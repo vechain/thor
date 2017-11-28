@@ -1,5 +1,5 @@
-hash: 983185d5ca70a6b08dca5e56fdb247e30df4b7c744a33e4c41cba2dc47751b19
-updated: 2017-11-28T11:54:39.797584+08:00
+hash: 06f70d027567c332e00501bb2ee394bba8db4c1d40404b4c6196feea12967c85
+updated: 2017-11-28T15:03:33.460884+08:00
 imports:
 - name: github.com/ethereum/go-ethereum
   version: 4bb3c89d44e372e6a9ab85a8be0c9345265c763a
@@ -8,6 +8,8 @@ imports:
   - common/hexutil
   - core
   - crypto/sha3
+- name: github.com/golang/snappy
+  version: 553a641470496b2327abcac10b36396bd98e45c9
 - name: github.com/gorilla/mux
   version: 7f08801859139f86dfafd1c296e2cba9a80d292e
 - name: github.com/pkg/errors
@@ -20,6 +22,17 @@ imports:
   version: 8c81ea47d4c41a385645e133e15510fc6a2a74b4
   subpackages:
   - leveldb
+  - leveldb/cache
+  - leveldb/comparer
+  - leveldb/errors
+  - leveldb/filter
+  - leveldb/iterator
+  - leveldb/journal
+  - leveldb/memdb
+  - leveldb/opt
+  - leveldb/storage
+  - leveldb/table
+  - leveldb/util
 - name: golang.org/x/crypto
   version: 3627ff35f31987174dbee61d9d1dcc1c643e7174
   subpackages:

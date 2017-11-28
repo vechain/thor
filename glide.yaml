@@ -17,4 +17,3 @@ import:
   version: v1.0.3
 - package: github.com/gorilla/mux
   version: v1.6.0
-- package: golang.org/x/crypto
