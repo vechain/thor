@@ -1,8 +1,33 @@
-hash: 3644248953e065cd889e62c8276c976603e8c497f3b88a40d9a4f296c417aecb
-updated: 2017-11-27T14:52:05.625909+08:00
+hash: 983185d5ca70a6b08dca5e56fdb247e30df4b7c744a33e4c41cba2dc47751b19
+updated: 2017-11-28T11:54:39.797584+08:00
 imports:
 - name: github.com/ethereum/go-ethereum
   version: 4bb3c89d44e372e6a9ab85a8be0c9345265c763a
   subpackages:
+  - common
+  - common/hexutil
   - core
+  - crypto/sha3
+- name: github.com/gorilla/mux
+  version: 7f08801859139f86dfafd1c296e2cba9a80d292e
+- name: github.com/pkg/errors
+  version: 645ef00459ed84a119197bfb8d8205042c6df63d
+- name: github.com/sirupsen/logrus
+  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
+- name: github.com/stretchr/testify
+  version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
+- name: github.com/syndtr/goleveldb
+  version: 8c81ea47d4c41a385645e133e15510fc6a2a74b4
+  subpackages:
+  - leveldb
+- name: golang.org/x/crypto
+  version: 3627ff35f31987174dbee61d9d1dcc1c643e7174
+  subpackages:
+  - ssh/terminal
+- name: golang.org/x/sys
+  version: 4b45465282a4624cf39876842a017334f13b8aff
+  subpackages:
+  - unix
+- name: gopkg.in/urfave/cli.v1
+  version: cfb38830724cc34fedffe9a2a29fb54fa9169cd1
 testImports: []
