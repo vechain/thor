@@ -98,3 +98,7 @@ func (ldb *lvldb) NewBatch() Batch {
 		batch: &leveldb.Batch{},
 	}
 }
+
+func (ldb *lvldb) NewIterator(r *Range) Iterator {
+	return ldb.db.NewIterator(r.r, readOpt)
+}

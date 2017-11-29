@@ -28,6 +28,7 @@ type Store interface {
 	Close() error
 
 	NewBatch() Batch
+	NewIterator(r *Range) Iterator
 }
 
 // Batch defines batch of write ops
@@ -35,6 +36,22 @@ type Batch interface {
 	Writer
 	Len() int
 	Write() error
+}
+
+// Iterator to iterates kvs in store
+type Iterator interface {
+	First() bool
+	Last() bool
+	Seek(key []byte) bool
+	Next() bool
+	Prev() bool
+
+	Release()
+
+	Error() error
+
+	Key() []byte
+	Value() []byte
 }
 
 // Options to be specified when create store instance
