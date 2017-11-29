@@ -1,9 +1,9 @@
 PACKAGE = github.com/vechain/vecore
 TARGET = bin/vecore
 SYS_GOPATH := $(GOPATH)
-GOPATH = $(CURDIR)/.build
+export GOPATH = $(CURDIR)/.build
 SRC_BASE = $(GOPATH)/src/$(PACKAGE)
-PACKAGES = $(shell go list ./... | grep -v '/vendor/')
+PACKAGES = `cd $(SRC_BASE) && go list ./... | grep -v '/vendor/'`
 
 DATEVERSION=`date -u +%Y%m%d`
 COMMIT=`git --no-pager log --pretty="%h" -n 1`
@@ -27,4 +27,4 @@ clean:
 
 .PHONY: test
 test: |$(SRC_BASE)
-	@cd $(SRC_BASE) && go test $(PACKAGES)
+	@go test $(PACKAGES)
