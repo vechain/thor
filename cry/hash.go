@@ -40,3 +40,28 @@ func ParseHash(s string) (*Hash, error) {
 	}
 	return &h, nil
 }
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+)
+
+func Keccak256(data ...[]byte) []byte {
+	d := sha3.NewKeccak256()
+	for _, b := range data {
+		d.Write(b)
+	}
+
+	return d.Sum(nil)
+}
+
+func Keccak256Hash(data ...[]byte) (h common.Hash) {
+	d := sha3.NewKeccak256()
+	for _, b := range data {
+		d.Write(b)
+	}
+	d.Sum(h[:0])
+	return h
+}
+
+// Deprecated: For backward compatibility as other packages depend on these
+func VSha3(data ...[]byte) []byte          { return Keccak256(data...) }
+func VSha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
