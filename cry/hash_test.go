@@ -18,6 +18,6 @@ func TestHash(t *testing.T) {
 	}
 	v = VSha3([]byte{1, 2})
 	if !bytes.Equal(valueHash, v) {
-		t.Fatalf("empty hash mismatch: want: %x have: %x", emptyHash, v)
+		t.Fatalf("empty hash mismatch: want: %x have: %x", valueHash, v)
 	}
 }
