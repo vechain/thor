@@ -2,6 +2,7 @@ package cry
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -20,4 +21,19 @@ func TestHash(t *testing.T) {
 	if !bytes.Equal(valueHash, v) {
 		t.Fatalf("empty hash mismatch: want: %x have: %x", valueHash, v)
 	}
+}
+
+func TestParse(t *testing.T) {
+	va, err := ParseHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+	if err != nil {
+		t.Fatalf("failed parsed")
+	}
+	fmt.Println(va)
+
+	va, err = ParseHash("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+	if err != nil {
+		t.Fatalf("failed parsed")
+	}
+	fmt.Println(va)
+
 }
