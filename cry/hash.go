@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 const (
@@ -39,4 +40,12 @@ func ParseHash(s string) (*Hash, error) {
 		return nil, err
 	}
 	return &h, nil
+}
+
+func HashSum(data ...[]byte) []byte {
+	d := sha3.NewKeccak256()
+	for _, b := range data {
+		d.Write(b)
+	}
+	return d.Sum(nil)
 }
