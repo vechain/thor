@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/vecore/acc"
 )
 
+// Account manage acc.Account and Storage.
 type Account struct {
 	address      acc.Address
 	addrHash     common.Hash // hash of ethereum address of the account
@@ -25,6 +26,21 @@ func newAccount(addr acc.Address, acc acc.Account) *Account {
 		account:      acc,
 		storage:      make(state.Storage),
 		dirtyStorage: make(state.Storage),
+	}
+}
+
+func (c *Account) deepCopy() *Account {
+	account := acc.Account{
+		Balance:     new(big.Int).Set(c.account.Balance),
+		CodeHash:    c.account.CodeHash,
+		StorageRoot: c.account.StorageRoot,
+	}
+	return &Account{
+		address:      c.address,
+		addrHash:     c.addrHash,
+		account:      account,
+		storage:      c.storage.Copy(),
+		dirtyStorage: c.dirtyStorage.Copy(),
 	}
 }
 

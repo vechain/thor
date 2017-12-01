@@ -3,9 +3,10 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/vecore/acc"
+	"github.com/vechain/vecore/cry"
+	"github.com/vechain/vecore/vm/account"
 )
 
 // IPreimager is Preimage for sha3.
@@ -18,8 +19,15 @@ type IJournaler interface {
 	AddLog(*types.Log)
 }
 
+type ISnapshoter interface {
+	AddSnapshot()
+	GetLastSnapshot()
+}
+
 // IAccountManager is account's delegate.
 type IAccountManager interface {
+	getDirtiedAccounts() []*account.Account
+
 	AddRefund(*big.Int)
 	GetRefund() *big.Int
 
@@ -33,13 +41,13 @@ type IAccountManager interface {
 	GetNonce(acc.Address) uint64
 	SetNonce(acc.Address, uint64)
 
-	GetCodeHash(acc.Address) common.Hash
+	GetCodeHash(acc.Address) cry.Hash
 	GetCode(acc.Address) []byte
 	SetCode(acc.Address, []byte)
 	GetCodeSize(acc.Address) int
 
-	GetState(acc.Address, common.Hash) common.Hash
-	SetState(acc.Address, common.Hash, common.Hash)
+	GetState(acc.Address, cry.Hash) cry.Hash
+	SetState(acc.Address, cry.Hash, cry.Hash)
 
 	Suicide(acc.Address) bool // 删除账户
 	HasSuicided(acc.Address) bool
@@ -51,7 +59,7 @@ type IAccountManager interface {
 	// is defined according to EIP161 (balance = nonce = code = 0).
 	Empty(acc.Address) bool
 
-	ForEachStorage(acc.Address, func(common.Hash, common.Hash) bool)
+	ForEachStorage(acc.Address, func(cry.Hash, cry.Hash) bool)
 }
 
 // ISnapshoter is version control.
