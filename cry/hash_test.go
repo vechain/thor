@@ -21,6 +21,7 @@ func TestHash(t *testing.T) {
 	if !bytes.Equal(valueHash, v) {
 		t.Fatalf("empty hash mismatch: want: %x have: %x", valueHash, v)
 	}
+
 }
 
 func TestParse(t *testing.T) {

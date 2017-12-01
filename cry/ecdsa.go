@@ -102,3 +102,7 @@ func AddressToBytes(addr common.Address) []byte {
 	a = append(a, addr[:]...)
 	return a
 }
+
+func (addr Address) String() string {
+	return "0x" + hex.EncodeToString(addr[:])
+}

@@ -49,8 +49,16 @@ func ParseHash(s string) (*Hash, error) {
 )
 
 const (
-	// HashLength length of hash in bytes
-	HashLength = common.HashLength
+	HashLength    = 32
+	AddressLength = 20
+)
+
+type (
+	// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+	Hash [HashLength]byte
+
+	// Address represents the 20 byte address of an Ethereum account.
+	Address [AddressLength]byte
 )
 
 func Keccak256(data ...[]byte) []byte {
@@ -58,7 +66,6 @@ func Keccak256(data ...[]byte) []byte {
 	for _, b := range data {
 		d.Write(b)
 	}
-
 	return d.Sum(nil)
 }
 
@@ -84,9 +91,6 @@ func BytesToHash(b []byte) common.Hash {
 func StringToHash(s string) common.Hash { return BytesToHash([]byte(s)) }
 func BigToHash(b *big.Int) common.Hash  { return BytesToHash(b.Bytes()) }
 func HexToHash(s string) common.Hash    { return BytesToHash(common.FromHex(s)) }
-
-// Hash main hash type
-type Hash common.Hash
 
 // String implements stringer
 func (h Hash) String() string {
