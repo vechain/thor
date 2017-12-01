@@ -11,6 +11,7 @@ import (
 const (
 	// HashLength length of hash in bytes
 	HashLength = common.HashLength
+	aaa =10
 )
 
 // Hash main hash type
