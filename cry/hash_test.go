@@ -13,11 +13,11 @@ var valueHash = common.FromHex("0x22ae6da6b482f9b1b19b0b897c3fd43884180a1c5ee361
 
 func TestHash(t *testing.T) {
 
-	v := VSha3([]byte{})
+	v := HashSum([]byte{})
 	if !bytes.Equal(emptyHash, v) {
 		t.Fatalf("empty hash mismatch: want: %x have: %x", emptyHash, v)
 	}
-	v = VSha3([]byte{1, 2})
+	v = HashSum([]byte{1, 2})
 	if !bytes.Equal(valueHash, v) {
 		t.Fatalf("empty hash mismatch: want: %x have: %x", valueHash, v)
 	}
