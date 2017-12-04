@@ -137,9 +137,3 @@ func (state *State) Root() []byte {
 func (state *State) Hash() cry.Hash {
 	return cry.Hash(state.trie.Hash())
 }
-
-//Copy returns copy storage trie
-func (state *State) Copy() *State {
-	cpy := *state
-	return &cpy
-}
