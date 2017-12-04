@@ -36,9 +36,6 @@ func TestAccount_deepCopy(t *testing.T) {
 	account1.address = acc.Address{2}
 	assert.NotEqual(account1.address, account2.address, "修改了 address, 应该不相等.")
 
-	account1.addrHash = common.Hash{2}
-	assert.NotEqual(account1.addrHash, account2.addrHash, "修改了 addrHash, 应该不相等.")
-
 	account1.storage[common.Hash{1}] = common.Hash{100}
 	assert.NotEqual(account1.storage, account2.storage, "修改了 storage, 应该不相等.")
 

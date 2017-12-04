@@ -3,16 +3,13 @@ package account
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/vecore/acc"
 )
 
 // Account manage acc.Account and Storage.
 type Account struct {
 	address      acc.Address
-	addrHash     common.Hash // hash of ethereum address of the account
 	account      acc.Account
 	storage      state.Storage
 	dirtyStorage state.Storage
@@ -22,7 +19,6 @@ type Account struct {
 func newAccount(addr acc.Address, acc acc.Account) *Account {
 	return &Account{
 		address:      addr,
-		addrHash:     crypto.Keccak256Hash(addr[:]),
 		account:      acc,
 		storage:      make(state.Storage),
 		dirtyStorage: make(state.Storage),
@@ -37,7 +33,6 @@ func (c *Account) deepCopy() *Account {
 	}
 	return &Account{
 		address:      c.address,
-		addrHash:     c.addrHash,
 		account:      account,
 		storage:      c.storage.Copy(),
 		dirtyStorage: c.dirtyStorage.Copy(),
