@@ -7,6 +7,7 @@ import (
 	"github.com/vechain/vecore/cry"
 )
 
+// Header defines header of block.
 type Header struct {
 	ParentHash      cry.Hash
 	Timestamp       uint64
@@ -19,6 +20,7 @@ type Header struct {
 	ReceiptsRoot cry.Hash
 }
 
+// Copy makes a deep copy.
 func (h Header) Copy() *Header {
 	if h.GasLimit == nil {
 		h.GasLimit = new(big.Int)

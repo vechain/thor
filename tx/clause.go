@@ -13,7 +13,7 @@ type Clause struct {
 	Data  []byte
 }
 
-// Copy makes a deep copy of clause
+// Copy makes a deep copy of clause.
 func (c Clause) Copy() *Clause {
 	if c.To != nil {
 		to := *c.To
@@ -32,10 +32,10 @@ func (c Clause) Copy() *Clause {
 	return &c
 }
 
-// Clauses array of clauses
+// Clauses array of clauses.
 type Clauses []Clause
 
-// Copy makes a deep copy of clauses slice
+// Copy makes a deep copy of clauses slice.
 func (cs Clauses) Copy() Clauses {
 	ret := make(Clauses, len(cs))
 	for i, c := range cs {
