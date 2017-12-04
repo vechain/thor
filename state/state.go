@@ -100,7 +100,7 @@ func (state *State) GetStorage(key cry.Hash) (value cry.Hash) {
 	if err != nil {
 		return cry.Hash{}
 	}
-	copy(value[:], content)
+	value = cry.BytesToHash(content)
 	return value
 }
 
