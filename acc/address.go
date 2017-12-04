@@ -40,3 +40,10 @@ func ParseAddress(s string) (*Address, error) {
 	}
 	return &addr, nil
 }
+
+// BytesToAddress converts bytes slice into address.
+// If b is larger than address legnth, b will be cropped (from the left).
+// If b is smaller than address length, b will be extended (from the left).
+func BytesToAddress(b []byte) Address {
+	return Address(common.BytesToAddress(b))
+}
