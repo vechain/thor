@@ -42,6 +42,14 @@ func ParseHash(s string) (*Hash, error) {
 	return &h, nil
 }
 
+// BytesToHash converts bytes slice into hash.
+// If b is larger than hash legnth, b will be cropped (from the left).
+// If b is smaller than hash length, b will be extended (from the left).
+func BytesToHash(b []byte) Hash {
+	return Hash(common.BytesToHash(b))
+}
+
+// HashSum most widely used hash algorithm in vecore.
 func HashSum(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
 	for _, b := range data {
