@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/vecore/acc"
 	"github.com/vechain/vecore/cry"
 )
@@ -24,13 +25,12 @@ func (sr *stateReader) GetStorage(cry.Hash) cry.Hash {
 }
 
 func TestManager_DeepCopy(t *testing.T) {
-	// assert := assert.New(t)
-	// sr := new(stateReader)
+	assert := assert.New(t)
+	addr := acc.Address{1}
+	manager1 := NewManager(new(stateReader))
+	manager1.AddBalance(addr, big.NewInt(10))
+	manager2 := manager1.DeepCopy()
 
-	// manager1 := NewManager(sr)
-	// manager1.AddBalance(acc.Address{1}, big.NewInt(10))
-
-	// manager2 := manager1.DeepCopy()
-	// manager1.getAccout(acc.Address{1}).account.Balance.SetInt64(100)
-	// manager1.getAccout(acc.Address{1}).account.CodeHash = cry.Hash{1, 2, 3, 1, 2, 3}
+	// test for Manager.Account
+	assertAccount(assert, manager1.getAccout(addr), manager2.getAccout(addr))
 }

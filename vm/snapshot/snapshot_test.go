@@ -2,9 +2,16 @@ package snapshot
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// AddSnapshot 保存到 Snapshot 中的对象和原对象是两个对象
-func TestSnapshot_AddSnapshot(t *testing.T) {
+func TestSnapshot_Fullback(t *testing.T) {
+	assert := assert.New(t)
 
+	snapshotManager := New()
+	snapshotManager.AddSnapshot(5)
+	snapshotManager.AddSnapshot(6)
+
+	assert.Equal(snapshotManager.Fullback(), 5, "获取到的应该是倒数第二个插入的元素.")
 }

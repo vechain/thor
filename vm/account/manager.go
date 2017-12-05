@@ -7,8 +7,8 @@ import (
 	"github.com/vechain/vecore/cry"
 )
 
-// IStateReader return a accout or storage.
-type IStateReader interface {
+// StateReader return a accout or storage.
+type StateReader interface {
 	GetAccout(acc.Address) acc.Account
 	GetStorage(cry.Hash) cry.Hash
 }
@@ -16,7 +16,7 @@ type IStateReader interface {
 // Manager is account's delegate.
 // Implements vm.AccountManager.
 type Manager struct {
-	stateReader IStateReader
+	stateReader StateReader
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	accounts      map[acc.Address]*Account // memory cache
@@ -29,7 +29,7 @@ type Manager struct {
 }
 
 // NewManager return a manager for Accounts.
-func NewManager(state IStateReader) *Manager {
+func NewManager(state StateReader) *Manager {
 	return &Manager{
 		stateReader:   state,
 		accounts:      make(map[acc.Address]*Account),
@@ -40,15 +40,15 @@ func NewManager(state IStateReader) *Manager {
 }
 
 // DeepCopy Full backup of the current status, future changes will not affect them.
-func (m *Manager) DeepCopy() *Manager {
+func (m *Manager) DeepCopy() interface{} {
 	accounts := make(map[acc.Address]*Account)
 	for key, value := range m.accounts {
 		accounts[key] = value.deepCopy()
 	}
 
 	accountsDirty := make(map[acc.Address]struct{})
-	for key, value := range m.accountsDirty {
-		accountsDirty[key] = value
+	for key := range m.accountsDirty {
+		accountsDirty[key] = struct{}{}
 	}
 
 	preimages := make(map[cry.Hash][]byte)
@@ -77,7 +77,7 @@ func (m *Manager) markAccoutDirty(addr acc.Address) {
 // GetAccout get a account from memory cache or IStateReader.
 func (m *Manager) getAccout(addr acc.Address) *Account {
 	if acc := m.accounts[addr]; acc != nil {
-		if acc.deleted {
+		if acc.suicided {
 			return nil
 		}
 		return acc
@@ -87,22 +87,24 @@ func (m *Manager) getAccout(addr acc.Address) *Account {
 	return account
 }
 
-// setBalance replace account.Balance with amount.
-func (m *Manager) setBalance(addr acc.Address, amount *big.Int) {
-	if account := m.getAccout(addr); account != nil {
-		account.setBalance(amount)
-		m.markAccoutDirty(addr)
-	}
-}
-
 // AddBalance adds amount to the account associated with addr
 func (m *Manager) AddBalance(addr acc.Address, amount *big.Int) {
 	if account := m.getAccout(addr); account != nil {
 		if amount.Sign() == 0 {
 			return
 		}
-		m.setBalance(addr, new(big.Int).Add(account.getBalance(), amount))
+		account.setBalance(new(big.Int).Add(account.getBalance(), amount))
 	}
+}
+
+// GetDirtiedAccounts return all dirtied Accounts.
+func (m *Manager) GetDirtiedAccounts() []*Account {
+	var dirtyAccounts = make([]*Account, len(m.accountsDirty))
+	for addr := range m.accountsDirty {
+		account := m.accounts[addr]
+		dirtyAccounts = append(dirtyAccounts, account)
+	}
+	return dirtyAccounts
 }
 
 // // Preimages returns a list of SHA3 preimages that have been submitted.

@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/vecore/acc"
 	"github.com/vechain/vecore/cry"
@@ -18,10 +17,14 @@ func TestAccount_deepCopy(t *testing.T) {
 		CodeHash:    cry.Hash{1, 2, 3},
 		StorageRoot: cry.Hash{1, 2, 3},
 	})
-	account1.storage[common.Hash{1}] = common.Hash{200}
-	account1.dirtyStorage[common.Hash{1}] = common.Hash{200}
+	account1.storage[cry.Hash{1}] = cry.Hash{200}
+	account1.dirtyStorage[cry.Hash{1}] = cry.Hash{200}
 
 	account2 := account1.deepCopy()
+	assertAccount(assert, account1, account2)
+}
+
+func assertAccount(assert *assert.Assertions, account1 *Account, account2 *Account) {
 	assert.Equal(account1, account2, "未改值前应该相等.")
 
 	account1.account.Balance.SetInt64(100)
@@ -36,9 +39,9 @@ func TestAccount_deepCopy(t *testing.T) {
 	account1.address = acc.Address{2}
 	assert.NotEqual(account1.address, account2.address, "修改了 address, 应该不相等.")
 
-	account1.storage[common.Hash{1}] = common.Hash{100}
+	account1.storage[cry.Hash{1}] = cry.Hash{100}
 	assert.NotEqual(account1.storage, account2.storage, "修改了 storage, 应该不相等.")
 
-	account1.dirtyStorage[common.Hash{1}] = common.Hash{100}
+	account1.dirtyStorage[cry.Hash{1}] = cry.Hash{100}
 	assert.NotEqual(account1.dirtyStorage, account2.dirtyStorage, "修改了 dirtyStorage, 应该不相等.")
 }

@@ -3,7 +3,6 @@ package account
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/vechain/vecore/acc"
 )
 
@@ -11,17 +10,17 @@ import (
 type Account struct {
 	address      acc.Address
 	account      acc.Account
-	storage      state.Storage
-	dirtyStorage state.Storage
-	deleted      bool
+	storage      acc.Storage
+	dirtyStorage acc.Storage
+	suicided     bool // 标记是否删除
 }
 
-func newAccount(addr acc.Address, acc acc.Account) *Account {
+func newAccount(addr acc.Address, account acc.Account) *Account {
 	return &Account{
 		address:      addr,
-		account:      acc,
-		storage:      make(state.Storage),
-		dirtyStorage: make(state.Storage),
+		account:      account,
+		storage:      make(acc.Storage),
+		dirtyStorage: make(acc.Storage),
 	}
 }
 

@@ -1,6 +1,6 @@
 package snapshot
 
-// Snapshot is the version control for account.Manager.
+// Snapshot is the version control.
 // Implements vm.ISnapshoter.
 type Snapshot struct {
 	versions []interface{}
@@ -18,7 +18,8 @@ func (sn *Snapshot) AddSnapshot(snapshot interface{}) {
 	sn.versions = append(sn.versions, snapshot)
 }
 
-// GetLastSnapshot go to the last added snapshot.
-func (sn *Snapshot) GetLastSnapshot() interface{} {
+// Fullback delete the last snapshot.
+func (sn *Snapshot) Fullback() interface{} {
+	sn.versions = sn.versions[:len(sn.versions)-1]
 	return sn.versions[len(sn.versions)-1]
 }
