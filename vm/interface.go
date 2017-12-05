@@ -32,3 +32,9 @@ type Message interface {
 	CheckNonce() bool
 	Data() []byte
 }
+
+// StateReader is account.StateReader's facade.
+type StateReader interface {
+	GetAccout(acc.Address) acc.Account
+	GetStorage(cry.Hash) cry.Hash
+}

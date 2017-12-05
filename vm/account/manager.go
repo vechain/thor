@@ -94,6 +94,7 @@ func (m *Manager) AddBalance(addr acc.Address, amount *big.Int) {
 			return
 		}
 		account.setBalance(new(big.Int).Add(account.getBalance(), amount))
+		m.markAccoutDirty(addr)
 	}
 }
 
@@ -107,19 +108,76 @@ func (m *Manager) GetDirtiedAccounts() []*Account {
 	return dirtyAccounts
 }
 
-// // Preimages returns a list of SHA3 preimages that have been submitted.
-// func (m *Manager) Preimages() map[cry.Hash][]byte {
-// 	return m.preimages
-// }
+func (m *Manager) CreateAccount(acc.Address) {
+}
 
-// // AddRefund add Refund.
-// func (m *Manager) AddRefund(gas *big.Int) {
-// 	m.refund.Add(m.refund, gas)
-// }
+func (m *Manager) SubBalance(acc.Address, *big.Int) {
+}
 
-// // GetRefund returns the current value of the refund counter.
-// // The return value must not be modified by the caller and will become
-// // invalid at the next call to AddRefund.
-// func (m *Manager) GetRefund() *big.Int {
-// 	return m.refund
-// }
+func (m *Manager) GetBalance(acc.Address) *big.Int {
+	return nil
+}
+
+func (m *Manager) GetNonce(acc.Address) uint64 {
+	return 0
+}
+
+func (m *Manager) SetNonce(acc.Address, uint64) {
+}
+
+func (m *Manager) GetCodeHash(acc.Address) cry.Hash {
+	return cry.Hash{}
+}
+
+func (m *Manager) GetCode(acc.Address) []byte {
+	return []byte{}
+}
+
+func (m *Manager) SetCode(acc.Address, []byte) {
+}
+
+func (m *Manager) GetCodeSize(acc.Address) int {
+	return 0
+}
+
+func (m *Manager) AddRefund(*big.Int) {
+}
+
+func (m *Manager) GetRefund() *big.Int {
+	return nil
+}
+
+func (m *Manager) GetState(acc.Address, cry.Hash) cry.Hash {
+	return cry.Hash{}
+}
+
+func (m *Manager) SetState(acc.Address, cry.Hash, cry.Hash) {
+}
+
+func (m *Manager) Suicide(acc.Address) bool {
+	return false
+}
+
+func (m *Manager) HasSuicided(acc.Address) bool {
+	return false
+}
+
+// Exist reports whether the given account exists in state.
+// Notably this should also return true for suicided accounts.
+func (m *Manager) Exist(acc.Address) bool {
+	return false
+}
+
+// Empty returns whether the given account is empty. Empty
+// is defined according to EIP161 (balance = nonce = code = 0).
+func (m *Manager) Empty(acc.Address) bool {
+	return false
+}
+
+func (m *Manager) ForEachStorage(acc.Address, func(cry.Hash, cry.Hash) bool) {
+}
+
+// AddPreimage records a SHA3 preimage seen by the VM.
+func (m *Manager) AddPreimage(hash cry.Hash, preimage []byte) {
+
+}

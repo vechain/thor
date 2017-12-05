@@ -3,23 +3,29 @@ package vm
 import (
 	"math/big"
 
+	"github.com/vechain/vecore/vm/vmlog"
+
+	"github.com/vechain/vecore/vm/snapshot"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/vecore/acc"
+	"github.com/vechain/vecore/vm/account"
+	"github.com/vechain/vecore/vm/state"
 )
 
 // Config is ref to vm.Config.
 type Config vm.Config
 
-// EVM is ref to vm.EVM.
+// EVM is a facade for ethEvm.
 type EVM struct {
 	ethEvm *vm.EVM
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewEVM(ctx Context, statedb vm.StateDB, vmConfig Config) *EVM {
+func NewEVM(ctx Context, stateReader StateReader, vmConfig Config) *EVM {
 	var chainConfig = &params.ChainConfig{
 		ChainId:        big.NewInt(0),
 		HomesteadBlock: big.NewInt(0),
@@ -33,7 +39,10 @@ func NewEVM(ctx Context, statedb vm.StateDB, vmConfig Config) *EVM {
 		Ethash:         nil,
 		Clique:         nil,
 	}
-	evm := vm.NewEVM(vm.Context(ctx), statedb, chainConfig, vm.Config(vmConfig))
+
+	stateDB := state.New(account.NewManager(stateReader), snapshot.New(), vmlog.New())
+
+	evm := vm.NewEVM(vm.Context(ctx), stateDB, chainConfig, vm.Config(vmConfig))
 	return &EVM{ethEvm: evm}
 }
 
