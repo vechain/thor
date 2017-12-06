@@ -29,8 +29,8 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 	assert := assert.New(t)
 	manager := NewManager(new(stateReader))
 
-	manager.getAccout(acc.Address{1})                  // 1 accout
-	manager.getAccout(acc.Address{2})                  // 2 accout
+	manager.CreateAccount(acc.Address{1})              // 1 accout
+	manager.CreateAccount(acc.Address{2})              // 2 accout
 	manager.AddBalance(acc.Address{3}, big.NewInt(10)) // 3 accout and dirty
 
 	dAccounts := manager.GetDirtiedAccounts()
@@ -46,5 +46,5 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 
 	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 3 accout and dirty
 	dAccounts = manager.GetDirtiedAccounts()
-	assert.Equal(len(dAccounts), 2, "应该只有二个 accout 被修改.")
+	assert.Equal(len(dAccounts), 2, "应该有二个 accout 被修改.")
 }

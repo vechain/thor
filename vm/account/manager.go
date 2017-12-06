@@ -75,57 +75,54 @@ func (m *Manager) GetDirtiedAccounts() []*Account {
 	return dirtyAccounts
 }
 
-// markAccoutDirty mark the account is dirtied.
-func (m *Manager) markAccoutDirty(addr acc.Address) {
-	_, isDirty := m.accountsDirty[addr]
-	if !isDirty {
-		m.accountsDirty[addr] = struct{}{}
-	}
-}
-
-// GetAccout get a account from memory cache or IStateReader.
-func (m *Manager) getAccout(addr acc.Address) *Account {
-	if acc := m.accounts[addr]; acc != nil {
-		if acc.suicided {
-			return nil
-		}
-		return acc
-	}
-	account := newAccount(addr, m.stateReader.GetAccout(addr))
-	m.accounts[addr] = account
-	return account
-}
-
-// AddBalance adds amount to the account associated with addr
-func (m *Manager) AddBalance(addr acc.Address, amount *big.Int) {
-	if account := m.getAccout(addr); account != nil {
-		if amount.Sign() == 0 {
-			return
-		}
-		account.setBalance(new(big.Int).Add(account.getBalance(), amount))
+// CreateAccount create a new accout, if the addr already bound to another accout, set it's balance.
+func (m *Manager) CreateAccount(addr acc.Address) {
+	new, prev := m.createAccount(addr)
+	if prev != nil {
+		new.setBalance(prev.Data.Balance)
 		m.markAccoutDirty(addr)
 	}
 }
 
-func (m *Manager) CreateAccount(acc.Address) {
+// AddBalance add amount to the account's balance.
+func (m *Manager) AddBalance(addr acc.Address, amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	account := m.getOrCreateAccout(addr)
+	account.setBalance(new(big.Int).Add(account.getBalance(), amount))
+	m.markAccoutDirty(addr)
 }
 
-func (m *Manager) SubBalance(acc.Address, *big.Int) {
+// SubBalance sub amount from the account's balance.
+func (m *Manager) SubBalance(addr acc.Address, amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	account := m.getOrCreateAccout(addr)
+	account.setBalance(new(big.Int).Sub(account.getBalance(), amount))
+	m.markAccoutDirty(addr)
 }
 
-func (m *Manager) GetBalance(acc.Address) *big.Int {
-	return nil
+// GetBalance return the account's balance.
+// If the
+func (m *Manager) GetBalance(addr acc.Address) *big.Int {
+	account := m.getOrCreateAccout(addr)
+	return account.getBalance()
 }
 
+// GetNonce stub func.
 func (m *Manager) GetNonce(acc.Address) uint64 {
 	return 0
 }
 
+// SetNonce stub func.
 func (m *Manager) SetNonce(acc.Address, uint64) {
 }
 
-func (m *Manager) GetCodeHash(acc.Address) cry.Hash {
-	return cry.Hash{}
+// GetCodeHash return account's CodeHash.
+func (m *Manager) GetCodeHash(addr acc.Address) cry.Hash {
+	return m.getOrCreateAccout(addr).getCodeHash()
 }
 
 func (m *Manager) GetCode(acc.Address) []byte {
@@ -179,4 +176,36 @@ func (m *Manager) ForEachStorage(acc.Address, func(cry.Hash, cry.Hash) bool) {
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (m *Manager) AddPreimage(hash cry.Hash, preimage []byte) {
 
+}
+
+// markAccoutDirty mark the account is dirtied.
+func (m *Manager) markAccoutDirty(addr acc.Address) {
+	_, isDirty := m.accountsDirty[addr]
+	if !isDirty {
+		m.accountsDirty[addr] = struct{}{}
+	}
+}
+
+func (m *Manager) getAccount(addr acc.Address) *Account {
+	acc := m.accounts[addr]
+	if acc != nil && acc.suicided {
+		return nil
+	}
+	return acc
+}
+
+func (m *Manager) createAccount(addr acc.Address) (*Account, *Account) {
+	prev := m.getAccount(addr)
+	newobj := newAccount(addr, m.stateReader.GetAccout(addr))
+	m.accounts[addr] = newobj
+	return newobj, prev
+}
+
+// getOrCreateAccout get a account from memory cache or create a new from StateReader.
+func (m *Manager) getOrCreateAccout(addr acc.Address) *Account {
+	if acc := m.getAccount(addr); acc != nil {
+		return acc
+	}
+	account, _ := m.createAccount(addr)
+	return account
 }

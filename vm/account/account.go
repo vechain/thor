@@ -3,6 +3,8 @@ package account
 import (
 	"math/big"
 
+	"github.com/vechain/vecore/cry"
+
 	"github.com/vechain/vecore/acc"
 )
 
@@ -45,4 +47,8 @@ func (c *Account) setBalance(amount *big.Int) {
 
 func (c *Account) getBalance() *big.Int {
 	return c.Data.Balance
+}
+
+func (c *Account) getCodeHash() cry.Hash {
+	return c.Data.CodeHash
 }

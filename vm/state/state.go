@@ -14,13 +14,15 @@ import (
 )
 
 // State is mediator for account.Manager, snapshot.Snapshot and Log.
-// State implements vm.StateDB.
+// State is the coordinator of account.Manager and snapshot.Snapshot.
+// Implements vm.StateDB.
 type State struct {
 	accountManager  *account.Manager
 	snapshotManager *snapshot.Snapshot
 	vmLog           *vmlog.VMlog
 }
 
+// New create a new State object and return it's point.
 func New(am *account.Manager, sm *snapshot.Snapshot, vl *vmlog.VMlog) *State {
 	return &State{
 		accountManager:  am,
@@ -29,7 +31,7 @@ func New(am *account.Manager, sm *snapshot.Snapshot, vl *vmlog.VMlog) *State {
 	}
 }
 
-// GetDirtiedAccounts return all dirtied accounts.
+// GetDirtiedAccounts return all the dirtied accounts.
 func (s *State) GetDirtiedAccounts() []*account.Account {
 	return s.accountManager.GetDirtiedAccounts()
 }
