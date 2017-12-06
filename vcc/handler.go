@@ -19,21 +19,14 @@ func NewHTTPRouter(router *mux.Router, accountManager *AccountManager) {
 	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(accountManager.handleGetAccount))
 }
 func (accountManager *AccountManager) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
-	fmt.Println(req)
 	query := mux.Vars(req)
-	fmt.Println("query:", query)
+	fmt.Println("query :", query)
 	address, err := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e01a")
-	fmt.Println("address err accountManager:", address, err, accountManager)
 	account := accountManager.GetAccount(*address)
-	fmt.Println("account", account)
 	str, err := json.Marshal(account)
-	fmt.Println("str err :", str, err)
 	if err != nil {
 		return err
 	}
-	var data interface{}
-	json.Unmarshal(str, &data)
-	fmt.Println("data:", data)
 	w.Write(str)
 	return nil
 }
