@@ -3,6 +3,7 @@ package cry
 import (
 	"encoding/hex"
 	"errors"
+	"hash"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -49,11 +50,18 @@ func BytesToHash(b []byte) Hash {
 	return Hash(common.BytesToHash(b))
 }
 
-// HashSum most widely used hash algorithm in vecore.
-func HashSum(data ...[]byte) []byte {
-	d := sha3.NewKeccak256()
+// NewHasher returns widely used hasher (Keccak256).
+func NewHasher() hash.Hash {
+	return sha3.NewKeccak256()
+}
+
+// HashSum computes hash of data using hasher returned by NewHash.
+func HashSum(data ...[]byte) Hash {
+	h := NewHasher()
 	for _, b := range data {
-		d.Write(b)
+		h.Write(b)
 	}
-	return d.Sum(nil)
+	var hash Hash
+	h.Sum(hash[:0])
+	return hash
 }
