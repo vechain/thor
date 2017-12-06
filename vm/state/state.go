@@ -94,7 +94,8 @@ func (s *State) SetState(addr common.Address, key common.Hash, value common.Hash
 }
 
 func (s *State) Suicide(addr common.Address) bool {
-	return s.accountManager.Suicide(acc.Address(addr))
+	s.accountManager.Suicide(acc.Address(addr))
+	return true
 }
 
 func (s *State) HasSuicided(addr common.Address) bool {

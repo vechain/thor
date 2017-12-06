@@ -9,11 +9,6 @@ import (
 	"github.com/vechain/vecore/acc"
 )
 
-// KVReader get value from a key.
-type KVReader interface {
-	GetValue(cry.Hash) []byte
-}
-
 // Account manage acc.Account and Storage.
 type Account struct {
 	Address acc.Address
@@ -73,4 +68,27 @@ func (c *Account) getCode(kv KVReader) []byte {
 func (c *Account) setCode(code []byte) {
 	c.Code = code
 	c.Data.CodeHash = cry.Hash(crypto.Keccak256Hash(code))
+}
+
+func (c *Account) getStorage(state StateReader, key cry.Hash) cry.Hash {
+	storage := c.cachedStorage[key]
+	if storage != (cry.Hash{0}) {
+		return storage
+	}
+	storage = state.GetStorage(key)
+	c.cachedStorage[key] = storage
+	return storage
+}
+
+func (c *Account) setStorage(key cry.Hash, value cry.Hash) {
+	c.cachedStorage[key] = value
+	c.Storage[key] = value
+}
+
+func (c *Account) suicide() {
+	c.suicided = true
+}
+
+func (c *Account) hasSuicided() bool {
+	return c.suicided
 }

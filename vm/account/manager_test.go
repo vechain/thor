@@ -94,12 +94,4 @@ func TestManager_GetCodeSize(t *testing.T) {
 
 	manager = NewManager(new(testKV2), new(stateReader))
 	assert.Equal(manager.GetCodeSize(addr), 2)
-
-	// code := []byte{4, 5, 6}
-	// codeHash := cry.Hash(crypto.Keccak256Hash(code))
-
-	// manager.SetCode(addr, code)
-
-	// assert.Equal(manager.GetCode(addr), code)
-	// assert.Equal(manager.GetCodeHash(addr), codeHash)
 }

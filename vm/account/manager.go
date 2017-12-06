@@ -7,12 +7,6 @@ import (
 	"github.com/vechain/vecore/cry"
 )
 
-// StateReader return a accout or storage.
-type StateReader interface {
-	GetAccout(acc.Address) acc.Account
-	GetStorage(cry.Hash) cry.Hash
-}
-
 // Manager is account's delegate.
 // Implements vm.AccountManager.
 type Manager struct {
@@ -151,26 +145,41 @@ func (m *Manager) GetCodeSize(addr acc.Address) int {
 	return len(code)
 }
 
-func (m *Manager) AddRefund(*big.Int) {
+// AddRefund add gas to refund.
+func (m *Manager) AddRefund(gas *big.Int) {
+	m.refund.Add(m.refund, gas)
 }
 
+// GetRefund returns the current value of the refund counter.
+// The return value must not be modified by the caller and will become
+// invalid at the next call to AddRefund.
 func (m *Manager) GetRefund() *big.Int {
-	return nil
+	return m.refund
 }
 
-func (m *Manager) GetState(acc.Address, cry.Hash) cry.Hash {
-	return cry.Hash{}
+// GetState return storage by given key.
+func (m *Manager) GetState(addr acc.Address, key cry.Hash) cry.Hash {
+	account := m.getOrCreateAccout(addr)
+	return account.getStorage(m.stateReader, key)
 }
 
-func (m *Manager) SetState(acc.Address, cry.Hash, cry.Hash) {
+// SetState set storage by given key and value.
+func (m *Manager) SetState(addr acc.Address, key cry.Hash, value cry.Hash) {
+	account := m.getOrCreateAccout(addr)
+	account.setStorage(key, value)
+	m.markAccoutDirty(addr)
 }
 
-func (m *Manager) Suicide(acc.Address) bool {
-	return false
+// Suicide kill a account.
+func (m *Manager) Suicide(addr acc.Address) {
+	account := m.getOrCreateAccout(addr)
+	account.suicide()
 }
 
-func (m *Manager) HasSuicided(acc.Address) bool {
-	return false
+// HasSuicided return a account or not suicide.
+func (m *Manager) HasSuicided(addr acc.Address) bool {
+	account := m.getOrCreateAccout(addr)
+	return account.hasSuicided()
 }
 
 // Exist reports whether the given account exists in state.
@@ -179,8 +188,8 @@ func (m *Manager) Exist(acc.Address) bool {
 	return false
 }
 
-// Empty returns whether the given account is empty. Empty
-// is defined according to EIP161 (balance = nonce = code = 0).
+// Empty returns whether the given account is empty.
+// Empty is defined according to EIP161 (balance = nonce = code = 0).
 func (m *Manager) Empty(acc.Address) bool {
 	return false
 }
@@ -210,7 +219,7 @@ func (m *Manager) getAccount(addr acc.Address) *Account {
 }
 
 func (m *Manager) createAccount(addr acc.Address) (*Account, *Account) {
-	prev := m.getAccount(addr)
+	prev := m.getAccount(addr) // 这里有问题, getAccount 只返回了当前缓存的 account
 	newobj := newAccount(addr, m.stateReader.GetAccout(addr))
 	m.accounts[addr] = newobj
 	return newobj, prev
