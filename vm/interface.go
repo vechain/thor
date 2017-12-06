@@ -38,3 +38,8 @@ type StateReader interface {
 	GetAccout(acc.Address) acc.Account
 	GetStorage(cry.Hash) cry.Hash
 }
+
+// KVReader is account.KVReader's facade.
+type KVReader interface {
+	GetValue(cry.Hash) []byte
+}

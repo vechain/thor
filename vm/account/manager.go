@@ -16,6 +16,7 @@ type StateReader interface {
 // Manager is account's delegate.
 // Implements vm.AccountManager.
 type Manager struct {
+	kvReader    KVReader
 	stateReader StateReader
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
@@ -29,8 +30,9 @@ type Manager struct {
 }
 
 // NewManager return a manager for Accounts.
-func NewManager(state StateReader) *Manager {
+func NewManager(kv KVReader, state StateReader) *Manager {
 	return &Manager{
+		kvReader:      kv,
 		stateReader:   state,
 		accounts:      make(map[acc.Address]*Account),
 		accountsDirty: make(map[acc.Address]struct{}),
@@ -122,18 +124,31 @@ func (m *Manager) SetNonce(acc.Address, uint64) {
 
 // GetCodeHash return account's CodeHash.
 func (m *Manager) GetCodeHash(addr acc.Address) cry.Hash {
-	return m.getOrCreateAccout(addr).getCodeHash()
+	account := m.getOrCreateAccout(addr)
+	return account.getCodeHash()
 }
 
-func (m *Manager) GetCode(acc.Address) []byte {
-	return []byte{}
+// GetCode return code from account.
+func (m *Manager) GetCode(addr acc.Address) []byte {
+	account := m.getOrCreateAccout(addr)
+	return account.getCode(m.kvReader)
 }
 
-func (m *Manager) SetCode(acc.Address, []byte) {
+// SetCode set account's code.
+func (m *Manager) SetCode(addr acc.Address, code []byte) {
+	account := m.getOrCreateAccout(addr)
+	account.setCode(code)
+	m.markAccoutDirty(addr)
 }
 
-func (m *Manager) GetCodeSize(acc.Address) int {
-	return 0
+// GetCodeSize return lenth of account'code.
+func (m *Manager) GetCodeSize(addr acc.Address) int {
+	account := m.getOrCreateAccout(addr)
+	code := account.getCode(m.kvReader)
+	if code == nil {
+		return 0
+	}
+	return len(code)
 }
 
 func (m *Manager) AddRefund(*big.Int) {

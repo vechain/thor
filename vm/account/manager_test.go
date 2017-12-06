@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/vecore/acc"
@@ -27,7 +28,7 @@ func (sr *stateReader) GetStorage(cry.Hash) cry.Hash {
 
 func TestManager_GetDirtiedAccounts(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewManager(new(stateReader))
+	manager := NewManager(nil, new(stateReader))
 
 	manager.CreateAccount(acc.Address{1})              // 1 accout
 	manager.CreateAccount(acc.Address{2})              // 2 accout
@@ -47,4 +48,58 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 3 accout and dirty
 	dAccounts = manager.GetDirtiedAccounts()
 	assert.Equal(len(dAccounts), 2, "应该有二个 accout 被修改.")
+}
+
+func TestManager_GetCodeHash(t *testing.T) {
+	assert := assert.New(t)
+	manager := NewManager(nil, new(stateReader))
+	addr := acc.Address{1}
+
+	right := manager.GetCodeHash(addr)
+	left := cry.Hash{1, 2, 3}
+	assert.Equal(right, left)
+}
+
+func TestManager_SetCode(t *testing.T) {
+	assert := assert.New(t)
+	manager := NewManager(nil, new(stateReader))
+	addr := acc.Address{1}
+	code := []byte{4, 5, 6}
+	codeHash := cry.Hash(crypto.Keccak256Hash(code))
+
+	manager.SetCode(addr, code)
+
+	assert.Equal(manager.GetCode(addr), code)
+	assert.Equal(manager.GetCodeHash(addr), codeHash)
+}
+
+type testKV struct{}
+
+func (kv testKV) GetValue(cry.Hash) []byte {
+	return nil
+}
+
+type testKV2 struct{}
+
+func (kv testKV2) GetValue(cry.Hash) []byte {
+	return []byte{1, 2}
+}
+
+func TestManager_GetCodeSize(t *testing.T) {
+	assert := assert.New(t)
+	manager := NewManager(new(testKV), new(stateReader))
+	addr := acc.Address{1}
+
+	assert.Equal(manager.GetCodeSize(addr), 0)
+
+	manager = NewManager(new(testKV2), new(stateReader))
+	assert.Equal(manager.GetCodeSize(addr), 2)
+
+	// code := []byte{4, 5, 6}
+	// codeHash := cry.Hash(crypto.Keccak256Hash(code))
+
+	// manager.SetCode(addr, code)
+
+	// assert.Equal(manager.GetCode(addr), code)
+	// assert.Equal(manager.GetCodeHash(addr), codeHash)
 }
