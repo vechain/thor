@@ -1,17 +1,30 @@
 package tx
 
 import (
+	"errors"
+	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/vechain/vecore/dsa"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/vecore/acc"
 	"github.com/vechain/vecore/cry"
 )
 
+// Transaction is an immutable tx type.
+type Transaction struct {
+	body      body
+	signature []byte
+
+	cache struct {
+		hash   *cry.Hash
+		signer *acc.Address
+	}
+}
+
 // body describes details of a tx.
-type txBody struct {
+type body struct {
 	Clauses   Clauses
 	GasPrice  *big.Int
 	GasLimit  *big.Int
@@ -19,31 +32,14 @@ type txBody struct {
 	DependsOn *cry.Hash `rlp:"nil"`
 }
 
-// txPayload payload of a tx.
-type txPayload struct {
-	Body      txBody
-	Signature []byte
-}
-
-// Transaction is an immutable tx type.
-type Transaction struct {
-	payload txPayload
-
-	cache struct {
-		hash *cry.Hash
-		from *acc.Address
-	}
-}
-
 // Hash returns hash of tx.
 func (t *Transaction) Hash() cry.Hash {
-	// TODO
-	if h := t.cache.hash; h != nil {
-		return *h
+	if cached := t.cache.hash; cached != nil {
+		return *cached
 	}
 
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, &t.payload)
+	hw := cry.NewHasher()
+	rlp.Encode(hw, t)
 
 	var h cry.Hash
 	hw.Sum(h[:0])
@@ -53,135 +49,82 @@ func (t *Transaction) Hash() cry.Hash {
 
 // HashForSigning returns hash of tx excludes signature.
 func (t *Transaction) HashForSigning() cry.Hash {
-	// TODO
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, &t.payload.Body)
+	hw := cry.NewHasher()
+	rlp.Encode(hw, &t.body)
 	var h cry.Hash
 	hw.Sum(h[:0])
 	return h
 }
 
 // GasPrice returns gas price.
-func (t Transaction) GasPrice() *big.Int {
-	if t.payload.Body.GasPrice == nil {
+func (t *Transaction) GasPrice() *big.Int {
+	if t.body.GasPrice == nil {
 		return new(big.Int)
 	}
-	return new(big.Int).Set(t.payload.Body.GasPrice)
+	return new(big.Int).Set(t.body.GasPrice)
 }
 
 // GasLimit returns gas limit.
-func (t Transaction) GasLimit() *big.Int {
-	if t.payload.Body.GasLimit == nil {
+func (t *Transaction) GasLimit() *big.Int {
+	if t.body.GasLimit == nil {
 		return new(big.Int)
 	}
-	return new(big.Int).Set(t.payload.Body.GasLimit)
-}
-
-// Signer returns origin of tx.
-func (t Transaction) Signer() (*acc.Address, error) {
-	// TODO
-	return &acc.Address{}, nil
-}
-
-func (t *Transaction) resetCache() {
-	t.cache.from = nil
-	t.cache.hash = nil
+	return new(big.Int).Set(t.body.GasLimit)
 }
 
 // WithSignature create a new tx with signature set.
-func (t Transaction) WithSignature(sig []byte) *Transaction {
-	t.resetCache()
+func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	sigCpy := append([]byte(nil), sig...)
-	t.payload.Signature = sigCpy
-	return &t
-}
-
-// Encode encodes tx into bytes.
-func (t Transaction) Encode() []byte {
-	data, err := rlp.EncodeToBytes(&t.payload)
-	if err != nil {
-		panic(err)
+	return &Transaction{
+		body:      t.body,
+		signature: sigCpy,
 	}
-	return data
 }
 
-// DecodeTransaction decodes bytes into transaction object.
-func DecodeTransaction(data []byte) (*Transaction, error) {
-	var payload txPayload
-	if err := rlp.DecodeBytes(data, &payload); err != nil {
+// Signer returns the signer of tx.
+func (t *Transaction) Signer() (*acc.Address, error) {
+	if len(t.signature) == 0 {
+		return nil, errors.New("not signed")
+	}
+	if signer := t.cache.signer; signer != nil {
+		cpy := *signer
+		return &cpy, nil
+	}
+	signer, err := dsa.Signer(t.HashForSigning(), t.signature)
+	if err != nil {
 		return nil, err
 	}
-	return &Transaction{payload: payload}, nil
+	t.cache.signer = signer
+	cpy := *signer
+	return &cpy, nil
 }
 
-// Transactions a slice of transactions.
-type Transactions []Transaction
-
-// RootHash computes merkle root hash of transactions.
-func (txs Transactions) RootHash() cry.Hash {
-	return cry.Hash(types.DeriveSha(derivableTxs(txs)))
+// EncodeRLP implements rlp.Encoder
+func (t *Transaction) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{
+		t.body,
+		t.signature,
+	})
 }
 
-// Copy makes a copy of txs slice
-func (txs Transactions) Copy() Transactions {
-	return append(Transactions(nil), txs...)
+// Decoder to decode bytes into tx object.
+// Since Transaction is immutable, it's not suitable to implement rlp.Decoder directly.
+type Decoder struct {
+	Result *Transaction
 }
 
-// implements DerivableList
-type derivableTxs []Transaction
-
-func (txs derivableTxs) Len() int {
-	return len(txs)
-}
-func (txs derivableTxs) GetRlp(i int) []byte {
-	return txs[i].Encode()
-}
-
-//--
-
-// Builder to make it easy to build transaction.
-type Builder struct {
-	body txBody
-}
-
-// Clauses set clauses.
-func (b *Builder) Clauses(cs Clauses) *Builder {
-	b.body.Clauses = cs.Copy()
-	return b
-}
-
-// GasPrice set gas price.
-func (b *Builder) GasPrice(price *big.Int) *Builder {
-	b.body.GasPrice = new(big.Int).Set(price)
-	return b
-}
-
-// GasLimit set gas limit.
-func (b *Builder) GasLimit(limit *big.Int) *Builder {
-	b.body.GasLimit = new(big.Int).Set(limit)
-	return b
-}
-
-// Nonce set nonce.
-func (b *Builder) Nonce(nonce uint64) *Builder {
-	b.body.Nonce = nonce
-	return b
-}
-
-// DependsOn set depended tx.
-func (b *Builder) DependsOn(txHash *cry.Hash) *Builder {
-	if txHash == nil {
-		b.body.DependsOn = nil
-	} else {
-		h := *txHash
-		b.body.DependsOn = &h
+// DecodeRLP implements rlp.Decoder
+func (d *Decoder) DecodeRLP(s *rlp.Stream) error {
+	payload := struct {
+		B body
+		S []byte
+	}{}
+	if err := s.Decode(&payload); err != nil {
+		return err
 	}
-	return b
-}
-
-// Build build tx object.
-func (b Builder) Build() *Transaction {
-	tx := Transaction{}
-	tx.payload.Body = b.body
-	return &tx
+	d.Result = &Transaction{
+		body:      payload.B,
+		signature: payload.S,
+	}
+	return nil
 }

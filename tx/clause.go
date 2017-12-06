@@ -26,20 +26,14 @@ func (c Clause) Copy() *Clause {
 	}
 	c.Value = value
 
-	data := make([]byte, len(c.Data))
-	copy(data, c.Data)
-	c.Data = data
+	c.Data = append([]byte(nil), c.Data...)
 	return &c
 }
 
 // Clauses array of clauses.
-type Clauses []Clause
+type Clauses []*Clause
 
-// Copy makes a deep copy of clauses slice.
+// Copy returns a shallow copy.
 func (cs Clauses) Copy() Clauses {
-	ret := make(Clauses, len(cs))
-	for i, c := range cs {
-		ret[i] = *c.Copy()
-	}
-	return ret
+	return append(Clauses(nil), cs...)
 }

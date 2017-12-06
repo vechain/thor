@@ -5,12 +5,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/vecore/block"
+	. "github.com/vechain/vecore/block"
 )
 
-func TestA(t *testing.T) {
-	bb := block.Builder{}
-	bb.GasUsed(big.NewInt(1))
-	block := bb.Build()
-	fmt.Println(block.HashForSigning().String())
+func TestBlock(t *testing.T) {
+
+	builder := Builder{}
+	block := builder.GasUsed(big.NewInt(1000)).Build()
+	h := block.Header()
+	fmt.Println(h.Hash())
 }
