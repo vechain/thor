@@ -8,52 +8,41 @@ import (
 
 // Account manage acc.Account and Storage.
 type Account struct {
-	address      acc.Address
-	account      acc.Account
-	storage      acc.Storage
-	dirtyStorage acc.Storage
-	suicided     bool // 标记是否删除
+	Address       acc.Address
+	Data          acc.Account
+	Storage       acc.Storage
+	cachedStorage acc.Storage
+	suicided      bool // 标记是否删除
 }
 
 func newAccount(addr acc.Address, account acc.Account) *Account {
 	return &Account{
-		address:      addr,
-		account:      account,
-		storage:      make(acc.Storage),
-		dirtyStorage: make(acc.Storage),
+		Address:       addr,
+		Data:          account,
+		Storage:       make(acc.Storage),
+		cachedStorage: make(acc.Storage),
+		suicided:      false,
 	}
 }
 
 func (c *Account) deepCopy() *Account {
-	account := acc.Account{
-		Balance:     new(big.Int).Set(c.account.Balance),
-		CodeHash:    c.account.CodeHash,
-		StorageRoot: c.account.StorageRoot,
+	data := acc.Account{
+		Balance:     new(big.Int).Set(c.Data.Balance),
+		CodeHash:    c.Data.CodeHash,
+		StorageRoot: c.Data.StorageRoot,
 	}
 	return &Account{
-		address:      c.address,
-		account:      account,
-		storage:      c.storage.Copy(),
-		dirtyStorage: c.dirtyStorage.Copy(),
+		Address:       c.Address,
+		Data:          data,
+		Storage:       c.Storage.Copy(),
+		cachedStorage: c.cachedStorage.Copy(),
 	}
 }
 
 func (c *Account) setBalance(amount *big.Int) {
-	c.account.Balance = amount
+	c.Data.Balance = amount
 }
 
 func (c *Account) getBalance() *big.Int {
-	return c.account.Balance
+	return c.Data.Balance
 }
-
-// // addBalance add amount to c's balance.
-// // It is used to add funds to the destination account of a transfer.
-// // :rtype: bool, if changed return true, or return false
-// func (c *Account) addBalance(amount *big.Int) bool {
-// 	if amount.Sign() == 0 {
-// 		return false
-// 	}
-// 	newBalance := new(big.Int).Add(c.account.Balance, amount)
-// 	c.setBalance(newBalance)
-// 	return true
-// }

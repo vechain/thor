@@ -66,6 +66,15 @@ func (m *Manager) DeepCopy() interface{} {
 	}
 }
 
+// GetDirtiedAccounts return all dirtied Accounts.
+func (m *Manager) GetDirtiedAccounts() []*Account {
+	var dirtyAccounts = make([]*Account, 0, len(m.accountsDirty))
+	for addr := range m.accountsDirty {
+		dirtyAccounts = append(dirtyAccounts, m.accounts[addr])
+	}
+	return dirtyAccounts
+}
+
 // markAccoutDirty mark the account is dirtied.
 func (m *Manager) markAccoutDirty(addr acc.Address) {
 	_, isDirty := m.accountsDirty[addr]
@@ -96,16 +105,6 @@ func (m *Manager) AddBalance(addr acc.Address, amount *big.Int) {
 		account.setBalance(new(big.Int).Add(account.getBalance(), amount))
 		m.markAccoutDirty(addr)
 	}
-}
-
-// GetDirtiedAccounts return all dirtied Accounts.
-func (m *Manager) GetDirtiedAccounts() []*Account {
-	var dirtyAccounts = make([]*Account, len(m.accountsDirty))
-	for addr := range m.accountsDirty {
-		account := m.accounts[addr]
-		dirtyAccounts = append(dirtyAccounts, account)
-	}
-	return dirtyAccounts
 }
 
 func (m *Manager) CreateAccount(acc.Address) {

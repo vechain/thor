@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/vecore/acc"
 	"github.com/vechain/vecore/cry"
 )
@@ -24,13 +25,26 @@ func (sr *stateReader) GetStorage(cry.Hash) cry.Hash {
 	return cry.Hash{1, 2, 3}
 }
 
-func TestManager_DeepCopy(t *testing.T) {
+func TestManager_GetDirtiedAccounts(t *testing.T) {
 	assert := assert.New(t)
-	addr := acc.Address{1}
-	manager1 := NewManager(new(stateReader))
-	manager1.AddBalance(addr, big.NewInt(10))
-	manager2 := manager1.DeepCopy()
+	manager := NewManager(new(stateReader))
 
-	// test for Manager.Account
-	assertAccount(assert, manager1.getAccout(addr), manager2.getAccout(addr))
+	manager.getAccout(acc.Address{1})                  // 1 accout
+	manager.getAccout(acc.Address{2})                  // 2 accout
+	manager.AddBalance(acc.Address{3}, big.NewInt(10)) // 3 accout and dirty
+
+	dAccounts := manager.GetDirtiedAccounts()
+	assert.Equal(len(dAccounts), 1, "应该只有一个 accout 被修改.")
+	for _, account := range dAccounts {
+		assert.Equal(account.Data.Balance, big.NewInt(10), "dirty accout's balace must be 10.")
+	}
+
+	manager.AddBalance(acc.Address{3}, big.NewInt(20)) // 3 accout and dirty
+	for _, account := range dAccounts {
+		assert.Equal(account.Data.Balance, big.NewInt(30), "dirty accout's balace must be 30.")
+	}
+
+	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 3 accout and dirty
+	dAccounts = manager.GetDirtiedAccounts()
+	assert.Equal(len(dAccounts), 2, "应该只有二个 accout 被修改.")
 }

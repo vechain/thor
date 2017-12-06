@@ -29,6 +29,12 @@ func New(am *account.Manager, sm *snapshot.Snapshot, vl *vmlog.VMlog) *State {
 	}
 }
 
+// GetDirtiedAccounts return all dirtied accounts.
+func (s *State) GetDirtiedAccounts() []*account.Account {
+	return s.accountManager.GetDirtiedAccounts()
+}
+
+// Proxy
 func (s *State) CreateAccount(addr common.Address) {
 	s.accountManager.CreateAccount(acc.Address(addr))
 }
