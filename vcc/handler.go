@@ -31,7 +31,7 @@ func (accountManager *AccountManager) handleGetAccount(w http.ResponseWriter, re
 	if err != nil {
 		return err
 	}
-	var data acc.Account
+	var data interface{}
 	json.Unmarshal(str, &data)
 	fmt.Println("data:", data)
 	w.Write(str)
