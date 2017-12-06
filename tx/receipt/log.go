@@ -1,4 +1,4 @@
-package tx
+package receipt
 
 import (
 	"github.com/vechain/vecore/acc"
