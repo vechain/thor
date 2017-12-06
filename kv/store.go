@@ -18,10 +18,15 @@ type Writer interface {
 	Delete(key []byte) error
 }
 
-// Store defines interface of kv store.
-type Store interface {
+// Duplex composes reader and writer.
+type Duplex interface {
 	Reader
 	Writer
+}
+
+// Store defines interface of kv store.
+type Store interface {
+	Duplex
 
 	Close() error
 
