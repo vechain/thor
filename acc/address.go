@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/cry"
 )
 
 const (
@@ -46,4 +48,12 @@ func ParseAddress(s string) (*Address, error) {
 // If b is smaller than address length, b will be extended (from the left).
 func BytesToAddress(b []byte) Address {
 	return Address(common.BytesToAddress(b))
+}
+
+// CreateContractAddress to generate contract address according to tx hash, and
+// contract creation count.
+func CreateContractAddress(txHash cry.Hash, creationCount uint64) Address {
+	data, _ := rlp.EncodeToBytes([]interface{}{txHash, creationCount})
+	hash := cry.HashSum(data)
+	return BytesToAddress(hash[12:])
 }
