@@ -16,8 +16,8 @@ type State struct {
 	db   kv.Store
 }
 
-//NewState create new storage trie
-func NewState(root cry.Hash, db kv.Store) (state *State, err error) {
+//New create new state
+func New(root cry.Hash, db kv.Store) (s *State, err error) {
 	hash := common.Hash(root)
 	secureTrie, err := Trie.NewSecure(hash, db, 0)
 	if err != nil {
@@ -30,8 +30,8 @@ func NewState(root cry.Hash, db kv.Store) (state *State, err error) {
 }
 
 //GetAccount return account from address
-func (state *State) GetAccount(address acc.Address) *acc.Account {
-	account, err := state.getAccountByAddress(address)
+func (s *State) GetAccount(address acc.Address) *acc.Account {
+	account, err := s.getAccount(address)
 	if err != nil {
 		return nil
 	}
@@ -39,8 +39,8 @@ func (state *State) GetAccount(address acc.Address) *acc.Account {
 }
 
 //GetAccountByAddress get account by address
-func (state *State) getAccountByAddress(address acc.Address) (account *acc.Account, err error) {
-	enc, err := state.Get(address[:])
+func (s *State) getAccount(address acc.Address) (account *acc.Account, err error) {
+	enc, err := s.Get(address[:])
 	if err != nil {
 		log.Error("GetState error nil enc:", err)
 		return nil, err
@@ -53,40 +53,24 @@ func (state *State) getAccountByAddress(address acc.Address) (account *acc.Accou
 	return &data, nil
 }
 
-//GetAccountByAddressHash get account by addressHash
-func (state *State) getAccountByAddressHash(addressHash cry.Hash) (account *acc.Account, err error) {
-	enc, err := state.Get(addressHash[:])
-	if err != nil || len(enc) == 0 {
-		log.Error("GetState error nil enc:", err)
-		return nil, err
-	}
-	var data acc.Account
-	err = rlp.DecodeBytes(enc, &data)
-	if err != nil {
-		log.Error("GetState error decode enc:", err)
-		return nil, err
-	}
-	return &data, nil
-}
-
 //UpdateAccount update account by address
-func (state *State) UpdateAccount(address acc.Address, account *acc.Account) (err error) {
+func (s *State) UpdateAccount(address acc.Address, account *acc.Account) (err error) {
 	enc, err := rlp.EncodeToBytes(*account)
 	if err != nil {
 		log.Error("UpdateAccount error:", err)
 		return err
 	}
-	return state.Put(address[:], enc)
+	return s.Put(address[:], enc)
 }
 
 //UpdateStorage update account storage
-func (state *State) UpdateStorage(key cry.Hash, value cry.Hash) error {
-	return state.Put(key[:], value[:])
+func (s *State) UpdateStorage(key cry.Hash, value cry.Hash) error {
+	return s.Put(key[:], value[:])
 }
 
 //GetStorage get account storage
-func (state *State) GetStorage(key cry.Hash) (value cry.Hash) {
-	enc, err := state.Get(key[:])
+func (s *State) GetStorage(key cry.Hash) (value cry.Hash) {
+	enc, err := s.Get(key[:])
 	if err != nil {
 		return cry.Hash{}
 	}
@@ -99,23 +83,23 @@ func (state *State) GetStorage(key cry.Hash) (value cry.Hash) {
 }
 
 //Get key value
-func (state *State) Get(key []byte) ([]byte, error) {
-	return state.trie.TryGet(key)
+func (s *State) Get(key []byte) ([]byte, error) {
+	return s.trie.TryGet(key)
 }
 
 //Put key value
-func (state *State) Put(key []byte, value []byte) error {
-	return state.trie.TryUpdate(key, value)
+func (s *State) Put(key []byte, value []byte) error {
+	return s.trie.TryUpdate(key, value)
 }
 
 // Delete removes any existing value for key from the trie.
-func (state *State) Delete(key []byte) error {
-	return state.trie.TryDelete(key)
+func (s *State) Delete(key []byte) error {
+	return s.trie.TryDelete(key)
 }
 
 //Commit commit data to update
-func (state *State) Commit() (root cry.Hash, err error) {
-	hash, err := state.trie.CommitTo(state.db)
+func (s *State) Commit() (root cry.Hash, err error) {
+	hash, err := s.trie.CommitTo(s.db)
 	if err != nil {
 		return cry.Hash(common.Hash{}), err
 	}
@@ -123,11 +107,11 @@ func (state *State) Commit() (root cry.Hash, err error) {
 }
 
 //Root get storage trie root
-func (state *State) Root() []byte {
-	return state.trie.Root()
+func (s *State) Root() []byte {
+	return s.trie.Root()
 }
 
 //Hash get storage trie root hash
-func (state *State) Hash() cry.Hash {
-	return cry.Hash(state.trie.Hash())
+func (s *State) Hash() cry.Hash {
+	return cry.Hash(s.trie.Hash())
 }

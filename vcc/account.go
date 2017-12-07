@@ -7,10 +7,17 @@ import (
 
 //AccountManager manage account
 type AccountManager struct {
-	State *state.State
+	state *state.State
+}
+
+//New create new AccountManager
+func New(state *state.State) *AccountManager {
+	return &AccountManager{
+		state: state,
+	}
 }
 
 //GetAccount get account by address
-func (accountManager *AccountManager) GetAccount(address acc.Address) *acc.Account {
-	return accountManager.State.GetAccount(address)
+func (am *AccountManager) GetAccount(address acc.Address) *acc.Account {
+	return am.state.GetAccount(address)
 }
