@@ -41,6 +41,11 @@ func (s *State) Preimages() map[cry.Hash][]byte {
 	return s.accountManager.Preimages()
 }
 
+// GetLogs return the log for this state.
+func (s *State) GetLogs() []*types.Log {
+	return s.vmLog.GetLogs()
+}
+
 // Proxy
 func (s *State) CreateAccount(addr common.Address) {
 	s.accountManager.CreateAccount(acc.Address(addr))

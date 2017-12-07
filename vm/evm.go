@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/vecore/vm/snapshot"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/vecore/acc"
@@ -56,9 +57,9 @@ func (evm *EVM) Cancel() {
 // Call executes the contract associated with the addr with the given input as parameters.
 // It also handles any necessary value transfer required and takes the necessary steps to
 // create accounts and reverses the state in case of an execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, error) {
+func (evm *EVM) Call(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, []*types.Log, error) {
 	ret, leftOverGas, err := evm.ethEvm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), err
+	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), evm.state.GetLogs(), err
 }
 
 // CallCode executes the contract associated with the addr with the given input as parameters.
@@ -67,9 +68,9 @@ func (evm *EVM) Call(caller ContractRef, addr acc.Address, input []byte, gas uin
 //
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
-func (evm *EVM) CallCode(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, error) {
+func (evm *EVM) CallCode(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, []*types.Log, error) {
 	ret, leftOverGas, err := evm.ethEvm.CallCode(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), err
+	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), evm.state.GetLogs(), err
 }
 
 // DelegateCall executes the contract associated with the addr with the given input as parameters.
@@ -77,9 +78,9 @@ func (evm *EVM) CallCode(caller ContractRef, addr acc.Address, input []byte, gas
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with
 // the caller as context and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, error) {
+func (evm *EVM) DelegateCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, []*types.Log, error) {
 	ret, leftOverGas, err := evm.ethEvm.DelegateCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), err
+	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), evm.state.GetLogs(), err
 }
 
 // StaticCall executes the contract associated with the addr with the given input as parameters
@@ -87,15 +88,15 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr acc.Address, input []byte,
 //
 // Opcodes that attempt to perform such modifications will result in exceptions instead of performing
 // the modifications.
-func (evm *EVM) StaticCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, error) {
+func (evm *EVM) StaticCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) ([]byte, uint64, []*account.Account, map[cry.Hash][]byte, []*types.Log, error) {
 	ret, leftOverGas, err := evm.ethEvm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), err
+	return ret, leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), evm.state.GetLogs(), err
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) ([]byte, acc.Address, uint64, []*account.Account, map[cry.Hash][]byte, error) {
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) ([]byte, acc.Address, uint64, []*account.Account, map[cry.Hash][]byte, []*types.Log, error) {
 	ret, contractAddr, leftOverGas, err := evm.ethEvm.Create(&vmContractRef{caller}, code, gas, value)
-	return ret, acc.Address(contractAddr), leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), err
+	return ret, acc.Address(contractAddr), leftOverGas, evm.state.GetDirtiedAccounts(), evm.state.Preimages(), evm.state.GetLogs(), err
 }
 
 // ChainConfig returns the evmironment's chain configuration
