@@ -1,8 +1,6 @@
 package state
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	Trie "github.com/ethereum/go-ethereum/trie"
@@ -32,16 +30,12 @@ func NewState(root cry.Hash, db kv.Store) (state *State, err error) {
 }
 
 //GetAccount return account from address
-func (state *State) GetAccount(address acc.Address) acc.Account {
+func (state *State) GetAccount(address acc.Address) *acc.Account {
 	account, err := state.getAccountByAddress(address)
 	if err != nil {
-		return acc.Account{
-			Balance:     new(big.Int),
-			CodeHash:    cry.Hash{},
-			StorageRoot: cry.Hash{},
-		}
+		return nil
 	}
-	return *account
+	return account
 }
 
 //GetAccountByAddress get account by address
