@@ -28,10 +28,15 @@ type Duplex interface {
 type Store interface {
 	Duplex
 
-	Close() error
-
 	NewBatch() Batch
 	NewIterator(r *Range) Iterator
+	NewTable(name string) Table
+}
+
+// StoreCloser store with close method.
+type StoreCloser interface {
+	Store
+	Close() error
 }
 
 // Batch defines batch of write ops.
@@ -64,12 +69,12 @@ type Options struct {
 }
 
 // New create persistent store at fs path specified.
-func New(path string, opts Options) (Store, error) {
+func New(path string, opts Options) (StoreCloser, error) {
 	return newPersistentLevelDB(path, opts.CacheSize, opts.OpenFilesCacheCapacity)
 }
 
 // NewMem create in-memory store, for testing purpose.
-func NewMem(opts Options) (Store, error) {
+func NewMem(opts Options) (StoreCloser, error) {
 	return newMemLevelDB(opts.CacheSize)
 }
 

@@ -94,11 +94,18 @@ func (ldb *lvldb) Close() error {
 
 func (ldb *lvldb) NewBatch() Batch {
 	return &lvldbBatch{
-		db:    ldb.db,
-		batch: &leveldb.Batch{},
+		ldb.db,
+		&leveldb.Batch{},
 	}
 }
 
 func (ldb *lvldb) NewIterator(r *Range) Iterator {
 	return ldb.db.NewIterator(r.r, readOpt)
+}
+
+func (ldb *lvldb) NewTable(name string) Table {
+	return &table{
+		name,
+		ldb,
+	}
 }
