@@ -3,9 +3,9 @@ package block
 import (
 	"math/big"
 
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
-	"github.com/vechain/vecore/tx"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/tx"
 )
 
 // Builder to make it easy to build a block object.

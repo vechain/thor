@@ -5,7 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/vechain/vecore/acc"
+	"github.com/vechain/thor/acc"
 )
 
 // Context is ref to vm.Context.

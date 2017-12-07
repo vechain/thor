@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
 )
 
 func TestAccount_deepCopy(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	Trie "github.com/ethereum/go-ethereum/trie"
 	log "github.com/sirupsen/logrus"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
-	"github.com/vechain/vecore/kv"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/kv"
 )
 
 //State manage account list

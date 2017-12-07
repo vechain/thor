@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	. "github.com/vechain/vecore/tx"
+	. "github.com/vechain/thor/tx"
 )
 
 func TestTx(t *testing.T) {

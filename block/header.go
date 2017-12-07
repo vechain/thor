@@ -7,9 +7,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
-	"github.com/vechain/vecore/dsa"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/dsa"
 )
 
 // Header contains almost all information about a block, except txs.

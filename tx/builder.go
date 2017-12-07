@@ -3,7 +3,7 @@ package tx
 import (
 	"math/big"
 
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/cry"
 )
 
 // Builder to make it easy to build transaction.

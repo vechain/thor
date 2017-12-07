@@ -3,18 +3,18 @@ package vm
 import (
 	"math/big"
 
-	"github.com/vechain/vecore/cry"
-	"github.com/vechain/vecore/vm/vmlog"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/vm/vmlog"
 
-	"github.com/vechain/vecore/vm/snapshot"
+	"github.com/vechain/thor/vm/snapshot"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/vm/account"
-	"github.com/vechain/vecore/vm/state"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/vm/account"
+	"github.com/vechain/thor/vm/state"
 )
 
 // Config is ref to vm.Config.

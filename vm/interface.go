@@ -5,8 +5,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
 )
 
 // ContractRef is a reference to the contract's backing object.

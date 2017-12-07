@@ -4,9 +4,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/vecore/cry"
-
-	"github.com/vechain/vecore/acc"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
 )
 
 // Account manage acc.Account and Storage.

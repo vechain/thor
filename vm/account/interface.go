@@ -1,8 +1,8 @@
 package account
 
 import (
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
 )
 
 // StateReader return a accout or storage.

@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/vecore/tx"
+	"github.com/vechain/thor/tx"
 )
 
 // Block is an immutable block type.

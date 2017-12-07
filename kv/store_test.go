@@ -3,7 +3,7 @@ package kv_test
 import (
 	"testing"
 
-	. "github.com/vechain/vecore/kv"
+	. "github.com/vechain/thor/kv"
 )
 
 func TestStore(t *testing.T) {
