@@ -58,3 +58,16 @@ func NewRangeWithHexPrefix(hexPrefix string) (*Range, error) {
 
 	return NewRangeWithBytesPrefix(prefix), nil
 }
+
+func (r Range) WithPrefix(prefix []byte) *Range {
+	r.r.Start = withPrefix(r.r.Start, prefix)
+	r.r.Limit = withPrefix(r.r.Limit, prefix)
+	return &r
+}
+
+func withPrefix(src []byte, prefix []byte) []byte {
+	r := make([]byte, len(prefix), len(src))
+	copy(r, prefix)
+	copy(r[len(prefix):], src)
+	return r
+}
