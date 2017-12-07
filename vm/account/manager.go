@@ -71,7 +71,8 @@ func (m *Manager) GetDirtiedAccounts() []*Account {
 	return dirtyAccounts
 }
 
-// CreateAccount create a new accout, if the addr already bound to another accout, set it's balance.
+// CreateAccount create a new accout with empty,
+// if the addr already bound to another accout, set it's balance.
 func (m *Manager) CreateAccount(addr acc.Address) {
 	new, prev := m.createAccount(addr)
 	if prev != nil {
@@ -101,9 +102,11 @@ func (m *Manager) SubBalance(addr acc.Address, amount *big.Int) {
 }
 
 // GetBalance return the account's balance.
-// If the
 func (m *Manager) GetBalance(addr acc.Address) *big.Int {
-	account := m.getOrCreateAccout(addr)
+	account := m.getAccount(addr)
+	if account == nil {
+		return nil
+	}
 	return account.getBalance()
 }
 
@@ -118,13 +121,19 @@ func (m *Manager) SetNonce(acc.Address, uint64) {
 
 // GetCodeHash return account's CodeHash.
 func (m *Manager) GetCodeHash(addr acc.Address) cry.Hash {
-	account := m.getOrCreateAccout(addr)
+	account := m.getAccount(addr)
+	if account == nil {
+		return cry.Hash{}
+	}
 	return account.getCodeHash()
 }
 
 // GetCode return code from account.
 func (m *Manager) GetCode(addr acc.Address) []byte {
-	account := m.getOrCreateAccout(addr)
+	account := m.getAccount(addr)
+	if account == nil {
+		return nil
+	}
 	return account.getCode(m.kvReader)
 }
 
@@ -137,7 +146,10 @@ func (m *Manager) SetCode(addr acc.Address, code []byte) {
 
 // GetCodeSize return lenth of account'code.
 func (m *Manager) GetCodeSize(addr acc.Address) int {
-	account := m.getOrCreateAccout(addr)
+	account := m.getAccount(addr)
+	if account == nil {
+		return 0
+	}
 	code := account.getCode(m.kvReader)
 	if code == nil {
 		return 0
@@ -159,7 +171,10 @@ func (m *Manager) GetRefund() *big.Int {
 
 // GetState return storage by given key.
 func (m *Manager) GetState(addr acc.Address, key cry.Hash) cry.Hash {
-	account := m.getOrCreateAccout(addr)
+	account := m.getAccount(addr)
+	if account == nil {
+		return cry.Hash{}
+	}
 	return account.getStorage(m.stateReader, key)
 }
 
@@ -172,34 +187,52 @@ func (m *Manager) SetState(addr acc.Address, key cry.Hash, value cry.Hash) {
 
 // Suicide kill a account.
 func (m *Manager) Suicide(addr acc.Address) {
-	account := m.getOrCreateAccout(addr)
-	account.suicide()
+	account := m.getAccount(addr)
+	if account != nil {
+		account.suicide()
+		m.markAccoutDirty(addr)
+	}
 }
 
 // HasSuicided return a account or not suicide.
 func (m *Manager) HasSuicided(addr acc.Address) bool {
-	account := m.getOrCreateAccout(addr)
-	return account.hasSuicided()
+	account := m.getAccount(addr)
+	if account != nil {
+		return account.hasSuicided()
+	}
+	return false
 }
 
 // Exist reports whether the given account exists in state.
 // Notably this should also return true for suicided accounts.
-func (m *Manager) Exist(acc.Address) bool {
-	return false
+func (m *Manager) Exist(addr acc.Address) bool {
+	return m.getAccount(addr) != nil
 }
 
 // Empty returns whether the given account is empty.
 // Empty is defined according to EIP161 (balance = nonce = code = 0).
-func (m *Manager) Empty(acc.Address) bool {
-	return false
+func (m *Manager) Empty(addr acc.Address) bool {
+	account := m.getAccount(addr)
+	return account == nil || account.empty()
 }
 
-func (m *Manager) ForEachStorage(acc.Address, func(cry.Hash, cry.Hash) bool) {
+// ForEachStorage Unrealized.
+func (m *Manager) ForEachStorage(addr acc.Address, cb func(cry.Hash, cry.Hash) bool) {
+	panic("ForEachStorage Unrealized!")
 }
 
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (m *Manager) AddPreimage(hash cry.Hash, preimage []byte) {
+	if _, ok := m.preimages[hash]; !ok {
+		pi := make([]byte, len(preimage))
+		copy(pi, preimage)
+		m.preimages[hash] = pi
+	}
+}
 
+// Preimages returns a list of SHA3 preimages that have been submitted.
+func (m *Manager) Preimages() map[cry.Hash][]byte {
+	return m.preimages
 }
 
 // markAccoutDirty mark the account is dirtied.
@@ -211,16 +244,30 @@ func (m *Manager) markAccoutDirty(addr acc.Address) {
 }
 
 func (m *Manager) getAccount(addr acc.Address) *Account {
+	// step 1. get from memory.
 	acc := m.accounts[addr]
-	if acc != nil && acc.suicided {
+	if acc != nil {
+		if acc.Suicided {
+			return nil
+		}
+		return acc
+	}
+
+	// step 2. if acc == nil, then get from stateReader
+	account := m.stateReader.GetAccout(addr)
+	if account == nil {
 		return nil
 	}
-	return acc
+
+	newobj := newAccount(addr, m.stateReader.GetAccout(addr))
+	m.accounts[addr] = newobj
+	return newobj
 }
 
+// createAccount create a empty accout.
 func (m *Manager) createAccount(addr acc.Address) (*Account, *Account) {
-	prev := m.getAccount(addr) // 这里有问题, getAccount 只返回了当前缓存的 account
-	newobj := newAccount(addr, m.stateReader.GetAccout(addr))
+	prev := m.getAccount(addr)
+	newobj := newAccount(addr, &acc.Account{})
 	m.accounts[addr] = newobj
 	return newobj, prev
 }
@@ -230,6 +277,9 @@ func (m *Manager) getOrCreateAccout(addr acc.Address) *Account {
 	if acc := m.getAccount(addr); acc != nil {
 		return acc
 	}
+
+	// If memory and stateReader dot have the given account,
+	// then create a new accout with empty.
 	account, _ := m.createAccount(addr)
 	return account
 }

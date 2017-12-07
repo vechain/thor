@@ -35,11 +35,11 @@ type Message interface {
 
 // StateReader is account.StateReader's facade.
 type StateReader interface {
-	GetAccout(acc.Address) acc.Account
+	GetAccout(acc.Address) *acc.Account // if do't have, return nil
 	GetStorage(cry.Hash) cry.Hash
 }
 
 // KVReader is account.KVReader's facade.
 type KVReader interface {
-	GetValue(cry.Hash) []byte
+	GetValue(cry.Hash) []byte // if do't have, return nil
 }

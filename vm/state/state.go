@@ -36,6 +36,11 @@ func (s *State) GetDirtiedAccounts() []*account.Account {
 	return s.accountManager.GetDirtiedAccounts()
 }
 
+// Preimages returns a list of SHA3 preimages that have been submitted.
+func (s *State) Preimages() map[cry.Hash][]byte {
+	return s.accountManager.Preimages()
+}
+
 // Proxy
 func (s *State) CreateAccount(addr common.Address) {
 	s.accountManager.CreateAccount(acc.Address(addr))

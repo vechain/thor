@@ -12,7 +12,7 @@ import (
 func TestAccount_deepCopy(t *testing.T) {
 	assert := assert.New(t)
 
-	account1 := newAccount(acc.Address{1}, acc.Account{
+	account1 := newAccount(acc.Address{1}, &acc.Account{
 		Balance:     new(big.Int),
 		CodeHash:    cry.Hash{1, 2, 3},
 		StorageRoot: cry.Hash{1, 2, 3},

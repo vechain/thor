@@ -14,8 +14,8 @@ import (
 type stateReader struct {
 }
 
-func (sr *stateReader) GetAccout(acc.Address) acc.Account {
-	return acc.Account{
+func (sr *stateReader) GetAccout(acc.Address) *acc.Account {
+	return &acc.Account{
 		Balance:     new(big.Int),
 		CodeHash:    cry.Hash{1, 2, 3},
 		StorageRoot: cry.Hash{1, 2, 3},
@@ -30,24 +30,35 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 	assert := assert.New(t)
 	manager := NewManager(nil, new(stateReader))
 
-	manager.CreateAccount(acc.Address{1})              // 1 accout
-	manager.CreateAccount(acc.Address{2})              // 2 accout
+	manager.CreateAccount(acc.Address{1})              // 1 accout, stateReader will certainly return a account, so dirty +1
+	manager.CreateAccount(acc.Address{2})              // 2 accout, stateReader will certainly return a account, so dirty +1
 	manager.AddBalance(acc.Address{3}, big.NewInt(10)) // 3 accout and dirty
 
 	dAccounts := manager.GetDirtiedAccounts()
-	assert.Equal(len(dAccounts), 1, "应该只有一个 accout 被修改.")
+	assert.Equal(len(dAccounts), 3, "应该三个 accout 被修改.")
+
 	for _, account := range dAccounts {
-		assert.Equal(account.Data.Balance, big.NewInt(10), "dirty accout's balace must be 10.")
+		if account.Address == (acc.Address{1}) {
+			assert.Equal(account.Data.Balance, new(big.Int), "dirty accout's balace must be 0.")
+		} else if account.Address == (acc.Address{3}) {
+			assert.Equal(account.Data.Balance, big.NewInt(10), "dirty accout's balace must be 10.")
+		}
+
 	}
 
 	manager.AddBalance(acc.Address{3}, big.NewInt(20)) // 3 accout and dirty
+	dAccounts = manager.GetDirtiedAccounts()
+	assert.Equal(len(dAccounts), 3, "应该三个 accout 被修改.")
+
 	for _, account := range dAccounts {
-		assert.Equal(account.Data.Balance, big.NewInt(30), "dirty accout's balace must be 30.")
+		if account.Address == (acc.Address{3}) {
+			assert.Equal(account.Data.Balance, big.NewInt(30), "dirty accout's balace must be 30.")
+		}
 	}
 
-	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 3 accout and dirty
+	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 4 accout and dirty
 	dAccounts = manager.GetDirtiedAccounts()
-	assert.Equal(len(dAccounts), 2, "应该有二个 accout 被修改.")
+	assert.Equal(len(dAccounts), 4, "应该四个 accout 被修改.")
 }
 
 func TestManager_GetCodeHash(t *testing.T) {
@@ -94,4 +105,21 @@ func TestManager_GetCodeSize(t *testing.T) {
 
 	manager = NewManager(new(testKV2), new(stateReader))
 	assert.Equal(manager.GetCodeSize(addr), 2)
+}
+
+type emptyStateReader struct {
+	stateReader
+}
+
+func (sr *emptyStateReader) GetAccout(acc.Address) *acc.Account {
+	return nil
+}
+
+func TestManager_Empty(t *testing.T) {
+	assert := assert.New(t)
+	emptyManager := NewManager(nil, new(emptyStateReader))
+	assert.Equal(emptyManager.Empty(acc.Address{1}), true)
+
+	manager := NewManager(nil, new(stateReader))
+	assert.Equal(manager.Empty(acc.Address{1}), false)
 }
