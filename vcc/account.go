@@ -1,8 +1,8 @@
 package vcc
 
 import (
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/state"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/state"
 )
 
 //AccountManager manage account

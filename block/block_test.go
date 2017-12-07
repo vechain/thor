@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"testing"
 
-	. "github.com/vechain/vecore/block"
+	. "github.com/vechain/thor/block"
 )
 
 func TestBlock(t *testing.T) {

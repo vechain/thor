@@ -7,8 +7,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
 )
 
 type stateReader struct {

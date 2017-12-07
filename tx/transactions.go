@@ -3,7 +3,7 @@ package tx
 import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/cry"
 )
 
 // Transactions a slice of transactions.

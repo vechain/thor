@@ -1,4 +1,4 @@
-package: github.com/vechain/vecore
+package: github.com/vechain/thor
 import:
 - package: github.com/ethereum/go-ethereum
   version: 1.7.3

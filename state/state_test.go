@@ -5,10 +5,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
-	"github.com/vechain/vecore/kv"
-	"github.com/vechain/vecore/state"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/state"
 )
 
 const (

@@ -3,7 +3,7 @@ package vm
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/cry"
 )
 
 // vmContractRef is a adapter from ContractRef to vm.ContractRef

@@ -5,11 +5,10 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/vechain/vecore/dsa"
-
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/vecore/acc"
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/dsa"
 )
 
 // Transaction is an immutable tx type.

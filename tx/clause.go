@@ -3,7 +3,7 @@ package tx
 import (
 	"math/big"
 
-	"github.com/vechain/vecore/acc"
+	"github.com/vechain/thor/acc"
 )
 
 // Clause is the basic execution unit of a transaction.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	. "github.com/vechain/vecore/tx/receipt"
+	. "github.com/vechain/thor/tx/receipt"
 )
 
 func TestReceipt(t *testing.T) {

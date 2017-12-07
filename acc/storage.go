@@ -3,7 +3,7 @@ package acc
 import (
 	"fmt"
 
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/cry"
 )
 
 type Storage map[cry.Hash]cry.Hash

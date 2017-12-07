@@ -3,10 +3,10 @@ package acc
 import (
 	"math/big"
 
-	"github.com/vechain/vecore/cry"
+	"github.com/vechain/thor/cry"
 )
 
-//Account vecore account
+//Account Thor account
 type Account struct {
 	Balance     *big.Int
 	CodeHash    cry.Hash

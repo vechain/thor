@@ -1,1 +1,1 @@
-## Genesis Contracts of VeCore
+## Genesis Contracts of Thor

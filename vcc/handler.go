@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/solidb/utils/httpx"
-	"github.com/vechain/vecore/acc"
+	"github.com/vechain/thor/acc"
 )
 
 //HTTPPathPrefix http path prefix

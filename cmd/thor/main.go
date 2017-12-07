@@ -17,7 +17,7 @@ var (
 func newApp() *cli.App {
 	app := cli.NewApp()
 	app.Version = fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit)
-	app.Name = "vecore"
+	app.Name = "Thor"
 	app.Usage = "Core of VeChain"
 	app.Copyright = "2017 VeChain Foundation <https://vechain.com/>"
 	return app
