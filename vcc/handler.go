@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/vechain/solidb/utils/httpx"
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/vcc/utils/httpx"
 )
 
 //HTTPPathPrefix http path prefix
@@ -18,11 +18,22 @@ func NewHTTPRouter(router *mux.Router, accountManager *AccountManager) {
 	sub := router.PathPrefix(HTTPPathPrefix).Subrouter()
 	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(accountManager.handleGetAccount))
 }
-func (accountManager *AccountManager) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+func (am *AccountManager) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
+	if query == nil {
+		w.WriteHeader(400)
+	}
+	addr, ok := query["address"]
+	if !ok {
+		w.WriteHeader(400)
+	}
 	fmt.Println("query :", query)
-	address, err := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e01a")
-	account := accountManager.GetAccount(*address)
+	address, err := acc.ParseAddress(addr)
+
+	if err != nil {
+		w.WriteHeader(400)
+	}
+	account := am.GetAccount(*address)
 	str, err := json.Marshal(account)
 	if err != nil {
 		return err
