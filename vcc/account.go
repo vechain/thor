@@ -11,6 +11,6 @@ type AccountManager struct {
 }
 
 //GetAccount get account by address
-func (accountManager *AccountManager) GetAccount(address acc.Address) acc.Account {
+func (accountManager *AccountManager) GetAccount(address acc.Address) *acc.Account {
 	return accountManager.State.GetAccount(address)
 }
