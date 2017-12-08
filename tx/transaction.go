@@ -109,7 +109,7 @@ func (t *Transaction) EncodeRLP(w io.Writer) error {
 // Decoder to decode bytes into tx object.
 // Since Transaction is immutable, it's not suitable to implement rlp.Decoder directly.
 type Decoder struct {
-	Result *Transaction
+	*Transaction
 }
 
 // DecodeRLP implements rlp.Decoder
@@ -121,7 +121,7 @@ func (d *Decoder) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&payload); err != nil {
 		return err
 	}
-	d.Result = &Transaction{
+	d.Transaction = &Transaction{
 		body:      payload.B,
 		signature: payload.S,
 	}
