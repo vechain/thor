@@ -52,7 +52,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 // Decoder to decode block from bytes.
 // Since Block is immutable, it's not suitable to implement rlp.Decoder.
 type Decoder struct {
-	Result *Block
+	*Block
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -65,8 +65,8 @@ func (d *Decoder) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&payload); err != nil {
 		return err
 	}
-	d.Result = &Block{
-		header: payload.HD.Result,
+	d.Block = &Block{
+		header: payload.HD.Header,
 		txs:    payload.Txs,
 	}
 	return nil

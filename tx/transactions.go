@@ -27,7 +27,7 @@ func (txs *Transactions) DecodeRLP(s *rlp.Stream) error {
 	}
 	*txs = Transactions{}
 	for _, txd := range ds {
-		*txs = append(*txs, txd.Result)
+		*txs = append(*txs, txd.Transaction)
 	}
 	return nil
 }

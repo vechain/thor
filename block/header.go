@@ -161,7 +161,7 @@ func (h *Header) Signer() (*acc.Address, error) {
 // Since Header is immutable, it's not suitable to implement rlp.Decoder.
 type HeaderDecoder struct {
 	// decoded header
-	Result *Header
+	*Header
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -174,7 +174,7 @@ func (d *HeaderDecoder) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&payload); err != nil {
 		return err
 	}
-	d.Result = &Header{
+	d.Header = &Header{
 		subject:   payload.Subject,
 		signature: payload.Sig,
 	}
