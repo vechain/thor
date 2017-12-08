@@ -8,7 +8,7 @@ import (
 )
 
 // Manager is account's delegate.
-// Implements vm.AccountManager.
+// Implements evm.AccountManager.
 type Manager struct {
 	kvReader    KVReader
 	stateReader StateReader

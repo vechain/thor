@@ -15,7 +15,7 @@ import (
 
 // State is mediator for account.Manager, snapshot.Snapshot and Log.
 // State is the coordinator of account.Manager and snapshot.Snapshot.
-// Implements vm.StateDB.
+// Implements evm.StateDB.
 type State struct {
 	accountManager  *account.Manager
 	snapshotManager *snapshot.Snapshot

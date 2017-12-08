@@ -5,7 +5,7 @@ type version interface {
 }
 
 // Snapshot is the version control.
-// Implements vm.ISnapshoter.
+// Implements evm.ISnapshoter.
 type Snapshot struct {
 	snapshots []interface{}
 }
