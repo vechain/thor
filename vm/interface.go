@@ -4,8 +4,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
 )
 
@@ -18,7 +18,7 @@ type ContractRef interface {
 // current blockchain to be used during transaction processing.
 type ChainContext interface {
 	Engine() consensus.Engine
-	GetHeader(cry.Hash, uint64) *types.Header
+	GetHeader(cry.Hash, uint64) *block.Header
 }
 
 // Message represents a message sent to a contract.
