@@ -20,6 +20,9 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/cry"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -72,6 +75,10 @@ type Context struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
+
+	// The transaction where the message contained.
+	// This var is required when generating contract address.
+	TxHash common.Hash
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -104,6 +111,10 @@ type EVM struct {
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
+
+	// contract created during execution.
+	// this value is important for generating contract address.
+	contractCreationCount uint64
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -312,7 +323,13 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
-	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
+	//contractAddr = crypto.CreateAddress(caller.Address(), nonce)
+
+	// differ with ethereum here!!!
+	evm.contractCreationCount++
+	contractAddr = common.Address(acc.CreateContractAddress(cry.Hash(evm.TxHash), evm.contractCreationCount))
+	//
+
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
 		return nil, common.Address{}, 0, ErrContractAddressCollision
