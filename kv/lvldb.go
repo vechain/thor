@@ -103,9 +103,6 @@ func (ldb *lvldb) NewIterator(r *Range) Iterator {
 	return ldb.db.NewIterator(r.r, readOpt)
 }
 
-func (ldb *lvldb) NewTable(name string) Table {
-	return &table{
-		name,
-		ldb,
-	}
+func (ldb *lvldb) NewKeyspace(space string) Keyspace {
+	return newKeyspace(space, ldb)
 }
