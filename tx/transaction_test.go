@@ -16,9 +16,10 @@ func TestTx(t *testing.T) {
 	tx := b.Nonce(1).GasLimit(big.NewInt(100)).Clause(&Clause{}).Build()
 	data, _ := rlp.EncodeToBytes(tx)
 
-	var dec Decoder
-	rlp.DecodeBytes(data, &dec)
-	data2, _ := rlp.EncodeToBytes(dec.Result)
+	tx2 := Transaction{}
+
+	rlp.DecodeBytes(data, &tx2)
+	data2, _ := rlp.EncodeToBytes(&tx2)
 	assert.Equal(data, data2)
 
 }
