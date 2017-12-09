@@ -9,7 +9,7 @@ import (
 // Transactions a slice of transactions.
 type Transactions []*Transaction
 
-// Copy returns a shallow copy.
+// Copy makes a shallow copy.
 func (txs Transactions) Copy() Transactions {
 	return append(Transactions(nil), txs...)
 }
@@ -17,19 +17,6 @@ func (txs Transactions) Copy() Transactions {
 // RootHash computes merkle root hash of transactions.
 func (txs Transactions) RootHash() cry.Hash {
 	return cry.Hash(types.DeriveSha(derivableTxs(txs)))
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (txs *Transactions) DecodeRLP(s *rlp.Stream) error {
-	var ds []Decoder
-	if err := s.Decode(&ds); err != nil {
-		return err
-	}
-	*txs = Transactions{}
-	for _, txd := range ds {
-		*txs = append(*txs, txd.Transaction)
-	}
-	return nil
 }
 
 // implements types.DerivableList

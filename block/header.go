@@ -89,14 +89,6 @@ func (h *Header) ReceiptsRoot() cry.Hash {
 	return h.subject.ReceiptsRoot
 }
 
-// EncodeRLP implements rlp.Encoder
-func (h *Header) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
-		h.subject,
-		h.signature,
-	})
-}
-
 // Hash computes hash of header (block hash).
 func (h *Header) Hash() cry.Hash {
 	if cached := h.cache.hash; cached != nil {
@@ -157,15 +149,16 @@ func (h *Header) Signer() (*acc.Address, error) {
 	return &cpy, nil
 }
 
-// HeaderDecoder to decode header from bytes.
-// Since Header is immutable, it's not suitable to implement rlp.Decoder.
-type HeaderDecoder struct {
-	// decoded header
-	*Header
+// EncodeRLP implements rlp.Encoder
+func (h *Header) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, []interface{}{
+		h.subject,
+		h.signature,
+	})
 }
 
 // DecodeRLP implements rlp.Decoder.
-func (d *HeaderDecoder) DecodeRLP(s *rlp.Stream) error {
+func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	payload := struct {
 		Subject subject
 		Sig     []byte
@@ -174,7 +167,7 @@ func (d *HeaderDecoder) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&payload); err != nil {
 		return err
 	}
-	d.Header = &Header{
+	*h = Header{
 		subject:   payload.Subject,
 		signature: payload.Sig,
 	}

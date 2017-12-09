@@ -49,25 +49,20 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
-// Decoder to decode block from bytes.
-// Since Block is immutable, it's not suitable to implement rlp.Decoder.
-type Decoder struct {
-	*Block
-}
-
 // DecodeRLP implements rlp.Decoder.
-func (d *Decoder) DecodeRLP(s *rlp.Stream) error {
+func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	payload := struct {
-		HD  HeaderDecoder
-		Txs tx.Transactions
+		Header Header
+		Txs    tx.Transactions
 	}{}
 
 	if err := s.Decode(&payload); err != nil {
 		return err
 	}
-	d.Block = &Block{
-		header: payload.HD.Header,
-		txs:    payload.Txs,
+
+	*b = Block{
+		&payload.Header,
+		payload.Txs,
 	}
 	return nil
 }
