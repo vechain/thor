@@ -18,19 +18,21 @@ type Writer interface {
 	Delete(key []byte) error
 }
 
-// Duplex composes reader and writer.
-type Duplex interface {
-	Reader
-	Writer
-}
-
 // Store defines interface of kv store.
 type Store interface {
-	Duplex
+	Reader
+	Writer
 
 	NewBatch() Batch
 	NewIterator(r *Range) Iterator
-	NewTable(name string) Table
+
+	NewKeyspace(space string) Keyspace
+}
+
+type Keyspace interface {
+	Store
+
+	Space() string
 }
 
 // StoreCloser store with close method.

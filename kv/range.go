@@ -59,6 +59,7 @@ func NewRangeWithHexPrefix(hexPrefix string) (*Range, error) {
 	return NewRangeWithBytesPrefix(prefix), nil
 }
 
+// WithPrefix create a new range prefixed with prefix.
 func (r Range) WithPrefix(prefix []byte) *Range {
 	r.r.Start = withPrefix(r.r.Start, prefix)
 	r.r.Limit = withPrefix(r.r.Limit, prefix)
