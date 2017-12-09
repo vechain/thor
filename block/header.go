@@ -12,11 +12,10 @@ import (
 	"github.com/vechain/thor/dsa"
 )
 
-// Header contains almost all information about a block, except txs.
+// Header contains almost all information about a block, except body.
 // It's immutable.
 type Header struct {
-	subject   subject
-	signature []byte
+	content headerContent
 
 	cache struct {
 		hash   *cry.Hash
@@ -24,8 +23,8 @@ type Header struct {
 	}
 }
 
-// subject header excludes signature.
-type subject struct {
+// headerContent content of header
+type headerContent struct {
 	ParentHash  cry.Hash
 	Timestamp   uint64
 	GasLimit    *big.Int
@@ -35,58 +34,60 @@ type subject struct {
 	TxsRoot      cry.Hash
 	StateRoot    cry.Hash
 	ReceiptsRoot cry.Hash
+
+	Signature []byte
 }
 
 // ParentHash returns hash of parent block.
 func (h *Header) ParentHash() cry.Hash {
-	return h.subject.ParentHash
+	return h.content.ParentHash
 }
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
 	// inferred from parent hash
-	return blockHash(h.subject.ParentHash).blockNumber() + 1
+	return blockHash(h.content.ParentHash).blockNumber() + 1
 }
 
 // Timestamp returns timestamp of this block.
 func (h *Header) Timestamp() uint64 {
-	return h.subject.Timestamp
+	return h.content.Timestamp
 }
 
 // GasLimit returns gas limit of this block.
 func (h *Header) GasLimit() *big.Int {
-	if h.subject.GasLimit == nil {
+	if h.content.GasLimit == nil {
 		return &big.Int{}
 	}
-	return new(big.Int).Set(h.subject.GasLimit)
+	return new(big.Int).Set(h.content.GasLimit)
 }
 
 // GasUsed returns gas used by txs.
 func (h *Header) GasUsed() *big.Int {
-	if h.subject.GasUsed == nil {
+	if h.content.GasUsed == nil {
 		return &big.Int{}
 	}
-	return new(big.Int).Set(h.subject.GasUsed)
+	return new(big.Int).Set(h.content.GasUsed)
 }
 
 // Beneficiary returns reward recipient.
 func (h *Header) Beneficiary() acc.Address {
-	return h.subject.Beneficiary
+	return h.content.Beneficiary
 }
 
 // TxsRoot returns merkle root of txs contained in this block.
 func (h *Header) TxsRoot() cry.Hash {
-	return h.subject.TxsRoot
+	return h.content.TxsRoot
 }
 
 // StateRoot returns account state merkle root just afert this block being applied.
 func (h *Header) StateRoot() cry.Hash {
-	return h.subject.StateRoot
+	return h.content.StateRoot
 }
 
 // ReceiptsRoot returns merkle root of tx receipts.
 func (h *Header) ReceiptsRoot() cry.Hash {
-	return h.subject.ReceiptsRoot
+	return h.content.ReceiptsRoot
 }
 
 // Hash computes hash of header (block hash).
@@ -101,11 +102,11 @@ func (h *Header) Hash() cry.Hash {
 	var hash cry.Hash
 	hw.Sum(hash[:0])
 
-	if (cry.Hash{}) == h.subject.ParentHash {
+	if (cry.Hash{}) == h.content.ParentHash {
 		// genesis block
 		(*blockHash)(&hash).setBlockNumber(0)
 	} else {
-		parentNum := blockHash(h.subject.ParentHash).blockNumber()
+		parentNum := blockHash(h.content.ParentHash).blockNumber()
 		(*blockHash)(&hash).setBlockNumber(parentNum + 1)
 	}
 
@@ -116,7 +117,17 @@ func (h *Header) Hash() cry.Hash {
 // HashForSigning computes hash of all header fields excluding signature.
 func (h *Header) HashForSigning() cry.Hash {
 	hw := cry.NewHasher()
-	rlp.Encode(hw, &h.subject)
+	rlp.Encode(hw, []interface{}{
+		h.content.ParentHash,
+		h.content.Timestamp,
+		h.content.GasLimit,
+		h.content.GasUsed,
+		h.content.Beneficiary,
+
+		h.content.TxsRoot,
+		h.content.StateRoot,
+		h.content.ReceiptsRoot,
+	})
 
 	var hash cry.Hash
 	hw.Sum(hash[:0])
@@ -125,22 +136,23 @@ func (h *Header) HashForSigning() cry.Hash {
 
 // WithSignature create a new Header object with signature set.
 func (h *Header) WithSignature(sig []byte) *Header {
+	content := h.content
+	content.Signature = append([]byte(nil), sig...)
 	return &Header{
-		subject:   h.subject,
-		signature: append([]byte(nil), sig...),
+		content: content,
 	}
 }
 
 // Signer returns signer of this block.
 func (h *Header) Signer() (*acc.Address, error) {
-	if len(h.signature) == 0 {
+	if len(h.content.Signature) == 0 {
 		return nil, errors.New("not signed")
 	}
 	if signer := h.cache.signer; signer != nil {
 		cpy := *signer
 		return &cpy, nil
 	}
-	signer, err := dsa.Signer(h.HashForSigning(), h.signature)
+	signer, err := dsa.Signer(h.HashForSigning(), h.content.Signature)
 	if err != nil {
 		return nil, err
 	}
@@ -151,25 +163,18 @@ func (h *Header) Signer() (*acc.Address, error) {
 
 // EncodeRLP implements rlp.Encoder
 func (h *Header) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
-		h.subject,
-		h.signature,
-	})
+	return rlp.Encode(w, &h.content)
 }
 
 // DecodeRLP implements rlp.Decoder.
 func (h *Header) DecodeRLP(s *rlp.Stream) error {
-	payload := struct {
-		Subject subject
-		Sig     []byte
-	}{}
+	var content headerContent
 
-	if err := s.Decode(&payload); err != nil {
+	if err := s.Decode(&content); err != nil {
 		return err
 	}
 	*h = Header{
-		subject:   payload.Subject,
-		signature: payload.Sig,
+		content: content,
 	}
 	return nil
 }

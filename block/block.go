@@ -13,6 +13,11 @@ type Block struct {
 	txs    tx.Transactions
 }
 
+// Body defines body of a block.
+type Body struct {
+	Txs tx.Transactions
+}
+
 // New create a block instance.
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
@@ -39,6 +44,11 @@ func (b *Block) Header() *Header {
 // Transactions returns a copy of transactions.
 func (b *Block) Transactions() tx.Transactions {
 	return b.txs.Copy()
+}
+
+// Body returns body of a block.
+func (b *Block) Body() *Body {
+	return &Body{b.txs.Copy()}
 }
 
 // EncodeRLP implements rlp.Encoder.
