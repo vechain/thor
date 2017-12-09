@@ -13,8 +13,7 @@ import (
 
 // Transaction is an immutable tx type.
 type Transaction struct {
-	body      body
-	signature []byte
+	body body
 
 	cache struct {
 		hash   *cry.Hash
@@ -29,6 +28,7 @@ type body struct {
 	GasLimit  *big.Int
 	Nonce     uint64
 	DependsOn *cry.Hash `rlp:"nil"`
+	Signature []byte
 }
 
 // Hash returns hash of tx.
@@ -49,7 +49,13 @@ func (t *Transaction) Hash() cry.Hash {
 // HashForSigning returns hash of tx excludes signature.
 func (t *Transaction) HashForSigning() cry.Hash {
 	hw := cry.NewHasher()
-	rlp.Encode(hw, &t.body)
+	rlp.Encode(hw, []interface{}{
+		t.body.Clauses,
+		t.body.GasPrice,
+		t.body.GasLimit,
+		t.body.Nonce,
+		t.body.DependsOn,
+	})
 	var h cry.Hash
 	hw.Sum(h[:0])
 	return h
@@ -73,23 +79,24 @@ func (t *Transaction) GasLimit() *big.Int {
 
 // WithSignature create a new tx with signature set.
 func (t *Transaction) WithSignature(sig []byte) *Transaction {
-	sigCpy := append([]byte(nil), sig...)
-	return &Transaction{
-		body:      t.body,
-		signature: sigCpy,
+	newTx := Transaction{
+		body: t.body,
 	}
+	// copy sig
+	newTx.body.Signature = append([]byte(nil), sig...)
+	return &newTx
 }
 
 // Signer returns the signer of tx.
 func (t *Transaction) Signer() (*acc.Address, error) {
-	if len(t.signature) == 0 {
+	if len(t.body.Signature) == 0 {
 		return nil, errors.New("not signed")
 	}
 	if signer := t.cache.signer; signer != nil {
 		cpy := *signer
 		return &cpy, nil
 	}
-	signer, err := dsa.Signer(t.HashForSigning(), t.signature)
+	signer, err := dsa.Signer(t.HashForSigning(), t.body.Signature)
 	if err != nil {
 		return nil, err
 	}
@@ -100,24 +107,17 @@ func (t *Transaction) Signer() (*acc.Address, error) {
 
 // EncodeRLP implements rlp.Encoder
 func (t *Transaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
-		t.body,
-		t.signature,
-	})
+	return rlp.Encode(w, &t.body)
 }
 
 // DecodeRLP implements rlp.Decoder
 func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
-	payload := struct {
-		B body
-		S []byte
-	}{}
-	if err := s.Decode(&payload); err != nil {
+	var body body
+	if err := s.Decode(&body); err != nil {
 		return err
 	}
 	*t = Transaction{
-		body:      payload.B,
-		signature: payload.S,
+		body: body,
 	}
 	return nil
 }
