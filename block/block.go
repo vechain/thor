@@ -3,6 +3,8 @@ package block
 import (
 	"io"
 
+	"github.com/vechain/thor/cry"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/tx"
 )
@@ -34,6 +36,26 @@ func (b *Block) WithSignature(sig []byte) *Block {
 		b.header.WithSignature(sig),
 		b.txs,
 	}
+}
+
+// Number same as Header.Number().
+func (b *Block) Number() uint32 {
+	return b.header.Number()
+}
+
+// Timestamp same as Header.Timestamp().
+func (b *Block) Timestamp() uint64 {
+	return b.header.Timestamp()
+}
+
+// ParentHash same as Header.ParentHash().
+func (b *Block) ParentHash() cry.Hash {
+	return b.header.ParentHash()
+}
+
+// Hash same as Header.Hash().
+func (b *Block) Hash() cry.Hash {
+	return b.header.Hash()
 }
 
 // Header returns a copy of block header.
