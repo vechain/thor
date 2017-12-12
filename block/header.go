@@ -45,8 +45,12 @@ func (h *Header) ParentHash() cry.Hash {
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
+	if (cry.Hash{}) == h.content.ParentHash {
+		// genesis block
+		return 0
+	}
 	// inferred from parent hash
-	return blockHash(h.content.ParentHash).blockNumber() + 1
+	return Number(h.content.ParentHash) + 1
 }
 
 // Timestamp returns timestamp of this block.
@@ -102,13 +106,8 @@ func (h *Header) Hash() cry.Hash {
 	var hash cry.Hash
 	hw.Sum(hash[:0])
 
-	if (cry.Hash{}) == h.content.ParentHash {
-		// genesis block
-		(*blockHash)(&hash).setBlockNumber(0)
-	} else {
-		parentNum := blockHash(h.content.ParentHash).blockNumber()
-		(*blockHash)(&hash).setBlockNumber(parentNum + 1)
-	}
+	// overwrite first 4 bytes of block hash to block number.
+	binary.BigEndian.PutUint32(hash[:4], h.Number())
 
 	h.cache.hash = &hash
 	return hash
@@ -179,13 +178,8 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// blockHash which first 4 bytes are over written by block number (big endian).
-type blockHash cry.Hash
-
-func (bh *blockHash) setBlockNumber(n uint32) {
-	binary.BigEndian.PutUint32(bh[:4], n)
-}
-
-func (bh blockHash) blockNumber() uint32 {
-	return binary.BigEndian.Uint32(bh[:4])
+// Number extract block number from block hash.
+func Number(hash cry.Hash) uint32 {
+	// first 4 bytes are over written by block number (big endian).
+	return binary.BigEndian.Uint32(hash[:4])
 }
