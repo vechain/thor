@@ -12,14 +12,18 @@ import (
 func TestTx(t *testing.T) {
 	assert := assert.New(t)
 
-	b := Builder{}
-	tx := b.Nonce(1).GasLimit(big.NewInt(100)).Clause(&Clause{}).Build()
-	data, _ := rlp.EncodeToBytes(tx)
+	tx1 := new(Builder).
+		Nonce(1).
+		GasLimit(big.NewInt(100)).
+		Clause(&Clause{}).
+		Build()
 
-	tx2 := Transaction{}
+	data1, _ := rlp.EncodeToBytes(tx1)
 
-	rlp.DecodeBytes(data, &tx2)
+	tx2 := &Transaction{}
+
+	rlp.DecodeBytes(data1, tx2)
 	data2, _ := rlp.EncodeToBytes(&tx2)
-	assert.Equal(data, data2)
+	assert.Equal(data1, data2)
 
 }

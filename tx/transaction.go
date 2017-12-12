@@ -121,3 +121,18 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	}
 	return nil
 }
+
+// AsMessages transforms a tx into Messages.
+// An error returned if the tx is not signed.
+func (t *Transaction) AsMessages() ([]Message, error) {
+	// to check if the tx is properly signed.
+	signer, err := t.Signer()
+	if err != nil {
+		return nil, err
+	}
+	msgs := make([]Message, len(t.body.Clauses))
+	for i := range t.body.Clauses {
+		msgs[i] = newMessage(t, i, *signer)
+	}
+	return msgs, nil
+}
