@@ -45,6 +45,10 @@ func (h *Header) ParentHash() cry.Hash {
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
+	if (cry.Hash{}) == h.content.ParentHash {
+		// genesis block
+		return 0
+	}
 	// inferred from parent hash
 	return blockHash(h.content.ParentHash).blockNumber() + 1
 }
@@ -102,13 +106,7 @@ func (h *Header) Hash() cry.Hash {
 	var hash cry.Hash
 	hw.Sum(hash[:0])
 
-	if (cry.Hash{}) == h.content.ParentHash {
-		// genesis block
-		(*blockHash)(&hash).setBlockNumber(0)
-	} else {
-		parentNum := blockHash(h.content.ParentHash).blockNumber()
-		(*blockHash)(&hash).setBlockNumber(parentNum + 1)
-	}
+	(*blockHash)(&hash).setBlockNumber(h.Number())
 
 	h.cache.hash = &hash
 	return hash
