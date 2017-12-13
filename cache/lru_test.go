@@ -4,16 +4,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	. "github.com/vechain/thor/cache"
+	"github.com/vechain/thor/cache"
 )
 
 func TestLRU(t *testing.T) {
 	assert := assert.New(t)
-	lru, _ := NewLRU(10)
-	assert.Equal(lru.GetOrLoad("foo", func() interface{} {
-		return "bar"
-	}), "bar")
+	lru, _ := cache.NewLRU(10)
+	v, _ := lru.GetOrLoad("foo", func(interface{}) (interface{}, error) {
+		return "bar", nil
+	})
+	assert.Equal(v, "bar")
 
-	v, _ := lru.Get("foo")
+	v, _ = lru.Get("foo")
 	assert.Equal(v, "bar")
 }

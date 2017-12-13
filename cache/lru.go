@@ -17,14 +17,19 @@ func NewLRU(maxSize int) (*LRU, error) {
 	return &LRU{cache}, nil
 }
 
+// Loader defines loader to load value.
+type Loader func(key interface{}) (interface{}, error)
+
 // GetOrLoad first try to get from cache, do load if missed.
-func (l *LRU) GetOrLoad(key interface{}, loader func() interface{}) interface{} {
+func (l *LRU) GetOrLoad(key interface{}, loader Loader) (interface{}, error) {
 	if v, ok := l.Get(key); ok {
-		return v
+		return v, nil
 	}
-	if v := loader(); v != nil {
-		l.Add(key, v)
-		return v
+	v, err := loader(key)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	l.Add(key, v)
+	return v, nil
 }
