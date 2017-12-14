@@ -13,9 +13,8 @@ import (
 	"github.com/vechain/thor/vm/vmlog"
 )
 
-// State is mediator for account.Manager, snapshot.Snapshot and Log.
-// State is the coordinator of account.Manager and snapshot.Snapshot.
-// Implements evm.StateDB.
+// State is facade for account.Manager, snapshot.Snapshot and Log.
+// It implements evm.StateDB, only adapt to evm.
 type State struct {
 	accountManager  *account.Manager
 	snapshotManager *snapshot.Snapshot

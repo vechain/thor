@@ -62,7 +62,7 @@ func (c *Account) getCode(kv KVReader) []byte {
 		return c.Code
 	}
 	c.cachedCode = kv.GetValue(c.Data.CodeHash)
-	return c.Code
+	return c.cachedCode
 }
 
 func (c *Account) setCode(code []byte) {
@@ -87,6 +87,7 @@ func (c *Account) setStorage(key cry.Hash, value cry.Hash) {
 }
 
 func (c *Account) suicide() {
+	c.Data.Balance = new(big.Int)
 	c.Suicided = true
 }
 

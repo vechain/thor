@@ -15,32 +15,27 @@ import (
 type Context evm.Context
 
 // NewEVMContext return a new evm.Context.
-func NewEVMContext(getHash func(uint64) cry.Hash, msg Message, header *block.Header, chain ChainContext, author *acc.Address) Context {
+// origin: Message.From()
+// price: Message.Price()
+// txHash: Message.TransactionHash()
+func NewEVMContext(header *block.Header, price *big.Int, origin acc.Address, txHash cry.Hash, getHash func(uint64) cry.Hash) Context {
 	tHeader := translation2EthHeader(header)
-	tMsg := vmMessage{msg}
-
 	tGetHash := func(n uint64) common.Hash {
 		return common.Hash(getHash(n))
-	}
-
-	var beneficiary common.Address
-	if author == nil {
-		beneficiary, _ = chain.Engine().Author(tHeader) // Ignore error, we're past header validation
-	} else {
-		beneficiary = common.Address(*author)
 	}
 
 	return Context{
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
 		GetHash:     tGetHash,
-		Origin:      tMsg.From(),
-		Coinbase:    beneficiary,
+		Origin:      common.Address(origin),
+		Coinbase:    common.Address(header.Beneficiary()),
 		BlockNumber: new(big.Int).Set(tHeader.Number),
 		Time:        new(big.Int).Set(tHeader.Time),
 		Difficulty:  new(big.Int).Set(tHeader.Difficulty),
 		GasLimit:    new(big.Int).Set(tHeader.GasLimit),
-		GasPrice:    new(big.Int).Set(tMsg.GasPrice()),
+		GasPrice:    price,
+		TxHash:      common.Hash(txHash),
 	}
 }
 

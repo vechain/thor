@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/vm/account"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/acc"
@@ -38,7 +40,7 @@ func getHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 }
 
-func NewEnv(kvReader KVReader, stateReader StateReader) *VM {
+func NewEnv(kvReader account.KVReader, stateReader account.StateReader) *VM {
 	context := Context{
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
@@ -50,7 +52,8 @@ func NewEnv(kvReader KVReader, stateReader StateReader) *VM {
 		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
 		GasPrice:    new(big.Int),
 	}
-	return NewVM(context, kvReader, stateReader, Config{})
+	am := account.NewManager(kvReader, stateReader)
+	return NewVM(context, am, Config{})
 }
 
 type stateReader struct {
@@ -94,16 +97,10 @@ func (sr *stateReader) GetStorage(key cry.Hash) cry.Hash {
 	return newST
 }
 
-type AccountRef acc.Address
-
-func (ar AccountRef) Address() acc.Address { return (acc.Address)(ar) }
-
 func Call(sr *stateReader, vm *VM, address acc.Address, input []byte) *Output {
-	sender := AccountRef(sr.origin)
-
 	// Call the code with the given configuration.
 	return vm.Call(
-		sender,
+		sr.origin,
 		address,
 		input,
 		sr.gasLimit,
@@ -142,11 +139,9 @@ func TestCall(t *testing.T) {
 
 // Create executes the code using the EVM create method
 func Create(sr *stateReader, vm *VM, input []byte) (acc.Address, *Output) {
-	sender := AccountRef(sr.origin)
-
 	// Call the code with the given configuration.
 	return vm.Create(
-		sender,
+		sr.origin,
 		input,
 		sr.gasLimit,
 		sr.value,
