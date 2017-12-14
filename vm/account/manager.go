@@ -105,7 +105,7 @@ func (m *Manager) SubBalance(addr acc.Address, amount *big.Int) {
 func (m *Manager) GetBalance(addr acc.Address) *big.Int {
 	account := m.getAccount(addr)
 	if account == nil {
-		return nil
+		return big.NewInt(0)
 	}
 	return account.getBalance()
 }
@@ -186,6 +186,8 @@ func (m *Manager) SetState(addr acc.Address, key cry.Hash, value cry.Hash) {
 }
 
 // Suicide kill a account.
+// If a account  is suicided, the remaining bytecode of the current call will not be executed,
+// but it can also be transferred.
 func (m *Manager) Suicide(addr acc.Address) {
 	account := m.getAccount(addr)
 	if account != nil {

@@ -61,8 +61,7 @@ var chainConfig = &params.ChainConfig{
 
 // NewVM retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewVM(ctx Context, kvReader KVReader, stateReader StateReader, vmConfig Config) *VM {
-	am := account.NewManager(kvReader, stateReader)
+func NewVM(ctx Context, am *account.Manager, vmConfig Config) *VM {
 	sm := snapshot.New()
 	vl := vmlog.New()
 	state := state.New(am, sm, vl)
@@ -79,7 +78,7 @@ func (vm *VM) Cancel() {
 // Call executes the contract associated with the addr with the given input as parameters.
 // It also handles any necessary value transfer required and takes the necessary steps to
 // create accounts and reverses the state in case of an execution error or failed value transfer.
-func (vm *VM) Call(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
+func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
 	ret, leftOverGas, vmErr := vm.evm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
@@ -91,7 +90,7 @@ func (vm *VM) Call(caller ContractRef, addr acc.Address, input []byte, gas uint6
 //
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
-func (vm *VM) CallCode(caller ContractRef, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
+func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
 	ret, leftOverGas, vmErr := vm.evm.CallCode(&vmContractRef{caller}, common.Address(addr), input, gas, value)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
@@ -102,7 +101,7 @@ func (vm *VM) CallCode(caller ContractRef, addr acc.Address, input []byte, gas u
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with
 // the caller as context and the caller is set to the caller of the caller.
-func (vm *VM) DelegateCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) *Output {
+func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) *Output {
 	ret, leftOverGas, vmErr := vm.evm.DelegateCall(&vmContractRef{caller}, common.Address(addr), input, gas)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
@@ -113,14 +112,14 @@ func (vm *VM) DelegateCall(caller ContractRef, addr acc.Address, input []byte, g
 //
 // Opcodes that attempt to perform such modifications will result in exceptions instead of performing
 // the modifications.
-func (vm *VM) StaticCall(caller ContractRef, addr acc.Address, input []byte, gas uint64) *Output {
+func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) *Output {
 	ret, leftOverGas, vmErr := vm.evm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
 }
 
 // Create creates a new contract using code as deployment code.
-func (vm *VM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (acc.Address, *Output) {
+func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int) (acc.Address, *Output) {
 	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return acc.Address(contractAddr), output
