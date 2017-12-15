@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"math/big"

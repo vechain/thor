@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"math/big"
@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
+	. "github.com/vechain/thor/processor"
 	"github.com/vechain/thor/vm"
 )
 
@@ -18,17 +19,7 @@ func TestExecuteMsg(t *testing.T) {
 	state.SetOwner(sender)
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
 	header := block.Header()
-
-	context := Context{
-		price:    big.NewInt(1),
-		sender:   sender,
-		header:   header,
-		gasLimit: 4999999999999921932,
-		txHash:   cry.Hash{1},
-		state:    state,
-		kv:       nil,
-		getHash:  nil,
-	}
+	context := NewContext(big.NewInt(1), sender, header, 4999999999999921932, cry.Hash{1}, state, nil, nil)
 
 	transaction := block.Transactions()[0]
 	messages, _ := transaction.AsMessages()
