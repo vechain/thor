@@ -25,7 +25,8 @@ type Output struct {
 	DirtiedAccounts []*account.Account
 	Preimages       map[cry.Hash][]byte
 	Log             []*types.Log
-	VMErr           error // VMErr identify the execution result of the contract function, not evm function's err.
+	VMErr           error        // VMErr identify the execution result of the contract function, not evm function's err.
+	ContractAddress *acc.Address // if create a new contract, or is nil.
 }
 
 func newOutput(value []byte, leftOverGas uint64, dirtiedAccounts []*account.Account, preimages map[cry.Hash][]byte, log []*types.Log, vmErr error) *Output {
@@ -36,6 +37,7 @@ func newOutput(value []byte, leftOverGas uint64, dirtiedAccounts []*account.Acco
 		Preimages:       preimages,
 		Log:             log,
 		VMErr:           vmErr,
+		ContractAddress: nil,
 	}
 }
 
@@ -119,10 +121,12 @@ func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas
 }
 
 // Create creates a new contract using code as deployment code.
-func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int) (acc.Address, *Output) {
+func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int) *Output {
 	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
 	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
-	return acc.Address(contractAddr), output
+	ContractAddress := acc.Address(contractAddr)
+	output.ContractAddress = &ContractAddress
+	return output
 }
 
 // ChainConfig returns the evmironment's chain configuration

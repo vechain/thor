@@ -19,7 +19,6 @@ type Context evm.Context
 // price: Message.Price()
 // txHash: Message.TransactionHash()
 func NewEVMContext(header *block.Header, price *big.Int, origin acc.Address, txHash cry.Hash, getHash func(uint64) cry.Hash) Context {
-	tHeader := translation2EthHeader(header)
 	tGetHash := func(n uint64) common.Hash {
 		return common.Hash(getHash(n))
 	}
@@ -30,10 +29,10 @@ func NewEVMContext(header *block.Header, price *big.Int, origin acc.Address, txH
 		GetHash:     tGetHash,
 		Origin:      common.Address(origin),
 		Coinbase:    common.Address(header.Beneficiary()),
-		BlockNumber: new(big.Int).Set(tHeader.Number),
-		Time:        new(big.Int).Set(tHeader.Time),
-		Difficulty:  new(big.Int).Set(tHeader.Difficulty),
-		GasLimit:    new(big.Int).Set(tHeader.GasLimit),
+		BlockNumber: new(big.Int).SetUint64(uint64(header.Number())),
+		Time:        new(big.Int).SetUint64(header.Timestamp()),
+		Difficulty:  new(big.Int),
+		GasLimit:    header.GasLimit(),
 		GasPrice:    price,
 		TxHash:      common.Hash(txHash),
 	}
