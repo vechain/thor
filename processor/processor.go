@@ -4,11 +4,13 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/tx"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/vm"
@@ -19,7 +21,7 @@ import (
 // Processor is a facade for vm.
 // It can handle the transactioner interface.
 type Processor struct {
-	state   State
+	state   Stater
 	am      *account.Manager
 	getHash func(uint64) cry.Hash
 
@@ -27,23 +29,25 @@ type Processor struct {
 	price    *big.Int
 	gasLimit *big.Int
 	gp       *core.GasPool // block gas limit
+	txHash   cry.Hash
 
 	restGas    uint64
 	initialGas *big.Int
 }
 
 // New is the Processor's Factory.
-func New(st State, kv account.KVReader, getHash func(uint64) cry.Hash) *Processor {
+func New(st Stater, kv account.KVReader, getHash func(uint64) cry.Hash) *Processor {
 	am := account.NewManager(kv, st)
 	return &Processor{
-		state:   st,
-		am:      am,
-		getHash: getHash,
+		state:      st,
+		am:         am,
+		getHash:    getHash,
+		initialGas: new(big.Int),
 	}
 }
 
 // Handle hanle the messages.
-func (p *Processor) Handle(header *block.Header, transaction Transactioner, config vm.Config) ([]*vm.Output, error) {
+func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, config vm.Config) ([]*vm.Output, error) {
 	// initialize context.
 	messages, err := transaction.AsMessages()
 	if err != nil {
@@ -51,9 +55,11 @@ func (p *Processor) Handle(header *block.Header, transaction Transactioner, conf
 	}
 
 	p.price = transaction.GasPrice()
-	p.sender = transaction.From()
+	sender, _ := transaction.Signer()
+	p.sender = *sender
 	p.gp = new(core.GasPool).AddGas(transaction.GasLimit())
 	p.gasLimit = transaction.GasLimit()
+	p.txHash = transaction.Hash()
 
 	// verify context.
 	if err := p.prepare(messages); err != nil {
@@ -61,13 +67,14 @@ func (p *Processor) Handle(header *block.Header, transaction Transactioner, conf
 	}
 
 	// execute.
-	result := make([]*vm.Output, len(messages), 0)
+	result := make([]*vm.Output, len(messages))
 
-	for _, message := range messages {
+	for index, message := range messages {
 		output := p.handleUnitMsg(message, header, config)
+		result[index] = output
+
 		if output.VMErr != nil {
 			log.Debug("VM returned with error", "err", output.VMErr)
-			result = append(result, output)
 			return result, nil
 		}
 
@@ -79,7 +86,6 @@ func (p *Processor) Handle(header *block.Header, transaction Transactioner, conf
 		output.DirtiedAccounts = p.am.GetDirtiedAccounts()
 
 		p.updateState(output.DirtiedAccounts)
-		result = append(result, output)
 	}
 
 	return result, nil
@@ -94,25 +100,25 @@ func (p *Processor) updateState(accounts []*account.Account) {
 	}
 }
 
-func (p *Processor) handleUnitMsg(msg Messager, header *block.Header, config vm.Config) *vm.Output {
-	ctx := vm.NewEVMContext(header, p.price, p.sender, msg.TransactionHash(), p.getHash)
+func (p *Processor) handleUnitMsg(msg tx.Message, header *block.Header, config vm.Config) *vm.Output {
+	ctx := vm.NewEVMContext(header, p.price, p.sender, p.txHash, p.getHash)
 	mvm := vm.NewVM(ctx, p.am, config) // message virtual machine
 	var output *vm.Output
 
 	if msg.To() == nil {
-		_, output = mvm.Create(p.sender, msg.Data(), p.restGas, msg.Value())
+		output = mvm.Create(p.sender, msg.Data(), p.restGas, msg.Value())
 	} else {
 		output = mvm.Call(p.sender, *(msg.To()), msg.Data(), p.restGas, msg.Value())
 	}
 	return output
 }
 
-// IntrinsicGas is a partial function for core.IntrinsicGas.
-func (p *Processor) intrinsicGas(msg Messager) *big.Int {
+// partial function for core.IntrinsicGas.
+func (p *Processor) intrinsicGas(msg tx.Message) *big.Int {
 	return core.IntrinsicGas(msg.Data(), msg.To() == nil, true)
 }
 
-func (p *Processor) prepare(messages []Messager) error {
+func (p *Processor) prepare(messages []tx.Message) error {
 	if p.gasLimit.BitLen() > 64*len(messages) {
 		return evm.ErrOutOfGas
 	}
