@@ -1,4 +1,4 @@
-package processor
+package processor_test
 
 import (
 	"crypto/ecdsa"
@@ -6,17 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/acc"
-
-	"github.com/vechain/thor/dsa"
-
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/dsa"
+	. "github.com/vechain/thor/processor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-
-	"github.com/vechain/thor/block"
 )
 
 var key = func() *ecdsa.PrivateKey {

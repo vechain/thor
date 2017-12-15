@@ -25,8 +25,21 @@ type Context struct {
 	getHash func(uint64) cry.Hash
 }
 
+func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLimit uint64, txHash cry.Hash, state account.StateReader, kv account.KVReader, getHash func(uint64) cry.Hash) *Context {
+	return &Context{
+		price:    price,
+		sender:   sender,
+		header:   header,
+		gasLimit: gasLimit,
+		txHash:   txHash,
+		state:    state,
+		kv:       kv,
+		getHash:  getHash,
+	}
+}
+
 // ExecuteMsg can handle a transaction.message without prepare and check.
-func ExecuteMsg(msg tx.Message, config vm.Config, context Context) *vm.Output {
+func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
 	ctx := vm.NewEVMContext(context.header, context.price, context.sender, context.txHash, context.getHash)
 	am := account.NewManager(context.kv, context.state)
 	mvm := vm.NewVM(ctx, am, config) // message virtual machine
