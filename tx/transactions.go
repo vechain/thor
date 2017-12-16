@@ -6,6 +6,11 @@ import (
 	"github.com/vechain/thor/cry"
 )
 
+var (
+	// EmptyRoot root hash of empty tx/receipt slice
+	EmptyRoot = cry.Hash(types.DeriveSha(&derivableTxs{}))
+)
+
 // Transactions a slice of transactions.
 type Transactions []*Transaction
 
@@ -16,6 +21,10 @@ func (txs Transactions) Copy() Transactions {
 
 // RootHash computes merkle root hash of transactions.
 func (txs Transactions) RootHash() cry.Hash {
+	if len(txs) == 0 {
+		// optimized
+		return EmptyRoot
+	}
 	return cry.Hash(types.DeriveSha(derivableTxs(txs)))
 }
 

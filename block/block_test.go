@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
-
 	. "github.com/vechain/thor/block"
 )
 
 func TestBlock(t *testing.T) {
 
-	builder := Builder{}
-	block := builder.GasUsed(big.NewInt(1000)).Build()
+	block := new(Builder).
+		GasUsed(big.NewInt(1000)).
+		Build()
 	h := block.Header()
 	fmt.Println(h.Hash())
 

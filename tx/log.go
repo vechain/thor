@@ -1,4 +1,4 @@
-package receipt
+package tx
 
 import (
 	"github.com/vechain/thor/acc"
@@ -14,6 +14,4 @@ type Log struct {
 	Topics []cry.Hash
 	// supplied by the contract, usually ABI-encoded
 	Data []byte
-	// which clause produces this log
-	ClauseIndex uint
 }

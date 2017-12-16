@@ -1,30 +1,20 @@
-package receipt
+package tx
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cry"
 )
-
-// Receipt represents the results of a transaction.
-type Receipt struct {
-	// status of tx execution
-	Status uint
-	// which clause caused tx failure
-	BadClauseIndex uint
-	// gas used by this tx
-	GasUsed *big.Int
-	// logs produced
-	Logs []*Log
-}
 
 // Receipts slice of receipts.
 type Receipts []*Receipt
 
 // RootHash computes merkle root hash of receipts.
 func (rs Receipts) RootHash() cry.Hash {
+	if len(rs) == 0 {
+		// optimized
+		return EmptyRoot
+	}
 	return cry.Hash(types.DeriveSha(derivableReceipts(rs)))
 }
 
