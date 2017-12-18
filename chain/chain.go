@@ -18,19 +18,12 @@ const (
 	blockTxHashesLimit = 1024
 )
 
-var (
-	errNotFound = errors.New("not found")
-)
-
-// IsNotFound returns if the error means not found.
-func IsNotFound(err error) bool {
-	return err == errNotFound
-}
+var errNotFound = errors.New("not found")
 
 // Chain describes a persistent block chain.
 // It's thread-safe.
 type Chain struct {
-	store     kv.Store
+	kv        kv.GetPutter
 	bestBlock *block.Block
 	cached    cached
 	rw        sync.RWMutex
@@ -43,13 +36,13 @@ type cached struct {
 }
 
 // New create an instance of Chain.
-func New(store kv.Store) *Chain {
+func New(kv kv.GetPutter) *Chain {
 	headerCache, _ := cache.NewLRU(headerCacheLimit)
 	bodyCache, _ := cache.NewLRU(bodyCacheLimit)
 	blockTxHashesCache, _ := cache.NewLRU(blockTxHashesLimit)
 
 	return &Chain{
-		store: store,
+		kv: kv,
 		cached: cached{
 			headerCache,
 			bodyCache,
@@ -66,12 +59,12 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 
 	b, err := c.getBlockByNumber(0)
 	if err != nil {
-		if !IsNotFound(err) {
+		if !c.IsNotFound(err) {
 			// errors occurred
 			return err
 		}
 		// no genesis yet
-		batch := c.store.NewBatch()
+		batch := c.kv.NewBatch()
 
 		if err := persist.SaveBlock(batch, genesis); err != nil {
 			return err
@@ -104,7 +97,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 	defer c.rw.Unlock()
 
 	if _, err := c.getBlock(newBlock.Hash()); err != nil {
-		if !IsNotFound(err) {
+		if !c.IsNotFound(err) {
 			return err
 		}
 	} else {
@@ -113,13 +106,13 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 	}
 
 	if _, err := c.getBlock(newBlock.ParentHash()); err != nil {
-		if IsNotFound(err) {
+		if c.IsNotFound(err) {
 			return errors.New("parent missing")
 		}
 		return err
 	}
 
-	batch := c.store.NewBatch()
+	batch := c.kv.NewBatch()
 	if err := persist.SaveBlock(batch, newBlock); err != nil {
 		return err
 	}
@@ -223,12 +216,9 @@ func (c *Chain) GetBlockHeader(hash cry.Hash) (*block.Header, error) {
 
 func (c *Chain) getBlockHeader(hash cry.Hash) (*block.Header, error) {
 	header, err := c.cached.header.GetOrLoad(hash, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockHeader(c.store, hash)
+		return persist.LoadBlockHeader(c.kv, hash)
 	})
 	if err != nil {
-		if kv.IsNotFound(err) {
-			return nil, errNotFound
-		}
 		return nil, err
 	}
 	return header.(*block.Header), nil
@@ -243,12 +233,9 @@ func (c *Chain) GetBlockBody(hash cry.Hash) (*block.Body, error) {
 
 func (c *Chain) getBlockBody(hash cry.Hash) (*block.Body, error) {
 	body, err := c.cached.body.GetOrLoad(hash, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockBody(c.store, hash)
+		return persist.LoadBlockBody(c.kv, hash)
 	})
 	if err != nil {
-		if kv.IsNotFound(err) {
-			return nil, errNotFound
-		}
 		return nil, err
 	}
 	return body.(*block.Body), nil
@@ -282,11 +269,8 @@ func (c *Chain) GetBlockHashByNumber(num uint32) (*cry.Hash, error) {
 }
 
 func (c *Chain) getBlockHashByNumber(num uint32) (*cry.Hash, error) {
-	hash, err := persist.LoadTrunkBlockHash(c.store, num)
+	hash, err := persist.LoadTrunkBlockHash(c.kv, num)
 	if err != nil {
-		if kv.IsNotFound(err) {
-			return nil, errNotFound
-		}
 		return nil, err
 	}
 	return hash, nil
@@ -320,11 +304,8 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	if best := c.bestBlock; best != nil {
 		return best, nil
 	}
-	hash, err := persist.LoadBestBlockHash(c.store)
+	hash, err := persist.LoadBestBlockHash(c.kv)
 	if err != nil {
-		if kv.IsNotFound(err) {
-			return nil, errNotFound
-		}
 		return nil, err
 	}
 	best, err := c.getBlock(*hash)
@@ -340,11 +321,8 @@ func (c *Chain) GetTransaction(txHash cry.Hash) (*tx.Transaction, *persist.TxLoc
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	tx, loc, err := persist.LoadTx(c.store, txHash)
+	tx, loc, err := persist.LoadTx(c.kv, txHash)
 	if err != nil {
-		if kv.IsNotFound(err) {
-			return nil, nil, errNotFound
-		}
 		return nil, nil, err
 	}
 	return tx, loc, nil
@@ -397,7 +375,7 @@ func (c *Chain) LookupTransaction(blockHash cry.Hash, txHash cry.Hash) (*persist
 			}, nil
 		}
 	}
-	loc, err := persist.LoadTxLocation(c.store, txHash)
+	loc, err := persist.LoadTxLocation(c.kv, txHash)
 	if err != nil {
 		return nil, err
 	}
@@ -405,4 +383,9 @@ func (c *Chain) LookupTransaction(blockHash cry.Hash, txHash cry.Hash) (*persist
 		return loc, nil
 	}
 	return nil, errNotFound
+}
+
+// IsNotFound returns if an error means not found.
+func (c *Chain) IsNotFound(err error) bool {
+	return err == errNotFound || c.kv.IsNotFound(err)
 }

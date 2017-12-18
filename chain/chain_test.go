@@ -6,12 +6,12 @@ import (
 
 	"github.com/vechain/thor/block"
 	. "github.com/vechain/thor/chain"
-	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/lvldb"
 )
 
 func TestChain(t *testing.T) {
 
-	s, _ := kv.NewMem(kv.Options{})
+	s, _ := lvldb.NewMem()
 	chain := New(s)
 	chain.WriteGenesis(new(block.Builder).Build())
 
