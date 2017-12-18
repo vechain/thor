@@ -3,6 +3,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/aristanetworks/goarista"
+  packages = ["monotime"]
+  revision = "18a2f1dd52bb9abbc1e898439df06c74f28f63a4"
+
+[[projects]]
+  branch = "master"
   name = "github.com/btcsuite/btcd"
   packages = ["btcec"]
   revision = "2e60448ffcc6bf78332d1fe590260095f554dd78"
@@ -14,8 +20,14 @@
   version = "v1.1.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/edsrzf/mmap-go"
+  packages = ["."]
+  revision = "0bce6a6887123b67a60366d2c9fe2dfb74289d2e"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["common","common/hexutil","common/math","consensus","core/state","core/types","crypto","crypto/bn256","crypto/secp256k1","crypto/sha3","ethdb","log","metrics","params","rlp","rpc","trie"]
+  packages = ["accounts/abi","common","common/bitutil","common/hexutil","common/math","common/mclock","consensus","consensus/ethash","consensus/misc","core","core/state","core/types","core/vm","crypto","crypto/bn256","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","params","rlp","rpc","trie"]
   revision = "4bb3c89d44e372e6a9ab85a8be0c9345265c763a"
   version = "v1.7.3"
 
@@ -136,6 +148,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "076e8f401e75eb9dfb6066c91bf2f62448ef7a8c8966c98a15b0b7f2a3e39dc0"
+  inputs-digest = "9934f582e51dbad26f2d0b9ee049bca32bb003a94589f0ff5736c5390339014b"
   solver-name = "gps-cdcl"
   solver-version = 1
