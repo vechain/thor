@@ -9,23 +9,24 @@ import (
 
 // Range describes key range of kv store.
 type Range struct {
-	r *util.Range
+	From []byte
+	To   []byte
 }
 
 // NewRange create a range.
 func NewRange(from []byte, to []byte) *Range {
 	return &Range{
-		r: &util.Range{
-			Start: from,
-			Limit: to,
-		},
+		from,
+		to,
 	}
 }
 
 // NewRangeWithBytesPrefix create a range defined by bytes prefix.
 func NewRangeWithBytesPrefix(prefix []byte) *Range {
+	r := util.BytesPrefix(prefix)
 	return &Range{
-		r: util.BytesPrefix(prefix),
+		r.Start,
+		r.Limit,
 	}
 }
 
@@ -44,10 +45,8 @@ func NewRangeWithHexPrefix(hexPrefix string) (*Range, error) {
 		}
 
 		return &Range{
-			r: &util.Range{
-				Start: start,
-				Limit: util.BytesPrefix(end).Limit,
-			},
+			start,
+			util.BytesPrefix(end).Limit,
 		}, nil
 	}
 	// even hex
@@ -61,8 +60,8 @@ func NewRangeWithHexPrefix(hexPrefix string) (*Range, error) {
 
 // WithPrefix create a new range prefixed with prefix.
 func (r Range) WithPrefix(prefix []byte) *Range {
-	r.r.Start = withPrefix(r.r.Start, prefix)
-	r.r.Limit = withPrefix(r.r.Limit, prefix)
+	r.From = withPrefix(r.From, prefix)
+	r.To = withPrefix(r.To, prefix)
 	return &r
 }
 

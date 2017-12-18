@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/vcc"
 )
@@ -20,8 +20,8 @@ const (
 
 func main() {
 
-	opt := kv.Options{CacheSize: 10, OpenFilesCacheCapacity: 10}
-	db, _ := kv.New("/Users/dinn/Desktop/db", opt)
+	opt := lvldb.Options{CacheSize: 10, OpenFilesCacheCapacity: 10}
+	db, _ := lvldb.New("/Users/dinn/Desktop/db", opt)
 	hash, _ := cry.ParseHash(emptyRootHash)
 	s, _ := state.New(*hash, db)
 	address, _ := acc.ParseAddress(testAddress)

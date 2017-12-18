@@ -7,7 +7,7 @@ import (
 
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 )
 
@@ -16,8 +16,8 @@ const (
 )
 
 func TestState(t *testing.T) {
-	opt := kv.Options{CacheSize: 10, OpenFilesCacheCapacity: 10}
-	db, _ := kv.New("/Users/dinn/Desktop/db", opt)
+	db, _ := lvldb.NewMem()
+	defer db.Close()
 
 	hash, _ := cry.ParseHash(emptyRootHash)
 	// hash, _ := cry.ParseHash("0xcfcc4b2abe6c249cbb48466ef89e949e4950c75f98a739b4a079d8d84a9593f5")

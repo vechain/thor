@@ -13,19 +13,19 @@ import (
 //State manage account list
 type State struct {
 	trie *Trie.SecureTrie
-	db   kv.Store
+	kv   kv.GetPutter
 }
 
 //New create new state
-func New(root cry.Hash, db kv.Store) (s *State, err error) {
+func New(root cry.Hash, kv kv.GetPutter) (s *State, err error) {
 	hash := common.Hash(root)
-	secureTrie, err := Trie.NewSecure(hash, db, 0)
+	secureTrie, err := Trie.NewSecure(hash, kv, 0)
 	if err != nil {
 		return nil, err
 	}
 	return &State{
-		trie: secureTrie,
-		db:   db,
+		secureTrie,
+		kv,
 	}, nil
 }
 
@@ -99,7 +99,7 @@ func (s *State) Delete(key []byte) error {
 
 //Commit commit data to update
 func (s *State) Commit() (root cry.Hash, err error) {
-	hash, err := s.trie.CommitTo(s.db)
+	hash, err := s.trie.CommitTo(s.kv)
 	if err != nil {
 		return cry.Hash(common.Hash{}), err
 	}
