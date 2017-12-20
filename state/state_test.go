@@ -28,10 +28,8 @@ func TestState(t *testing.T) {
 		CodeHash:    cry.Hash{0xaa, 0x22},
 		StorageRoot: cry.Hash{0xaa, 0x22},
 	}
-	fmt.Printf("1 *address %v\n  account %v \n:", address, account)
 	state.UpdateAccount(*address, account)
 	a := state.GetAccount(*address)
-	fmt.Printf("2 acc %v\n root %v\n:", a, state.Hash().String())
 	account = &acc.Account{
 		Balance:     new(big.Int),
 		CodeHash:    cry.Hash{0xaa},
