@@ -32,10 +32,9 @@ contract("Energy", (accounts) => {
   //   let auth = await Authority.deployed();
   //   let energy = await Energy.deployed();
   //   await energy.shareFrom(accounts[1],accounts[0],auth.address,shareAmount,expireTime);
-  //   await energy.consume(accounts[0],auth.address,consumeAmount);
   //   let sa = await energy.getShareAmount(accounts[0],auth.address);
-  //   // let b = await energy.balanceOf(accounts[0]);
-  //   // console.log(b);
+  //   let b = await energy.balanceOf(accounts[0]);
+  //   console.log(b);
   //   assertEqual(sa,shareAmount,'revert shared energy');
     
   // });
