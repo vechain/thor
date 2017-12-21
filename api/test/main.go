@@ -7,10 +7,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/vcc"
 )
 
 const (
@@ -38,9 +38,9 @@ func main() {
 	}
 	s.UpdateAccount(*address, account)
 	s.Commit()
-	accountManager := vcc.New(s)
+	accountManager := api.New(s)
 	router := mux.NewRouter()
-	vcc.NewHTTPRouter(router, accountManager)
+	api.NewHTTPRouter(router, accountManager)
 	fmt.Println("server listen 3000")
 	http.ListenAndServe(":3000", router)
 

@@ -1,4 +1,4 @@
-package vcc
+package api
 
 import (
 	"encoding/json"
@@ -7,11 +7,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/vcc/utils/httpx"
+	"github.com/vechain/thor/api/utils/httpx"
 )
 
 //HTTPPathPrefix http path prefix
-const HTTPPathPrefix = "/account/"
+const HTTPPathPrefix = "/account"
 
 //NewHTTPRouter add path to router
 func NewHTTPRouter(router *mux.Router, accountManager *AccountManager) {
