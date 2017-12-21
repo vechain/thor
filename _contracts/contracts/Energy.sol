@@ -31,7 +31,9 @@ contract Energy is Token {
   function name() public pure returns (string n) {
     n = "VET Energy";
   }
-
+  function decimals() public pure returns (uint8 d) {
+    d = 18;    
+  }
   function symbol() public pure returns (string s) {
     s = "ENG";
   }
@@ -41,7 +43,7 @@ contract Energy is Token {
     //TODO
     totalEnergy = 10000;
   }
-  // Send back ether sent to me
+  // Send back vet sent to me
   function() public {
     revert();
   }
