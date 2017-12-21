@@ -18,9 +18,7 @@ const (
 func TestState(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	defer db.Close()
-
 	hash, _ := cry.ParseHash(emptyRootHash)
-	// hash, _ := cry.ParseHash("0xcfcc4b2abe6c249cbb48466ef89e949e4950c75f98a739b4a079d8d84a9593f5")
 	state, _ := state.New(*hash, db)
 	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e01a")
 	account := &acc.Account{
@@ -41,4 +39,15 @@ func TestState(t *testing.T) {
 	fmt.Printf("4 acc %v\n root %v\n state %v \n: ", a, state.Hash().String(), *state)
 	root, err := state.Commit()
 	fmt.Printf("5 root %v\n err %v \n rootHash %v\n:", root, err, state.Hash().String())
+}
+
+func TestStorage(t *testing.T) {
+	db, _ := lvldb.NewMem()
+	defer db.Close()
+	storage := state.NewStorage(db)
+	hash, _ := cry.ParseHash(emptyRootHash)
+	fmt.Printf("hash %v", hash)
+	storage.UpdateStorage(*hash, *hash, *hash)
+	v := storage.GetStorage(*hash, *hash)
+	fmt.Printf("\nv %v\n", v)
 }

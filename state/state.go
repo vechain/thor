@@ -63,25 +63,6 @@ func (s *State) UpdateAccount(address acc.Address, account *acc.Account) (err er
 	return s.Put(address[:], enc)
 }
 
-//UpdateStorage update account storage
-func (s *State) UpdateStorage(key cry.Hash, value cry.Hash) error {
-	return s.Put(key[:], value[:])
-}
-
-//GetStorage get account storage
-func (s *State) GetStorage(key cry.Hash) (value cry.Hash) {
-	enc, err := s.Get(key[:])
-	if err != nil {
-		return cry.Hash{}
-	}
-	_, content, _, err := rlp.Split(enc)
-	if err != nil {
-		return cry.Hash{}
-	}
-	value = cry.BytesToHash(content)
-	return value
-}
-
 //Get key value
 func (s *State) Get(key []byte) ([]byte, error) {
 	return s.trie.TryGet(key)
