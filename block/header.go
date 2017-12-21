@@ -27,6 +27,7 @@ type Header struct {
 type headerContent struct {
 	ParentHash  cry.Hash
 	Timestamp   uint64
+	TotalScore  *big.Int
 	GasLimit    *big.Int
 	GasUsed     *big.Int
 	Beneficiary acc.Address
@@ -56,6 +57,14 @@ func (h *Header) Number() uint32 {
 // Timestamp returns timestamp of this block.
 func (h *Header) Timestamp() uint64 {
 	return h.content.Timestamp
+}
+
+// TotalScore returns total score that cumulated from genesis block to this one.
+func (h *Header) TotalScore() *big.Int {
+	if h.content.TotalScore == nil {
+		return &big.Int{}
+	}
+	return new(big.Int).Set(h.content.TotalScore)
 }
 
 // GasLimit returns gas limit of this block.
