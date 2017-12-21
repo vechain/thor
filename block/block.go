@@ -2,6 +2,7 @@ package block
 
 import (
 	"io"
+	"math/big"
 
 	"github.com/vechain/thor/cry"
 
@@ -46,6 +47,11 @@ func (b *Block) Number() uint32 {
 // Timestamp same as Header.Timestamp().
 func (b *Block) Timestamp() uint64 {
 	return b.header.Timestamp()
+}
+
+// TotalScore same as Header.TotalScore().
+func (b *Block) TotalScore() *big.Int {
+	return b.header.TotalScore()
 }
 
 // ParentHash same as Header.ParentHash().

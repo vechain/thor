@@ -26,6 +26,12 @@ func (b *Builder) Timestamp(ts uint64) *Builder {
 	return b
 }
 
+// TotalScore set total score.
+func (b *Builder) TotalScore(s *big.Int) *Builder {
+	b.header.TotalScore = new(big.Int).Set(s)
+	return b
+}
+
 // GasLimit set gas limit.
 func (b *Builder) GasLimit(limit *big.Int) *Builder {
 	b.header.GasLimit = new(big.Int).Set(limit)
