@@ -1,4 +1,4 @@
-package vcc
+package api
 
 import (
 	"github.com/vechain/thor/acc"
