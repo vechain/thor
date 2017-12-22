@@ -6,6 +6,9 @@ import (
 	"github.com/vechain/thor/cry"
 )
 
+// EmptyCodeHash hash of empty code
+var EmptyCodeHash = cry.HashSum(nil)
+
 //Account Thor account
 type Account struct {
 	Balance     *big.Int
@@ -13,23 +16,24 @@ type Account struct {
 	StorageRoot cry.Hash // merkle root of the storage trie
 }
 
-// Account Set Balance
-func (account *Account) setBalance(balance *big.Int) {
-	account.Balance = balance
-}
-
 //SubBalance Account
-func (account *Account) SubBalance(balance *big.Int) {
+func (a *Account) SubBalance(balance *big.Int) {
 	if balance.Sign() == 0 {
 		return
 	}
-	account.setBalance(new(big.Int).Sub(account.Balance, balance))
+	a.Balance = new(big.Int).Sub(a.Balance, balance)
 }
 
 // AddBalance Account
-func (account *Account) AddBalance(balance *big.Int) {
+func (a *Account) AddBalance(balance *big.Int) {
 	if balance.Sign() == 0 {
 		return
 	}
-	account.setBalance(new(big.Int).Add(account.Balance, balance))
+	a.Balance = new(big.Int).Add(a.Balance, balance)
+}
+
+// IsEmpty returns if an account is empty.
+// Similar to EIP158, but here we don't have nonce.
+func (a *Account) IsEmpty() bool {
+	return a.Balance.Sign() == 0 && a.CodeHash == EmptyCodeHash
 }
