@@ -50,10 +50,10 @@ func BytesToAddress(b []byte) Address {
 	return Address(common.BytesToAddress(b))
 }
 
-// CreateContractAddress to generate contract address according to tx hash, and
+// CreateContractAddress to generate contract address according to tx hash, clause index and
 // contract creation count.
-func CreateContractAddress(txHash cry.Hash, creationCount uint64) Address {
-	data, _ := rlp.EncodeToBytes([]interface{}{txHash, creationCount})
+func CreateContractAddress(txHash cry.Hash, clauseIndex uint64, creationCount uint64) Address {
+	data, _ := rlp.EncodeToBytes([]interface{}{txHash, clauseIndex, creationCount})
 	hash := cry.HashSum(data)
 	return BytesToAddress(hash[12:])
 }
