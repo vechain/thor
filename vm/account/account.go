@@ -71,12 +71,12 @@ func (c *Account) setCode(code []byte) {
 	c.Data.CodeHash = cry.Hash(crypto.Keccak256Hash(code))
 }
 
-func (c *Account) getStorage(state StateReader, key cry.Hash) cry.Hash {
+func (c *Account) getStorage(sr StorageReader, key cry.Hash) cry.Hash {
 	storage := c.cachedStorage[key]
 	if storage != (cry.Hash{0}) {
 		return storage
 	}
-	storage = state.GetStorage(key)
+	storage = sr.GetStorage(key)
 	c.cachedStorage[key] = storage
 	return storage
 }
