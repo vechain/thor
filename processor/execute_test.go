@@ -17,9 +17,10 @@ func TestExecuteMsg(t *testing.T) {
 	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
 	state := NewState()
 	state.SetOwner(sender)
+	storage := NewStorage()
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
 	header := block.Header()
-	context := NewContext(big.NewInt(1), sender, header, 4999999999999921932, cry.Hash{1}, state, nil, nil)
+	context := NewContext(big.NewInt(1), sender, header, 4999999999999921932, cry.Hash{1}, state, storage, &KV{}, nil)
 
 	transaction := block.Transactions()[0]
 	messages, _ := transaction.AsMessages()

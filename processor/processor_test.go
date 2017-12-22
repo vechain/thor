@@ -21,6 +21,9 @@ import (
 // State implement Stater.
 type State struct {
 	accounts map[acc.Address]*acc.Account
+}
+
+type Storage struct {
 	storages map[cry.Hash]cry.Hash
 }
 
@@ -28,9 +31,16 @@ type State struct {
 func NewState() *State {
 	state := &State{
 		make(map[acc.Address]*acc.Account),
-		make(map[cry.Hash]cry.Hash),
 	}
 	return state
+}
+
+// NewState mock Stater interface.
+func NewStorage() *Storage {
+	storage := &Storage{
+		make(map[cry.Hash]cry.Hash),
+	}
+	return storage
 }
 
 // SetOwner mock a rich account.
@@ -48,7 +58,7 @@ func (st *State) GetAccout(addr acc.Address) *acc.Account {
 }
 
 // GetStorage get storage.
-func (st *State) GetStorage(key cry.Hash) cry.Hash {
+func (st *Storage) GetStorage(key cry.Hash) cry.Hash {
 	return st.storages[key]
 }
 
@@ -58,9 +68,27 @@ func (st *State) UpdateAccount(addr acc.Address, account *acc.Account) error {
 	return nil
 }
 
+func (st *State) Delete(key []byte) error {
+	return nil
+}
+
 // UpdateStorage update memory.
-func (st *State) UpdateStorage(key cry.Hash, value cry.Hash) error {
+func (st *Storage) UpdateStorage(root cry.Hash, key cry.Hash, value cry.Hash) error {
 	st.storages[key] = value
+	return nil
+}
+
+func (st *Storage) Hash(root cry.Hash) cry.Hash {
+	return cry.Hash{}
+}
+
+type KV struct{}
+
+func (kv *KV) GetValue(cry.Hash) []byte {
+	return nil
+}
+
+func (kv *KV) Put(key, value []byte) error {
 	return nil
 }
 
@@ -73,7 +101,8 @@ func TestHandleTransaction(t *testing.T) {
 	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
 	state := NewState()
 	state.SetOwner(sender)
-	processor := New(state, nil, nil)
+	storage := NewStorage()
+	processor := New(state, storage, &KV{}, nil)
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
 	header := block.Header()
 	transaction := block.Transactions()[0]

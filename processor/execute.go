@@ -21,11 +21,13 @@ type Context struct {
 	txHash   cry.Hash
 
 	state   account.StateReader
+	storage account.StorageReader
 	kv      account.KVReader
 	getHash func(uint64) cry.Hash
 }
 
-func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLimit uint64, txHash cry.Hash, state account.StateReader, kv account.KVReader, getHash func(uint64) cry.Hash) *Context {
+// NewContext return Context.
+func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLimit uint64, txHash cry.Hash, state account.StateReader, storage account.StorageReader, kv account.KVReader, getHash func(uint64) cry.Hash) *Context {
 	return &Context{
 		price:    price,
 		sender:   sender,
@@ -33,6 +35,7 @@ func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLim
 		gasLimit: gasLimit,
 		txHash:   txHash,
 		state:    state,
+		storage:  storage,
 		kv:       kv,
 		getHash:  getHash,
 	}
@@ -50,7 +53,7 @@ func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
 		TxHash:      context.txHash,
 		GetHash:     context.getHash,
 	}
-	am := account.NewManager(context.kv, context.state)
+	am := account.NewManager(context.kv, context.state, context.storage)
 	mvm := vm.NewVM(ctx, am, config) // message virtual machine
 	var output *vm.Output
 	initialGas := new(big.Int).SetUint64(context.gasLimit)
@@ -68,7 +71,7 @@ func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
 	output.LeftOverGas = refundGas(am, context.sender, output.LeftOverGas, initialGas, context.price)
 	gasUsed := new(big.Int).Sub(initialGas, new(big.Int).SetUint64(output.LeftOverGas))
 	am.AddBalance(context.header.Beneficiary(), new(big.Int).Mul(gasUsed, context.price))
-	output.DirtiedAccounts = am.GetDirtiedAccounts()
+	output.DirtiedAccounts = am.GetDirtyAccounts()
 
 	return output
 }
