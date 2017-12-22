@@ -16,7 +16,7 @@ type Manager struct {
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	accounts      map[acc.Address]*Account // memory cache
-	accountsDirty map[acc.Address]struct{} // 用 map 来判断 address 是否被修改过
+	dirtyAccounts map[acc.Address]struct{} // 用 map 来判断 address 是否被修改过
 
 	// The refund counter, also used by state transitioning.
 	refund *big.Int
@@ -31,7 +31,7 @@ func NewManager(kv KVReader, state StateReader, storage StorageReader) *Manager 
 		stateReader:   state,
 		storageReader: storage,
 		accounts:      make(map[acc.Address]*Account),
-		accountsDirty: make(map[acc.Address]struct{}),
+		dirtyAccounts: make(map[acc.Address]struct{}),
 		refund:        new(big.Int),
 		preimages:     make(map[cry.Hash][]byte),
 	}
@@ -44,9 +44,9 @@ func (m *Manager) DeepCopy() interface{} {
 		accounts[key] = value.deepCopy()
 	}
 
-	accountsDirty := make(map[acc.Address]struct{})
-	for key := range m.accountsDirty {
-		accountsDirty[key] = struct{}{}
+	dirtyAccounts := make(map[acc.Address]struct{})
+	for key := range m.dirtyAccounts {
+		dirtyAccounts[key] = struct{}{}
 	}
 
 	preimages := make(map[cry.Hash][]byte)
@@ -59,16 +59,16 @@ func (m *Manager) DeepCopy() interface{} {
 		stateReader:   m.stateReader,
 		storageReader: m.storageReader,
 		accounts:      accounts,
-		accountsDirty: accountsDirty,
+		dirtyAccounts: dirtyAccounts,
 		refund:        new(big.Int).Set(m.refund),
 		preimages:     preimages,
 	}
 }
 
-// GetDirtiedAccounts return all dirtied Accounts.
-func (m *Manager) GetDirtiedAccounts() []*Account {
-	var dirtyAccounts = make([]*Account, 0, len(m.accountsDirty))
-	for addr := range m.accountsDirty {
+// GetDirtyAccounts return all dirty Accounts.
+func (m *Manager) GetDirtyAccounts() []*Account {
+	var dirtyAccounts = make([]*Account, 0, len(m.dirtyAccounts))
+	for addr := range m.dirtyAccounts {
 		dirtyAccounts = append(dirtyAccounts, m.accounts[addr])
 	}
 	return dirtyAccounts
@@ -240,11 +240,11 @@ func (m *Manager) Preimages() map[cry.Hash][]byte {
 	return m.preimages
 }
 
-// markAccoutDirty mark the account is dirtied.
+// markAccoutDirty mark the account is dirty.
 func (m *Manager) markAccoutDirty(addr acc.Address) {
-	_, isDirty := m.accountsDirty[addr]
+	_, isDirty := m.dirtyAccounts[addr]
 	if !isDirty {
-		m.accountsDirty[addr] = struct{}{}
+		m.dirtyAccounts[addr] = struct{}{}
 	}
 }
 
@@ -264,7 +264,7 @@ func (m *Manager) getAccount(addr acc.Address) *Account {
 		return nil
 	}
 
-	newobj := newAccount(addr, m.stateReader.GetAccout(addr))
+	newobj := newAccount(addr, account)
 	m.accounts[addr] = newobj
 	return newobj
 }

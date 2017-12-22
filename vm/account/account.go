@@ -10,11 +10,11 @@ import (
 
 // Account manage acc.Account and Storage.
 type Account struct {
-	Address  acc.Address
-	Data     *acc.Account
-	Storage  acc.Storage // only dirtied storage
-	Code     []byte      // dirtied code
-	Suicided bool        // 标记是否删除
+	Address      acc.Address
+	Data         *acc.Account
+	DirtyStorage acc.Storage // only dirty storage
+	DirtyCode    []byte      // dirty code
+	Suicided     bool
 
 	cachedStorage acc.Storage
 	cachedCode    []byte
@@ -24,10 +24,11 @@ func newAccount(addr acc.Address, account *acc.Account) *Account {
 	return &Account{
 		Address:       addr,
 		Data:          account,
-		Storage:       make(acc.Storage),
-		Code:          nil,
-		Suicided:      false,
+		DirtyStorage:  make(acc.Storage),
 		cachedStorage: make(acc.Storage),
+		DirtyCode:     nil,
+		cachedCode:    nil,
+		Suicided:      false,
 	}
 }
 
@@ -37,11 +38,28 @@ func (c *Account) deepCopy() *Account {
 		CodeHash:    c.Data.CodeHash,
 		StorageRoot: c.Data.StorageRoot,
 	}
+
+	var dirtyCode []byte
+	var cachedCode []byte
+
+	if c.DirtyCode != nil {
+		dirtyCode := make([]byte, len(c.DirtyCode))
+		copy(dirtyCode, c.DirtyCode)
+	}
+
+	if c.cachedCode != nil {
+		cachedCode := make([]byte, len(c.cachedCode))
+		copy(cachedCode, c.cachedCode)
+	}
+
 	return &Account{
 		Address:       c.Address,
 		Data:          data,
-		Storage:       c.Storage.Copy(),
+		DirtyStorage:  c.DirtyStorage.Copy(),
 		cachedStorage: c.cachedStorage.Copy(),
+		DirtyCode:     dirtyCode,
+		cachedCode:    cachedCode,
+		Suicided:      c.Suicided,
 	}
 }
 
@@ -58,15 +76,15 @@ func (c *Account) getCodeHash() cry.Hash {
 }
 
 func (c *Account) getCode(kv KVReader) []byte {
-	if c.Code != nil {
-		return c.Code
+	if c.DirtyCode != nil {
+		return c.DirtyCode
 	}
 	c.cachedCode = kv.GetValue(c.Data.CodeHash)
 	return c.cachedCode
 }
 
 func (c *Account) setCode(code []byte) {
-	c.Code = code
+	c.DirtyCode = code
 	c.cachedCode = code
 	c.Data.CodeHash = cry.Hash(crypto.Keccak256Hash(code))
 }
@@ -83,7 +101,7 @@ func (c *Account) getStorage(sr StorageReader, key cry.Hash) cry.Hash {
 
 func (c *Account) setStorage(key cry.Hash, value cry.Hash) {
 	c.cachedStorage[key] = value
-	c.Storage[key] = value
+	c.DirtyStorage[key] = value
 }
 
 func (c *Account) suicide() {
