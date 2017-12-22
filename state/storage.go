@@ -38,26 +38,26 @@ func (s *Storage) getOrCreateNewTrie(root cry.Hash) (trie *Trie.SecureTrie, err 
 	return s.storageTries[root], nil
 }
 
-//GetStorage return account storage from storage root
-func (s *Storage) GetStorage(root cry.Hash, key cry.Hash) (value cry.Hash) {
+//Get return account storage from storage root
+func (s *Storage) Get(root cry.Hash, key cry.Hash) (value cry.Hash, err error) {
 	trie, err := s.getOrCreateNewTrie(root)
 	if err != nil {
-		return cry.Hash{}
+		return cry.Hash{}, err
 	}
 	enc, err := trie.TryGet(key[:])
 	if err != nil {
-		return cry.Hash{}
+		return cry.Hash{}, errNotFound
 	}
 	_, content, _, err := rlp.Split(enc)
 	if err != nil {
-		return cry.Hash{}
+		return cry.Hash{}, err
 	}
 	value = cry.BytesToHash(content)
-	return value
+	return value, nil
 }
 
-//UpdateStorage update account storage
-func (s *Storage) UpdateStorage(root cry.Hash, key cry.Hash, value cry.Hash) error {
+//Update update account storage
+func (s *Storage) Update(root cry.Hash, key cry.Hash, value cry.Hash) error {
 	trie, err := s.getOrCreateNewTrie(root)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (s *Storage) UpdateStorage(root cry.Hash, key cry.Hash, value cry.Hash) err
 }
 
 //Commit commit data to db
-func (s *Storage) Commit(root cry.Hash) (r cry.Hash, err error) {
+func (s *Storage) Commit(root cry.Hash) (cry.Hash, error) {
 	trie, err := s.getOrCreateNewTrie(root)
 	if err != nil {
 		return cry.Hash{}, err
@@ -81,6 +81,11 @@ func (s *Storage) Commit(root cry.Hash) (r cry.Hash, err error) {
 		return cry.Hash(common.Hash{}), err
 	}
 	return cry.Hash(hash), nil
+}
+
+//IsNotFound return is the err an ErrorNotFound error
+func (s *Storage) IsNotFound(err error) bool {
+	return err == errNotFound
 }
 
 //CommitAll commit all trie in the storage , remove the trie from cache if success
@@ -95,11 +100,11 @@ func (s *Storage) CommitAll() error {
 	return nil
 }
 
-//Hash get current root hash from trie which create by root
-func (s *Storage) Hash(root cry.Hash) cry.Hash {
+//Root get current root hash from trie which create by root
+func (s *Storage) Root(root cry.Hash) (cry.Hash, error) {
 	trie, err := s.getOrCreateNewTrie(root)
 	if err != nil {
-		return cry.Hash{}
+		return cry.Hash{}, err
 	}
-	return cry.Hash(trie.Hash())
+	return cry.Hash(trie.Hash()), nil
 }
