@@ -101,7 +101,7 @@ func (vm *VM) Cancel() {
 // create accounts and reverses the state in case of an execution error or failed value transfer.
 func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
 	ret, leftOverGas, vmErr := vm.evm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
+	output := newOutput(ret, leftOverGas, vm.state.GetDirtyAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
 }
 
@@ -113,7 +113,7 @@ func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint6
 // code with the caller as context.
 func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) *Output {
 	ret, leftOverGas, vmErr := vm.evm.CallCode(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
+	output := newOutput(ret, leftOverGas, vm.state.GetDirtyAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
 }
 
@@ -124,7 +124,7 @@ func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas u
 // the caller as context and the caller is set to the caller of the caller.
 func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) *Output {
 	ret, leftOverGas, vmErr := vm.evm.DelegateCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
+	output := newOutput(ret, leftOverGas, vm.state.GetDirtyAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
 }
 
@@ -135,14 +135,14 @@ func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, g
 // the modifications.
 func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) *Output {
 	ret, leftOverGas, vmErr := vm.evm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
+	output := newOutput(ret, leftOverGas, vm.state.GetDirtyAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	return output
 }
 
 // Create creates a new contract using code as deployment code.
 func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int) *Output {
 	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
-	output := newOutput(ret, leftOverGas, vm.state.GetDirtiedAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
+	output := newOutput(ret, leftOverGas, vm.state.GetDirtyAccounts(), vm.state.Preimages(), vm.state.GetLogs(), vmErr)
 	ContractAddress := acc.Address(contractAddr)
 	output.ContractAddress = &ContractAddress
 	return output
