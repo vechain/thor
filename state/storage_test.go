@@ -19,7 +19,7 @@ func TestStorage(t *testing.T) {
 	root, _ := cry.ParseHash(emptyRootHash)
 	key, _ := cry.ParseHash(keystr)
 	value, _ := cry.ParseHash(valuestr)
-	storage.UpdateStorage(*root, *key, *value)
-	v := storage.GetStorage(*root, *key)
+	storage.Update(*root, *key, *value)
+	v, _ := storage.Get(*root, *key)
 	assert.Equal(t, *value, v, "storage value should be euqal")
 }

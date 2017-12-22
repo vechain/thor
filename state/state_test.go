@@ -27,7 +27,7 @@ func TestState(t *testing.T) {
 		CodeHash:    cry.Hash{0xaa, 0x22},
 		StorageRoot: cry.Hash{0xaa, 0x22},
 	}
-	state.UpdateAccount(*address, account)
-	a := state.GetAccount(*address)
+	state.Update(*address, account)
+	a, _ := state.Get(*address)
 	assert.Equal(t, a, account, "account should be equal")
 }
