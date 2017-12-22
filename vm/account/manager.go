@@ -259,7 +259,7 @@ func (m *Manager) getAccount(addr acc.Address) *Account {
 	}
 
 	// step 2. if acc == nil, then get from stateReader
-	account := m.stateReader.GetAccout(addr)
+	account, _ := m.stateReader.Get(addr)
 	if account == nil {
 		return nil
 	}

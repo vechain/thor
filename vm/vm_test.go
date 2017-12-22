@@ -72,9 +72,9 @@ func newStateR() *stateReader {
 	}
 }
 
-func (sr *stateReader) GetAccout(addr acc.Address) *acc.Account {
+func (sr *stateReader) Get(addr acc.Address) (*acc.Account, error) {
 	if ac := sr.accounts[addr]; ac != nil {
-		return ac
+		return ac, nil
 	}
 	newAC := &acc.Account{
 		Balance:     new(big.Int),
@@ -82,7 +82,7 @@ func (sr *stateReader) GetAccout(addr acc.Address) *acc.Account {
 		StorageRoot: cry.Hash{},
 	}
 	sr.accounts[addr] = newAC
-	return newAC
+	return newAC, nil
 }
 
 type storageReader struct {
@@ -95,13 +95,13 @@ func newStorageR() *storageReader {
 	}
 }
 
-func (sor *storageReader) GetStorage(key cry.Hash) cry.Hash {
+func (sor *storageReader) Get(root cry.Hash, key cry.Hash) (cry.Hash, error) {
 	if st := sor.storage[key]; st != (cry.Hash{}) {
-		return st
+		return st, nil
 	}
 	newST := cry.Hash{}
 	sor.storage[key] = newST
-	return newST
+	return newST, nil
 }
 
 func Call(sr *stateReader, vm *VM, address acc.Address, input []byte) *Output {

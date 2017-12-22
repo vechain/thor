@@ -79,7 +79,7 @@ func (c *Account) getCode(kv KVReader) []byte {
 	if c.DirtyCode != nil {
 		return c.DirtyCode
 	}
-	c.cachedCode = kv.GetValue(c.Data.CodeHash)
+	c.cachedCode, _ = kv.Get(c.Data.CodeHash[:])
 	return c.cachedCode
 }
 
@@ -94,7 +94,7 @@ func (c *Account) getStorage(sr StorageReader, key cry.Hash) cry.Hash {
 	if storage != (cry.Hash{0}) {
 		return storage
 	}
-	storage = sr.GetStorage(key)
+	storage, _ = sr.Get(c.Data.StorageRoot, key)
 	c.cachedStorage[key] = storage
 	return storage
 }

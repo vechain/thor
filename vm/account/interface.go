@@ -7,15 +7,15 @@ import (
 
 // StateReader return a accout.
 type StateReader interface {
-	GetAccout(acc.Address) *acc.Account // if don't have, return nil
+	Get(acc.Address) (*acc.Account, error)
 }
 
 // StorageReader return a storage.
 type StorageReader interface {
-	GetStorage(cry.Hash) cry.Hash
+	Get(cry.Hash, cry.Hash) (cry.Hash, error)
 }
 
 // KVReader get value from a key.
 type KVReader interface {
-	GetValue(cry.Hash) []byte // if don't have, return nil
+	Get([]byte) ([]byte, error)
 }
