@@ -76,9 +76,12 @@ type Context struct {
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 
+	/// The following two vars are required to generating contract address.
+
 	// The transaction where the message contained.
-	// This var is required when generating contract address.
 	TxHash common.Hash
+	// The index of clause that generates this message.
+	ClauseIndex uint64
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -327,7 +330,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	// differ with ethereum here!!!
 	evm.contractCreationCount++
-	contractAddr = common.Address(acc.CreateContractAddress(cry.Hash(evm.TxHash), evm.contractCreationCount))
+	contractAddr = common.Address(acc.CreateContractAddress(cry.Hash(evm.TxHash), evm.ClauseIndex, evm.contractCreationCount))
 	//
 
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
