@@ -36,15 +36,15 @@ func (o *VMOutput) ApplyState(state StateWriter, storage StorageWriter, kv KVPut
 		} else {
 			accCopy := *da.Data
 			// update storage
-			for k, v := range da.Storage {
+			for k, v := range da.DirtyStorage {
 				if err := storage.UpdateStorage(accCopy.StorageRoot, k, v); err != nil {
 					return err
 				}
 			}
 
-			if len(da.Code) > 0 {
+			if len(da.DirtyCode) > 0 {
 				// writing code
-				if err := kv.Put(accCopy.CodeHash[:], da.Code); err != nil {
+				if err := kv.Put(accCopy.CodeHash[:], da.DirtyCode); err != nil {
 					return err
 				}
 			}

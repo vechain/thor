@@ -35,5 +35,5 @@ func (a *Account) AddBalance(balance *big.Int) {
 // IsEmpty returns if an account is empty.
 // Similar to EIP158, but here we don't have nonce.
 func (a *Account) IsEmpty() bool {
-	return a.Balance.Sign() == 0 && a.CodeHash == EmptyCodeHash
+	return (a.Balance == nil || a.Balance.Sign() == 0) && a.CodeHash == EmptyCodeHash
 }

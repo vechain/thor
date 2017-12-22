@@ -22,6 +22,9 @@ import (
 // It can handle the transactioner interface.
 type Processor struct {
 	state   Stater
+	storage Storager
+	kv      KVer
+
 	am      *account.Manager
 	getHash func(uint64) cry.Hash
 
@@ -36,10 +39,12 @@ type Processor struct {
 }
 
 // New is the Processor's Factory.
-func New(st Stater, kv account.KVReader, getHash func(uint64) cry.Hash) *Processor {
-	am := account.NewManager(kv, st)
+func New(st Stater, so Storager, kv KVer, getHash func(uint64) cry.Hash) *Processor {
+	am := account.NewManager(kv, st, so)
 	return &Processor{
 		state:      st,
+		storage:    so,
+		kv:         kv,
 		am:         am,
 		getHash:    getHash,
 		initialGas: new(big.Int),
@@ -47,7 +52,7 @@ func New(st Stater, kv account.KVReader, getHash func(uint64) cry.Hash) *Process
 }
 
 // Handle hanle the messages.
-func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, config vm.Config) ([]*vm.Output, error) {
+func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, config vm.Config) ([]*VMOutput, error) {
 	// initialize context.
 	messages, err := transaction.AsMessages()
 	if err != nil {
@@ -67,14 +72,15 @@ func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, co
 	}
 
 	// execute.
-	result := make([]*vm.Output, len(messages))
+	result := make([]*VMOutput, len(messages))
 
 	for index, message := range messages {
-		output := p.handleUnitMsg(message, header, config)
+		output := (*VMOutput)(p.handleUnitMsg(message, header, config))
 		result[index] = output
 
 		if output.VMErr != nil {
 			log.Debug("VM returned with error", "err", output.VMErr)
+			output.ApplyState(p.state, p.storage, p.kv)
 			return result, nil
 		}
 
@@ -83,21 +89,12 @@ func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, co
 		output.LeftOverGas = p.restGas
 
 		p.am.AddBalance(header.Beneficiary(), new(big.Int).Mul(p.gasUsed(), p.price))
-		output.DirtiedAccounts = p.am.GetDirtiedAccounts()
+		output.DirtiedAccounts = p.am.GetDirtyAccounts()
 
-		p.updateState(output.DirtiedAccounts)
+		output.ApplyState(p.state, p.storage, p.kv)
 	}
 
 	return result, nil
-}
-
-func (p *Processor) updateState(accounts []*account.Account) {
-	for _, account := range accounts {
-		p.state.UpdateAccount(account.Address, account.Data)
-		for key, value := range account.Storage {
-			p.state.UpdateStorage(key, value)
-		}
-	}
 }
 
 func (p *Processor) handleUnitMsg(msg tx.Message, header *block.Header, config vm.Config) *vm.Output {
