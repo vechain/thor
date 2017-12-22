@@ -1,43 +1,71 @@
 package api
 
-// import (
-// 	"encoding/json"
-// 	"fmt"
-// 	"net/http"
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
 
-// 	"github.com/gorilla/mux"
-// 	"github.com/vechain/thor/block"
-// 	"github.com/vechain/thor/api/utils/httpx"
-// )
+	"github.com/gorilla/mux"
+	"github.com/vechain/thor/api/utils/httpx"
+	"github.com/vechain/thor/cry"
+)
 
-// //HTTPPathPrefix http path prefix
-// const HTTPPathPrefix = "/block"
+//BlockHTTPPathPrefix http path prefix
+const BlockHTTPPathPrefix = "/block"
 
-// //NewHTTPRouter add path to router
-// func NewHTTPRouter(router *mux.Router, accountManager *AccountManager) {
-// 	sub := router.PathPrefix(HTTPPathPrefix).Subrouter()
-// 	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(accountManager.handleGetAccount))
-// }
-// func (am *AccountManager) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
-// 	query := mux.Vars(req)
-// 	if query == nil {
-// 		w.WriteHeader(400)
-// 	}
-// 	addr, ok := query["address"]
-// 	if !ok {
-// 		w.WriteHeader(400)
-// 	}
-// 	fmt.Println("query :", query)
-// 	address, err := acc.ParseAddress(addr)
+//NewBlockHTTPRouter add path to router
+func NewBlockHTTPRouter(router *mux.Router, bi *BlockInterface) {
+	sub := router.PathPrefix(BlockHTTPPathPrefix).Subrouter()
+	sub.Path("/hash/{hash}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
+	sub.Path("/number/{number}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
+}
+func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.Request) error {
+	query := mux.Vars(req)
+	if query == nil {
+		return httpx.Error(errors.New(" No Params! "), 400)
+	}
+	hashstring, ok := query["hash"]
+	if !ok {
+		return httpx.Error(errors.New(" Invalid Params! "), 400)
+	}
+	hash, err := cry.ParseHash(hashstring)
+	if err != nil {
+		return httpx.Error(errors.New(" Parse block hash failed! "), 400)
+	}
+	block, err := bi.GetBlockByHash(*hash)
+	if err != nil {
+		return httpx.Error(errors.New(" Get block failed! "), 400)
+	}
+	str, err := json.Marshal(block)
+	if err != nil {
+		return httpx.Error(errors.New(" System Error! "), 400)
+	}
+	w.Write(str)
+	return nil
+}
 
-// 	if err != nil {
-// 		w.WriteHeader(400)
-// 	}
-// 	account := am.GetAccount(*address)
-// 	str, err := json.Marshal(account)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	w.Write(str)
-// 	return nil
-// }
+func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *http.Request) error {
+	query := mux.Vars(req)
+	if query == nil {
+		return httpx.Error(errors.New(" No Params! "), 400)
+	}
+	number, ok := query["number"]
+	if !ok {
+		return httpx.Error(errors.New(" Invalid Params! "), 400)
+	}
+	bn, err := strconv.Atoi(number)
+	if err != nil {
+		return httpx.Error(errors.New(" Parse block hash failed! "), 400)
+	}
+	block, err := bi.GetBlockByNumber(uint32(bn))
+	if err != nil {
+		return httpx.Error(errors.New(" Get block failed! "), 400)
+	}
+	str, err := json.Marshal(block)
+	if err != nil {
+		return httpx.Error(errors.New(" System Error! "), 400)
+	}
+	w.Write(str)
+	return nil
+}

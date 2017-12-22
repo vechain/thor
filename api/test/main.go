@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -38,9 +40,26 @@ func main() {
 	}
 	s.UpdateAccount(*address, account)
 	s.Commit()
-	accountManager := api.New(s)
+	chain := chain.New(db)
+	chain.WriteGenesis(new(block.Builder).Build())
+
+	for i := 0; i < 100; i++ {
+		best, _ := chain.GetBestBlock()
+		b := new(block.Builder).
+			ParentHash(best.Hash()).
+			Build()
+		fmt.Println(b.Hash())
+		if err := chain.AddBlock(b, true); err != nil {
+			fmt.Println(err)
+		}
+	}
+	best, _ := chain.GetBestBlock()
+	fmt.Println(best.Number())
+	bm := api.NewBlockMananger(chain)
+	am := api.NewAccountMananger(s)
 	router := mux.NewRouter()
-	api.NewHTTPRouter(router, accountManager)
+	api.NewAccountHTTPRouter(router, am)
+	api.NewBlockHTTPRouter(router, bm)
 	fmt.Println("server listen 3000")
 	http.ListenAndServe(":3000", router)
 

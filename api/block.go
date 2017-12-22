@@ -1,19 +1,29 @@
 package api
 
-// import (
-// 	"github.com/vechain/thor/chain"
-// 	"github.com/vechain/thor/block"
-// )
-// type struct BlockManager {
-// 	chain *chain.Chain
-// }
+import (
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/cry"
+)
 
-// //GetAccount get account by address
+//BlockInterface for manage block with chain
+type BlockInterface struct {
+	chain *chain.Chain
+}
 
-// func (bm *BlockManager) GetBlock(blockHash cry.Hash) *block.Block {
-// 	return bm.chain.GetBlock(blockHash);
-// }
+//NewBlockInterface return a BlockMananger by chain
+func NewBlockInterface(chain *chain.Chain) *BlockInterface {
+	return &BlockInterface{
+		chain: chain,
+	}
+}
 
-// func (bm *BlockManager) GetBlock(blockNumber big.Int) *block.Block {
-// 	return bm.chain.GetBlockByNumber(blockNumber);
-// }
+//GetBlockByHash return block by address
+func (bi *BlockInterface) GetBlockByHash(blockHash cry.Hash) (*block.Block, error) {
+	return bi.chain.GetBlock(blockHash)
+}
+
+//GetBlockByNumber return block by address
+func (bi *BlockInterface) GetBlockByNumber(blockNumber uint32) (*block.Block, error) {
+	return bi.chain.GetBlockByNumber(blockNumber)
+}
