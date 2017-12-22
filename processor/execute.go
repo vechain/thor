@@ -40,7 +40,16 @@ func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLim
 
 // ExecuteMsg can handle a transaction.message without prepare and check.
 func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
-	ctx := vm.NewEVMContext(context.header, context.price, context.sender, context.txHash, context.getHash)
+	ctx := vm.Context{
+		Origin:      context.sender,
+		Beneficiary: context.header.Beneficiary(),
+		BlockNumber: new(big.Int).SetUint64(uint64(context.header.Number())),
+		Time:        new(big.Int).SetUint64(uint64(context.header.Timestamp())),
+		GasLimit:    context.header.GasLimit(),
+		GasPrice:    context.price,
+		TxHash:      context.txHash,
+		GetHash:     context.getHash,
+	}
 	am := account.NewManager(context.kv, context.state)
 	mvm := vm.NewVM(ctx, am, config) // message virtual machine
 	var output *vm.Output

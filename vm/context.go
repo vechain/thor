@@ -3,39 +3,24 @@ package vm
 import (
 	"math/big"
 
-	"github.com/vechain/thor/cry"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/block"
+
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/vm/evm"
+
+	"github.com/vechain/thor/acc"
 )
 
-// Context is ref to evm.Context.
-type Context evm.Context
-
-// NewEVMContext return a new evm.Context.
-// origin: Message.From()
-// price: Message.Price()
-// txHash: Message.TransactionHash()
-func NewEVMContext(header *block.Header, price *big.Int, origin acc.Address, txHash cry.Hash, getHash func(uint64) cry.Hash) Context {
-	tGetHash := func(n uint64) common.Hash {
-		return common.Hash(getHash(n))
-	}
-
-	return Context{
-		CanTransfer: canTransfer,
-		Transfer:    transfer,
-		GetHash:     tGetHash,
-		Origin:      common.Address(origin),
-		Coinbase:    common.Address(header.Beneficiary()),
-		BlockNumber: new(big.Int).SetUint64(uint64(header.Number())),
-		Time:        new(big.Int).SetUint64(header.Timestamp()),
-		Difficulty:  new(big.Int),
-		GasLimit:    header.GasLimit(),
-		GasPrice:    price,
-		TxHash:      common.Hash(txHash),
-	}
+// Context for VM runtime.
+type Context struct {
+	Origin      acc.Address
+	Beneficiary acc.Address
+	BlockNumber *big.Int
+	Time        *big.Int
+	GasLimit    *big.Int
+	GasPrice    *big.Int
+	TxHash      cry.Hash
+	GetHash     func(uint64) cry.Hash
 }
 
 // CanTransfer checks wether there are enough funds in the address' account to make a transfer.
