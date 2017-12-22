@@ -10,8 +10,9 @@ import (
 // Manager is account's delegate.
 // Implements evm.AccountManager.
 type Manager struct {
-	kvReader    KVReader
-	stateReader StateReader
+	kvReader      KVReader
+	stateReader   StateReader
+	storageReader StorageReader
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	accounts      map[acc.Address]*Account // memory cache
@@ -24,10 +25,11 @@ type Manager struct {
 }
 
 // NewManager return a manager for Accounts.
-func NewManager(kv KVReader, state StateReader) *Manager {
+func NewManager(kv KVReader, state StateReader, storage StorageReader) *Manager {
 	return &Manager{
 		kvReader:      kv,
 		stateReader:   state,
+		storageReader: storage,
 		accounts:      make(map[acc.Address]*Account),
 		accountsDirty: make(map[acc.Address]struct{}),
 		refund:        new(big.Int),
@@ -55,6 +57,7 @@ func (m *Manager) DeepCopy() interface{} {
 
 	return &Manager{
 		stateReader:   m.stateReader,
+		storageReader: m.storageReader,
 		accounts:      accounts,
 		accountsDirty: accountsDirty,
 		refund:        new(big.Int).Set(m.refund),
@@ -175,7 +178,7 @@ func (m *Manager) GetState(addr acc.Address, key cry.Hash) cry.Hash {
 	if account == nil {
 		return cry.Hash{}
 	}
-	return account.getStorage(m.stateReader, key)
+	return account.getStorage(m.storageReader, key)
 }
 
 // SetState set storage by given key and value.

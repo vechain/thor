@@ -5,9 +5,13 @@ import (
 	"github.com/vechain/thor/cry"
 )
 
-// StateReader return a accout or storage.
+// StateReader return a accout.
 type StateReader interface {
 	GetAccout(acc.Address) *acc.Account // if don't have, return nil
+}
+
+// StorageReader return a storage.
+type StorageReader interface {
 	GetStorage(cry.Hash) cry.Hash
 }
 
