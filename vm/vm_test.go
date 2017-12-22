@@ -36,24 +36,21 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func getHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
+func getHash(n uint64) cry.Hash {
+	return cry.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 }
 
 func NewEnv(kvReader account.KVReader, stateReader account.StateReader) *VM {
-	context := Context{
-		CanTransfer: canTransfer,
-		Transfer:    transfer,
+	ctx := Context{
+		TxHash:      cry.Hash{},
 		GetHash:     getHash,
-
 		BlockNumber: new(big.Int),
-		Time:        big.NewInt(time.Now().Unix()),
-		Difficulty:  new(big.Int),
-		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
 		GasPrice:    new(big.Int),
+		Time:        big.NewInt(time.Now().Unix()),
+		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
 	}
 	am := account.NewManager(kvReader, stateReader)
-	return NewVM(context, am, Config{})
+	return NewVM(ctx, am, Config{})
 }
 
 type stateReader struct {

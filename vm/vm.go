@@ -64,10 +64,29 @@ var chainConfig = &params.ChainConfig{
 // NewVM retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
 func NewVM(ctx Context, am *account.Manager, vmConfig Config) *VM {
+	tGetHash := func(n uint64) common.Hash {
+		return common.Hash(ctx.GetHash(n))
+	}
+
+	evmCtx := evm.Context{
+		CanTransfer: canTransfer,
+		Transfer:    transfer,
+		GetHash:     tGetHash,
+		Difficulty:  new(big.Int),
+
+		Origin:      common.Address(ctx.Origin),
+		Coinbase:    common.Address(ctx.Beneficiary),
+		BlockNumber: ctx.BlockNumber,
+		Time:        ctx.Time,
+		GasLimit:    ctx.GasLimit,
+		GasPrice:    ctx.GasPrice,
+		TxHash:      common.Hash(ctx.TxHash),
+	}
+
 	sm := snapshot.New()
 	vl := vmlog.New()
 	state := state.New(am, sm, vl)
-	evm := evm.NewEVM(evm.Context(ctx), state, chainConfig, evm.Config(vmConfig))
+	evm := evm.NewEVM(evmCtx, state, chainConfig, evm.Config(vmConfig))
 	return &VM{evm: evm, state: state}
 }
 

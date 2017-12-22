@@ -101,7 +101,16 @@ func (p *Processor) updateState(accounts []*account.Account) {
 }
 
 func (p *Processor) handleUnitMsg(msg tx.Message, header *block.Header, config vm.Config) *vm.Output {
-	ctx := vm.NewEVMContext(header, p.price, p.sender, p.txHash, p.getHash)
+	ctx := vm.Context{
+		Origin:      p.sender,
+		Beneficiary: header.Beneficiary(),
+		BlockNumber: new(big.Int).SetUint64(uint64(header.Number())),
+		Time:        new(big.Int).SetUint64(uint64(header.Timestamp())),
+		GasLimit:    header.GasLimit(),
+		GasPrice:    p.price,
+		TxHash:      p.txHash,
+		GetHash:     p.getHash,
+	}
 	mvm := vm.NewVM(ctx, p.am, config) // message virtual machine
 	var output *vm.Output
 
