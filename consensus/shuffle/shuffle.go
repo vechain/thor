@@ -13,9 +13,6 @@ func Shuffle(seed uint32, perm []int) {
 	hr := newHrand(seed)
 	for i := 0; i < len(perm)-1; i++ {
 		j := hr.Intn(size-i) + i
-
-		tmp := perm[i]
-		perm[i] = perm[j]
-		perm[j] = tmp
+		perm[i], perm[j] = perm[j], perm[i]
 	}
 }
