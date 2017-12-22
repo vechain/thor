@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -10,33 +10,31 @@ import (
 	"github.com/vechain/thor/api/utils/httpx"
 )
 
-//HTTPPathPrefix http path prefix
-const HTTPPathPrefix = "/account"
+//AccountHTTPPathPrefix http path prefix
+const AccountHTTPPathPrefix = "/account"
 
-//NewHTTPRouter add path to router
-func NewHTTPRouter(router *mux.Router, accountManager *AccountManager) {
-	sub := router.PathPrefix(HTTPPathPrefix).Subrouter()
-	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(accountManager.handleGetAccount))
+//NewAccountHTTPRouter add path to router
+func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
+	sub := router.PathPrefix(AccountHTTPPathPrefix).Subrouter()
+	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetAccount))
 }
-func (am *AccountManager) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+func (ai *AccountInterface) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if query == nil {
-		w.WriteHeader(400)
+		return httpx.Error(errors.New(" No Params! "), 400)
 	}
 	addr, ok := query["address"]
 	if !ok {
-		w.WriteHeader(400)
+		return httpx.Error(errors.New(" Invalid Params! "), 400)
 	}
-	fmt.Println("query :", query)
 	address, err := acc.ParseAddress(addr)
-
 	if err != nil {
-		w.WriteHeader(400)
+		return httpx.Error(errors.New(" Parse address failed! "), 400)
 	}
-	account := am.GetAccount(*address)
+	account := ai.GetAccount(*address)
 	str, err := json.Marshal(account)
 	if err != nil {
-		return err
+		return httpx.Error(errors.New(" System Error! "), 500)
 	}
 	w.Write(str)
 	return nil

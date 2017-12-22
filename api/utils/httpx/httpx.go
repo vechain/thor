@@ -38,6 +38,7 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := f(w, r)
 		if err != nil {
+
 			if se, ok := err.(errorWithStatus); ok {
 				if se.err != nil {
 					http.Error(w, se.err.Error(), se.status)
