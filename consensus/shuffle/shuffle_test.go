@@ -9,10 +9,12 @@ import (
 
 func TestShuffle(t *testing.T) {
 	sum := make([]int, 10)
+	perm := make([]int, 10)
+
 	for i := uint32(0); i < 10000; i++ {
-		s := shuffle.Shuffle(i, 10)
+		shuffle.Shuffle(i, perm)
 		for j := range sum {
-			sum[j] = sum[j] + s[j]
+			sum[j] = sum[j] + perm[j]
 		}
 	}
 	fmt.Println(sum)

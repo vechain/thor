@@ -1,21 +1,21 @@
 package shuffle
 
 // Shuffle cryptographic hash based Fisher–Yates shuffle algorithm.
-// It generates a shuffled slice based on seed.
-// The size indicates the length of returned slice.
-func Shuffle(seed uint32, size int) []int {
-	slice := make([]int, size)
-	for i := range slice {
-		slice[i] = i
+// The perm is to receive shuffled permutation of [0, len(perm)-1).
+func Shuffle(seed uint32, perm []int) {
+	for i := range perm {
+		perm[i] = i
 	}
-
+	size := len(perm)
+	if size < 2 {
+		return
+	}
 	hr := newHrand(seed)
-	for i := 0; i < size-1; i++ {
+	for i := 0; i < len(perm)-1; i++ {
 		j := hr.Intn(size-i) + i
 
-		tmp := slice[i]
-		slice[i] = slice[j]
-		slice[j] = tmp
+		tmp := perm[i]
+		perm[i] = perm[j]
+		perm[j] = tmp
 	}
-	return slice
 }
