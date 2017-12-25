@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
@@ -18,77 +20,78 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
-// State implement Stater.
-type State struct {
-	accounts map[acc.Address]*acc.Account
+type accountFake struct {
+	balance *big.Int
+	code    []byte
 }
 
-type Storage struct {
+// State implement Stater.
+type State struct {
+	accounts map[acc.Address]*accountFake
 	storages map[cry.Hash]cry.Hash
 }
 
 // NewState mock Stater interface.
 func NewState() *State {
 	state := &State{
-		make(map[acc.Address]*acc.Account),
+		make(map[acc.Address]*accountFake),
+		make(map[cry.Hash]cry.Hash),
 	}
 	return state
 }
 
-// NewState mock Stater interface.
-func NewStorage() *Storage {
-	storage := &Storage{
-		make(map[cry.Hash]cry.Hash),
-	}
-	return storage
-}
-
 // SetOwner mock a rich account.
 func (st *State) SetOwner(addr acc.Address) {
-	st.accounts[addr] = &acc.Account{
-		Balance:     big.NewInt(5000000000000000000),
-		CodeHash:    cry.Hash{},
-		StorageRoot: cry.Hash{},
+	st.accounts[addr] = &accountFake{
+		balance: big.NewInt(5000000000000000000),
 	}
 }
 
-// GetAccout get account.
-func (st *State) Get(addr acc.Address) (*acc.Account, error) {
-	return st.accounts[addr], nil
-}
-
-// GetStorage get storage.
-func (st *Storage) Get(root cry.Hash, key cry.Hash) (cry.Hash, error) {
-	return st.storages[key], nil
-}
-
-// UpdateAccount update memory.
-func (st *State) Update(addr acc.Address, account *acc.Account) error {
-	st.accounts[addr] = account
+func (st *State) Error() error {
 	return nil
 }
 
-func (st *State) Delete(acc.Address) error {
-	return nil
+func (st *State) Exist(addr acc.Address) bool {
+	if acc := st.accounts[addr]; acc == nil {
+		st.accounts[addr] = &accountFake{
+			new(big.Int),
+			[]byte{},
+		}
+	}
+	return true
 }
 
-func (st *Storage) Update(root cry.Hash, key cry.Hash, value cry.Hash) error {
+func (st *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
+	if storage := st.storages[key]; storage != (cry.Hash{}) {
+		return storage
+	}
+	newST := cry.Hash{}
+	st.storages[key] = newST
+	return newST
+}
+
+func (st *State) GetBalance(addr acc.Address) *big.Int {
+	return st.accounts[addr].balance
+}
+
+func (st *State) GetCode(addr acc.Address) []byte {
+	return st.accounts[addr].code
+}
+
+func (st *State) SetBalance(addr acc.Address, balance *big.Int) {
+	st.accounts[addr].balance = balance
+}
+
+func (st *State) SetCode(addr acc.Address, code []byte) {
+	st.accounts[addr].code = code
+}
+
+func (st *State) SetStorage(addr acc.Address, key cry.Hash, value cry.Hash) {
 	st.storages[key] = value
-	return nil
 }
 
-func (st *Storage) Root(root cry.Hash) (cry.Hash, error) {
-	return cry.Hash{}, nil
-}
-
-type KV struct{}
-
-func (kv *KV) Get([]byte) ([]byte, error) {
-	return nil, nil
-}
-
-func (kv *KV) Put(key, value []byte) error {
-	return nil
+func (st *State) DeleteAccount(addr acc.Address) {
+	st.accounts[addr] = nil
 }
 
 var key = func() *ecdsa.PrivateKey {
@@ -97,16 +100,17 @@ var key = func() *ecdsa.PrivateKey {
 }()
 
 func TestHandleTransaction(t *testing.T) {
+	assert := assert.New(t)
 	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
 	state := NewState()
 	state.SetOwner(sender)
-	storage := NewStorage()
-	processor := New(state, storage, &KV{}, nil)
+	processor := New(state, nil)
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
 	header := block.Header()
 	transaction := block.Transactions()[0]
-	outputs, _ := processor.Handle(header, transaction, vm.Config{})
-	t.Log(outputs[0])
+	_, gasUsed, _ := processor.Process(header, transaction, vm.Config{})
+	//t.Log(outputs[0])
+	assert.Equal(gasUsed.Int64(), int64(157592))
 }
 
 func buildTransaction() *tx.Transaction {

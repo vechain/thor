@@ -1,21 +1,16 @@
 package account
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 )
 
-// StateReader return a accout.
+// StateReader fake.
 type StateReader interface {
-	Get(acc.Address) (*acc.Account, error)
-}
-
-// StorageReader return a storage.
-type StorageReader interface {
-	Get(cry.Hash, cry.Hash) (cry.Hash, error)
-}
-
-// KVReader get value from a key.
-type KVReader interface {
-	Get([]byte) ([]byte, error)
+	GetBalance(acc.Address) *big.Int
+	GetCode(acc.Address) []byte
+	GetStorage(acc.Address, cry.Hash) cry.Hash
+	Exist(acc.Address) bool
 }

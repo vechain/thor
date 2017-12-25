@@ -9,7 +9,6 @@ import (
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-	"github.com/vechain/thor/vm/account"
 )
 
 // Context for ExecuteMsg.
@@ -20,14 +19,12 @@ type Context struct {
 	gasLimit uint64
 	txHash   cry.Hash
 
-	state   account.StateReader
-	storage account.StorageReader
-	kv      account.KVReader
+	state   Stater
 	getHash func(uint64) cry.Hash
 }
 
 // NewContext return Context.
-func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLimit uint64, txHash cry.Hash, state account.StateReader, storage account.StorageReader, kv account.KVReader, getHash func(uint64) cry.Hash) *Context {
+func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLimit uint64, txHash cry.Hash, state Stater, getHash func(uint64) cry.Hash) *Context {
 	return &Context{
 		price:    price,
 		sender:   sender,
@@ -35,14 +32,12 @@ func NewContext(price *big.Int, sender acc.Address, header *block.Header, gasLim
 		gasLimit: gasLimit,
 		txHash:   txHash,
 		state:    state,
-		storage:  storage,
-		kv:       kv,
 		getHash:  getHash,
 	}
 }
 
 // ExecuteMsg can handle a transaction.message without prepare and check.
-func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
+func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) (*vm.Output, *big.Int) {
 	ctx := vm.Context{
 		Origin:      context.sender,
 		Beneficiary: context.header.Beneficiary(),
@@ -53,42 +48,38 @@ func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) *vm.Output {
 		TxHash:      context.txHash,
 		GetHash:     context.getHash,
 	}
-	am := account.NewManager(context.kv, context.state, context.storage)
-	mvm := vm.NewVM(ctx, am, config) // message virtual machine
-	var output *vm.Output
+	mvm := vm.NewVM(ctx, context.state, config) // message virtual machine
+	var (
+		output      *vm.Output
+		leftOverGas uint64
+		refundx     *big.Int
+	)
 	initialGas := new(big.Int).SetUint64(context.gasLimit)
 
 	if msg.To() == nil {
-		output = mvm.Create(context.sender, msg.Data(), context.gasLimit, msg.Value())
+		output, leftOverGas, refundx = mvm.Create(context.sender, msg.Data(), context.gasLimit, msg.Value())
 	} else {
-		output = mvm.Call(context.sender, *(msg.To()), msg.Data(), context.gasLimit, msg.Value())
+		output, leftOverGas, refundx = mvm.Call(context.sender, *(msg.To()), msg.Data(), context.gasLimit, msg.Value())
 	}
 
-	if output.VMErr != nil {
-		return output
-	}
+	leftOverGas = refundGas(context.state, context.sender, leftOverGas, refundx, initialGas, context.price)
+	gasUsed := new(big.Int).Sub(initialGas, new(big.Int).SetUint64(leftOverGas))
 
-	output.LeftOverGas = refundGas(am, context.sender, output.LeftOverGas, initialGas, context.price)
-	gasUsed := new(big.Int).Sub(initialGas, new(big.Int).SetUint64(output.LeftOverGas))
-	am.AddBalance(context.header.Beneficiary(), new(big.Int).Mul(gasUsed, context.price))
-	output.DirtiedAccounts = am.GetDirtyAccounts()
-
-	return output
+	return output, gasUsed
 }
 
-func refundGas(am *account.Manager, sender acc.Address, leftOverGas uint64, initialGas *big.Int, price *big.Int) uint64 {
+func refundGas(state Stater, sender acc.Address, leftOverGas uint64, refundGas *big.Int, initialGas *big.Int, price *big.Int) uint64 {
 	// Return eth for remaining gas to the sender account,
 	// exchanged at the original rate.
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), price)
-	am.AddBalance(sender, remaining)
+	state.SetBalance(sender, new(big.Int).Add(state.GetBalance(sender), remaining))
 
 	// Apply refund counter, capped to half of the used gas.
 	gasUsed := new(big.Int).Sub(initialGas, new(big.Int).SetUint64(leftOverGas))
 	uhalf := remaining.Div(gasUsed, big.NewInt(2))
-	refund := math.BigMin(uhalf, am.GetRefund())
+	refund := math.BigMin(uhalf, refundGas)
 	leftOverGas += refund.Uint64()
-
-	am.AddBalance(sender, refund.Mul(refund, price))
+	state.SetBalance(sender, new(big.Int).Add(state.GetBalance(sender), refund.Mul(refund, price)))
 
 	return leftOverGas
 }
