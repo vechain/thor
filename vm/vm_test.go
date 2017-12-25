@@ -23,12 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/vm/account"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/vm/account"
 	"github.com/vechain/thor/vm/evm"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -40,21 +39,26 @@ func getHash(n uint64) cry.Hash {
 	return cry.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 }
 
-func NewEnv(kvReader account.KVReader, stateReader account.StateReader, storageReader account.StorageReader) *VM {
+func NewEnv(stateReader account.StateReader) *VM {
 	ctx := Context{
-		TxHash:      cry.Hash{},
+		TxHash:      cry.Hash{1},
+		ClauseIndex: 1,
 		GetHash:     getHash,
 		BlockNumber: new(big.Int),
 		GasPrice:    new(big.Int),
 		Time:        big.NewInt(time.Now().Unix()),
 		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
 	}
-	am := account.NewManager(kvReader, stateReader, storageReader)
-	return NewVM(ctx, am, Config{})
+	return NewVM(ctx, stateReader, Config{})
+}
+
+type accountFake struct {
+	balance *big.Int
+	code    []byte
 }
 
 type stateReader struct {
-	accounts map[acc.Address]*acc.Account
+	accounts map[acc.Address]*accountFake
 	storage  map[cry.Hash]cry.Hash
 
 	value    *big.Int
@@ -64,7 +68,7 @@ type stateReader struct {
 
 func newStateR() *stateReader {
 	return &stateReader{
-		make(map[acc.Address]*acc.Account),
+		make(map[acc.Address]*accountFake),
 		make(map[cry.Hash]cry.Hash),
 		new(big.Int),
 		math.MaxUint64,
@@ -72,39 +76,34 @@ func newStateR() *stateReader {
 	}
 }
 
-func (sr *stateReader) Get(addr acc.Address) (*acc.Account, error) {
-	if ac := sr.accounts[addr]; ac != nil {
-		return ac, nil
+func (st *stateReader) Exist(addr acc.Address) bool {
+	if acc := st.accounts[addr]; acc == nil {
+		st.accounts[addr] = &accountFake{
+			new(big.Int),
+			[]byte{},
+		}
 	}
-	newAC := &acc.Account{
-		Balance:     new(big.Int),
-		CodeHash:    cry.Hash{},
-		StorageRoot: cry.Hash{},
-	}
-	sr.accounts[addr] = newAC
-	return newAC, nil
+	return true
 }
 
-type storageReader struct {
-	storage map[cry.Hash]cry.Hash
-}
-
-func newStorageR() *storageReader {
-	return &storageReader{
-		make(map[cry.Hash]cry.Hash),
-	}
-}
-
-func (sor *storageReader) Get(root cry.Hash, key cry.Hash) (cry.Hash, error) {
-	if st := sor.storage[key]; st != (cry.Hash{}) {
-		return st, nil
+func (st *stateReader) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
+	if storage := st.storage[key]; storage != (cry.Hash{}) {
+		return storage
 	}
 	newST := cry.Hash{}
-	sor.storage[key] = newST
-	return newST, nil
+	st.storage[key] = newST
+	return newST
 }
 
-func Call(sr *stateReader, vm *VM, address acc.Address, input []byte) *Output {
+func (st *stateReader) GetBalance(addr acc.Address) *big.Int {
+	return st.accounts[addr].balance
+}
+
+func (st *stateReader) GetCode(addr acc.Address) []byte {
+	return st.accounts[addr].code
+}
+
+func Call(sr *stateReader, vm *VM, address acc.Address, input []byte) (*Output, uint64, *big.Int) {
 	// Call the code with the given configuration.
 	return vm.Call(
 		sr.origin,
@@ -119,8 +118,7 @@ func TestCall(t *testing.T) {
 	assert := assert.New(t)
 
 	sr := newStateR()
-	sor := newStorageR()
-	env := NewEnv(nil, sr, sor)
+	env := NewEnv(sr)
 	address := acc.BytesToAddress([]byte("0x0a"))
 
 	env.state.SetCode(common.Address(address), []byte{
@@ -132,9 +130,9 @@ func TestCall(t *testing.T) {
 		byte(evm.RETURN),
 	})
 
-	output := Call(sr, env, address, nil)
+	output, _, _ := Call(sr, env, address, nil)
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	num := new(big.Int).SetBytes(output.Value)
@@ -146,7 +144,7 @@ func TestCall(t *testing.T) {
 }
 
 // Create executes the code using the EVM create method
-func Create(sr *stateReader, vm *VM, input []byte) *Output {
+func Create(sr *stateReader, vm *VM, input []byte) (*Output, uint64, *big.Int) {
 	// Call the code with the given configuration.
 	return vm.Create(
 		sr.origin,
@@ -161,15 +159,14 @@ func TestContract(t *testing.T) {
 
 	sr := newStateR()
 	sr.origin = acc.BytesToAddress([]byte("0x0a"))
-	sor := newStorageR()
-	env := NewEnv(nil, sr, sor)
+	env := NewEnv(sr)
 
 	// 创建合约
 	var input = common.Hex2Bytes("6060604052341561000f57600080fd5b61018d8061001e6000396000f30060606040526004361061006d576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806316e64048146100725780631f2a63c01461009b57806344650b74146100c457806367e06858146100e75780639650470c14610110575b600080fd5b341561007d57600080fd5b610085610133565b6040518082815260200191505060405180910390f35b34156100a657600080fd5b6100ae610139565b6040518082815260200191505060405180910390f35b34156100cf57600080fd5b6100e5600480803590602001909190505061013f565b005b34156100f257600080fd5b6100fa610149565b6040518082815260200191505060405180910390f35b341561011b57600080fd5b6101316004808035906020019091905050610157565b005b60005481565b60015481565b8060008190555050565b600060015460005401905090565b80600181905550505600a165627a7a723058201fb67fe068c521eaa014e518e0916c231e5e376eeabcad865a6c8a8619c34fca0029")
-	output := Create(sr, env, input)
+	output, _, _ := Create(sr, env, input)
 	contractAddr := *output.ContractAddress
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	// 创建 abi
@@ -184,9 +181,9 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output = Call(sr, env, contractAddr, left)
+	output, _, _ = Call(sr, env, contractAddr, left)
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	// 设置 right
@@ -194,9 +191,9 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output = Call(sr, env, contractAddr, right)
+	output, _, _ = Call(sr, env, contractAddr, right)
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	// ADD
@@ -204,9 +201,9 @@ func TestContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output = Call(sr, env, contractAddr, add)
+	output, _, _ = Call(sr, env, contractAddr, add)
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	num := new(big.Int).SetBytes(output.Value)
@@ -219,15 +216,14 @@ func TestContractCall(t *testing.T) {
 
 	sr := newStateR()
 	sr.origin = acc.BytesToAddress([]byte("0x0a"))
-	sor := newStorageR()
-	env := NewEnv(nil, sr, sor)
+	env := NewEnv(sr)
 
 	// 创建合约
 	var input = common.Hex2Bytes("6060604052341561000f57600080fd5b610017610071565b604051809103906000f080151561002d57600080fd5b6000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff160217905550610081565b6040516101ab806103bf83390190565b61032f806100906000396000f30060606040526004361061004c576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063830fb67c1461005157806396f1b6be14610091575b600080fd5b341561005c57600080fd5b61007b60048080359060200190919080359060200190919050506100e6565b6040518082815260200191505060405180910390f35b341561009c57600080fd5b6100a46102de565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b60008060009054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166344650b74846040518263ffffffff167c010000000000000000000000000000000000000000000000000000000002815260040180828152602001915050600060405180830381600087803b151561017757600080fd5b6102c65a03f1151561018857600080fd5b5050506000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16639650470c836040518263ffffffff167c010000000000000000000000000000000000000000000000000000000002815260040180828152602001915050600060405180830381600087803b151561021a57600080fd5b6102c65a03f1151561022b57600080fd5b5050506000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff166367e068586000604051602001526040518163ffffffff167c0100000000000000000000000000000000000000000000000000000000028152600401602060405180830381600087803b15156102bb57600080fd5b6102c65a03f115156102cc57600080fd5b50505060405180519050905092915050565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff16815600a165627a7a72305820aa5680aaafffb2c975d04c68f53abed365e4a87aab84366cfd47e244d023188900296060604052341561000f57600080fd5b61018d8061001e6000396000f30060606040526004361061006d576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806316e64048146100725780631f2a63c01461009b57806344650b74146100c457806367e06858146100e75780639650470c14610110575b600080fd5b341561007d57600080fd5b610085610133565b6040518082815260200191505060405180910390f35b34156100a657600080fd5b6100ae610139565b6040518082815260200191505060405180910390f35b34156100cf57600080fd5b6100e5600480803590602001909190505061013f565b005b34156100f257600080fd5b6100fa610149565b6040518082815260200191505060405180910390f35b341561011b57600080fd5b6101316004808035906020019091905050610157565b005b60005481565b60015481565b8060008190555050565b600060015460005401905090565b80600181905550505600a165627a7a72305820509096b2d0bdf296da55f8c6593cd4a375d04f06be748020cec5b9e001d4f8ee0029")
-	output := Create(sr, env, input)
+	output, _, _ := Create(sr, env, input)
 	contractAddr := *output.ContractAddress
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	// 创建 abi
@@ -242,9 +238,9 @@ func TestContractCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output = Call(sr, env, contractAddr, add)
+	output, _, _ = Call(sr, env, contractAddr, add)
 	if output.VMErr != nil {
-		t.Fatal("didn't expect error", output.VMErr)
+		t.Fatal("didn't expect error:", output.VMErr)
 	}
 
 	num := new(big.Int).SetBytes(output.Value)

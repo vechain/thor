@@ -10,9 +10,7 @@ import (
 // Manager is account's delegate.
 // Implements evm.AccountManager.
 type Manager struct {
-	kvReader      KVReader
-	stateReader   StateReader
-	storageReader StorageReader
+	stateReader StateReader
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	accounts      map[acc.Address]*Account // memory cache
@@ -25,11 +23,9 @@ type Manager struct {
 }
 
 // NewManager return a manager for Accounts.
-func NewManager(kv KVReader, state StateReader, storage StorageReader) *Manager {
+func NewManager(state StateReader) *Manager {
 	return &Manager{
-		kvReader:      kv,
 		stateReader:   state,
-		storageReader: storage,
 		accounts:      make(map[acc.Address]*Account),
 		dirtyAccounts: make(map[acc.Address]struct{}),
 		refund:        new(big.Int),
@@ -57,7 +53,6 @@ func (m *Manager) DeepCopy() interface{} {
 
 	return &Manager{
 		stateReader:   m.stateReader,
-		storageReader: m.storageReader,
 		accounts:      accounts,
 		dirtyAccounts: dirtyAccounts,
 		refund:        new(big.Int).Set(m.refund),
@@ -79,7 +74,7 @@ func (m *Manager) GetDirtyAccounts() []*Account {
 func (m *Manager) CreateAccount(addr acc.Address) {
 	new, prev := m.createAccount(addr)
 	if prev != nil {
-		new.setBalance(prev.Data.Balance)
+		new.setBalance(prev.Balance)
 		m.markAccoutDirty(addr)
 	}
 }
@@ -128,7 +123,7 @@ func (m *Manager) GetCodeHash(addr acc.Address) cry.Hash {
 	if account == nil {
 		return cry.Hash{}
 	}
-	return account.getCodeHash()
+	return account.getCodeHash(m.stateReader)
 }
 
 // GetCode return code from account.
@@ -137,7 +132,7 @@ func (m *Manager) GetCode(addr acc.Address) []byte {
 	if account == nil {
 		return nil
 	}
-	return account.getCode(m.kvReader)
+	return account.getCode(m.stateReader)
 }
 
 // SetCode set account's code.
@@ -153,7 +148,7 @@ func (m *Manager) GetCodeSize(addr acc.Address) int {
 	if account == nil {
 		return 0
 	}
-	code := account.getCode(m.kvReader)
+	code := account.getCode(m.stateReader)
 	if code == nil {
 		return 0
 	}
@@ -178,7 +173,7 @@ func (m *Manager) GetState(addr acc.Address, key cry.Hash) cry.Hash {
 	if account == nil {
 		return cry.Hash{}
 	}
-	return account.getStorage(m.storageReader, key)
+	return account.getStorage(m.stateReader, key)
 }
 
 // SetState set storage by given key and value.
@@ -218,7 +213,7 @@ func (m *Manager) Exist(addr acc.Address) bool {
 // Empty is defined according to EIP161 (balance = nonce = code = 0).
 func (m *Manager) Empty(addr acc.Address) bool {
 	account := m.getAccount(addr)
-	return account == nil || account.empty()
+	return account == nil || account.empty(m.stateReader)
 }
 
 // ForEachStorage Unrealized.
@@ -259,12 +254,11 @@ func (m *Manager) getAccount(addr acc.Address) *Account {
 	}
 
 	// step 2. if acc == nil, then get from stateReader
-	account, _ := m.stateReader.Get(addr)
-	if account == nil {
+	if !m.stateReader.Exist(addr) {
 		return nil
 	}
 
-	newobj := newAccount(addr, account)
+	newobj := newAccount(addr, m.stateReader.GetBalance(addr))
 	m.accounts[addr] = newobj
 	return newobj
 }
@@ -272,7 +266,7 @@ func (m *Manager) getAccount(addr acc.Address) *Account {
 // createAccount create a empty accout.
 func (m *Manager) createAccount(addr acc.Address) (*Account, *Account) {
 	prev := m.getAccount(addr)
-	newobj := newAccount(addr, &acc.Account{})
+	newobj := newAccount(addr, new(big.Int))
 	m.accounts[addr] = newobj
 	return newobj, prev
 }

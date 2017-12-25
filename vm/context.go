@@ -20,6 +20,7 @@ type Context struct {
 	GasLimit    *big.Int
 	GasPrice    *big.Int
 	TxHash      cry.Hash
+	ClauseIndex uint64
 	GetHash     func(uint64) cry.Hash
 }
 

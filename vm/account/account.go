@@ -11,7 +11,7 @@ import (
 // Account manage acc.Account and Storage.
 type Account struct {
 	Address      acc.Address
-	Data         *acc.Account
+	Balance      *big.Int
 	DirtyStorage acc.Storage // only dirty storage
 	DirtyCode    []byte      // dirty code
 	Suicided     bool
@@ -20,10 +20,10 @@ type Account struct {
 	cachedCode    []byte
 }
 
-func newAccount(addr acc.Address, account *acc.Account) *Account {
+func newAccount(addr acc.Address, balacne *big.Int) *Account {
 	return &Account{
 		Address:       addr,
-		Data:          account,
+		Balance:       balacne,
 		DirtyStorage:  make(acc.Storage),
 		cachedStorage: make(acc.Storage),
 		DirtyCode:     nil,
@@ -33,12 +33,6 @@ func newAccount(addr acc.Address, account *acc.Account) *Account {
 }
 
 func (c *Account) deepCopy() *Account {
-	data := &acc.Account{
-		Balance:     new(big.Int).Set(c.Data.Balance),
-		CodeHash:    c.Data.CodeHash,
-		StorageRoot: c.Data.StorageRoot,
-	}
-
 	var dirtyCode []byte
 	var cachedCode []byte
 
@@ -54,7 +48,7 @@ func (c *Account) deepCopy() *Account {
 
 	return &Account{
 		Address:       c.Address,
-		Data:          data,
+		Balance:       new(big.Int).Set(c.Balance),
 		DirtyStorage:  c.DirtyStorage.Copy(),
 		cachedStorage: c.cachedStorage.Copy(),
 		DirtyCode:     dirtyCode,
@@ -64,37 +58,37 @@ func (c *Account) deepCopy() *Account {
 }
 
 func (c *Account) setBalance(amount *big.Int) {
-	c.Data.Balance = amount
+	c.Balance = amount
 }
 
 func (c *Account) getBalance() *big.Int {
-	return c.Data.Balance
+	return c.Balance
 }
 
-func (c *Account) getCodeHash() cry.Hash {
-	return c.Data.CodeHash
+func (c *Account) getCodeHash(state StateReader) cry.Hash {
+	code := c.getCode(state)
+	return cry.Hash(crypto.Keccak256Hash(code))
 }
 
-func (c *Account) getCode(kv KVReader) []byte {
+func (c *Account) getCode(state StateReader) []byte {
 	if c.DirtyCode != nil {
 		return c.DirtyCode
 	}
-	c.cachedCode, _ = kv.Get(c.Data.CodeHash[:])
+	c.cachedCode = state.GetCode(c.Address)
 	return c.cachedCode
 }
 
 func (c *Account) setCode(code []byte) {
 	c.DirtyCode = code
 	c.cachedCode = code
-	c.Data.CodeHash = cry.Hash(crypto.Keccak256Hash(code))
 }
 
-func (c *Account) getStorage(sr StorageReader, key cry.Hash) cry.Hash {
+func (c *Account) getStorage(state StateReader, key cry.Hash) cry.Hash {
 	storage := c.cachedStorage[key]
 	if storage != (cry.Hash{0}) {
 		return storage
 	}
-	storage, _ = sr.Get(c.Data.StorageRoot, key)
+	storage = state.GetStorage(c.Address, key)
 	c.cachedStorage[key] = storage
 	return storage
 }
@@ -105,7 +99,7 @@ func (c *Account) setStorage(key cry.Hash, value cry.Hash) {
 }
 
 func (c *Account) suicide() {
-	c.Data.Balance = new(big.Int)
+	c.Balance = new(big.Int)
 	c.Suicided = true
 }
 
@@ -113,6 +107,6 @@ func (c *Account) hasSuicided() bool {
 	return c.Suicided
 }
 
-func (c *Account) empty() bool {
-	return c.Data.Balance.Sign() == 0 && c.Data.CodeHash == cry.Hash{}
+func (c *Account) empty(state StateReader) bool {
+	return c.Balance.Sign() == 0 && c.getCodeHash(state) == cry.Hash(crypto.Keccak256Hash(nil))
 }
