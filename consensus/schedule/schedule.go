@@ -23,8 +23,7 @@ type Schedule struct {
 func New(
 	witnesses []acc.Address,
 	absentee []acc.Address,
-	parentWitness acc.Address,
-	parentBlockNumber uint32,
+	parentNumber uint32,
 	parentTime uint64) *Schedule {
 
 	if len(witnesses) == 0 {
@@ -39,7 +38,7 @@ func New(
 
 	// make a shuffled permutation to shuffle witnesses
 	perm := make([]int, len(witnesses))
-	shuffle.Shuffle(parentBlockNumber, perm)
+	shuffle.Shuffle(parentNumber, perm)
 
 	time := parentTime + params.BlockTime
 	entries := make([]Entry, len(witnesses))
