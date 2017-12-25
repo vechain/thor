@@ -53,39 +53,38 @@ func (st *State) SetOwner(addr acc.Address) {
 }
 
 // GetAccout get account.
-func (st *State) GetAccout(addr acc.Address) *acc.Account {
-	return st.accounts[addr]
+func (st *State) Get(addr acc.Address) (*acc.Account, error) {
+	return st.accounts[addr], nil
 }
 
 // GetStorage get storage.
-func (st *Storage) GetStorage(key cry.Hash) cry.Hash {
-	return st.storages[key]
+func (st *Storage) Get(root cry.Hash, key cry.Hash) (cry.Hash, error) {
+	return st.storages[key], nil
 }
 
 // UpdateAccount update memory.
-func (st *State) UpdateAccount(addr acc.Address, account *acc.Account) error {
+func (st *State) Update(addr acc.Address, account *acc.Account) error {
 	st.accounts[addr] = account
 	return nil
 }
 
-func (st *State) Delete(key []byte) error {
+func (st *State) Delete(acc.Address) error {
 	return nil
 }
 
-// UpdateStorage update memory.
-func (st *Storage) UpdateStorage(root cry.Hash, key cry.Hash, value cry.Hash) error {
+func (st *Storage) Update(root cry.Hash, key cry.Hash, value cry.Hash) error {
 	st.storages[key] = value
 	return nil
 }
 
-func (st *Storage) Hash(root cry.Hash) cry.Hash {
-	return cry.Hash{}
+func (st *Storage) Root(root cry.Hash) (cry.Hash, error) {
+	return cry.Hash{}, nil
 }
 
 type KV struct{}
 
-func (kv *KV) GetValue(cry.Hash) []byte {
-	return nil
+func (kv *KV) Get([]byte) ([]byte, error) {
+	return nil, nil
 }
 
 func (kv *KV) Put(key, value []byte) error {

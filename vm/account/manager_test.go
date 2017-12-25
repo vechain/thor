@@ -14,27 +14,30 @@ import (
 type stateReader struct {
 }
 
-func (sr *stateReader) GetAccout(acc.Address) *acc.Account {
+func (sr *stateReader) Get(addr acc.Address) (*acc.Account, error) {
 	return &acc.Account{
 		Balance:     new(big.Int),
 		CodeHash:    cry.Hash{1, 2, 3},
 		StorageRoot: cry.Hash{1, 2, 3},
-	}
+	}, nil
 }
 
-func (sr *stateReader) GetStorage(cry.Hash) cry.Hash {
-	return cry.Hash{1, 2, 3}
+type storageReader struct {
 }
 
-func TestManager_GetDirtiedAccounts(t *testing.T) {
+func (sr *storageReader) Get(cry.Hash, cry.Hash) (cry.Hash, error) {
+	return cry.Hash{1, 2, 3}, nil
+}
+
+func TestManager_GetDirtyAccounts(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewManager(nil, new(stateReader))
+	manager := NewManager(nil, new(stateReader), new(storageReader))
 
 	manager.CreateAccount(acc.Address{1})              // 1 accout, stateReader will certainly return a account, so dirty +1
 	manager.CreateAccount(acc.Address{2})              // 2 accout, stateReader will certainly return a account, so dirty +1
 	manager.AddBalance(acc.Address{3}, big.NewInt(10)) // 3 accout and dirty
 
-	dAccounts := manager.GetDirtiedAccounts()
+	dAccounts := manager.GetDirtyAccounts()
 	assert.Equal(len(dAccounts), 3, "应该三个 accout 被修改.")
 
 	for _, account := range dAccounts {
@@ -47,7 +50,7 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 	}
 
 	manager.AddBalance(acc.Address{3}, big.NewInt(20)) // 3 accout and dirty
-	dAccounts = manager.GetDirtiedAccounts()
+	dAccounts = manager.GetDirtyAccounts()
 	assert.Equal(len(dAccounts), 3, "应该三个 accout 被修改.")
 
 	for _, account := range dAccounts {
@@ -57,13 +60,13 @@ func TestManager_GetDirtiedAccounts(t *testing.T) {
 	}
 
 	manager.AddBalance(acc.Address{4}, big.NewInt(10)) // 4 accout and dirty
-	dAccounts = manager.GetDirtiedAccounts()
+	dAccounts = manager.GetDirtyAccounts()
 	assert.Equal(len(dAccounts), 4, "应该四个 accout 被修改.")
 }
 
 func TestManager_GetCodeHash(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewManager(nil, new(stateReader))
+	manager := NewManager(nil, new(stateReader), new(storageReader))
 	addr := acc.Address{1}
 
 	right := manager.GetCodeHash(addr)
@@ -73,7 +76,7 @@ func TestManager_GetCodeHash(t *testing.T) {
 
 func TestManager_SetCode(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewManager(nil, new(stateReader))
+	manager := NewManager(nil, new(stateReader), new(storageReader))
 	addr := acc.Address{1}
 	code := []byte{4, 5, 6}
 	codeHash := cry.Hash(crypto.Keccak256Hash(code))
@@ -86,24 +89,24 @@ func TestManager_SetCode(t *testing.T) {
 
 type testKV struct{}
 
-func (kv testKV) GetValue(cry.Hash) []byte {
-	return nil
+func (kv testKV) Get([]byte) ([]byte, error) {
+	return nil, nil
 }
 
 type testKV2 struct{}
 
-func (kv testKV2) GetValue(cry.Hash) []byte {
-	return []byte{1, 2}
+func (kv testKV2) Get([]byte) ([]byte, error) {
+	return []byte{1, 2}, nil
 }
 
 func TestManager_GetCodeSize(t *testing.T) {
 	assert := assert.New(t)
-	manager := NewManager(new(testKV), new(stateReader))
+	manager := NewManager(new(testKV), new(stateReader), new(storageReader))
 	addr := acc.Address{1}
 
 	assert.Equal(manager.GetCodeSize(addr), 0)
 
-	manager = NewManager(new(testKV2), new(stateReader))
+	manager = NewManager(new(testKV2), new(stateReader), new(storageReader))
 	assert.Equal(manager.GetCodeSize(addr), 2)
 }
 
@@ -111,15 +114,15 @@ type emptyStateReader struct {
 	stateReader
 }
 
-func (sr *emptyStateReader) GetAccout(acc.Address) *acc.Account {
-	return nil
+func (sr *emptyStateReader) Get(acc.Address) (*acc.Account, error) {
+	return nil, nil
 }
 
 func TestManager_Empty(t *testing.T) {
 	assert := assert.New(t)
-	emptyManager := NewManager(nil, new(emptyStateReader))
+	emptyManager := NewManager(nil, new(emptyStateReader), new(storageReader))
 	assert.Equal(emptyManager.Empty(acc.Address{1}), true)
 
-	manager := NewManager(nil, new(stateReader))
+	manager := NewManager(nil, new(stateReader), new(storageReader))
 	assert.Equal(manager.Empty(acc.Address{1}), false)
 }

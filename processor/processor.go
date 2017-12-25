@@ -78,20 +78,20 @@ func (p *Processor) Handle(header *block.Header, transaction *tx.Transaction, co
 		output := (*VMOutput)(p.handleUnitMsg(message, header, config))
 		result[index] = output
 
-		if output.VMErr != nil {
-			log.Debug("VM returned with error", "err", output.VMErr)
-			output.ApplyState(p.state, p.storage, p.kv)
-			return result, nil
-		}
-
 		p.restGas = output.LeftOverGas
 		p.refundGas()
 		output.LeftOverGas = p.restGas
-
 		p.am.AddBalance(header.Beneficiary(), new(big.Int).Mul(p.gasUsed(), p.price))
 		output.DirtiedAccounts = p.am.GetDirtyAccounts()
 
-		output.ApplyState(p.state, p.storage, p.kv)
+		if err := output.ApplyState(p.state, p.storage, p.kv); err != nil {
+			return nil, err
+		}
+
+		if output.VMErr != nil {
+			log.Debug("VM returned with error", "err", output.VMErr)
+			return result, nil
+		}
 	}
 
 	return result, nil
