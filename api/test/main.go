@@ -21,28 +21,15 @@ const (
 )
 
 func main() {
-
-	opt := lvldb.Options{CacheSize: 10, OpenFilesCacheCapacity: 10}
-	db, _ := lvldb.New("/Users/dinn/Desktop/db", opt)
+	db, _ := lvldb.NewMem()
 	hash, _ := cry.ParseHash(emptyRootHash)
 	s, _ := state.New(*hash, db)
 	address, _ := acc.ParseAddress(testAddress)
-	account := &acc.Account{
-		Balance:     new(big.Int),
-		CodeHash:    cry.Hash{0xaa, 0x22},
-		StorageRoot: cry.Hash{0xaa, 0x22},
-	}
-	s.UpdateAccount(*address, account)
-	account = &acc.Account{
-		Balance:     new(big.Int),
-		CodeHash:    cry.Hash{0xaa},
-		StorageRoot: cry.Hash{0xaa},
-	}
-	s.UpdateAccount(*address, account)
+	s.SetBalance(*address, big.NewInt(100))
+	s.SetCode(*address, []byte{0x11, 0x12})
 	s.Commit()
 	chain := chain.New(db)
 	chain.WriteGenesis(new(block.Builder).Build())
-
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
 		b := new(block.Builder).
@@ -55,11 +42,11 @@ func main() {
 	}
 	best, _ := chain.GetBestBlock()
 	fmt.Println(best.Number())
-	bm := api.NewBlockMananger(chain)
-	am := api.NewAccountMananger(s)
+	ai := api.NewAccountInterface(s)
+	bi := api.NewBlockInterface(chain)
 	router := mux.NewRouter()
-	api.NewAccountHTTPRouter(router, am)
-	api.NewBlockHTTPRouter(router, bm)
+	api.NewAccountHTTPRouter(router, ai)
+	api.NewBlockHTTPRouter(router, bi)
 	fmt.Println("server listen 3000")
 	http.ListenAndServe(":3000", router)
 
