@@ -21,9 +21,9 @@ func (e errorWithStatus) Error() string {
 }
 
 // Error create an error with http status code.
-func Error(err error, status int) error {
+func Error(msg string, status int) error {
 	return errorWithStatus{
-		err:    err,
+		err:    errors.New(msg),
 		status: status,
 	}
 }

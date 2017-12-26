@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -16,25 +15,47 @@ const AccountHTTPPathPrefix = "/account"
 //NewAccountHTTPRouter add path to router
 func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
 	sub := router.PathPrefix(AccountHTTPPathPrefix).Subrouter()
-	sub.Path("/address/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetAccount))
+	sub.Path("/address/{address}/balance").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetBalance))
+	sub.Path("/address/{address}/code").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetCode))
 }
-func (ai *AccountInterface) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if query == nil {
-		return httpx.Error(errors.New(" No Params! "), 400)
+		return httpx.Error(" No Params! ", 400)
 	}
 	addr, ok := query["address"]
 	if !ok {
-		return httpx.Error(errors.New(" Invalid Params! "), 400)
+		return httpx.Error(" Invalid Params! ", 400)
 	}
 	address, err := acc.ParseAddress(addr)
 	if err != nil {
-		return httpx.Error(errors.New(" Parse address failed! "), 400)
+		return httpx.Error(" Parse address failed! ", 400)
 	}
-	account := ai.GetAccount(*address)
-	str, err := json.Marshal(account)
+	b := ai.GetBalance(*address)
+	str, err := json.Marshal(b)
 	if err != nil {
-		return httpx.Error(errors.New(" System Error! "), 500)
+		return httpx.Error(" System Error! ", 500)
+	}
+	w.Write(str)
+	return nil
+}
+func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Request) error {
+	query := mux.Vars(req)
+	if query == nil {
+		return httpx.Error(" No Params! ", 400)
+	}
+	addr, ok := query["address"]
+	if !ok {
+		return httpx.Error(" Invalid Params! ", 400)
+	}
+	address, err := acc.ParseAddress(addr)
+	if err != nil {
+		return httpx.Error(" Parse address failed! ", 400)
+	}
+	c := ai.GetCode(*address)
+	str, err := json.Marshal(c)
+	if err != nil {
+		return httpx.Error(" System Error! ", 500)
 	}
 	w.Write(str)
 	return nil
