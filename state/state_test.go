@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
@@ -34,16 +36,9 @@ func TestState(t *testing.T) {
 	stat.Commit()
 	r := stat.Root()
 	s, _ := state.New(r, db)
-	v3 := s.GetStorage(*address, *k2)
-	v4 := s.GetStorage(*address, *k1)
+	v3 := s.GetStorage(*address, *k1)
+	v4 := s.GetStorage(*address, *k2)
 	cod := s.GetCode(*address)
+	assert.Equal(t, v1.String(), v3.String(), "storage should be equal")
 	fmt.Println("v3", v3, v4, cod)
-	// account := &acc.Account{
-	// 	Balance:     new(big.Int),
-	// 	CodeHash:    cry.Hash{0xaa, 0x22},
-	// 	StorageRoot: cry.Hash{0xaa, 0x22},
-	// }
-	// state.Update(*address, account)
-	// a, _ := state.Get(*address)
-	// assert.Equal(t, a, account, "account should be equal")
 }
