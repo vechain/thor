@@ -6,7 +6,7 @@ package stackedmap
 type StackedMap struct {
 	src            MapGetter
 	mapStack       stack
-	keyRevisionMap map[interface{}]stack
+	keyRevisionMap map[interface{}]*stack
 }
 
 type _map map[interface{}]interface{}
@@ -20,7 +20,7 @@ func New(src MapGetter) *StackedMap {
 	return &StackedMap{
 		src,
 		stack{},
-		make(map[interface{}]stack),
+		make(map[interface{}]*stack),
 	}
 }
 
@@ -39,18 +39,16 @@ func (sm *StackedMap) Push() int {
 // Pop pop the map at top of stack.
 // It will revert all Put operations since last Push.
 func (sm *StackedMap) Pop() {
-	sm.mapStack.pop()
-	rev := len(sm.mapStack)
-	// also pop key revision
-	for key, revs := range sm.keyRevisionMap {
-		if revs.top() == rev {
-			revs.pop()
-
-			if len(revs) == 0 {
-				delete(sm.keyRevisionMap, key)
-			}
+	// pop key revision
+	top := sm.mapStack.top().(_map)
+	for key := range top {
+		revs := sm.keyRevisionMap[key]
+		revs.pop()
+		if len(*revs) == 0 {
+			delete(sm.keyRevisionMap, key)
 		}
 	}
+	sm.mapStack.pop()
 }
 
 // PopTo pop maps until stack depth reaches depth.
@@ -83,7 +81,7 @@ func (sm *StackedMap) Put(key, value interface{}) {
 	if revs, ok := sm.keyRevisionMap[key]; ok {
 		revs.push(rev)
 	} else {
-		sm.keyRevisionMap[key] = stack{rev}
+		sm.keyRevisionMap[key] = &stack{rev}
 	}
 }
 
