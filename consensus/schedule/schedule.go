@@ -1,33 +1,29 @@
 package schedule
 
 import (
-	"errors"
-
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/consensus/shuffle"
 	"github.com/vechain/thor/params"
 )
 
-// Entry presents when and who.
+// Entry presents the time for a witness to build a block.
 type Entry struct {
 	Time    uint64
 	Witness acc.Address
 }
 
-// Schedule the plan of when witnesses' turn to build a block.
-type Schedule struct {
-	entries []Entry
-}
+// Schedule the entry list of when witnesses' turn to build a block.
+type Schedule []Entry
 
 // New create a schedule bases on parent block information.
 func New(
 	witnesses []acc.Address,
 	absentee []acc.Address,
 	parentNumber uint32,
-	parentTime uint64) *Schedule {
+	parentTime uint64) Schedule {
 
 	if len(witnesses) == 0 {
-		return &Schedule{}
+		return nil
 	}
 
 	// for fast lookup absence
@@ -53,18 +49,16 @@ func New(
 			time += params.BlockTime
 		}
 	}
-	return &Schedule{
-		entries,
-	}
+	return entries
 }
 
-// Timing returns the time when the witness' turn to build a block.
-// If the given witness is not listed, an error returned.
-func (s *Schedule) Timing(witness acc.Address) (uint64, error) {
-	for _, e := range s.entries {
+// EntryOf returns the Entry for given witness.
+// If the given witness is not listed, (nil, -1) returned.
+func (s Schedule) EntryOf(witness acc.Address) (*Entry, int) {
+	for i, e := range s {
 		if e.Witness == witness {
-			return e.Time, nil
+			return &e, i
 		}
 	}
-	return 0, errors.New("no entry")
+	return nil, -1
 }
