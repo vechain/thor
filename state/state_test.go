@@ -52,3 +52,13 @@ func TestStorage(t *testing.T) {
 	v2 := stat.GetStorage(*address, *k1)
 	assert.Equal(t, v1.String(), v2.String(), "storage should be equal")
 }
+
+func TestDelete(t *testing.T) {
+	db, _ := lvldb.NewMem()
+	defer db.Close()
+	rootHash, _ := cry.ParseHash(emptyRootHash)
+	stat, _ := state.New(*rootHash, db)
+	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
+	stat.Delete(*address)
+	stat.Root()
+}

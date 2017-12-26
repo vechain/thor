@@ -73,32 +73,35 @@ func (s *State) GetBalance(addr acc.Address) *big.Int {
 
 //SetBalance Set account balance by address
 func (s *State) SetBalance(addr acc.Address, balance *big.Int) {
-	if _, err := s.getAccount(addr); err != nil {
+	a, err := s.getAccount(addr)
+	if err != nil {
 		s.err = err
 		return
 	}
-	s.cachedAccounts[addr].isDirty = true
-	s.cachedAccounts[addr].balance = balance
+	a.isDirty = true
+	a.balance = balance
 }
 
 //SetStorage set storage by address and key with value
 func (s *State) SetStorage(addr acc.Address, key cry.Hash, value cry.Hash) {
-	if _, err := s.getAccount(addr); err != nil {
+	a, err := s.getAccount(addr)
+	if err != nil {
 		s.err = err
 		return
 	}
-	s.cachedAccounts[addr].isDirty = true
-	s.cachedAccounts[addr].storage[key] = value
+	a.isDirty = true
+	a.storage[key] = value
 }
 
 //GetStorage return storage by address and key
 func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
-	if account, ok := s.cachedAccounts[addr]; ok {
-		if value, ok := account.storage[key]; ok {
+	if a, ok := s.cachedAccounts[addr]; ok {
+		if value, ok := a.storage[key]; ok {
 			return value
 		}
 	}
-	if _, err := s.getAccount(addr); err != nil {
+	a, err := s.getAccount(addr)
+	if err != nil {
 		s.err = err
 		return cry.Hash{}
 	}
@@ -118,22 +121,24 @@ func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
 		return cry.Hash{}
 	}
 	value := cry.BytesToHash(content)
-	s.cachedAccounts[addr].storage[key] = value
+	a.storage[key] = value
 	return value
 }
 
 //GetCode return code from account address
 func (s *State) GetCode(addr acc.Address) []byte {
-	if _, err := s.getAccount(addr); err != nil {
+	a, err := s.getAccount(addr)
+	if err != nil {
 		s.err = err
 		return nil
 	}
-	return s.cachedAccounts[addr].code
+	return a.code
 }
 
 //SetCode set code by address
 func (s *State) SetCode(addr acc.Address, code []byte) {
-	if _, err := s.getAccount(addr); err != nil {
+	a, err := s.getAccount(addr)
+	if err != nil {
 		s.err = err
 		return
 	}
@@ -141,9 +146,9 @@ func (s *State) SetCode(addr acc.Address, code []byte) {
 	if err := s.kv.Put(codeHash[:], code); err != nil {
 		s.err = err
 	}
-	s.cachedAccounts[addr].codeHash = codeHash
-	s.cachedAccounts[addr].code = code
-	s.cachedAccounts[addr].isDirty = true
+	a.isDirty = true
+	a.codeHash = codeHash
+	a.code = code
 }
 
 //Exists return whether account exists
@@ -161,6 +166,7 @@ func (s *State) Exists(addr acc.Address) bool {
 
 // Delete removes any existing value for key from the trie.
 func (s *State) Delete(address acc.Address) error {
+	delete(s.cachedAccounts, address)
 	return s.trie.TryDelete(address[:])
 }
 
