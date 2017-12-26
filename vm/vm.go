@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/vm/account"
 	"github.com/vechain/thor/vm/evm"
 	"github.com/vechain/thor/vm/snapshot"
@@ -46,6 +47,30 @@ var chainConfig = &params.ChainConfig{
 	ByzantiumBlock: big.NewInt(0),
 	Ethash:         nil,
 	Clique:         nil,
+}
+
+// Context for VM runtime.
+type Context struct {
+	Origin      acc.Address
+	Beneficiary acc.Address
+	BlockNumber *big.Int
+	Time        *big.Int
+	GasLimit    *big.Int
+	GasPrice    *big.Int
+	TxHash      cry.Hash
+	ClauseIndex uint64
+	GetHash     func(uint64) cry.Hash
+}
+
+// The only purpose of this func separate definition is to be compatible with evm.context.
+func canTransfer(db evm.StateDB, addr common.Address, amount *big.Int) bool {
+	return db.GetBalance(addr).Cmp(amount) >= 0
+}
+
+// The only purpose of this func separate definition is to be compatible with evm.Context.
+func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
+	db.SubBalance(sender, amount)
+	db.AddBalance(recipient, amount)
 }
 
 // NewVM retutrns a new EVM . The returned EVM is not thread safe and should
