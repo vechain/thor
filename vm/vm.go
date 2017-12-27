@@ -19,7 +19,7 @@ type Config evm.Config
 // Output contains the execution return value.
 type Output struct {
 	Value           []byte
-	Accounts        map[acc.Address]*state.Account
+	Accounts        map[acc.Address]state.Account
 	Storages        map[state.StorageKey]cry.Hash
 	Preimages       map[cry.Hash][]byte
 	Log             []*types.Log
