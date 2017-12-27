@@ -2,7 +2,6 @@ package state
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -161,7 +160,7 @@ func (s *State) Exists(addr acc.Address) bool {
 	if len(enc) == 0 {
 		return false
 	}
-	return false
+	return true
 }
 
 // Delete removes any existing value for key from the trie.
@@ -207,7 +206,6 @@ func (s *State) updateAccount(address acc.Address, cachedAccount *cachedAccount)
 		CodeHash:    cachedAccount.codeHash,
 		StorageRoot: cachedAccount.storageRoot,
 	}
-	fmt.Println(a)
 	enc, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		return err
