@@ -57,11 +57,7 @@ func (p *Processor) Process(header *block.Header, transaction *tx.Transaction, c
 	messages, _ := transaction.AsMessages()
 	result := make([]*VMOutput, len(messages))
 	for index, message := range messages {
-		beneficiary := header.Beneficiary()
-		blockNum := new(big.Int).SetUint64(uint64(header.Number()))
-		time := new(big.Int).SetUint64(uint64(header.Timestamp()))
-		gasLimit := header.GasLimit()
-		result[index] = p.processMessage(message, uint64(index), beneficiary, blockNum, time, gasLimit, config)
+		result[index] = p.processMessage(message, uint64(index), header, config)
 		if err := result[index].ApplyState(p.state); err != nil {
 			return nil, nil, err
 		}
@@ -97,13 +93,13 @@ func (p *Processor) initContext(transaction *tx.Transaction) error {
 	return p.prepare(messages)
 }
 
-func (p *Processor) processMessage(msg tx.Message, msgIndex uint64, beneficiary acc.Address, blockNum *big.Int, time *big.Int, gasLimit *big.Int, config vm.Config) *VMOutput {
+func (p *Processor) processMessage(msg tx.Message, msgIndex uint64, header *block.Header, config vm.Config) *VMOutput {
 	ctx := vm.Context{
 		Origin:      p.sender,
-		Beneficiary: beneficiary,
-		BlockNumber: blockNum,
-		Time:        time,
-		GasLimit:    gasLimit,
+		Beneficiary: header.Beneficiary(),
+		BlockNumber: new(big.Int).SetUint64(uint64(header.Number())),
+		Time:        new(big.Int).SetUint64(uint64(header.Timestamp())),
+		GasLimit:    header.GasLimit(),
 		GasPrice:    p.price,
 		TxHash:      p.txHash,
 		GetHash:     p.getHash,
