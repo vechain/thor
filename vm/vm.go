@@ -8,12 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/vm/account"
+	//"github.com/vechain/thor/state"
 	"github.com/vechain/thor/vm/evm"
-	"github.com/vechain/thor/vm/snapshot"
 	"github.com/vechain/thor/vm/state"
-	"github.com/vechain/thor/vm/vmlog"
 )
 
 // Config is ref to evm.Config.
@@ -22,7 +19,8 @@ type Config evm.Config
 // Output contains the execution return value.
 type Output struct {
 	Value           []byte
-	DirtiedAccounts []*account.Account
+	Accounts        map[acc.Address]*state.Account
+	Storages        map[state.StorageKey]cry.Hash
 	Preimages       map[cry.Hash][]byte
 	Log             []*types.Log
 	VMErr           error        // VMErr identify the execution result of the contract function, not evm function's err.
@@ -75,13 +73,12 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 
 // NewVM retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewVM(ctx Context, stateReader account.StateReader, vmConfig Config) *VM {
+func NewVM(ctx Context, stateReader state.StateReader, vmConfig Config) *VM {
 	tGetHash := func(n uint64) common.Hash {
 		return common.Hash(ctx.GetHash(n))
 	}
 
-	am := account.NewManager(stateReader)
-
+	state := state.New(stateReader)
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
@@ -96,11 +93,8 @@ func NewVM(ctx Context, stateReader account.StateReader, vmConfig Config) *VM {
 		GasPrice:    ctx.GasPrice,
 		TxHash:      common.Hash(ctx.TxHash),
 	}
-
-	sm := snapshot.New()
-	vl := vmlog.New()
-	state := state.New(am, sm, vl)
 	evm := evm.NewEVM(evmCtx, state, chainConfig, evm.Config(vmConfig))
+
 	return &VM{evm: evm, state: state}
 }
 
@@ -115,10 +109,12 @@ func (vm *VM) Cancel() {
 // create accounts and reverses the state in case of an execution error or failed value transfer.
 func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) (*Output, uint64, *big.Int) {
 	ret, leftOverGas, vmErr := vm.evm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
+	accounts, storages := vm.state.GetAccountAndStorage()
 	return &Output{
 		Value:           ret,
-		DirtiedAccounts: vm.state.GetDirtyAccounts(),
-		Preimages:       vm.state.Preimages(),
+		Accounts:        accounts,
+		Storages:        storages,
+		Preimages:       vm.state.GetPreimages(),
 		Log:             vm.state.GetLogs(),
 		VMErr:           vmErr,
 		ContractAddress: nil,
@@ -133,10 +129,12 @@ func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint6
 // code with the caller as context.
 func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas uint64, value *big.Int) (*Output, uint64, *big.Int) {
 	ret, leftOverGas, vmErr := vm.evm.CallCode(&vmContractRef{caller}, common.Address(addr), input, gas, value)
+	accounts, storages := vm.state.GetAccountAndStorage()
 	return &Output{
 		Value:           ret,
-		DirtiedAccounts: vm.state.GetDirtyAccounts(),
-		Preimages:       vm.state.Preimages(),
+		Accounts:        accounts,
+		Storages:        storages,
+		Preimages:       vm.state.GetPreimages(),
 		Log:             vm.state.GetLogs(),
 		VMErr:           vmErr,
 		ContractAddress: nil,
@@ -150,10 +148,12 @@ func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas u
 // the caller as context and the caller is set to the caller of the caller.
 func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) (*Output, uint64, *big.Int) {
 	ret, leftOverGas, vmErr := vm.evm.DelegateCall(&vmContractRef{caller}, common.Address(addr), input, gas)
+	accounts, storages := vm.state.GetAccountAndStorage()
 	return &Output{
 		Value:           ret,
-		DirtiedAccounts: vm.state.GetDirtyAccounts(),
-		Preimages:       vm.state.Preimages(),
+		Accounts:        accounts,
+		Storages:        storages,
+		Preimages:       vm.state.GetPreimages(),
 		Log:             vm.state.GetLogs(),
 		VMErr:           vmErr,
 		ContractAddress: nil,
@@ -167,10 +167,12 @@ func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, g
 // the modifications.
 func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas uint64) (*Output, uint64, *big.Int) {
 	ret, leftOverGas, vmErr := vm.evm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
+	accounts, storages := vm.state.GetAccountAndStorage()
 	return &Output{
 		Value:           ret,
-		DirtiedAccounts: vm.state.GetDirtyAccounts(),
-		Preimages:       vm.state.Preimages(),
+		Accounts:        accounts,
+		Storages:        storages,
+		Preimages:       vm.state.GetPreimages(),
 		Log:             vm.state.GetLogs(),
 		VMErr:           vmErr,
 		ContractAddress: nil,
@@ -181,10 +183,12 @@ func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas
 func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int) (*Output, uint64, *big.Int) {
 	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
 	ContractAddress := acc.Address(contractAddr)
+	accounts, storages := vm.state.GetAccountAndStorage()
 	return &Output{
 		Value:           ret,
-		DirtiedAccounts: vm.state.GetDirtyAccounts(),
-		Preimages:       vm.state.Preimages(),
+		Accounts:        accounts,
+		Storages:        storages,
+		Preimages:       vm.state.GetPreimages(),
 		Log:             vm.state.GetLogs(),
 		VMErr:           vmErr,
 		ContractAddress: &ContractAddress,

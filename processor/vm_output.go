@@ -9,27 +9,36 @@ type VMOutput vm.Output
 
 // ApplyState apply account state changes.
 func (o *VMOutput) ApplyState(state Stater) error {
-	for _, da := range o.DirtiedAccounts {
-		if da.Suicided {
-			state.DeleteAccount(da.Address)
+	for addr, account := range o.Accounts {
+		if account.Suicided() {
+			state.DeleteAccount(addr)
+			if err := state.Error(); err != nil {
+				return err
+			}
 		} else {
-			// update storage
-			for k, v := range da.DirtyStorage {
-				state.SetStorage(da.Address, k, v)
+			// update code
+			code := account.Code()
+			if len(code) > 0 {
+				state.SetCode(addr, code)
 				if err := state.Error(); err != nil {
 					return err
 				}
 			}
 
-			// update code
-			if len(da.DirtyCode) > 0 {
-				state.SetCode(da.Address, da.DirtyCode)
-			}
-
 			// update balance
-			state.SetBalance(da.Address, da.Balance)
+			state.SetBalance(addr, account.Balance())
+			if err := state.Error(); err != nil {
+				return err
+			}
 		}
 	}
 
-	return state.Error()
+	for key, value := range o.Storages {
+		state.SetStorage(key.Addr, key.Key, value)
+		if err := state.Error(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
