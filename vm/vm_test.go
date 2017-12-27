@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package vm_test
 
 import (
 	"math"
@@ -27,6 +27,7 @@ import (
 
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
+	. "github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/state"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
