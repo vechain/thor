@@ -6,23 +6,23 @@ import (
 	"github.com/vechain/thor/params"
 )
 
-// Entry presents the time for a witness to build a block.
+// Entry presents the time for a block proposer to build a block.
 type Entry struct {
-	Time    uint64
-	Witness acc.Address
+	Time     uint64
+	Proposer acc.Address
 }
 
-// Schedule the entry list of when witnesses' turn to build a block.
+// Schedule the entry list of when proposers' turn to build a block.
 type Schedule []Entry
 
 // New create a schedule bases on parent block information.
 func New(
-	witnesses []acc.Address,
+	proposers []acc.Address,
 	absentee []acc.Address,
 	parentNumber uint32,
 	parentTime uint64) Schedule {
 
-	if len(witnesses) == 0 {
+	if len(proposers) == 0 {
 		return nil
 	}
 
@@ -32,19 +32,19 @@ func New(
 		absenteeMap[a] = true
 	}
 
-	// make a shuffled permutation to shuffle witnesses
-	perm := make([]int, len(witnesses))
+	// make a shuffled permutation to shuffle proposers
+	perm := make([]int, len(proposers))
 	shuffle.Shuffle(parentNumber, perm)
 
 	time := parentTime + params.BlockTime
-	entries := make([]Entry, len(witnesses))
+	entries := make([]Entry, len(proposers))
 	for i, j := range perm {
-		w := witnesses[j]
+		w := proposers[j]
 		entries[i] = Entry{
 			time,
-			witnesses[j],
+			proposers[j],
 		}
-		// allow one witness to occupy timing of previously absent witness
+		// allow one block proposer to occupy timing of previously absent proposer
 		if !absenteeMap[w] {
 			time += params.BlockTime
 		}
@@ -52,11 +52,11 @@ func New(
 	return entries
 }
 
-// EntryOf returns the Entry for given witness.
-// If the given witness is not listed, (nil, -1) returned.
-func (s Schedule) EntryOf(witness acc.Address) (*Entry, int) {
+// EntryOf returns the Entry for given proposer.
+// If the given proposer is not listed, (nil, -1) returned.
+func (s Schedule) EntryOf(proposer acc.Address) (*Entry, int) {
 	for i, e := range s {
-		if e.Witness == witness {
+		if e.Proposer == proposer {
 			return &e, i
 		}
 	}

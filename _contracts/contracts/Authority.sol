@@ -4,15 +4,19 @@ import './Constants.sol';
 
 contract Authority is Owned {
     event Registered(address indexed _addr);
-    event Authorised(address indexed _witness, bool _b);
+    event Authorised(address indexed _proposer, bool _b);
 
     mapping(address => string) registry;
 
-    address[] public witnesses;
-    mapping(address => uint) witnessMap;
+    address[] public proposers;
+    mapping(address => uint) proposerMap;
 
     address[] public absentee;
     mapping(address => uint) absenteeMap;
+
+    function init() public {
+        require(msg.sender == Constants.god());        
+    }
 
     function register(string _desc) public {
         require(bytes(_desc).length > 0);
@@ -22,45 +26,45 @@ contract Authority is Owned {
         Registered(msg.sender);
     }
     
-    function authorise (address _witness, bool _b) public onlyOwner {
-        uint pos = witnessMap[_witness];
+    function authorise (address _proposer, bool _b) public onlyOwner {
+        uint pos = proposerMap[_proposer];
         if (_b) {            
             require(pos == 0);
-            witnesses.push(_witness);
-            witnessMap[_witness] = witnesses.length;
+            proposers.push(_proposer);
+            proposerMap[_proposer] = proposers.length;
         } else {
             require(pos > 0);
-            witnesses[pos - 1] = witnesses[witnesses.length - 1];
-            witnesses.length -= 1;
-            witnessMap[_witness] = 0;
+            proposers[pos - 1] = proposers[proposers.length - 1];
+            proposers.length -= 1;
+            proposerMap[_proposer] = 0;
 
-            _absent(_witness, false);
+            _absent(_proposer, false);
         }
-        Authorised(_witness, _b);
+        Authorised(_proposer, _b);
     }
 
-    function _absent(address _witness, bool _b) internal returns (bool) {
-        if (witnessMap[_witness] == 0) {
+    function _absent(address _proposer, bool _b) internal returns (bool) {
+        if (proposerMap[_proposer] == 0) {
             return false;
         }
-        uint pos = absenteeMap[_witness];
+        uint pos = absenteeMap[_proposer];
         if (_b) {
             if (pos == 0) {
-                absentee.push(_witness);
-                absenteeMap[_witness] = absentee.length;
+                absentee.push(_proposer);
+                absenteeMap[_proposer] = absentee.length;
             }
         } else {
             if (pos > 0) { 
                 absentee[pos - 1] = absentee[absentee.length - 1];
                 absentee.length -= 1;
-                absenteeMap[_witness] = 0;
+                absenteeMap[_proposer] = 0;
             }
         }
         return true;
     }
 
-    function absent(address _witness, bool _b) public {
+    function absent(address _proposer, bool _b) public {
         require(msg.sender == Constants.god());
-        require(_absent(_witness, _b));
+        require(_absent(_proposer, _b));
     }
 }
