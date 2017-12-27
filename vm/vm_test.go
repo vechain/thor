@@ -27,8 +27,7 @@ import (
 
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/vm/account"
-	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/vm/state"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -39,7 +38,7 @@ func getHash(n uint64) cry.Hash {
 	return cry.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 }
 
-func NewEnv(stateReader account.StateReader) *VM {
+func NewEnv(stateReader state.StateReader) *VM {
 	ctx := Context{
 		TxHash:      cry.Hash{1},
 		ClauseIndex: 1,
@@ -112,35 +111,6 @@ func Call(sr *stateReader, vm *VM, address acc.Address, input []byte) (*Output, 
 		sr.gasLimit,
 		sr.value,
 	)
-}
-
-func TestCall(t *testing.T) {
-	assert := assert.New(t)
-
-	sr := newStateR()
-	env := NewEnv(sr)
-	address := acc.BytesToAddress([]byte("0x0a"))
-
-	env.state.SetCode(common.Address(address), []byte{
-		byte(evm.PUSH1), 10,
-		byte(evm.PUSH1), 0,
-		byte(evm.MSTORE),
-		byte(evm.PUSH1), 32,
-		byte(evm.PUSH1), 0,
-		byte(evm.RETURN),
-	})
-
-	output, _, _ := Call(sr, env, address, nil)
-	if output.VMErr != nil {
-		t.Fatal("didn't expect error:", output.VMErr)
-	}
-
-	num := new(big.Int).SetBytes(output.Value)
-	assert.Equal(num, big.NewInt(10), "Expected 10, got", num)
-
-	for _, da := range output.DirtiedAccounts {
-		assert.Equal(address, da.Address)
-	}
 }
 
 // Create executes the code using the EVM create method

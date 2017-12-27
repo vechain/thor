@@ -1,4 +1,4 @@
-package account
+package state
 
 import (
 	"math/big"
