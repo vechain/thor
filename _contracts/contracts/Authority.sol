@@ -40,18 +40,21 @@ contract Authority is Owned {
     }
 
     function _absent(address _witness, bool _b) internal returns (bool) {
+        if (witnessMap[_witness] == 0) {
+            return false;
+        }
         uint pos = absenteeMap[_witness];
         if (_b) {
-            if (pos > 0)
-                return false;
-            absentee.push(_witness);
-            absenteeMap[_witness] = absentee.length;
+            if (pos == 0) {
+                absentee.push(_witness);
+                absenteeMap[_witness] = absentee.length;
+            }
         } else {
-            if (pos == 0)      
-                return false;
-            absentee[pos - 1] = absentee[absentee.length - 1];
-            absentee.length -= 1;
-            absenteeMap[_witness] = 0;
+            if (pos > 0) { 
+                absentee[pos - 1] = absentee[absentee.length - 1];
+                absentee.length -= 1;
+                absenteeMap[_witness] = 0;
+            }
         }
         return true;
     }
