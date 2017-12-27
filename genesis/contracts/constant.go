@@ -1,4 +1,4 @@
-package genesis
+package contracts
 
 import (
 	"github.com/vechain/thor/acc"

@@ -3,6 +3,8 @@ package genesis
 import (
 	"math/big"
 
+	"github.com/vechain/thor/vm"
+
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 )
@@ -29,5 +31,6 @@ func (b *Builder) Alloc(addr acc.Address, balance *big.Int, bytecodes []byte) *B
 }
 
 func (b *Builder) Build(state State) *block.Block {
+	vm.NewVM()
 	return nil
 }
