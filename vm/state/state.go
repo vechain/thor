@@ -24,10 +24,12 @@ func New(stater StateReader) *State {
 	getter := func(hash interface{}) (interface{}, bool) {
 		switch v := hash.(type) {
 		case common.Address:
-			if exist := stater.Exist(acc.Address(v)); exist == false {
+			if !stater.Exist(acc.Address(v)) {
 				return nil, false
 			}
-			return newAccount(stater.GetBalance(acc.Address(v)), stater.GetCode(acc.Address(v))), true
+			return Account{
+				Balance: stater.GetBalance(acc.Address(v)),
+				Code:    stater.GetCode(acc.Address(v))}, true
 		case StorageKey:
 			return common.Hash(stater.GetStorage(v.Addr, v.Key)), true
 		}
@@ -39,22 +41,21 @@ func New(stater StateReader) *State {
 	}
 }
 
-func (s *State) getAccount(addr common.Address) *Account {
-	account, exist := s.repo.Get(addr)
-	if !exist {
-		return nil
+func (s *State) getAccount(addr common.Address) (Account, bool) {
+	if account, exist := s.repo.Get(addr); exist {
+		return account.(Account), true
 	}
-	return account.(*Account)
+	return Account{}, false
 }
 
 // GetAccountAndStorage return all the dirty.
-func (s *State) GetAccountAndStorage() (map[acc.Address]*Account, map[StorageKey]cry.Hash) {
-	accounts := make(map[acc.Address]*Account)
+func (s *State) GetAccountAndStorage() (map[acc.Address]Account, map[StorageKey]cry.Hash) {
+	accounts := make(map[acc.Address]Account)
 	storage := make(map[StorageKey]cry.Hash)
 	for key, value := range s.repo.Puts() {
 		switch v := key.(type) {
 		case common.Address:
-			accounts[acc.Address(v)] = value.(*Account)
+			accounts[acc.Address(v)] = value.(Account)
 		case StorageKey:
 			storage[v] = cry.Hash(value.(common.Hash))
 		}
@@ -64,11 +65,10 @@ func (s *State) GetAccountAndStorage() (map[acc.Address]*Account, map[StorageKey
 
 // GetRefund stub.
 func (s *State) GetRefund() *big.Int {
-	refund, exist := s.repo.Get("refund")
-	if !exist {
-		return big.NewInt(0)
+	if refund, exist := s.repo.Get("refund"); exist {
+		return refund.(*big.Int)
 	}
-	return refund.(*big.Int)
+	return big.NewInt(0)
 }
 
 // GetPreimages returns a list of SHA3 preimages that have been submitted.
@@ -97,11 +97,10 @@ func (s *State) Preimages() map[common.Hash][]byte {
 
 // GetLogs return the log for current state.
 func (s *State) GetLogs() []*types.Log {
-	logs, exist := s.repo.Get("logs")
-	if !exist {
-		return nil
+	if logs, exist := s.repo.Get("logs"); exist {
+		return logs.([]*types.Log)
 	}
-	return logs.([]*types.Log)
+	return nil
 }
 
 // ForEachStorage stub.
@@ -111,11 +110,10 @@ func (s *State) ForEachStorage(addr common.Address, cb func(common.Hash, common.
 
 // GetBalance stub.
 func (s *State) GetBalance(addr common.Address) *big.Int {
-	account := s.getAccount(addr)
-	if account == nil {
-		return big.NewInt(0)
+	if account, exist := s.getAccount(addr); exist {
+		return account.Balance
 	}
-	return account.Balance()
+	return big.NewInt(0)
 }
 
 // GetNonce stub.
@@ -125,47 +123,42 @@ func (s *State) GetNonce(addr common.Address) uint64 {
 
 // GetCodeHash stub.
 func (s *State) GetCodeHash(addr common.Address) common.Hash {
-	account := s.getAccount(addr)
-	if account == nil {
-		return common.Hash{}
+	if account, exist := s.getAccount(addr); exist {
+		return crypto.Keccak256Hash(account.Code)
 	}
-	return crypto.Keccak256Hash(account.Code())
+	return common.Hash{}
 }
 
 // GetCode stub.
 func (s *State) GetCode(addr common.Address) []byte {
-	account := s.getAccount(addr)
-	if account == nil {
-		return nil
+	if account, exist := s.getAccount(addr); exist {
+		return account.Code
 	}
-	return account.Code()
+	return nil
 }
 
 // GetCodeSize stub.
 func (s *State) GetCodeSize(addr common.Address) int {
-	account := s.getAccount(addr)
-	if account == nil {
-		return 0
+	if account, exist := s.getAccount(addr); exist {
+		return len(account.Code)
 	}
-	return len(account.Code())
+	return 0
 }
 
 // HasSuicided stub.
 func (s *State) HasSuicided(addr common.Address) bool {
-	account := s.getAccount(addr)
-	if account != nil {
-		return account.Suicided()
+	if account, exist := s.getAccount(addr); exist {
+		return account.Suicided
 	}
 	return false
 }
 
 // Empty stub.
 func (s *State) Empty(addr common.Address) bool {
-	account := s.getAccount(addr)
-	if account == nil {
-		return true
+	if account, exist := s.getAccount(addr); exist {
+		return account.Balance.Sign() == 0 && account.Code == nil
 	}
-	return account.Balance().Sign() == 0 && account.Code() == nil
+	return true
 }
 
 // GetState stub.
@@ -180,20 +173,23 @@ func (s *State) Exist(addr common.Address) bool {
 	return exist
 }
 
-func (s *State) withAccount(addr common.Address) *Account {
-	account := s.getAccount(addr)
-	if account != nil {
-		return newAccount(account.Balance(), account.Code())
+func (s *State) getOrCreateAccount(addr common.Address) Account {
+	if account, exist := s.getAccount(addr); !exist {
+		return account
 	}
-	return newAccount(big.NewInt(0), nil)
+	return Account{
+		Balance: big.NewInt(0),
+		Code:    nil}
 }
 
 // CreateAccount stub.
 func (s *State) CreateAccount(addr common.Address) {
-	new := newAccount(big.NewInt(0), nil)
-	prev := s.getAccount(addr)
-	if prev != nil {
-		new.setBalance(prev.Balance())
+	new := Account{
+		Balance: big.NewInt(0),
+		Code:    nil}
+
+	if prev, exist := s.getAccount(addr); exist {
+		new.Balance = prev.Balance
 		s.repo.Put(addr, new)
 	}
 }
@@ -204,9 +200,8 @@ func (s *State) SubBalance(addr common.Address, amount *big.Int) {
 		return
 	}
 
-	account := s.withAccount(addr)
-	newBalance := new(big.Int).Sub(account.Balance(), amount)
-	account.setBalance(newBalance)
+	account := s.getOrCreateAccount(addr)
+	account.Balance = new(big.Int).Sub(account.Balance, amount)
 
 	s.repo.Put(addr, account)
 }
@@ -217,9 +212,8 @@ func (s *State) AddBalance(addr common.Address, amount *big.Int) {
 		return
 	}
 
-	account := s.withAccount(addr)
-	newBalance := new(big.Int).Add(account.Balance(), amount)
-	account.setBalance(newBalance)
+	account := s.getOrCreateAccount(addr)
+	account.Balance = new(big.Int).Add(account.Balance, amount)
 
 	s.repo.Put(addr, account)
 }
@@ -229,10 +223,9 @@ func (s *State) SetNonce(addr common.Address, nonce uint64) {}
 
 // SetCode stub.
 func (s *State) SetCode(addr common.Address, code []byte) {
-	account := s.withAccount(addr)
-	ce := make([]byte, len(code))
-	copy(ce, code)
-	account.setCode(ce)
+	account := s.getOrCreateAccount(addr)
+	account.Code = make([]byte, len(code))
+	copy(account.Code, code)
 
 	s.repo.Put(addr, account)
 }
@@ -244,17 +237,18 @@ func (s *State) SetState(addr common.Address, key common.Hash, value common.Hash
 
 // Suicide stub.
 func (s *State) Suicide(addr common.Address) bool {
-	account := s.getAccount(addr)
-	if account == nil {
-		return false
+	if account, exist := s.getAccount(addr); exist {
+		acc := Account{
+			Balance: account.Balance,
+			Code:    account.Code}
+		acc.Suicided = true
+
+		s.repo.Put(addr, acc)
+
+		return true
 	}
 
-	acc := newAccount(account.Balance(), account.Code())
-	acc.setSuicided()
-
-	s.repo.Put(addr, acc)
-
-	return true
+	return false
 }
 
 // AddRefund stub.
