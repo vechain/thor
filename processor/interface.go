@@ -34,7 +34,7 @@ type Stater interface {
 	GetBalance(acc.Address) *big.Int
 	GetCode(acc.Address) []byte
 	GetStorage(acc.Address, cry.Hash) cry.Hash
-	Exist(acc.Address) bool
+	Exists(acc.Address) bool
 
 	SetBalance(acc.Address, *big.Int)
 	SetCode(acc.Address, []byte)

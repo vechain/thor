@@ -12,5 +12,5 @@ type Reader interface {
 	GetBalance(acc.Address) *big.Int
 	GetCode(acc.Address) []byte
 	GetStorage(acc.Address, cry.Hash) cry.Hash
-	Exist(acc.Address) bool
+	Exists(acc.Address) bool
 }

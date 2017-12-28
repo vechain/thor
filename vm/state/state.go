@@ -24,7 +24,7 @@ func New(stater Reader) *State {
 	getter := func(hash interface{}) (interface{}, bool) {
 		switch v := hash.(type) {
 		case common.Address:
-			if !stater.Exist(acc.Address(v)) {
+			if !stater.Exists(acc.Address(v)) {
 				return nil, false
 			}
 			return Account{
