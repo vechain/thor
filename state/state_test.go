@@ -46,6 +46,7 @@ func TestStorage(t *testing.T) {
 	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
 	k1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b410")
 	v1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b412")
+	stat.SetBalance(*address, big.NewInt(100))
 	stat.SetStorage(*address, *k1, *v1)
 	stat.Root()
 	// s, _ := state.New(r, db)
@@ -60,7 +61,6 @@ func TestDelete(t *testing.T) {
 	stat, _ := state.New(*rootHash, db)
 	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
 	stat.Delete(*address)
-	stat.Root()
 }
 func TestExist(t *testing.T) {
 	db, _ := lvldb.NewMem()
