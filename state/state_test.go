@@ -46,6 +46,9 @@ func TestStorage(t *testing.T) {
 	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
 	k1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b410")
 	v1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b412")
+	emptyHash := cry.Hash{}
+	v := stat.GetStorage(*address, *k1)
+	assert.Equal(t, v.String(), emptyHash.String(), "storage should be empty")
 	stat.SetBalance(*address, big.NewInt(100))
 	stat.SetStorage(*address, *k1, *v1)
 	stat.Root()

@@ -156,6 +156,9 @@ func (s *State) SetCode(addr acc.Address, code []byte) {
 
 //Exists return whether account exists
 func (s *State) Exists(addr acc.Address) bool {
+	if _, ok := s.cachedAccounts[addr]; ok {
+		return true
+	}
 	enc, err := s.trie.TryGet(addr[:])
 	if err != nil {
 		s.err = err
