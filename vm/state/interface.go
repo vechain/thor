@@ -7,8 +7,8 @@ import (
 	"github.com/vechain/thor/cry"
 )
 
-// StateReader fake.
-type StateReader interface {
+// Reader fake.
+type Reader interface {
 	GetBalance(acc.Address) *big.Int
 	GetCode(acc.Address) []byte
 	GetStorage(acc.Address, cry.Hash) cry.Hash
