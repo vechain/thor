@@ -23,7 +23,7 @@ func (r reader) GetCode(acc.Address) []byte { return nil }
 
 func (r reader) GetStorage(acc.Address, cry.Hash) cry.Hash { return cry.Hash{} }
 
-func (r reader) Exist(acc.Address) bool { return false }
+func (r reader) Exists(acc.Address) bool { return false }
 
 func TestStateSnapshot(t *testing.T) {
 	assert := assert.New(t)

@@ -76,7 +76,7 @@ func newStateR() *stateReader {
 	}
 }
 
-func (st *stateReader) Exist(addr acc.Address) bool {
+func (st *stateReader) Exists(addr acc.Address) bool {
 	if acc := st.accounts[addr]; acc == nil {
 		st.accounts[addr] = &accountFake{
 			new(big.Int),

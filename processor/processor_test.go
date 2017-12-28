@@ -51,7 +51,7 @@ func (st *State) Error() error {
 	return nil
 }
 
-func (st *State) Exist(addr acc.Address) bool {
+func (st *State) Exists(addr acc.Address) bool {
 	if acc := st.accounts[addr]; acc == nil {
 		st.accounts[addr] = &accountFake{
 			new(big.Int),
