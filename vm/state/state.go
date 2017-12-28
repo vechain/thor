@@ -20,7 +20,7 @@ type State struct {
 }
 
 // New is State's factory.
-func New(stater StateReader) *State {
+func New(stater Reader) *State {
 	getter := func(hash interface{}) (interface{}, bool) {
 		switch v := hash.(type) {
 		case common.Address:
@@ -174,7 +174,7 @@ func (s *State) Exist(addr common.Address) bool {
 }
 
 func (s *State) getOrCreateAccount(addr common.Address) Account {
-	if account, exist := s.getAccount(addr); !exist {
+	if account, exist := s.getAccount(addr); exist {
 		return account
 	}
 	return Account{
