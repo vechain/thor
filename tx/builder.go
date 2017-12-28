@@ -29,6 +29,12 @@ func (b *Builder) GasLimit(limit *big.Int) *Builder {
 	return b
 }
 
+// TimeBarrier set time barrier.
+func (b *Builder) TimeBarrier(tb uint64) *Builder {
+	b.body.TimeBarrier = tb
+	return b
+}
+
 // Nonce set nonce.
 func (b *Builder) Nonce(nonce uint64) *Builder {
 	b.body.Nonce = nonce
