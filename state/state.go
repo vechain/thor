@@ -165,9 +165,14 @@ func (s *State) Exists(addr acc.Address) bool {
 }
 
 // Delete removes any existing value for key from the trie.
-func (s *State) Delete(address acc.Address) error {
+func (s *State) Delete(address acc.Address) {
 	delete(s.cachedAccounts, address)
-	return s.trie.TryDelete(address[:])
+	if err := s.trie.TryDelete(address[:]); err != nil {
+		if _, ok := err.(*Trie.MissingNodeError); !ok {
+			s.err = err
+			return
+		}
+	}
 }
 
 //if storagte trie exists returned else return a new trie from root
