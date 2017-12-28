@@ -205,6 +205,7 @@ func (s *State) updateStorage(addr acc.Address, cachedAccount *cachedAccount) (*
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
 		e := st.TryUpdate(key[:], v)
 		if e != nil {
+			s.err = err
 			return nil, err
 		}
 		delete(cachedAccount.storage, key)
@@ -226,7 +227,8 @@ func (s *State) updateAccount(address acc.Address, cachedAccount *cachedAccount)
 	}
 	err = s.trie.TryUpdate(address[:], enc)
 	if err != nil {
-		return err
+		s.err = err
+		return
 	}
 	return nil
 }
@@ -238,6 +240,7 @@ func (s *State) getAccount(addr acc.Address) (*cachedAccount, error) {
 	}
 	enc, err := s.trie.TryGet(addr[:])
 	if err != nil {
+		s.err = err
 		return nil, err
 	}
 	if len(enc) == 0 {
