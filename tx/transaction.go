@@ -46,8 +46,8 @@ func (t *Transaction) Hash() cry.Hash {
 	return h
 }
 
-// HashForSigning returns hash of tx excludes signature.
-func (t *Transaction) HashForSigning() cry.Hash {
+// HashOfWorkProof returns hash for work proof.
+func (t *Transaction) HashOfWorkProof() (hash cry.Hash) {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
 		t.body.Clauses,
@@ -56,9 +56,15 @@ func (t *Transaction) HashForSigning() cry.Hash {
 		t.body.Nonce,
 		t.body.DependsOn,
 	})
-	var h cry.Hash
-	hw.Sum(h[:0])
-	return h
+	hw.Sum(hash[:0])
+	return
+}
+
+// HashForSigning returns hash of tx excludes signature.
+func (t *Transaction) HashForSigning() cry.Hash {
+	wph := t.HashOfWorkProof()
+	// use hash of work proof hash as signing hash
+	return cry.HashSum(wph[:])
 }
 
 // GasPrice returns gas price.
