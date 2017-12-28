@@ -40,5 +40,5 @@ type Stater interface {
 	SetCode(acc.Address, []byte)
 	SetStorage(acc.Address, cry.Hash, cry.Hash)
 
-	DeleteAccount(acc.Address)
+	Delete(acc.Address)
 }

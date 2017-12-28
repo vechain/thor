@@ -39,7 +39,7 @@ func getHash(n uint64) cry.Hash {
 	return cry.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 }
 
-func NewEnv(stateReader state.StateReader) *VM {
+func NewEnv(stateReader state.Reader) *VM {
 	ctx := Context{
 		TxHash:      cry.Hash{1},
 		ClauseIndex: 1,
@@ -49,7 +49,7 @@ func NewEnv(stateReader state.StateReader) *VM {
 		Time:        big.NewInt(time.Now().Unix()),
 		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
 	}
-	return NewVM(ctx, stateReader, Config{})
+	return New(ctx, stateReader, Config{})
 }
 
 type accountFake struct {

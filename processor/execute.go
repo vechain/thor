@@ -48,7 +48,7 @@ func ExecuteMsg(msg tx.Message, config vm.Config, context *Context) (*vm.Output,
 		TxHash:      context.txHash,
 		GetHash:     context.getHash,
 	}
-	mvm := vm.NewVM(ctx, context.state, config) // message virtual machine
+	mvm := vm.New(ctx, context.state, config) // message virtual machine
 	var (
 		output      *vm.Output
 		leftOverGas uint64

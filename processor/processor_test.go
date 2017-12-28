@@ -90,7 +90,7 @@ func (st *State) SetStorage(addr acc.Address, key cry.Hash, value cry.Hash) {
 	st.storages[key] = value
 }
 
-func (st *State) DeleteAccount(addr acc.Address) {
+func (st *State) Delete(addr acc.Address) {
 	st.accounts[addr] = nil
 }
 
