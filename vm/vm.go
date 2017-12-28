@@ -71,9 +71,9 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 	db.AddBalance(recipient, amount)
 }
 
-// NewVM retutrns a new EVM . The returned EVM is not thread safe and should
+// New retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func NewVM(ctx Context, stateReader state.StateReader, vmConfig Config) *VM {
+func New(ctx Context, stateReader state.Reader, vmConfig Config) *VM {
 	tGetHash := func(n uint64) common.Hash {
 		return common.Hash(ctx.GetHash(n))
 	}

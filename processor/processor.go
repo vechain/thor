@@ -105,7 +105,7 @@ func (p *Processor) processMessage(msg tx.Message, msgIndex uint64, header *bloc
 		GetHash:     p.getHash,
 		ClauseIndex: msgIndex,
 	}
-	mvm := vm.NewVM(ctx, p.state, config) // message virtual machine
+	mvm := vm.New(ctx, p.state, config) // message virtual machine
 	var (
 		output    *vm.Output
 		refundGas *big.Int

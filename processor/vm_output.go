@@ -11,7 +11,7 @@ type VMOutput vm.Output
 func (o *VMOutput) ApplyState(state Stater) error {
 	for addr, account := range o.Accounts {
 		if account.Suicided {
-			state.DeleteAccount(addr)
+			state.Delete(addr)
 			if err := state.Error(); err != nil {
 				return err
 			}
