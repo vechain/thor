@@ -115,6 +115,9 @@ func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
 		s.err = err
 		return cry.Hash{}
 	}
+	if len(enc) == 0 {
+		return cry.Hash{}
+	}
 	_, content, _, err := rlp.Split(enc)
 	if err != nil {
 		s.err = err
