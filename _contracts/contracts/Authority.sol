@@ -2,20 +2,32 @@ pragma solidity ^0.4.18;
 import './Owned.sol';
 import './Constants.sol';
 
-contract Authority is Owned {
+contract Authority {
     event Registered(address indexed _addr);
     event Authorised(address indexed _proposer, bool _b);
 
+    address public owner;
+
     mapping(address => string) registry;
 
-    address[] public proposers;
+    address[] proposers;
     mapping(address => uint) proposerMap;
 
-    address[] public absentee;
+    address[] absentee;
     mapping(address => uint) absenteeMap;
 
-    function init() public {
-        require(msg.sender == Constants.god());        
+    function initialize(address _owner, address[] _proposers) public {
+        require(msg.sender == Constants.god()); 
+        owner = _owner;
+        proposers = _proposers;  
+    }
+
+    function getProposers() public view returns (address[]) {
+        return proposers;
+    }
+
+    function getAbsentee() public view returns (address[]) {
+        return absentee;
     }
 
     function register(string _desc) public {
@@ -26,7 +38,9 @@ contract Authority is Owned {
         Registered(msg.sender);
     }
     
-    function authorise (address _proposer, bool _b) public onlyOwner {
+    function authorise (address _proposer, bool _b) public {
+        require(msg.sender == owner);
+
         uint pos = proposerMap[_proposer];
         if (_b) {            
             require(pos == 0);
