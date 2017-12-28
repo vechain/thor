@@ -23,12 +23,13 @@ type Transaction struct {
 
 // body describes details of a tx.
 type body struct {
-	Clauses   Clauses
-	GasPrice  *big.Int
-	GasLimit  *big.Int
-	Nonce     uint64
-	DependsOn *cry.Hash `rlp:"nil"`
-	Signature []byte
+	Clauses     Clauses
+	GasPrice    *big.Int
+	GasLimit    *big.Int
+	Nonce       uint64
+	TimeBarrier uint64
+	DependsOn   *cry.Hash `rlp:"nil"`
+	Signature   []byte
 }
 
 // Hash returns hash of tx.
@@ -81,6 +82,13 @@ func (t *Transaction) GasLimit() *big.Int {
 		return new(big.Int)
 	}
 	return new(big.Int).Set(t.body.GasLimit)
+}
+
+// TimeBarrier returns time barrier.
+// It's required that tx.TimeBarrier <= block.Timestamp,
+// when a tx was packed in a block.
+func (t *Transaction) TimeBarrier() uint64 {
+	return t.body.TimeBarrier
 }
 
 // WithSignature create a new tx with signature set.
