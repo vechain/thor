@@ -41,16 +41,19 @@ func TestSchedule(t *testing.T) {
 		now      uint64
 		ret      []interface{}
 	}{
+		// now time < time of best block
 		{entries[0].Proposer, 0, []interface{}{
 			uint64(parentTime + params.BlockTime),
 			[]acc.Address(nil),
 			nil,
 		}},
+		// now time < second proposer's time
 		{entries[0].Proposer, parentTime + params.BlockTime + params.BlockTime - 1, []interface{}{
 			uint64(parentTime + params.BlockTime),
 			[]acc.Address(nil),
 			nil,
 		}},
+		// now time == second proposer's time
 		{entries[0].Proposer, parentTime + params.BlockTime + params.BlockTime, []interface{}{
 			uint64(parentTime + params.BlockTime*uint64(len(proposers)+1)),
 			entriesToAddrs(entries[1:]),
@@ -60,6 +63,11 @@ func TestSchedule(t *testing.T) {
 
 	for _, t := range tests {
 		assert.Equal(fortest.Multi(sched.Timing(t.proposer, t.now)), t.ret)
+
+		// check verifiable
+		t1, _, _ := sched.Timing(t.proposer, t.now)
+		t2, _, _ := sched.Timing(t.proposer, t1)
+		assert.Equal(t1, t2)
 	}
 
 }
