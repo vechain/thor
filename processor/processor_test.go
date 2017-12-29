@@ -15,84 +15,12 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/lvldb"
 	. "github.com/vechain/thor/processor"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
-
-type accountFake struct {
-	balance *big.Int
-	code    []byte
-}
-
-// State implement Stater.
-type State struct {
-	accounts map[acc.Address]*accountFake
-	storages map[cry.Hash]cry.Hash
-}
-
-// NewState mock Stater interface.
-func NewState() *State {
-	state := &State{
-		make(map[acc.Address]*accountFake),
-		make(map[cry.Hash]cry.Hash),
-	}
-	return state
-}
-
-// SetOwner mock a rich account.
-func (st *State) SetOwner(addr acc.Address) {
-	st.accounts[addr] = &accountFake{
-		balance: big.NewInt(5000000000000000000),
-	}
-}
-
-func (st *State) Error() error {
-	return nil
-}
-
-func (st *State) Exists(addr acc.Address) bool {
-	if acc := st.accounts[addr]; acc == nil {
-		st.accounts[addr] = &accountFake{
-			new(big.Int),
-			[]byte{},
-		}
-	}
-	return true
-}
-
-func (st *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
-	if storage := st.storages[key]; storage != (cry.Hash{}) {
-		return storage
-	}
-	newST := cry.Hash{}
-	st.storages[key] = newST
-	return newST
-}
-
-func (st *State) GetBalance(addr acc.Address) *big.Int {
-	return st.accounts[addr].balance
-}
-
-func (st *State) GetCode(addr acc.Address) []byte {
-	return st.accounts[addr].code
-}
-
-func (st *State) SetBalance(addr acc.Address, balance *big.Int) {
-	st.accounts[addr].balance = balance
-}
-
-func (st *State) SetCode(addr acc.Address, code []byte) {
-	st.accounts[addr].code = code
-}
-
-func (st *State) SetStorage(addr acc.Address, key cry.Hash, value cry.Hash) {
-	st.storages[key] = value
-}
-
-func (st *State) Delete(addr acc.Address) {
-	st.accounts[addr] = nil
-}
 
 var key = func() *ecdsa.PrivateKey {
 	key, _ := crypto.GenerateKey()
@@ -101,15 +29,20 @@ var key = func() *ecdsa.PrivateKey {
 
 func TestHandleTransaction(t *testing.T) {
 	assert := assert.New(t)
+
+	db, _ := lvldb.NewMem()
+	state, _ := state.New(cry.Hash{}, db)
+	defer db.Close()
+
 	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
-	state := NewState()
-	state.SetOwner(sender)
+	state.SetBalance(sender, big.NewInt(5000000000000000000))
+
 	processor := New(state, nil)
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
 	header := block.Header()
 	transaction := block.Transactions()[0]
+
 	_, gasUsed, _ := processor.Process(header, transaction, vm.Config{})
-	//t.Log(outputs[0])
 	assert.Equal(gasUsed.Int64(), int64(157592))
 }
 
