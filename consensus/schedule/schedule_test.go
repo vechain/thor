@@ -48,14 +48,20 @@ func TestSchedule(t *testing.T) {
 			nil,
 		}},
 		// now time < second proposer's time
-		{entries[0].Proposer, parentTime + params.BlockTime + params.BlockTime - 1, []interface{}{
+		{entries[0].Proposer, parentTime + params.BlockTime*2 - 1, []interface{}{
 			uint64(parentTime + params.BlockTime),
 			[]acc.Address(nil),
 			nil,
 		}},
 		// now time == second proposer's time
-		{entries[0].Proposer, parentTime + params.BlockTime + params.BlockTime, []interface{}{
+		{entries[0].Proposer, parentTime + params.BlockTime*2, []interface{}{
 			uint64(parentTime + params.BlockTime*uint64(len(proposers)+1)),
+			entriesToAddrs(entries[1:]),
+			nil,
+		}},
+		// now time >= last proposer's time + block time
+		{entries[0].Proposer, entries[0].Time + params.BlockTime + 99, []interface{}{
+			(entries[0].Time + params.BlockTime + 90),
 			entriesToAddrs(entries[1:]),
 			nil,
 		}},
