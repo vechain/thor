@@ -174,10 +174,8 @@ func (s *State) Exists(addr acc.Address) bool {
 func (s *State) Delete(address acc.Address) {
 	delete(s.cachedAccounts, address)
 	if err := s.trie.TryDelete(address[:]); err != nil {
-		if _, ok := err.(*Trie.MissingNodeError); !ok {
-			s.err = err
-			return
-		}
+		s.err = err
+		return
 	}
 }
 
@@ -286,40 +284,27 @@ func isEmpty(a *cachedAccount) bool {
 
 //Commit commit data to update
 func (s *State) Commit() cry.Hash {
+	s.Root()
 	for addr, account := range s.cachedAccounts {
-		if isEmpty(account) { //delete empty(account)
-			s.Delete(addr)
-			continue
-		}
-		if account.isStorageDirty { //storage is still dirty , should update to trie
-			trie, err := s.updateStorage(addr, account)
+		if account.isStorageDirty {
+			storageTrie, err := s.getTrie(addr)
 			if err != nil {
 				s.err = err
 				return cry.Hash{}
 			}
-			account.storageRoot = cry.Hash(trie.Hash())
-			account.isDirty = true
-		}
-		if account.storageTrie != nil { //has been updated to trie
-			if _, err := account.storageTrie.Commit(); err != nil {
+			if _, err := storageTrie.Commit(); err != nil {
 				s.err = err
 				return cry.Hash{}
 			}
-		}
-		if account.isDirty { //if account dirty,update it to trie
-			if err := s.updateAccount(addr, account); err != nil {
-				s.err = err
-				return cry.Hash{}
-			}
-		}
-		//commit account data to kv
-		if _, err := s.trie.Commit(); err != nil {
-			s.err = err
-			return cry.Hash{}
 		}
 		delete(s.cachedAccounts, addr)
 	}
-	return cry.Hash(s.trie.Hash())
+	root, err := s.trie.Commit()
+	if err != nil {
+		s.err = err
+		return cry.Hash{}
+	}
+	return cry.Hash(root)
 }
 
 //Root get state trie root hash
