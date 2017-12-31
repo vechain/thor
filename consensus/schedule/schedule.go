@@ -27,7 +27,7 @@ func New(
 	parentTime uint64) *Schedule {
 
 	if len(proposers) == 0 {
-		return nil
+		return &Schedule{}
 	}
 
 	// for fast lookup absence
@@ -59,7 +59,7 @@ func New(
 // Timing to determine time of the proposer to produce a block, according to nowTime.
 //
 // The first return value is the timestamp to be waited until.
-// It's guaranteed that timestamp > nowTime - params.BlockTime.
+// It's guaranteed that timestamp + params.BlockTime> nowTime.
 //
 // The second one is a list of proposers that will be absented if
 // this proposer builds a block at the returned timestamp.
