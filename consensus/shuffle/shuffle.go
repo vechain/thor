@@ -2,7 +2,7 @@ package shuffle
 
 // Shuffle cryptographic hash based Fisher–Yates shuffle algorithm.
 // The perm is to receive shuffled permutation of [0, len(perm)-1).
-func Shuffle(seed uint32, perm []int) {
+func Shuffle(seed []byte, perm []int) {
 	for i := range perm {
 		perm[i] = i
 	}

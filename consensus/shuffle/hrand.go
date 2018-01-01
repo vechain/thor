@@ -3,21 +3,26 @@ package shuffle
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"hash"
 )
 
 // hash based random generator
 type hrand struct {
-	sha  hash.Hash
-	seed [32]byte
-	seq  uint32
+	seed  []byte
+	round uint32
+	hash  [32]byte
+	seq   uint32
 }
 
-func newHrand(seed uint32) *hrand {
-	var hr hrand
-	hr.sha = sha256.New()
-	binary.BigEndian.PutUint32(hr.seed[:], seed)
-	return &hr
+func newHrand(seed []byte) *hrand {
+	hseed := make([]byte, len(seed)+4)
+	copy(hseed[4:], seed)
+	return &hrand{seed: hseed}
+}
+
+func (hr *hrand) nextRound() {
+	binary.BigEndian.PutUint32(hr.seed, hr.round)
+	hr.hash = sha256.Sum256(hr.seed)
+	hr.round++
 }
 
 // returns int in [0, n)
@@ -26,11 +31,10 @@ func (hr *hrand) Intn(n int) int {
 	if n <= 0 {
 		panic("n must > 0")
 	}
-	p := hr.seq % 8
-	hr.seq++
-	if p == 0 {
-		hr.sha.Write(hr.seed[:])
-		hr.sha.Sum(hr.seed[:0])
+	i := hr.seq % 8
+	if i == 0 {
+		hr.nextRound()
 	}
-	return int(binary.BigEndian.Uint32(hr.seed[p*4:]) % uint32(n))
+	hr.seq++
+	return int(binary.BigEndian.Uint32(hr.hash[i*4:]) % uint32(n))
 }
