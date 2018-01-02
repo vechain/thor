@@ -8,14 +8,16 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var big0 = new(big.Int)
+
 // Int wraps big.Int.
 // It can be used as a value without state sharing.
 type Int struct {
 	value *big.Int
 }
 
-// WrapBig wraps big.Int to bn.Int.
-func WrapBig(bi *big.Int) Int {
+// FromBig create a bn.Int object from big.Int.
+func FromBig(bi *big.Int) Int {
 	i := Int{}
 	i.SetBig(bi)
 	return i
@@ -88,16 +90,26 @@ func (i *Int) DecodeRLP(s *rlp.Stream) error {
 
 // String implements Stringer.
 func (i Int) String() string {
+	if i.value == nil {
+		return big0.String()
+	}
 	return i.value.String()
 }
 
 // Format see big.Int.Format.
 func (i Int) Format(s fmt.State, ch rune) {
+	if i.value == nil {
+		big0.Format(s, ch)
+		return
+	}
 	i.value.Format(s, ch)
 }
 
 // MarshalText implements the encoding.TextMarshaler interface.
 func (i Int) MarshalText() (text []byte, err error) {
+	if i.value == nil {
+		return big0.MarshalText()
+	}
 	return i.value.MarshalText()
 }
 
@@ -107,6 +119,32 @@ func (i *Int) UnmarshalText(text []byte) error {
 	if err := bi.UnmarshalText(text); err != nil {
 		return err
 	}
-	i.value = bi
+	if bi.Sign() == 0 {
+		i.value = nil
+	} else {
+		i.value = bi
+	}
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (i Int) MarshalJSON() ([]byte, error) {
+	if i.value == nil {
+		return big0.MarshalJSON()
+	}
+	return i.value.MarshalJSON()
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (i *Int) UnmarshalJSON(text []byte) error {
+	bi := new(big.Int)
+	if err := bi.UnmarshalJSON(text); err != nil {
+		return err
+	}
+	if bi.Sign() == 0 {
+		i.value = nil
+	} else {
+		i.value = bi
+	}
 	return nil
 }
