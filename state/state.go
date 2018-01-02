@@ -13,14 +13,6 @@ import (
 	"github.com/vechain/thor/kv"
 )
 
-type storageStep int
-
-const (
-	noStorage storageStep = iota
-	storageSet
-	storageUpdated
-)
-
 type storage map[cry.Hash]cry.Hash
 
 type account struct {
@@ -29,16 +21,23 @@ type account struct {
 	StorageRoot cry.Hash // merkle root of the storage trie
 }
 
+//cachedStorage saved all cached storages and the corresponding storage trie,
+// if storage is set,both storage and storageTrie would be dirty,
+//when Root() called,storage would not be dirty, but the storageTrie is still dirty until Commit() called
+type cachedStorage struct {
+	storage        storage
+	isDirtyStorage bool
+	storageTrie    *Trie.SecureTrie //this trie manages account storage data and it's root is storageRoot
+	isDirtyTrie    bool
+}
+
 //cachedAccount it's for cache account
 type cachedAccount struct {
-	isDirty     bool //is cached account should update
-	storageStep storageStep
+	isDirty     bool //whether cached account should be updated to trie
 	balance     *big.Int
-	code        []byte
-	codeHash    cry.Hash
-	storageRoot cry.Hash
-	storage     storage          //dirty storage
-	storageTrie *Trie.SecureTrie //this trie manages account storage data and it's root is storageRoot
+	code        []byte   //contract code
+	codeHash    cry.Hash //contract code hash
+	storageRoot cry.Hash //storage root
 }
 
 //State manage account list
@@ -46,6 +45,7 @@ type State struct {
 	trie           *Trie.SecureTrie //this trie manages all accounts data
 	kv             kv.GetPutter
 	cachedAccounts map[acc.Address]*cachedAccount
+	cachedStorages map[acc.Address]*cachedStorage
 	err            error
 }
 
@@ -60,6 +60,7 @@ func New(root cry.Hash, kv kv.GetPutter) (s *State, err error) {
 		secureTrie,
 		kv,
 		make(map[acc.Address]*cachedAccount),
+		make(map[acc.Address]*cachedStorage),
 		nil,
 	}, nil
 }
@@ -92,33 +93,28 @@ func (s *State) SetBalance(addr acc.Address, balance *big.Int) {
 
 //SetStorage set storage by address and key with value
 func (s *State) SetStorage(addr acc.Address, key cry.Hash, value cry.Hash) {
-	a, err := s.getAccount(addr)
+	cs, err := s.getCachedStorage(addr)
 	if err != nil {
 		s.err = err
 		return
 	}
-	a.storageStep = storageSet
-	a.storage[key] = value
+	cs.storage[key] = value
+	cs.isDirtyStorage = true
 }
 
 //GetStorage return storage by address and key
 func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
-	if a, ok := s.cachedAccounts[addr]; ok {
-		if value, ok := a.storage[key]; ok {
-			return value
+	if cs, ok := s.cachedStorages[addr]; ok {
+		if v, ok := cs.storage[key]; ok {
+			return v
 		}
 	}
-	a, err := s.getAccount(addr)
+	cs, err := s.getCachedStorage(addr)
 	if err != nil {
 		s.err = err
 		return cry.Hash{}
 	}
-	st, err := s.getTrie(addr)
-	if err != nil {
-		s.err = err
-		return cry.Hash{}
-	}
-	enc, err := st.TryGet(key[:])
+	enc, err := cs.storageTrie.TryGet(key[:])
 	if err != nil {
 		s.err = err
 		return cry.Hash{}
@@ -132,7 +128,7 @@ func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
 		return cry.Hash{}
 	}
 	value := cry.BytesToHash(content)
-	a.storage[key] = value
+	cs.storage[key] = value
 	return value
 }
 
@@ -188,36 +184,38 @@ func (s *State) Delete(address acc.Address) {
 }
 
 //if storagte trie exists returned else return a new trie from root
-func (s *State) getTrie(addr acc.Address) (*Trie.SecureTrie, error) {
-	trie := s.cachedAccounts[addr].storageTrie
-	if trie != nil {
-		return trie, nil
+func (s *State) getCachedStorage(addr acc.Address) (*cachedStorage, error) {
+	if cs, ok := s.cachedStorages[addr]; ok {
+		return cs, nil
 	}
-	hash := common.Hash(s.cachedAccounts[addr].storageRoot)
+	a, err := s.getAccount(addr)
+	if err != nil {
+		return nil, err
+	}
+	hash := common.Hash(a.storageRoot)
 	secureTrie, err := Trie.NewSecure(hash, s.kv, 0)
 	if err != nil {
 		return nil, err
 	}
-	s.cachedAccounts[addr].storageTrie = secureTrie
-	return secureTrie, nil
+	cs := &cachedStorage{
+		make(storage),
+		false,
+		secureTrie,
+		false,
+	}
+	s.cachedStorages[addr] = cs
+	return cs, nil
 }
 
-func (s *State) updateStorage(addr acc.Address, cachedAccount *cachedAccount) (*Trie.SecureTrie, error) {
-	st, err := s.getTrie(addr)
-	if err != nil {
-		return nil, err
-	}
-	for key, value := range cachedAccount.storage {
+func (s *State) updateStorage(cs *cachedStorage) error {
+	for key, value := range cs.storage {
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-		e := st.TryUpdate(key[:], v)
-		if e != nil {
+		if err := cs.storageTrie.TryUpdate(key[:], v); err != nil {
 			s.err = err
-			return nil, err
+			return err
 		}
-		delete(cachedAccount.storage, key)
 	}
-
-	return st, nil
+	return nil
 }
 
 //update an account by address
@@ -252,12 +250,10 @@ func (s *State) getAccount(addr acc.Address) (*cachedAccount, error) {
 	if len(enc) == 0 {
 		s.cachedAccounts[addr] = &cachedAccount{
 			isDirty:     false,
-			storageStep: noStorage,
 			balance:     new(big.Int),
 			code:        nil,
 			codeHash:    cry.BytesToHash(crypto.Keccak256(nil)),
 			storageRoot: cry.Hash{},
-			storage:     make(storage),
 		}
 		return s.cachedAccounts[addr], nil
 	}
@@ -267,12 +263,10 @@ func (s *State) getAccount(addr acc.Address) (*cachedAccount, error) {
 	}
 	dirtyAcc := &cachedAccount{
 		isDirty:     false,
-		storageStep: noStorage,
 		balance:     data.Balance,
 		code:        nil,
 		codeHash:    data.CodeHash,
 		storageRoot: data.StorageRoot,
-		storage:     make(storage),
 	}
 	if !bytes.Equal(dirtyAcc.codeHash[:], crypto.Keccak256(nil)) {
 		code, err := s.kv.Get(dirtyAcc.codeHash[:])
@@ -293,18 +287,16 @@ func isEmpty(a *cachedAccount) bool {
 //Commit commit data to update
 func (s *State) Commit() cry.Hash {
 	s.Root()
-	for addr, account := range s.cachedAccounts {
-		if account.storageStep == storageUpdated {
-			storageTrie, err := s.getTrie(addr)
-			if err != nil {
-				s.err = err
-				return cry.Hash{}
-			}
-			if _, err := storageTrie.Commit(); err != nil {
+	for addr, cs := range s.cachedStorages {
+		if cs.isDirtyTrie {
+			if _, err := cs.storageTrie.Commit(); err != nil {
 				s.err = err
 				return cry.Hash{}
 			}
 		}
+		delete(s.cachedStorages, addr)
+	}
+	for addr := range s.cachedAccounts {
 		delete(s.cachedAccounts, addr)
 	}
 	root, err := s.trie.Commit()
@@ -317,27 +309,41 @@ func (s *State) Commit() cry.Hash {
 
 //Root get state trie root hash
 func (s *State) Root() cry.Hash {
-	for addr, account := range s.cachedAccounts {
-		if isEmpty(account) {
-			s.Delete(addr)
-			continue
-		}
-		if account.storageStep == storageSet { //storage has been set,should update to trie
-			trie, err := s.updateStorage(addr, account)
+	//update dirty storage to storage trie
+	for addr, cs := range s.cachedStorages {
+		if cs.isDirtyStorage {
+			a, err := s.getAccount(addr)
 			if err != nil {
 				s.err = err
 				return cry.Hash{}
 			}
-			account.storageRoot = cry.Hash(trie.Hash())
-			account.isDirty = true
-			account.storageStep = storageUpdated
-		}
-		if account.isDirty { //if account still dirty,update it to trie
-			if err := s.updateAccount(addr, account); err != nil {
+			if isEmpty(a) {
+				s.Delete(addr)
+				continue
+			}
+			err = s.updateStorage(cs)
+			if err != nil {
 				s.err = err
 				return cry.Hash{}
 			}
-			account.isDirty = false
+			a.storageRoot = cry.Hash(cs.storageTrie.Hash())
+			a.isDirty = true
+			cs.isDirtyStorage = false
+			cs.isDirtyTrie = true
+		}
+	}
+	//update dirty account data to state trie
+	for addr, a := range s.cachedAccounts {
+		if isEmpty(a) {
+			s.Delete(addr)
+			continue
+		}
+		if a.isDirty {
+			if err := s.updateAccount(addr, a); err != nil {
+				s.err = err
+				return cry.Hash{}
+			}
+			a.isDirty = false
 		}
 	}
 	return cry.Hash(s.trie.Hash())
