@@ -122,8 +122,8 @@ func TestStorage(t *testing.T) {
 
 	stat.SetStorage(*address, *k1, *v1)
 	stat.Root()
-	emptyAccountStorageValue := stat.GetStorage(*address, *k1)
-	assert.Equal(t, emptyAccountStorageValue.String(), emptyHash.String(), "empty account storage value should be empty")
+	accountStorageValue := stat.GetStorage(*address, *k1)
+	assert.Equal(t, accountStorageValue.String(), v1.String(), "storage update to trie , return the same value")
 
 	stat.SetStorage(*address, *k1, *v1)
 	stat.SetBalance(*address, big.NewInt(100))
