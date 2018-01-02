@@ -2,5 +2,5 @@ package params
 
 // Constants of block chain.
 const (
-	BlockTime uint64 = 10 // Time gap to produce a block.
+	BlockInterval uint64 = 10 // time interval between two consecutive blocks.
 )

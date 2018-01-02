@@ -1,6 +1,7 @@
 package schedule
 
 import (
+	"encoding/binary"
 	"errors"
 
 	"github.com/vechain/thor/acc"
@@ -8,89 +9,130 @@ import (
 	"github.com/vechain/thor/params"
 )
 
-// Entry presents the time for a block proposer to build a block.
-type Entry struct {
-	Time     uint64
-	Proposer acc.Address
-}
-
-// Schedule the entry list of when proposers' turn to build a block.
+// Schedule arrange when a proposer to build a block.
 type Schedule struct {
-	entries []Entry
+	proposers    []acc.Address
+	absenteeMap  addrMap
+	parentNumber uint32
+	parentTime   uint64
 }
 
-// New create a schedule bases on parent block information.
+// New create a new schedule instance.
 func New(
 	proposers []acc.Address,
 	absentee []acc.Address,
 	parentNumber uint32,
 	parentTime uint64) *Schedule {
 
-	if len(proposers) == 0 {
-		return &Schedule{}
+	if !(len(absentee) < len(proposers)) {
+		panic("len(absentee) must < len(proposers)")
 	}
 
-	// for fast lookup absence
-	absenteeMap := make(map[acc.Address]bool, len(absentee))
+	absenteeMap := map[acc.Address]bool{}
 	for _, a := range absentee {
 		absenteeMap[a] = true
 	}
-
-	// make a shuffled permutation to shuffle proposers
-	perm := make([]int, len(proposers))
-	shuffle.Shuffle(parentNumber, perm)
-
-	time := parentTime + params.BlockTime
-	entries := make([]Entry, len(proposers))
-	for i, j := range perm {
-		w := proposers[j]
-		entries[i] = Entry{
-			time,
-			proposers[j],
-		}
-		// allow one block proposer to occupy timing of previously absent proposer
-		if !absenteeMap[w] {
-			time += params.BlockTime
-		}
+	return &Schedule{
+		append([]acc.Address(nil), proposers...),
+		absenteeMap,
+		parentNumber,
+		parentTime,
 	}
-	return &Schedule{entries}
 }
 
 // Timing to determine time of the proposer to produce a block, according to nowTime.
-//
-// The first return value is the timestamp to be waited until.
-// It's guaranteed that timestamp + params.BlockTime> nowTime.
-//
-// The second one is a list of proposers that will be absented if
-// this proposer builds a block at the returned timestamp.
-//
 // If the proposer is not listed, an error returned.
-func (s *Schedule) Timing(proposer acc.Address, nowTime uint64) (
+//
+// The first return value is the timestamp for the proposer to build a block with.
+// It's guaranteed that the timestamp >= nowTime.
+//
+// The second one is a new absentee list.
+func (s *Schedule) Timing(addr acc.Address, nowTime uint64) (
 	uint64, //timestamp
 	[]acc.Address, //absentee
-	error) {
-
-	var absentee []acc.Address
-	for i, e := range s.entries {
-		if e.Proposer == proposer {
-			if nowTime < e.Time+params.BlockTime {
-				return e.Time, absentee, nil
-			}
-			// out of the range of schedule
-			// absent all except self
-			for _, ae := range s.entries[i+1:] {
-				absentee = append(absentee, ae.Proposer)
-			}
-
-			lastEntry := s.entries[len(s.entries)-1]
-			if nowTime < lastEntry.Time+params.BlockTime {
-				return lastEntry.Time + params.BlockTime, absentee, nil
-			}
-
-			rounded := (nowTime - lastEntry.Time) / params.BlockTime * params.BlockTime
-			return lastEntry.Time + rounded, absentee, nil
+	error,
+) {
+	found := false
+	for _, a := range s.proposers {
+		if a == addr {
+			found = true
+			break
 		}
-		absentee = append(absentee, e.Proposer)
 	}
-	return 0, nil, errors.New("not a proposer")
+	if !found {
+		return 0, nil, errors.New("not a proposer")
+	}
+
+	predictedTime := s.parentTime + params.BlockInterval
+	roundInterval := uint64(len(s.proposers)-len(s.absenteeMap)) * params.BlockInterval
+
+	var nRound uint64
+	if nowTime >= predictedTime+roundInterval {
+		nRound = (nowTime - predictedTime) / roundInterval
+	}
+
+	retAbsenteeMap := addrMap{}
+	if nRound > 0 {
+		// absent all if skip some rounds
+		for _, a := range s.proposers {
+			retAbsenteeMap[a] = true
+		}
+	} else {
+		// keep absent input absentee
+		for a := range s.absenteeMap {
+			retAbsenteeMap[a] = true
+		}
+	}
+
+	perm := make([]int, len(s.proposers))
+	for {
+		// shuffle proposers bases on parent number and round number
+		var seed [4 + 8]byte
+		binary.BigEndian.PutUint32(seed[:], s.parentNumber)
+		binary.BigEndian.PutUint64(seed[4:], nRound)
+		shuffle.Shuffle(seed[:], perm)
+
+		t := predictedTime + roundInterval*nRound
+
+		for _, i := range perm {
+			proposer := s.proposers[i]
+			if addr != proposer {
+				// step time if proposer not in absentee list
+				if !s.absenteeMap[proposer] {
+					t += params.BlockInterval
+				}
+				retAbsenteeMap[proposer] = true
+				continue
+			}
+
+			if nowTime > t {
+				// next round
+				break
+			}
+			// kick off proposer in absentee list
+			retAbsenteeMap[proposer] = false
+			return t, retAbsenteeMap.toSlice(), nil
+		}
+		nRound++
+	}
+}
+
+// IsValid returns if the timestamp of addr is valid.
+func (s *Schedule) IsValid(addr acc.Address, timestamp uint64) bool {
+	t, _, err := s.Timing(addr, timestamp)
+	if err != nil {
+		return false
+	}
+	return t == timestamp
+}
+
+type addrMap map[acc.Address]bool
+
+func (am addrMap) toSlice() (slice []acc.Address) {
+	for a, b := range am {
+		if b {
+			slice = append(slice, a)
+		}
+	}
+	return
 }
