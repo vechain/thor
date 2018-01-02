@@ -19,13 +19,13 @@ func (b *Builder) Clause(c *Clause) *Builder {
 
 // GasPrice set gas price.
 func (b *Builder) GasPrice(price *big.Int) *Builder {
-	b.body.GasPrice = new(big.Int).Set(price)
+	b.body.GasPrice.SetBig(price)
 	return b
 }
 
 // GasLimit set gas limit.
 func (b *Builder) GasLimit(limit *big.Int) *Builder {
-	b.body.GasLimit = new(big.Int).Set(limit)
+	b.body.GasLimit.SetBig(limit)
 	return b
 }
 

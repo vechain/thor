@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
 )
@@ -27,9 +27,9 @@ type Header struct {
 type headerContent struct {
 	ParentHash  cry.Hash
 	Timestamp   uint64
-	TotalScore  *big.Int
-	GasLimit    *big.Int
-	GasUsed     *big.Int
+	TotalScore  bn.Int
+	GasLimit    bn.Int
+	GasUsed     bn.Int
 	Beneficiary acc.Address
 
 	TxsRoot      cry.Hash
@@ -60,27 +60,18 @@ func (h *Header) Timestamp() uint64 {
 }
 
 // TotalScore returns total score that cumulated from genesis block to this one.
-func (h *Header) TotalScore() *big.Int {
-	if h.content.TotalScore == nil {
-		return &big.Int{}
-	}
-	return new(big.Int).Set(h.content.TotalScore)
+func (h *Header) TotalScore() bn.Int {
+	return h.content.TotalScore
 }
 
 // GasLimit returns gas limit of this block.
-func (h *Header) GasLimit() *big.Int {
-	if h.content.GasLimit == nil {
-		return &big.Int{}
-	}
-	return new(big.Int).Set(h.content.GasLimit)
+func (h *Header) GasLimit() bn.Int {
+	return h.content.GasLimit
 }
 
 // GasUsed returns gas used by txs.
-func (h *Header) GasUsed() *big.Int {
-	if h.content.GasUsed == nil {
-		return &big.Int{}
-	}
-	return new(big.Int).Set(h.content.GasUsed)
+func (h *Header) GasUsed() bn.Int {
+	return h.content.GasUsed
 }
 
 // Beneficiary returns reward recipient.

@@ -3,10 +3,10 @@ package tx
 import (
 	"errors"
 	"io"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
 )
@@ -24,8 +24,8 @@ type Transaction struct {
 // body describes details of a tx.
 type body struct {
 	Clauses     Clauses
-	GasPrice    *big.Int
-	GasLimit    *big.Int
+	GasPrice    bn.Int
+	GasLimit    bn.Int
 	Nonce       uint64
 	TimeBarrier uint64
 	DependsOn   *cry.Hash `rlp:"nil"`
@@ -69,19 +69,13 @@ func (t *Transaction) HashForSigning() cry.Hash {
 }
 
 // GasPrice returns gas price.
-func (t *Transaction) GasPrice() *big.Int {
-	if t.body.GasPrice == nil {
-		return new(big.Int)
-	}
-	return new(big.Int).Set(t.body.GasPrice)
+func (t *Transaction) GasPrice() bn.Int {
+	return t.body.GasPrice
 }
 
 // GasLimit returns gas limit.
-func (t *Transaction) GasLimit() *big.Int {
-	if t.body.GasLimit == nil {
-		return new(big.Int)
-	}
-	return new(big.Int).Set(t.body.GasLimit)
+func (t *Transaction) GasLimit() bn.Int {
+	return t.body.GasLimit
 }
 
 // TimeBarrier returns time barrier.
@@ -89,6 +83,15 @@ func (t *Transaction) GasLimit() *big.Int {
 // when a tx was packed in a block.
 func (t *Transaction) TimeBarrier() uint64 {
 	return t.body.TimeBarrier
+}
+
+// Clauses returns caluses in tx.
+func (t *Transaction) Clauses() Clauses {
+	clauses := make(Clauses, len(t.body.Clauses))
+	for i, c := range t.body.Clauses {
+		clauses[i] = c.Copy()
+	}
+	return clauses
 }
 
 // WithSignature create a new tx with signature set.
@@ -134,19 +137,4 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 		body: body,
 	}
 	return nil
-}
-
-// AsMessages transforms a tx into Messages.
-// An error returned if the tx is not signed.
-func (t *Transaction) AsMessages() ([]Message, error) {
-	// to check if the tx is properly signed.
-	signer, err := t.Signer()
-	if err != nil {
-		return nil, err
-	}
-	msgs := make([]Message, len(t.body.Clauses))
-	for i := range t.body.Clauses {
-		msgs[i] = newMessage(t, i, *signer)
-	}
-	return msgs, nil
 }

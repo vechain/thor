@@ -2,8 +2,8 @@ package block
 
 import (
 	"io"
-	"math/big"
 
+	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -50,7 +50,7 @@ func (b *Block) Timestamp() uint64 {
 }
 
 // TotalScore same as Header.TotalScore().
-func (b *Block) TotalScore() *big.Int {
+func (b *Block) TotalScore() bn.Int {
 	return b.header.TotalScore()
 }
 

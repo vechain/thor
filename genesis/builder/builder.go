@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/processor"
 	"github.com/vechain/thor/tx"
@@ -20,7 +21,7 @@ const (
 // Builder helper to build genesis block.
 type Builder struct {
 	timestamp uint64
-	gasLimit  *big.Int
+	gasLimit  bn.Int
 
 	allocs []alloc
 	calls  []call
@@ -28,7 +29,7 @@ type Builder struct {
 
 type alloc struct {
 	address          acc.Address
-	balance          *big.Int
+	balance          bn.Int
 	runtimeBytecodes []byte
 }
 

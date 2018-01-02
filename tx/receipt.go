@@ -1,13 +1,13 @@
 package tx
 
 import (
-	"math/big"
+	"github.com/vechain/thor/bn"
 )
 
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// gas used by this tx
-	GasUsed *big.Int
+	GasUsed bn.Int
 	// outputs of clauses in tx
 	Outputs []*Output
 }

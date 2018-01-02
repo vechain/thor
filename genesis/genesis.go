@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/genesis/builder"
