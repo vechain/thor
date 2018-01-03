@@ -1,30 +1,23 @@
 package tx
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/bn"
 )
 
 // Clause is the basic execution unit of a transaction.
 type Clause struct {
 	To    *acc.Address `rlp:"nil"`
-	Value *big.Int
+	Value bn.Int
 	Data  []byte
 }
 
-// Copy makes a deep copy of clause.
+// Copy makes a copy of clause.
 func (c Clause) Copy() *Clause {
 	if c.To != nil {
 		to := *c.To
 		c.To = &to
 	}
-
-	value := new(big.Int)
-	if c.Value != nil {
-		value.Set(c.Value)
-	}
-	c.Value = value
 
 	c.Data = append([]byte(nil), c.Data...)
 	return &c

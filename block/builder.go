@@ -28,19 +28,19 @@ func (b *Builder) Timestamp(ts uint64) *Builder {
 
 // TotalScore set total score.
 func (b *Builder) TotalScore(s *big.Int) *Builder {
-	b.header.TotalScore = new(big.Int).Set(s)
+	b.header.TotalScore.SetBig(s)
 	return b
 }
 
 // GasLimit set gas limit.
 func (b *Builder) GasLimit(limit *big.Int) *Builder {
-	b.header.GasLimit = new(big.Int).Set(limit)
+	b.header.GasLimit.SetBig(limit)
 	return b
 }
 
 // GasUsed set gas used.
 func (b *Builder) GasUsed(used *big.Int) *Builder {
-	b.header.GasUsed = new(big.Int).Set(used)
+	b.header.GasUsed.SetBig(used)
 	return b
 }
 

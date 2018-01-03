@@ -3,12 +3,10 @@ package genesis_test
 import (
 	"testing"
 
-	"github.com/vechain/thor/genesis/contracts"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/lvldb"
 	State "github.com/vechain/thor/state"
 )
