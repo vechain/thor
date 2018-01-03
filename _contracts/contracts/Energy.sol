@@ -1,46 +1,50 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import './SafeMath.sol';
+/// @title Energy an ERC20 token.
 contract Energy is Token {
-
+    
     using SafeMath for uint256;
-
+     
     //energy grown stamp for each VET
     uint public constant UNITGROWNSTAMP = 1;
-
+    //which represents an owner's balance
     struct Balance {
-        uint256 balance;
-        uint256 timestamp;
-        uint256 venamount;
-        bool isSet;
+        uint256 balance;//the energy balance
+        uint256 timestamp;//for calculate how much energy would be grown
+        uint256 venamount;//vet balance
+        bool isSet;//whether the balances is initiated or not
     }
-
+    //save all owner's balance
     mapping(address => Balance) balances;
-
+    
     mapping(address => mapping (address => uint256)) allowed;
 
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
 
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
     
-    //Share 
-    struct ShareEnergy {
+    //which represents the detail info for a shared energy credits
+    struct SharedCredit {
         address from;
         uint256 amount;
         uint256 expire;
     }
-
-    mapping (bytes32 => ShareEnergy[]) public shares;
+    //an array that stores all energy credits
+    mapping (bytes32 => SharedCredit) public sharedCredits;
 
     event ShareFrom(address indexed _from,address indexed _to,address indexed _target,uint256 amount,uint256 expire);
+
     ///@return ERC20 token name
     function name() public pure returns (string) {
         return "VET Energy";
     }
+
     ///@return ERC20 token decimals
     function decimals() public pure returns (uint8) {
         return 18;    
     }
+
     ///@return ERC20 token symbol
     function symbol() public pure returns (string) {
         return "ENG";
@@ -55,71 +59,44 @@ contract Energy is Token {
     function() public payable {
         revert();
     }
-
-    ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never trasferred
-    ///@param _from who shares the energy credits
+  
+    ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never transferred
+    ///@param _from who shares the energy credits , it should be euqal to _target
     ///@param _to who recieves the energy credits
-    ///@param _target which is a contract,if a msg is called in the contract,the energy credits would be consumed
+    ///@param _target which is a contract, if a msg is called in the contract, the energy credits would be consumed
     ///@param _amount how many energy credits would be shared
-    ///@param _expire a timestamp ,when block time covered that, this shared energy credits would be useless
+    ///@param _expire a timestamp, if block time exceeded that, this shared energy credits would be useless
     function shareFrom(address _from,address _to,address _target,uint256 _amount,uint256 _expire) public {
-        //never shared to self
-        require(_from != _to);
-        //never shared to a contract
-        require(!isContract(_to));
-        //energy credits can only be applied to a contract
+        //credits can only be applied to a contract
         require(isContract(_target));
-        
-        ShareFrom(_from,_to,_target,_expire,_amount);
+        //the contract caller should be a normal amount
+        require(!isContract(_to));
+        //only the contract can share to its user
+        require(_from == _target);
+        //shared credits should be greater than zero
+        require(_amount > 0);
+        //the expiration time should be greater than block time
+        require(_expire > now);
+
+        ShareFrom(_from, _to, _target, _amount, _expire);
+        //hash the caller address and the contract address to ensure the key unique
         bytes32 key = keccak256(_to,_target);
-        ShareEnergy[] storage ss = shares[key];
-        for (uint256 i = 0; i < ss.length ; i++) {
-            ShareEnergy storage s = ss[i];
-            if (_from == s.from) {
-                s.amount = _amount;
-                s.expire = _expire;
-                return;
-            }
-        }
-        ss.push(ShareEnergy(_from,_amount,_expire));
+        sharedCredits[key] = SharedCredit(_from,_amount,_expire);
+
     }
     
     ///@param _to who recieves the energy credits
-    ///@param _target which is a contract,if a msg is called in the contract,the energy credits would be consumed
+    ///@param _target which is a contract,if a msg is called in the contract,the credits would be consumed
     ///
-    ///@return how many energy credits is shared
-    function getShareAmount(address _to,address _target) public constant returns (uint256) {
+    ///@return how many credits is shared
+    function getSharedCredits(address _to,address _target) public constant returns (uint256) {
+        //hash the caller address and the contract address to ensure the key unique
         bytes32 key = keccak256(_to,_target);
-        uint256 sum = 0;
-        ShareEnergy[] storage ss = shares[key];
-        for (uint256 j = 0; j < ss.length; j++) {
-            ShareEnergy storage s = ss[j];
-            if (s.expire > now && s.amount > 0) {
-                sum = sum.add(s.amount);
-            }
-        }
-        return sum;
-    }
-
-    ///@param key the hash of _to and _target 
-    ///@param _amount how many shared credits should be consumed
-    ///
-    ///@return how many shared energy credits are left
-    function consumeShared(bytes32 key,uint256 _amount) internal returns(uint256) {
-        ShareEnergy[] storage ss = shares[key];
-        for (uint256 i = 0; i < ss.length; i++) {
-            ShareEnergy storage s = ss[i];
-            if (s.amount > 0 && s.expire > now) {
-                if (s.amount >= _amount ) {
-                    s.amount = s.amount.sub(_amount);
-                    break;
-                } else {
-                    _amount = _amount.sub(s.amount);
-                    s.amount = 0;
-                }
-            }
-        }
-        return _amount;
+        SharedCredit storage s = sharedCredits[key];
+        if ( s.amount > 0 && s.expire > now ) {
+            return s.amount;
+        } 
+        return 0;
     }
 
     ///@notice if shared energy credits are all consumed,the true energy would be consumed
@@ -137,23 +114,29 @@ contract Energy is Token {
 
     ///@notice if shared energy credits are all consumed,the true energy would be consumed
     ///@param _to who holds the energy and the shared energy credits
-    ///@param amount total energy and shared energy credits would be consumed
+    ///@param _target which is a contract,if a msg is called in the contract,the energy credits would be consumed
+    ///@param _amount total energy and shared energy credits would be consumed
     ///
     ///@return whether the energy and shared energy credits is consumed successfully or not
-    function consume(address _to,address target,uint256 amount) public returns(bool success) {
+    function consume(address _to,address _target,uint256 _amount) public returns(bool success) {
         //require(msg.sender == admin);
-        require(isContract(target));
+        //credits can only be applied to a contract
+        require(isContract(_target));
+        //the contract caller should be a normal amount
         require(!isContract(_to));
-        bytes32 key = keccak256(_to,target);
-        uint256 shareRestAmount = getShareAmount(_to,target);
-        if (shareRestAmount >= amount) {
-            consumeShared(key,amount);
+        //shared credits should be greater than zero
+        require(_amount > 0);
+
+        bytes32 key = keccak256(_to,_target);
+        uint256 sc = getSharedCredits(_to,_target);
+        if (sc >= _amount) {
+            sharedCredits[key].amount = sc.sub(_amount);
             return true;
         }
         uint256 engAmount = calRestBalance(_to);
-        if (shareRestAmount.add(engAmount) >= amount) {
-            uint256 rest = consumeShared(key,amount);
-            consumeEnergy(_to,rest);
+        if (sc.add(engAmount) >= _amount) {
+            sharedCredits[key].amount = 0;
+            consumeEnergy(_to,_amount.sub(sc));
             return true;
         }
         return false;
@@ -170,12 +153,11 @@ contract Energy is Token {
         return ven;
     }
 
-    ///@notice To initiate the balances storage of the owner
+    ///@notice To initiate or calculate the energy balance of the owner
     ///@param _owner who holds the energy and the vet
     ///
     ///@return how much energy the _owner holds
     function calRestBalance(address _owner) internal returns(uint256) {
-
         if (balances[_owner].isSet) {
             balances[_owner].balance = balanceOf(msg.sender);
             balances[_owner].venamount = msg.sender.balance;
@@ -187,7 +169,6 @@ contract Energy is Token {
             balances[_owner].timestamp = now;
         }
         return balances[_owner].balance;
-
     }
 
     /// @notice send `_amount` token to `_to` from `msg.sender`
@@ -238,6 +219,7 @@ contract Energy is Token {
         Approval(msg.sender, _spender, _amount);
         return true;
     }
+
     /// @param _owner The address of the account owning tokens
     /// @param _spender The address of the account able to transfer the tokens
     /// @return Amount of remaining tokens allowed to spent
