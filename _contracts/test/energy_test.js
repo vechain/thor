@@ -9,7 +9,7 @@ contract("Energy", (accounts) => {
     let auth = await Authority.deployed();
     let energy = await Energy.deployed();
     await energy.shareFrom(accounts[1],accounts[0],auth.address,shareAmount,expireTime);
-    let sa = await energy.getShareAmount(accounts[0],auth.address);
+    let sa = await energy.getSharedCredits(accounts[0],auth.address);
     assertEqual(sa,shareAmount,'shared energy not equal to expected');
   });
   
@@ -21,7 +21,7 @@ contract("Energy", (accounts) => {
     let energy = await Energy.deployed();
     await energy.shareFrom(accounts[1],accounts[0],auth.address,shareAmount,expireTime);
     await energy.consume(accounts[0],auth.address,consumeAmount);
-    let sa = await energy.getShareAmount(accounts[0],auth.address);
+    let sa = await energy.getSharedCredits(accounts[0],auth.address);
     assertEqual(sa,shareAmount-consumeAmount,'consume energy from shared energy');
   });
   
