@@ -3,7 +3,9 @@ package tx
 import (
 	"errors"
 	"io"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/bn"
@@ -137,4 +139,19 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 		body: body,
 	}
 	return nil
+}
+
+// IntrinsicGas returns intrinsic gas.
+// That's sum of all clauses intrinsic gas.
+func (t *Transaction) IntrinsicGas() *big.Int {
+	total := new(big.Int)
+	for _, c := range t.body.Clauses {
+		gas := core.IntrinsicGas(
+			c.Data,
+			c.To == nil, // contract creation
+			true,        // eth homestead
+		)
+		total.Add(total, gas)
+	}
+	return total
 }
