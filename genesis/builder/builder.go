@@ -8,7 +8,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/processor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
@@ -46,7 +45,7 @@ func (b *Builder) Timestamp(t uint64) *Builder {
 
 // GasLimit set gas limit.
 func (b *Builder) GasLimit(gl *big.Int) *Builder {
-	b.gasLimit = gl
+	b.gasLimit.SetBig(gl)
 	return b
 }
 
@@ -54,7 +53,7 @@ func (b *Builder) GasLimit(gl *big.Int) *Builder {
 func (b *Builder) Alloc(addr acc.Address, balance *big.Int, runtimeBytecodes []byte) *Builder {
 	b.allocs = append(b.allocs, alloc{
 		addr,
-		balance,
+		bn.FromBig(balance),
 		runtimeBytecodes,
 	})
 	return b
@@ -90,7 +89,7 @@ func (b *Builder) Build(state State, god acc.Address) (*block.Block, error) {
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {
-		state.SetBalance(alloc.address, alloc.balance)
+		state.SetBalance(alloc.address, alloc.balance.ToBig())
 		if len(alloc.runtimeBytecodes) > 0 {
 			state.SetCode(alloc.address, alloc.runtimeBytecodes)
 			continue
@@ -110,7 +109,7 @@ func (b *Builder) Build(state State, god acc.Address) (*block.Block, error) {
 		if output.VMErr != nil {
 			return nil, errors.Wrap(output.VMErr, "build genesis (vm error)")
 		}
-		if err := (*processor.VMOutput)(output).ApplyState(state); err != nil {
+		if err := (*VMOutput)(output).ApplyState(state); err != nil {
 			return nil, errors.Wrap(err, "build genesis")
 		}
 	}
@@ -122,7 +121,7 @@ func (b *Builder) Build(state State, god acc.Address) (*block.Block, error) {
 
 	return new(block.Builder).
 			Timestamp(b.timestamp).
-			GasLimit(b.gasLimit).
+			GasLimit(b.gasLimit.ToBig()).
 			StateRoot(stateRoot).
 			ReceiptsRoot(tx.EmptyRoot).
 			Build(),
