@@ -5,15 +5,12 @@ import './SafeMath.sol';
 contract Energy is Token {
     
     using SafeMath for uint256;
-     
-    //energy grown stamp for each VET
-    uint public constant UNITGROWNSTAMP = 1;
+    
     //which represents an owner's balance
     struct Balance {
         uint256 balance;//the energy balance
         uint256 timestamp;//for calculate how much energy would be grown
         uint256 venamount;//vet balance
-        bool isSet;//whether the balances is initiated or not
     }
     //save all owner's balance
     mapping(address => Balance) balances;
@@ -26,14 +23,19 @@ contract Energy is Token {
     
     //which represents the detail info for a shared energy credits
     struct SharedCredit {
-        address from;
-        uint256 amount;
-        uint256 expire;
+        uint256 limit;             //max availableCredits
+
+        uint256 availableCredits;  //credits can be consumed
+        uint256 expire;            //expiration time
+
+        uint256 creditGrowthRate;  //how mange credits grown in a second
+        uint256 currentTimeStamp;  //current block number
     }
+
     //an array that stores all energy credits
     mapping (bytes32 => SharedCredit) public sharedCredits;
 
-    event ShareFrom(address indexed _from,address indexed _to,address indexed _target,uint256 amount,uint256 expire);
+    event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
@@ -47,7 +49,7 @@ contract Energy is Token {
 
     ///@return ERC20 token symbol
     function symbol() public pure returns (string) {
-        return "ENG";
+        return "THOR";
     }
 
     ///@return ERC20 token total supply
@@ -61,87 +63,89 @@ contract Energy is Token {
     }
   
     ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never transferred
-    ///@param _from who shares the energy credits , it should be euqal to _target
-    ///@param _to who recieves the energy credits
-    ///@param _target which is a contract, if a msg is called in the contract, the energy credits would be consumed
-    ///@param _amount how many energy credits would be shared
+    ///@param _reciever who recieves the energy credits
+    ///@param _limit max credits can be consumed
+    ///@param _creditGrowthRate how mange credits grown in a second
     ///@param _expire a timestamp, if block time exceeded that, this shared energy credits would be useless
-    function shareFrom(address _from,address _to,address _target,uint256 _amount,uint256 _expire) public {
-        //credits can only be applied to a contract
-        require(isContract(_target));
+    function shareTo(address _reciever,uint256 _limit,uint256 _creditGrowthRate,uint256 _expire) public {
+        //sharing credits can only be called by a contract
+        require(isContract(msg.sender));
         //the contract caller should be a normal amount
-        require(!isContract(_to));
-        //only the contract can share to its user
-        require(_from == _target);
+        require(!isContract(_reciever));
         //shared credits should be greater than zero
-        require(_amount > 0);
+        require(_limit > 0);
         //the expiration time should be greater than block time
         require(_expire > now);
-
-        ShareFrom(_from, _to, _target, _amount, _expire);
+        
+        address _from = msg.sender;
+        ShareFrom(_from, _reciever, _limit, _creditGrowthRate, _expire);
         //hash the caller address and the contract address to ensure the key unique
-        bytes32 key = keccak256(_to,_target);
-        sharedCredits[key] = SharedCredit(_from,_amount,_expire);
+        bytes32 key = keccak256(_from,_reciever);
+        sharedCredits[key] = SharedCredit(_limit,_limit,_expire, _creditGrowthRate,now);
 
     }
-    
-    ///@param _to who recieves the energy credits
-    ///@param _target which is a contract,if a msg is called in the contract,the credits would be consumed
+
+    ///@param _reciever who recieved the credits
+    ///@param _from which is a contract that shares the to _reciever
     ///
     ///@return how many credits is shared
-    function getSharedCredits(address _to,address _target) public constant returns (uint256) {
-        //hash the caller address and the contract address to ensure the key unique
-        bytes32 key = keccak256(_to,_target);
+    function getAvailableCredits(address _from,address _reciever) public view returns (uint256) {
+        //hash the caller address and the contract address to ensure the key unique.
+        bytes32 key = keccak256(_from,_reciever);
         SharedCredit storage s = sharedCredits[key];
-        if ( s.amount > 0 && s.expire > now ) {
-            return s.amount;
+        if ( s.availableCredits > 0 && s.expire > now ) {
+            uint256 cbt = block.timestamp;
+            if ( cbt > s.currentTimeStamp) {
+                //credits has been grown,calculate the available credits within the limit.
+                uint256 ac = s.limit.add((cbt.sub(s.currentTimeStamp)).mul(s.creditGrowthRate));
+                if (ac >= s.limit) {
+                    return s.limit;
+                }
+                return ac;
+            }
+            return s.availableCredits;
         } 
         return 0;
     }
 
-    ///@notice if shared energy credits are all consumed,the true energy would be consumed
-    ///@param to who holds the energy
-    ///@param amount how much energy should be consumed
+    ///@notice first of all, consume the shared credits, if all shared credits all consumed,the real energy would be consumed
+    ///@param _from which is a contract,if a msg called in the contract,the credits would be consumed
+    ///@param _reciever who holds the energy and the shared credits
+    ///@param _consumption total energy and credits should be consumed
     ///
-    ///@return whether the energy is consumed successfully or not
-    function consumeEnergy(address to,uint256 amount) internal returns (bool) {
-        uint256 b = balances[to].balance;
-        balances[to].balance = b;
-        if (b >= amount) {
-            balances[to].balance = balances[to].balance.sub(amount);
-        }
-    }
-
-    ///@notice if shared energy credits are all consumed,the true energy would be consumed
-    ///@param _to who holds the energy and the shared energy credits
-    ///@param _target which is a contract,if a msg is called in the contract,the energy credits would be consumed
-    ///@param _amount total energy and shared energy credits would be consumed
-    ///
-    ///@return whether the energy and shared energy credits is consumed successfully or not
-    function consume(address _to,address _target,uint256 _amount) public returns(bool success) {
-        //require(msg.sender == admin);
-        //credits can only be applied to a contract
-        require(isContract(_target));
+    ///@return availableCredits available credits for _reciever if not overrate return the left credits otherwise return zero
+    ///@return leftBalance left balance for _reciever
+    function consume(address _from,address _reciever,uint256 _consumption) public returns(uint256 leftBalance,uint256 availableCredits) {
+        // require(msg.sender == admin);
+        // credits can only be applied to a contract
+        require(isContract(_from));
         //the contract caller should be a normal amount
-        require(!isContract(_to));
+        require(!isContract(_reciever));
         //shared credits should be greater than zero
-        require(_amount > 0);
+        require(_consumption > 0);
 
-        bytes32 key = keccak256(_to,_target);
-        uint256 sc = getSharedCredits(_to,_target);
-        if (sc >= _amount) {
-            sharedCredits[key].amount = sc.sub(_amount);
-            return true;
+        bytes32 key = keccak256(_from,_reciever);
+        uint256 ac = getAvailableCredits(_from,_reciever);
+        if (block.timestamp > sharedCredits[key].currentTimeStamp) {
+            //set the block time.
+            sharedCredits[key].currentTimeStamp = block.timestamp;
         }
-        uint256 engAmount = calRestBalance(_to);
-        if (sc.add(engAmount) >= _amount) {
-            sharedCredits[key].amount = 0;
-            consumeEnergy(_to,_amount.sub(sc));
-            return true;
+        if (ac >= _consumption) {
+            //available credits is enough to be consumed
+            sharedCredits[key].availableCredits = ac.sub(_consumption);
+            return (sharedCredits[key].availableCredits,calRestBalance(_reciever));
         }
-        return false;
+        uint256 engAmount = calRestBalance(_reciever);
+        if (ac.add(engAmount) >= _consumption) {
+            //sum the credits and energy, consume them if enough
+            sharedCredits[key].availableCredits = 0;
+            uint256 b = calRestBalance(_reciever);
+            uint256 restConsumption = _consumption.sub(ac);
+            balances[_reciever].balance = b.sub(restConsumption);
+        }
+        return (0,balances[_reciever].balance);
     }
-    
+
     ///@param _owner who holds the energy and the vet
     ///
     ///@return how much energy the _owner holds
@@ -149,7 +153,13 @@ contract Energy is Token {
         uint256 amount = balances[_owner].balance;
         uint256 time = balances[_owner].timestamp;
         uint256 ven = balances[_owner].venamount;
-        amount += UNITGROWNSTAMP.mul(ven.mul(now.sub(time)))+(_owner.balance.sub(ven)).mul(UNITGROWNSTAMP);
+        //calculate the benefit with per vet per second
+        uint256 total = (10**5)*(10**18);
+        uint256 benefit = 42;
+        uint256 timestamp = 3600*24;
+        uint256 unitGrownStamp = benefit.div(timestamp).div(total);
+        //calculate balance
+        amount += unitGrownStamp.mul(ven.mul(now.sub(time)));
         return ven;
     }
 
@@ -158,12 +168,11 @@ contract Energy is Token {
     ///
     ///@return how much energy the _owner holds
     function calRestBalance(address _owner) internal returns(uint256) {
-        if (balances[_owner].isSet) {
+        if (balances[_owner].timestamp != 0) {
             balances[_owner].balance = balanceOf(msg.sender);
             balances[_owner].venamount = msg.sender.balance;
             balances[_owner].timestamp = now;
         } else {
-            balances[_owner].isSet = true;
             balances[_owner].balance = 0;
             balances[_owner].venamount = msg.sender.balance;
             balances[_owner].timestamp = now;
