@@ -55,11 +55,17 @@ func TestStackedMapPuts(t *testing.T) {
 		return nil, false
 	})
 
-	kvs := map[interface{}]interface{}{"a": "b", "c": "d", "e": "f"}
-
-	for k, v := range kvs {
-		sm.Push()
-		sm.Put(k, v)
+	kvs := []*stackedmap.JournalEntry{
+		{Key: "a", Value: "b"},
+		{Key: "a1", Value: "b1"},
+		{Key: "a2", Value: "b2"},
+		{Key: "a3", Value: "b3"},
+		{Key: "a4", Value: "b4"},
 	}
-	assert.Equal(sm.Puts(), kvs)
+
+	for _, kv := range kvs {
+		sm.Push()
+		sm.Put(kv.Key, kv.Value)
+	}
+	assert.Equal(sm.Journal(), kvs)
 }

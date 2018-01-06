@@ -9,7 +9,20 @@ type StackedMap struct {
 	keyRevisionMap map[interface{}]*stack
 }
 
-type _map map[interface{}]interface{}
+type level struct {
+	kvs     map[interface{}]interface{}
+	journal []*JournalEntry
+}
+
+func newLevel() *level {
+	return &level{kvs: make(map[interface{}]interface{})}
+}
+
+// JournalEntry entry of journal.
+type JournalEntry struct {
+	Key   interface{}
+	Value interface{}
+}
 
 // MapGetter defines getter method of map.
 type MapGetter func(key interface{}) (value interface{}, exist bool)
@@ -32,7 +45,7 @@ func (sm *StackedMap) Depth() int {
 // Push pushes a new map on stack.
 // It returns stack depth before push.
 func (sm *StackedMap) Push() int {
-	sm.mapStack.push(make(_map))
+	sm.mapStack.push(newLevel())
 	return len(sm.mapStack) - 1
 }
 
@@ -40,8 +53,8 @@ func (sm *StackedMap) Push() int {
 // It will revert all Put operations since last Push.
 func (sm *StackedMap) Pop() {
 	// pop key revision
-	top := sm.mapStack.top().(_map)
-	for key := range top {
+	top := sm.mapStack.top().(*level)
+	for key := range top.kvs {
 		revs := sm.keyRevisionMap[key]
 		revs.pop()
 		if len(*revs) == 0 {
@@ -62,8 +75,8 @@ func (sm *StackedMap) PopTo(depth int) {
 // The second return value indicates whether the given key is found.
 func (sm *StackedMap) Get(key interface{}) (interface{}, bool) {
 	if revs, ok := sm.keyRevisionMap[key]; ok {
-		m := sm.mapStack[revs.top().(int)].(_map)
-		if v, ok := m[key]; ok {
+		lvl := sm.mapStack[revs.top().(int)].(*level)
+		if v, ok := lvl.kvs[key]; ok {
 			return v, true
 		}
 	}
@@ -73,8 +86,9 @@ func (sm *StackedMap) Get(key interface{}) (interface{}, bool) {
 // Put puts key value into map at stack top.
 // It will panic if stack is empty.
 func (sm *StackedMap) Put(key, value interface{}) {
-	top := sm.mapStack.top().(_map)
-	top[key] = value
+	top := sm.mapStack.top().(*level)
+	top.kvs[key] = value
+	top.journal = append(top.journal, &JournalEntry{Key: key, Value: value})
 
 	// records key revision for fast access
 	rev := len(sm.mapStack) - 1
@@ -85,14 +99,12 @@ func (sm *StackedMap) Put(key, value interface{}) {
 	}
 }
 
-// Puts returns all Put key-value pairs。
-func (sm *StackedMap) Puts() map[interface{}]interface{} {
-	puts := make(map[interface{}]interface{})
-	for key, revs := range sm.keyRevisionMap {
-		rev := revs.top().(int)
-		puts[key] = sm.mapStack[rev].(_map)[key]
+// Journal returns journal of all Put operations.
+func (sm *StackedMap) Journal() (j []*JournalEntry) {
+	for _, lvl := range sm.mapStack {
+		j = append(j, lvl.(*level).journal...)
 	}
-	return puts
+	return
 }
 
 // stack ops
