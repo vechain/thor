@@ -11,17 +11,17 @@ type StackedMap struct {
 
 type level struct {
 	kvs     map[interface{}]interface{}
-	journal []*JournalEntry
+	journal []*journalEntry
 }
 
 func newLevel() *level {
 	return &level{kvs: make(map[interface{}]interface{})}
 }
 
-// JournalEntry entry of journal.
-type JournalEntry struct {
-	Key   interface{}
-	Value interface{}
+// journalEntry entry of journal.
+type journalEntry struct {
+	key   interface{}
+	value interface{}
 }
 
 // MapGetter defines getter method of map.
@@ -88,7 +88,7 @@ func (sm *StackedMap) Get(key interface{}) (interface{}, bool) {
 func (sm *StackedMap) Put(key, value interface{}) {
 	top := sm.mapStack.top().(*level)
 	top.kvs[key] = value
-	top.journal = append(top.journal, &JournalEntry{Key: key, Value: value})
+	top.journal = append(top.journal, &journalEntry{key: key, value: value})
 
 	// records key revision for fast access
 	rev := len(sm.mapStack) - 1
@@ -99,12 +99,13 @@ func (sm *StackedMap) Put(key, value interface{}) {
 	}
 }
 
-// Journal returns journal of all Put operations.
-func (sm *StackedMap) Journal() (j []*JournalEntry) {
+// Journal traverse journal entries of all Put operations.
+func (sm *StackedMap) Journal(cb func(key, value interface{})) {
 	for _, lvl := range sm.mapStack {
-		j = append(j, lvl.(*level).journal...)
+		for _, entry := range lvl.(*level).journal {
+			cb(entry.key, entry.value)
+		}
 	}
-	return
 }
 
 // stack ops

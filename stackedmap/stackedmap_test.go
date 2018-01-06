@@ -55,17 +55,25 @@ func TestStackedMapPuts(t *testing.T) {
 		return nil, false
 	})
 
-	kvs := []*stackedmap.JournalEntry{
-		{Key: "a", Value: "b"},
-		{Key: "a1", Value: "b1"},
-		{Key: "a2", Value: "b2"},
-		{Key: "a3", Value: "b3"},
-		{Key: "a4", Value: "b4"},
+	kvs := []struct {
+		k, v string
+	}{
+		{"a", "b"},
+		{"a", "b"},
+		{"a1", "b1"},
+		{"a2", "b2"},
+		{"a3", "b3"},
+		{"a4", "b4"},
 	}
 
 	for _, kv := range kvs {
 		sm.Push()
-		sm.Put(kv.Key, kv.Value)
+		sm.Put(kv.k, kv.v)
 	}
-	assert.Equal(sm.Journal(), kvs)
+	i := 0
+	sm.Journal(func(k, v interface{}) {
+		assert.Equal(k, kvs[i].k)
+		assert.Equal(v, kvs[i].v)
+		i++
+	})
 }
