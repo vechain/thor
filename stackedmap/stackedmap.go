@@ -100,10 +100,13 @@ func (sm *StackedMap) Put(key, value interface{}) {
 }
 
 // Journal traverse journal entries of all Put operations.
-func (sm *StackedMap) Journal(cb func(key, value interface{})) {
+// The traverse will abort if the callback func returns false.
+func (sm *StackedMap) Journal(cb func(key, value interface{}) bool) {
 	for _, lvl := range sm.mapStack {
 		for _, entry := range lvl.(*level).journal {
-			cb(entry.key, entry.value)
+			if !cb(entry.key, entry.value) {
+				return
+			}
 		}
 	}
 }
