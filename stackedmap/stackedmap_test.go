@@ -71,9 +71,19 @@ func TestStackedMapPuts(t *testing.T) {
 		sm.Put(kv.k, kv.v)
 	}
 	i := 0
-	sm.Journal(func(k, v interface{}) {
+	sm.Journal(func(k, v interface{}) bool {
 		assert.Equal(k, kvs[i].k)
 		assert.Equal(v, kvs[i].v)
 		i++
+		return true
 	})
+	assert.Equal(len(kvs), i, "Journal traverse should abort")
+
+	i = 0
+	sm.Journal(func(k, v interface{}) bool {
+		i++
+		return false
+	})
+
+	assert.Equal(1, i, "Journal traverse should abort")
 }
