@@ -1,4 +1,4 @@
-package state_test
+package state
 
 import (
 	"math/big"
@@ -8,176 +8,94 @@ import (
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/state"
 )
 
-func TestBalance(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	defer db.Close()
-	stat, _ := state.New(cry.Hash{}, db)
-	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
-	// get balance from an account that is not existing
-	cas := struct {
-		want *big.Int
-	}{
-		big.NewInt(0),
-	}
-	b := stat.GetBalance(*address)
-	assert.Equal(t, b, cas.want, "balance of an account that not exists should be empty")
-	//set balance for account and get the same balance from the account
-	cases := []struct {
-		in, want *big.Int
-	}{
-		{big.NewInt(0), big.NewInt(0)},
-		{big.NewInt(10), big.NewInt(10)},
-		{big.NewInt(100), big.NewInt(100)},
-	}
-	for _, c := range cases {
-		stat.SetBalance(*address, c.in)
-		got := stat.GetBalance(*address)
-		assert.Equal(t, got, c.want, "Balance should be equal")
-	}
-	//get balance from an existing account
-	c := struct {
-		in, want *big.Int
-	}{
-		big.NewInt(1000), big.NewInt(1000),
-	}
-	stat.SetBalance(*address, c.in)
-	hash := stat.Commit()
-	newState, _ := state.New(hash, db)
-	balance := newState.GetBalance(*address)
-	assert.Equal(t, balance, c.want, "Balance should be equal to existing account balance")
-}
+func TestStateReadWrite(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	state, _ := New(cry.Hash{}, kv)
 
-func TestCode(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	defer db.Close()
-	stat, _ := state.New(cry.Hash{}, db)
-	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
-	//get code from an account that is not existing
-	code := stat.GetCode(*address)
-	assert.Nil(t, code, "initial code should be nil")
-	//set code for account and get the same code from the account
-	cases := []struct {
-		in, want []byte
-	}{
-		{[]byte{}, []byte{}},
-		{[]byte{0x00, 0x01, 0x02, 0x03}, []byte{0x00, 0x01, 0x02, 0x03}},
-		{[]byte{0x00, 0x01, 0x02, 0x03, 0x00, 0x01, 0x02, 0x03}, []byte{0x00, 0x01, 0x02, 0x03, 0x00, 0x01, 0x02, 0x03}},
-	}
-	for _, c := range cases {
-		stat.SetCode(*address, c.in)
-		got := stat.GetCode(*address)
-		assert.Equal(t, got, c.want, "cached code should be equal to test code")
-	}
-	//get code from an existing account
-	c := struct {
-		in, want []byte
-	}{
-		[]byte{0x00, 0x01, 0x02, 0x03, 0x04},
-		[]byte{0x00, 0x01, 0x02, 0x03, 0x04},
-	}
-	stat.SetCode(*address, c.in)
-	hash := stat.Commit()
-	newState, _ := state.New(hash, db)
-	existCode := newState.GetCode(*address)
-	assert.Equal(t, existCode, c.want, "existing code should be equal to test code")
+	addr := acc.BytesToAddress([]byte("account1"))
+	storageKey := cry.BytesToHash([]byte("storageKey"))
+
+	assert.False(t, state.Exists(addr))
+	assert.Equal(t, state.GetBalance(addr), &big.Int{})
+	assert.Equal(t, state.GetCode(addr), []byte(nil))
+	assert.Equal(t, state.GetCodeHash(addr), cry.Hash{})
+	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
+
+	state.SetStorage(addr, storageKey, cry.BytesToHash([]byte("storageValue")))
+	assert.Equal(t,
+		state.GetStorage(addr, storageKey),
+		cry.Hash{},
+		"should be no effect when set storage to an account without code")
+
+	// make account not empty
+	state.SetBalance(addr, big.NewInt(1))
+	assert.Equal(t, state.GetBalance(addr), big.NewInt(1))
+
+	state.SetCode(addr, []byte("code"))
+	assert.Equal(t, state.GetCode(addr), []byte("code"))
+	assert.Equal(t, state.GetCodeHash(addr), cry.HashSum([]byte("code")))
+
+	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
+	state.SetStorage(addr, storageKey, cry.BytesToHash([]byte("storageValue")))
+	assert.Equal(t, state.GetStorage(addr, storageKey), cry.BytesToHash([]byte("storageValue")))
+
+	assert.True(t, state.Exists(addr))
+
+	// delete account
+	state.Delete(addr)
+	assert.False(t, state.Exists(addr))
+	assert.Equal(t, state.GetBalance(addr), &big.Int{})
+	assert.Equal(t, state.GetCode(addr), []byte(nil))
+	assert.Equal(t, state.GetCodeHash(addr), cry.Hash{})
+	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
+
+	assert.Nil(t, state.Error(), "error is not expected")
 
 }
-func TestStorage(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	defer db.Close()
-	stat, _ := state.New(cry.Hash{}, db)
-	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
-	emptyHash := cry.Hash{}
-	k1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b410")
-	v1, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b411")
-	k2, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b412")
-	v2, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b413")
-	k3, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b414")
-	v3, _ := cry.ParseHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b415")
-	v := stat.GetStorage(*address, *k1)
-	assert.Equal(t, v.String(), emptyHash.String(), "storage should be empty")
-	//set storaget for account and get the same storage from the account
-	cases := struct {
-		in, want map[cry.Hash]cry.Hash
+
+func TestStateRevert(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	state, _ := New(cry.Hash{}, kv)
+
+	addr := acc.BytesToAddress([]byte("account1"))
+	storageKey := cry.BytesToHash([]byte("storageKey"))
+
+	values := []struct {
+		balance *big.Int
+		code    []byte
+		storage cry.Hash
 	}{
-		map[cry.Hash]cry.Hash{
-			*k1: *v1,
-			*k2: *v2,
-			*k3: *v3,
-		},
-		map[cry.Hash]cry.Hash{
-			*k1: *v1,
-			*k2: *v2,
-			*k3: *v3,
-		},
-	}
-	for key, value := range cases.in {
-		stat.SetStorage(*address, key, value)
-		cachedStorageValue := stat.GetStorage(*address, key)
-		assert.Equal(t, cachedStorageValue.String(), cases.want[key].String(), "cached storage value should be equal to test value")
+		{big.NewInt(1), []byte("code1"), cry.BytesToHash([]byte("v1"))},
+		{big.NewInt(2), []byte("code2"), cry.BytesToHash([]byte("v2"))},
+		{big.NewInt(3), []byte("code3"), cry.BytesToHash([]byte("v3"))},
 	}
 
-	stat.SetStorage(*address, *k1, *v1)
-	stat.Root()
-	accountStorageValue := stat.GetStorage(*address, *k1)
-	assert.Equal(t, accountStorageValue.String(), v1.String(), "storage update to trie , return the same value")
+	for _, v := range values {
+		state.NewCheckpoint()
+		state.SetBalance(addr, v.balance)
+		state.SetCode(addr, v.code)
+		state.SetStorage(addr, storageKey, v.storage)
+	}
 
-	stat.SetStorage(*address, *k1, *v1)
-	stat.SetBalance(*address, big.NewInt(100))
-	stat.Root()
-	trieStorageValue := stat.GetStorage(*address, *k1)
-	assert.Equal(t, trieStorageValue.String(), v1.String(), "storage value in trie should be equal to test value")
+	for i := range values {
+		v := values[len(values)-i-1]
+		assert.Equal(t, state.GetBalance(addr), v.balance)
+		assert.Equal(t, state.GetCode(addr), v.code)
+		assert.Equal(t, state.GetCodeHash(addr), cry.HashSum(v.code))
+		assert.Equal(t, state.GetStorage(addr, storageKey), v.storage)
+		state.Revert()
+	}
+	assert.False(t, state.Exists(addr))
+	assert.Nil(t, state.Error(), "error is not expected")
 
-	stat.SetStorage(*address, *k1, *v1)
-	stat.SetBalance(*address, big.NewInt(100))
-	hash := stat.Commit()
-	newState, _ := state.New(hash, db)
-	existAccountStorageValue := newState.GetStorage(*address, *k1)
-	assert.Equal(t, existAccountStorageValue.String(), v1.String(), "exist account storage value should be equal to test value")
-}
+	//
+	state, _ = New(cry.Hash{}, kv)
+	assert.Equal(t, state.NewCheckpoint(), 1)
+	state.RevertTo(0)
+	assert.Equal(t, state.NewCheckpoint(), 1)
+	state.Revert()
+	assert.Equal(t, state.NewCheckpoint(), 1)
 
-func TestDelete(t *testing.T) {
-
-	db, _ := lvldb.NewMem()
-	defer db.Close()
-	stat, _ := state.New(cry.Hash{}, db)
-	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
-	stat.SetBalance(*address, big.NewInt(100))
-	isExist := stat.Exists(*address)
-	assert.True(t, isExist, "account should be existing")
-
-	hash := stat.Commit()
-	newState, _ := state.New(hash, db)
-	isExist = newState.Exists(*address)
-	assert.True(t, isExist, "account should be existing")
-
-	newState.Delete(*address)
-	isExist = newState.Exists(*address)
-	assert.False(t, isExist, "account should be not existing")
-
-	notExistAddress, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e091")
-	newState.Delete(*notExistAddress)
-	isExist = newState.Exists(*notExistAddress)
-	assert.False(t, isExist, "account should be not existing")
-}
-func TestExist(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	defer db.Close()
-	stat, _ := state.New(cry.Hash{}, db)
-	address, _ := acc.ParseAddress("56e81f171bcc55a6ff8345e692c0f86e5b48e090")
-
-	isExist := stat.Exists(*address)
-	assert.False(t, isExist, "account should not exist in trie")
-	stat.SetBalance(*address, big.NewInt(100))
-	stat.Commit()
-	isExist = stat.Exists(*address)
-	assert.True(t, isExist, "account should exist in trie")
-
-	stat.SetBalance(*address, big.NewInt(0))
-	stat.Commit()
-	isExist = stat.Exists(*address)
-	assert.False(t, isExist, "empty account should not exist in trie")
 }
