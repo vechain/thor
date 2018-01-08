@@ -8,6 +8,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/genesis/builder"
 	cs "github.com/vechain/thor/genesis/contracts"
+	"github.com/vechain/thor/state"
 )
 
 var (
@@ -25,7 +26,7 @@ const (
 )
 
 // Build build the genesis block.
-func Build(state builder.State) (*block.Block, error) {
+func Build(state *state.State) (*block.Block, error) {
 	return new(builder.Builder).
 		Timestamp(Timestamp).
 		GasLimit(InitialGasLimit).
