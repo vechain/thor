@@ -5,12 +5,15 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/params"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/thor"
 )
 
 // Transaction is an immutable tx type.
@@ -141,17 +144,29 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// IntrinsicGas returns intrinsic gas.
+// IntrinsicGas returns intrinsic gas of tx.
 // That's sum of all clauses intrinsic gas.
-func (t *Transaction) IntrinsicGas() *big.Int {
-	total := new(big.Int)
-	for _, c := range t.body.Clauses {
+func (t *Transaction) IntrinsicGas() (uint64, error) {
+	total := &big.Int{}
+	for i, c := range t.body.Clauses {
+		contractCreation := c.To == nil
 		gas := core.IntrinsicGas(
 			c.Data,
-			c.To == nil, // contract creation
-			true,        // eth homestead
+			contractCreation,
+			true, // eth homestead
 		)
 		total.Add(total, gas)
+		if i > 0 {
+			// sub over-payed gas for clauses after the first one.
+			if contractCreation {
+				total.Sub(total, gas.SetUint64(params.TxGasContractCreation-thor.ClauseGasContractCreation))
+			} else {
+				total.Sub(total, gas.SetUint64(params.TxGas-thor.ClauseGas))
+			}
+		}
 	}
-	return total
+	if total.BitLen() > 64 {
+		return 0, errors.New("intrinsic gas too large")
+	}
+	return total.Uint64(), nil
 }
