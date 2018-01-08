@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/consensus/schedule"
-	"github.com/vechain/thor/params"
+	"github.com/vechain/thor/thor"
 )
 
 func TestSchedule(t *testing.T) {
@@ -26,7 +26,7 @@ func TestSchedule(t *testing.T) {
 	sched := schedule.New(proposers, nil, 1, parentTime)
 
 	for i := uint64(0); i < 100; i++ {
-		now := parentTime + i*params.BlockInterval/2
+		now := parentTime + i*thor.BlockInterval/2
 		for _, p := range proposers {
 			ts, _, _ := sched.Timing(p, now)
 			assert.True(sched.IsValid(p, ts))
