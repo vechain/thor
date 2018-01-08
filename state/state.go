@@ -202,22 +202,13 @@ func (s *State) SetBalance(addr acc.Address, balance *big.Int) {
 }
 
 // GetStorage returns storage value for the given address and key.
-// It always returns empty value, if the account at address is empty.
 func (s *State) GetStorage(addr acc.Address, key cry.Hash) cry.Hash {
-	if (s.GetCodeHash(addr) == cry.Hash{}) {
-		return cry.Hash{}
-	}
-
 	v, _ := s.sm.Get(storageKey{addr, key})
 	return v.(cry.Hash)
 }
 
 // SetStorage set storage value for the given address and key.
-// It will do nothing if call on the address where the account not exists.
 func (s *State) SetStorage(addr acc.Address, key, value cry.Hash) {
-	if (s.GetCodeHash(addr) == cry.Hash{}) {
-		return
-	}
 	s.sm.Put(storageKey{addr, key}, value)
 }
 
