@@ -1,4 +1,4 @@
-package params
+package thor
 
 // Constants of block chain.
 const (

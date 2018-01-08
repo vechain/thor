@@ -6,7 +6,7 @@ import (
 
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/consensus/shuffle"
-	"github.com/vechain/thor/params"
+	"github.com/vechain/thor/thor"
 )
 
 // Schedule arrange when a proposer to build a block.
@@ -63,8 +63,8 @@ func (s *Schedule) Timing(addr acc.Address, nowTime uint64) (
 		return 0, nil, errors.New("not a proposer")
 	}
 
-	predictedTime := s.parentTime + params.BlockInterval
-	roundInterval := uint64(len(s.proposers)-len(s.absenteeMap)) * params.BlockInterval
+	predictedTime := s.parentTime + thor.BlockInterval
+	roundInterval := uint64(len(s.proposers)-len(s.absenteeMap)) * thor.BlockInterval
 
 	var nRound uint64
 	if nowTime >= predictedTime+roundInterval {
@@ -99,7 +99,7 @@ func (s *Schedule) Timing(addr acc.Address, nowTime uint64) (
 			if addr != proposer {
 				// step time if proposer not in absentee list
 				if !s.absenteeMap[proposer] {
-					t += params.BlockInterval
+					t += thor.BlockInterval
 				}
 				retAbsenteeMap[proposer] = true
 				continue
