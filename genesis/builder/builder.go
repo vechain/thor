@@ -8,6 +8,8 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/runtime"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
@@ -68,24 +70,17 @@ func (b *Builder) Call(addr acc.Address, data []byte) *Builder {
 	return b
 }
 
-func (b *Builder) newVM(state State, origin acc.Address) *vm.VM {
-	return vm.New(vm.Context{
-		Origin:      origin,
-		Beneficiary: acc.Address{},
-		BlockNumber: big.NewInt(0),
-		Time:        new(big.Int).SetUint64(b.timestamp),
-		GasLimit:    big.NewInt(execGasLimit),
-		GasPrice:    new(big.Int),
-		TxHash:      cry.Hash{},
-		ClauseIndex: 0,
-		GetHash: func(uint64) cry.Hash {
-			return cry.Hash{}
-		},
-	}, state, vm.Config{})
+func (b *Builder) newRuntime(state *state.State, origin acc.Address) *runtime.Runtime {
+	return runtime.New(
+		state,
+		&block.Header{},
+		func(uint64) cry.Hash { return cry.Hash{} },
+		vm.Config{},
+	)
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(state State, god acc.Address) (*block.Block, error) {
+func (b *Builder) Build(state *state.State, god acc.Address) (*block.Block, error) {
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {
@@ -98,25 +93,25 @@ func (b *Builder) Build(state State, god acc.Address) (*block.Block, error) {
 
 	// execute all calls
 	for _, call := range b.calls {
-		vm := b.newVM(state, god)
-		output, _, _ := vm.Call(
-			god,
-			call.address,
-			call.data,
+		rt := b.newRuntime(state, god)
+		output := rt.Exec(
+			&tx.Clause{
+				To:   &call.address,
+				Data: call.data},
+			0,
 			execGasLimit,
+			god,
 			new(big.Int),
-		)
+			cry.Hash{})
 		if output.VMErr != nil {
 			return nil, errors.Wrap(output.VMErr, "build genesis (vm error)")
 		}
-		if err := (*VMOutput)(output).ApplyState(state); err != nil {
-			return nil, errors.Wrap(err, "build genesis")
-		}
 	}
 
-	stateRoot := state.Commit()
-	if err := state.Error(); err != nil {
-		return nil, errors.Wrap(err, "build genesis")
+	stage := state.Stage()
+	stateRoot, err := stage.Commit()
+	if err != nil {
+		return nil, errors.Wrap(err, "commit state")
 	}
 
 	return new(block.Builder).
