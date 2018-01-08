@@ -1,7 +1,7 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import './SafeMath.sol';
-/// @title Energy an ERC20 token.
+/// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
     
     using SafeMath for uint256;
@@ -10,7 +10,7 @@ contract Energy is Token {
     struct Balance {
         uint256 balance;//the energy balance
         uint256 timestamp;//for calculate how much energy would be grown
-        uint256 venamount;//vet balance
+        uint256 vetamount;//vet balance
     }
     //save all owner's balance
     mapping(address => Balance) balances;
@@ -20,7 +20,10 @@ contract Energy is Token {
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
 
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-    
+
+    //owners of the contracts, which can only be used to transfer energy from contract
+    mapping (address => address) contractOwners;
+
     //which represents the detail info for a shared energy credits
     struct SharedCredit {
         uint256 limit;             //max availableCredits
@@ -36,6 +39,7 @@ contract Energy is Token {
     mapping (bytes32 => SharedCredit) public sharedCredits;
 
     event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
+
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
@@ -73,7 +77,7 @@ contract Energy is Token {
         //the contract caller should be a normal amount
         require(!isContract(_reciever));
         //shared credits should be greater than zero
-        require(_limit > 0);
+        require(_limit >= 0);
         //the expiration time should be greater than block time
         require(_expire > now);
         
@@ -152,15 +156,15 @@ contract Energy is Token {
     function balanceOf(address _owner) public constant returns (uint256 balance) {
         uint256 amount = balances[_owner].balance;
         uint256 time = balances[_owner].timestamp;
-        uint256 ven = balances[_owner].venamount;
+        uint256 vetamount = balances[_owner].vetamount;
         //calculate the benefit with per vet per second
         uint256 total = (10**5)*(10**18);
         uint256 benefit = 42;
         uint256 timestamp = 3600*24;
         uint256 unitGrownStamp = benefit.div(timestamp).div(total);
         //calculate balance
-        amount += unitGrownStamp.mul(ven.mul(now.sub(time)));
-        return ven;
+        amount += unitGrownStamp.mul(vetamount.mul(now.sub(time)));
+        return amount;
     }
 
     ///@notice To initiate or calculate the energy balance of the owner
@@ -170,11 +174,11 @@ contract Energy is Token {
     function calRestBalance(address _owner) internal returns(uint256) {
         if (balances[_owner].timestamp != 0) {
             balances[_owner].balance = balanceOf(msg.sender);
-            balances[_owner].venamount = msg.sender.balance;
+            balances[_owner].vetamount = msg.sender.balance;
             balances[_owner].timestamp = now;
         } else {
             balances[_owner].balance = 0;
-            balances[_owner].venamount = msg.sender.balance;
+            balances[_owner].vetamount = msg.sender.balance;
             balances[_owner].timestamp = now;
         }
         return balances[_owner].balance;
@@ -199,34 +203,22 @@ contract Energy is Token {
         }
     }
 
-    /// @notice send `_amount` token to `_to` from `_from` on the condition it is approved by `_from`
-    /// @param _from The address of the sender
-    /// @param _to The address of the recipient
-    /// @param _amount The amount of token to be transferred
-    /// @return Whether the transfer was successful or not
-    function transferFrom(address _from,address _to,uint256 _amount) public returns (bool success) {
-        require(!isContract(_to));
-        require(_amount > 0);
-        uint256 senderBalance = calRestBalance(_from);
-        uint256 recipientBalance = calRestBalance(_to);
-        if (senderBalance >= _amount && allowed[_from][msg.sender] >= _amount && recipientBalance.add(_amount) > recipientBalance) {
-            balances[_from].balance = balances[_from].balance.sub(_amount);
-            allowed[_from][msg.sender] = allowed[_from][msg.sender].sub(_amount);
-            balances[_to].balance = balances[_to].balance.add(_amount);
-            Transfer(_from, _to, _amount);
-            return true;
-        }
-        return false;  
-    }
-
-    /// @notice `msg.sender` approves `_addr` to spend `_value` tokens
-    /// @param _spender The address of the account able to transfer the tokens
+    /// @notice the contract owner approves `_contractAddr` to transfer `_amount` tokens to `_to`
+    /// @param _contractAddr The address of the contract able to transfer the tokens
+    /// @param _reciever who recieved the `_amount` tokens
     /// @param _amount The amount of wei to be approved for transfer
     /// @return Whether the approval was successful or not
-    function approve(address _spender, uint256 _amount) public returns (bool success) {
-        allowed[msg.sender][_spender] = _amount;
-        Approval(msg.sender, _spender, _amount);
-        return true;
+    function ownerApprove(address _contractAddr,address _reciever, uint256 _amount) public returns (bool success) {
+        //only approved to a contract
+        require(isContract(_contractAddr));
+        //only transfer to a normal contract
+        require(!isContract(_reciever));
+        if (tx.origin == contractOwners[_contractAddr]) {
+            allowed[_contractAddr][_reciever] = _amount;
+            Approval(_contractAddr, _reciever, _amount);
+            return true;
+        }
+        return false;
     }
 
     /// @param _owner The address of the account owning tokens
@@ -234,6 +226,72 @@ contract Energy is Token {
     /// @return Amount of remaining tokens allowed to spent
     function allowance(address _owner, address _spender)  public constant returns (uint256 remaining) {
         return allowed[_owner][_spender];
+    }
+
+    /// @notice Allow `_reciever` to withdraw from your account, multiple times, up to the `tokens` amount.
+    /// If this function is called again it overwrites the current allowance with _value.
+    /// @param _reciever who recieves `_amount` tokens from your account
+    /// @param _amount The address of the account able to transfer the tokens
+    /// @return whether approved successfully
+    function approve(address _reciever, uint256 _amount) public returns (bool success) {
+        allowed[msg.sender][_reciever] = _amount;
+        Approval(msg.sender, _reciever, _amount);
+        return true;
+    }
+    /// @notice set the contract owner
+    /// @param _contractAddr a contract address
+    function setOwnerForContract(address _contractAddr,address _owner) public {
+        //require(msg.sender == god);
+        //_contractAddr must be a contract address
+        require(isContract(_contractAddr));
+        //caller must be an normal account address
+        require(!isContract(_owner));
+
+        if (contractOwners[_contractAddr] == 0) {
+            contractOwners[_contractAddr] = _owner;
+        }
+        
+    }
+
+    /// @notice set a new owner for a contract which has been set a owner
+    /// @param _contractAddr  a contract address
+    /// @param _newOwner  an account address ,which will be the owner of _contractAddr
+    function setNewOwnerForContract(address _contractAddr,address _newOwner) public {
+        //_contractAddr must be a contract address
+        require(isContract(_contractAddr));
+        //_newOwner must be an normal account address
+        require(!isContract(_newOwner));
+
+        //the contract must be approved to set a new owner,and the caller must be its owner
+        if (contractOwners[_contractAddr] == msg.sender) {
+            contractOwners[_contractAddr] = _newOwner;
+        }
+
+    }
+
+    /// @notice transferFromContract only called by the owner of _contractAddr,
+    /// which means the msg.sender must be the owner of _contractAddr
+    ///
+    /// @param _from who send `_amount` tokens to `_to`
+    /// @param _to a normal account address who recieves the balance
+    /// @param _amount  balance for transferring
+    /// @return success  whether transferred successfully
+    function transferFrom(address _from,address _to,uint256 _amount) public returns(bool success) {
+        //only the contract owner can transfer the energy to `_to`
+        if (isContract(_from)) {
+            require(tx.origin == contractOwners[_from]);
+        }
+        require(!isContract(_to));
+        uint256 contractBalance = calRestBalance(_from);
+        uint256 recipientBalance = calRestBalance(_to);
+        if (contractBalance >= _amount && recipientBalance.add(_amount) > recipientBalance && allowed[_from][_to] >= _amount) {
+            balances[_from].balance = balances[_from].balance.sub(_amount);
+            balances[_to].balance = balances[_to].balance.add(_amount);
+            allowed[_from][_to] = allowed[_from][_to].sub(_amount);
+            Transfer(_from, _to, _amount);
+            return true;
+        }
+        return false;
     }
 
     /// @param _addr an address of a normal account or a contract
