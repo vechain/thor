@@ -22,3 +22,5 @@
 # private gopath
 /.build/
 
+package.json
+/node_modules/
