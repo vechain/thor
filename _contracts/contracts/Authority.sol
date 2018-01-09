@@ -19,7 +19,10 @@ contract Authority {
     function initialize(address _owner, address[] _proposers) public {
         require(msg.sender == Constants.god()); 
         owner = _owner;
-        proposers = _proposers;  
+        for (uint i = 0; i < _proposers.length; i++) {
+            proposers.push(_proposers[i]);
+            proposerMap[_proposers[i]] = proposers.length;
+        }
     }
 
     function getProposers() public view returns (address[]) {
