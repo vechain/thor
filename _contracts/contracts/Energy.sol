@@ -173,12 +173,12 @@ contract Energy is Token {
     ///@return how much energy the _owner holds
     function calRestBalance(address _owner) internal returns(uint256) {
         if (balances[_owner].timestamp != 0) {
-            balances[_owner].balance = balanceOf(msg.sender);
-            balances[_owner].vetamount = msg.sender.balance;
+            balances[_owner].balance = balanceOf(_owner);
+            balances[_owner].vetamount = _owner.balance;
             balances[_owner].timestamp = now;
         } else {
             balances[_owner].balance = 0;
-            balances[_owner].vetamount = msg.sender.balance;
+            balances[_owner].vetamount = _owner.balance;
             balances[_owner].timestamp = now;
         }
         return balances[_owner].balance;
@@ -263,7 +263,7 @@ contract Energy is Token {
         require(!isContract(_newOwner));
 
         //the contract must be approved to set a new owner,and the caller must be its owner
-        if (contractOwners[_contractAddr] == msg.sender) {
+        if (contractOwners[_contractAddr] == tx.origin) {
             contractOwners[_contractAddr] = _newOwner;
         }
 
