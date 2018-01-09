@@ -19,7 +19,7 @@ type Config evm.Config
 type Output struct {
 	Value           []byte
 	Preimages       map[cry.Hash][]byte
-	Log             []*types.Log
+	Logs            []*types.Log
 	LeftOverGas     uint64
 	RefundGas       *big.Int
 	VMErr           error        // VMErr identify the execution result of the contract function, not evm function's err.
@@ -114,7 +114,7 @@ func (vm *VM) Call(caller acc.Address, addr acc.Address, input []byte, gas uint6
 	return &Output{
 		Value:           ret,
 		Preimages:       vm.statedb.GetPreimages(),
-		Log:             vm.statedb.GetLogs(),
+		Logs:            vm.statedb.GetLogs(),
 		LeftOverGas:     leftOverGas,
 		RefundGas:       vm.statedb.GetRefund(),
 		VMErr:           vmErr,
@@ -133,7 +133,7 @@ func (vm *VM) CallCode(caller acc.Address, addr acc.Address, input []byte, gas u
 	return &Output{
 		Value:           ret,
 		Preimages:       vm.statedb.GetPreimages(),
-		Log:             vm.statedb.GetLogs(),
+		Logs:            vm.statedb.GetLogs(),
 		LeftOverGas:     leftOverGas,
 		RefundGas:       vm.statedb.GetRefund(),
 		VMErr:           vmErr,
@@ -151,7 +151,7 @@ func (vm *VM) DelegateCall(caller acc.Address, addr acc.Address, input []byte, g
 	return &Output{
 		Value:           ret,
 		Preimages:       vm.statedb.GetPreimages(),
-		Log:             vm.statedb.GetLogs(),
+		Logs:            vm.statedb.GetLogs(),
 		LeftOverGas:     leftOverGas,
 		RefundGas:       vm.statedb.GetRefund(),
 		VMErr:           vmErr,
@@ -169,7 +169,7 @@ func (vm *VM) StaticCall(caller acc.Address, addr acc.Address, input []byte, gas
 	return &Output{
 		Value:           ret,
 		Preimages:       vm.statedb.GetPreimages(),
-		Log:             vm.statedb.GetLogs(),
+		Logs:            vm.statedb.GetLogs(),
 		LeftOverGas:     leftOverGas,
 		RefundGas:       vm.statedb.GetRefund(),
 		VMErr:           vmErr,
@@ -184,7 +184,7 @@ func (vm *VM) Create(caller acc.Address, code []byte, gas uint64, value *big.Int
 	return &Output{
 		Value:           ret,
 		Preimages:       vm.statedb.GetPreimages(),
-		Log:             vm.statedb.GetLogs(),
+		Logs:            vm.statedb.GetLogs(),
 		LeftOverGas:     leftOverGas,
 		RefundGas:       vm.statedb.GetRefund(),
 		VMErr:           vmErr,
