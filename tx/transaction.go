@@ -30,7 +30,7 @@ type Transaction struct {
 type body struct {
 	Clauses     Clauses
 	GasPrice    bn.Int
-	GasLimit    bn.Int
+	Gas         uint64
 	Nonce       uint64
 	TimeBarrier uint64
 	DependsOn   *cry.Hash `rlp:"nil"`
@@ -58,8 +58,9 @@ func (t *Transaction) HashOfWorkProof() (hash cry.Hash) {
 	rlp.Encode(hw, []interface{}{
 		t.body.Clauses,
 		t.body.GasPrice,
-		t.body.GasLimit,
+		t.body.Gas,
 		t.body.Nonce,
+		t.body.TimeBarrier,
 		t.body.DependsOn,
 	})
 	hw.Sum(hash[:0])
@@ -78,9 +79,9 @@ func (t *Transaction) GasPrice() bn.Int {
 	return t.body.GasPrice
 }
 
-// GasLimit returns gas limit.
-func (t *Transaction) GasLimit() bn.Int {
-	return t.body.GasLimit
+// Gas returns gas provision for this tx.
+func (t *Transaction) Gas() uint64 {
+	return t.body.Gas
 }
 
 // TimeBarrier returns time barrier.

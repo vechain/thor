@@ -1,11 +1,9 @@
 package tx
 
-import "math/big"
-
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// gas used by this tx
-	GasUsed *big.Int
+	GasUsed uint64
 	// outputs of clauses in tx
 	Outputs []*Output
 }

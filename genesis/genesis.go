@@ -17,7 +17,7 @@ var (
 	GodAddress = acc.BytesToAddress([]byte("god"))
 
 	// InitialGasLimit gas limit value int genesis block.
-	InitialGasLimit = big.NewInt(10 * 1000 * 1000)
+	InitialGasLimit uint64 = 10 * 1000 * 1000
 )
 
 const (

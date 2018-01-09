@@ -19,7 +19,7 @@ type Runtime struct {
 	blockBeneficiary acc.Address
 	blockNumber      uint32
 	blockTime        uint64
-	blockGasLimit    *big.Int
+	blockGasLimit    uint64
 }
 
 func New(
@@ -35,8 +35,7 @@ func New(
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
-		header.GasLimit().ToBig(),
-	}
+		header.GasLimit()}
 }
 
 func (rt *Runtime) Exec(
@@ -52,7 +51,7 @@ func (rt *Runtime) Exec(
 		Beneficiary: rt.blockBeneficiary,
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.blockNumber)),
 		Time:        new(big.Int).SetUint64(rt.blockTime),
-		GasLimit:    rt.blockGasLimit,
+		GasLimit:    new(big.Int).SetUint64(rt.blockGasLimit),
 
 		Origin:   origin,
 		GasPrice: gasPrice,

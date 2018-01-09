@@ -1,8 +1,6 @@
 package block
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/tx"
@@ -27,20 +25,20 @@ func (b *Builder) Timestamp(ts uint64) *Builder {
 }
 
 // TotalScore set total score.
-func (b *Builder) TotalScore(s *big.Int) *Builder {
-	b.header.TotalScore.SetBig(s)
+func (b *Builder) TotalScore(score uint64) *Builder {
+	b.header.TotalScore = score
 	return b
 }
 
 // GasLimit set gas limit.
-func (b *Builder) GasLimit(limit *big.Int) *Builder {
-	b.header.GasLimit.SetBig(limit)
+func (b *Builder) GasLimit(limit uint64) *Builder {
+	b.header.GasLimit = limit
 	return b
 }
 
 // GasUsed set gas used.
-func (b *Builder) GasUsed(used *big.Int) *Builder {
-	b.header.GasUsed.SetBig(used)
+func (b *Builder) GasUsed(used uint64) *Builder {
+	b.header.GasUsed = used
 	return b
 }
 

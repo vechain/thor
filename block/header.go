@@ -7,7 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
 )
@@ -27,9 +26,9 @@ type Header struct {
 type headerContent struct {
 	ParentHash  cry.Hash
 	Timestamp   uint64
-	TotalScore  bn.Int
-	GasLimit    bn.Int
-	GasUsed     bn.Int
+	TotalScore  uint64
+	GasLimit    uint64
+	GasUsed     uint64
 	Beneficiary acc.Address
 
 	TxsRoot      cry.Hash
@@ -60,17 +59,17 @@ func (h *Header) Timestamp() uint64 {
 }
 
 // TotalScore returns total score that cumulated from genesis block to this one.
-func (h *Header) TotalScore() bn.Int {
+func (h *Header) TotalScore() uint64 {
 	return h.content.TotalScore
 }
 
 // GasLimit returns gas limit of this block.
-func (h *Header) GasLimit() bn.Int {
+func (h *Header) GasLimit() uint64 {
 	return h.content.GasLimit
 }
 
 // GasUsed returns gas used by txs.
-func (h *Header) GasUsed() bn.Int {
+func (h *Header) GasUsed() uint64 {
 	return h.content.GasUsed
 }
 
@@ -119,6 +118,7 @@ func (h *Header) HashForSigning() cry.Hash {
 	rlp.Encode(hw, []interface{}{
 		h.content.ParentHash,
 		h.content.Timestamp,
+		h.content.TotalScore,
 		h.content.GasLimit,
 		h.content.GasUsed,
 		h.content.Beneficiary,
