@@ -49,15 +49,15 @@ func ProcessBlock(blk *block.Block) (cry.Hash, *big.Int, error) {
 func processTransactions(stub processorStub, transactions tx.Transactions) (tx.Receipts, *big.Int, error) {
 	length := len(transactions)
 	if length == 0 {
-		return tx.Receipts{}, new(big.Int), nil
+		return nil, new(big.Int), nil
 	}
 
-	receipts, totalGasUsed, err := processTransactions(stub, transactions[:length-1])
+	receipt, gasUsed, err := stub.processTransaction(transactions[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
-	receipt, gasUsed, err := stub.processTransaction(transactions[length-1])
+	receipts, totalGasUsed, err := processTransactions(stub, transactions[1:length])
 	if err != nil {
 		return nil, nil, err
 	}
