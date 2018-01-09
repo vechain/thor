@@ -34,6 +34,6 @@ func buildTransaction() *tx.Transaction {
 
 func TestProcessBlock(t *testing.T) {
 	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
-	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Build()
+	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Transaction(buildTransaction()).Build()
 	t.Log(consensus.ProcessBlock(block))
 }

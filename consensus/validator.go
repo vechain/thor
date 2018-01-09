@@ -4,7 +4,7 @@ import (
 	"github.com/vechain/thor/block"
 )
 
-func validate(parentHeader *block.Header, blk *block.Block) error {
+func validate(preHeader *block.Header, blk *block.Block) error {
 	header := blk.Header()
 
 	if blk.Body().Txs.RootHash() != header.TxsRoot() {
@@ -15,11 +15,11 @@ func validate(parentHeader *block.Header, blk *block.Block) error {
 		return errGasUsed
 	}
 
-	if parentHeader.Number()+1 != blk.Number() {
+	if preHeader.Number()+1 != blk.Number() {
 		return errNumber
 	}
 
-	if parentHeader.Timestamp() >= blk.Timestamp() {
+	if preHeader.Timestamp() >= blk.Timestamp() {
 		return errTimestamp
 	}
 
