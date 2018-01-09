@@ -2,7 +2,6 @@ package block_test
 
 import (
 	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -12,7 +11,7 @@ import (
 func TestBlock(t *testing.T) {
 
 	block := new(Builder).
-		GasUsed(big.NewInt(1000)).
+		GasUsed(1000).
 		Build()
 	h := block.Header()
 	fmt.Println(h.Hash())

@@ -1,7 +1,6 @@
 package tx_test
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -14,7 +13,7 @@ func TestTx(t *testing.T) {
 
 	tx1 := new(Builder).
 		Nonce(1).
-		GasLimit(big.NewInt(100)).
+		Gas(100).
 		Clause(&Clause{}).
 		Build()
 

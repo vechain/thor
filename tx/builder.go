@@ -23,9 +23,9 @@ func (b *Builder) GasPrice(price *big.Int) *Builder {
 	return b
 }
 
-// GasLimit set gas limit.
-func (b *Builder) GasLimit(limit *big.Int) *Builder {
-	b.body.GasLimit.SetBig(limit)
+// Gas set gas provision for tx.
+func (b *Builder) Gas(gas uint64) *Builder {
+	b.body.Gas = gas
 	return b
 }
 

@@ -22,7 +22,7 @@ const (
 // Builder helper to build genesis block.
 type Builder struct {
 	timestamp uint64
-	gasLimit  bn.Int
+	gasLimit  uint64
 
 	allocs []alloc
 	calls  []call
@@ -46,8 +46,8 @@ func (b *Builder) Timestamp(t uint64) *Builder {
 }
 
 // GasLimit set gas limit.
-func (b *Builder) GasLimit(gl *big.Int) *Builder {
-	b.gasLimit.SetBig(gl)
+func (b *Builder) GasLimit(limit uint64) *Builder {
+	b.gasLimit = limit
 	return b
 }
 
@@ -116,7 +116,7 @@ func (b *Builder) Build(state *state.State, god acc.Address) (*block.Block, erro
 
 	return new(block.Builder).
 			Timestamp(b.timestamp).
-			GasLimit(b.gasLimit.ToBig()).
+			GasLimit(b.gasLimit).
 			StateRoot(stateRoot).
 			ReceiptsRoot(tx.EmptyRoot).
 			Build(),
