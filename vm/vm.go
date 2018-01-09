@@ -26,6 +26,9 @@ type Output struct {
 	ContractAddress *acc.Address // if create a new contract, or is nil.
 }
 
+// State to decouple with state.State
+type State statedb.State
+
 // VM is a facade for ethEvm.
 type VM struct {
 	evm     *evm.EVM
@@ -72,7 +75,7 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 
 // New retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func New(ctx Context, state statedb.State, vmConfig Config) *VM {
+func New(ctx Context, state State, vmConfig Config) *VM {
 	tGetHash := func(n uint64) common.Hash {
 		return common.Hash(ctx.GetHash(n))
 	}
