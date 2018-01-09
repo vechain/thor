@@ -147,24 +147,26 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 // IntrinsicGas returns intrinsic gas of tx.
 // That's sum of all clauses intrinsic gas.
 func (t *Transaction) IntrinsicGas() (uint64, error) {
-	total := &big.Int{}
-	for i, c := range t.body.Clauses {
+	clauseCount := len(t.body.Clauses)
+	if clauseCount == 0 {
+		return params.TxGas, nil
+	}
+
+	firstClause := t.body.Clauses[0]
+	total := core.IntrinsicGas(firstClause.Data, firstClause.To == nil, true)
+
+	for _, c := range t.body.Clauses[1:] {
 		contractCreation := c.To == nil
-		gas := core.IntrinsicGas(
-			c.Data,
-			contractCreation,
-			true, // eth homestead
-		)
-		total.Add(total, gas)
-		if i > 0 {
-			// sub over-payed gas for clauses after the first one.
-			if contractCreation {
-				total.Sub(total, gas.SetUint64(params.TxGasContractCreation-thor.ClauseGasContractCreation))
-			} else {
-				total.Sub(total, gas.SetUint64(params.TxGas-thor.ClauseGas))
-			}
+		total.Add(total, core.IntrinsicGas(c.Data, contractCreation, true))
+
+		// sub over-payed gas for clauses after the first one.
+		if contractCreation {
+			total.Sub(total, new(big.Int).SetUint64(params.TxGasContractCreation-thor.ClauseGasContractCreation))
+		} else {
+			total.Sub(total, new(big.Int).SetUint64(params.TxGas-thor.ClauseGas))
 		}
 	}
+
 	if total.BitLen() > 64 {
 		return 0, errors.New("intrinsic gas too large")
 	}
