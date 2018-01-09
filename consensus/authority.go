@@ -53,15 +53,13 @@ func Authority(rt *runtime.Runtime, funcName string) []acc.Address {
 		panic(err)
 	}
 
-	return convertToAccAddress(len(addrs)-1, addrs)
+	return convertToAccAddress(addrs)
 }
 
-func convertToAccAddress(index int, addrs []common.Address) []acc.Address {
-	if index < 0 {
+func convertToAccAddress(addrs []common.Address) []acc.Address {
+	length := len(addrs)
+	if length == 0 {
 		return nil
-	} else if index == 0 {
-		return []acc.Address{acc.Address(addrs[index])}
 	}
-
-	return append(convertToAccAddress(index-1, addrs), acc.Address(addrs[index]))
+	return append(convertToAccAddress(addrs[1:length]), acc.Address(addrs[0]))
 }
