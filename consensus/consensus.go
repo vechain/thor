@@ -1,7 +1,7 @@
 package consensus
 
 import (
-	"errors"
+	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
@@ -11,15 +11,15 @@ import (
 // Consensus check whether the block is verified,
 // and predicate which trunk it belong to.
 type Consensus struct {
-	chain    chainReader
-	getState func(cry.Hash) state.State
+	chain        chainReader
+	stateCreator func(cry.Hash) *state.State
 }
 
 // New is Consensus factory.
-func New(chain chainReader, getState func(cry.Hash) state.State) *Consensus {
+func New(chain chainReader, stateCreator func(cry.Hash) *state.State) *Consensus {
 	return &Consensus{
-		chain:    chain,
-		getState: getState}
+		chain:        chain,
+		stateCreator: stateCreator}
 }
 
 // Consent is Consensus's main func.
@@ -28,37 +28,31 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	if err := c.isNotQualified(blk); err != nil {
+	preHeader, err := c.getParentHeader(blk)
+	if err != nil {
 		return false, err
 	}
 
-	return c.predicateTrunk()
-}
-
-func (c *Consensus) isNotQualified(blk *block.Block) error {
-	parentHeader, err := c.getParentHeader(blk)
-	if err != nil {
-		return err
+	if err = validate(preHeader, blk); err != nil {
+		return false, err
 	}
 
-	if err = validate(parentHeader, blk); err != nil {
-		return err
+	state := c.stateCreator(preHeader.StateRoot())
+
+	if err = verify(state, blk); err != nil {
+		return false, err
 	}
 
-	return verify(c.getState(parentHeader.StateRoot()), blk)
+	return PredicateTrunk(state, blk.Header(), preHeader)
 }
 
 func (c *Consensus) getParentHeader(blk *block.Block) (*block.Header, error) {
-	parentHeader, err := c.chain.GetBlockHeader(blk.ParentHash())
+	preHeader, err := c.chain.GetBlockHeader(blk.ParentHash())
 	if err != nil {
 		if c.chain.IsNotFound(err) {
 			return nil, errParentNotFound
 		}
 		return nil, err
 	}
-	return parentHeader, nil
-}
-
-func (c *Consensus) predicateTrunk() (bool, error) {
-	return false, nil
+	return preHeader, nil
 }

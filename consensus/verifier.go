@@ -9,7 +9,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func verify(state state.State, blk *block.Block) error {
+func verify(state *state.State, blk *block.Block) error {
 	header := blk.Header()
 
 	receiptsRoot, gasUsed, err := ProcessBlock(blk)
@@ -17,12 +17,16 @@ func verify(state state.State, blk *block.Block) error {
 		return err
 	}
 
-	if header.GasUsed().ToBig() != gasUsed {
-		return errGasUsed
+	if stageRoot, err := state.Stage().Hash(); err == nil {
+		if header.StateRoot() != stageRoot {
+			return errStateRoot
+		}
+	} else {
+		return err
 	}
 
-	if header.StateRoot() != state.Root() {
-		return errStateRoot
+	if header.GasUsed().ToBig() != gasUsed {
+		return errGasUsed
 	}
 
 	if header.ReceiptsRoot() != receiptsRoot {
@@ -58,5 +62,5 @@ func processTransactions(stub processorStub, transactions tx.Transactions) (tx.R
 		return nil, nil, err
 	}
 
-	return append(receipts, receipt), new(big.Int).Add(totalGasUsed, gasUsed), err
+	return append(receipts, receipt), new(big.Int).Add(totalGasUsed, gasUsed), nil
 }
