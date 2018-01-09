@@ -117,9 +117,9 @@ contract Energy is Token {
     ///@param _reciever who holds the energy and the shared credits
     ///@param _consumption total energy and credits should be consumed
     ///
-    ///@return availableCredits available credits for _reciever if not overrate return the left credits otherwise return zero
-    ///@return leftBalance left balance for _reciever
-    function consume(address _from,address _reciever,uint256 _consumption) public returns(uint256 leftBalance,uint256 availableCredits) {
+    ///@return consumedBalance energy consumed 
+    ///@return consumedCredits credits consumed
+    function consume(address _from,address _reciever,uint256 _consumption) public returns(uint256 consumedBalance,uint256 consumedCredits) {
         // require(msg.sender == admin);
         // credits can only be applied to a contract
         require(isContract(_from));
@@ -137,7 +137,7 @@ contract Energy is Token {
         if (ac >= _consumption) {
             //available credits is enough to be consumed
             sharedCredits[key].availableCredits = ac.sub(_consumption);
-            return (sharedCredits[key].availableCredits,calRestBalance(_reciever));
+            return (0,_consumption);
         }
         uint256 engAmount = calRestBalance(_reciever);
         if (ac.add(engAmount) >= _consumption) {
@@ -146,8 +146,9 @@ contract Energy is Token {
             uint256 b = calRestBalance(_reciever);
             uint256 restConsumption = _consumption.sub(ac);
             balances[_reciever].balance = b.sub(restConsumption);
+            return (restConsumption,ac);
         }
-        return (0,balances[_reciever].balance);
+        return (0,0);
     }
 
     ///@param _owner who holds the energy and the vet
@@ -163,7 +164,7 @@ contract Energy is Token {
         uint256 timestamp = 3600*24;
         uint256 unitGrownStamp = benefit.div(timestamp).div(total);
         //calculate balance
-        amount += unitGrownStamp.mul(vetamount.mul(now.sub(time)));
+        amount = amount.add(unitGrownStamp.mul(vetamount.mul(now.sub(time))));
         return amount;
     }
 
@@ -238,6 +239,7 @@ contract Energy is Token {
         Approval(msg.sender, _reciever, _amount);
         return true;
     }
+
     /// @notice set the contract owner
     /// @param _contractAddr a contract address
     function setOwnerForContract(address _contractAddr,address _owner) public {
@@ -296,7 +298,7 @@ contract Energy is Token {
 
     /// @param _addr an address of a normal account or a contract
     /// 
-    /// @return whether the account that the address `_addr` represents is a contract or not
+    /// @return whether `_addr` is a contract or not
     function isContract(address _addr) constant internal returns(bool) {
         uint size;
         if (_addr == 0) {
