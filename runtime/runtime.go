@@ -1,15 +1,19 @@
 package runtime
 
 import (
+	"errors"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/tx"
+	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
 
+// Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig vm.Config
 	getHash  func(uint64) cry.Hash
@@ -20,32 +24,53 @@ type Runtime struct {
 	blockNumber      uint32
 	blockTime        uint64
 	blockGasLimit    uint64
+
+	// tx env
+	txOrigin   acc.Address
+	txGasPrice bn.Int
+	txHash     cry.Hash
 }
 
+// State to decouple state.State.
+type State interface {
+	vm.State
+	RevertTo(revision int)
+}
+
+// New create a Runtime object.
 func New(
 	state State,
 	header *block.Header,
 	getHash func(uint64) cry.Hash,
-	vmConfig vm.Config,
 ) *Runtime {
 	return &Runtime{
-		vmConfig,
-		getHash,
-		state,
-		header.Beneficiary(),
-		header.Number(),
-		header.Timestamp(),
-		header.GasLimit()}
+		getHash:       getHash,
+		state:         state,
+		txOrigin:      header.Beneficiary(),
+		blockNumber:   header.Number(),
+		blockTime:     header.Timestamp(),
+		blockGasLimit: header.GasLimit(),
+	}
 }
 
-func (rt *Runtime) Exec(
-	clause *tx.Clause,
-	index int,
-	gas uint64,
-	origin acc.Address,
-	gasPrice *big.Int,
-	txHash cry.Hash,
-) *vm.Output {
+// SetTransactionEnvironment set transaction related vars.
+func (rt *Runtime) SetTransactionEnvironment(
+	txOrigin acc.Address,
+	txGasPrice *big.Int,
+	txHash cry.Hash) {
+
+	rt.txOrigin = txOrigin
+	rt.txGasPrice.SetBig(txGasPrice)
+	rt.txHash = txHash
+}
+
+// SetVMConfig config VM.
+func (rt *Runtime) SetVMConfig(config vm.Config) {
+	rt.vmConfig = config
+}
+
+// Execute executes single clause bases on tx env set by SetTransactionEnvironment.
+func (rt *Runtime) Execute(clause *Tx.Clause, index int, gas uint64) *vm.Output {
 
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
@@ -53,9 +78,9 @@ func (rt *Runtime) Exec(
 		Time:        new(big.Int).SetUint64(rt.blockTime),
 		GasLimit:    new(big.Int).SetUint64(rt.blockGasLimit),
 
-		Origin:   origin,
-		GasPrice: gasPrice,
-		TxHash:   txHash,
+		Origin:   rt.txOrigin,
+		GasPrice: rt.txGasPrice.ToBig(),
+		TxHash:   rt.txHash,
 
 		GetHash:     rt.getHash,
 		ClauseIndex: uint64(index),
@@ -63,79 +88,128 @@ func (rt *Runtime) Exec(
 
 	if clause.To == nil {
 		return vm.New(ctx, rt.state, rt.vmConfig).
-			Create(origin, clause.Data, gas, clause.Value.ToBig())
+			Create(rt.txOrigin, clause.Data, gas, clause.Value.ToBig())
 	}
 	return vm.New(ctx, rt.state, rt.vmConfig).
-		Call(origin, *clause.To, clause.Data, gas, clause.Value.ToBig())
+		Call(rt.txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
 }
 
-// func (rt *Runtime) consumeEnergy(who acc.Address, amount *big.Int) (*big.Int, *big.Int, error) {
-// 	return nil, nil, nil
-// }
+func (rt *Runtime) consumeEnergy(target *acc.Address, amount *big.Int) (acc.Address, error) {
+	return acc.Address{}, nil
+}
 
-// func (rt *Runtime) chargeEnergy(who acc.Address, amount *big.Int) error {
-// 	return nil
-// }
+func (rt *Runtime) chargeEnergy(addr acc.Address, amount *big.Int) error {
+	return nil
+}
 
-// func (rt *Runtime) ExecTransaction(tx *tx.Transaction) (*tx.Receipt, error) {
-// 	origin, err := tx.Signer()
-// 	if err != nil {
-// 		return nil, err
-// 	}
+// ExecuteTransaction executes a transaction.
+// It will invoke SetTransactionEnvironment to reset tx env.
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Output, error) {
+	// precheck
+	origin, err := tx.Signer()
+	if err != nil {
+		return nil, nil, err
+	}
+	intrinsicGas, err := tx.IntrinsicGas()
+	if err != nil {
+		return nil, nil, err
+	}
+	gas := tx.Gas()
+	if intrinsicGas > gas {
+		return nil, nil, errors.New("intrinsic gas exceeds provided gas")
+	}
 
-// 	bigIntrinsicGas := tx.IntrinsicGas()
-// 	if bigIntrinsicGas.BitLen() > 64 {
-// 		return nil, evm.ErrOutOfGas
-// 	}
-// 	intrinsicGas := bigIntrinsicGas.Uint64()
+	gasPrice := tx.GasPrice().ToBig()
 
-// 	bigGasLimit := tx.GasLimit().ToBig()
-// 	if bigGasLimit.BitLen() > 64 {
-// 		return nil, evm.ErrOutOfGas
-// 	}
-// 	gasLimit := bigGasLimit.Uint64()
+	// set tx env
+	rt.SetTransactionEnvironment(*origin, gasPrice, tx.Hash())
 
-// 	if intrinsicGas > gasLimit {
-// 		return nil, evm.ErrOutOfGas
-// 	}
+	clauses := tx.Clauses()
+	commonTarget := commonTo(clauses)
 
-// 	gasPrice := tx.GasPrice().ToBig()
+	energyPrepayed := new(big.Int).SetUint64(gas)
+	energyPrepayed.Mul(energyPrepayed, gasPrice)
 
-// 	selfConsumed, shareConsumed, err := rt.consumeEnergy(*origin, new(big.Int).Mul(gasPrice, bigGasLimit))
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	// the checkpoint to be reverted only when gas consumption failure.
+	txCheckpoint := rt.state.NewCheckpoint()
 
-// 	leftOverGas := gasLimit - intrinsicGas
+	// pre pay energy for tx gas
+	addrPayedEnergy, err := rt.consumeEnergy(
+		commonTarget,
+		energyPrepayed)
+	if err != nil {
+		rt.state.RevertTo(txCheckpoint)
+		return nil, nil, err
+	}
 
-// 	totalRefund := new(big.Int)
-// 	txHash := tx.Hash()
+	// checkpoint to be reverted when clause failure.
+	clauseCheckpoint := rt.state.NewCheckpoint()
 
-// 	checkpoint := rt.state.NewCheckpoint()
+	leftOverGas := gas - intrinsicGas
 
-// 	for i, clause := range tx.Clauses() {
-// 		output := rt.Exec(clause, i, leftOverGas, *origin, gasPrice, txHash)
-// 		if output.VMErr != nil {
+	receipt := Tx.Receipt{Outputs: make([]*Tx.Output, len(clauses))}
+	vmOutputs := make([]*vm.Output, len(clauses))
 
-// 		}
-// 		if err != nil
-// 		if vmErr := output.vmOutput; vmErr != nil {
-// 			break
-// 		}
-// 		gasUsed := leftOverGas - output.LeftOverGas
-// 		leftOverGas = output.LeftOverGas
+	for i, clause := range clauses {
+		vmOutput := rt.Execute(clause, i, leftOverGas)
+		vmOutputs[i] = vmOutput
 
-// 		// Apply refund counter, capped to half of the used gas.
-// 		halfUsed := new(big.Int).SetUint64(gasUsed / 2)
-// 		refund := math.BigMin(output.RefundGas, halfUsed)
-// 		totalRefund.Add(totalRefund, refund)
+		gasUsed := leftOverGas - vmOutput.LeftOverGas
+		leftOverGas = vmOutput.LeftOverGas
 
-// 		leftOverGas += refund.Uint64()
-// 	}
+		// Apply refund counter, capped to half of the used gas.
+		halfUsed := new(big.Int).SetUint64(gasUsed / 2)
+		refund := math.BigMin(vmOutput.RefundGas, halfUsed)
 
-// 	if vmErr != nil {
+		// won't overflow
+		leftOverGas += refund.Uint64()
 
-// 	}
+		if vmOutput.VMErr != nil {
+			// vm exception here
+			// revert all executed clauses
+			rt.state.RevertTo(clauseCheckpoint)
+			receipt.Outputs = nil
+			break
+		}
 
-// 	return nil, nil
-// }
+		// transform vm output to clause output
+		var logs []*Tx.Log
+		for _, vmLog := range vmOutput.Logs {
+			logs = append(logs, (*Tx.Log)(vmLog))
+		}
+		receipt.Outputs[i] = &Tx.Output{Logs: logs}
+	}
+
+	receipt.GasUsed = gas - leftOverGas
+
+	// entergy to return = leftover gas * gas price
+	energyToReturn := new(big.Int).SetUint64(leftOverGas)
+	energyToReturn.Mul(energyToReturn, gasPrice)
+
+	// return overpayed energy to whom payed
+	if err := rt.chargeEnergy(addrPayedEnergy, energyToReturn); err != nil {
+		rt.state.RevertTo(txCheckpoint)
+		return nil, nil, err
+	}
+	return &receipt, vmOutputs, nil
+}
+
+func commonTo(clauses Tx.Clauses) *acc.Address {
+	if len(clauses) == 0 {
+		return nil
+	}
+	firstTo := clauses[0].To
+	if firstTo == nil {
+		return nil
+	}
+
+	for _, c := range clauses[1:] {
+		if c.To == nil {
+			return nil
+		}
+		if *c.To != *firstTo {
+			return nil
+		}
+	}
+	return firstTo
+}
