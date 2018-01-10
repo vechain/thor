@@ -106,7 +106,10 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 }
 
 // ExecuteTransaction executes a transaction.
+// If an error returned, state will not be affected.
 // It will invoke SetTransactionEnvironment to reset tx env.
+// Note that the elements of returned []*vm.Output may be nil if failed
+// to execute corresponded clauses.
 func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Output, error) {
 	// precheck
 	origin, err := tx.Signer()
