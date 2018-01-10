@@ -11,7 +11,6 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
 
 const (
@@ -74,9 +73,7 @@ func (b *Builder) newRuntime(state *state.State, origin acc.Address) *runtime.Ru
 	return runtime.New(
 		state,
 		&block.Header{},
-		func(uint64) cry.Hash { return cry.Hash{} },
-		vm.Config{},
-	)
+		func(uint64) cry.Hash { return cry.Hash{} })
 }
 
 // Build build genesis block according to presets.
@@ -94,15 +91,12 @@ func (b *Builder) Build(state *state.State, god acc.Address) (*block.Block, erro
 	// execute all calls
 	for _, call := range b.calls {
 		rt := b.newRuntime(state, god)
-		output := rt.Exec(
+		output := rt.Execute(
 			&tx.Clause{
 				To:   &call.address,
 				Data: call.data},
 			0,
-			execGasLimit,
-			god,
-			new(big.Int),
-			cry.Hash{})
+			execGasLimit)
 		if output.VMErr != nil {
 			return nil, errors.Wrap(output.VMErr, "build genesis (vm error)")
 		}
