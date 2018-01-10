@@ -5,29 +5,23 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/thor"
 )
 
 func TestStateReadWrite(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := New(cry.Hash{}, kv)
+	state, _ := New(thor.Hash{}, kv)
 
-	addr := acc.BytesToAddress([]byte("account1"))
-	storageKey := cry.BytesToHash([]byte("storageKey"))
+	addr := thor.BytesToAddress([]byte("account1"))
+	storageKey := thor.BytesToHash([]byte("storageKey"))
 
 	assert.False(t, state.Exists(addr))
 	assert.Equal(t, state.GetBalance(addr), &big.Int{})
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), cry.Hash{})
-	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
-
-	state.SetStorage(addr, storageKey, cry.BytesToHash([]byte("storageValue")))
-	assert.Equal(t,
-		state.GetStorage(addr, storageKey),
-		cry.Hash{},
-		"should be no effect when set storage to an account without code")
+	assert.Equal(t, state.GetCodeHash(addr), thor.Hash{})
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Hash{})
 
 	// make account not empty
 	state.SetBalance(addr, big.NewInt(1))
@@ -37,9 +31,9 @@ func TestStateReadWrite(t *testing.T) {
 	assert.Equal(t, state.GetCode(addr), []byte("code"))
 	assert.Equal(t, state.GetCodeHash(addr), cry.HashSum([]byte("code")))
 
-	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
-	state.SetStorage(addr, storageKey, cry.BytesToHash([]byte("storageValue")))
-	assert.Equal(t, state.GetStorage(addr, storageKey), cry.BytesToHash([]byte("storageValue")))
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Hash{})
+	state.SetStorage(addr, storageKey, thor.BytesToHash([]byte("storageValue")))
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.BytesToHash([]byte("storageValue")))
 
 	assert.True(t, state.Exists(addr))
 
@@ -48,8 +42,7 @@ func TestStateReadWrite(t *testing.T) {
 	assert.False(t, state.Exists(addr))
 	assert.Equal(t, state.GetBalance(addr), &big.Int{})
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), cry.Hash{})
-	assert.Equal(t, state.GetStorage(addr, storageKey), cry.Hash{})
+	assert.Equal(t, state.GetCodeHash(addr), thor.Hash{})
 
 	assert.Nil(t, state.Error(), "error is not expected")
 
@@ -57,19 +50,19 @@ func TestStateReadWrite(t *testing.T) {
 
 func TestStateRevert(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := New(cry.Hash{}, kv)
+	state, _ := New(thor.Hash{}, kv)
 
-	addr := acc.BytesToAddress([]byte("account1"))
-	storageKey := cry.BytesToHash([]byte("storageKey"))
+	addr := thor.BytesToAddress([]byte("account1"))
+	storageKey := thor.BytesToHash([]byte("storageKey"))
 
 	values := []struct {
 		balance *big.Int
 		code    []byte
-		storage cry.Hash
+		storage thor.Hash
 	}{
-		{big.NewInt(1), []byte("code1"), cry.BytesToHash([]byte("v1"))},
-		{big.NewInt(2), []byte("code2"), cry.BytesToHash([]byte("v2"))},
-		{big.NewInt(3), []byte("code3"), cry.BytesToHash([]byte("v3"))},
+		{big.NewInt(1), []byte("code1"), thor.BytesToHash([]byte("v1"))},
+		{big.NewInt(2), []byte("code2"), thor.BytesToHash([]byte("v2"))},
+		{big.NewInt(3), []byte("code3"), thor.BytesToHash([]byte("v3"))},
 	}
 
 	for _, v := range values {
@@ -91,7 +84,7 @@ func TestStateRevert(t *testing.T) {
 	assert.Nil(t, state.Error(), "error is not expected")
 
 	//
-	state, _ = New(cry.Hash{}, kv)
+	state, _ = New(thor.Hash{}, kv)
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 1)

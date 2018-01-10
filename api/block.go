@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 )
 
 //BlockInterface for manage block with chain
@@ -19,7 +19,7 @@ func NewBlockInterface(chain *chain.Chain) *BlockInterface {
 }
 
 //GetBlockByHash return block by address
-func (bi *BlockInterface) GetBlockByHash(blockHash cry.Hash) (*block.Block, error) {
+func (bi *BlockInterface) GetBlockByHash(blockHash thor.Hash) (*block.Block, error) {
 	return bi.chain.GetBlock(blockHash)
 }
 

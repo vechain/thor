@@ -3,9 +3,8 @@ package state
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/thor"
 )
 
 // Stage abstracts changes on the main accounts trie.
@@ -24,7 +23,7 @@ type codeWithHash struct {
 	hash []byte
 }
 
-func newStage(root cry.Hash, kv kv.GetPutter, changes map[acc.Address]*changedObject) *Stage {
+func newStage(root thor.Hash, kv kv.GetPutter, changes map[thor.Address]*changedObject) *Stage {
 	accountTrie, err := trie.NewSecure(common.Hash(root), kv, 0)
 	if err != nil {
 		return &Stage{err: err}
@@ -72,43 +71,43 @@ func newStage(root cry.Hash, kv kv.GetPutter, changes map[acc.Address]*changedOb
 }
 
 // Hash computes hash of the main accounts trie.
-func (s *Stage) Hash() (cry.Hash, error) {
+func (s *Stage) Hash() (thor.Hash, error) {
 	if s.err != nil {
-		return cry.Hash{}, s.err
+		return thor.Hash{}, s.err
 	}
-	return cry.Hash(s.accountTrie.Hash()), nil
+	return thor.Hash(s.accountTrie.Hash()), nil
 }
 
 // Commit commits all changes into main accounts trie and storage tries.
-func (s *Stage) Commit() (cry.Hash, error) {
+func (s *Stage) Commit() (thor.Hash, error) {
 	if s.err != nil {
-		return cry.Hash{}, s.err
+		return thor.Hash{}, s.err
 	}
 
 	batch := s.kv.NewBatch()
 	// write codes
 	for _, code := range s.codes {
 		if err := batch.Put(code.hash, code.code); err != nil {
-			return cry.Hash{}, err
+			return thor.Hash{}, err
 		}
 	}
 
 	// commit storage tries
 	for _, strie := range s.storageTries {
 		if _, err := strie.CommitTo(batch); err != nil {
-			return cry.Hash{}, err
+			return thor.Hash{}, err
 		}
 	}
 
 	// commit accounts trie
 	root, err := s.accountTrie.CommitTo(batch)
 	if err != nil {
-		return cry.Hash{}, err
+		return thor.Hash{}, err
 	}
 
 	if err := batch.Write(); err != nil {
-		return cry.Hash{}, err
+		return thor.Hash{}, err
 	}
 
-	return cry.Hash(root), nil
+	return thor.Hash(root), nil
 }

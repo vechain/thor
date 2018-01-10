@@ -8,12 +8,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/thor"
 )
 
 func BenchmarkCall(b *testing.B) {
-	origin := acc.BytesToAddress([]byte("0x0a"))
+	origin := thor.BytesToAddress([]byte("0x0a"))
 	env := newEnv()
 
 	// 创建合约

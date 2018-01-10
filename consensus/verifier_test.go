@@ -9,14 +9,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
 func TestProcessBlock(t *testing.T) {
-	sender := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
+	sender := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
 	block := new(block.Builder).Beneficiary(sender).Timestamp(uint64(time.Now().Unix())).Transaction(buildTransaction()).Transaction(buildTransaction()).Build()
 	//t.Log(consensus.ProcessBlock(block))
 	_ = block

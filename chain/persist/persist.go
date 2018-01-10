@@ -4,11 +4,10 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/vechain/thor/kv"
-
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -23,7 +22,7 @@ var (
 
 // TxLocation contains information about a tx is settled.
 type TxLocation struct {
-	BlockHash cry.Hash
+	BlockHash thor.Hash
 
 	// Index the position of the tx in block's txs.
 	Index uint64 // rlp require uint64.
@@ -46,27 +45,26 @@ func loadRLP(r kv.Getter, key []byte, val interface{}) error {
 }
 
 // LoadBestBlockHash returns the best block hash on trunk.
-func LoadBestBlockHash(r kv.Getter) (*cry.Hash, error) {
+func LoadBestBlockHash(r kv.Getter) (thor.Hash, error) {
 	data, err := r.Get(bestBlockKey)
 	if err != nil {
-		return nil, err
+		return thor.Hash{}, err
 	}
-	hash := cry.BytesToHash(data)
-	return &hash, nil
+	return thor.BytesToHash(data), nil
 }
 
 // SaveBestBlockHash save the best block hash on trunk.
-func SaveBestBlockHash(w kv.Putter, hash cry.Hash) error {
+func SaveBestBlockHash(w kv.Putter, hash thor.Hash) error {
 	return w.Put(bestBlockKey, hash[:])
 }
 
 // LoadRawBlockHeader load block header without being decoded.
-func LoadRawBlockHeader(r kv.Getter, hash cry.Hash) (rlp.RawValue, error) {
+func LoadRawBlockHeader(r kv.Getter, hash thor.Hash) (rlp.RawValue, error) {
 	return r.Get(append(headerPrefix, hash[:]...))
 }
 
 // LoadBlockHeader load decoded block header.
-func LoadBlockHeader(r kv.Getter, hash cry.Hash) (*block.Header, error) {
+func LoadBlockHeader(r kv.Getter, hash thor.Hash) (*block.Header, error) {
 	var header block.Header
 	if err := loadRLP(r, append(headerPrefix, hash[:]...), &header); err != nil {
 		return nil, err
@@ -75,12 +73,12 @@ func LoadBlockHeader(r kv.Getter, hash cry.Hash) (*block.Header, error) {
 }
 
 // LoadRawBlockBody load block body without being decoded.
-func LoadRawBlockBody(r kv.Getter, hash cry.Hash) (rlp.RawValue, error) {
+func LoadRawBlockBody(r kv.Getter, hash thor.Hash) (rlp.RawValue, error) {
 	return r.Get(append(bodyPrefix, hash[:]...))
 }
 
 // LoadBlockBody load decoded block body.
-func LoadBlockBody(r kv.Getter, hash cry.Hash) (*block.Body, error) {
+func LoadBlockBody(r kv.Getter, hash thor.Hash) (*block.Body, error) {
 	var body block.Body
 	if err := loadRLP(r, append(bodyPrefix, hash[:]...), &body); err != nil {
 		return nil, err
@@ -101,26 +99,25 @@ func SaveBlock(w kv.Putter, b *block.Block) error {
 }
 
 // SaveTrunkBlockHash save a block's hash on the trunk.
-func SaveTrunkBlockHash(w kv.Putter, hash cry.Hash) error {
+func SaveTrunkBlockHash(w kv.Putter, hash thor.Hash) error {
 	// first 4 bytes of block hash present block number
 	return w.Put(append(trunkPrefix, hash[:4]...), hash[:])
 }
 
 // EraseTrunkBlockHash erase block hash on the trunk.
-func EraseTrunkBlockHash(w kv.Putter, hash cry.Hash) error {
+func EraseTrunkBlockHash(w kv.Putter, hash thor.Hash) error {
 	return w.Delete(append(trunkPrefix, hash[:4]...))
 }
 
 // LoadTrunkBlockHash returns block's hash with given block number.
-func LoadTrunkBlockHash(r kv.Getter, num uint32) (*cry.Hash, error) {
+func LoadTrunkBlockHash(r kv.Getter, num uint32) (thor.Hash, error) {
 	var n [4]byte
 	binary.BigEndian.PutUint32(n[:], num)
 	data, err := r.Get(append(trunkPrefix, n[:]...))
 	if err != nil {
-		return nil, err
+		return thor.Hash{}, err
 	}
-	hash := cry.BytesToHash(data)
-	return &hash, nil
+	return thor.BytesToHash(data), nil
 }
 
 // SaveTxLocations save locations of all txs in a block.
@@ -154,7 +151,7 @@ func EraseTxLocations(w kv.Putter, block *block.Block) error {
 }
 
 // LoadTxLocation load tx location info by tx hash.
-func LoadTxLocation(r kv.Getter, txHash cry.Hash) (*TxLocation, error) {
+func LoadTxLocation(r kv.Getter, txHash thor.Hash) (*TxLocation, error) {
 	var loc TxLocation
 	if err := loadRLP(r, append(txLocationPrefix, txHash[:]...), &loc); err != nil {
 		return nil, err
@@ -163,7 +160,7 @@ func LoadTxLocation(r kv.Getter, txHash cry.Hash) (*TxLocation, error) {
 }
 
 // LoadTx load tx by tx hash.
-func LoadTx(r kv.Getter, txHash cry.Hash) (*tx.Transaction, *TxLocation, error) {
+func LoadTx(r kv.Getter, txHash thor.Hash) (*tx.Transaction, *TxLocation, error) {
 	loc, err := LoadTxLocation(r, txHash)
 	if err != nil {
 		return nil, nil, err

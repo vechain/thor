@@ -3,8 +3,8 @@ package state
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/thor"
 )
 
 // cachedObject to cache code and storage of an account.
@@ -15,7 +15,7 @@ type cachedObject struct {
 	cache struct {
 		code        []byte
 		storageTrie trieReader
-		storage     map[cry.Hash]cry.Hash
+		storage     map[thor.Hash]thor.Hash
 	}
 }
 
@@ -24,11 +24,11 @@ func newCachedObject(kv kv.GetPutter, data Account) *cachedObject {
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key cry.Hash) (cry.Hash, error) {
+func (co *cachedObject) GetStorage(key thor.Hash) (thor.Hash, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage == nil {
-		cache.storage = make(map[cry.Hash]cry.Hash)
+		cache.storage = make(map[thor.Hash]thor.Hash)
 	} else {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil
@@ -41,7 +41,7 @@ func (co *cachedObject) GetStorage(key cry.Hash) (cry.Hash, error) {
 		root := common.BytesToHash(co.data.StorageRoot)
 		trie, err := trie.NewSecure(root, co.kv, 0)
 		if err != nil {
-			return cry.Hash{}, err
+			return thor.Hash{}, err
 		}
 		cache.storageTrie = trie
 	}
@@ -49,7 +49,7 @@ func (co *cachedObject) GetStorage(key cry.Hash) (cry.Hash, error) {
 	// load from trie
 	v, err := loadStorage(cache.storageTrie, key)
 	if err != nil {
-		return cry.Hash{}, err
+		return thor.Hash{}, err
 	}
 	// put into cache
 	cache.storage[key] = v

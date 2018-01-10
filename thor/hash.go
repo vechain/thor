@@ -27,23 +27,23 @@ func (h Hash) Bytes() []byte {
 }
 
 // ParseHash convert string presented hash into Hash type
-func ParseHash(s string) (*Hash, error) {
+func ParseHash(s string) (Hash, error) {
 	if len(s) == HashLength*2 {
 	} else if len(s) == HashLength*2+2 {
 		if strings.ToLower(s[:2]) != "0x" {
-			return nil, errors.New("invalid prefix")
+			return Hash{}, errors.New("invalid prefix")
 		}
 		s = s[2:]
 	} else {
-		return nil, errors.New("invalid length")
+		return Hash{}, errors.New("invalid length")
 	}
 
 	var h Hash
 	_, err := hex.Decode(h[:], []byte(s))
 	if err != nil {
-		return nil, err
+		return Hash{}, err
 	}
-	return &h, nil
+	return h, nil
 }
 
 // BytesToHash converts bytes slice into hash.

@@ -4,12 +4,11 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/bn"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -28,13 +27,13 @@ type Builder struct {
 }
 
 type alloc struct {
-	address          acc.Address
+	address          thor.Address
 	balance          bn.Int
 	runtimeBytecodes []byte
 }
 
 type call struct {
-	address acc.Address
+	address thor.Address
 	data    []byte
 }
 
@@ -51,7 +50,7 @@ func (b *Builder) GasLimit(limit uint64) *Builder {
 }
 
 // Alloc alloc an account with balance and runtime bytecodes.
-func (b *Builder) Alloc(addr acc.Address, balance *big.Int, runtimeBytecodes []byte) *Builder {
+func (b *Builder) Alloc(addr thor.Address, balance *big.Int, runtimeBytecodes []byte) *Builder {
 	b.allocs = append(b.allocs, alloc{
 		addr,
 		bn.FromBig(balance),
@@ -61,7 +60,7 @@ func (b *Builder) Alloc(addr acc.Address, balance *big.Int, runtimeBytecodes []b
 }
 
 // Call call the pre alloced contract(account with runtime bytecodes).
-func (b *Builder) Call(addr acc.Address, data []byte) *Builder {
+func (b *Builder) Call(addr thor.Address, data []byte) *Builder {
 	b.calls = append(b.calls, call{
 		addr,
 		data,
@@ -69,13 +68,13 @@ func (b *Builder) Call(addr acc.Address, data []byte) *Builder {
 	return b
 }
 
-func (b *Builder) newRuntime(state *state.State, origin acc.Address) *runtime.Runtime {
-	return runtime.New(state, &block.Header{}, func(uint64) cry.Hash { return cry.Hash{} }).
-		SetTransactionEnvironment(origin, new(big.Int), cry.Hash{})
+func (b *Builder) newRuntime(state *state.State, origin thor.Address) *runtime.Runtime {
+	return runtime.New(state, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} }).
+		SetTransactionEnvironment(origin, new(big.Int), thor.Hash{})
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(state *state.State, god acc.Address) (*block.Block, error) {
+func (b *Builder) Build(state *state.State, god thor.Address) (*block.Block, error) {
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {

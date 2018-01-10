@@ -2,9 +2,9 @@ package consensus
 
 import (
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -35,17 +35,17 @@ func verify(state *state.State, blk *block.Block) error {
 	return nil
 }
 
-func getHash(uint64) cry.Hash {
-	return cry.Hash{}
+func getHash(uint64) thor.Hash {
+	return thor.Hash{}
 }
 
 // ProcessBlock can execute all transactions in a block.
-func ProcessBlock(state *state.State, blk *block.Block) (cry.Hash, uint64, error) {
+func ProcessBlock(state *state.State, blk *block.Block) (thor.Hash, uint64, error) {
 	rt := runtime.New(state, blk.Header(), getHash)
 
 	receipts, totalGasUsed, err := processTransactions(rt, blk.Transactions())
 	if err != nil {
-		return cry.Hash{}, 0, err
+		return thor.Hash{}, 0, err
 	}
 	return receipts.RootHash(), totalGasUsed, nil
 }

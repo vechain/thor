@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/consensus/schedule"
 	"github.com/vechain/thor/thor"
 )
@@ -13,13 +12,13 @@ func TestSchedule(t *testing.T) {
 	assert := assert.New(t)
 	_ = assert
 	p1, p2, p3, p4, p5 :=
-		acc.BytesToAddress([]byte("p1")),
-		acc.BytesToAddress([]byte("p2")),
-		acc.BytesToAddress([]byte("p3")),
-		acc.BytesToAddress([]byte("p4")),
-		acc.BytesToAddress([]byte("p5"))
+		thor.BytesToAddress([]byte("p1")),
+		thor.BytesToAddress([]byte("p2")),
+		thor.BytesToAddress([]byte("p3")),
+		thor.BytesToAddress([]byte("p4")),
+		thor.BytesToAddress([]byte("p5"))
 
-	proposers := []acc.Address{p1, p2, p3, p4, p5}
+	proposers := []thor.Address{p1, p2, p3, p4, p5}
 	_ = proposers
 
 	parentTime := uint64(1000)
@@ -29,7 +28,8 @@ func TestSchedule(t *testing.T) {
 		now := parentTime + i*thor.BlockInterval/2
 		for _, p := range proposers {
 			ts, _, _ := sched.Timing(p, now)
-			assert.True(sched.IsValid(p, ts))
+			r, _ := sched.Validate(p, ts)
+			assert.True(r)
 		}
 	}
 }

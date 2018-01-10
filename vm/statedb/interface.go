@@ -3,23 +3,22 @@ package statedb
 import (
 	"math/big"
 
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 )
 
 // State is defined to decouple with state.State.
 type State interface {
-	GetBalance(acc.Address) *big.Int
-	GetCode(acc.Address) []byte
-	GetCodeHash(acc.Address) cry.Hash
-	GetStorage(acc.Address, cry.Hash) cry.Hash
-	Exists(acc.Address) bool
-	ForEachStorage(addr acc.Address, cb func(key, value cry.Hash) bool)
+	GetBalance(thor.Address) *big.Int
+	GetCode(thor.Address) []byte
+	GetCodeHash(thor.Address) thor.Hash
+	GetStorage(thor.Address, thor.Hash) thor.Hash
+	Exists(thor.Address) bool
+	ForEachStorage(addr thor.Address, cb func(key, value thor.Hash) bool)
 
-	SetBalance(acc.Address, *big.Int)
-	SetCode(acc.Address, []byte)
-	SetStorage(acc.Address, cry.Hash, cry.Hash)
-	Delete(acc.Address)
+	SetBalance(thor.Address, *big.Int)
+	SetCode(thor.Address, []byte)
+	SetStorage(thor.Address, thor.Hash, thor.Hash)
+	Delete(thor.Address)
 
 	NewCheckpoint() int
 	Revert()

@@ -7,8 +7,8 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain/persist"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -208,13 +208,13 @@ func (c *Chain) traceBackToCommonAncestor(b1 *block.Block, b2 *block.Block) (*bl
 }
 
 // GetBlockHeader get block header by hash of block.
-func (c *Chain) GetBlockHeader(hash cry.Hash) (*block.Header, error) {
+func (c *Chain) GetBlockHeader(hash thor.Hash) (*block.Header, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockHeader(hash)
 }
 
-func (c *Chain) getBlockHeader(hash cry.Hash) (*block.Header, error) {
+func (c *Chain) getBlockHeader(hash thor.Hash) (*block.Header, error) {
 	header, err := c.cached.header.GetOrLoad(hash, func(interface{}) (interface{}, error) {
 		return persist.LoadBlockHeader(c.kv, hash)
 	})
@@ -225,13 +225,13 @@ func (c *Chain) getBlockHeader(hash cry.Hash) (*block.Header, error) {
 }
 
 // GetBlockBody get block body by hash of block.
-func (c *Chain) GetBlockBody(hash cry.Hash) (*block.Body, error) {
+func (c *Chain) GetBlockBody(hash thor.Hash) (*block.Body, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockBody(hash)
 }
 
-func (c *Chain) getBlockBody(hash cry.Hash) (*block.Body, error) {
+func (c *Chain) getBlockBody(hash thor.Hash) (*block.Body, error) {
 	body, err := c.cached.body.GetOrLoad(hash, func(interface{}) (interface{}, error) {
 		return persist.LoadBlockBody(c.kv, hash)
 	})
@@ -242,14 +242,14 @@ func (c *Chain) getBlockBody(hash cry.Hash) (*block.Body, error) {
 }
 
 // GetBlock get block by hash.
-func (c *Chain) GetBlock(hash cry.Hash) (*block.Block, error) {
+func (c *Chain) GetBlock(hash thor.Hash) (*block.Block, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
 	return c.getBlock(hash)
 }
 
-func (c *Chain) getBlock(hash cry.Hash) (*block.Block, error) {
+func (c *Chain) getBlock(hash thor.Hash) (*block.Block, error) {
 	header, err := c.getBlockHeader(hash)
 	if err != nil {
 		return nil, err
@@ -262,16 +262,16 @@ func (c *Chain) getBlock(hash cry.Hash) (*block.Block, error) {
 }
 
 // GetBlockHashByNumber returns block hash by block number on trunk.
-func (c *Chain) GetBlockHashByNumber(num uint32) (*cry.Hash, error) {
+func (c *Chain) GetBlockHashByNumber(num uint32) (thor.Hash, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockHashByNumber(num)
 }
 
-func (c *Chain) getBlockHashByNumber(num uint32) (*cry.Hash, error) {
+func (c *Chain) getBlockHashByNumber(num uint32) (thor.Hash, error) {
 	hash, err := persist.LoadTrunkBlockHash(c.kv, num)
 	if err != nil {
-		return nil, err
+		return thor.Hash{}, err
 	}
 	return hash, nil
 }
@@ -288,7 +288,7 @@ func (c *Chain) getBlockByNumber(num uint32) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.getBlock(*hash)
+	return c.getBlock(hash)
 }
 
 // GetBestBlock get the newest block on trunk.
@@ -308,7 +308,7 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	best, err := c.getBlock(*hash)
+	best, err := c.getBlock(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 }
 
 // GetTransaction get transaction by hash on trunk.
-func (c *Chain) GetTransaction(txHash cry.Hash) (*tx.Transaction, *persist.TxLocation, error) {
+func (c *Chain) GetTransaction(txHash thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
@@ -328,13 +328,13 @@ func (c *Chain) GetTransaction(txHash cry.Hash) (*tx.Transaction, *persist.TxLoc
 	return tx, loc, nil
 }
 
-func (c *Chain) getTransactionHashes(blockHash cry.Hash) (map[cry.Hash]int, error) {
+func (c *Chain) getTransactionHashes(blockHash thor.Hash) (map[thor.Hash]int, error) {
 	hashes, err := c.cached.blockTxHashes.GetOrLoad(blockHash, func(interface{}) (interface{}, error) {
 		body, err := c.getBlockBody(blockHash)
 		if err != nil {
 			return nil, err
 		}
-		hashes := make(map[cry.Hash]int)
+		hashes := make(map[thor.Hash]int)
 		for i, tx := range body.Txs {
 			hashes[tx.Hash()] = i
 		}
@@ -343,11 +343,11 @@ func (c *Chain) getTransactionHashes(blockHash cry.Hash) (map[cry.Hash]int, erro
 	if err != nil {
 		return nil, err
 	}
-	return hashes.(map[cry.Hash]int), nil
+	return hashes.(map[thor.Hash]int), nil
 }
 
 // LookupTransaction find out the location of a tx, on the chain which ends with blockHash.
-func (c *Chain) LookupTransaction(blockHash cry.Hash, txHash cry.Hash) (*persist.TxLocation, error) {
+func (c *Chain) LookupTransaction(blockHash thor.Hash, txHash thor.Hash) (*persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 

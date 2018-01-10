@@ -4,15 +4,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/vm/evm"
-
-	"github.com/ethereum/go-ethereum/core/types"
-
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/stackedmap"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vm/evm"
 )
 
 var _ evm.StateDB = (*StateDB)(nil)
@@ -59,10 +55,10 @@ func (s *StateDB) GetRefund() *big.Int {
 }
 
 // GetPreimages returns preimages produced by VM when evm.Config.EnablePreimageRecording turned on.
-func (s *StateDB) GetPreimages(cb func(cry.Hash, []byte) bool) {
+func (s *StateDB) GetPreimages(cb func(thor.Hash, []byte) bool) {
 	s.repo.Journal(func(k, v interface{}) bool {
 		if key, ok := k.(preimageKey); ok {
-			return cb(cry.Hash(key), v.([]byte))
+			return cb(thor.Hash(key), v.([]byte))
 		}
 		return true
 	})
@@ -80,7 +76,7 @@ func (s *StateDB) GetLogs(cb func(*Log) bool) {
 
 // ForEachStorage see state.State.ForEachStorage.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) {
-	s.state.ForEachStorage(acc.Address(addr), func(k cry.Hash, v cry.Hash) bool {
+	s.state.ForEachStorage(thor.Address(addr), func(k thor.Hash, v thor.Hash) bool {
 		return cb(common.Hash(k), common.Hash(v))
 	})
 }
@@ -90,7 +86,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {}
 
 // GetBalance stub.
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.state.GetBalance(acc.Address(addr))
+	return s.state.GetBalance(thor.Address(addr))
 }
 
 // SubBalance stub.
@@ -98,8 +94,8 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	balance := s.state.GetBalance(acc.Address(addr))
-	s.state.SetBalance(acc.Address(addr), new(big.Int).Sub(balance, amount))
+	balance := s.state.GetBalance(thor.Address(addr))
+	s.state.SetBalance(thor.Address(addr), new(big.Int).Sub(balance, amount))
 }
 
 // AddBalance stub.
@@ -107,8 +103,8 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	balance := s.state.GetBalance(acc.Address(addr))
-	s.state.SetBalance(acc.Address(addr), new(big.Int).Add(balance, amount))
+	balance := s.state.GetBalance(thor.Address(addr))
+	s.state.SetBalance(thor.Address(addr), new(big.Int).Add(balance, amount))
 }
 
 // GetNonce stub.
@@ -119,22 +115,22 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	return common.Hash(s.state.GetCodeHash(acc.Address(addr)))
+	return common.Hash(s.state.GetCodeHash(thor.Address(addr)))
 }
 
 // GetCode stub.
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	return s.state.GetCode(acc.Address(addr))
+	return s.state.GetCode(thor.Address(addr))
 }
 
 // GetCodeSize stub.
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	return len(s.state.GetCode(acc.Address(addr)))
+	return len(s.state.GetCode(thor.Address(addr)))
 }
 
 // SetCode stub.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	s.state.SetCode(acc.Address(addr), code)
+	s.state.SetCode(thor.Address(addr), code)
 }
 
 // HasSuicided stub.
@@ -149,32 +145,32 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 // 1, delete account
 // 2, set suicide flag
 func (s *StateDB) Suicide(addr common.Address) bool {
-	if !s.state.Exists(acc.Address(addr)) {
+	if !s.state.Exists(thor.Address(addr)) {
 		return false
 	}
-	s.state.Delete(acc.Address(addr))
+	s.state.Delete(thor.Address(addr))
 	s.repo.Put(suicideFlagKey(addr), true)
 	return true
 }
 
 // GetState stub.
 func (s *StateDB) GetState(addr common.Address, key common.Hash) common.Hash {
-	return common.Hash(s.state.GetStorage(acc.Address(addr), cry.Hash(key)))
+	return common.Hash(s.state.GetStorage(thor.Address(addr), thor.Hash(key)))
 }
 
 // SetState stub.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	s.state.SetStorage(acc.Address(addr), cry.Hash(key), cry.Hash(value))
+	s.state.SetStorage(thor.Address(addr), thor.Hash(key), thor.Hash(value))
 }
 
 // Exist stub.
 func (s *StateDB) Exist(addr common.Address) bool {
-	return s.state.Exists(acc.Address(addr))
+	return s.state.Exists(thor.Address(addr))
 }
 
 // Empty stub.
 func (s *StateDB) Empty(addr common.Address) bool {
-	return !s.state.Exists(acc.Address(addr))
+	return !s.state.Exists(thor.Address(addr))
 }
 
 // AddRefund stub.
@@ -217,22 +213,22 @@ func (s *StateDB) RevertToSnapshot(rev int) {
 // stored/indexed by the node.
 type Log struct {
 	// address of the contract that generated the event
-	Address acc.Address
+	Address thor.Address
 	// list of topics provided by the contract.
-	Topics []cry.Hash
+	Topics []thor.Hash
 	// supplied by the contract, usually ABI-encoded
 	Data []byte
 }
 
 func vmlogToLog(vmlog *types.Log) *Log {
-	var topics []cry.Hash
+	var topics []thor.Hash
 	if len(vmlog.Topics) > 0 {
 		for _, t := range vmlog.Topics {
-			topics = append(topics, cry.Hash(t))
+			topics = append(topics, thor.Hash(t))
 		}
 	}
 	return &Log{
-		acc.Address(vmlog.Address),
+		thor.Address(vmlog.Address),
 		topics,
 		vmlog.Data,
 	}

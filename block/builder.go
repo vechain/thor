@@ -1,8 +1,7 @@
 package block
 
 import (
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -13,7 +12,7 @@ type Builder struct {
 }
 
 // ParentHash set parent hash.
-func (b *Builder) ParentHash(hash cry.Hash) *Builder {
+func (b *Builder) ParentHash(hash thor.Hash) *Builder {
 	b.header.ParentHash = hash
 	return b
 }
@@ -43,19 +42,19 @@ func (b *Builder) GasUsed(used uint64) *Builder {
 }
 
 // Beneficiary set recipient of reward.
-func (b *Builder) Beneficiary(addr acc.Address) *Builder {
+func (b *Builder) Beneficiary(addr thor.Address) *Builder {
 	b.header.Beneficiary = addr
 	return b
 }
 
 // StateRoot set state root.
-func (b *Builder) StateRoot(hash cry.Hash) *Builder {
+func (b *Builder) StateRoot(hash thor.Hash) *Builder {
 	b.header.StateRoot = hash
 	return b
 }
 
 // ReceiptsRoot set receipts root.
-func (b *Builder) ReceiptsRoot(hash cry.Hash) *Builder {
+func (b *Builder) ReceiptsRoot(hash thor.Hash) *Builder {
 	b.header.ReceiptsRoot = hash
 	return b
 }

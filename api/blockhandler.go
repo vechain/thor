@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 )
 
 //BlockHTTPPathPrefix http path prefix
@@ -28,11 +28,11 @@ func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}
-	hash, err := cry.ParseHash(hashstring)
+	hash, err := thor.ParseHash(hashstring)
 	if err != nil {
 		return httpx.Error(" Parse block hash failed! ", 400)
 	}
-	block, err := bi.GetBlockByHash(*hash)
+	block, err := bi.GetBlockByHash(hash)
 	if err != nil {
 		return httpx.Error(" Get block failed! ", 400)
 	}

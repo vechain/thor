@@ -6,24 +6,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
-
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/genesis/builder"
 	"github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 func TestPredicateTrunk(t *testing.T) {
 	db, _ := lvldb.NewMem()
-	state, _ := state.New(cry.Hash{}, db)
+	state, _ := state.New(thor.Hash{}, db)
 	defer db.Close()
 
-	signer := acc.Address(crypto.PubkeyToAddress(key.PublicKey))
+	signer := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
 
 	if genesisBlk, err := buildGenesis(state, signer); err != nil {
 		t.Fatal(err)
@@ -39,7 +37,7 @@ func TestPredicateTrunk(t *testing.T) {
 	}
 }
 
-func buildGenesis(state *state.State, signer acc.Address) (*block.Block, error) {
+func buildGenesis(state *state.State, signer thor.Address) (*block.Block, error) {
 	return new(builder.Builder).
 		Timestamp(1234567890).
 		GasLimit(10*1000*1000).
@@ -53,13 +51,13 @@ func buildGenesis(state *state.State, signer acc.Address) (*block.Block, error) 
 			func() []byte {
 				data, err := contracts.Authority.ABI.Pack(
 					"initialize",
-					acc.BytesToAddress([]byte("test")),
-					[]acc.Address{signer})
+					thor.BytesToAddress([]byte("test")),
+					[]thor.Address{signer})
 				if err != nil {
 					panic(errors.Wrap(err, "build genesis"))
 				}
 				return data
 			}(),
 		).
-		Build(state, acc.BytesToAddress([]byte("god")))
+		Build(state, thor.BytesToAddress([]byte("god")))
 }
