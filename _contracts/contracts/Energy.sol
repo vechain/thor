@@ -112,6 +112,39 @@ contract Energy is Token {
         return 0;
     }
 
+    ///@notice consume `_amount` tokens of `_consumer`
+    ///@param _consumer tokens of whom would be consumed 
+    ///@param _amount   `_amount` tokens would be consumed
+    ///@return _consumption `_consumption` tokens that has been consumed
+    function consumeEnergy(address _consumer,uint256 _amount) public returns(uint256 _consumption) {
+        uint256 b = calRestBalance(_consumer);
+        if (b < _amount) {
+            return 0;
+        }
+        balances[_consumer].balance = b.sub(_amount);
+        balances[_consumer].timestamp = block.timestamp;
+        return _amount;
+    }
+
+    ///@notice consume `_amount` tokens of `_consumer`
+    ///@param _contract `_contract` who shared the credits to `_consumer`
+    ///@param _consumer credits of whom would be consumed 
+    ///@param _amount   `_amount` tokens would be consumed
+    ///@return _consumption `_consumption` credits that has been consumed
+    function consumeCredits(address _contract, address _consumer, uint256 _amount) public returns(uint256 _consumption) {
+        require(isContract(_contract));
+        require(!isContract(_consumer));
+
+        uint256 ac = getAvailableCredits(_contract,_consumer);
+        if (ac < _amount) {
+            return 0;
+        }
+        bytes32 key = keccak256(_contract,_consumer);
+        sharedCredits[key].currentTimeStamp = block.timestamp;
+        sharedCredits[key].availableCredits = ac.sub(_amount);
+        return _amount;
+    }
+
     ///@notice first of all, consume the shared credits, if all shared credits all consumed,the real energy would be consumed
     ///@param _from which is a contract,if a msg called in the contract,the credits would be consumed
     ///@param _reciever who holds the energy and the shared credits
@@ -209,6 +242,7 @@ contract Energy is Token {
     /// @param _reciever who recieved the `_amount` tokens
     /// @param _amount The amount of wei to be approved for transfer
     /// @return Whether the approval was successful or not
+    
     function ownerApprove(address _contractAddr,address _reciever, uint256 _amount) public returns (bool success) {
         //only approved to a contract
         require(isContract(_contractAddr));
