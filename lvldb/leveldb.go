@@ -10,7 +10,7 @@ import (
 	"github.com/vechain/thor/kv"
 )
 
-var testConformation kv.GetPutCloser = (*LevelDB)(nil)
+var _ kv.GetPutCloser = (*LevelDB)(nil)
 
 // Options options for creating level db instance.
 type Options struct {
