@@ -70,10 +70,12 @@ func (b *Builder) Call(addr acc.Address, data []byte) *Builder {
 }
 
 func (b *Builder) newRuntime(state *state.State, origin acc.Address) *runtime.Runtime {
-	return runtime.New(
+	rt := runtime.New(
 		state,
 		&block.Header{},
 		func(uint64) cry.Hash { return cry.Hash{} })
+	rt.SetTransactionEnvironment(origin, new(big.Int), cry.Hash{})
+	return rt
 }
 
 // Build build genesis block according to presets.
