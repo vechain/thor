@@ -3,7 +3,6 @@ package consensus
 import (
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -11,13 +10,10 @@ import (
 	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/consensus/schedule"
-	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
 
 func PredicateTrunk(state *state.State, header *block.Header, preHeader *block.Header) (bool, error) {
@@ -26,7 +22,7 @@ func PredicateTrunk(state *state.State, header *block.Header, preHeader *block.H
 		return false, err
 	}
 
-	rt := runtime.New(state, preHeader, nil, vm.Config{})
+	rt := runtime.New(state, preHeader, nil)
 
 	return schedule.New(
 		Authority(rt, "getProposers"),
@@ -47,7 +43,7 @@ func Authority(rt *runtime.Runtime, funcName string) []acc.Address {
 			return data
 		}()}
 
-	output := rt.Exec(clause, 0, math.MaxUint64, genesis.GodAddress, new(big.Int), cry.Hash{})
+	output := rt.Execute(clause, 0, math.MaxUint64)
 	var addrs []common.Address
 	if err := contracts.Authority.ABI.Unpack(&addrs, funcName, output.Value); err != nil {
 		panic(err)

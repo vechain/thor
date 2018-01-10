@@ -1,10 +1,9 @@
 package consensus
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
 )
@@ -12,7 +11,7 @@ import (
 func verify(state *state.State, blk *block.Block) error {
 	header := blk.Header()
 
-	receiptsRoot, gasUsed, err := ProcessBlock(blk)
+	receiptsRoot, gasUsed, err := ProcessBlock(state, blk)
 	if err != nil {
 		return err
 	}
@@ -25,7 +24,7 @@ func verify(state *state.State, blk *block.Block) error {
 		return err
 	}
 
-	if header.GasUsed().ToBig() != gasUsed {
+	if header.GasUsed() != gasUsed {
 		return errGasUsed
 	}
 
@@ -36,31 +35,36 @@ func verify(state *state.State, blk *block.Block) error {
 	return nil
 }
 
+func getHash(uint64) cry.Hash {
+	return cry.Hash{}
+}
+
 // ProcessBlock can execute all transactions in a block.
-func ProcessBlock(blk *block.Block) (cry.Hash, *big.Int, error) {
-	stub := &processStub{}
-	receipts, totalGasUsed, err := processTransactions(stub, blk.Transactions())
+func ProcessBlock(state *state.State, blk *block.Block) (cry.Hash, uint64, error) {
+	rt := runtime.New(state, blk.Header(), getHash)
+
+	receipts, totalGasUsed, err := processTransactions(rt, blk.Transactions())
 	if err != nil {
-		return cry.Hash{}, nil, err
+		return cry.Hash{}, 0, err
 	}
 	return receipts.RootHash(), totalGasUsed, nil
 }
 
-func processTransactions(stub processorStub, transactions tx.Transactions) (tx.Receipts, *big.Int, error) {
+func processTransactions(rt *runtime.Runtime, transactions tx.Transactions) (tx.Receipts, uint64, error) {
 	length := len(transactions)
 	if length == 0 {
-		return nil, new(big.Int), nil
+		return nil, 0, nil
 	}
 
-	receipt, gasUsed, err := stub.processTransaction(transactions[0])
+	receipt, _, err := rt.ExecuteTransaction(transactions[0])
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 
-	receipts, totalGasUsed, err := processTransactions(stub, transactions[1:length])
+	receipts, totalGasUsed, err := processTransactions(rt, transactions[1:length])
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 
-	return append(receipts, receipt), new(big.Int).Add(totalGasUsed, gasUsed), nil
+	return append(receipts, receipt), totalGasUsed + receipt.GasUsed, nil
 }

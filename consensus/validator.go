@@ -11,7 +11,7 @@ func validate(preHeader *block.Header, blk *block.Block) error {
 		return errTxsRoot
 	}
 
-	if header.GasUsed().Cmp(header.GasLimit()) > 0 {
+	if header.GasUsed() > header.GasLimit() {
 		return errGasUsed
 	}
 

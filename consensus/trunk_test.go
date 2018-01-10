@@ -42,7 +42,7 @@ func TestPredicateTrunk(t *testing.T) {
 func buildGenesis(state *state.State, signer acc.Address) (*block.Block, error) {
 	return new(builder.Builder).
 		Timestamp(1234567890).
-		GasLimit(big.NewInt(10*1000*1000)).
+		GasLimit(10*1000*1000).
 		Alloc(
 			contracts.Authority.Address,
 			new(big.Int),
