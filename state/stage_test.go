@@ -5,24 +5,24 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/thor"
 )
 
 func TestStage(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := New(cry.Hash{}, kv)
+	state, _ := New(thor.Hash{}, kv)
 
-	addr := acc.BytesToAddress([]byte("acc1"))
+	addr := thor.BytesToAddress([]byte("acc1"))
 
 	balance := big.NewInt(10)
 	code := []byte{1, 2, 3}
 
-	storage := map[cry.Hash]cry.Hash{
-		cry.BytesToHash([]byte("s1")): cry.BytesToHash([]byte("v1")),
-		cry.BytesToHash([]byte("s2")): cry.BytesToHash([]byte("v2")),
-		cry.BytesToHash([]byte("s3")): cry.BytesToHash([]byte("v3"))}
+	storage := map[thor.Hash]thor.Hash{
+		thor.BytesToHash([]byte("s1")): thor.BytesToHash([]byte("v1")),
+		thor.BytesToHash([]byte("s2")): thor.BytesToHash([]byte("v2")),
+		thor.BytesToHash([]byte("s3")): thor.BytesToHash([]byte("v3"))}
 
 	state.SetBalance(addr, balance)
 	state.SetCode(addr, code)

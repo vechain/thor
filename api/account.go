@@ -3,8 +3,8 @@ package api
 import (
 	"math/big"
 
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 //AccountInterface manage account
@@ -20,11 +20,11 @@ func NewAccountInterface(state *state.State) *AccountInterface {
 }
 
 //GetBalance return balance from account
-func (ai *AccountInterface) GetBalance(address acc.Address) *big.Int {
+func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 	return ai.state.GetBalance(address)
 }
 
 //GetCode return code from account
-func (ai *AccountInterface) GetCode(address acc.Address) []byte {
+func (ai *AccountInterface) GetCode(address thor.Address) []byte {
 	return ai.state.GetCode(address)
 }

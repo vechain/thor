@@ -4,7 +4,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -53,12 +53,12 @@ func (b *Block) TotalScore() uint64 {
 }
 
 // ParentHash same as Header.ParentHash().
-func (b *Block) ParentHash() cry.Hash {
+func (b *Block) ParentHash() thor.Hash {
 	return b.header.ParentHash()
 }
 
 // Hash same as Header.Hash().
-func (b *Block) Hash() cry.Hash {
+func (b *Block) Hash() thor.Hash {
 	return b.header.Hash()
 }
 

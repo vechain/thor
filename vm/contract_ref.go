@@ -2,12 +2,12 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/acc"
+	"github.com/vechain/thor/thor"
 )
 
 // vmContractRef implements evm.ContractRef
 type vmContractRef struct {
-	addr acc.Address
+	addr thor.Address
 }
 
 func (vc *vmContractRef) Address() common.Address {

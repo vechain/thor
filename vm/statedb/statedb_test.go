@@ -6,16 +6,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	. "github.com/vechain/thor/vm/statedb"
 )
 
 func TestStateSnapshot(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
-	state, _ := state.New(cry.Hash{}, kv)
+	state, _ := state.New(thor.Hash{}, kv)
 
 	statedb := New(state)
 

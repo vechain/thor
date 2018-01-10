@@ -9,7 +9,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
@@ -21,8 +20,8 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		hash   *cry.Hash
-		signer *acc.Address
+		hash   *thor.Hash
+		signer *thor.Address
 	}
 }
 
@@ -33,12 +32,12 @@ type body struct {
 	Gas         uint64
 	Nonce       uint64
 	TimeBarrier uint64
-	DependsOn   *cry.Hash `rlp:"nil"`
+	DependsOn   *thor.Hash `rlp:"nil"`
 	Signature   []byte
 }
 
 // Hash returns hash of tx.
-func (t *Transaction) Hash() cry.Hash {
+func (t *Transaction) Hash() thor.Hash {
 	if cached := t.cache.hash; cached != nil {
 		return *cached
 	}
@@ -46,14 +45,14 @@ func (t *Transaction) Hash() cry.Hash {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, t)
 
-	var h cry.Hash
+	var h thor.Hash
 	hw.Sum(h[:0])
 	t.cache.hash = &h
 	return h
 }
 
 // HashOfWorkProof returns hash for work proof.
-func (t *Transaction) HashOfWorkProof() (hash cry.Hash) {
+func (t *Transaction) HashOfWorkProof() (hash thor.Hash) {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
 		t.body.Clauses,
@@ -68,7 +67,7 @@ func (t *Transaction) HashOfWorkProof() (hash cry.Hash) {
 }
 
 // HashForSigning returns hash of tx excludes signature.
-func (t *Transaction) HashForSigning() cry.Hash {
+func (t *Transaction) HashForSigning() thor.Hash {
 	wph := t.HashOfWorkProof()
 	// use hash of work proof hash as signing hash
 	return cry.HashSum(wph[:])
@@ -111,21 +110,19 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 }
 
 // Signer returns the signer of tx.
-func (t *Transaction) Signer() (*acc.Address, error) {
+func (t *Transaction) Signer() (thor.Address, error) {
 	if len(t.body.Signature) == 0 {
-		return nil, errors.New("not signed")
+		return thor.Address{}, errors.New("not signed")
 	}
 	if signer := t.cache.signer; signer != nil {
-		cpy := *signer
-		return &cpy, nil
+		return *signer, nil
 	}
 	signer, err := dsa.Signer(t.HashForSigning(), t.body.Signature)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
-	t.cache.signer = signer
-	cpy := *signer
-	return &cpy, nil
+	t.cache.signer = &signer
+	return signer, nil
 }
 
 // EncodeRLP implements rlp.Encoder

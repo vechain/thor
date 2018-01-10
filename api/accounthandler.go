@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/api/utils/httpx"
+	"github.com/vechain/thor/thor"
 )
 
 //AccountHTTPPathPrefix http path prefix
@@ -27,11 +27,11 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}
-	address, err := acc.ParseAddress(addr)
+	address, err := thor.ParseAddress(addr)
 	if err != nil {
 		return httpx.Error(" Parse address failed! ", 400)
 	}
-	b := ai.GetBalance(*address)
+	b := ai.GetBalance(address)
 	str, err := json.Marshal(b)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)
@@ -48,11 +48,11 @@ func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Reque
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}
-	address, err := acc.ParseAddress(addr)
+	address, err := thor.ParseAddress(addr)
 	if err != nil {
 		return httpx.Error(" Parse address failed! ", 400)
 	}
-	c := ai.GetCode(*address)
+	c := ai.GetCode(address)
 	str, err := json.Marshal(c)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)

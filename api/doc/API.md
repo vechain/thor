@@ -36,8 +36,8 @@ Method : GET
 ```
 {
   "Balance":0,
-  "CodeHash":cry.Hash
-  "StorageRoot":cry.Hash
+  "CodeHash":thor.Hash
+  "StorageRoot":thor.Hash
 }
 ```
 

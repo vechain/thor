@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/thor"
 )
 
 func TestCachedObject(t *testing.T) {
@@ -17,13 +18,13 @@ func TestCachedObject(t *testing.T) {
 
 	stgTrie, _ := trie.NewSecure(common.Hash{}, kv, 0)
 	storages := []struct {
-		k cry.Hash
-		v cry.Hash
+		k thor.Hash
+		v thor.Hash
 	}{
-		{cry.BytesToHash([]byte("key1")), cry.BytesToHash([]byte("value1"))},
-		{cry.BytesToHash([]byte("key2")), cry.BytesToHash([]byte("value2"))},
-		{cry.BytesToHash([]byte("key3")), cry.BytesToHash([]byte("value3"))},
-		{cry.BytesToHash([]byte("key4")), cry.BytesToHash([]byte("value4"))},
+		{thor.BytesToHash([]byte("key1")), thor.BytesToHash([]byte("value1"))},
+		{thor.BytesToHash([]byte("key2")), thor.BytesToHash([]byte("value2"))},
+		{thor.BytesToHash([]byte("key3")), thor.BytesToHash([]byte("value3"))},
+		{thor.BytesToHash([]byte("key4")), thor.BytesToHash([]byte("value4"))},
 	}
 
 	for _, s := range storages {

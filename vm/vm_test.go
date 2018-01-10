@@ -27,21 +27,20 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	dbstate "github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	. "github.com/vechain/thor/vm"
 )
 
 func newEnv() *VM {
 	db, _ := lvldb.NewMem()
-	statr, _ := dbstate.New(cry.Hash{}, db)
+	statr, _ := dbstate.New(thor.Hash{}, db)
 	ctx := Context{
-		TxHash:      cry.Hash{1},
+		TxHash:      thor.Hash{1},
 		ClauseIndex: 1,
-		GetHash: func(n uint64) cry.Hash {
-			return cry.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
+		GetHash: func(n uint64) thor.Hash {
+			return thor.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		},
 		BlockNumber: nil,
 		GasPrice:    nil,
@@ -54,7 +53,7 @@ func newEnv() *VM {
 func TestContract(t *testing.T) {
 	assert := assert.New(t)
 
-	origin := acc.BytesToAddress([]byte("0x0a"))
+	origin := thor.BytesToAddress([]byte("0x0a"))
 	env := newEnv()
 
 	// 创建合约
@@ -110,7 +109,7 @@ func TestContract(t *testing.T) {
 func TestContractCall(t *testing.T) {
 	assert := assert.New(t)
 
-	origin := acc.BytesToAddress([]byte("0x0a"))
+	origin := thor.BytesToAddress([]byte("0x0a"))
 	env := newEnv()
 
 	// 创建合约

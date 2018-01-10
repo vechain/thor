@@ -4,14 +4,13 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/consensus/shuffle"
 	"github.com/vechain/thor/thor"
 )
 
 // Schedule arrange when a proposer to build a block.
 type Schedule struct {
-	proposers    []acc.Address
+	proposers    []thor.Address
 	absenteeMap  addrMap
 	parentNumber uint32
 	parentTime   uint64
@@ -19,8 +18,8 @@ type Schedule struct {
 
 // New create a new schedule instance.
 func New(
-	proposers []acc.Address,
-	absentee []acc.Address,
+	proposers []thor.Address,
+	absentee []thor.Address,
 	parentNumber uint32,
 	parentTime uint64) *Schedule {
 
@@ -28,12 +27,12 @@ func New(
 		panic("len(absentee) must < len(proposers)")
 	}
 
-	absenteeMap := map[acc.Address]bool{}
+	absenteeMap := map[thor.Address]bool{}
 	for _, a := range absentee {
 		absenteeMap[a] = true
 	}
 	return &Schedule{
-		append([]acc.Address(nil), proposers...),
+		append([]thor.Address(nil), proposers...),
 		absenteeMap,
 		parentNumber,
 		parentTime,
@@ -47,9 +46,9 @@ func New(
 // It's guaranteed that the timestamp >= nowTime.
 //
 // The second one is a new absentee list.
-func (s *Schedule) Timing(addr acc.Address, nowTime uint64) (
+func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 	uint64, //timestamp
-	[]acc.Address, //absentee
+	[]thor.Address, //absentee
 	error,
 ) {
 	found := false
@@ -119,7 +118,7 @@ func (s *Schedule) Timing(addr acc.Address, nowTime uint64) (
 
 // Validate returns if the timestamp of addr is valid.
 // Error returned if addr is not in proposers list.
-func (s *Schedule) Validate(addr acc.Address, timestamp uint64) (bool, error) {
+func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, error) {
 	t, _, err := s.Timing(addr, timestamp)
 	if err != nil {
 		return false, err
@@ -127,9 +126,9 @@ func (s *Schedule) Validate(addr acc.Address, timestamp uint64) (bool, error) {
 	return t == timestamp, nil
 }
 
-type addrMap map[acc.Address]bool
+type addrMap map[thor.Address]bool
 
-func (am addrMap) toSlice() (slice []acc.Address) {
+func (am addrMap) toSlice() (slice []thor.Address) {
 	for a, b := range am {
 		if b {
 			slice = append(slice, a)

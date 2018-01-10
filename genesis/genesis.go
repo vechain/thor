@@ -4,17 +4,17 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/genesis/builder"
 	cs "github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 var (
 	// GodAddress is the address that can do special things on genesis contracts.
 	// e.g. initialize genesis contracts, consume/reward energy.
-	GodAddress = acc.BytesToAddress([]byte("god"))
+	GodAddress = thor.BytesToAddress([]byte("god"))
 
 	// InitialGasLimit gas limit value int genesis block.
 	InitialGasLimit uint64 = 10 * 1000 * 1000
@@ -46,8 +46,8 @@ func Build(state *state.State) (*block.Block, error) {
 				// Authority.initialize(address, address[])
 				data, err := cs.Authority.ABI.Pack(
 					"initialize",
-					acc.BytesToAddress([]byte("test")),
-					[]acc.Address{})
+					thor.BytesToAddress([]byte("test")),
+					[]thor.Address{})
 				if err != nil {
 					panic(errors.Wrap(err, "build genesis"))
 				}

@@ -7,12 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/consensus/schedule"
 	"github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -28,10 +28,10 @@ func PredicateTrunk(state *state.State, header *block.Header, preHeader *block.H
 		Authority(rt, "getProposers"),
 		Authority(rt, "getAbsentee"),
 		preHeader.Number(),
-		preHeader.Timestamp()).Validate(*signer, header.Timestamp())
+		preHeader.Timestamp()).Validate(signer, header.Timestamp())
 }
 
-func Authority(rt *runtime.Runtime, funcName string) []acc.Address {
+func Authority(rt *runtime.Runtime, funcName string) []thor.Address {
 	clause := &tx.Clause{
 		To: &contracts.Authority.Address,
 		Data: func() []byte {
@@ -52,10 +52,10 @@ func Authority(rt *runtime.Runtime, funcName string) []acc.Address {
 	return convertToAccAddress(addrs)
 }
 
-func convertToAccAddress(addrs []common.Address) []acc.Address {
+func convertToAccAddress(addrs []common.Address) []thor.Address {
 	length := len(addrs)
 	if length == 0 {
 		return nil
 	}
-	return append(convertToAccAddress(addrs[1:length]), acc.Address(addrs[0]))
+	return append(convertToAccAddress(addrs[1:length]), thor.Address(addrs[0]))
 }

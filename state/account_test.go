@@ -7,10 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/fortest"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/thor"
 )
 
 var M = fortest.Multi
@@ -31,7 +30,7 @@ func newTrie() *trie.SecureTrie {
 func TestTrie(t *testing.T) {
 	trie := newTrie()
 
-	addr := acc.BytesToAddress([]byte("account1"))
+	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
 		M(loadAccount(trie, addr)),
 		[]interface{}{Account{Balance: new(big.Int)}, nil},
@@ -57,18 +56,18 @@ func TestTrie(t *testing.T) {
 func TestStorageTrie(t *testing.T) {
 	trie := newTrie()
 
-	key := cry.BytesToHash([]byte("key"))
+	key := thor.BytesToHash([]byte("key"))
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
-		[]interface{}{cry.Hash{}, nil})
+		[]interface{}{thor.Hash{}, nil})
 
-	value := cry.BytesToHash([]byte("value"))
+	value := thor.BytesToHash([]byte("value"))
 	saveStorage(trie, key, value)
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
 		[]interface{}{value, nil})
 
-	saveStorage(trie, key, cry.Hash{})
+	saveStorage(trie, key, thor.Hash{})
 	assert.Equal(t,
 		M(trie.TryGet(key[:])),
 		[]interface{}{[]byte(nil), nil},

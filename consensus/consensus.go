@@ -2,21 +2,20 @@ package consensus
 
 import (
 	"github.com/pkg/errors"
-
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 // Consensus check whether the block is verified,
 // and predicate which trunk it belong to.
 type Consensus struct {
 	chain        chainReader
-	stateCreator func(cry.Hash) *state.State
+	stateCreator func(thor.Hash) *state.State
 }
 
 // New is Consensus factory.
-func New(chain chainReader, stateCreator func(cry.Hash) *state.State) *Consensus {
+func New(chain chainReader, stateCreator func(thor.Hash) *state.State) *Consensus {
 	return &Consensus{
 		chain:        chain,
 		stateCreator: stateCreator}

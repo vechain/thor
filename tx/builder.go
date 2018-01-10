@@ -3,7 +3,7 @@ package tx
 import (
 	"math/big"
 
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 )
 
 // Builder to make it easy to build transaction.
@@ -42,7 +42,7 @@ func (b *Builder) Nonce(nonce uint64) *Builder {
 }
 
 // DependsOn set depended tx.
-func (b *Builder) DependsOn(txHash *cry.Hash) *Builder {
+func (b *Builder) DependsOn(txHash *thor.Hash) *Builder {
 	if txHash == nil {
 		b.body.DependsOn = nil
 	} else {

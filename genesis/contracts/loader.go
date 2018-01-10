@@ -7,20 +7,20 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/genesis/contracts/gen"
+	"github.com/vechain/thor/thor"
 )
 
 // all info about a contract.
 type contract struct {
-	Address         acc.Address // pre-alloced address
+	Address         thor.Address // pre-alloced address
 	ABI             abi.ABI
 	binRuntimeAsset string
 }
 
 // load contract info from asset.
 // panic if failed.
-func mustLoad(addr acc.Address, abiAsset, binRuntimeAsset string) contract {
+func mustLoad(addr thor.Address, abiAsset, binRuntimeAsset string) contract {
 	data := gen.MustAsset(abiAsset)
 	abi, err := abi.JSON(bytes.NewReader(data))
 	if err != nil {

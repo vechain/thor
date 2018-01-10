@@ -20,8 +20,7 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/vechain/thor/acc"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -330,7 +329,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	// differ with ethereum here!!!
 	evm.contractCreationCount++
-	contractAddr = common.Address(acc.CreateContractAddress(cry.Hash(evm.TxHash), evm.ClauseIndex, evm.contractCreationCount))
+	contractAddr = common.Address(thor.CreateContractAddress(thor.Hash(evm.TxHash), evm.ClauseIndex, evm.contractCreationCount))
 	//
 
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)

@@ -5,10 +5,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/bn"
-	"github.com/vechain/thor/cry"
+	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
@@ -16,19 +15,19 @@ import (
 // Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig vm.Config
-	getHash  func(uint64) cry.Hash
+	getHash  func(uint64) thor.Hash
 	state    State
 
 	// block env
-	blockBeneficiary acc.Address
+	blockBeneficiary thor.Address
 	blockNumber      uint32
 	blockTime        uint64
 	blockGasLimit    uint64
 
 	// tx env
-	txOrigin   acc.Address
+	txOrigin   thor.Address
 	txGasPrice bn.Int
-	txHash     cry.Hash
+	txHash     thor.Hash
 }
 
 // State to decouple state.State.
@@ -41,7 +40,7 @@ type State interface {
 func New(
 	state State,
 	header *block.Header,
-	getHash func(uint64) cry.Hash,
+	getHash func(uint64) thor.Hash,
 ) *Runtime {
 	return &Runtime{
 		getHash:       getHash,
@@ -56,9 +55,9 @@ func New(
 // SetTransactionEnvironment set transaction related vars.
 // Returns this runtime.
 func (rt *Runtime) SetTransactionEnvironment(
-	txOrigin acc.Address,
+	txOrigin thor.Address,
 	txGasPrice *big.Int,
-	txHash cry.Hash) *Runtime {
+	txHash thor.Hash) *Runtime {
 
 	rt.txOrigin = txOrigin
 	rt.txGasPrice.SetBig(txGasPrice)
@@ -98,11 +97,11 @@ func (rt *Runtime) Execute(clause *Tx.Clause, index int, gas uint64) *vm.Output 
 		Call(rt.txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
 }
 
-func (rt *Runtime) consumeEnergy(target *acc.Address, amount *big.Int) (acc.Address, error) {
-	return acc.Address{}, nil
+func (rt *Runtime) consumeEnergy(target *thor.Address, amount *big.Int) (thor.Address, error) {
+	return thor.Address{}, nil
 }
 
-func (rt *Runtime) chargeEnergy(addr acc.Address, amount *big.Int) error {
+func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 	return nil
 }
 
@@ -126,7 +125,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 	gasPrice := tx.GasPrice().ToBig()
 
 	// set tx env
-	rt.SetTransactionEnvironment(*origin, gasPrice, tx.Hash())
+	rt.SetTransactionEnvironment(origin, gasPrice, tx.Hash())
 
 	clauses := tx.Clauses()
 	commonTarget := commonTo(clauses)
@@ -198,7 +197,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 	return &receipt, vmOutputs, nil
 }
 
-func commonTo(clauses Tx.Clauses) *acc.Address {
+func commonTo(clauses Tx.Clauses) *thor.Address {
 	if len(clauses) == 0 {
 		return nil
 	}

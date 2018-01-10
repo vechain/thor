@@ -6,9 +6,9 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/thor"
 )
 
 // Header contains almost all information about a block, except body.
@@ -17,35 +17,35 @@ type Header struct {
 	content headerContent
 
 	cache struct {
-		hash   *cry.Hash
-		signer *acc.Address
+		hash   *thor.Hash
+		signer *thor.Address
 	}
 }
 
 // headerContent content of header
 type headerContent struct {
-	ParentHash  cry.Hash
+	ParentHash  thor.Hash
 	Timestamp   uint64
 	TotalScore  uint64
 	GasLimit    uint64
 	GasUsed     uint64
-	Beneficiary acc.Address
+	Beneficiary thor.Address
 
-	TxsRoot      cry.Hash
-	StateRoot    cry.Hash
-	ReceiptsRoot cry.Hash
+	TxsRoot      thor.Hash
+	StateRoot    thor.Hash
+	ReceiptsRoot thor.Hash
 
 	Signature []byte
 }
 
 // ParentHash returns hash of parent block.
-func (h *Header) ParentHash() cry.Hash {
+func (h *Header) ParentHash() thor.Hash {
 	return h.content.ParentHash
 }
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
-	if (cry.Hash{}) == h.content.ParentHash {
+	if (thor.Hash{}) == h.content.ParentHash {
 		// genesis block
 		return 0
 	}
@@ -74,27 +74,27 @@ func (h *Header) GasUsed() uint64 {
 }
 
 // Beneficiary returns reward recipient.
-func (h *Header) Beneficiary() acc.Address {
+func (h *Header) Beneficiary() thor.Address {
 	return h.content.Beneficiary
 }
 
 // TxsRoot returns merkle root of txs contained in this block.
-func (h *Header) TxsRoot() cry.Hash {
+func (h *Header) TxsRoot() thor.Hash {
 	return h.content.TxsRoot
 }
 
 // StateRoot returns account state merkle root just afert this block being applied.
-func (h *Header) StateRoot() cry.Hash {
+func (h *Header) StateRoot() thor.Hash {
 	return h.content.StateRoot
 }
 
 // ReceiptsRoot returns merkle root of tx receipts.
-func (h *Header) ReceiptsRoot() cry.Hash {
+func (h *Header) ReceiptsRoot() thor.Hash {
 	return h.content.ReceiptsRoot
 }
 
 // Hash computes hash of header (block hash).
-func (h *Header) Hash() cry.Hash {
+func (h *Header) Hash() thor.Hash {
 	if cached := h.cache.hash; cached != nil {
 		return *cached
 	}
@@ -102,7 +102,7 @@ func (h *Header) Hash() cry.Hash {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, h)
 
-	var hash cry.Hash
+	var hash thor.Hash
 	hw.Sum(hash[:0])
 
 	// overwrite first 4 bytes of block hash to block number.
@@ -113,7 +113,7 @@ func (h *Header) Hash() cry.Hash {
 }
 
 // HashForSigning computes hash of all header fields excluding signature.
-func (h *Header) HashForSigning() cry.Hash {
+func (h *Header) HashForSigning() thor.Hash {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
 		h.content.ParentHash,
@@ -128,7 +128,7 @@ func (h *Header) HashForSigning() cry.Hash {
 		h.content.ReceiptsRoot,
 	})
 
-	var hash cry.Hash
+	var hash thor.Hash
 	hw.Sum(hash[:0])
 	return hash
 }
@@ -143,21 +143,19 @@ func (h *Header) WithSignature(sig []byte) *Header {
 }
 
 // Signer returns signer of this block.
-func (h *Header) Signer() (*acc.Address, error) {
+func (h *Header) Signer() (thor.Address, error) {
 	if len(h.content.Signature) == 0 {
-		return nil, errors.New("not signed")
+		return thor.Address{}, errors.New("not signed")
 	}
 	if signer := h.cache.signer; signer != nil {
-		cpy := *signer
-		return &cpy, nil
+		return *signer, nil
 	}
 	signer, err := dsa.Signer(h.HashForSigning(), h.content.Signature)
 	if err != nil {
-		return nil, err
+		return thor.Address{}, err
 	}
-	h.cache.signer = signer
-	cpy := *signer
-	return &cpy, nil
+	h.cache.signer = &signer
+	return signer, nil
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -179,7 +177,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 }
 
 // Number extract block number from block hash.
-func Number(hash cry.Hash) uint32 {
+func Number(hash thor.Hash) uint32 {
 	// first 4 bytes are over written by block number (big endian).
 	return binary.BigEndian.Uint32(hash[:4])
 }

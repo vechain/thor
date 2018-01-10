@@ -6,13 +6,12 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/acc"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 const (
@@ -22,12 +21,12 @@ const (
 
 func main() {
 	db, _ := lvldb.NewMem()
-	hash, _ := cry.ParseHash(emptyRootHash)
-	s, _ := state.New(*hash, db)
-	address, _ := acc.ParseAddress(testAddress)
-	s.SetBalance(*address, big.NewInt(100))
-	s.SetCode(*address, []byte{0x11, 0x12})
-	s.Commit()
+	hash, _ := thor.ParseHash(emptyRootHash)
+	s, _ := state.New(hash, db)
+	address, _ := thor.ParseAddress(testAddress)
+	s.SetBalance(address, big.NewInt(100))
+	s.SetCode(address, []byte{0x11, 0x12})
+	s.Stage().Commit()
 	chain := chain.New(db)
 	chain.WriteGenesis(new(block.Builder).Build())
 	for i := 0; i < 100; i++ {
