@@ -132,6 +132,7 @@ contract Energy is Token {
     ///@param _amount   `_amount` tokens would be consumed
     ///@return _consumption `_consumption` credits that has been consumed
     function consumeCredits(address _contract, address _consumer, uint256 _amount) public returns(uint256 _consumption) {
+
         require(isContract(_contract));
         require(!isContract(_consumer));
 
@@ -143,45 +144,6 @@ contract Energy is Token {
         sharedCredits[key].currentTimeStamp = block.timestamp;
         sharedCredits[key].availableCredits = ac.sub(_amount);
         return _amount;
-    }
-
-    ///@notice first of all, consume the shared credits, if all shared credits all consumed,the real energy would be consumed
-    ///@param _from which is a contract,if a msg called in the contract,the credits would be consumed
-    ///@param _reciever who holds the energy and the shared credits
-    ///@param _consumption total energy and credits should be consumed
-    ///
-    ///@return consumedBalance energy consumed 
-    ///@return consumedCredits credits consumed
-    function consume(address _from,address _reciever,uint256 _consumption) public returns(uint256 consumedBalance,uint256 consumedCredits) {
-        // require(msg.sender == admin);
-        // credits can only be applied to a contract
-        require(isContract(_from));
-        //the contract caller should be a normal amount
-        require(!isContract(_reciever));
-        //shared credits should be greater than zero
-        require(_consumption > 0);
-
-        bytes32 key = keccak256(_from,_reciever);
-        uint256 ac = getAvailableCredits(_from,_reciever);
-        if (block.timestamp > sharedCredits[key].currentTimeStamp) {
-            //set the block time.
-            sharedCredits[key].currentTimeStamp = block.timestamp;
-        }
-        if (ac >= _consumption) {
-            //available credits is enough to be consumed
-            sharedCredits[key].availableCredits = ac.sub(_consumption);
-            return (0,_consumption);
-        }
-        uint256 engAmount = calRestBalance(_reciever);
-        if (ac.add(engAmount) >= _consumption) {
-            //sum the credits and energy, consume them if enough
-            sharedCredits[key].availableCredits = 0;
-            uint256 b = calRestBalance(_reciever);
-            uint256 restConsumption = _consumption.sub(ac);
-            balances[_reciever].balance = b.sub(restConsumption);
-            return (restConsumption,ac);
-        }
-        return (0,0);
     }
 
     ///@param _owner who holds the energy and the vet
