@@ -19,7 +19,6 @@ func TestRuntime(t *testing.T) {
 	state, _ := state.New(thor.Hash{}, kv)
 
 	rt := runtime.New(state, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
-	rt.SetTransactionEnvironment(thor.BytesToAddress([]byte("acc1")), &big.Int{}, thor.Hash{})
-	output := rt.Execute(&tx.Clause{}, 0, 1000000)
+	output := rt.Execute(&tx.Clause{}, 0, 1000000, thor.BytesToAddress([]byte("acc1")), &big.Int{}, thor.Hash{})
 	fmt.Printf("%+v\n", output)
 }
