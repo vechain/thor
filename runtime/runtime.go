@@ -54,19 +54,23 @@ func New(
 }
 
 // SetTransactionEnvironment set transaction related vars.
+// Returns this runtime.
 func (rt *Runtime) SetTransactionEnvironment(
 	txOrigin acc.Address,
 	txGasPrice *big.Int,
-	txHash cry.Hash) {
+	txHash cry.Hash) *Runtime {
 
 	rt.txOrigin = txOrigin
 	rt.txGasPrice.SetBig(txGasPrice)
 	rt.txHash = txHash
+	return rt
 }
 
 // SetVMConfig config VM.
-func (rt *Runtime) SetVMConfig(config vm.Config) {
+// Returns this runtime.
+func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 	rt.vmConfig = config
+	return rt
 }
 
 // Execute executes single clause bases on tx env set by SetTransactionEnvironment.
