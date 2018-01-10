@@ -68,13 +68,15 @@ func (b *Builder) Call(addr thor.Address, data []byte) *Builder {
 	return b
 }
 
-func (b *Builder) newRuntime(state *state.State, origin thor.Address) *runtime.Runtime {
-	return runtime.New(state, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} }).
-		SetTransactionEnvironment(origin, new(big.Int), thor.Hash{})
-}
-
 // Build build genesis block according to presets.
-func (b *Builder) Build(state *state.State, god thor.Address) (*block.Block, error) {
+func (b *Builder) Build(state *state.State, god thor.Address) (blk *block.Block, err error) {
+
+	checkpoint := state.NewCheckpoint()
+	defer func() {
+		if err != nil {
+			state.RevertTo(checkpoint)
+		}
+	}()
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {
@@ -85,15 +87,24 @@ func (b *Builder) Build(state *state.State, god thor.Address) (*block.Block, err
 		}
 	}
 
+	rt := runtime.New(
+		state,
+		&block.Header{},
+		func(uint64) thor.Hash { return thor.Hash{} })
+
 	// execute all calls
 	for _, call := range b.calls {
-		rt := b.newRuntime(state, god)
+
 		output := rt.Execute(
 			&tx.Clause{
 				To:   &call.address,
 				Data: call.data},
 			0,
-			execGasLimit)
+			execGasLimit,
+			god,
+			&big.Int{},
+			thor.Hash{})
+
 		if output.VMErr != nil {
 			return nil, errors.Wrap(output.VMErr, "build genesis (vm error)")
 		}

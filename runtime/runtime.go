@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
@@ -23,11 +22,6 @@ type Runtime struct {
 	blockNumber      uint32
 	blockTime        uint64
 	blockGasLimit    uint64
-
-	// tx env
-	txOrigin   thor.Address
-	txGasPrice bn.Int
-	txHash     thor.Hash
 }
 
 // State to decouple state.State.
@@ -43,26 +37,13 @@ func New(
 	getHash func(uint64) thor.Hash,
 ) *Runtime {
 	return &Runtime{
-		getHash:       getHash,
-		state:         state,
-		txOrigin:      header.Beneficiary(),
-		blockNumber:   header.Number(),
-		blockTime:     header.Timestamp(),
-		blockGasLimit: header.GasLimit(),
+		getHash:          getHash,
+		state:            state,
+		blockBeneficiary: header.Beneficiary(),
+		blockNumber:      header.Number(),
+		blockTime:        header.Timestamp(),
+		blockGasLimit:    header.GasLimit(),
 	}
-}
-
-// SetTransactionEnvironment set transaction related vars.
-// Returns this runtime.
-func (rt *Runtime) SetTransactionEnvironment(
-	txOrigin thor.Address,
-	txGasPrice *big.Int,
-	txHash thor.Hash) *Runtime {
-
-	rt.txOrigin = txOrigin
-	rt.txGasPrice.SetBig(txGasPrice)
-	rt.txHash = txHash
-	return rt
 }
 
 // SetVMConfig config VM.
@@ -73,7 +54,14 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 }
 
 // Execute executes single clause bases on tx env set by SetTransactionEnvironment.
-func (rt *Runtime) Execute(clause *Tx.Clause, index int, gas uint64) *vm.Output {
+func (rt *Runtime) Execute(
+	clause *Tx.Clause,
+	index int,
+	gas uint64,
+	txOrigin thor.Address,
+	txGasPrice *big.Int,
+	txHash thor.Hash,
+) *vm.Output {
 
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
@@ -81,9 +69,9 @@ func (rt *Runtime) Execute(clause *Tx.Clause, index int, gas uint64) *vm.Output 
 		Time:        new(big.Int).SetUint64(rt.blockTime),
 		GasLimit:    new(big.Int).SetUint64(rt.blockGasLimit),
 
-		Origin:   rt.txOrigin,
-		GasPrice: rt.txGasPrice.ToBig(),
-		TxHash:   rt.txHash,
+		Origin:   txOrigin,
+		GasPrice: txGasPrice,
+		TxHash:   txHash,
 
 		GetHash:     rt.getHash,
 		ClauseIndex: uint64(index),
@@ -91,10 +79,10 @@ func (rt *Runtime) Execute(clause *Tx.Clause, index int, gas uint64) *vm.Output 
 
 	if clause.To == nil {
 		return vm.New(ctx, rt.state, rt.vmConfig).
-			Create(rt.txOrigin, clause.Data, gas, clause.Value.ToBig())
+			Create(txOrigin, clause.Data, gas, clause.Value.ToBig())
 	}
 	return vm.New(ctx, rt.state, rt.vmConfig).
-		Call(rt.txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
+		Call(txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
 }
 
 func (rt *Runtime) consumeEnergy(target *thor.Address, amount *big.Int) (thor.Address, error) {
@@ -106,8 +94,11 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 }
 
 // ExecuteTransaction executes a transaction.
+// If an error returned, state will not be affected.
 // It will invoke SetTransactionEnvironment to reset tx env.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Output, error) {
+// Note that the elements of returned []*vm.Output may be nil if failed
+// to execute corresponded clauses.
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	// precheck
 	origin, err := tx.Signer()
 	if err != nil {
@@ -124,9 +115,6 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 
 	gasPrice := tx.GasPrice().ToBig()
 
-	// set tx env
-	rt.SetTransactionEnvironment(origin, gasPrice, tx.Hash())
-
 	clauses := tx.Clauses()
 	commonTarget := commonTo(clauses)
 
@@ -135,13 +123,18 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 
 	// the checkpoint to be reverted only when gas consumption failure.
 	txCheckpoint := rt.state.NewCheckpoint()
+	defer func() {
+		if err != nil {
+			rt.state.RevertTo(txCheckpoint)
+		}
+	}()
 
 	// pre pay energy for tx gas
 	addrPayedEnergy, err := rt.consumeEnergy(
 		commonTarget,
 		energyPrepayed)
+
 	if err != nil {
-		rt.state.RevertTo(txCheckpoint)
 		return nil, nil, err
 	}
 
@@ -150,11 +143,11 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 
 	leftOverGas := gas - intrinsicGas
 
-	receipt := Tx.Receipt{Outputs: make([]*Tx.Output, len(clauses))}
-	vmOutputs := make([]*vm.Output, len(clauses))
+	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, len(clauses))}
+	vmOutputs = make([]*vm.Output, len(clauses))
 
 	for i, clause := range clauses {
-		vmOutput := rt.Execute(clause, i, leftOverGas)
+		vmOutput := rt.Execute(clause, i, leftOverGas, origin, gasPrice, tx.Hash())
 		vmOutputs[i] = vmOutput
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -191,10 +184,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (*Tx.Receipt, []*vm.Ou
 
 	// return overpayed energy to whom payed
 	if err := rt.chargeEnergy(addrPayedEnergy, energyToReturn); err != nil {
-		rt.state.RevertTo(txCheckpoint)
 		return nil, nil, err
 	}
-	return &receipt, vmOutputs, nil
+	return receipt, vmOutputs, nil
 }
 
 func commonTo(clauses Tx.Clauses) *thor.Address {
