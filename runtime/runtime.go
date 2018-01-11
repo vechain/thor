@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/genesis/contracts"
+	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	Tx "github.com/vechain/thor/tx"
