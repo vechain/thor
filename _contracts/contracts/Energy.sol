@@ -99,7 +99,7 @@ contract Energy is Token {
         bytes32 key = keccak256(_from,_reciever);
         SharedCredit storage s = sharedCredits[key];
         if ( s.availableCredits > 0 && s.expire > now ) {
-            uint256 cbt = block.timestamp;
+            uint256 cbt = now;
             if ( cbt > s.currentTimeStamp) {
                 //credits has been grown,calculate the available credits within the limit.
                 uint256 ac = s.availableCredits.add((cbt.sub(s.currentTimeStamp)).mul(s.creditGrowthRate));
@@ -125,7 +125,7 @@ contract Energy is Token {
         uint256 ac = getAvailableCredits(_callee,_caller);
         if (ac >= _amount) {
             bytes32 key = keccak256(_callee,_caller);
-            sharedCredits[key].currentTimeStamp = block.timestamp;
+            sharedCredits[key].currentTimeStamp = now;
             sharedCredits[key].availableCredits = ac.sub(_amount);
             return _callee;
         }
@@ -135,7 +135,7 @@ contract Energy is Token {
             revert();
         }
         balances[_caller].balance = b.sub(_amount);
-        balances[_caller].timestamp = block.timestamp;
+        balances[_caller].timestamp = now;
         return _caller;
 
     }
@@ -148,7 +148,7 @@ contract Energy is Token {
         
         uint256 b = calRestBalance(_reciever); 
         balances[_reciever].balance = b.add(_amount);
-        balances[_reciever].timestamp = block.timestamp;
+        balances[_reciever].timestamp = now;
     }
 
     ///@param _owner who holds the energy and the vet
@@ -173,15 +173,12 @@ contract Energy is Token {
     ///
     ///@return how much energy the _owner holds
     function calRestBalance(address _owner) internal returns(uint256) {
-        if (balances[_owner].timestamp != 0) {
-            balances[_owner].balance = balanceOf(_owner);
-            balances[_owner].vetamount = _owner.balance;
-            balances[_owner].timestamp = now;
-        } else {
-            balances[_owner].balance = 0;
-            balances[_owner].vetamount = _owner.balance;
+        if (balances[_owner].timestamp == 0) {
             balances[_owner].timestamp = now;
         }
+        balances[_owner].balance = balanceOf(_owner);
+        balances[_owner].vetamount = _owner.balance;
+        balances[_owner].timestamp = now;
         return balances[_owner].balance;
     }
 
