@@ -113,13 +113,13 @@ contract Energy is Token {
         return 0;
     }
 
-    ///@notice consume `_amount` tokens of `_consumer`
+    ///@notice consume `_amount` tokens or credits of `_caller`
     ///@param _callee `_callee` who shared the credits to `_callee`
     ///@param _caller credits of `_caller` would be consumed 
     ///@param _amount   `_amount` tokens would be consumed
     ///@return _consumer credits of `_consumer` would be consumed
     function consume(address _caller, address _callee, uint256 _amount) public returns(address _consumer) {
-        //only called by admin
+        //only called by god
         require(msg.sender == Constants.god());
 
         uint256 ac = getAvailableCredits(_callee,_caller);
@@ -138,6 +138,17 @@ contract Energy is Token {
         balances[_caller].timestamp = block.timestamp;
         return _caller;
 
+    }
+
+    ///@notice charge `_amount` tokens to `_reciever`
+    ///@param _reciever `_reciever` recieves `_amount` tokens
+    ///@param _amount `_amount` send to `_reciever`
+    function charge(address _reciever, uint256 _amount) public {
+        require(msg.sender == Constants.god());
+        
+        uint256 b = calRestBalance(_reciever); 
+        balances[_reciever].balance = b.add(_amount);
+        balances[_reciever].timestamp = block.timestamp;
     }
 
     ///@param _owner who holds the energy and the vet
