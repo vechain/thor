@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/vechain/thor/genesis/contracts/gen"
+	"github.com/vechain/thor/contracts/gen"
 	"github.com/vechain/thor/thor"
 )
 
