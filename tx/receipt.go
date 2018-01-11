@@ -10,6 +10,8 @@ type Receipt struct {
 
 // Output output of clause execution.
 type Output struct {
+	// returned data of the clause that invokes a method of a contract
+	ReturnData []byte
 	// logs produced by the clause
 	Logs []*Log
 }
