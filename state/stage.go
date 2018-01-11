@@ -35,7 +35,7 @@ func newStage(root thor.Hash, kv kv.GetPutter, changes map[thor.Address]*changed
 	for addr, obj := range changes {
 		dataCpy := obj.data
 
-		if len(dataCpy.CodeHash) > 0 {
+		if len(obj.code) > 0 {
 			codes = append(codes, codeWithHash{
 				code: obj.code,
 				hash: dataCpy.CodeHash})
