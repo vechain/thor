@@ -1,14 +1,21 @@
 package runtime
 
 import (
-	"errors"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
+)
+
+var (
+	callGas uint64 = 1000 * 1000
 )
 
 // Runtime is to support transaction execution.
@@ -85,11 +92,41 @@ func (rt *Runtime) Execute(
 		Call(txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
 }
 
-func (rt *Runtime) consumeEnergy(target *thor.Address, amount *big.Int) (thor.Address, error) {
-	return thor.Address{}, nil
+func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
+	const consumeFnName = "consume"
+	data, err := contracts.Energy.ABI.Pack(consumeFnName, common.Address(caller), common.Address(callee), amount)
+	if err != nil {
+		panic(err)
+	}
+
+	output := rt.Execute(&Tx.Clause{
+		To:   &contracts.Energy.Address,
+		Data: data,
+	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
+	if output.VMErr != nil {
+		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
+	}
+
+	var payer common.Address
+	if err := contracts.Energy.ABI.Unpack(&payer, consumeFnName, output.Value); err != nil {
+		panic(err)
+	}
+	return thor.Address(payer), nil
 }
 
 func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
+	const chargeFnName = "charge"
+	data, err := contracts.Energy.ABI.Pack(chargeFnName, common.Address(addr), amount)
+	if err != nil {
+		panic(err)
+	}
+	output := rt.Execute(&tx.Clause{
+		To:   &contracts.Energy.Address,
+		Data: data,
+	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
+	if output.VMErr != nil {
+		return errors.Wrap(output.VMErr, "charge energy")
+	}
 	return nil
 }
 
@@ -116,7 +153,6 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	gasPrice := tx.GasPrice().ToBig()
 
 	clauses := tx.Clauses()
-	commonTarget := commonTo(clauses)
 
 	energyPrepayed := new(big.Int).SetUint64(gas)
 	energyPrepayed.Mul(energyPrepayed, gasPrice)
@@ -130,8 +166,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	}()
 
 	// pre pay energy for tx gas
-	addrPayedEnergy, err := rt.consumeEnergy(
-		commonTarget,
+	energyPayer, err := rt.consumeEnergy(
+		origin,
+		commonTo(clauses),
 		energyPrepayed)
 
 	if err != nil {
@@ -183,28 +220,30 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn.Mul(energyToReturn, gasPrice)
 
 	// return overpayed energy to whom payed
-	if err := rt.chargeEnergy(addrPayedEnergy, energyToReturn); err != nil {
+	if err := rt.chargeEnergy(energyPayer, energyToReturn); err != nil {
 		return nil, nil, err
 	}
 	return receipt, vmOutputs, nil
 }
 
-func commonTo(clauses Tx.Clauses) *thor.Address {
+// returns common 'To' field of clauses if any.
+// Empty address returned if no common 'To'.
+func commonTo(clauses Tx.Clauses) thor.Address {
 	if len(clauses) == 0 {
-		return nil
+		return thor.Address{}
 	}
 	firstTo := clauses[0].To
 	if firstTo == nil {
-		return nil
+		return thor.Address{}
 	}
 
 	for _, c := range clauses[1:] {
 		if c.To == nil {
-			return nil
+			return thor.Address{}
 		}
 		if *c.To != *firstTo {
-			return nil
+			return thor.Address{}
 		}
 	}
-	return firstTo
+	return *firstTo
 }
