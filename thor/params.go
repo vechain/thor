@@ -9,4 +9,11 @@ const (
 	BlockInterval             uint64 = 10 // time interval between two consecutive blocks.
 	ClauseGas                 uint64 = params.TxGas * 2 / 3
 	ClauseGasContractCreation uint64 = params.TxGasContractCreation * 2 / 3
+	InitialGasLimit           uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
+)
+
+var (
+	// GodAddress is the address that can do special things on genesis contracts.
+	// e.g. initialize genesis contracts, consume/reward energy.
+	GodAddress = BytesToAddress([]byte("god"))
 )

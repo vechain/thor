@@ -59,5 +59,5 @@ func buildGenesis(state *state.State, signer thor.Address) (*block.Block, error)
 				return data
 			}(),
 		).
-		Build(state, thor.BytesToAddress([]byte("god")))
+		Build(state)
 }

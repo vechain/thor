@@ -11,15 +11,6 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-var (
-	// GodAddress is the address that can do special things on genesis contracts.
-	// e.g. initialize genesis contracts, consume/reward energy.
-	GodAddress = thor.BytesToAddress([]byte("god"))
-
-	// InitialGasLimit gas limit value int genesis block.
-	InitialGasLimit uint64 = 10 * 1000 * 1000
-)
-
 const (
 	// Timestamp timestamp of genesis block.
 	Timestamp uint64 = 1234567890
@@ -29,7 +20,7 @@ const (
 func Build(state *state.State) (*block.Block, error) {
 	return new(builder.Builder).
 		Timestamp(Timestamp).
-		GasLimit(InitialGasLimit).
+		GasLimit(thor.InitialGasLimit).
 		Alloc(
 			cs.Authority.Address,
 			new(big.Int),
@@ -54,5 +45,5 @@ func Build(state *state.State) (*block.Block, error) {
 				return data
 			}(),
 		).
-		Build(state, GodAddress)
+		Build(state)
 }

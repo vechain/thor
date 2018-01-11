@@ -69,7 +69,7 @@ func (b *Builder) Call(addr thor.Address, data []byte) *Builder {
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(state *state.State, god thor.Address) (blk *block.Block, err error) {
+func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	checkpoint := state.NewCheckpoint()
 	defer func() {
@@ -101,7 +101,7 @@ func (b *Builder) Build(state *state.State, god thor.Address) (blk *block.Block,
 				Data: call.data},
 			0,
 			execGasLimit,
-			god,
+			thor.GodAddress,
 			&big.Int{},
 			thor.Hash{})
 
