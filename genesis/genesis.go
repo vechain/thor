@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/genesis/builder"
-	cs "github.com/vechain/thor/genesis/contracts"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )

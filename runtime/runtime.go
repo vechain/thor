@@ -84,12 +84,11 @@ func (rt *Runtime) Execute(
 		ClauseIndex: uint64(index),
 	}
 
+	vm := vm.New(ctx, rt.state, rt.vmConfig)
 	if clause.To == nil {
-		return vm.New(ctx, rt.state, rt.vmConfig).
-			Create(txOrigin, clause.Data, gas, clause.Value.ToBig())
+		return vm.Create(txOrigin, clause.Data, gas, clause.Value.ToBig())
 	}
-	return vm.New(ctx, rt.state, rt.vmConfig).
-		Call(txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
+	return vm.Call(txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
 }
 
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
