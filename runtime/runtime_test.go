@@ -1,10 +1,8 @@
 package runtime_test
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -124,63 +122,4 @@ func TestExecuteTransaction(t *testing.T) {
 	}
 	_ = receipt
 	assert.Equal(t, state.GetBalance(addr1), new(big.Int).Sub(balance1, big.NewInt(10)))
-}
-
-func TestSpeed(t *testing.T) {
-	//	testGasProccessSpeed()
-}
-func testGasProccessSpeed() {
-	kv, _ := lvldb.NewMem()
-
-	st, _ := state.New(thor.Hash{}, kv)
-	_, err := genesis.Build(st)
-	if err != nil {
-		panic(err)
-	}
-
-	root, _ := st.Stage().Commit()
-	_ = root
-
-	t := time.Now().UnixNano()
-	totalUsedGas := new(big.Int)
-	for {
-		//		st, err := state.New(root, kv)
-		if err != nil {
-			panic(err)
-		}
-		rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
-		data, err := contracts.Energy.ABI.Pack(
-			"charge",
-			thor.BytesToAddress([]byte("acc1")),
-			big.NewInt(1000*1000*1000*1000),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		gas := uint64(1000000)
-		out := rt.Execute(&tx.Clause{
-			To:   &contracts.Energy.Address,
-			Data: data,
-		}, 0, gas, thor.GodAddress, new(big.Int), thor.Hash{})
-		if out.VMErr != nil {
-			panic(out.VMErr)
-		}
-
-		totalUsedGas.Add(totalUsedGas, new(big.Int).SetUint64(gas-out.LeftOverGas))
-
-		root, err = st.Stage().Commit()
-		if err != nil {
-			panic(err)
-		}
-
-		now := time.Now().UnixNano()
-		if now-t > 1000*1000*1000*3 {
-			fmt.Println(totalUsedGas)
-			x := new(big.Int).Mul(totalUsedGas, big.NewInt(1000*1000*1000))
-			x.Div(x, big.NewInt(now-t))
-			fmt.Println("gas process speed:", x, " gas/sec")
-			break
-		}
-	}
 }
