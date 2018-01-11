@@ -1,5 +1,6 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
+import './Constants.sol';
 import './SafeMath.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -101,49 +102,42 @@ contract Energy is Token {
             uint256 cbt = block.timestamp;
             if ( cbt > s.currentTimeStamp) {
                 //credits has been grown,calculate the available credits within the limit.
-                uint256 ac = s.limit.add((cbt.sub(s.currentTimeStamp)).mul(s.creditGrowthRate));
+                uint256 ac = s.availableCredits.add((cbt.sub(s.currentTimeStamp)).mul(s.creditGrowthRate));
                 if (ac >= s.limit) {
                     return s.limit;
                 }
                 return ac;
             }
             return s.availableCredits;
-        } 
+        }
         return 0;
     }
 
     ///@notice consume `_amount` tokens of `_consumer`
-    ///@param _consumer tokens of whom would be consumed 
+    ///@param _callee `_callee` who shared the credits to `_callee`
+    ///@param _caller credits of `_caller` would be consumed 
     ///@param _amount   `_amount` tokens would be consumed
-    ///@return _consumption `_consumption` tokens that has been consumed
-    function consumeEnergy(address _consumer,uint256 _amount) public returns(uint256 _consumption) {
-        uint256 b = calRestBalance(_consumer);
+    ///@return _consumer credits of `_consumer` would be consumed
+    function consume(address _caller, address _callee, uint256 _amount) public returns(address _consumer) {
+        //only called by admin
+        require(msg.sender == Constants.god());
+
+        uint256 ac = getAvailableCredits(_callee,_caller);
+        if (ac >= _amount) {
+            bytes32 key = keccak256(_callee,_caller);
+            sharedCredits[key].currentTimeStamp = block.timestamp;
+            sharedCredits[key].availableCredits = ac.sub(_amount);
+            return _callee;
+        }
+        
+        uint256 b = calRestBalance(_caller); 
         if (b < _amount) {
-            return 0;
+            revert();
         }
-        balances[_consumer].balance = b.sub(_amount);
-        balances[_consumer].timestamp = block.timestamp;
-        return _amount;
-    }
+        balances[_caller].balance = b.sub(_amount);
+        balances[_caller].timestamp = block.timestamp;
+        return _caller;
 
-    ///@notice consume `_amount` tokens of `_consumer`
-    ///@param _contract `_contract` who shared the credits to `_consumer`
-    ///@param _consumer credits of whom would be consumed 
-    ///@param _amount   `_amount` tokens would be consumed
-    ///@return _consumption `_consumption` credits that has been consumed
-    function consumeCredits(address _contract, address _consumer, uint256 _amount) public returns(uint256 _consumption) {
-
-        require(isContract(_contract));
-        require(!isContract(_consumer));
-
-        uint256 ac = getAvailableCredits(_contract,_consumer);
-        if (ac < _amount) {
-            return 0;
-        }
-        bytes32 key = keccak256(_contract,_consumer);
-        sharedCredits[key].currentTimeStamp = block.timestamp;
-        sharedCredits[key].availableCredits = ac.sub(_amount);
-        return _amount;
     }
 
     ///@param _owner who holds the energy and the vet
@@ -239,7 +233,7 @@ contract Energy is Token {
     /// @notice set the contract owner
     /// @param _contractAddr a contract address
     function setOwnerForContract(address _contractAddr,address _owner) public {
-        //require(msg.sender == god);
+        require(msg.sender == Constants.god());
         //_contractAddr must be a contract address
         require(isContract(_contractAddr));
         //caller must be an normal account address
