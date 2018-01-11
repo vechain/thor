@@ -3,6 +3,7 @@ package consensus
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -43,7 +44,7 @@ func Authority(rt *runtime.Runtime, funcName string) []thor.Address {
 			return data
 		}()}
 
-	output := rt.Execute(clause, 0, math.MaxUint64)
+	output := rt.Execute(clause, 0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
 	var addrs []common.Address
 	if err := contracts.Authority.ABI.Unpack(&addrs, funcName, output.Value); err != nil {
 		panic(err)

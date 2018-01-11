@@ -42,7 +42,6 @@ func getHash(uint64) thor.Hash {
 // ProcessBlock can execute all transactions in a block.
 func ProcessBlock(state *state.State, blk *block.Block) (thor.Hash, uint64, error) {
 	rt := runtime.New(state, blk.Header(), getHash)
-
 	receipts, totalGasUsed, err := processTransactions(rt, blk.Transactions())
 	if err != nil {
 		return thor.Hash{}, 0, err
