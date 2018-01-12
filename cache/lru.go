@@ -1,6 +1,8 @@
 package cache
 
-import lru "github.com/hashicorp/golang-lru"
+import (
+	lru "github.com/hashicorp/golang-lru"
+)
 
 // LRU a LRU cache extends golang-lru.
 type LRU struct {
@@ -8,13 +10,12 @@ type LRU struct {
 }
 
 // NewLRU create a LRU cache instance.
-// maxSize should be > 0, or an error returned.
-func NewLRU(maxSize int) (*LRU, error) {
-	cache, err := lru.New(maxSize)
-	if err != nil {
-		return nil, err
+func NewLRU(maxSize int) *LRU {
+	if maxSize < 16 {
+		maxSize = 16
 	}
-	return &LRU{cache}, nil
+	cache, _ := lru.New(maxSize)
+	return &LRU{cache}
 }
 
 // Loader defines loader to load value.

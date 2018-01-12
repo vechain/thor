@@ -37,16 +37,12 @@ type cached struct {
 
 // New create an instance of Chain.
 func New(kv kv.GetPutter) *Chain {
-	headerCache, _ := cache.NewLRU(headerCacheLimit)
-	bodyCache, _ := cache.NewLRU(bodyCacheLimit)
-	blockTxHashesCache, _ := cache.NewLRU(blockTxHashesLimit)
-
 	return &Chain{
 		kv: kv,
 		cached: cached{
-			headerCache,
-			bodyCache,
-			blockTxHashesCache,
+			cache.NewLRU(headerCacheLimit),
+			cache.NewLRU(bodyCacheLimit),
+			cache.NewLRU(blockTxHashesLimit),
 		},
 	}
 }

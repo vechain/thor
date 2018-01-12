@@ -9,7 +9,7 @@ import (
 
 func TestLRU(t *testing.T) {
 	assert := assert.New(t)
-	lru, _ := cache.NewLRU(10)
+	lru := cache.NewLRU(10)
 	v, _ := lru.GetOrLoad("foo", func(interface{}) (interface{}, error) {
 		return "bar", nil
 	})
