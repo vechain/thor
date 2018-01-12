@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/vechain/thor/consensus/shuffle"
+	"github.com/vechain/thor/schedule/shuffle"
 )
 
 func TestShuffle(t *testing.T) {

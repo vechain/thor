@@ -9,9 +9,9 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/consensus/schedule"
-	"github.com/vechain/thor/genesis/contracts"
+	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
+	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"

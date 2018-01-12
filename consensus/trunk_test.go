@@ -8,9 +8,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/consensus"
+	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/dsa"
-	"github.com/vechain/thor/genesis/builder"
-	"github.com/vechain/thor/genesis/contracts"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -38,7 +38,7 @@ func TestPredicateTrunk(t *testing.T) {
 }
 
 func buildGenesis(state *state.State, signer thor.Address) (*block.Block, error) {
-	return new(builder.Builder).
+	return new(genesis.Builder).
 		Timestamp(1234567890).
 		GasLimit(10*1000*1000).
 		Alloc(

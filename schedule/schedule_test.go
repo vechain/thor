@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/consensus/schedule"
+	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/thor"
 )
 

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/vechain/thor/consensus/shuffle"
+	"github.com/vechain/thor/schedule/shuffle"
 	"github.com/vechain/thor/thor"
 )
 
