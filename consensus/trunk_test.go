@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/genesis"
@@ -33,7 +32,7 @@ func TestPredicateTrunk(t *testing.T) {
 			Build()
 		sig, _ := dsa.Sign(blk.Header().HashForSigning(), crypto.FromECDSA(key))
 		blk = blk.WithSignature(sig)
-		t.Log(consensus.PredicateTrunk(state, blk.Header(), genesisBlk.Header()))
+		//t.Log(consensus.PredicateTrunk(state, blk.Header(), genesisBlk.Header()))
 	}
 }
 

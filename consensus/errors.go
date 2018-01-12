@@ -11,7 +11,10 @@ var (
 	errTimestamp      = errors.New("")
 	errNumber         = errors.New("")
 	errVerify         = errors.New("")
-	errKnownBlock     = errors.New("block already known")
+	errKnownBlock     = errors.New("")
+	errTransaction    = errors.New("block already known")
+	errSinger         = errors.New("")
+	errTotalScore     = errors.New("")
 )
 
 // 1. 丢弃

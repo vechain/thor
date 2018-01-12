@@ -8,36 +8,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/schedule"
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
-func PredicateTrunk(state *state.State, header *block.Header, preHeader *block.Header) (bool, error) {
-	signer, err := header.Signer()
-	if err != nil {
-		return false, err
-	}
-
-	rt := runtime.New(state, preHeader, nil)
-
-	return schedule.New(
-		Authority(rt, "getProposers"),
-		Authority(rt, "getAbsentee"),
-		preHeader.Number(),
-		preHeader.Timestamp()).Validate(signer, header.Timestamp())
-}
-
+// Authority can call getProposers & getAbsentee methods of Authority.sol.
 func Authority(rt *runtime.Runtime, funcName string) []thor.Address {
 	clause := &tx.Clause{
 		To: &contracts.Authority.Address,
 		Data: func() []byte {
-			data, err := contracts.Authority.ABI.Pack(
-				funcName)
+			data, err := contracts.Authority.ABI.Pack(funcName)
 			if err != nil {
 				panic(errors.Wrap(err, fmt.Sprintf("call %s\n", funcName)))
 			}

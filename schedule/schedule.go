@@ -118,12 +118,12 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 
 // Validate returns if the timestamp of addr is valid.
 // Error returned if addr is not in proposers list.
-func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, error) {
-	t, _, err := s.Timing(addr, timestamp)
+func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []thor.Address, error) {
+	t, absentee, err := s.Timing(addr, timestamp)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
-	return t == timestamp, nil
+	return t == timestamp, absentee, nil
 }
 
 type addrMap map[thor.Address]bool
