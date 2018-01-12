@@ -9,7 +9,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
@@ -111,11 +111,12 @@ func TestExecuteTransaction(t *testing.T) {
 		}).
 		Build()
 
-	sig, _ := dsa.Sign(tx.HashForSigning(), crypto.FromECDSA(key))
+	signing := cry.NewSigning(thor.Hash{})
+	sig, _ := signing.Sign(tx, crypto.FromECDSA(key))
 	tx = tx.WithSignature(sig)
 
 	rt := runtime.New(state, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
-	receipt, _, err := rt.ExecuteTransaction(tx)
+	receipt, _, err := rt.ExecuteTransaction(tx, signing)
 	if err != nil {
 		t.Fatal(err)
 	}

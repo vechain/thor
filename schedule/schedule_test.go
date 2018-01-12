@@ -28,7 +28,7 @@ func TestSchedule(t *testing.T) {
 		now := parentTime + i*thor.BlockInterval/2
 		for _, p := range proposers {
 			ts, _, _ := sched.Timing(p, now)
-			r, _ := sched.Validate(p, ts)
+			r, _, _ := sched.Validate(p, ts)
 			assert.True(r)
 		}
 	}
