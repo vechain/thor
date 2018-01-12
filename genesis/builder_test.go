@@ -1,4 +1,4 @@
-package builder_test
+package genesis_test
 
 import "testing"
 

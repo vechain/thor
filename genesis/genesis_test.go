@@ -11,7 +11,6 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
-	State "github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -20,11 +19,11 @@ func TestGenesis(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
-	state, _ := State.New(thor.Hash{}, kv)
-	block, _ := genesis.Build(state)
+	st, _ := state.New(thor.Hash{}, kv)
+	block, _ := genesis.Build(st)
 
-	state, _ = State.New(block.Header().StateRoot(), kv)
-	assert.True(len(state.GetCode(contracts.Authority.Address)) > 0)
+	st, _ = state.New(block.Header().StateRoot(), kv)
+	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
 }
 
 func BenchmarkChargeEnergy(b *testing.B) {
