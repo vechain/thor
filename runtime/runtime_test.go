@@ -11,7 +11,6 @@ import (
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/genesis/builder"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -87,7 +86,7 @@ func TestExecuteTransaction(t *testing.T) {
 	addr2 := thor.BytesToAddress([]byte("acc2"))
 	balance1 := big.NewInt(1000 * 1000 * 1000)
 
-	_, err := new(builder.Builder).
+	_, err := new(genesis.Builder).
 		Alloc(contracts.Energy.Address, &big.Int{}, contracts.Energy.RuntimeBytecodes()).
 		Alloc(addr1, balance1, nil).
 		Call(contracts.Energy.Address, func() []byte {

@@ -1,4 +1,4 @@
-package builder
+package genesis
 
 import (
 	"math/big"

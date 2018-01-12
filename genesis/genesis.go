@@ -6,7 +6,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	cs "github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/genesis/builder"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -18,7 +17,7 @@ const (
 
 // Build build the genesis block.
 func Build(state *state.State) (*block.Block, error) {
-	return new(builder.Builder).
+	return new(Builder).
 		Timestamp(Timestamp).
 		GasLimit(thor.InitialGasLimit).
 		Alloc(
