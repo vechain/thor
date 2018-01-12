@@ -114,7 +114,7 @@ func processTransactions(rt *runtime.Runtime, transactions tx.Transactions, sign
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	energyUsed := receipt.GasUsed * transactions[0].GasPrice().ToBig().Uint64()
+	energyUsed := receipt.GasUsed * transactions[0].GasPrice().Uint64()
 
 	receipts, totalGasUsed, totalEnergyUsed, err := processTransactions(rt, transactions[1:length], sign)
 	if err != nil {

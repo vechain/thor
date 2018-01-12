@@ -5,11 +5,9 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/params"
-
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 )
@@ -28,7 +26,7 @@ var _ cry.Signable = (*Transaction)(nil)
 // body describes details of a tx.
 type body struct {
 	Clauses     Clauses
-	GasPrice    bn.Int
+	GasPrice    *big.Int
 	Gas         uint64
 	Nonce       uint64
 	TimeBarrier uint64
@@ -74,8 +72,8 @@ func (t *Transaction) SigningHash() thor.Hash {
 }
 
 // GasPrice returns gas price.
-func (t *Transaction) GasPrice() bn.Int {
-	return t.body.GasPrice
+func (t *Transaction) GasPrice() *big.Int {
+	return new(big.Int).Set(t.body.GasPrice)
 }
 
 // Gas returns gas provision for this tx.

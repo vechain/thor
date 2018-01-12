@@ -19,7 +19,7 @@ func (b *Builder) Clause(c *Clause) *Builder {
 
 // GasPrice set gas price.
 func (b *Builder) GasPrice(price *big.Int) *Builder {
-	b.body.GasPrice.SetBig(price)
+	b.body.GasPrice = new(big.Int).Set(price)
 	return b
 }
 
@@ -54,6 +54,9 @@ func (b *Builder) DependsOn(txHash *thor.Hash) *Builder {
 
 // Build build tx object.
 func (b *Builder) Build() *Transaction {
+	if b.body.GasPrice == nil {
+		b.body.GasPrice = &big.Int{}
+	}
 	tx := Transaction{body: b.body}
 	tx.body.Clauses = b.body.Clauses.Copy()
 	return &tx
