@@ -8,6 +8,7 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/state"
@@ -15,9 +16,9 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func verify(blk *block.Block, preHeader *block.Header, state *state.State) error {
+func verify(blk *block.Block, preHeader *block.Header, state *state.State, sign *cry.Signing) error {
 	header := blk.Header()
-	signer, err := header.Signer()
+	signer, err := sign.Signer(header)
 	if err != nil {
 		return err
 	}
@@ -41,7 +42,7 @@ func verify(blk *block.Block, preHeader *block.Header, state *state.State) error
 		return errTotalScore
 	}
 
-	receiptsRoot, gasUsed, energyUsed, err := ProcessBlock(state, blk)
+	receiptsRoot, gasUsed, energyUsed, err := ProcessBlock(state, blk, sign)
 	if err != nil {
 		return err
 	}
@@ -94,28 +95,28 @@ func getHash(uint64) thor.Hash {
 }
 
 // ProcessBlock can execute all transactions in a block.
-func ProcessBlock(state *state.State, blk *block.Block) (thor.Hash, uint64, uint64, error) {
+func ProcessBlock(state *state.State, blk *block.Block, sign *cry.Signing) (thor.Hash, uint64, uint64, error) {
 	rt := runtime.New(state, blk.Header(), getHash)
-	receipts, totalGasUsed, totalEnergyUsed, err := processTransactions(rt, blk.Transactions())
+	receipts, totalGasUsed, totalEnergyUsed, err := processTransactions(rt, blk.Transactions(), sign)
 	if err != nil {
 		return thor.Hash{}, 0, 0, err
 	}
 	return receipts.RootHash(), totalGasUsed, totalEnergyUsed, nil
 }
 
-func processTransactions(rt *runtime.Runtime, transactions tx.Transactions) (tx.Receipts, uint64, uint64, error) {
+func processTransactions(rt *runtime.Runtime, transactions tx.Transactions, sign *cry.Signing) (tx.Receipts, uint64, uint64, error) {
 	length := len(transactions)
 	if length == 0 {
 		return nil, 0, 0, nil
 	}
 
-	receipt, _, err := rt.ExecuteTransaction(transactions[0])
+	receipt, _, err := rt.ExecuteTransaction(transactions[0], sign)
 	if err != nil {
 		return nil, 0, 0, err
 	}
 	energyUsed := receipt.GasUsed * transactions[0].GasPrice().ToBig().Uint64()
 
-	receipts, totalGasUsed, totalEnergyUsed, err := processTransactions(rt, transactions[1:length])
+	receipts, totalGasUsed, totalEnergyUsed, err := processTransactions(rt, transactions[1:length], sign)
 	if err != nil {
 		return nil, 0, 0, err
 	}
