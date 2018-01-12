@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	Tx "github.com/vechain/thor/tx"
@@ -134,9 +135,9 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 // It will invoke SetTransactionEnvironment to reset tx env.
 // Note that the elements of returned []*vm.Output may be nil if failed
 // to execute corresponded clauses.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	// precheck
-	origin, err := tx.Signer()
+	origin, err := signing.Signer(tx)
 	if err != nil {
 		return nil, nil, err
 	}

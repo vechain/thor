@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/thor"
 )
 
@@ -20,10 +19,11 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		hash   *thor.Hash
-		signer *thor.Address
+		hash *thor.Hash
 	}
 }
+
+var _ cry.Signable = (*Transaction)(nil)
 
 // body describes details of a tx.
 type body struct {
@@ -66,8 +66,8 @@ func (t *Transaction) HashOfWorkProof() (hash thor.Hash) {
 	return
 }
 
-// HashForSigning returns hash of tx excludes signature.
-func (t *Transaction) HashForSigning() thor.Hash {
+// SigningHash returns hash of tx excludes signature.
+func (t *Transaction) SigningHash() thor.Hash {
 	wph := t.HashOfWorkProof()
 	// use hash of work proof hash as signing hash
 	return cry.HashSum(wph[:])
@@ -99,6 +99,11 @@ func (t *Transaction) Clauses() Clauses {
 	return clauses
 }
 
+// Signature returns signature.
+func (t *Transaction) Signature() []byte {
+	return append([]byte(nil), t.body.Signature...)
+}
+
 // WithSignature create a new tx with signature set.
 func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	newTx := Transaction{
@@ -107,22 +112,6 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	// copy sig
 	newTx.body.Signature = append([]byte(nil), sig...)
 	return &newTx
-}
-
-// Signer returns the signer of tx.
-func (t *Transaction) Signer() (thor.Address, error) {
-	if len(t.body.Signature) == 0 {
-		return thor.Address{}, errors.New("not signed")
-	}
-	if signer := t.cache.signer; signer != nil {
-		return *signer, nil
-	}
-	signer, err := dsa.Signer(t.HashForSigning(), t.body.Signature)
-	if err != nil {
-		return thor.Address{}, err
-	}
-	t.cache.signer = &signer
-	return signer, nil
 }
 
 // EncodeRLP implements rlp.Encoder

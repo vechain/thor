@@ -2,14 +2,14 @@ package block
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cry"
-	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/thor"
 )
+
+var _ cry.Signable = (*Header)(nil)
 
 // Header contains almost all information about a block, except body.
 // It's immutable.
@@ -17,8 +17,7 @@ type Header struct {
 	content headerContent
 
 	cache struct {
-		hash   *thor.Hash
-		signer *thor.Address
+		hash *thor.Hash
 	}
 }
 
@@ -112,8 +111,8 @@ func (h *Header) Hash() thor.Hash {
 	return hash
 }
 
-// HashForSigning computes hash of all header fields excluding signature.
-func (h *Header) HashForSigning() thor.Hash {
+// SigningHash computes hash of all header fields excluding signature.
+func (h *Header) SigningHash() thor.Hash {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
 		h.content.ParentHash,
@@ -133,6 +132,11 @@ func (h *Header) HashForSigning() thor.Hash {
 	return hash
 }
 
+// Signature returns signature.
+func (h *Header) Signature() []byte {
+	return append([]byte(nil), h.content.Signature...)
+}
+
 // WithSignature create a new Header object with signature set.
 func (h *Header) WithSignature(sig []byte) *Header {
 	content := h.content
@@ -140,22 +144,6 @@ func (h *Header) WithSignature(sig []byte) *Header {
 	return &Header{
 		content: content,
 	}
-}
-
-// Signer returns signer of this block.
-func (h *Header) Signer() (thor.Address, error) {
-	if len(h.content.Signature) == 0 {
-		return thor.Address{}, errors.New("not signed")
-	}
-	if signer := h.cache.signer; signer != nil {
-		return *signer, nil
-	}
-	signer, err := dsa.Signer(h.HashForSigning(), h.content.Signature)
-	if err != nil {
-		return thor.Address{}, err
-	}
-	h.cache.signer = &signer
-	return signer, nil
 }
 
 // EncodeRLP implements rlp.Encoder

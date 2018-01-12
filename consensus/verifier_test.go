@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/cry"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/dsa"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -34,6 +34,6 @@ func buildTransaction() *tx.Transaction {
 	}
 
 	tx := new(tx.Builder).GasPrice(big.NewInt(1)).Gas(5000000000000000000).Clause(createClause).Build()
-	sig, _ := dsa.Sign(tx.HashForSigning(), crypto.FromECDSA(key))
+	sig, _ := cry.NewSigning(thor.Hash{}).Sign(tx, crypto.FromECDSA(key))
 	return tx.WithSignature(sig)
 }

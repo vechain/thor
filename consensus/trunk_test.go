@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/dsa"
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -30,7 +30,7 @@ func TestPredicateTrunk(t *testing.T) {
 			Beneficiary(signer).
 			Timestamp(1234567890 + 10).
 			Build()
-		sig, _ := dsa.Sign(blk.Header().HashForSigning(), crypto.FromECDSA(key))
+		sig, _ := cry.NewSigning(thor.Hash{}).Sign(blk.Header(), crypto.FromECDSA(key))
 		blk = blk.WithSignature(sig)
 		//t.Log(consensus.PredicateTrunk(state, blk.Header(), genesisBlk.Header()))
 	}
