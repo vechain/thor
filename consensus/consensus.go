@@ -3,6 +3,7 @@ package consensus
 import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -12,12 +13,14 @@ import (
 type Consensus struct {
 	chain        chainReader
 	stateCreator func(thor.Hash) *state.State
+	sign         *cry.Signing
 }
 
 // New is Consensus factory.
-func New(chain chainReader, stateCreator func(thor.Hash) *state.State) *Consensus {
+func New(chain chainReader, sign *cry.Signing, stateCreator func(thor.Hash) *state.State) *Consensus {
 	return &Consensus{
 		chain:        chain,
+		sign:         sign,
 		stateCreator: stateCreator}
 }
 
@@ -34,9 +37,13 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 
 	state := c.stateCreator(preHeader.StateRoot())
 
-	if err = verify(blk, preHeader, state); err != nil {
+	if err = verify(blk, preHeader, state, c.sign); err != nil {
 		return false, err
 	}
 
 	return predicateTrunk(state, blk.Header(), preHeader)
+}
+
+func predicateTrunk(state *state.State, header *block.Header, preHeader *block.Header) (bool, error) {
+	return false, nil
 }
