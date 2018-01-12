@@ -27,31 +27,16 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	preHeader, err := c.getParentHeader(blk)
+	preHeader, err := validate(blk, c.chain)
 	if err != nil {
-		return false, err
-	}
-
-	if err = validate(preHeader, blk); err != nil {
 		return false, err
 	}
 
 	state := c.stateCreator(preHeader.StateRoot())
 
-	if err = verify(state, blk); err != nil {
+	if err = verify(blk, preHeader, state); err != nil {
 		return false, err
 	}
 
-	return PredicateTrunk(state, blk.Header(), preHeader)
-}
-
-func (c *Consensus) getParentHeader(blk *block.Block) (*block.Header, error) {
-	preHeader, err := c.chain.GetBlockHeader(blk.ParentHash())
-	if err != nil {
-		if c.chain.IsNotFound(err) {
-			return nil, errParentNotFound
-		}
-		return nil, err
-	}
-	return preHeader, nil
+	return predicateTrunk(state, blk.Header(), preHeader)
 }
