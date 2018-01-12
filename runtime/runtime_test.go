@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
@@ -43,8 +42,9 @@ func TestExecute(t *testing.T) {
 		}
 
 		out := rt.Execute(&tx.Clause{
-			To:   &contracts.Energy.Address,
-			Data: data,
+			To:    &contracts.Energy.Address,
+			Value: &big.Int{},
+			Data:  data,
 		}, 0, 1000000, thor.GodAddress, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
@@ -60,8 +60,9 @@ func TestExecute(t *testing.T) {
 		}
 
 		out := rt.Execute(&tx.Clause{
-			To:   &contracts.Energy.Address,
-			Data: data,
+			To:    &contracts.Energy.Address,
+			Value: &big.Int{},
+			Data:  data,
 		}, 0, 1000000, thor.GodAddress, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
@@ -107,7 +108,7 @@ func TestExecuteTransaction(t *testing.T) {
 		Gas(1000000).
 		Clause(&tx.Clause{
 			To:    &addr2,
-			Value: bn.FromBig(big.NewInt(10)),
+			Value: big.NewInt(10),
 		}).
 		Build()
 

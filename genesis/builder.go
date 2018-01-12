@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/bn"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -28,7 +27,7 @@ type Builder struct {
 
 type alloc struct {
 	address          thor.Address
-	balance          bn.Int
+	balance          *big.Int
 	runtimeBytecodes []byte
 }
 
@@ -53,7 +52,7 @@ func (b *Builder) GasLimit(limit uint64) *Builder {
 func (b *Builder) Alloc(addr thor.Address, balance *big.Int, runtimeBytecodes []byte) *Builder {
 	b.allocs = append(b.allocs, alloc{
 		addr,
-		bn.FromBig(balance),
+		balance,
 		runtimeBytecodes,
 	})
 	return b
@@ -80,7 +79,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {
-		state.SetBalance(alloc.address, alloc.balance.ToBig())
+		state.SetBalance(alloc.address, alloc.balance)
 		if len(alloc.runtimeBytecodes) > 0 {
 			state.SetCode(alloc.address, alloc.runtimeBytecodes)
 			continue
@@ -97,8 +96,9 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 		output := rt.Execute(
 			&tx.Clause{
-				To:   &call.address,
-				Data: call.data},
+				To:    &call.address,
+				Value: &big.Int{},
+				Data:  call.data},
 			0,
 			execGasLimit,
 			thor.GodAddress,

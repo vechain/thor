@@ -87,9 +87,9 @@ func (rt *Runtime) Execute(
 
 	vm := vm.New(ctx, rt.state, rt.vmConfig)
 	if clause.To == nil {
-		return vm.Create(txOrigin, clause.Data, gas, clause.Value.ToBig())
+		return vm.Create(txOrigin, clause.Data, gas, clause.Value)
 	}
-	return vm.Call(txOrigin, *clause.To, clause.Data, gas, clause.Value.ToBig())
+	return vm.Call(txOrigin, *clause.To, clause.Data, gas, clause.Value)
 }
 
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
@@ -100,8 +100,9 @@ func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amoun
 	}
 
 	output := rt.Execute(&Tx.Clause{
-		To:   &contracts.Energy.Address,
-		Data: data,
+		To:    &contracts.Energy.Address,
+		Value: &big.Int{},
+		Data:  data,
 	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
@@ -121,8 +122,9 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 		panic(err)
 	}
 	output := rt.Execute(&tx.Clause{
-		To:   &contracts.Energy.Address,
-		Data: data,
+		To:    &contracts.Energy.Address,
+		Value: &big.Int{},
+		Data:  data,
 	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
@@ -150,7 +152,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) 
 		return nil, nil, errors.New("intrinsic gas exceeds provided gas")
 	}
 
-	gasPrice := tx.GasPrice().ToBig()
+	gasPrice := tx.GasPrice()
 
 	clauses := tx.Clauses()
 
