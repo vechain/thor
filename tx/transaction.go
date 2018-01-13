@@ -35,7 +35,7 @@ type body struct {
 }
 
 // Hash returns hash of tx.
-func (t *Transaction) Hash() thor.Hash {
+func (t *Transaction) Hash() (hash thor.Hash) {
 	if cached := t.cache.hash; cached != nil {
 		return *cached
 	}
@@ -43,14 +43,13 @@ func (t *Transaction) Hash() thor.Hash {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, t)
 
-	var h thor.Hash
-	hw.Sum(h[:0])
-	t.cache.hash = &h
-	return h
+	hw.Sum(hash[:0])
+	t.cache.hash = &hash
+	return hash
 }
 
-// HashOfWorkProof returns hash for work proof.
-func (t *Transaction) HashOfWorkProof() (hash thor.Hash) {
+// SigningHash returns hash of tx excludes signature.
+func (t *Transaction) SigningHash() (hash thor.Hash) {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
 		t.body.Clauses,
@@ -62,13 +61,6 @@ func (t *Transaction) HashOfWorkProof() (hash thor.Hash) {
 	})
 	hw.Sum(hash[:0])
 	return
-}
-
-// SigningHash returns hash of tx excludes signature.
-func (t *Transaction) SigningHash() thor.Hash {
-	wph := t.HashOfWorkProof()
-	// use hash of work proof hash as signing hash
-	return cry.HashSum(wph[:])
 }
 
 // GasPrice returns gas price.
