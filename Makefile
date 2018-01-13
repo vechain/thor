@@ -17,7 +17,7 @@ $(SRC_BASE):
 	@ln -sf $(CURDIR) $@
 
 .PHONY: install
-install: vcore
+install: thor
 	@mv $(TARGET) $(SYS_GOPATH)/bin/
 
 .PHONY: clean
@@ -27,4 +27,4 @@ clean:
 
 .PHONY: test
 test: |$(SRC_BASE)
-	@go test $(PACKAGES)
+	@go test -cover $(PACKAGES)
