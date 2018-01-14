@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/cry"
@@ -47,16 +46,9 @@ func buildGenesis(state *state.State, signer thor.Address) (*block.Block, error)
 		).
 		Call(
 			contracts.Authority.Address,
-			func() []byte {
-				data, err := contracts.Authority.ABI.Pack(
-					"initialize",
-					thor.BytesToAddress([]byte("test")),
-					[]thor.Address{signer})
-				if err != nil {
-					panic(errors.Wrap(err, "build genesis"))
-				}
-				return data
-			}(),
+			contracts.Authority.PackInitialize(thor.BytesToAddress([]byte("test")))).
+		Call(contracts.Authority.Address,
+			contracts.Authority.PackPreset(signer, "p1"),
 		).
 		Build(state)
 }

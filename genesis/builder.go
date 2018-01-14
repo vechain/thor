@@ -101,7 +101,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 				Data:  call.data},
 			0,
 			execGasLimit,
-			thor.GodAddress,
+			call.address,
 			&big.Int{},
 			thor.Hash{})
 

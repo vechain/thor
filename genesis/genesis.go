@@ -3,7 +3,6 @@ package genesis
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/state"
@@ -32,17 +31,7 @@ func Build(state *state.State) (*block.Block, error) {
 		).
 		Call(
 			cs.Authority.Address,
-			func() []byte {
-				// Authority.initialize(address, address[])
-				data, err := cs.Authority.ABI.Pack(
-					"initialize",
-					thor.BytesToAddress([]byte("test")),
-					[]thor.Address{})
-				if err != nil {
-					panic(errors.Wrap(err, "build genesis"))
-				}
-				return data
-			}(),
+			cs.Authority.PackInitialize(thor.Address{} /*TODO*/),
 		).
 		Build(state)
 }
