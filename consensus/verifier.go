@@ -55,14 +55,12 @@ func verify(blk *block.Block, preHeader *block.Header, state *state.State, sign 
 		return errGasUsed
 	}
 
-	data, err := contracts.Energy.ABI.Pack("charge", header.Beneficiary(), energyUsed)
-	if err != nil {
-		panic(err)
-	}
+	data := contracts.Energy.PackCharge(header.Beneficiary(), new(big.Int).SetUint64(energyUsed))
+
 	output := rt.Execute(&tx.Clause{
 		To:   &contracts.Energy.Address,
 		Data: data,
-	}, 0, math.MaxUint64, thor.GodAddress, &big.Int{}, thor.Hash{})
+	}, 0, math.MaxUint64, contracts.Energy.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
@@ -74,7 +72,7 @@ func verify(blk *block.Block, preHeader *block.Header, state *state.State, sign 
 	output = rt.Execute(&tx.Clause{
 		To:   &contracts.Authority.Address,
 		Data: data,
-	}, 0, math.MaxUint64, thor.GodAddress, &big.Int{}, thor.Hash{})
+	}, 0, math.MaxUint64, contracts.Authority.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "set absent")
 	}

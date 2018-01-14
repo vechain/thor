@@ -3,7 +3,6 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
@@ -93,39 +92,28 @@ func (rt *Runtime) Execute(
 }
 
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
-	const consumeFnName = "consume"
-	data, err := contracts.Energy.ABI.Pack(consumeFnName, common.Address(caller), common.Address(callee), amount)
-	if err != nil {
-		panic(err)
-	}
-
+	data := contracts.Energy.PackConsume(caller, callee, amount)
 	output := rt.Execute(&Tx.Clause{
 		To:    &contracts.Energy.Address,
 		Value: &big.Int{},
 		Data:  data,
-	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
+	}, 0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
 	}
 
-	var payer common.Address
-	if err := contracts.Energy.ABI.Unpack(&payer, consumeFnName, output.Value); err != nil {
-		panic(err)
-	}
-	return thor.Address(payer), nil
+	return contracts.Energy.UnpackConsume(output.Value), nil
 }
 
 func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
-	const chargeFnName = "charge"
-	data, err := contracts.Energy.ABI.Pack(chargeFnName, common.Address(addr), amount)
-	if err != nil {
-		panic(err)
-	}
+
+	data := contracts.Energy.PackCharge(addr, amount)
+
 	output := rt.Execute(&tx.Clause{
 		To:    &contracts.Energy.Address,
 		Value: &big.Int{},
 		Data:  data,
-	}, 0, callGas, thor.GodAddress, &big.Int{}, thor.Hash{})
+	}, 0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}

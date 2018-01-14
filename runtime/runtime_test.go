@@ -32,20 +32,16 @@ func TestExecute(t *testing.T) {
 
 	{
 		// charge
-		data, err := contracts.Energy.ABI.Pack(
-			"charge",
+		data := contracts.Energy.PackCharge(
 			addr,
 			amount,
 		)
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		out := rt.Execute(&tx.Clause{
 			To:    &contracts.Energy.Address,
 			Value: &big.Int{},
 			Data:  data,
-		}, 0, 1000000, thor.GodAddress, new(big.Int), thor.Hash{})
+		}, 0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
 		}
@@ -63,7 +59,7 @@ func TestExecute(t *testing.T) {
 			To:    &contracts.Energy.Address,
 			Value: &big.Int{},
 			Data:  data,
-		}, 0, 1000000, thor.GodAddress, new(big.Int), thor.Hash{})
+		}, 0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
 		}
@@ -90,13 +86,7 @@ func TestExecuteTransaction(t *testing.T) {
 	_, err := new(genesis.Builder).
 		Alloc(contracts.Energy.Address, &big.Int{}, contracts.Energy.RuntimeBytecodes()).
 		Alloc(addr1, balance1, nil).
-		Call(contracts.Energy.Address, func() []byte {
-			data, err := contracts.Energy.ABI.Pack("charge", addr1, big.NewInt(1000000))
-			if err != nil {
-				panic(err)
-			}
-			return data
-		}()).
+		Call(contracts.Energy.Address, contracts.Energy.PackCharge(addr1, big.NewInt(1000000))).
 		Build(state)
 
 	if err != nil {
