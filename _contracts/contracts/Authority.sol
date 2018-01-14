@@ -12,7 +12,7 @@ contract Authority {
 
     struct Proposer {
         address addr;
-        uint96 status;
+        uint32 status;
         string identity;
     }
 
@@ -40,12 +40,14 @@ contract Authority {
     }
 
     // @notice udpate status of proposers.
+    // input element is encoded as ((address << 32) | status).
     // @param _addrs addresses of proposers.
     // @param _status status of proposers corresponded `_addrs`.
-    function _update(address[] _addrs, uint96[] _status) public {
+    function _update(bytes24[] _encodedProposers) public {
         require(msg.sender == address(this));
-        for (uint i = 0; i < _addrs.length; i++) {
-            proposerSet.get(_addrs[i]).status = _status[i];
+        for (uint i = 0; i < _encodedProposers.length; i++) {
+            address addr = address(_encodedProposers[i] >> 32);
+            proposerSet.get(addr).status = uint32(_encodedProposers[i]);
         }        
     }
 
@@ -71,15 +73,22 @@ contract Authority {
         Deauthorize(_addr);
     }
 
-    // @returns all block proposers. 
-    function proposers() public view returns(Proposer[]) {
-        return proposerSet.array;
+    // @returns all block proposers.
+    // The element is encoded by ((address << 32) | status)
+    function proposers() public view returns(bytes24[]) {
+        var ret = new bytes24[](proposerSet.array.length);
+        for (uint i = 0;i < proposerSet.array.length; i ++) {
+            ret[i] = (bytes24(proposerSet.array[i].addr) << 32) |
+                bytes24(proposerSet.array[i].status);
+        }
+        return ret;
     }
 
     // @param _addr address of proposer.
     // @returns proposer with the given `_addr`. Reverted if not found.
-    function proposer(address _addr) public view returns(Proposer) {
-        return proposerSet.get(_addr);
+    function proposer(address _addr) public view returns(uint32 status, string identity) {
+        var p = proposerSet.get(_addr);
+        return (p.status, p.identity);
     }
 }
 
