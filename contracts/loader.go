@@ -42,3 +42,17 @@ func (c *contract) RuntimeBytecodes() []byte {
 	}
 	return data
 }
+
+func (c *contract) mustPack(name string, args ...interface{}) []byte {
+	data, err := c.ABI.Pack(name, args...)
+	if err != nil {
+		panic(errors.Wrap(err, "pack "+name))
+	}
+	return data
+}
+
+func (c *contract) mustUnpack(v interface{}, name string, output []byte) {
+	if err := c.ABI.Unpack(v, name, output); err != nil {
+		panic(errors.Wrap(err, "unpack "+name))
+	}
+}
