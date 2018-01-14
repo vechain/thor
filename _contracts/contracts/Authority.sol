@@ -1,87 +1,129 @@
 pragma solidity ^0.4.18;
-import './Owned.sol';
+
 import './Constants.sol';
 
+
+/// @title Authority manages the whitelist of block proposers.
 contract Authority {
-    event Registered(address indexed _addr);
-    event Authorised(address indexed _proposer, bool _b);
+    // fired when an address authorized to be a proposer.
+    event Authorize(address indexed _addr, string _identity);
+    // fired when an address deauthorized.
+    event Deauthorize(address indexed _addr);
 
-    address public owner;
-
-    mapping(address => string) registry;
-
-    address[] proposers;
-    mapping(address => uint) proposerMap;
-
-    address[] absentee;
-    mapping(address => uint) absenteeMap;
-
-    function initialize(address _owner, address[] _proposers) public {
-        require(msg.sender == Constants.god()); 
-        owner = _owner;
-        for (uint i = 0; i < _proposers.length; i++) {
-            proposers.push(_proposers[i]);
-            proposerMap[_proposers[i]] = proposers.length;
-        }
+    struct Proposer {
+        address addr;
+        uint96 status;
+        string identity;
     }
 
-    function getProposers() public view returns (address[]) {
-        return proposers;
+    // address of voting contract, which controls the whitelist.
+    address public voting;
+
+    using ProposerSet for ProposerSet.Type;
+
+    ProposerSet.Type proposerSet;
+
+    // @notice initialize the contract.
+    function _initialize() public {
+        require(msg.sender == address(this));
+        voting = Constants.voting();
     }
 
-    function getAbsentee() public view returns (address[]) {
-        return absentee;
+    // @notice preset initial block proposers.
+    // @param _addr address of proposer.
+    // @param _identity identity of proposer.
+    function _preset(address _addr, string _identity) public {
+        require(msg.sender == address(this));
+        require(bytes(_identity).length > 0);
+
+        require(proposerSet.add(_addr, _identity));
     }
 
-    function register(string _desc) public {
-        require(bytes(_desc).length > 0);
-        require(bytes(registry[msg.sender]).length == 0);
-
-        registry[msg.sender] = _desc;        
-        Registered(msg.sender);
-    }
-    
-    function authorise (address _proposer, bool _b) public {
-        require(msg.sender == owner);
-
-        uint pos = proposerMap[_proposer];
-        if (_b) {            
-            require(pos == 0);
-            proposers.push(_proposer);
-            proposerMap[_proposer] = proposers.length;
-        } else {
-            require(pos > 0);
-            proposers[pos - 1] = proposers[proposers.length - 1];
-            proposers.length -= 1;
-            proposerMap[_proposer] = 0;
-
-            _absent(_proposer, false);
-        }
-        Authorised(_proposer, _b);
+    // @notice udpate status of proposers.
+    // @param _addrs addresses of proposers.
+    // @param _status status of proposers corresponded `_addrs`.
+    function _update(address[] _addrs, uint96[] _status) public {
+        require(msg.sender == address(this));
+        for (uint i = 0; i < _addrs.length; i++) {
+            proposerSet.get(_addrs[i]).status = _status[i];
+        }        
     }
 
-    function _absent(address _proposer, bool _b) internal returns (bool) {
-        if (proposerMap[_proposer] == 0) {
+    // @notice authorize someone to be a block proposer.
+    // It will be reverted if someone already listed, 
+    // @param _addr address of someone.
+    // @param _identity identity to identify someone. Must be non-empty. 
+    function authorize(address _addr, string _identity) public {
+        require(msg.sender == voting);
+        require(bytes(_identity).length > 0);
+
+        require(proposerSet.add(_addr, _identity));
+
+        Authorize(_addr, _identity);
+    }
+    // @notice deauthorize a block proposer by its address.
+    // @param _addr address of the proposer.
+    function deauthorize(address _addr) public {
+        require(msg.sender == voting);
+
+        require(proposerSet.remove(_addr));
+
+        Deauthorize(_addr);
+    }
+
+    // @returns all block proposers. 
+    function proposers() public view returns(Proposer[]) {
+        return proposerSet.array;
+    }
+
+    // @param _addr address of proposer.
+    // @returns proposer with the given `_addr`. Reverted if not found.
+    function proposer(address _addr) public view returns(Proposer) {
+        return proposerSet.get(_addr);
+    }
+}
+
+/// @title help to manage a set of proposers.
+library ProposerSet {
+    struct Type {
+        // address -> (index + 1)
+        mapping(address => uint) map;
+        Authority.Proposer[] array;
+    }
+
+    function contains(Type storage _self, address _addr) internal view returns(bool) {
+        return _self.map[_addr] != 0;
+    }
+
+    function add(Type storage _self, address _addr, string _identity) internal returns(bool) {
+        if (contains(_self, _addr))
             return false;
+
+        _self.array.push(Authority.Proposer(_addr, 0, _identity));
+        _self.map[_addr] = _self.array.length;
+        return true;        
+    }
+
+    function remove(Type storage _self, address _addr) internal returns(bool) {
+        uint pos = _self.map[_addr];
+        if (pos == 0) {
+            return false;            
         }
-        uint pos = absenteeMap[_proposer];
-        if (_b) {
-            if (pos == 0) {
-                absentee.push(_proposer);
-                absenteeMap[_proposer] = absentee.length;
-            }
-        } else {
-            if (pos > 0) { 
-                absentee[pos - 1] = absentee[absentee.length - 1];
-                absentee.length -= 1;
-                absenteeMap[_proposer] = 0;
-            }
-        }
+
+        // move last value to the gap
+        _self.array[pos - 1] = _self.array[_self.array.length - 1];
+
+        // remap
+        _self.map[_self.array[pos - 1].addr] = pos;
+
+        _self.map[_addr] = 0;
+        _self.array.length --;
         return true;
     }
 
-    function absent(address _proposer, bool _b) public {
-        require(msg.sender == Constants.god());
-        require(_absent(_proposer, _b));
+    function get(Type storage _self, address _addr) internal view returns(Authority.Proposer storage) {
+        uint pos = _self.map[_addr];
+        require(pos != 0);
+        return _self.array[pos - 1];
     }
 }

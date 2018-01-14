@@ -5,15 +5,15 @@ library Constants {
         return address(uint24(bytes3("par")));
     }
 
-    function energy() pure internal returns (address) {
-        return address(uint24(bytes3("eng")));
-    }
-
     function authority() pure internal returns (address) {
         return address(uint24(bytes3("aut")));
     }
 
-    function god() pure internal returns (address) {        
-        return address(uint24(bytes3("god")));
+    function energy() pure internal returns (address) {
+        return address(uint24(bytes3("eng")));
+    }
+
+    function voting() pure internal returns (address) {
+        return address(uint24(bytes3("vot")));
     }
 }
