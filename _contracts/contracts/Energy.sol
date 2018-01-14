@@ -1,6 +1,5 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
-import './Constants.sol';
 import './SafeMath.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -119,8 +118,8 @@ contract Energy is Token {
     ///@param _amount   `_amount` tokens would be consumed
     ///@return _consumer credits of `_consumer` would be consumed
     function consume(address _caller, address _callee, uint256 _amount) public returns(address _consumer) {
-        //only called by god
-        require(msg.sender == Constants.god());
+        //only called by `thor`
+        require(msg.sender == address(this));
 
         uint256 ac = getAvailableCredits(_callee,_caller);
         if (ac >= _amount) {
@@ -144,7 +143,7 @@ contract Energy is Token {
     ///@param _reciever `_reciever` recieves `_amount` tokens
     ///@param _amount `_amount` send to `_reciever`
     function charge(address _reciever, uint256 _amount) public {
-        require(msg.sender == Constants.god());
+        require(msg.sender == address(this));
         
         uint256 b = calRestBalance(_reciever); 
         balances[_reciever].balance = b.add(_amount);
@@ -241,7 +240,7 @@ contract Energy is Token {
     /// @notice set the contract owner
     /// @param _contractAddr a contract address
     function setOwnerForContract(address _contractAddr,address _owner) public {
-        require(msg.sender == Constants.god());
+        require(msg.sender == address(this));
         //_contractAddr must be a contract address
         require(isContract(_contractAddr));
         //caller must be an normal account address
