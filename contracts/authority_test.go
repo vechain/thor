@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	. "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/fortest"
 	"github.com/vechain/thor/lvldb"
@@ -24,7 +23,9 @@ func TestAuthority(t *testing.T) {
 
 	st.SetCode(Authority.Address, Authority.RuntimeBytecodes())
 
-	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st,
+		thor.Address{}, 0, 0, 0,
+		func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
 		return rt.Execute(&tx.Clause{
@@ -69,7 +70,9 @@ func BenchmarkProposers(b *testing.B) {
 	st, _ := state.New(thor.Hash{}, kv)
 
 	st.SetCode(Authority.Address, Authority.RuntimeBytecodes())
-	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st,
+		thor.Address{}, 0, 0, 0,
+		func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
 		return rt.Execute(&tx.Clause{

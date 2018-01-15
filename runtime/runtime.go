@@ -5,11 +5,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
@@ -40,16 +38,19 @@ type State interface {
 // New create a Runtime object.
 func New(
 	state State,
-	header *block.Header,
+	blockBeneficiary thor.Address,
+	blockNumber uint32,
+	blockTime,
+	blockGasLimit uint64,
 	getHash func(uint32) thor.Hash,
 ) *Runtime {
 	return &Runtime{
 		getHash:          getHash,
 		state:            state,
-		blockBeneficiary: header.Beneficiary(),
-		blockNumber:      header.Number(),
-		blockTime:        header.Timestamp(),
-		blockGasLimit:    header.GasLimit(),
+		blockBeneficiary: blockBeneficiary,
+		blockNumber:      blockNumber,
+		blockTime:        blockTime,
+		blockGasLimit:    blockGasLimit,
 	}
 }
 
@@ -109,7 +110,7 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 
 	data := contracts.Energy.PackCharge(addr, amount)
 
-	output := rt.Execute(&tx.Clause{
+	output := rt.Execute(&Tx.Clause{
 		To:    &contracts.Energy.Address,
 		Value: &big.Int{},
 		Data:  data,

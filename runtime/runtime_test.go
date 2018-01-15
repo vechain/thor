@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
@@ -25,7 +24,8 @@ func TestExecute(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := runtime.New(state, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(state,
+		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
 	addr := thor.BytesToAddress([]byte("acc1"))
 	amount := big.NewInt(1000 * 1000 * 1000 * 1000)
@@ -106,7 +106,8 @@ func TestExecuteTransaction(t *testing.T) {
 	sig, _ := signing.Sign(tx, crypto.FromECDSA(key))
 	tx = tx.WithSignature(sig)
 
-	rt := runtime.New(state, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(state,
+		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 	receipt, _, err := rt.ExecuteTransaction(tx, signing)
 	if err != nil {
 		t.Fatal(err)
