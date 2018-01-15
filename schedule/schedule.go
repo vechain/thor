@@ -10,30 +10,19 @@ import (
 
 // Schedule arrange when a proposer to build a block.
 type Schedule struct {
-	proposers    []thor.Address
-	absenteeMap  addrMap
+	proposers    []Proposer
 	parentNumber uint32
 	parentTime   uint64
 }
 
 // New create a new schedule instance.
 func New(
-	proposers []thor.Address,
-	absentee []thor.Address,
+	proposers []Proposer,
 	parentNumber uint32,
 	parentTime uint64) *Schedule {
 
-	if !(len(absentee) < len(proposers)) {
-		panic("len(absentee) must < len(proposers)")
-	}
-
-	absenteeMap := map[thor.Address]bool{}
-	for _, a := range absentee {
-		absenteeMap[a] = true
-	}
 	return &Schedule{
-		append([]thor.Address(nil), proposers...),
-		absenteeMap,
+		append([]Proposer(nil), proposers...),
 		parentNumber,
 		parentTime,
 	}
@@ -45,41 +34,40 @@ func New(
 // The first return value is the timestamp for the proposer to build a block with.
 // It's guaranteed that the timestamp >= nowTime.
 //
-// The second one is a new absentee list.
+// The second one is the list of proposers that need to be updated.
 func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 	uint64, //timestamp
-	[]thor.Address, //absentee
+	[]Proposer,
 	error,
 ) {
 	found := false
-	for _, a := range s.proposers {
-		if a == addr {
+	var roundInterval uint64
+	for _, p := range s.proposers {
+		if p.Address == addr {
 			found = true
-			break
+		}
+		if !p.isAbsent() {
+			roundInterval += thor.BlockInterval
 		}
 	}
 	if !found {
 		return 0, nil, errors.New("not a proposer")
 	}
-
 	predictedTime := s.parentTime + thor.BlockInterval
-	roundInterval := uint64(len(s.proposers)-len(s.absenteeMap)) * thor.BlockInterval
 
 	var nRound uint64
 	if nowTime >= predictedTime+roundInterval {
 		nRound = (nowTime - predictedTime) / roundInterval
 	}
 
-	retAbsenteeMap := addrMap{}
+	updated := make(proposerMap)
 	if nRound > 0 {
 		// absent all if skip some rounds
-		for _, a := range s.proposers {
-			retAbsenteeMap[a] = true
-		}
-	} else {
-		// keep absent input absentee
-		for a := range s.absenteeMap {
-			retAbsenteeMap[a] = true
+		for _, p := range s.proposers {
+			if !p.isAbsent() && p.Address != addr {
+				p.setAbsent(true)
+				updated[p.Address] = p
+			}
 		}
 	}
 
@@ -91,26 +79,31 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 		binary.BigEndian.PutUint64(seed[4:], nRound)
 		shuffle.Shuffle(seed[:], perm)
 
-		t := predictedTime + roundInterval*nRound
+		timeSlot := predictedTime + roundInterval*nRound
 
 		for _, i := range perm {
 			proposer := s.proposers[i]
-			if addr != proposer {
-				// step time if proposer not in absentee list
-				if !s.absenteeMap[proposer] {
-					t += thor.BlockInterval
+			if addr == proposer.Address {
+				if nowTime > timeSlot {
+					// next round
+					break
 				}
-				retAbsenteeMap[proposer] = true
-				continue
+				// update to non-absent if absent
+				if proposer.isAbsent() {
+					proposer.setAbsent(false)
+					updated[proposer.Address] = proposer
+				}
+				return timeSlot, updated.toSlice(), nil
 			}
 
-			if nowTime > t {
-				// next round
-				break
+			// step time if proposer not previously absent
+			if !proposer.isAbsent() {
+				timeSlot += thor.BlockInterval
+
+				// and add to update list
+				proposer.setAbsent(true)
+				updated[proposer.Address] = proposer
 			}
-			// kick off proposer in absentee list
-			retAbsenteeMap[proposer] = false
-			return t, retAbsenteeMap.toSlice(), nil
 		}
 		nRound++
 	}
@@ -118,7 +111,7 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 
 // Validate returns if the timestamp of addr is valid.
 // Error returned if addr is not in proposers list.
-func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []thor.Address, error) {
+func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []Proposer, error) {
 	t, absentee, err := s.Timing(addr, timestamp)
 	if err != nil {
 		return false, nil, err
@@ -126,13 +119,30 @@ func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []thor.A
 	return t == timestamp, absentee, nil
 }
 
-type addrMap map[thor.Address]bool
+// Proposer address with status.
+type Proposer struct {
+	Address thor.Address
+	Status  uint32
+}
 
-func (am addrMap) toSlice() (slice []thor.Address) {
-	for a, b := range am {
-		if b {
-			slice = append(slice, a)
-		}
+func (p *Proposer) isAbsent() bool {
+	return (p.Status & uint32(1)) != 0
+}
+
+func (p *Proposer) setAbsent(b bool) {
+	if b {
+		p.Status |= uint32(1)
+	} else {
+		p.Status &= uint32(0xfffffffe)
 	}
-	return
+}
+
+type proposerMap map[thor.Address]Proposer
+
+func (pm proposerMap) toSlice() []Proposer {
+	slice := make([]Proposer, 0, len(pm))
+	for _, p := range pm {
+		slice = append(slice, p)
+	}
+	return slice
 }
