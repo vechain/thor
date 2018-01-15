@@ -1,27 +1,9 @@
 package contracts
 
 import (
-	"encoding/binary"
-
+	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/thor"
 )
-
-// Proposer data struct to communicate with `Authority` contract.
-type Proposer struct {
-	Address thor.Address
-	Status  uint32
-}
-
-func (p *Proposer) encode() (encoded [32]byte) {
-	copy(encoded[12:], p.Address[:])
-	binary.BigEndian.PutUint32(encoded[8:], p.Status)
-	return
-}
-
-func (p *Proposer) decode(encoded [32]byte) {
-	copy(p.Address[:], encoded[12:])
-	p.Status = binary.BigEndian.Uint32(encoded[8:])
-}
 
 type authority struct {
 	contract
@@ -38,10 +20,10 @@ func (a *authority) PackPreset(addr thor.Address, identity string) []byte {
 }
 
 // PackUpdate pack input data of `Authority._update` function.
-func (a *authority) PackUpdate(proposers []Proposer) []byte {
+func (a *authority) PackUpdate(proposers []schedule.Proposer) []byte {
 	encoded := make([][32]byte, len(proposers))
 	for i, p := range proposers {
-		encoded[i] = p.encode()
+		encoded[i] = p.Encode()
 	}
 	return a.mustPack("_udpate", encoded)
 }
@@ -52,13 +34,13 @@ func (a *authority) PackProposers() []byte {
 }
 
 // UnpackProposers unpack return data of `Authority.proposers` function.
-func (a *authority) UnpackProposers(output []byte) (proposers []Proposer) {
+func (a *authority) UnpackProposers(output []byte) (proposers []schedule.Proposer) {
 	var encoded [][32]byte
 	a.mustUnpack(&encoded, "proposers", output)
 	if len(encoded) > 0 {
-		proposers = make([]Proposer, len(encoded))
+		proposers = make([]schedule.Proposer, len(encoded))
 		for i, e := range encoded {
-			proposers[i].decode(e)
+			proposers[i].Decode(e)
 		}
 	}
 	return
