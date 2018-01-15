@@ -6,22 +6,33 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func validate(blk *block.Block, chain *chain.Chain) (*block.Header, error) {
-	preHeader, err := chain.GetBlockHeader(blk.ParentHash())
+type validator struct {
+	block *block.Block
+	chain *chain.Chain
+}
+
+func newValidator(blk *block.Block, chain *chain.Chain) *validator {
+	return &validator{
+		block: blk,
+		chain: chain}
+}
+
+func (v *validator) validate() (*block.Header, error) {
+	preHeader, err := v.chain.GetBlockHeader(v.block.ParentHash())
 	if err != nil {
-		if chain.IsNotFound(err) {
+		if v.chain.IsNotFound(err) {
 			return nil, errParentNotFound
 		}
 		return nil, err
 	}
 
-	if preHeader.Timestamp() >= blk.Timestamp() {
+	if preHeader.Timestamp() >= v.block.Timestamp() {
 		return nil, errTimestamp
 	}
 
-	header := blk.Header()
+	header := v.block.Header()
 
-	if header.TxsRoot() != blk.Body().Txs.RootHash() {
+	if header.TxsRoot() != v.block.Body().Txs.RootHash() {
 		return nil, errTxsRoot
 	}
 
@@ -29,8 +40,8 @@ func validate(blk *block.Block, chain *chain.Chain) (*block.Header, error) {
 		return nil, errGasUsed
 	}
 
-	for _, transaction := range blk.Transactions() {
-		if !validateTransaction(transaction, blk, chain) {
+	for _, transaction := range v.block.Transactions() {
+		if !v.validateTransaction(transaction) {
 			return nil, errTransaction
 		}
 	}
@@ -38,18 +49,16 @@ func validate(blk *block.Block, chain *chain.Chain) (*block.Header, error) {
 	return preHeader, nil
 }
 
-func validateTransaction(transaction *tx.Transaction, blk *block.Block, chain *chain.Chain) bool {
+func (v *validator) validateTransaction(transaction *tx.Transaction) bool {
 	if len(transaction.Clauses()) == 0 {
 		return false
 	}
 
-	if transaction.TimeBarrier() > blk.Timestamp() {
+	if transaction.TimeBarrier() > v.block.Timestamp() {
 		return false
 	}
 
-	if _, err := chain.LookupTransaction(blk.ParentHash(), transaction.Hash()); chain.IsNotFound(err) {
-		return true
-	}
+	_, err := v.chain.LookupTransaction(v.block.ParentHash(), transaction.Hash())
 
-	return false
+	return v.chain.IsNotFound(err)
 }

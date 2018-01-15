@@ -38,7 +38,7 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	preHeader, err := validate(blk, c.chain)
+	preHeader, err := newValidator(blk, c.chain).validate()
 	if err != nil {
 		return false, err
 	}
@@ -54,7 +54,13 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	preHash := preHeader.StateRoot()
 	state := c.stateCreator(preHash)
 	getHash := chain.NewHashGetter(c.chain, preHash).GetHash
-	rt := runtime.New(state, preHeader, getHash)
+	rt := runtime.New(
+		state,
+		preHeader.Beneficiary(),
+		preHeader.Number(),
+		preHeader.Timestamp(),
+		preHeader.GasLimit(),
+		getHash)
 	handler := func(to thor.Address, data []byte) *vm.Output {
 		clause := &tx.Clause{
 			To:   &to,
