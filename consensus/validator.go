@@ -2,10 +2,11 @@ package consensus
 
 import (
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/tx"
 )
 
-func validate(blk *block.Block, chain chainReader) (*block.Header, error) {
+func validate(blk *block.Block, chain *chain.Chain) (*block.Header, error) {
 	preHeader, err := chain.GetBlockHeader(blk.ParentHash())
 	if err != nil {
 		if chain.IsNotFound(err) {
@@ -37,7 +38,7 @@ func validate(blk *block.Block, chain chainReader) (*block.Header, error) {
 	return preHeader, nil
 }
 
-func validateTransaction(transaction *tx.Transaction, blk *block.Block, chain chainReader) bool {
+func validateTransaction(transaction *tx.Transaction, blk *block.Block, chain *chain.Chain) bool {
 	if len(transaction.Clauses()) == 0 {
 		return false
 	}
