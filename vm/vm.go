@@ -61,7 +61,7 @@ type Context struct {
 	GasPrice    *big.Int
 	TxHash      thor.Hash
 	ClauseIndex uint64
-	GetHash     func(uint64) thor.Hash
+	GetHash     func(uint32) thor.Hash
 }
 
 // The only purpose of this func separate definition is to be compatible with evm.context.
@@ -79,7 +79,7 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 // only ever be used *once*.
 func New(ctx Context, state State, vmConfig Config) *VM {
 	tGetHash := func(n uint64) common.Hash {
-		return common.Hash(ctx.GetHash(n))
+		return common.Hash(ctx.GetHash(uint32(n)))
 	}
 
 	statedb := statedb.New(state)

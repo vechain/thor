@@ -24,7 +24,7 @@ func TestAuthority(t *testing.T) {
 
 	st.SetCode(Authority.Address, Authority.RuntimeBytecodes())
 
-	rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
 		return rt.Execute(&tx.Clause{
@@ -69,7 +69,7 @@ func BenchmarkProposers(b *testing.B) {
 	st, _ := state.New(thor.Hash{}, kv)
 
 	st.SetCode(Authority.Address, Authority.RuntimeBytecodes())
-	rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
 		return rt.Execute(&tx.Clause{

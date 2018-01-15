@@ -21,7 +21,7 @@ var (
 // Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig vm.Config
-	getHash  func(uint64) thor.Hash
+	getHash  func(uint32) thor.Hash
 	state    State
 
 	// block env
@@ -41,7 +41,7 @@ type State interface {
 func New(
 	state State,
 	header *block.Header,
-	getHash func(uint64) thor.Hash,
+	getHash func(uint32) thor.Hash,
 ) *Runtime {
 	return &Runtime{
 		getHash:          getHash,

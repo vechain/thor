@@ -39,7 +39,7 @@ func BenchmarkChargeEnergy(b *testing.B) {
 		// if err != nil {
 		// 	b.Fatal(err)
 		// }
-		rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
+		rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
 		data := contracts.Energy.PackCharge(
 			thor.BytesToAddress([]byte("acc1")),
 			big.NewInt(1),
@@ -72,7 +72,7 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
 	data := contracts.Energy.PackCharge(
 		thor.BytesToAddress([]byte("acc1")),
 		big.NewInt(1000*1000*1000*1000),
@@ -97,7 +97,7 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		// if err != nil {
 		// 	panic(err)
 		// }
-		rt := runtime.New(st, &block.Header{}, func(uint64) thor.Hash { return thor.Hash{} })
+		rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
 		data := contracts.Energy.PackConsume(
 			thor.BytesToAddress([]byte("acc1")),
 			thor.Address{},

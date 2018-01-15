@@ -39,8 +39,8 @@ func newEnv() *VM {
 	ctx := Context{
 		TxHash:      thor.Hash{1},
 		ClauseIndex: 1,
-		GetHash: func(n uint64) thor.Hash {
-			return thor.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
+		GetHash: func(n uint32) thor.Hash {
+			return thor.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(uint64(n)).String())))
 		},
 		BlockNumber: nil,
 		GasPrice:    nil,
