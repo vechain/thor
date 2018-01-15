@@ -88,7 +88,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	rt := runtime.New(
 		state,
-		&block.Header{},
+		thor.Address{}, 0, 0, 0,
 		func(uint32) thor.Hash { return thor.Hash{} })
 
 	// execute all calls

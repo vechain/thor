@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -39,7 +38,8 @@ func BenchmarkChargeEnergy(b *testing.B) {
 		// if err != nil {
 		// 	b.Fatal(err)
 		// }
-		rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+		rt := runtime.New(st,
+			thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 		data := contracts.Energy.PackCharge(
 			thor.BytesToAddress([]byte("acc1")),
 			big.NewInt(1),
@@ -72,7 +72,8 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(st,
+		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 	data := contracts.Energy.PackCharge(
 		thor.BytesToAddress([]byte("acc1")),
 		big.NewInt(1000*1000*1000*1000),
@@ -97,7 +98,8 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		// if err != nil {
 		// 	panic(err)
 		// }
-		rt := runtime.New(st, &block.Header{}, func(uint32) thor.Hash { return thor.Hash{} })
+		rt := runtime.New(st,
+			thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 		data := contracts.Energy.PackConsume(
 			thor.BytesToAddress([]byte("acc1")),
 			thor.Address{},
