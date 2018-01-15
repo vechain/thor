@@ -46,7 +46,7 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 		if p.Address == addr {
 			found = true
 		}
-		if !p.isAbsent() {
+		if !p.IsAbsent() {
 			roundInterval += thor.BlockInterval
 		}
 	}
@@ -64,8 +64,8 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 	if nRound > 0 {
 		// absent all if skip some rounds
 		for _, p := range s.proposers {
-			if !p.isAbsent() && p.Address != addr {
-				p.setAbsent(true)
+			if !p.IsAbsent() && p.Address != addr {
+				p.SetAbsent(true)
 				updated[p.Address] = p
 			}
 		}
@@ -89,19 +89,19 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 					break
 				}
 				// update to non-absent if absent
-				if proposer.isAbsent() {
-					proposer.setAbsent(false)
+				if proposer.IsAbsent() {
+					proposer.SetAbsent(false)
 					updated[proposer.Address] = proposer
 				}
 				return timeSlot, updated.toSlice(), nil
 			}
 
 			// step time if proposer not previously absent
-			if !proposer.isAbsent() {
+			if !proposer.IsAbsent() {
 				timeSlot += thor.BlockInterval
 
 				// and add to update list
-				proposer.setAbsent(true)
+				proposer.SetAbsent(true)
 				updated[proposer.Address] = proposer
 			}
 		}
@@ -117,24 +117,6 @@ func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []Propos
 		return false, nil, err
 	}
 	return t == timestamp, absentee, nil
-}
-
-// Proposer address with status.
-type Proposer struct {
-	Address thor.Address
-	Status  uint32
-}
-
-func (p *Proposer) isAbsent() bool {
-	return (p.Status & uint32(1)) != 0
-}
-
-func (p *Proposer) setAbsent(b bool) {
-	if b {
-		p.Status |= uint32(1)
-	} else {
-		p.Status &= uint32(0xfffffffe)
-	}
 }
 
 type proposerMap map[thor.Address]Proposer
