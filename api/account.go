@@ -7,7 +7,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-//AccountInterface manage account
+//AccountInterface manage accounts
 type AccountInterface struct {
 	state *state.State
 }
@@ -27,4 +27,9 @@ func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 //GetCode return code from account
 func (ai *AccountInterface) GetCode(address thor.Address) []byte {
 	return ai.state.GetCode(address)
+}
+
+//GetStorage return storage value from key
+func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor.Hash {
+	return ai.state.GetStorage(address, key)
 }

@@ -16,12 +16,14 @@ const BlockHTTPPathPrefix = "/block"
 //NewBlockHTTPRouter add path to router
 func NewBlockHTTPRouter(router *mux.Router, bi *BlockInterface) {
 	sub := router.PathPrefix(BlockHTTPPathPrefix).Subrouter()
+
 	sub.Path("/hash/{hash}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
 	sub.Path("/number/{number}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
 }
+
 func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
-	if query == nil {
+	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
 	}
 	hashstring, ok := query["hash"]
@@ -30,11 +32,11 @@ func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.
 	}
 	hash, err := thor.ParseHash(hashstring)
 	if err != nil {
-		return httpx.Error(" Parse block hash failed! ", 400)
+		return httpx.Error(" Invalid blockhash! ", 400)
 	}
 	block, err := bi.GetBlockByHash(hash)
 	if err != nil {
-		return httpx.Error(" Get block failed! ", 400)
+		return httpx.Error(" Block not found! ", 400)
 	}
 	str, err := json.Marshal(block)
 	if err != nil {
