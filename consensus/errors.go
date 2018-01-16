@@ -5,6 +5,7 @@ import "errors"
 var (
 	errTxsRoot        = errors.New("")
 	errGasUsed        = errors.New("")
+	errGasLimit       = errors.New("")
 	errStateRoot      = errors.New("")
 	errReceiptsRoot   = errors.New("")
 	errParentNotFound = errors.New("")

@@ -3,6 +3,7 @@ package consensus
 import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -31,13 +32,18 @@ func (v *validator) validate() (*block.Header, error) {
 	}
 
 	header := v.block.Header()
+	gasLimit := header.GasLimit()
+
+	if !thor.GasLimit(gasLimit).IsValid(preHeader.GasLimit()) {
+		return nil, errGasLimit
+	}
+
+	if header.GasUsed() > gasLimit {
+		return nil, errGasUsed
+	}
 
 	if header.TxsRoot() != v.block.Body().Txs.RootHash() {
 		return nil, errTxsRoot
-	}
-
-	if header.GasUsed() > header.GasLimit() {
-		return nil, errGasUsed
 	}
 
 	for _, transaction := range v.block.Transactions() {
