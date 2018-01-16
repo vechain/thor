@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"math"
 	"math/big"
 
@@ -47,7 +48,7 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 		return false, err
 	}
 
-	return predicateTrunk(blk.Header(), preHeader)
+	return c.predicateTrunk(blk)
 }
 
 func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
@@ -91,6 +92,24 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	return checkState(state, header)
 }
 
-func predicateTrunk(header *block.Header, preHeader *block.Header) (bool, error) {
-	return false, nil
+func (c *Consensus) predicateTrunk(block *block.Block) (bool, error) {
+	bestBlock, err := c.chain.GetBestBlock()
+	if err != nil {
+		return false, err
+	}
+
+	if block.TotalScore() < bestBlock.TotalScore() {
+		return false, nil
+	}
+
+	if block.TotalScore() == bestBlock.TotalScore() {
+		blockHash := block.Hash()
+		bestHash := bestBlock.Hash()
+		if bytes.Compare(blockHash[:], bestHash[:]) > 0 { // blockHash[:] >  bestHash[:]
+			return true, nil
+		}
+		return false, nil
+	}
+
+	return true, nil
 }
