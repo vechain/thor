@@ -45,3 +45,19 @@ func TestGasLimit_Adjust(t *testing.T) {
 		assert.Equal(t, tt.want, thor.GasLimit(tt.gl).Adjust(tt.delta))
 	}
 }
+
+func TestGasLimit_Qualify(t *testing.T) {
+	tests := []struct {
+		gl       uint64
+		parentGL uint64
+		want     uint64
+	}{
+		{thor.MinGasLimit, thor.MinGasLimit, thor.MinGasLimit},
+		{thor.MinGasLimit - 1, thor.MinGasLimit, thor.MinGasLimit},
+		{thor.MinGasLimit, thor.MinGasLimit * 2, thor.MinGasLimit*2 - (thor.MinGasLimit*2)/thor.GasLimitBoundDivisor},
+		{thor.MinGasLimit * 2, thor.MinGasLimit, thor.MinGasLimit + thor.MinGasLimit/thor.GasLimitBoundDivisor},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, thor.GasLimit(tt.gl).Qualify(tt.parentGL))
+	}
+}
