@@ -46,13 +46,19 @@ func (v *validator) validate() (*block.Header, error) {
 		return nil, errTxsRoot
 	}
 
-	for _, transaction := range v.block.Transactions() {
-		if !v.validateTransaction(transaction) {
-			return nil, errTransaction
-		}
+	if !v.validateTransactions(v.block.Transactions()) {
+		return nil, errTransaction
 	}
 
 	return preHeader, nil
+}
+
+func (v *validator) validateTransactions(transactions tx.Transactions) bool {
+	length := len(transactions)
+	if length == 0 {
+		return true
+	}
+	return v.validateTransaction(transactions[0]) && v.validateTransactions(transactions[1:length])
 }
 
 func (v *validator) validateTransaction(transaction *tx.Transaction) bool {
