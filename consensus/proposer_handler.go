@@ -4,62 +4,66 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
 )
 
-func handleProposers(
-	handler func(thor.Address, []byte) *vm.Output,
-	header *block.Header,
-	sign *cry.Signing,
-	preHeader *block.Header) error {
-
-	signer, err := sign.Signer(header)
-	if err != nil {
-		return err
-	}
-
-	proposers, err := getProposers(handler)
-	if err != nil {
-		return err
-	}
-
-	updates, err := validateProposers(proposers, header, signer, preHeader)
-	if err != nil {
-		return err
-	}
-
-	return setProposers(handler, updates)
+type proposerHandler struct {
+	handler   func(thor.Address, []byte) *vm.Output
+	header    *block.Header
+	signer    thor.Address
+	preHeader *block.Header
 }
 
-func getProposers(handler func(thor.Address, []byte) *vm.Output) ([]schedule.Proposer, error) {
-	output := handler(contracts.Authority.Address, contracts.Authority.PackProposers())
+func newProposerHandler(
+	handler func(thor.Address, []byte) *vm.Output,
+	header *block.Header,
+	signer thor.Address,
+	preHeader *block.Header,
+) *proposerHandler {
+	return &proposerHandler{
+		handler:   handler,
+		header:    header,
+		signer:    signer,
+		preHeader: preHeader}
+}
+
+func (ph *proposerHandler) handle() error {
+	proposers, err := ph.getProposers()
+	if err != nil {
+		return err
+	}
+
+	updates, err := ph.validateProposers(proposers)
+	if err != nil {
+		return err
+	}
+
+	return ph.updateProposers(updates)
+}
+
+func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
+	output := ph.handler(contracts.Authority.Address, contracts.Authority.PackProposers())
 	if output.VMErr != nil {
 		return nil, errors.Wrap(output.VMErr, "get proposers")
 	}
 	return contracts.Authority.UnpackProposers(output.Value), nil
 }
 
-func setProposers(handler func(thor.Address, []byte) *vm.Output, updates []schedule.Proposer) error {
-	output := handler(contracts.Authority.Address, contracts.Authority.PackUpdate(updates))
+func (ph *proposerHandler) updateProposers(updates []schedule.Proposer) error {
+	output := ph.handler(contracts.Authority.Address, contracts.Authority.PackUpdate(updates))
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "set absent")
 	}
 	return nil
 }
 
-func validateProposers(
-	proposers []schedule.Proposer,
-	header *block.Header,
-	signer thor.Address,
-	preHeader *block.Header) ([]schedule.Proposer, error) {
-
+func (ph *proposerHandler) validateProposers(proposers []schedule.Proposer) ([]schedule.Proposer, error) {
 	legal, updates, err := schedule.New(
 		proposers,
-		preHeader.Number(),
-		preHeader.Timestamp()).Validate(signer, header.Timestamp())
+		ph.preHeader.Number(),
+		ph.preHeader.Timestamp()).Validate(ph.signer, ph.header.Timestamp())
 
 	if !legal {
 		return nil, errSinger
@@ -68,7 +72,7 @@ func validateProposers(
 		return nil, err
 	}
 
-	if preHeader.TotalScore()+calcScore(proposers, updates) != header.TotalScore() {
+	if ph.preHeader.TotalScore()+calcScore(proposers, updates) != ph.header.TotalScore() {
 		return nil, errTotalScore
 	}
 
