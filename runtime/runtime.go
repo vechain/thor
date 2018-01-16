@@ -122,10 +122,7 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 }
 
 // ExecuteTransaction executes a transaction.
-// If an error returned, state will not be affected.
-// It will invoke SetTransactionEnvironment to reset tx env.
-// Note that the elements of returned []*vm.Output may be nil if failed
-// to execute corresponded clauses.
+// Note that the elements of returned []*vm.Output may be nil if corresponded clause failed.
 func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	// precheck
 	origin, err := signing.Signer(tx)
@@ -147,14 +144,6 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) 
 
 	energyPrepayed := new(big.Int).SetUint64(gas)
 	energyPrepayed.Mul(energyPrepayed, gasPrice)
-
-	// the checkpoint to be reverted only when gas consumption failure.
-	txCheckpoint := rt.state.NewCheckpoint()
-	defer func() {
-		if err != nil {
-			rt.state.RevertTo(txCheckpoint)
-		}
-	}()
 
 	// pre pay energy for tx gas
 	energyPayer, err := rt.consumeEnergy(
