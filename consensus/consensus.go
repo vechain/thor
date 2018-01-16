@@ -51,6 +51,12 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 }
 
 func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
+	header := blk.Header()
+	signer, err := c.sign.Signer(header)
+	if err != nil {
+		return err
+	}
+
 	preHash := preHeader.StateRoot()
 	state := c.stateCreator(preHash)
 	getHash := chain.NewHashGetter(c.chain, preHash).GetHash
@@ -61,25 +67,24 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		preHeader.Timestamp(),
 		preHeader.GasLimit(),
 		getHash)
-	handler := func(to thor.Address, data []byte) *vm.Output {
+	clauseHandler := func(to thor.Address, data []byte) *vm.Output {
 		clause := &tx.Clause{
 			To:   &to,
 			Data: data}
 		return rt.Execute(clause, 0, math.MaxUint64, to, &big.Int{}, thor.Hash{})
 	}
 
-	header := blk.Header()
-	if err := handleProposers(handler, header, c.sign, preHeader); err != nil {
+	if err := newProposerHandler(clauseHandler, header, signer, preHeader).handle(); err != nil {
 		return err
 	}
 
-	energyUsed, err := ProcessBlock(rt, blk, c.sign)
+	energyUsed, err := newBlockProcessor(rt, c.sign).Process(blk)
 	if err != nil {
 		return err
 	}
 
 	data := contracts.Energy.PackCharge(header.Beneficiary(), new(big.Int).SetUint64(energyUsed))
-	if output := handler(contracts.Energy.Address, data); output.VMErr != nil {
+	if output := clauseHandler(contracts.Energy.Address, data); output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
 
