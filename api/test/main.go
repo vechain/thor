@@ -35,11 +35,11 @@ func main() {
 		fmt.Println(err)
 	}
 	chain.WriteGenesis(b)
+	key, _ := crypto.GenerateKey()
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
 		cla := &tx.Clause{To: &address, Value: big.NewInt(10), Data: nil}
 		signing := cry.NewSigning(best.Hash())
-		key, _ := crypto.GenerateKey()
 		tx1 := new(tx.Builder).
 			GasPrice(big.NewInt(1000)).
 			Gas(1000).

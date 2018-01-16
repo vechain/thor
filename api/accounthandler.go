@@ -2,11 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
-
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
+	"math/big"
+	"net/http"
 )
 
 //AccountHTTPPathPrefix http path prefix
@@ -34,12 +34,17 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return httpx.Error(" Invalid address! ", 400)
 	}
+
 	b := ai.GetBalance(address)
-	str, err := json.Marshal(b)
+	data := map[string]*big.Int{
+		"balance": b,
+	}
+
+	d, err := json.Marshal(data)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)
 	}
-	w.Write(str)
+	w.Write(d)
 	return nil
 }
 
@@ -56,12 +61,17 @@ func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return httpx.Error(" Invalid address! ", 400)
 	}
-	c := ai.GetCode(address)
-	str, err := json.Marshal(c)
+
+	code := ai.GetCode(address)
+	data := map[string][]byte{
+		"code": code,
+	}
+
+	d, err := json.Marshal(data)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)
 	}
-	w.Write(str)
+	w.Write(d)
 	return nil
 }
 
@@ -86,11 +96,16 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return httpx.Error(" Invalid key! ", 400)
 	}
-	v := ai.GetStorage(address, keyhash)
-	str, err := json.Marshal(v)
+
+	value := ai.GetStorage(address, keyhash)
+	data := map[string]string{
+		key: value.String(),
+	}
+
+	d, err := json.Marshal(data)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)
 	}
-	w.Write(str)
+	w.Write(d)
 	return nil
 }
