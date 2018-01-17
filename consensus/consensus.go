@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"bytes"
-	"math"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -13,8 +12,6 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
 
 // Consensus check whether the block is verified,
@@ -68,24 +65,18 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		preHeader.Timestamp(),
 		preHeader.GasLimit(),
 		getHash)
-	clauseHandler := func(to thor.Address, data []byte) *vm.Output {
-		clause := &tx.Clause{
-			To:   &to,
-			Data: data}
-		return rt.Execute(clause, 0, math.MaxUint64, to, &big.Int{}, thor.Hash{})
-	}
 
-	if err := newProposerHandler(clauseHandler, header, signer, preHeader).handle(); err != nil {
+	if err := newProposerHandler(rt, header, signer, preHeader).handle(); err != nil {
 		return err
 	}
 
-	energyUsed, err := newBlockProcessor(rt, c.sign).Process(blk)
+	energyUsed, err := newBlockProcessor(rt, c.sign).process(blk)
 	if err != nil {
 		return err
 	}
 
 	data := contracts.Energy.PackCharge(header.Beneficiary(), new(big.Int).SetUint64(energyUsed))
-	if output := clauseHandler(contracts.Energy.Address, data); output.VMErr != nil {
+	if output := handleClause(rt, contracts.Energy.Address, data); output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
 

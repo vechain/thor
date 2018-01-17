@@ -4,26 +4,26 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm"
 )
 
 type proposerHandler struct {
-	handler   func(thor.Address, []byte) *vm.Output
+	rt        *runtime.Runtime
 	header    *block.Header
 	signer    thor.Address
 	preHeader *block.Header
 }
 
 func newProposerHandler(
-	handler func(thor.Address, []byte) *vm.Output,
+	rt *runtime.Runtime,
 	header *block.Header,
 	signer thor.Address,
 	preHeader *block.Header,
 ) *proposerHandler {
 	return &proposerHandler{
-		handler:   handler,
+		rt:        rt,
 		header:    header,
 		signer:    signer,
 		preHeader: preHeader}
@@ -44,7 +44,7 @@ func (ph *proposerHandler) handle() error {
 }
 
 func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
-	output := ph.handler(contracts.Authority.Address, contracts.Authority.PackProposers())
+	output := handleClause(ph.rt, contracts.Authority.Address, contracts.Authority.PackProposers())
 	if output.VMErr != nil {
 		return nil, errors.Wrap(output.VMErr, "get proposers")
 	}
@@ -52,7 +52,7 @@ func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
 }
 
 func (ph *proposerHandler) updateProposers(updates []schedule.Proposer) error {
-	output := ph.handler(contracts.Authority.Address, contracts.Authority.PackUpdate(updates))
+	output := handleClause(ph.rt, contracts.Authority.Address, contracts.Authority.PackUpdate(updates))
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "set absent")
 	}
@@ -77,24 +77,4 @@ func (ph *proposerHandler) validateProposers(proposers []schedule.Proposer) ([]s
 	}
 
 	return updates, nil
-}
-
-func calcScore(proposers []schedule.Proposer, updates []schedule.Proposer) uint64 {
-	var witness map[thor.Address]bool
-
-	for _, proposer := range proposers {
-		if !proposer.IsAbsent() {
-			witness[proposer.Address] = true
-		}
-	}
-
-	for _, update := range updates {
-		if update.IsAbsent() {
-			delete(witness, update.Address)
-		} else {
-			witness[update.Address] = true
-		}
-	}
-
-	return uint64(len(witness))
 }
