@@ -32,7 +32,7 @@ func checkState(state *state.State, header *block.Header) error {
 }
 
 func calcScore(proposers []schedule.Proposer, updates []schedule.Proposer) uint64 {
-	var witness map[thor.Address]bool
+	witness := make(map[thor.Address]bool)
 
 	for _, proposer := range proposers {
 		if !proposer.IsAbsent() {
