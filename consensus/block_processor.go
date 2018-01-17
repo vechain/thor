@@ -4,7 +4,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/tx"
 )
 
@@ -20,7 +19,7 @@ func newBlockProcessor(rt *runtime.Runtime, sign *cry.Signing) *blockProcessor {
 }
 
 // ProcessBlock can execute all transactions in a block.
-func (bp *blockProcessor) Process(blk *block.Block) (uint64, error) {
+func (bp *blockProcessor) process(blk *block.Block) (uint64, error) {
 	receipts, totalGasUsed, totalEnergyUsed, err := bp.processTransactions(blk.Transactions())
 	if err != nil {
 		return 0, err
@@ -55,15 +54,4 @@ func (bp *blockProcessor) processTransactions(transactions tx.Transactions) (tx.
 	}
 
 	return append(receipts, receipt), totalGasUsed + receipt.GasUsed, totalEnergyUsed + energyUsed, nil
-}
-
-func checkState(state *state.State, header *block.Header) error {
-	if stateRoot, err := state.Stage().Hash(); err == nil {
-		if header.StateRoot() != stateRoot {
-			return errStateRoot
-		}
-	} else {
-		return err
-	}
-	return nil
 }
