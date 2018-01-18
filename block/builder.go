@@ -72,6 +72,6 @@ func (b *Builder) Build() *Block {
 
 	return &Block{
 		&Header{content: header},
-		b.txs.Copy(),
+		b.txs,
 	}
 }

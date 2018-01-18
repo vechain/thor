@@ -25,7 +25,7 @@ var _ cry.Signable = (*Transaction)(nil)
 
 // body describes details of a tx.
 type body struct {
-	Clauses     Clauses
+	Clauses     []*Clause
 	GasPrice    *big.Int
 	Gas         uint64
 	Nonce       uint64
@@ -80,13 +80,23 @@ func (t *Transaction) TimeBarrier() uint64 {
 	return t.body.TimeBarrier
 }
 
-// Clauses returns caluses in tx.
-func (t *Transaction) Clauses() Clauses {
-	clauses := make(Clauses, len(t.body.Clauses))
-	for i, c := range t.body.Clauses {
-		clauses[i] = c.Copy()
+// NewClauseIterator create a clause iteartor.
+// It returns a function acts as 'Next'.
+func (t *Transaction) NewClauseIterator() func() (clause *Clause, index int, ok bool) {
+	i := 0
+	return func() (c *Clause, index int, ok bool) {
+		if i >= len(t.body.Clauses) {
+			return nil, 0, false
+		}
+		c, index, ok = t.body.Clauses[i], i, true
+		i++
+		return
 	}
-	return clauses
+}
+
+// ClauseCount returns count of clauses contained in this tx.
+func (t *Transaction) ClauseCount() int {
+	return len(t.body.Clauses)
 }
 
 // Signature returns signature.
@@ -130,11 +140,11 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 	}
 
 	firstClause := t.body.Clauses[0]
-	total := core.IntrinsicGas(firstClause.Data, firstClause.To == nil, true)
+	total := core.IntrinsicGas(firstClause.body.Data, firstClause.body.To == nil, true)
 
 	for _, c := range t.body.Clauses[1:] {
-		contractCreation := c.To == nil
-		total.Add(total, core.IntrinsicGas(c.Data, contractCreation, true))
+		contractCreation := c.body.To == nil
+		total.Add(total, core.IntrinsicGas(c.body.Data, contractCreation, true))
 
 		// sub over-payed gas for clauses after the first one.
 		if contractCreation {
