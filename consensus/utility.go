@@ -31,23 +31,27 @@ func checkState(state *state.State, header *block.Header) error {
 }
 
 func calcScore(proposers []schedule.Proposer, updates []schedule.Proposer) uint64 {
-	witness := make(map[thor.Address]bool)
+	return uint64(len(
+		getPresentProposers(
+			getPresentProposers(
+				make(map[thor.Address]bool),
+				proposers),
+			updates)))
+}
 
-	for _, proposer := range proposers {
-		if !proposer.IsAbsent() {
-			witness[proposer.Address] = true
-		}
+func getPresentProposers(witness map[thor.Address]bool, proposers []schedule.Proposer) map[thor.Address]bool {
+	length := len(proposers)
+	if length == 0 {
+		return witness
 	}
 
-	for _, update := range updates {
-		if update.IsAbsent() {
-			delete(witness, update.Address)
-		} else {
-			witness[update.Address] = true
-		}
+	if proposers[0].IsAbsent() {
+		delete(witness, proposers[0].Address)
+	} else {
+		witness[proposers[0].Address] = true
 	}
 
-	return uint64(len(witness))
+	return getPresentProposers(witness, proposers[1:length])
 }
 
 func getRewardPercentage(rt *runtime.Runtime) (uint64, error) {
