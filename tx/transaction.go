@@ -81,17 +81,8 @@ func (t *Transaction) TimeBarrier() uint64 {
 }
 
 // NewClauseIterator create a clause iteartor.
-// It returns a function acts as 'Next'.
-func (t *Transaction) NewClauseIterator() func() (clause *Clause, index int, ok bool) {
-	i := 0
-	return func() (c *Clause, index int, ok bool) {
-		if i >= len(t.body.Clauses) {
-			return nil, 0, false
-		}
-		c, index, ok = t.body.Clauses[i], i, true
-		i++
-		return
-	}
+func (t *Transaction) NewClauseIterator() ClauseIterator {
+	return &clauseIter{clauses: t.body.Clauses}
 }
 
 // ClauseCount returns count of clauses contained in this tx.
