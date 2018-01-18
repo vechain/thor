@@ -90,16 +90,16 @@ type ClauseIterator interface {
 }
 
 type clauseIter struct {
-	clausers []*Clause
-	i        int
+	clauses []*Clause
+	i       int
 }
 
 func (ci *clauseIter) HasNext() bool {
-	return ci.i < len(ci.clausers)
+	return ci.i < len(ci.clauses)
 }
 
 func (ci *clauseIter) Next() (c *Clause) {
-	c = ci.clausers[ci.i]
+	c = ci.clauses[ci.i]
 	ci.i++
 	return
 }
