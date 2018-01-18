@@ -6,11 +6,24 @@ contract Energy is Token {
     
     using SafeMath for uint256;
     
+    // public constant address params;
+
+    //balance growth rate at `timestamp`
+    struct BalanceBirth {
+        uint256 timestamp;  // `timestamp` changes if birth updated.
+        uint256 birth;      // how many tokens grown by per vet per second
+    }
+
+    BalanceBirth[] birthRevisions;
+
+    event LogBalanceBirth(address indexed executor,uint256 time,uint256 growthrate);
+    
     //which represents an owner's balance
     struct Balance {
         uint256 balance;//the energy balance
         uint256 timestamp;//for calculate how much energy would be grown
         uint256 vetamount;//vet balance
+        uint256 version;//index of `snapGRs`
     }
     //save all owner's balance
     mapping(address => Balance) balances;
@@ -39,7 +52,6 @@ contract Energy is Token {
     mapping (bytes32 => SharedCredit) public sharedCredits;
 
     event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
-
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
@@ -150,34 +162,67 @@ contract Energy is Token {
         balances[_reciever].timestamp = now;
     }
 
+    ///@notice adjust balance growth rate to `_birth`
+    ///@param _birth how much energy grows by per vet per second
+    function adjustBalanceBirth(uint256 _birth) public {
+        require(msg.sender == address(this));
+        require(_birth > 0);
+        
+        birthRevisions.push(BalanceBirth(now,_birth));
+
+        LogBalanceBirth(msg.sender,now,_birth);
+    }
     ///@param _owner who holds the energy and the vet
     ///
     ///@return how much energy the _owner holds
     function balanceOf(address _owner) public constant returns (uint256 balance) {
+        if ( birthRevisions.length == 0 ) {
+            return 0;   
+        }
+
         uint256 amount = balances[_owner].balance;
         uint256 time = balances[_owner].timestamp;
         uint256 vetamount = balances[_owner].vetamount;
-        //calculate the benefit with per vet per second
-        uint256 total = (10**5)*(10**18);
-        uint256 benefit = 42;
-        uint256 timestamp = 3600*24;
-        uint256 unitGrownStamp = benefit.div(timestamp).div(total);
-        //calculate balance
-        amount = amount.add(unitGrownStamp.mul(vetamount.mul(now.sub(time))));
-        return amount;
+        uint256 version = balances[_owner].version;
+        if ( version == birthRevisions.length - 1 ) {
+            uint256 birth = birthRevisions[birthRevisions.length - 1].birth;
+            amount = amount.add(birth.mul(vetamount.mul(now.sub(time))));
+            return amount;
+        }
+
+        //`_owner` has not operated his account for a long time
+        for ( uint256 i = version; i < birthRevisions.length; i++ ) {
+            var current = birthRevisions[i];
+            if ( i == version ) {
+                var next = birthRevisions[i+1];
+                amount = amount.add(current.birth.mul(vetamount.mul(next.timestamp.sub(time))));
+                continue;
+            }
+            
+            if ( i == birthRevisions.length - 1 ) {
+                amount = amount.add(current.birth.mul(vetamount.mul(now.sub(current.timestamp))));
+                return amount;
+            }
+
+            var n = birthRevisions[i+1];
+            amount = amount.add(current.birth.mul(vetamount.mul(n.timestamp.sub(current.timestamp))));
+        }
     }
 
     ///@notice To initiate or calculate the energy balance of the owner
-    ///@param _owner who holds the energy and the vet
+    ///@param _owner an account
     ///
-    ///@return how much energy the _owner holds
-    function calRestBalance(address _owner) internal returns(uint256) {
+    ///@return how much energy `_owner` holds
+    function calRestBalance(address _owner) public returns(uint256) {
         if (balances[_owner].timestamp == 0) {
             balances[_owner].timestamp = now;
         }
         balances[_owner].balance = balanceOf(_owner);
         balances[_owner].vetamount = _owner.balance;
         balances[_owner].timestamp = now;
+        if ( birthRevisions.length > 0 ) {
+            balances[_owner].version = birthRevisions.length - 1;
+        }
         return balances[_owner].balance;
     }
 
@@ -227,7 +272,7 @@ contract Energy is Token {
     }
 
     /// @notice Allow `_reciever` to withdraw from your account, multiple times, up to the `tokens` amount.
-    /// If this function is called again it overwrites the current allowance with _value.
+    /// If this function is called again it overwrites the current allowance with _amount.
     /// @param _reciever who recieves `_amount` tokens from your account
     /// @param _amount The address of the account able to transfer the tokens
     /// @return whether approved successfully
@@ -243,7 +288,7 @@ contract Energy is Token {
         require(msg.sender == address(this));
         //_contractAddr must be a contract address
         require(isContract(_contractAddr));
-        //caller must be an normal account address
+        //_owner must be a normal account address
         require(!isContract(_owner));
 
         if (contractOwners[_contractAddr] == 0) {
@@ -305,5 +350,6 @@ contract Energy is Token {
             size := extcodesize(_addr)
         }
         return size > 0;
-    }   
+    } 
+      
 }
