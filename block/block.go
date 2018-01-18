@@ -14,28 +14,9 @@ type Block struct {
 	txs    tx.Transactions
 }
 
-type body struct {
-	Txs tx.Transactions
-}
-
 // Body defines body of a block.
 type Body struct {
-	body body
-}
-
-// EncodeRLP implements rlp.Encoder.
-func (b *Body) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &b.body)
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (b *Body) DecodeRLP(s *rlp.Stream) error {
-	var body body
-	if err := s.Decode(&body); err != nil {
-		return err
-	}
-	*b = Body{body}
-	return nil
+	Txs tx.Transactions
 }
 
 // New create a block instance.
@@ -86,19 +67,14 @@ func (b *Block) Header() *Header {
 	return b.header
 }
 
-// NewTransactionIterator returns a transaction iterator.
-func (b *Block) NewTransactionIterator() TransactionIterator {
-	return &txIter{txs: b.txs}
-}
-
-// GetTransactionCount returns count of transactions contained in this block.
-func (b *Block) GetTransactionCount() int {
-	return len(b.txs)
+// Transactions returns a copy of transactions.
+func (b *Block) Transactions() tx.Transactions {
+	return append(tx.Transactions(nil), b.txs...)
 }
 
 // Body returns body of a block.
 func (b *Block) Body() *Body {
-	return &Body{body{b.txs}}
+	return &Body{append(tx.Transactions(nil), b.txs...)}
 }
 
 // EncodeRLP implements rlp.Encoder.
@@ -125,25 +101,4 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		payload.Txs,
 	}
 	return nil
-}
-
-// TransactionIterator to iterates txs contained in the block.
-type TransactionIterator interface {
-	HasNext() bool
-	Next() *tx.Transaction
-}
-
-type txIter struct {
-	txs tx.Transactions
-	i   int
-}
-
-func (ti *txIter) HasNext() bool {
-	return ti.i < len(ti.txs)
-}
-
-func (ti *txIter) Next() (tx *tx.Transaction) {
-	tx = ti.txs[ti.i]
-	ti.i++
-	return
 }

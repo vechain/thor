@@ -47,11 +47,9 @@ func (p *Proposer) Schedule(state *state.State, parent *block.Header) (
 	rt := runtime.New(state, thor.Address{}, 0, 0, 0, hashGetter.GetHash)
 
 	// invoke `Authority.proposers()` to get current proposers whitelist
-	out := rt.Execute(&tx.Clause{
-		To:    &contracts.Authority.Address,
-		Value: &big.Int{},
-		Data:  contracts.Authority.PackProposers(),
-	}, 0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
+	out := rt.Execute(
+		tx.NewClause(&contracts.Authority.Address).WithData(contracts.Authority.PackProposers()),
+		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
 
 	if out.VMErr != nil {
 		return 0, 0, errors.Wrap(out.VMErr, "vm error")
@@ -67,11 +65,10 @@ func (p *Proposer) Schedule(state *state.State, parent *block.Header) (
 	}
 
 	// update proposers' status
-	out = rt.Execute(&tx.Clause{
-		To:    &contracts.Authority.Address,
-		Value: &big.Int{},
-		Data:  contracts.Authority.PackUpdate(updates),
-	}, 0, math.MaxUint64, contracts.Authority.Address, &big.Int{}, thor.Hash{})
+	out = rt.Execute(
+		tx.NewClause(&contracts.Authority.Address).
+			WithData(contracts.Authority.PackUpdate(updates)),
+		0, math.MaxUint64, contracts.Authority.Address, &big.Int{}, thor.Hash{})
 
 	if out.VMErr != nil {
 		return 0, 0, errors.Wrap(out.VMErr, "vm")

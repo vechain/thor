@@ -37,11 +37,9 @@ func TestExecute(t *testing.T) {
 			amount,
 		)
 
-		out := rt.Execute(&tx.Clause{
-			To:    &contracts.Energy.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
+		out := rt.Execute(
+			tx.NewClause(&contracts.Energy.Address).WithData(data),
+			0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
 		}
@@ -55,11 +53,9 @@ func TestExecute(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		out := rt.Execute(&tx.Clause{
-			To:    &contracts.Energy.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
+		out := rt.Execute(
+			tx.NewClause(&contracts.Energy.Address).WithData(data),
+			0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
 		}
@@ -96,10 +92,7 @@ func TestExecuteTransaction(t *testing.T) {
 	tx := new(tx.Builder).
 		GasPrice(big.NewInt(1)).
 		Gas(1000000).
-		Clause(&tx.Clause{
-			To:    &addr2,
-			Value: big.NewInt(10),
-		}).
+		Clause(tx.NewClause(&addr2).WithValue(big.NewInt(10))).
 		Build()
 
 	signing := cry.NewSigning(thor.Hash{})

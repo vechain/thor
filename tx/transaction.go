@@ -80,14 +80,9 @@ func (t *Transaction) TimeBarrier() uint64 {
 	return t.body.TimeBarrier
 }
 
-// NewClauseIterator create a clause iteartor.
-func (t *Transaction) NewClauseIterator() ClauseIterator {
-	return &clauseIter{clauses: t.body.Clauses}
-}
-
-// ClauseCount returns count of clauses contained in this tx.
-func (t *Transaction) ClauseCount() int {
-	return len(t.body.Clauses)
+// Clauses returns caluses in tx.
+func (t *Transaction) Clauses() []*Clause {
+	return append([]*Clause(nil), t.body.Clauses...)
 }
 
 // Signature returns signature.
