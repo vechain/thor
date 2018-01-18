@@ -82,3 +82,24 @@ func (c *Clause) DecodeRLP(s *rlp.Stream) error {
 	*c = Clause{body}
 	return nil
 }
+
+// ClauseIterator to iterates clauses.
+type ClauseIterator interface {
+	HasNext() bool
+	Next() *Clause
+}
+
+type clauseIter struct {
+	clausers []*Clause
+	i        int
+}
+
+func (ci *clauseIter) HasNext() bool {
+	return ci.i < len(ci.clausers)
+}
+
+func (ci *clauseIter) Next() (c *Clause) {
+	c = ci.clausers[ci.i]
+	ci.i++
+	return
+}

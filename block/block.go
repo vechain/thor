@@ -87,17 +87,8 @@ func (b *Block) Header() *Header {
 }
 
 // NewTransactionIterator returns a transaction iterator.
-// The returned function acts like 'Next'.
-func (b *Block) NewTransactionIterator() func() (tx *tx.Transaction, index int, ok bool) {
-	i := 0
-	return func() (tx *tx.Transaction, index int, ok bool) {
-		if i >= len(b.txs) {
-			return nil, 0, false
-		}
-		tx, index, ok = b.txs[i], i, true
-		i++
-		return
-	}
+func (b *Block) NewTransactionIterator() TransactionIterator {
+	return &txIter{txs: b.txs}
 }
 
 // GetTransactionCount returns count of transactions contained in this block.
@@ -134,4 +125,25 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		payload.Txs,
 	}
 	return nil
+}
+
+// TransactionIterator to iterates txs contained in the block.
+type TransactionIterator interface {
+	HasNext() bool
+	Next() *tx.Transaction
+}
+
+type txIter struct {
+	txs tx.Transactions
+	i   int
+}
+
+func (ti *txIter) HasNext() bool {
+	return ti.i < len(ti.txs)
+}
+
+func (ti *txIter) Next() (tx *tx.Transaction) {
+	tx = ti.txs[ti.i]
+	ti.i++
+	return
 }
