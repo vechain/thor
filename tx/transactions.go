@@ -14,11 +14,6 @@ var (
 // Transactions a slice of transactions.
 type Transactions []*Transaction
 
-// Copy makes a shallow copy.
-func (txs Transactions) Copy() Transactions {
-	return append(Transactions(nil), txs...)
-}
-
 // RootHash computes merkle root hash of transactions.
 func (txs Transactions) RootHash() thor.Hash {
 	if len(txs) == 0 {

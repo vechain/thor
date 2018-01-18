@@ -14,9 +14,28 @@ type Block struct {
 	txs    tx.Transactions
 }
 
+type body struct {
+	Txs tx.Transactions
+}
+
 // Body defines body of a block.
 type Body struct {
-	Txs tx.Transactions
+	body body
+}
+
+// EncodeRLP implements rlp.Encoder.
+func (b *Body) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &b.body)
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (b *Body) DecodeRLP(s *rlp.Stream) error {
+	var body body
+	if err := s.Decode(&body); err != nil {
+		return err
+	}
+	*b = Body{body}
+	return nil
 }
 
 // New create a block instance.
@@ -25,7 +44,7 @@ type Body struct {
 func New(header *Header, txs tx.Transactions) *Block {
 	return &Block{
 		header,
-		txs.Copy(),
+		append(tx.Transactions(nil), txs...),
 	}
 }
 
@@ -62,19 +81,33 @@ func (b *Block) Hash() thor.Hash {
 	return b.header.Hash()
 }
 
-// Header returns a copy of block header.
+// Header returns the block header.
 func (b *Block) Header() *Header {
 	return b.header
 }
 
-// Transactions returns a copy of transactions.
-func (b *Block) Transactions() tx.Transactions {
-	return b.txs.Copy()
+// NewTransactionIterator returns a transaction iterator.
+// The returned function acts like 'Next'.
+func (b *Block) NewTransactionIterator() func() (tx *tx.Transaction, index int, ok bool) {
+	i := 0
+	return func() (tx *tx.Transaction, index int, ok bool) {
+		if i >= len(b.txs) {
+			return nil, 0, false
+		}
+		tx, index, ok = b.txs[i], i, true
+		i++
+		return
+	}
+}
+
+// GetTransactionCount returns count of transactions contained in this block.
+func (b *Block) GetTransactionCount() int {
+	return len(b.txs)
 }
 
 // Body returns body of a block.
 func (b *Block) Body() *Body {
-	return &Body{b.txs.Copy()}
+	return &Body{body{b.txs}}
 }
 
 // EncodeRLP implements rlp.Encoder.

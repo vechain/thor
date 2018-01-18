@@ -13,7 +13,7 @@ type Builder struct {
 
 // Clause add a clause.
 func (b *Builder) Clause(c *Clause) *Builder {
-	b.body.Clauses = append(b.body.Clauses, c.Copy())
+	b.body.Clauses = append(b.body.Clauses, c)
 	return b
 }
 
@@ -58,6 +58,6 @@ func (b *Builder) Build() *Transaction {
 		b.body.GasPrice = &big.Int{}
 	}
 	tx := Transaction{body: b.body}
-	tx.body.Clauses = b.body.Clauses.Copy()
+	tx.body.Clauses = b.body.Clauses
 	return &tx
 }
