@@ -21,17 +21,26 @@ func Build(state *state.State) (*block.Block, error) {
 		GasLimit(thor.InitialGasLimit).
 		Alloc(
 			cs.Authority.Address,
-			new(big.Int),
+			&big.Int{},
 			cs.Authority.RuntimeBytecodes(),
 		).
 		Alloc(
 			cs.Energy.Address,
-			new(big.Int),
+			&big.Int{},
 			cs.Energy.RuntimeBytecodes(),
+		).
+		Alloc(
+			cs.Params.Address,
+			&big.Int{},
+			cs.Params.RuntimeBytecodes(),
 		).
 		Call(
 			cs.Authority.Address,
 			cs.Authority.PackInitialize(thor.Address{} /*TODO*/),
+		).
+		Call(
+			cs.Params.Address,
+			cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30)),
 		).
 		Build(state)
 }

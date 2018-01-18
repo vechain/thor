@@ -12,6 +12,11 @@ contract Params {
         voting = _voting;        
     }
 
+    function preset(string _key, uint256 _value) public {
+        require(msg.sender == address(this));
+        values[_key] = _value;
+    }
+
     function get(string _key) public view returns(uint256) {
         return values[_key];
     }

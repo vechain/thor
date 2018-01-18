@@ -38,6 +38,10 @@ func (p *params) PackSet(key string, value *big.Int) []byte {
 	return p.mustPack("set", key, value)
 }
 
+func (p *params) PackPreset(key string, value *big.Int) []byte {
+	return p.mustPack("preset", key, value)
+}
+
 // Params binder of `Params` contract.
 var Params = params{mustLoad(
 	thor.BytesToAddress([]byte("par")),
