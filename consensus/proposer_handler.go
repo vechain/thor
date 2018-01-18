@@ -65,16 +65,14 @@ func (ph *proposerHandler) validateProposers(proposers []schedule.Proposer) ([]s
 		ph.preHeader.Number(),
 		ph.preHeader.Timestamp()).Validate(ph.signer, ph.header.Timestamp())
 
-	if !legal {
-		return nil, errSinger
-	}
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, err
-	}
-
-	if ph.preHeader.TotalScore()+calcScore(proposers, updates) != ph.header.TotalScore() {
+	case !legal:
+		return nil, errSinger
+	case ph.preHeader.TotalScore()+calcScore(proposers, updates) != ph.header.TotalScore():
 		return nil, errTotalScore
+	default:
+		return updates, nil
 	}
-
-	return updates, nil
 }

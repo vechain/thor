@@ -16,10 +16,7 @@ import (
 )
 
 func handleClause(rt *runtime.Runtime, to thor.Address, data []byte) *vm.Output {
-	clause := &tx.Clause{
-		To:   &to,
-		Data: data}
-	return rt.Execute(clause, 0, math.MaxUint64, to, &big.Int{}, thor.Hash{})
+	return rt.Execute(tx.NewClause(&to).WithData(data), 0, math.MaxUint64, to, &big.Int{}, thor.Hash{})
 }
 
 func checkState(state *state.State, header *block.Header) error {
