@@ -19,7 +19,10 @@ func TestGenesis(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
 	st, _ := state.New(thor.Hash{}, kv)
-	block, _ := genesis.Build(st)
+	block, err := genesis.Build(st)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	st, _ = state.New(block.Header().StateRoot(), kv)
 	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
