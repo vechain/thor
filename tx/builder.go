@@ -58,6 +58,5 @@ func (b *Builder) Build() *Transaction {
 		b.body.GasPrice = &big.Int{}
 	}
 	tx := Transaction{body: b.body}
-	tx.body.Clauses = b.body.Clauses
 	return &tx
 }

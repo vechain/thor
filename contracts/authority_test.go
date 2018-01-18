@@ -28,11 +28,9 @@ func TestAuthority(t *testing.T) {
 		func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
-		return rt.Execute(&tx.Clause{
-			To:    &Authority.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
+		return rt.Execute(
+			tx.NewClause(&Authority.Address).WithData(data),
+			0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
 	}
 
 	out := call(Authority.PackInitialize(thor.BytesToAddress([]byte("voting"))))
@@ -75,11 +73,9 @@ func BenchmarkProposers(b *testing.B) {
 		func(uint32) thor.Hash { return thor.Hash{} })
 
 	call := func(data []byte) *vm.Output {
-		return rt.Execute(&tx.Clause{
-			To:    &Authority.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
+		return rt.Execute(
+			tx.NewClause(&Authority.Address).WithData(data),
+			0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
 	}
 
 	for i := 0; i < 100; i++ {

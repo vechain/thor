@@ -47,11 +47,9 @@ func BenchmarkChargeEnergy(b *testing.B) {
 
 		gas := uint64(1000000)
 		// cost about  49165 gas
-		out := rt.Execute(&tx.Clause{
-			To:    &contracts.Energy.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
+		out := rt.Execute(
+			tx.NewClause(&contracts.Energy.Address).WithData(data),
+			0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			b.Fatal(out.VMErr)
 		}
@@ -79,11 +77,9 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		big.NewInt(1000*1000*1000*1000),
 	)
 
-	out := rt.Execute(&tx.Clause{
-		To:    &contracts.Energy.Address,
-		Value: &big.Int{},
-		Data:  data,
-	}, 0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
+	out := rt.Execute(
+		tx.NewClause(&contracts.Energy.Address).WithData(data),
+		0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
 	if out.VMErr != nil {
 		b.Fatal(out.VMErr)
 	}
@@ -108,11 +104,9 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 
 		gas := uint64(1000000)
 		// cost about  49165 gas
-		out := rt.Execute(&tx.Clause{
-			To:    &contracts.Energy.Address,
-			Value: &big.Int{},
-			Data:  data,
-		}, 0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
+		out := rt.Execute(
+			tx.NewClause(&contracts.Energy.Address).WithData(data),
+			0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			panic(out.VMErr)
 		}

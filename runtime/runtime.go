@@ -86,19 +86,18 @@ func (rt *Runtime) Execute(
 	}
 
 	vm := vm.New(ctx, rt.state, rt.vmConfig)
-	if clause.To == nil {
-		return vm.Create(txOrigin, clause.Data, gas, clause.Value)
+	to := clause.To()
+	if to == nil {
+		return vm.Create(txOrigin, clause.Data(), gas, clause.Value())
 	}
-	return vm.Call(txOrigin, *clause.To, clause.Data, gas, clause.Value)
+	return vm.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 }
 
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
 	data := contracts.Energy.PackConsume(caller, callee, amount)
-	output := rt.Execute(&Tx.Clause{
-		To:    &contracts.Energy.Address,
-		Value: &big.Int{},
-		Data:  data,
-	}, 0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+	output := rt.Execute(
+		Tx.NewClause(&contracts.Energy.Address).WithData(data),
+		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
 	}
@@ -110,11 +109,9 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 
 	data := contracts.Energy.PackCharge(addr, amount)
 
-	output := rt.Execute(&Tx.Clause{
-		To:    &contracts.Energy.Address,
-		Value: &big.Int{},
-		Data:  data,
-	}, 0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+	output := rt.Execute(
+		Tx.NewClause(&contracts.Energy.Address).WithData(data),
+		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
@@ -139,7 +136,6 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) 
 	}
 
 	gasPrice := tx.GasPrice()
-
 	clauses := tx.Clauses()
 
 	energyPrepayed := new(big.Int).SetUint64(gas)
@@ -208,20 +204,22 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) 
 
 // returns common 'To' field of clauses if any.
 // Empty address returned if no common 'To'.
-func commonTo(clauses Tx.Clauses) thor.Address {
+func commonTo(clauses []*Tx.Clause) thor.Address {
 	if len(clauses) == 0 {
 		return thor.Address{}
 	}
-	firstTo := clauses[0].To
+
+	firstTo := clauses[0].To()
 	if firstTo == nil {
 		return thor.Address{}
 	}
 
-	for _, c := range clauses[1:] {
-		if c.To == nil {
+	for _, clause := range clauses[1:] {
+		to := clause.To()
+		if to == nil {
 			return thor.Address{}
 		}
-		if *c.To != *firstTo {
+		if *to != *firstTo {
 			return thor.Address{}
 		}
 	}

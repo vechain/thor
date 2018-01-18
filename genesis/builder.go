@@ -93,12 +93,8 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	// execute all calls
 	for _, call := range b.calls {
-
 		output := rt.Execute(
-			&tx.Clause{
-				To:    &call.address,
-				Value: &big.Int{},
-				Data:  call.data},
+			tx.NewClause(&call.address).WithData(call.data),
 			0,
 			execGasLimit,
 			call.address,
