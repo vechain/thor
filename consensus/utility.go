@@ -4,7 +4,9 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/state"
@@ -49,4 +51,16 @@ func calcScore(proposers []schedule.Proposer, updates []schedule.Proposer) uint6
 	}
 
 	return uint64(len(witness))
+}
+
+func getRewardPercentage(rt *runtime.Runtime) (uint64, error) {
+	output := handleClause(rt,
+		contracts.Params.Address,
+		contracts.Params.PackGet(contracts.ParamRewardPercentage))
+
+	if output.VMErr != nil {
+		return 0, errors.Wrap(output.VMErr, "reward percentage")
+	}
+
+	return contracts.Params.UnpackGet(output.Value).Uint64() / 100, nil
 }

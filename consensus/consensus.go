@@ -58,8 +58,7 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	preHash := preHeader.StateRoot()
 	state := c.stateCreator(preHash)
 	getHash := chain.NewHashGetter(c.chain, preHash).GetHash
-	rt := runtime.New(
-		state,
+	rt := runtime.New(state,
 		preHeader.Beneficiary(),
 		preHeader.Number(),
 		preHeader.Timestamp(),
@@ -75,8 +74,15 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		return err
 	}
 
-	data := contracts.Energy.PackCharge(header.Beneficiary(), new(big.Int).SetUint64(energyUsed))
-	if output := handleClause(rt, contracts.Energy.Address, data); output.VMErr != nil {
+	rewardPercentage, err := getRewardPercentage(rt)
+	if err != nil {
+		return err
+	}
+
+	if output := handleClause(rt,
+		contracts.Energy.Address,
+		contracts.Energy.PackCharge(header.Beneficiary(),
+			new(big.Int).SetUint64(energyUsed*rewardPercentage))); output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
 
