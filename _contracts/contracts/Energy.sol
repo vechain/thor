@@ -1,48 +1,51 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import './SafeMath.sol';
-import './Params.sol';
+import './Voting.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
-    
+    event Transfer(address indexed _from, address indexed _to, uint256 _value);
+    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
+    event SetBalanceBirth(address indexed executor,uint256 time,uint256 birth);
+    event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
+
     using SafeMath for uint256;
     
     //which represents an owner's balance
     struct Balance {
-        uint256 balance;//the energy balance
-        uint256 timestamp;//for calculate how much energy would be grown
-        uint256 vetamount;//vet balance
-        uint256 version;//index of `snapGRs`
+        uint256 balance;    //the energy balance
+        uint64 timestamp;   //for calculate how much energy would be grown
+        uint128 vetamount;  //vet balance
+        uint64 version;     //index of `snapGRs`
     }
-    //save all owner's balance
-    mapping(address => Balance) balances;
-    
-    mapping(address => mapping (address => uint256)) allowed;
-
-    event Transfer(address indexed _from, address indexed _to, uint256 _value);
-
-    event Approval(address indexed _owner, address indexed _spender, uint256 _value);
-
-    //owners of the contracts, which can only be used to transfer energy from contract
-    mapping (address => address) contractOwners;
 
     //which represents the detail info for a shared energy credits
     struct SharedCredit {
-        uint256 limit;             //max availableCredits
+        uint256 limit;            //max availableCredits        
+        uint64 expire;            //expiration time
+        uint64 creditGrowthRate;  //how many credits grown in a second
 
-        uint256 availableCredits;  //credits can be consumed
-        uint256 expire;            //expiration time
-
-        uint256 creditGrowthRate;  //how mange credits grown in a second
-        uint256 currentTimeStamp;  //current block number
+        uint256 creditsUsed;      //credits can be consumed
+        uint64 snapTime;          //current block number
     }
+    
+    //balance growth rate at `timestamp`
+    struct BalanceBirth {
+        uint256 timestamp;  // `timestamp` changes if birth updated.
+        uint256 birth;      // how many tokens grown by per vet per second
+    }
+    
+    BalanceBirth[] birthRevisions;
 
+    //save all owner's balance
+    mapping(address => Balance) balances;
+    mapping(address => mapping (address => uint256)) allowed;
+    //owners of the contracts, which can only be used to transfer energy from contract
+    mapping (address => address) contractOwners;
     //an array that stores all energy credits
     mapping (bytes32 => SharedCredit) public sharedCredits;
-
-    event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
-
-    address public params; 
+    
+    address public voting; 
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
@@ -68,19 +71,53 @@ contract Energy is Token {
     function() public payable {
         revert();
     }
+
+    ///@notice adjust balance growth rate to `_birth`
+    ///@param _birth how much energy grows by per vet per second
+    function setBalanceBirth(uint256 _birth) public {
+        require(msg.sender == voting);
+        require(_birth > 0);
+        
+        uint256 latestVer = lenthOfRevisions()-1;
+        uint256 latestime = timeWithVer(latestVer);
+        if (now == latestime) {
+            birthRevisions[latestVer].birth = _birth;
+        } else {
+            birthRevisions.push(BalanceBirth(now,_birth));
+        }
+        SetBalanceBirth(msg.sender,now,_birth);
+    }
+
+    function birthWithVer(uint256 version) public view returns(uint256) {
+        require(version <= lenthOfRevisions()-1);
+        if (birthRevisions.length == 0) {
+            return 0;
+        }
+        return birthRevisions[version].birth;
+    }
+
+    function timeWithVer(uint256 version) public view returns(uint256) {
+        require(version <= lenthOfRevisions()-1);
+        if (birthRevisions.length == 0) {
+            return 0;
+        }
+        return birthRevisions[version].timestamp;
+    }
+
+    function lenthOfRevisions() public view returns(uint256) {
+        return birthRevisions.length;
+    }
   
     ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never transferred
     ///@param _reciever who recieves the energy credits
     ///@param _limit max credits can be consumed
     ///@param _creditGrowthRate how mange credits grown in a second
     ///@param _expire a timestamp, if block time exceeded that, this shared energy credits would be useless
-    function shareTo(address _reciever,uint256 _limit,uint256 _creditGrowthRate,uint256 _expire) public {
+    function shareTo(address _reciever,uint256 _limit,uint64 _creditGrowthRate,uint64 _expire) public {
         //sharing credits can only be called by a contract
         require(isContract(msg.sender));
         //the contract caller should be a normal amount
         require(!isContract(_reciever));
-        //shared credits should be greater than zero
-        require(_limit >= 0);
         //the expiration time should be greater than block time
         require(_expire > now);
         
@@ -88,7 +125,7 @@ contract Energy is Token {
         ShareFrom(_from, _reciever, _limit, _creditGrowthRate, _expire);
         //hash the caller address and the contract address to ensure the key unique
         bytes32 key = keccak256(_from,_reciever);
-        sharedCredits[key] = SharedCredit(_limit,_limit,_expire, _creditGrowthRate,now);
+        sharedCredits[key] = SharedCredit(_limit, _expire, _creditGrowthRate, 0, uint64(now));
 
     }
 
@@ -100,19 +137,21 @@ contract Energy is Token {
         //hash the caller address and the contract address to ensure the key unique.
         bytes32 key = keccak256(_from,_reciever);
         SharedCredit storage s = sharedCredits[key];
-        if ( s.availableCredits > 0 && s.expire > now ) {
-            uint256 cbt = now;
-            if ( cbt > s.currentTimeStamp) {
-                //credits has been grown,calculate the available credits within the limit.
-                uint256 ac = s.availableCredits.add((cbt.sub(s.currentTimeStamp)).mul(s.creditGrowthRate));
-                if (ac >= s.limit) {
-                    return s.limit;
-                }
-                return ac;
-            }
-            return s.availableCredits;
+
+        if (now > s.expire) {
+            return 0;
         }
-        return 0;
+
+        if ( s.creditsUsed >= s.limit ) {
+            return 0;
+        }
+
+        uint256 growth = now.sub(s.snapTime).mul(s.creditGrowthRate);
+        if (growth >= s.creditsUsed) {
+            return s.limit;
+        } 
+        return s.limit.sub(s.creditsUsed.sub(growth));
+        
     }
 
     ///@notice consume `_amount` tokens or credits of `_caller`
@@ -127,17 +166,17 @@ contract Energy is Token {
         uint256 ac = getAvailableCredits(_callee,_caller);
         if (ac >= _amount) {
             bytes32 key = keccak256(_callee,_caller);
-            sharedCredits[key].currentTimeStamp = now;
-            sharedCredits[key].availableCredits = ac.sub(_amount);
+            sharedCredits[key].snapTime = uint64(now);
+            sharedCredits[key].creditsUsed = sharedCredits[key].creditsUsed.add(_amount);
             return _callee;
         }
         
-        uint256 b = calRestBalance(_caller); 
+        uint256 b = updateBalance(_caller); 
         if (b < _amount) {
             revert();
         }
         balances[_caller].balance = b.sub(_amount);
-        balances[_caller].timestamp = now;
+        balances[_caller].timestamp = uint64(now);
         return _caller;
 
     }
@@ -148,7 +187,7 @@ contract Energy is Token {
     function charge(address _reciever, uint256 _amount) public {
         require(msg.sender == address(this));
         
-        uint256 b = calRestBalance(_reciever); 
+        uint256 b = updateBalance(_reciever); 
         balances[_reciever].balance = b.add(_amount);
     }
 
@@ -160,9 +199,7 @@ contract Energy is Token {
         if ( time == 0 ) {
             return 0;
         }
-
-        Params param = Params(params);
-        uint256 revisionLen = param.lenthOfRevisions();
+        uint256 revisionLen = lenthOfRevisions();
         uint256 amount = balances[_owner].balance;
 
         if ( revisionLen == 0 ) {
@@ -172,18 +209,18 @@ contract Energy is Token {
         uint256 vetamount = balances[_owner].vetamount;
         uint256 version = balances[_owner].version;
 
-        if ( param.timeWithVer(revisionLen-1) <= time || version == revisionLen - 1) {
-            uint256 birth = param.birthWithVer(revisionLen - 1);
+        if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1) {
+            uint256 birth = birthWithVer(revisionLen - 1);
             amount = amount.add(birth.mul(vetamount.mul(now.sub(time))));
             return amount;
         }
 
         //`_owner` has not operated his account for a long time
         for ( uint256 i = version; i < revisionLen; i++ ) {
-            uint256 currentBirth = param.birthWithVer(i);
-            uint256 currentTime = param.timeWithVer(i);
+            uint256 currentBirth = birthWithVer(i);
+            uint256 currentTime = timeWithVer(i);
             if ( i == version ) {
-                uint256 nextTime = param.timeWithVer(i+1);
+                uint256 nextTime = timeWithVer(i+1);
                 amount = amount.add(currentBirth.mul(vetamount.mul(nextTime.sub(time))));
                 continue;
             }
@@ -193,7 +230,7 @@ contract Energy is Token {
                 return amount;
             }
 
-            uint256 nTime = param.timeWithVer(i+1);
+            uint256 nTime = timeWithVer(i+1);
             amount = amount.add(currentBirth.mul(vetamount.mul(nTime.sub(currentTime))));
         }
     }
@@ -202,17 +239,16 @@ contract Energy is Token {
     ///@param _owner an account
     ///
     ///@return how much energy `_owner` holds
-    function calRestBalance(address _owner) public returns(uint256) {
+    function updateBalance(address _owner) public returns(uint256) {
         if (balances[_owner].timestamp == 0) {
-            balances[_owner].timestamp = now;
+            balances[_owner].timestamp = uint64(now);
         }
         balances[_owner].balance = balanceOf(_owner);
-        balances[_owner].vetamount = _owner.balance;
-        balances[_owner].timestamp = now;
-        Params param = Params(params);
-        uint256 revisionLen = param.lenthOfRevisions();
+        balances[_owner].vetamount = _owner.balance.toUINT128();
+        balances[_owner].timestamp = uint64(now);
+        uint256 revisionLen = lenthOfRevisions();
         if ( revisionLen > 0 ) {
-            balances[_owner].version = revisionLen - 1;
+            balances[_owner].version = uint64(revisionLen - 1);
         }
         return balances[_owner].balance;
     }
@@ -224,8 +260,9 @@ contract Energy is Token {
     function transfer(address _to, uint256 _amount) public returns (bool success) {
         require(!isContract(_to));
         require(_amount > 0);
-        uint256 senderBalance = calRestBalance(msg.sender);
-        uint256 recipientBalance = calRestBalance(_to);
+
+        uint256 senderBalance = updateBalance(msg.sender);
+        uint256 recipientBalance = updateBalance(_to);
         if (senderBalance >= _amount && recipientBalance.add(_amount) > recipientBalance) {
             balances[msg.sender].balance = balances[msg.sender].balance.sub(_amount);
             balances[_to].balance = balances[_to].balance.add(_amount);
@@ -247,6 +284,7 @@ contract Energy is Token {
         require(isContract(_contractAddr));
         //only transfer to a normal contract
         require(!isContract(_reciever));
+
         if (tx.origin == contractOwners[_contractAddr]) {
             allowed[_contractAddr][_reciever] = _amount;
             Approval(_contractAddr, _reciever, _amount);
@@ -317,8 +355,9 @@ contract Energy is Token {
             require(tx.origin == contractOwners[_from]);
         }
         require(!isContract(_to));
-        uint256 contractBalance = calRestBalance(_from);
-        uint256 recipientBalance = calRestBalance(_to);
+
+        uint256 contractBalance = updateBalance(_from);
+        uint256 recipientBalance = updateBalance(_to);
         if (contractBalance >= _amount && recipientBalance.add(_amount) > recipientBalance && allowed[_from][_to] >= _amount) {
             balances[_from].balance = balances[_from].balance.sub(_amount);
             balances[_to].balance = balances[_to].balance.add(_amount);
@@ -329,10 +368,10 @@ contract Energy is Token {
         return false;
     }
 
-    function initialize(address _params) public {
+    function initialize(address _voting) public {
         require(msg.sender == address(this));
 
-        params = _params;        
+        voting = _voting;        
     }
     
     /// @param _addr an address of a normal account or a contract
