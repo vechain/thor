@@ -22,25 +22,23 @@ func Build(state *state.State) (*block.Block, error) {
 		Alloc(
 			cs.Authority.Address,
 			&big.Int{},
-			cs.Authority.RuntimeBytecodes(),
-		).
+			cs.Authority.RuntimeBytecodes()).
 		Alloc(
 			cs.Energy.Address,
 			&big.Int{},
-			cs.Energy.RuntimeBytecodes(),
-		).
+			cs.Energy.RuntimeBytecodes()).
 		Alloc(
 			cs.Params.Address,
 			&big.Int{},
-			cs.Params.RuntimeBytecodes(),
-		).
+			cs.Params.RuntimeBytecodes()).
 		Call(
 			cs.Authority.Address,
-			cs.Authority.PackInitialize(thor.Address{} /*TODO*/),
-		).
+			cs.Authority.PackInitialize(thor.Address{} /*TODO*/)).
 		Call(
 			cs.Params.Address,
-			cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30)),
-		).
+			cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30))).
+		Call(
+			cs.Energy.Address,
+			cs.Energy.PackInitialize(cs.Params.Address)).
 		Build(state)
 }
