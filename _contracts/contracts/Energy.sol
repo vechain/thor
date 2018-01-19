@@ -1,22 +1,11 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import './SafeMath.sol';
+import './Params.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
     
     using SafeMath for uint256;
-    
-    // public constant address params;
-
-    //balance growth rate at `timestamp`
-    struct BalanceBirth {
-        uint256 timestamp;  // `timestamp` changes if birth updated.
-        uint256 birth;      // how many tokens grown by per vet per second
-    }
-
-    BalanceBirth[] birthRevisions;
-
-    event LogBalanceBirth(address indexed executor,uint256 time,uint256 growthrate);
     
     //which represents an owner's balance
     struct Balance {
@@ -52,6 +41,8 @@ contract Energy is Token {
     mapping (bytes32 => SharedCredit) public sharedCredits;
 
     event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
+
+    address public params; 
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
@@ -159,53 +150,51 @@ contract Energy is Token {
         
         uint256 b = calRestBalance(_reciever); 
         balances[_reciever].balance = b.add(_amount);
-        balances[_reciever].timestamp = now;
     }
 
-    ///@notice adjust balance growth rate to `_birth`
-    ///@param _birth how much energy grows by per vet per second
-    function adjustBalanceBirth(uint256 _birth) public {
-        require(msg.sender == address(this));
-        require(_birth > 0);
-        
-        birthRevisions.push(BalanceBirth(now,_birth));
-
-        LogBalanceBirth(msg.sender,now,_birth);
-    }
     ///@param _owner who holds the energy and the vet
     ///
     ///@return how much energy the _owner holds
     function balanceOf(address _owner) public constant returns (uint256 balance) {
-        if ( birthRevisions.length == 0 ) {
-            return 0;   
+        uint256 time = balances[_owner].timestamp;
+        if ( time == 0 ) {
+            return 0;
         }
 
+        Params param = Params(params);
+        uint256 revisionLen = param.lenthOfRevisions();
         uint256 amount = balances[_owner].balance;
-        uint256 time = balances[_owner].timestamp;
+
+        if ( revisionLen == 0 ) {
+            return amount;   
+        }
+
         uint256 vetamount = balances[_owner].vetamount;
         uint256 version = balances[_owner].version;
-        if ( version == birthRevisions.length - 1 ) {
-            uint256 birth = birthRevisions[birthRevisions.length - 1].birth;
+
+        if ( param.timeWithVer(revisionLen-1) <= time || version == revisionLen - 1) {
+            uint256 birth = param.birthWithVer(revisionLen - 1);
             amount = amount.add(birth.mul(vetamount.mul(now.sub(time))));
             return amount;
         }
 
         //`_owner` has not operated his account for a long time
-        for ( uint256 i = version; i < birthRevisions.length; i++ ) {
-            var current = birthRevisions[i];
+        for ( uint256 i = version; i < revisionLen; i++ ) {
+            uint256 currentBirth = param.birthWithVer(i);
+            uint256 currentTime = param.timeWithVer(i);
             if ( i == version ) {
-                var next = birthRevisions[i+1];
-                amount = amount.add(current.birth.mul(vetamount.mul(next.timestamp.sub(time))));
+                uint256 nextTime = param.timeWithVer(i+1);
+                amount = amount.add(currentBirth.mul(vetamount.mul(nextTime.sub(time))));
                 continue;
             }
             
-            if ( i == birthRevisions.length - 1 ) {
-                amount = amount.add(current.birth.mul(vetamount.mul(now.sub(current.timestamp))));
+            if ( i == revisionLen - 1 ) {
+                amount = amount.add(currentBirth.mul(vetamount.mul(now.sub(currentTime))));
                 return amount;
             }
 
-            var n = birthRevisions[i+1];
-            amount = amount.add(current.birth.mul(vetamount.mul(n.timestamp.sub(current.timestamp))));
+            uint256 nTime = param.timeWithVer(i+1);
+            amount = amount.add(currentBirth.mul(vetamount.mul(nTime.sub(currentTime))));
         }
     }
 
@@ -220,8 +209,10 @@ contract Energy is Token {
         balances[_owner].balance = balanceOf(_owner);
         balances[_owner].vetamount = _owner.balance;
         balances[_owner].timestamp = now;
-        if ( birthRevisions.length > 0 ) {
-            balances[_owner].version = birthRevisions.length - 1;
+        Params param = Params(params);
+        uint256 revisionLen = param.lenthOfRevisions();
+        if ( revisionLen > 0 ) {
+            balances[_owner].version = revisionLen - 1;
         }
         return balances[_owner].balance;
     }
