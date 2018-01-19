@@ -6,16 +6,6 @@ import (
 	"math/big"
 )
 
-// Clause for json marshal
-type Clause struct {
-	To    string `rlp:"nil"`
-	Value *big.Int
-	Data  []byte
-}
-
-//Clauses array of clauses.
-type Clauses []Clause
-
 //Transaction transaction
 type Transaction struct {
 	Hash        string
@@ -44,23 +34,12 @@ func ConvertTransactionWithSigning(tx *tx.Transaction, signing *cry.Signing) *Tr
 	}
 
 	return &Transaction{
-		Hash:        tx.SigningHash().String(),
+		Hash:        tx.Hash().String(),
 		From:        from.String(),
 		GasPrice:    tx.GasPrice(),
 		Gas:         tx.Gas(),
 		TimeBarrier: tx.TimeBarrier(),
 		Clauses:     cls,
-	}
-
-}
-
-//ConvertClause convert a raw clause into a jason format clause
-func ConvertClause(c *tx.Clause) Clause {
-
-	return Clause{
-		c.To.String(),
-		c.Value,
-		c.Data,
 	}
 
 }
