@@ -59,10 +59,10 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	state := c.stateCreator(preHash)
 	getHash := chain.NewHashGetter(c.chain, preHash).GetHash
 	rt := runtime.New(state,
-		preHeader.Beneficiary(),
-		preHeader.Number(),
-		preHeader.Timestamp(),
-		preHeader.GasLimit(),
+		header.Beneficiary(),
+		header.Number(),
+		header.Timestamp(),
+		header.GasLimit(),
 		getHash)
 
 	if err := newProposerHandler(rt, header, signer, preHeader).handle(); err != nil {
