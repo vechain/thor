@@ -329,6 +329,12 @@ contract Energy is Token {
         return false;
     }
 
+    function initialize(address _params) public {
+        require(msg.sender == address(this));
+
+        params = _params;        
+    }
+    
     /// @param _addr an address of a normal account or a contract
     /// 
     /// @return whether `_addr` is a contract or not
