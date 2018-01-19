@@ -8,17 +8,21 @@ import (
 
 // keys of governance params.
 const (
-	ParamRewardPercentage   = "reward-percentage"
-	ParamEnergyGrowthFactor = "energy-growth-factor"
+	ParamRewardPercentage = "reward-percentage"
 )
 
 type params struct {
 	contract
 }
 
-// PackInitialize packs input data of `Params.initialize` function.
+// PackInitialize packs input data of `Params.sysInitialize` function.
 func (p *params) PackInitialize(voting thor.Address) []byte {
-	return p.mustPack("initialize", voting)
+	return p.mustPack("sysInitialize", voting)
+}
+
+// PackPreset packs input data of `Params.sysPreset` function.
+func (p *params) PackPreset(key string, value *big.Int) []byte {
+	return p.mustPack("sysPreset", key, value)
 }
 
 // PackGet packs input data of `Params.get` function.
@@ -36,10 +40,6 @@ func (p *params) UnpackGet(output []byte) *big.Int {
 // PackSet packs input data of `Params.set` function.
 func (p *params) PackSet(key string, value *big.Int) []byte {
 	return p.mustPack("set", key, value)
-}
-
-func (p *params) PackPreset(key string, value *big.Int) []byte {
-	return p.mustPack("preset", key, value)
 }
 
 // Params binder of `Params` contract.

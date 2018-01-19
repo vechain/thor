@@ -9,23 +9,23 @@ type authority struct {
 	contract
 }
 
-// PackInitialize pack input data of `Authority._initialize` function.
+// PackInitialize pack input data of `Authority.sysInitialize` function.
 func (a *authority) PackInitialize(voting thor.Address) []byte {
-	return a.mustPack("_initialize", voting)
+	return a.mustPack("sysInitialize", voting)
 }
 
-// PackPreset pack input data of `Authority._preset` function.
+// PackPreset pack input data of `Authority.sysPreset` function.
 func (a *authority) PackPreset(addr thor.Address, identity string) []byte {
-	return a.mustPack("_preset", addr, identity)
+	return a.mustPack("sysPreset", addr, identity)
 }
 
-// PackUpdate pack input data of `Authority._update` function.
+// PackUpdate pack input data of `Authority.sysUpdate` function.
 func (a *authority) PackUpdate(proposers []schedule.Proposer) []byte {
 	encoded := make([][32]byte, len(proposers))
 	for i, p := range proposers {
 		encoded[i] = p.Encode()
 	}
-	return a.mustPack("_udpate", encoded)
+	return a.mustPack("sysUdpate", encoded)
 }
 
 // PackProposers pack input data of `Authority.proposers` function.

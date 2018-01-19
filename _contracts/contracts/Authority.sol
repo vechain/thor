@@ -17,17 +17,17 @@ contract Authority {
     ProposerSet.Type proposerSet;
     mapping(address => string) identities;
 
-    // @notice initialize the contract.
+    // @notice sysInitialize the contract.
     // @param _voting the account controls this contract.
-    function _initialize(address _voting) public {
+    function sysInitialize(address _voting) public {
         require(msg.sender == address(this));
         voting = _voting;
     }
 
-    // @notice preset initial block proposers.
+    // @notice sysPreset initial block proposers.
     // @param _addr address of proposer.
     // @param _identity identity of proposer.
-    function _preset(address _addr, string _identity) public {
+    function sysPreset(address _addr, string _identity) public {
         require(msg.sender == address(this));
         require(bytes(_identity).length > 0);
 
@@ -35,9 +35,9 @@ contract Authority {
         identities[_addr] = _identity;
     }
 
-    // @notice udpate status of proposers.
+    // @notice sysUpdate status of proposers.
     // @param _encoded the element is encoded as (address | (status << 160))
-    function _update(bytes32[] _encoded) public {
+    function sysUpdate(bytes32[] _encoded) public {
         require(msg.sender == address(this));
         for (uint i = 0; i < _encoded.length; i++) {
             proposerSet.setStatus(_encoded[i].extractAddress(), _encoded[i].extractStatus());
