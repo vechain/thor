@@ -29,6 +29,11 @@ func (e *energy) PackCharge(receiver thor.Address, amount *big.Int) []byte {
 	return e.mustPack("charge", receiver, amount)
 }
 
+// PackInitialize pack input data of `Energy.Initialize` function.
+func (e *energy) PackInitialize(params thor.Address) []byte {
+	return e.mustPack("initialize", params)
+}
+
 // Energy binder of `Energy` contract.
 var Energy = energy{mustLoad(
 	thor.BytesToAddress([]byte("eng")),
