@@ -52,7 +52,8 @@ func BuildGenesis(state *state.State) (*block.Block, error) {
 		Alloc(cs.Authority.Address, &big.Int{}, cs.Authority.RuntimeBytecodes()).
 		Alloc(cs.Energy.Address, &big.Int{}, cs.Energy.RuntimeBytecodes()).
 		Alloc(cs.Params.Address, &big.Int{}, cs.Params.RuntimeBytecodes()).
-		Call(cs.Params.Address, cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30)))
+		Call(cs.Params.Address, cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30))).
+		Call(cs.Energy.Address, cs.Energy.PackInitialize(cs.Params.Address))
 
 	for _, a := range Accounts {
 		balance, _ := new(big.Int).SetString("10000000000000000000000", 10)
