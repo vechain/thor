@@ -8,7 +8,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func TestCalcScore(t *testing.T) {
+func Test_calcScore(t *testing.T) {
 	assert := assert.New(t)
 
 	proposer1 := schedule.Proposer{
