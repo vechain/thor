@@ -20,38 +20,40 @@ func newBlockProcessor(rt *runtime.Runtime, sign *cry.Signing) *blockProcessor {
 
 // ProcessBlock can execute all transactions in a block.
 func (bp *blockProcessor) process(blk *block.Block) (uint64, error) {
-	receipts, totalGasUsed, totalEnergyUsed, err := bp.processTransactions(blk.Transactions())
+	receipts, totalGasUsed, totalEnergyUsed, err := bp.processTransactions(blk.Transactions(), nil, 0, 0)
 	if err != nil {
 		return 0, err
 	}
 
 	header := blk.Header()
-	if header.ReceiptsRoot() != receipts.RootHash() {
+	switch {
+	case header.ReceiptsRoot() != receipts.RootHash():
 		return 0, errReceiptsRoot
-	}
-	if header.GasUsed() != totalGasUsed {
+	case header.GasUsed() != totalGasUsed:
 		return 0, errGasUsed
+	default:
+		return totalEnergyUsed, nil
 	}
-
-	return totalEnergyUsed, nil
 }
 
-func (bp *blockProcessor) processTransactions(transactions tx.Transactions) (tx.Receipts, uint64, uint64, error) {
+func (bp *blockProcessor) processTransactions(
+	transactions tx.Transactions,
+	receipts tx.Receipts,
+	totalGasUsed uint64,
+	totalEnergyUsed uint64) (tx.Receipts, uint64, uint64, error) {
+
 	length := len(transactions)
 	if length == 0 {
-		return nil, 0, 0, nil
+		return receipts, totalGasUsed, totalEnergyUsed, nil
 	}
 
 	receipt, _, err := bp.rt.ExecuteTransaction(transactions[0], bp.sign)
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	energyUsed := receipt.GasUsed * transactions[0].GasPrice().Uint64()
 
-	receipts, totalGasUsed, totalEnergyUsed, err := bp.processTransactions(transactions[1:length])
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	return append(receipts, receipt), totalGasUsed + receipt.GasUsed, totalEnergyUsed + energyUsed, nil
+	return bp.processTransactions(transactions[1:len(transactions)],
+		append(receipts, receipt),
+		totalGasUsed+receipt.GasUsed,
+		totalEnergyUsed+receipt.GasUsed*transactions[0].GasPrice().Uint64())
 }
