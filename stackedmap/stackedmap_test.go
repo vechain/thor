@@ -4,10 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/fortest"
 	"github.com/vechain/thor/stackedmap"
 )
 
+func M(a ...interface{}) []interface{} {
+	return a
+}
 func TestStackedMap(t *testing.T) {
 
 	assert := assert.New(t)
@@ -44,7 +46,7 @@ func TestStackedMap(t *testing.T) {
 			sm.Put(test.putKey, test.putValue)
 		}
 		if test.getKey != "" {
-			assert.Equal(fortest.Multi(sm.Get(test.getKey)), test.getReturn)
+			assert.Equal(M(sm.Get(test.getKey)), test.getReturn)
 		}
 	}
 }
