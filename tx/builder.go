@@ -1,6 +1,7 @@
 package tx
 
 import (
+	"encoding/binary"
 	"math/big"
 
 	"github.com/vechain/thor/thor"
@@ -29,9 +30,9 @@ func (b *Builder) Gas(gas uint64) *Builder {
 	return b
 }
 
-// TimeBarrier set time barrier.
-func (b *Builder) TimeBarrier(tb uint64) *Builder {
-	b.body.TimeBarrier = tb
+// BlockRef set block reference.
+func (b *Builder) BlockRef(br BlockRef) *Builder {
+	b.body.BlockRef = binary.BigEndian.Uint64(br[:])
 	return b
 }
 
