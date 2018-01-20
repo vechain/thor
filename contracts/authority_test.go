@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	. "github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/fortest"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/schedule"
@@ -16,6 +15,10 @@ import (
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 )
+
+func M(a ...interface{}) []interface{} {
+	return a
+}
 
 func TestAuthority(t *testing.T) {
 	kv, _ := lvldb.NewMem()
@@ -53,7 +56,7 @@ func TestAuthority(t *testing.T) {
 	assert.Equal(t, []interface{}{
 		uint32(0),
 		id1,
-	}, fortest.Multi(Authority.UnpackProposer(out.Value)))
+	}, M(Authority.UnpackProposer(out.Value)))
 
 	//// proposers
 	out = call(Authority.PackProposers())

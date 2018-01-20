@@ -7,12 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/fortest"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
 )
 
-var M = fortest.Multi
+func M(a ...interface{}) []interface{} {
+	return a
+}
 
 func TestAccount(t *testing.T) {
 	assert.True(t, Account{}.IsEmpty(), "newly constructed account should be empty")
