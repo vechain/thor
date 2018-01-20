@@ -1,6 +1,7 @@
 package tx
 
 import (
+	"encoding/binary"
 	"errors"
 	"io"
 	"math/big"
@@ -25,13 +26,13 @@ var _ cry.Signable = (*Transaction)(nil)
 
 // body describes details of a tx.
 type body struct {
-	Clauses     []*Clause
-	GasPrice    *big.Int
-	Gas         uint64
-	Nonce       uint64
-	TimeBarrier uint64
-	DependsOn   *thor.Hash `rlp:"nil"`
-	Signature   []byte
+	Clauses   []*Clause
+	GasPrice  *big.Int
+	Gas       uint64
+	Nonce     uint64
+	BlockRef  uint64
+	DependsOn *thor.Hash `rlp:"nil"`
+	Signature []byte
 }
 
 // Hash returns hash of tx.
@@ -56,7 +57,7 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 		t.body.GasPrice,
 		t.body.Gas,
 		t.body.Nonce,
-		t.body.TimeBarrier,
+		t.body.BlockRef,
 		t.body.DependsOn,
 	})
 	hw.Sum(hash[:0])
@@ -73,11 +74,10 @@ func (t *Transaction) Gas() uint64 {
 	return t.body.Gas
 }
 
-// TimeBarrier returns time barrier.
-// It's required that tx.TimeBarrier <= block.Timestamp,
-// when a tx was packed in a block.
-func (t *Transaction) TimeBarrier() uint64 {
-	return t.body.TimeBarrier
+// BlockRef returns block reference, which is first 8 bytes of block hash.
+func (t *Transaction) BlockRef() (br BlockRef) {
+	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
+	return
 }
 
 // Clauses returns caluses in tx.
