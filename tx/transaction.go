@@ -31,6 +31,7 @@ type Transaction struct {
 
 // body describes details of a tx.
 type body struct {
+	ChainTag  uint32
 	Clauses   []*Clause
 	GasPrice  *big.Int
 	Gas       uint64
@@ -38,6 +39,11 @@ type body struct {
 	BlockRef  uint64
 	DependsOn *thor.Hash `rlp:"nil"`
 	Signature []byte
+}
+
+// ChainTag returns chain tag.
+func (t *Transaction) ChainTag() uint32 {
+	return t.body.ChainTag
 }
 
 func (t *Transaction) hash() (hash thor.Hash) {
@@ -64,6 +70,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 	}
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
+		t.body.ChainTag,
 		t.body.Clauses,
 		t.body.GasPrice,
 		t.body.Gas,
@@ -81,6 +88,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 func (t *Transaction) SigningHash() (hash thor.Hash) {
 	hw := cry.NewHasher()
 	rlp.Encode(hw, []interface{}{
+		t.body.ChainTag,
 		t.body.Clauses,
 		t.body.GasPrice,
 		t.body.Gas,
