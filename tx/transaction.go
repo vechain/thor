@@ -17,7 +17,10 @@ import (
 
 const signerCacheSize = 1024
 
-var signerCache = cache.NewLRU(signerCacheSize)
+var (
+	signerCache = cache.NewLRU(signerCacheSize)
+	maxUint256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+)
 
 // Transaction is an immutable tx type.
 type Transaction struct {
@@ -60,7 +63,7 @@ func (t *Transaction) hash() (hash thor.Hash) {
 }
 
 // ID returns id of tx.
-func (t *Transaction) ID() (id thor.Hash) {
+func (t *Transaction) ID() thor.Hash {
 	if cached := t.cache.id; cached != nil {
 		return *cached
 	}
@@ -68,6 +71,12 @@ func (t *Transaction) ID() (id thor.Hash) {
 	if err != nil {
 		return thor.Hash{}
 	}
+	id := t.workProofHash(signer)
+	t.cache.id = &id
+	return id
+}
+
+func (t *Transaction) workProofHash(signer thor.Address) (hash thor.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
@@ -79,9 +88,24 @@ func (t *Transaction) ID() (id thor.Hash) {
 		t.body.DependsOn,
 		signer,
 	})
-	hw.Sum(id[:0])
-	t.cache.id = &id
+	hw.Sum(hash[:0])
 	return
+}
+
+// ProvedWork returns proved work of this tx.
+// It returns 0, if tx is not sined.
+func (t *Transaction) ProvedWork() *big.Int {
+	signer, err := t.Signer()
+	if err != nil {
+		return &big.Int{}
+	}
+	return t.EvaluateWork(signer)
+}
+
+// EvaluateWork try to compute work when tx signer assumed.
+func (t *Transaction) EvaluateWork(signer thor.Address) *big.Int {
+	result := new(big.Int).SetBytes(t.workProofHash(signer).Bytes())
+	return result.Div(maxUint256, result)
 }
 
 // SigningHash returns hash of tx excludes signature.
