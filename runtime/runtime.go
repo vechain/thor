@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
@@ -18,9 +17,9 @@ var (
 
 // Runtime is to support transaction execution.
 type Runtime struct {
-	vmConfig vm.Config
-	getHash  func(uint32) thor.Hash
-	state    State
+	vmConfig   vm.Config
+	getBlockID func(uint32) thor.Hash
+	state      State
 
 	// block env
 	blockBeneficiary thor.Address
@@ -42,10 +41,10 @@ func New(
 	blockNumber uint32,
 	blockTime,
 	blockGasLimit uint64,
-	getHash func(uint32) thor.Hash,
+	getBlockID func(uint32) thor.Hash,
 ) *Runtime {
 	return &Runtime{
-		getHash:          getHash,
+		getBlockID:       getBlockID,
 		state:            state,
 		blockBeneficiary: blockBeneficiary,
 		blockNumber:      blockNumber,
@@ -68,7 +67,7 @@ func (rt *Runtime) Execute(
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
-	txHash thor.Hash,
+	txID thor.Hash,
 ) *vm.Output {
 
 	ctx := vm.Context{
@@ -79,9 +78,9 @@ func (rt *Runtime) Execute(
 
 		Origin:   txOrigin,
 		GasPrice: txGasPrice,
-		TxHash:   txHash,
+		TxHash:   txID,
 
-		GetHash:     rt.getHash,
+		GetHash:     rt.getBlockID,
 		ClauseIndex: uint64(index),
 	}
 
@@ -120,9 +119,9 @@ func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 
 // ExecuteTransaction executes a transaction.
 // Note that the elements of returned []*vm.Output may be nil if corresponded clause failed.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	// precheck
-	origin, err := signing.Signer(tx)
+	origin, err := tx.Signer()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,7 +159,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction, signing *cry.Signing) 
 	vmOutputs = make([]*vm.Output, len(clauses))
 
 	for i, clause := range clauses {
-		vmOutput := rt.Execute(clause, i, leftOverGas, origin, gasPrice, tx.Hash())
+		vmOutput := rt.Execute(clause, i, leftOverGas, origin, gasPrice, tx.ID())
 		vmOutputs[i] = vmOutput
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
