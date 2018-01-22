@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
@@ -95,13 +94,12 @@ func TestExecuteTransaction(t *testing.T) {
 		Clause(tx.NewClause(&addr2).WithValue(big.NewInt(10))).
 		Build()
 
-	signing := cry.NewSigning(thor.Hash{})
-	sig, _ := signing.Sign(tx, crypto.FromECDSA(key))
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), key)
 	tx = tx.WithSignature(sig)
 
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
-	receipt, _, err := rt.ExecuteTransaction(tx, signing)
+	receipt, _, err := rt.ExecuteTransaction(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
