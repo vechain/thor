@@ -5,10 +5,11 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
 )
@@ -36,12 +37,12 @@ func TestCachedObject(t *testing.T) {
 	code := make([]byte, 100)
 	rand.Read(code)
 
-	codeHash := cry.HashSum(code)
-	kv.Put(codeHash[:], code)
+	codeHash := crypto.Keccak256(code)
+	kv.Put(codeHash, code)
 
 	account := Account{
 		Balance:     &big.Int{},
-		CodeHash:    codeHash[:],
+		CodeHash:    codeHash,
 		StorageRoot: storageRoot[:],
 	}
 

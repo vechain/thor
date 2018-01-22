@@ -4,8 +4,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
 )
@@ -43,7 +43,7 @@ func TestStage(t *testing.T) {
 
 	assert.Equal(t, balance, state.GetBalance(addr))
 	assert.Equal(t, code, state.GetCode(addr))
-	assert.Equal(t, cry.HashSum(code), state.GetCodeHash(addr))
+	assert.Equal(t, thor.Hash(crypto.Keccak256Hash(code)), state.GetCodeHash(addr))
 	for k, v := range storage {
 		assert.Equal(t, v, state.GetStorage(addr, k))
 	}

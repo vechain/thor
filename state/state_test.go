@@ -4,8 +4,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
 )
@@ -29,7 +30,7 @@ func TestStateReadWrite(t *testing.T) {
 
 	state.SetCode(addr, []byte("code"))
 	assert.Equal(t, state.GetCode(addr), []byte("code"))
-	assert.Equal(t, state.GetCodeHash(addr), cry.HashSum([]byte("code")))
+	assert.Equal(t, state.GetCodeHash(addr), thor.Hash(crypto.Keccak256Hash([]byte("code"))))
 
 	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Hash{})
 	state.SetStorage(addr, storageKey, thor.BytesToHash([]byte("storageValue")))
@@ -76,7 +77,7 @@ func TestStateRevert(t *testing.T) {
 		v := values[len(values)-i-1]
 		assert.Equal(t, state.GetBalance(addr), v.balance)
 		assert.Equal(t, state.GetCode(addr), v.code)
-		assert.Equal(t, state.GetCodeHash(addr), cry.HashSum(v.code))
+		assert.Equal(t, state.GetCodeHash(addr), thor.Hash(crypto.Keccak256Hash(v.code)))
 		assert.Equal(t, state.GetStorage(addr, storageKey), v.storage)
 		state.Revert()
 	}
