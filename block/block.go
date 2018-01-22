@@ -52,14 +52,19 @@ func (b *Block) TotalScore() uint64 {
 	return b.header.TotalScore()
 }
 
-// ParentHash same as Header.ParentHash().
-func (b *Block) ParentHash() thor.Hash {
-	return b.header.ParentHash()
+// ParentID same as Header.ParentID().
+func (b *Block) ParentID() thor.Hash {
+	return b.header.ParentID()
 }
 
-// Hash same as Header.Hash().
-func (b *Block) Hash() thor.Hash {
-	return b.header.Hash()
+// ID same as Header.ID().
+func (b *Block) ID() thor.Hash {
+	return b.header.ID()
+}
+
+// Signer same as Header.Signer
+func (b *Block) Signer() (thor.Address, error) {
+	return b.header.Signer()
 }
 
 // Header returns the block header.

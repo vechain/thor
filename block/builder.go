@@ -7,55 +7,55 @@ import (
 
 // Builder to make it easy to build a block object.
 type Builder struct {
-	header headerContent
-	txs    tx.Transactions
+	headerBody headerBody
+	txs        tx.Transactions
 }
 
-// ParentHash set parent hash.
-func (b *Builder) ParentHash(hash thor.Hash) *Builder {
-	b.header.ParentHash = hash
+// ParentID set parent id.
+func (b *Builder) ParentID(id thor.Hash) *Builder {
+	b.headerBody.ParentID = id
 	return b
 }
 
 // Timestamp set timestamp.
 func (b *Builder) Timestamp(ts uint64) *Builder {
-	b.header.Timestamp = ts
+	b.headerBody.Timestamp = ts
 	return b
 }
 
 // TotalScore set total score.
 func (b *Builder) TotalScore(score uint64) *Builder {
-	b.header.TotalScore = score
+	b.headerBody.TotalScore = score
 	return b
 }
 
 // GasLimit set gas limit.
 func (b *Builder) GasLimit(limit uint64) *Builder {
-	b.header.GasLimit = limit
+	b.headerBody.GasLimit = limit
 	return b
 }
 
 // GasUsed set gas used.
 func (b *Builder) GasUsed(used uint64) *Builder {
-	b.header.GasUsed = used
+	b.headerBody.GasUsed = used
 	return b
 }
 
 // Beneficiary set recipient of reward.
 func (b *Builder) Beneficiary(addr thor.Address) *Builder {
-	b.header.Beneficiary = addr
+	b.headerBody.Beneficiary = addr
 	return b
 }
 
 // StateRoot set state root.
 func (b *Builder) StateRoot(hash thor.Hash) *Builder {
-	b.header.StateRoot = hash
+	b.headerBody.StateRoot = hash
 	return b
 }
 
 // ReceiptsRoot set receipts root.
 func (b *Builder) ReceiptsRoot(hash thor.Hash) *Builder {
-	b.header.ReceiptsRoot = hash
+	b.headerBody.ReceiptsRoot = hash
 	return b
 }
 
@@ -67,11 +67,11 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 
 // Build build a block object.
 func (b *Builder) Build() *Block {
-	header := b.header
-	header.TxsRoot = b.txs.RootHash()
+	header := Header{body: b.headerBody}
+	header.body.TxsRoot = b.txs.RootHash()
 
 	return &Block{
-		&Header{content: header},
+		&header,
 		b.txs,
 	}
 }

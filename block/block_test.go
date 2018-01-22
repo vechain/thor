@@ -14,13 +14,13 @@ func TestBlock(t *testing.T) {
 		GasUsed(1000).
 		Build()
 	h := block.Header()
-	fmt.Println(h.Hash())
+	fmt.Println(h.ID())
 
 	data, _ := rlp.EncodeToBytes(block)
 	fmt.Println(data)
 
 	b := Block{}
 	rlp.DecodeBytes(data, &b)
-	fmt.Println(b.Header().Hash())
+	fmt.Println(b.Header().ID())
 
 }
