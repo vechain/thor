@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	headerCacheLimit   = 512
-	bodyCacheLimit     = 512
-	blockTxHashesLimit = 1024
+	headerCacheLimit = 512
+	bodyCacheLimit   = 512
+	blockTxIDsLimit  = 1024
 )
 
 var errNotFound = errors.New("not found")
@@ -30,9 +30,9 @@ type Chain struct {
 }
 
 type cached struct {
-	header        *cache.LRU
-	body          *cache.LRU
-	blockTxHashes *cache.LRU
+	header     *cache.LRU
+	body       *cache.LRU
+	blockTxIDs *cache.LRU
 }
 
 // New create an instance of Chain.
@@ -42,7 +42,7 @@ func New(kv kv.GetPutter) *Chain {
 		cached: cached{
 			cache.NewLRU(headerCacheLimit),
 			cache.NewLRU(bodyCacheLimit),
-			cache.NewLRU(blockTxHashesLimit),
+			cache.NewLRU(blockTxIDsLimit),
 		},
 	}
 }
@@ -68,10 +68,10 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		if err := persist.SaveTxLocations(batch, genesis); err != nil {
 			return err
 		}
-		if err := persist.SaveTrunkBlockHash(batch, genesis.Hash()); err != nil {
+		if err := persist.SaveTrunkBlockID(batch, genesis.ID()); err != nil {
 			return err
 		}
-		if err := persist.SaveBestBlockHash(batch, genesis.Hash()); err != nil {
+		if err := persist.SaveBestBlockID(batch, genesis.ID()); err != nil {
 			return err
 		}
 		if err := batch.Write(); err != nil {
@@ -80,7 +80,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		c.bestBlock = genesis
 		return nil
 	}
-	if b.Hash() != genesis.Hash() {
+	if b.ID() != genesis.ID() {
 		return errors.New("genesis mismatch")
 	}
 	return nil
@@ -92,7 +92,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
-	if _, err := c.getBlock(newBlock.Hash()); err != nil {
+	if _, err := c.getBlock(newBlock.ID()); err != nil {
 		if !c.IsNotFound(err) {
 			return err
 		}
@@ -101,7 +101,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 		return nil
 	}
 
-	if _, err := c.getBlock(newBlock.ParentHash()); err != nil {
+	if _, err := c.getBlock(newBlock.ParentID()); err != nil {
 		if c.IsNotFound(err) {
 			return errors.New("parent missing")
 		}
@@ -124,7 +124,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 			return err
 		}
 		for _, ob := range oldBlocks {
-			if err := persist.EraseTrunkBlockHash(batch, ob.Hash()); err != nil {
+			if err := persist.EraseTrunkBlockID(batch, ob.ID()); err != nil {
 				return err
 			}
 			if err := persist.EraseTxLocations(batch, ob); err != nil {
@@ -133,22 +133,22 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 		}
 
 		for _, nb := range newBlocks {
-			if err := persist.SaveTrunkBlockHash(batch, nb.Hash()); err != nil {
+			if err := persist.SaveTrunkBlockID(batch, nb.ID()); err != nil {
 				return err
 			}
 			if err := persist.SaveTxLocations(batch, nb); err != nil {
 				return err
 			}
 		}
-		persist.SaveBestBlockHash(batch, newBlock.Hash())
+		persist.SaveBestBlockID(batch, newBlock.ID())
 	}
 
 	if err := batch.Write(); err != nil {
 		return err
 	}
 
-	c.cached.header.Add(newBlock.Hash(), newBlock.Header())
-	c.cached.body.Add(newBlock.Hash(), newBlock.Body())
+	c.cached.header.Add(newBlock.ID(), newBlock.Header())
+	c.cached.body.Add(newBlock.ID(), newBlock.Body())
 
 	if isTrunk {
 		c.bestBlock = newBlock
@@ -174,45 +174,45 @@ func (c *Chain) traceBackToCommonAncestor(b1 *block.Block, b2 *block.Block) (*bl
 	for {
 		if b1.Number() > b2.Number() {
 			c1 = append(c1, b1)
-			if b1, err = c.getBlock(b1.ParentHash()); err != nil {
+			if b1, err = c.getBlock(b1.ParentID()); err != nil {
 				return nil, nil, nil, err
 			}
 			continue
 		}
 		if b1.Number() < b2.Number() {
 			c2 = append(c2, b2)
-			if b2, err = c.getBlock(b2.ParentHash()); err != nil {
+			if b2, err = c.getBlock(b2.ParentID()); err != nil {
 				return nil, nil, nil, err
 			}
 			continue
 		}
-		if b1.Hash() == b2.Hash() {
+		if b1.ID() == b2.ID() {
 			return b1, c1, c2, nil
 		}
 
 		c1 = append(c1, b1)
 		c2 = append(c2, b2)
 
-		if b1, err = c.getBlock(b1.ParentHash()); err != nil {
+		if b1, err = c.getBlock(b1.ParentID()); err != nil {
 			return nil, nil, nil, err
 		}
 
-		if b2, err = c.getBlock(b2.ParentHash()); err != nil {
+		if b2, err = c.getBlock(b2.ParentID()); err != nil {
 			return nil, nil, nil, err
 		}
 	}
 }
 
-// GetBlockHeader get block header by hash of block.
-func (c *Chain) GetBlockHeader(hash thor.Hash) (*block.Header, error) {
+// GetBlockHeader get block header by block id.
+func (c *Chain) GetBlockHeader(id thor.Hash) (*block.Header, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
-	return c.getBlockHeader(hash)
+	return c.getBlockHeader(id)
 }
 
-func (c *Chain) getBlockHeader(hash thor.Hash) (*block.Header, error) {
-	header, err := c.cached.header.GetOrLoad(hash, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockHeader(c.kv, hash)
+func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
+	header, err := c.cached.header.GetOrLoad(id, func(interface{}) (interface{}, error) {
+		return persist.LoadBlockHeader(c.kv, id)
 	})
 	if err != nil {
 		return nil, err
@@ -220,16 +220,16 @@ func (c *Chain) getBlockHeader(hash thor.Hash) (*block.Header, error) {
 	return header.(*block.Header), nil
 }
 
-// GetBlockBody get block body by hash of block.
-func (c *Chain) GetBlockBody(hash thor.Hash) (*block.Body, error) {
+// GetBlockBody get block body by block id.
+func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
-	return c.getBlockBody(hash)
+	return c.getBlockBody(id)
 }
 
-func (c *Chain) getBlockBody(hash thor.Hash) (*block.Body, error) {
-	body, err := c.cached.body.GetOrLoad(hash, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockBody(c.kv, hash)
+func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
+	body, err := c.cached.body.GetOrLoad(id, func(interface{}) (interface{}, error) {
+		return persist.LoadBlockBody(c.kv, id)
 	})
 	if err != nil {
 		return nil, err
@@ -237,39 +237,39 @@ func (c *Chain) getBlockBody(hash thor.Hash) (*block.Body, error) {
 	return body.(*block.Body), nil
 }
 
-// GetBlock get block by hash.
-func (c *Chain) GetBlock(hash thor.Hash) (*block.Block, error) {
+// GetBlock get block by id.
+func (c *Chain) GetBlock(id thor.Hash) (*block.Block, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	return c.getBlock(hash)
+	return c.getBlock(id)
 }
 
-func (c *Chain) getBlock(hash thor.Hash) (*block.Block, error) {
-	header, err := c.getBlockHeader(hash)
+func (c *Chain) getBlock(id thor.Hash) (*block.Block, error) {
+	header, err := c.getBlockHeader(id)
 	if err != nil {
 		return nil, err
 	}
-	body, err := c.getBlockBody(hash)
+	body, err := c.getBlockBody(id)
 	if err != nil {
 		return nil, err
 	}
 	return block.New(header, body.Txs), nil
 }
 
-// GetBlockHashByNumber returns block hash by block number on trunk.
-func (c *Chain) GetBlockHashByNumber(num uint32) (thor.Hash, error) {
+// GetBlockIDByNumber returns block id by block number on trunk.
+func (c *Chain) GetBlockIDByNumber(num uint32) (thor.Hash, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
-	return c.getBlockHashByNumber(num)
+	return c.getBlockIDByNumber(num)
 }
 
-func (c *Chain) getBlockHashByNumber(num uint32) (thor.Hash, error) {
-	hash, err := persist.LoadTrunkBlockHash(c.kv, num)
+func (c *Chain) getBlockIDByNumber(num uint32) (thor.Hash, error) {
+	id, err := persist.LoadTrunkBlockID(c.kv, num)
 	if err != nil {
 		return thor.Hash{}, err
 	}
-	return hash, nil
+	return id, nil
 }
 
 // GetBlockByNumber get block on trunk by its number.
@@ -280,11 +280,11 @@ func (c *Chain) GetBlockByNumber(num uint32) (*block.Block, error) {
 }
 
 func (c *Chain) getBlockByNumber(num uint32) (*block.Block, error) {
-	hash, err := c.getBlockHashByNumber(num)
+	id, err := c.getBlockIDByNumber(num)
 	if err != nil {
 		return nil, err
 	}
-	return c.getBlock(hash)
+	return c.getBlock(id)
 }
 
 // GetBestBlock get the newest block on trunk.
@@ -300,11 +300,11 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	if best := c.bestBlock; best != nil {
 		return best, nil
 	}
-	hash, err := persist.LoadBestBlockHash(c.kv)
+	id, err := persist.LoadBestBlockID(c.kv)
 	if err != nil {
 		return nil, err
 	}
-	best, err := c.getBlock(hash)
+	best, err := c.getBlock(id)
 	if err != nil {
 		return nil, err
 	}
@@ -312,38 +312,38 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	return best, nil
 }
 
-// GetTransaction get transaction by hash on trunk.
-func (c *Chain) GetTransaction(txHash thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
+// GetTransaction get transaction by id on trunk.
+func (c *Chain) GetTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	tx, loc, err := persist.LoadTx(c.kv, txHash)
+	tx, loc, err := persist.LoadTx(c.kv, txID)
 	if err != nil {
 		return nil, nil, err
 	}
 	return tx, loc, nil
 }
 
-func (c *Chain) getTransactionHashes(blockHash thor.Hash) (map[thor.Hash]int, error) {
-	hashes, err := c.cached.blockTxHashes.GetOrLoad(blockHash, func(interface{}) (interface{}, error) {
-		body, err := c.getBlockBody(blockHash)
+func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {
+	ids, err := c.cached.blockTxIDs.GetOrLoad(blockID, func(interface{}) (interface{}, error) {
+		body, err := c.getBlockBody(blockID)
 		if err != nil {
 			return nil, err
 		}
-		hashes := make(map[thor.Hash]int)
+		ids := make(map[thor.Hash]int)
 		for i, tx := range body.Txs {
-			hashes[tx.Hash()] = i
+			ids[tx.ID()] = i
 		}
-		return hashes, nil
+		return ids, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return hashes.(map[thor.Hash]int), nil
+	return ids.(map[thor.Hash]int), nil
 }
 
-// LookupTransaction find out the location of a tx, on the chain which ends with blockHash.
-func (c *Chain) LookupTransaction(blockHash thor.Hash, txHash thor.Hash) (*persist.TxLocation, error) {
+// LookupTransaction find out the location of a tx, on the chain which ends with blockID.
+func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
@@ -351,7 +351,7 @@ func (c *Chain) LookupTransaction(blockHash thor.Hash, txHash thor.Hash) (*persi
 	if err != nil {
 		return nil, err
 	}
-	from, err := c.getBlock(blockHash)
+	from, err := c.getBlock(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -360,22 +360,22 @@ func (c *Chain) LookupTransaction(blockHash thor.Hash, txHash thor.Hash) (*persi
 		return nil, err
 	}
 	for _, b := range branch {
-		hashes, err := c.getTransactionHashes(b.Hash())
+		ids, err := c.getTransactionIDs(b.ID())
 		if err != nil {
 			return nil, err
 		}
-		if index, found := hashes[txHash]; found {
+		if index, found := ids[txID]; found {
 			return &persist.TxLocation{
-				BlockHash: b.Hash(),
-				Index:     uint64(index),
+				BlockID: b.ID(),
+				Index:   uint64(index),
 			}, nil
 		}
 	}
-	loc, err := persist.LoadTxLocation(c.kv, txHash)
+	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		return nil, err
 	}
-	if block.Number(loc.BlockHash) <= ancestor.Number() {
+	if block.Number(loc.BlockID) <= ancestor.Number() {
 		return loc, nil
 	}
 	return nil, errNotFound

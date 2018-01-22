@@ -18,9 +18,9 @@ func TestChain(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
 		b := new(block.Builder).
-			ParentHash(best.Hash()).
+			ParentID(best.ID()).
 			Build()
-		fmt.Println(b.Hash())
+		fmt.Println(b.ID())
 		if err := chain.AddBlock(b, true); err != nil {
 			fmt.Println(err)
 		}
