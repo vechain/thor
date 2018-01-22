@@ -39,29 +39,52 @@ func (v *validator) validate() (*block.Header, error) {
 		return nil, errGasUsed
 	case header.TxsRoot() != v.block.Body().Txs.RootHash():
 		return nil, errTxsRoot
-	case !v.validateTransactions(v.block.Transactions()):
+	case !v.validateTransactions(make(map[thor.Hash]bool), v.block.Transactions()):
 		return nil, errTransaction
 	default:
 		return preHeader, nil
 	}
 }
 
-func (v *validator) validateTransactions(transactions tx.Transactions) bool {
-	length := len(transactions)
-	if length == 0 {
+func (v *validator) validateTransactions(validTx map[thor.Hash]bool, transactions tx.Transactions) bool {
+	switch {
+	case len(transactions) == 0:
 		return true
+	case !v.validateTransaction(validTx, transactions[0]):
+		return false
+	default:
+		validTx[transactions[0].Hash()] = true
+		return v.validateTransactions(validTx, transactions[1:len(transactions)])
 	}
-	return v.validateTransaction(transactions[0]) && v.validateTransactions(transactions[1:length])
 }
 
-func (v *validator) validateTransaction(transaction *tx.Transaction) bool {
+func (v *validator) validateTransaction(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
 	switch {
 	case len(transaction.Clauses()) == 0:
 		return false
-	case transaction.TimeBarrier() > v.block.Timestamp():
+	case transaction.BlockRef().Number() >= v.block.Number():
+		return false
+	case !v.isTxDependFound(validTx, transaction):
 		return false
 	default:
-		_, err := v.chain.LookupTransaction(v.block.ParentHash(), transaction.Hash())
-		return v.chain.IsNotFound(err)
+		return v.isTxNotFound(validTx, transaction)
 	}
+}
+
+func (v *validator) isTxNotFound(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
+	if _, ok := validTx[transaction.Hash()]; ok { // 在当前块中找到相同交易
+		return false
+	}
+
+	_, err := v.chain.LookupTransaction(v.block.ParentHash(), transaction.Hash())
+	return v.chain.IsNotFound(err)
+}
+
+func (v *validator) isTxDependFound(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
+	if _, ok := validTx[transaction.Hash()]; ok { // 在当前块中找到依赖
+		return true
+	}
+
+	_, err := v.chain.LookupTransaction(v.block.ParentHash(), *transaction.DependsOn())
+	return err != nil // 在 chain 中找到依赖
 }
