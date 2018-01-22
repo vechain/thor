@@ -7,11 +7,17 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 )
+
+const signerCacheSize = 1024
+
+var signerCache = cache.NewLRU(signerCacheSize)
 
 // Transaction is an immutable tx type.
 type Transaction struct {
@@ -19,10 +25,9 @@ type Transaction struct {
 
 	cache struct {
 		hash *thor.Hash
+		id   *thor.Hash
 	}
 }
-
-var _ cry.Signable = (*Transaction)(nil)
 
 // body describes details of a tx.
 type body struct {
@@ -35,8 +40,7 @@ type body struct {
 	Signature []byte
 }
 
-// Hash returns hash of tx.
-func (t *Transaction) Hash() (hash thor.Hash) {
+func (t *Transaction) hash() (hash thor.Hash) {
 	if cached := t.cache.hash; cached != nil {
 		return *cached
 	}
@@ -47,6 +51,30 @@ func (t *Transaction) Hash() (hash thor.Hash) {
 	hw.Sum(hash[:0])
 	t.cache.hash = &hash
 	return hash
+}
+
+// ID returns id of tx.
+func (t *Transaction) ID() (id thor.Hash) {
+	if cached := t.cache.id; cached != nil {
+		return *cached
+	}
+	signer, err := t.Signer()
+	if err != nil {
+		return thor.Hash{}
+	}
+	hw := cry.NewHasher()
+	rlp.Encode(hw, []interface{}{
+		t.body.Clauses,
+		t.body.GasPrice,
+		t.body.Gas,
+		t.body.Nonce,
+		t.body.BlockRef,
+		t.body.DependsOn,
+		signer,
+	})
+	hw.Sum(id[:0])
+	t.cache.id = &id
+	return
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -97,6 +125,21 @@ func (t *Transaction) DependsOn() *thor.Hash {
 // Signature returns signature.
 func (t *Transaction) Signature() []byte {
 	return append([]byte(nil), t.body.Signature...)
+}
+
+// Signer extract signer of tx from signature.
+func (t *Transaction) Signer() (thor.Address, error) {
+	cacheKey := t.hash()
+	if v, ok := signerCache.Get(cacheKey); ok {
+		return v.(thor.Address), nil
+	}
+	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature)
+	if err != nil {
+		return thor.Address{}, err
+	}
+	signer := thor.Address(crypto.PubkeyToAddress(*pub))
+	signerCache.Add(cacheKey, signer)
+	return signer, nil
 }
 
 // WithSignature create a new tx with signature set.
