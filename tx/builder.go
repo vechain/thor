@@ -12,6 +12,12 @@ type Builder struct {
 	body body
 }
 
+// ChainTag set chain tag.
+func (b *Builder) ChainTag(tag uint32) *Builder {
+	b.body.ChainTag = tag
+	return b
+}
+
 // Clause add a clause.
 func (b *Builder) Clause(c *Clause) *Builder {
 	b.body.Clauses = append(b.body.Clauses, c)
