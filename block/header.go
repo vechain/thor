@@ -5,10 +5,10 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cache"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 )
 
@@ -102,7 +102,7 @@ func (h *Header) hash() (hash thor.Hash) {
 		return *cached
 	}
 
-	hw := cry.NewHasher()
+	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, h)
 
 	hw.Sum(hash[:0])
@@ -122,7 +122,7 @@ func (h *Header) ID() (id thor.Hash) {
 
 // SigningHash computes hash of all header fields excluding signature.
 func (h *Header) SigningHash() thor.Hash {
-	hw := cry.NewHasher()
+	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
 		h.body.Timestamp,

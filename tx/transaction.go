@@ -8,10 +8,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cache"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 )
 
@@ -51,7 +51,7 @@ func (t *Transaction) hash() (hash thor.Hash) {
 		return *cached
 	}
 
-	hw := cry.NewHasher()
+	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, t)
 
 	hw.Sum(hash[:0])
@@ -68,7 +68,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 	if err != nil {
 		return thor.Hash{}
 	}
-	hw := cry.NewHasher()
+	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
 		t.body.Clauses,
@@ -86,7 +86,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 
 // SigningHash returns hash of tx excludes signature.
 func (t *Transaction) SigningHash() (hash thor.Hash) {
-	hw := cry.NewHasher()
+	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
 		t.body.Clauses,

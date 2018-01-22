@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
@@ -228,8 +229,7 @@ func (s *State) GetCodeHash(addr thor.Address) thor.Hash {
 func (s *State) SetCode(addr thor.Address, code []byte) {
 	if len(code) > 0 {
 		s.sm.Put(codeKey(addr), code)
-		hash := cry.HashSum(code)
-		s.sm.Put(codeHashKey(addr), hash[:])
+		s.sm.Put(codeHashKey(addr), crypto.Keccak256(code))
 	} else {
 		s.sm.Put(codeKey(addr), []byte(nil))
 		s.sm.Put(codeHashKey(addr), []byte(nil))
