@@ -85,6 +85,15 @@ func (t *Transaction) Clauses() []*Clause {
 	return append([]*Clause(nil), t.body.Clauses...)
 }
 
+// DependsOn returns depended tx hash.
+func (t *Transaction) DependsOn() *thor.Hash {
+	if t.body.DependsOn == nil {
+		return nil
+	}
+	cpy := *t.body.DependsOn
+	return &cpy
+}
+
 // Signature returns signature.
 func (t *Transaction) Signature() []byte {
 	return append([]byte(nil), t.body.Signature...)
