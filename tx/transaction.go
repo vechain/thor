@@ -93,7 +93,7 @@ func (t *Transaction) workProofHash(signer thor.Address) (hash thor.Hash) {
 }
 
 // ProvedWork returns proved work of this tx.
-// It returns 0, if tx is not sined.
+// It returns 0, if tx is not signed.
 func (t *Transaction) ProvedWork() *big.Int {
 	signer, err := t.Signer()
 	if err != nil {
