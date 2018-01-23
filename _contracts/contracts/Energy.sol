@@ -2,6 +2,7 @@ pragma solidity ^0.4.18;
 import "./Token.sol";
 import './SafeMath.sol';
 import './Voting.sol';
+import './ERC223Receiver.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
     event Transfer(address indexed _from, address indexed _to, uint256 _value);
@@ -60,52 +61,6 @@ contract Energy is Token {
     ///@return ERC20 token symbol
     function symbol() public pure returns (string) {
         return "THOR";
-    }
-
-    ///@return ERC20 token total supply
-    function totalSupply() public constant returns (uint256) {
-        return 0;
-    }
-
-    // Send back vet sent to me
-    function() public payable {
-        revert();
-    }
-
-    ///@notice adjust balance growth rate to `_birth`
-    ///@param _birth how much energy grows by per vet per second
-    function setBalanceBirth(uint256 _birth) public {
-        require(msg.sender == voting);
-        require(_birth > 0);
-        
-        uint256 latestVer = lenthOfRevisions()-1;
-        uint256 latestime = timeWithVer(latestVer);
-        if (now == latestime) {
-            birthRevisions[latestVer].birth = _birth;
-        } else {
-            birthRevisions.push(BalanceBirth(now,_birth));
-        }
-        SetBalanceBirth(msg.sender,now,_birth);
-    }
-
-    function birthWithVer(uint256 version) public view returns(uint256) {
-        require(version <= lenthOfRevisions()-1);
-        if (birthRevisions.length == 0) {
-            return 0;
-        }
-        return birthRevisions[version].birth;
-    }
-
-    function timeWithVer(uint256 version) public view returns(uint256) {
-        require(version <= lenthOfRevisions()-1);
-        if (birthRevisions.length == 0) {
-            return 0;
-        }
-        return birthRevisions[version].timestamp;
-    }
-
-    function lenthOfRevisions() public view returns(uint256) {
-        return birthRevisions.length;
     }
   
     ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never transferred
@@ -199,16 +154,15 @@ contract Energy is Token {
         if ( time == 0 ) {
             return 0;
         }
-        uint256 revisionLen = lenthOfRevisions();
-        uint256 amount = balances[_owner].balance;
 
+        uint256 revisionLen = lengthOfRevisions();
+        uint256 amount = balances[_owner].balance;
         if ( revisionLen == 0 ) {
             return amount;   
         }
 
         uint256 vetamount = balances[_owner].vetamount;
         uint256 version = balances[_owner].version;
-
         if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1) {
             uint256 birth = birthWithVer(revisionLen - 1);
             amount = amount.add(birth.mul(vetamount.mul(now.sub(time))));
@@ -243,10 +197,11 @@ contract Energy is Token {
         if (balances[_owner].timestamp == 0) {
             balances[_owner].timestamp = uint64(now);
         }
+
         balances[_owner].balance = balanceOf(_owner);
         balances[_owner].vetamount = _owner.balance.toUINT128();
         balances[_owner].timestamp = uint64(now);
-        uint256 revisionLen = lenthOfRevisions();
+        uint256 revisionLen = lengthOfRevisions();
         if ( revisionLen > 0 ) {
             balances[_owner].version = uint64(revisionLen - 1);
         }
@@ -258,14 +213,17 @@ contract Energy is Token {
     /// @param _amount The amount of token to be transferred
     /// @return Whether the transfer was successful or not
     function transfer(address _to, uint256 _amount) public returns (bool success) {
-        require(!isContract(_to));
-        require(_amount > 0);
-
         uint256 senderBalance = updateBalance(msg.sender);
         uint256 recipientBalance = updateBalance(_to);
-        if (senderBalance >= _amount && recipientBalance.add(_amount) > recipientBalance) {
+        
+        if (_amount > 0 && senderBalance >= _amount && recipientBalance.add(_amount) > recipientBalance) {
             balances[msg.sender].balance = balances[msg.sender].balance.sub(_amount);
             balances[_to].balance = balances[_to].balance.add(_amount);
+            if (isContract(_to)) {
+                // Require proper transaction handling.
+                ERC223Receiver receiver = ERC223Receiver(_to);
+                receiver.tokenFallback(msg.sender, _amount, msg.data);
+            }
             Transfer(msg.sender, _to, _amount);
             return true;
         } else {
@@ -278,7 +236,6 @@ contract Energy is Token {
     /// @param _reciever who recieved the `_amount` tokens
     /// @param _amount The amount of wei to be approved for transfer
     /// @return Whether the approval was successful or not
-    
     function ownerApprove(address _contractAddr,address _reciever, uint256 _amount) public returns (bool success) {
         //only approved to a contract
         require(isContract(_contractAddr));
@@ -362,6 +319,11 @@ contract Energy is Token {
             balances[_from].balance = balances[_from].balance.sub(_amount);
             balances[_to].balance = balances[_to].balance.add(_amount);
             allowed[_from][_to] = allowed[_from][_to].sub(_amount);
+            if (isContract(_to)) {
+                // Require proper transaction handling.
+                ERC223Receiver receiver = ERC223Receiver(_to);
+                receiver.tokenFallback(msg.sender, _amount, msg.data);
+            }
             Transfer(_from, _to, _amount);
             return true;
         }
@@ -387,5 +349,42 @@ contract Energy is Token {
         }
         return size > 0;
     } 
-      
+    
+    ///@notice adjust balance growth rate to `_birth`
+    ///@param _birth how much energy grows by per vet per second
+    function setBalanceBirth(uint256 _birth) public {
+        require(msg.sender == voting);
+        require(_birth > 0);
+        if (lengthOfRevisions() > 0) {
+            uint256 latestVer = lengthOfRevisions()-1;
+            uint256 latestime = timeWithVer(latestVer);
+            if (now == latestime) {
+                birthRevisions[latestVer].birth = _birth;
+                SetBalanceBirth(msg.sender,now,_birth);
+                return;
+            }
+        }
+        birthRevisions.push(BalanceBirth(now,_birth));
+        SetBalanceBirth(msg.sender,now,_birth);
+    }
+
+    function birthWithVer(uint256 version) public view returns(uint256) {
+        require(version <= lengthOfRevisions()-1);
+        if (birthRevisions.length == 0) {
+            return 0;
+        }
+        return birthRevisions[version].birth;
+    }
+
+    function timeWithVer(uint256 version) public view returns(uint256) {
+        require(version <= lengthOfRevisions()-1);
+        if (birthRevisions.length == 0) {
+            return 0;
+        }
+        return birthRevisions[version].timestamp;
+    }
+
+    function lengthOfRevisions() public view returns(uint256) {
+        return birthRevisions.length;
+    }
 }
