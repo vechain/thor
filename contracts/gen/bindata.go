@@ -6,6 +6,8 @@
 // compiled/Energy.bin-runtime
 // compiled/Params.abi
 // compiled/Params.bin-runtime
+// compiled/Voting.bin-runtime
+// compiled/Voting.abi
 // DO NOT EDIT!
 
 package gen
@@ -193,6 +195,46 @@ func compiledParamsBinRuntime() (*asset, error) {
 	return a, nil
 }
 
+var _compiledVotingBinRuntime = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x14\xc1\x09\x11\x43\x31\x08\x04\x50\x4b\x1b\xae\x05\x39\x84\x7c\xfc\x4b\xe8\x74\x5e\xe0\xcf\xe0\x12\x00\x12\xfb\x80\x3e\xe1\x21\x6c\x36\x45\xe1\x29\x78\xf6\x69\x80\xf7\x66\xcd\x19\x05\x37\x67\x16\x7e\xd6\x00\xf5\xa8\xd5\xe4\x24\xcc\x52\x6d\x5b\xfa\x7d\xf7\x4c\x15\x09\x52\xe7\x00\x52\xbf\x00\x00\x00\xff\xff\x80\xad\x42\xa4\x6a\x00\x00\x00")
+
+func compiledVotingBinRuntimeBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledVotingBinRuntime,
+		"compiled/Voting.bin-runtime",
+	)
+}
+
+func compiledVotingBinRuntime() (*asset, error) {
+	bytes, err := compiledVotingBinRuntimeBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/Voting.bin-runtime", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _compiledVotingAbi = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x8a\x8e\x05\x04\x00\x00\xff\xff\x29\xbb\x4c\x0d\x02\x00\x00\x00")
+
+func compiledVotingAbiBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledVotingAbi,
+		"compiled/Voting.abi",
+	)
+}
+
+func compiledVotingAbi() (*asset, error) {
+	bytes, err := compiledVotingAbiBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/Voting.abi", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
 // Asset loads and returns the asset for the given name.
 // It returns an error if the asset could not be found or
 // could not be loaded.
@@ -251,6 +293,8 @@ var _bindata = map[string]func() (*asset, error){
 	"compiled/Energy.bin-runtime": compiledEnergyBinRuntime,
 	"compiled/Params.abi": compiledParamsAbi,
 	"compiled/Params.bin-runtime": compiledParamsBinRuntime,
+	"compiled/Voting.bin-runtime": compiledVotingBinRuntime,
+	"compiled/Voting.abi": compiledVotingAbi,
 }
 
 // AssetDir returns the file names below a certain
@@ -300,6 +344,8 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"Energy.bin-runtime": &bintree{compiledEnergyBinRuntime, map[string]*bintree{}},
 		"Params.abi": &bintree{compiledParamsAbi, map[string]*bintree{}},
 		"Params.bin-runtime": &bintree{compiledParamsBinRuntime, map[string]*bintree{}},
+		"Voting.abi": &bintree{compiledVotingAbi, map[string]*bintree{}},
+		"Voting.bin-runtime": &bintree{compiledVotingBinRuntime, map[string]*bintree{}},
 	}},
 }}
 
