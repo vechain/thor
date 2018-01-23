@@ -21,9 +21,11 @@ type StateDB struct {
 }
 
 type suicideFlagKey common.Address
-type preimageKey common.Hash
 type refundKey struct{}
+
+type preimageKey common.Hash
 type logKey struct{}
+type newAddressKey common.Address
 
 // New create a statedb object.
 func New(state State) *StateDB {
@@ -33,10 +35,6 @@ func New(state State) *StateDB {
 			return false, true
 		case refundKey:
 			return &big.Int{}, true
-		case preimageKey:
-			return []byte(nil), true
-		case logKey:
-			return (*types.Log)(nil), true
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -54,21 +52,21 @@ func (s *StateDB) GetRefund() *big.Int {
 	return v.(*big.Int)
 }
 
-// GetPreimages returns preimages produced by VM when evm.Config.EnablePreimageRecording turned on.
-func (s *StateDB) GetPreimages(cb func(thor.Hash, []byte) bool) {
+// GetOutputs callback ouputs include logs, new addresses and preimages.
+// Merge callbacks for performance reasons.
+func (s *StateDB) GetOutputs(
+	logCB func(*Log) bool,
+	newAddressCB func(thor.Address) bool,
+	preimagesCB func(thor.Hash, []byte) bool,
+) {
 	s.repo.Journal(func(k, v interface{}) bool {
-		if key, ok := k.(preimageKey); ok {
-			return cb(thor.Hash(key), v.([]byte))
-		}
-		return true
-	})
-}
-
-// GetLogs return the logs collected during VM life-cycle.
-func (s *StateDB) GetLogs(cb func(*Log) bool) {
-	s.repo.Journal(func(k, v interface{}) bool {
-		if _, ok := k.(logKey); ok {
-			return cb(v.(*Log))
+		switch key := k.(type) {
+		case logKey:
+			return logCB(vmlogToLog(v.(*types.Log)))
+		case newAddressKey:
+			return newAddressCB(thor.Address(key))
+		case preimageKey:
+			return preimagesCB(thor.Hash(key), v.([]byte))
 		}
 		return true
 	})
@@ -104,6 +102,10 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 		return
 	}
 	balance := s.state.GetBalance(thor.Address(addr))
+	if balance.Sign() == 0 {
+		// balance from 0 to non-zero
+		s.repo.Put(newAddressKey(addr), nil)
+	}
 	s.state.SetBalance(thor.Address(addr), new(big.Int).Add(balance, amount))
 }
 
@@ -187,7 +189,7 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 
 // AddLog stub.
 func (s *StateDB) AddLog(vmlog *types.Log) {
-	s.repo.Put(logKey{}, vmlogToLog(vmlog))
+	s.repo.Put(logKey{}, vmlog)
 }
 
 // Snapshot stub.
