@@ -9,6 +9,7 @@ import (
 // keys of governance params.
 const (
 	ParamRewardPercentage = "reward-percentage"
+	ParamBaseGasPrice     = "base-gas-price"
 )
 
 type params struct {
