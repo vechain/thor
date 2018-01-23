@@ -62,6 +62,12 @@ contract Energy is Token {
     function symbol() public pure returns (string) {
         return "THOR";
     }
+
+    ///@return ERC20 token total supply
+    function totalSupply() public constant returns (uint256) {
+        return 0;
+    }
+
   
     ///@notice share `_amount` energy credits from `_from` to `_to` which can only be consumed,never transferred
     ///@param _reciever who recieves the energy credits
