@@ -23,6 +23,7 @@ func TestEnergy(t *testing.T) {
 	checkChargeAncConsume(t)
 	checkBalanceGrowth(t)
 	checkMulBalanceGrowth(t)
+	checkTransferBalance(t)
 }
 
 func checkChargeAncConsume(t *testing.T) {
@@ -176,4 +177,39 @@ func checkMulBalanceGrowth(t *testing.T) {
 	out = call(Energy.PackUpdateBalance(addr))
 	assert.Equal(t, big.NewInt(int64(totalBenefit)), new(big.Int).SetBytes(out.Value))
 
+}
+
+func checkTransferBalance(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	st, _ := state.New(thor.Hash{}, kv)
+	st.SetCode(Energy.Address, Energy.RuntimeBytecodes())
+
+	rt := runtime.New(st,
+		thor.Address{}, 0, 1000000, 1000000,
+		func(uint32) thor.Hash { return thor.Hash{} })
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, Energy.Address, &big.Int{}, thor.Hash{})
+	}
+
+	acc1 := thor.BytesToAddress([]byte("acc1"))
+	balance1 := big.NewInt(10000)
+	acc2 := thor.BytesToAddress([]byte("acc2"))
+	balance2 := big.NewInt(10000)
+	transfer := big.NewInt(2000)
+
+	call(Energy.PackCharge(acc1, balance1))
+	call(Energy.PackCharge(acc2, balance2))
+
+	callTransfer := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, acc1, &big.Int{}, thor.Hash{})
+	}
+	callTransfer(Energy.PackTransfer(acc2, transfer))
+	b1 := call(Energy.PackBalanceOf(acc1))
+	b2 := call(Energy.PackBalanceOf(acc2))
+	assert.Equal(t, new(big.Int).Sub(balance1, transfer), new(big.Int).SetBytes(b1.Value))
+	assert.Equal(t, new(big.Int).Add(balance2, transfer), new(big.Int).SetBytes(b2.Value))
 }

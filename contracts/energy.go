@@ -62,6 +62,11 @@ func (e *energy) PackSetBalanceBirth(birth *big.Int) *tx.Clause {
 }
 
 // PackSetOwnerForContract pack input data of `Energy.setOwnerForContract` function.
-func (e *energy) PackSetOwnerForContract(owner *thor.Address) *tx.Clause {
+func (e *energy) PackSetOwnerForContract(owner thor.Address) *tx.Clause {
 	return e.clause.WithData(e.mustPack("setOwnerForContract", owner))
+}
+
+// PackTransfer pack input data of `Energy.transfer` function.
+func (e *energy) PackTransfer(to thor.Address, amount *big.Int) *tx.Clause {
+	return e.clause.WithData(e.mustPack("transfer", to, amount))
 }
