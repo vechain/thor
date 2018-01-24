@@ -22,18 +22,13 @@ type Builder struct {
 	gasLimit  uint64
 
 	allocs []alloc
-	calls  []call
+	calls  []*tx.Clause
 }
 
 type alloc struct {
 	address          thor.Address
 	balance          *big.Int
 	runtimeBytecodes []byte
-}
-
-type call struct {
-	address thor.Address
-	data    []byte
 }
 
 // Timestamp set timestamp.
@@ -59,11 +54,8 @@ func (b *Builder) Alloc(addr thor.Address, balance *big.Int, runtimeBytecodes []
 }
 
 // Call call the pre alloced contract(account with runtime bytecodes).
-func (b *Builder) Call(addr thor.Address, data []byte) *Builder {
-	b.calls = append(b.calls, call{
-		addr,
-		data,
-	})
+func (b *Builder) Call(clause *tx.Clause) *Builder {
+	b.calls = append(b.calls, clause)
 	return b
 }
 
@@ -93,11 +85,11 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	// execute all calls
 	for _, call := range b.calls {
-		output := rt.Execute(
-			tx.NewClause(&call.address).WithData(call.data),
+		output := rt.Call(
+			call,
 			0,
 			execGasLimit,
-			call.address,
+			*call.To(),
 			&big.Int{},
 			thor.Hash{})
 

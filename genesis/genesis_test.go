@@ -13,7 +13,6 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 )
 
 func TestGenesis(t *testing.T) {
@@ -45,15 +44,14 @@ func BenchmarkChargeEnergy(b *testing.B) {
 		// }
 		rt := runtime.New(st,
 			thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
-		data := contracts.Energy.PackCharge(
-			thor.BytesToAddress([]byte("acc1")),
-			big.NewInt(1),
-		)
 
 		gas := uint64(1000000)
 		// cost about  49165 gas
-		out := rt.Execute(
-			tx.NewClause(&contracts.Energy.Address).WithData(data),
+		out := rt.Call(
+			contracts.Energy.PackCharge(
+				thor.BytesToAddress([]byte("acc1")),
+				big.NewInt(1),
+			),
 			0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			b.Fatal(out.VMErr)
@@ -77,20 +75,19 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 
 	rt := runtime.New(st,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
-	data := contracts.Energy.PackCharge(
-		thor.BytesToAddress([]byte("acc1")),
-		big.NewInt(1000*1000*1000*1000),
-	)
 
-	out := rt.Execute(
-		tx.NewClause(&contracts.Energy.Address).WithData(data),
+	out := rt.Call(
+		contracts.Energy.PackCharge(
+			thor.BytesToAddress([]byte("acc1")),
+			big.NewInt(1000*1000*1000*1000),
+		),
 		0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
 	if out.VMErr != nil {
 		b.Fatal(out.VMErr)
 	}
 
-	data, _ = contracts.Energy.ABI.Pack("balanceOf", thor.BytesToAddress([]byte("acc1")))
-	out = rt.Execute(tx.NewClause(&contracts.Energy.Address).WithData(data), 0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
+	out = rt.StaticCall(contracts.Energy.PackBalanceOf(thor.BytesToAddress([]byte("acc1"))),
+		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
 	var bal *big.Int
 	fmt.Println(contracts.Energy.ABI.Unpack(&bal, "balanceOf", out.Value))
 	fmt.Println(bal)
@@ -107,16 +104,15 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		// }
 		rt := runtime.New(st,
 			thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
-		data := contracts.Energy.PackConsume(
-			thor.BytesToAddress([]byte("acc1")),
-			thor.Address{},
-			big.NewInt(1),
-		)
 
 		gas := uint64(1000000)
 		// cost about  49165 gas
-		out := rt.Execute(
-			tx.NewClause(&contracts.Energy.Address).WithData(data),
+		out := rt.Call(
+			contracts.Energy.PackConsume(
+				thor.BytesToAddress([]byte("acc1")),
+				thor.Address{},
+				big.NewInt(1),
+			),
 			0, gas, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			panic(out.VMErr)

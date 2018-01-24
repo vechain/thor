@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func TestExecute(t *testing.T) {
+func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	state, _ := state.New(thor.Hash{}, kv)
 	_, err := genesis.Build(state)
@@ -31,29 +31,20 @@ func TestExecute(t *testing.T) {
 
 	{
 		// charge
-		data := contracts.Energy.PackCharge(
-			addr,
-			amount,
-		)
-
-		out := rt.Execute(
-			tx.NewClause(&contracts.Energy.Address).WithData(data),
+		out := rt.Call(
+			contracts.Energy.PackCharge(
+				addr,
+				amount,
+			),
 			0, 1000000, contracts.Energy.Address, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
 		}
 	}
 	{
-		data, err := contracts.Energy.ABI.Pack(
-			"balanceOf",
-			addr,
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
 
-		out := rt.Execute(
-			tx.NewClause(&contracts.Energy.Address).WithData(data),
+		out := rt.StaticCall(
+			contracts.Energy.PackBalanceOf(addr),
 			0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
 		if out.VMErr != nil {
 			t.Fatal(out.VMErr)
@@ -81,7 +72,7 @@ func TestExecuteTransaction(t *testing.T) {
 	_, err := new(genesis.Builder).
 		Alloc(contracts.Energy.Address, &big.Int{}, contracts.Energy.RuntimeBytecodes()).
 		Alloc(addr1, balance1, nil).
-		Call(contracts.Energy.Address, contracts.Energy.PackCharge(addr1, big.NewInt(1000000))).
+		Call(contracts.Energy.PackCharge(addr1, big.NewInt(1000000))).
 		Build(state)
 
 	if err != nil {

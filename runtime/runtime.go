@@ -60,16 +60,19 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 	return rt
 }
 
-// Execute executes single clause bases on tx env set by SetTransactionEnvironment.
-func (rt *Runtime) Execute(
+func (rt *Runtime) execute(
 	clause *Tx.Clause,
 	index int,
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Hash,
+	isStatic bool,
 ) *vm.Output {
-
+	to := clause.To()
+	if isStatic && to == nil {
+		panic("static call requires 'To'")
+	}
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.blockNumber)),
@@ -85,18 +88,43 @@ func (rt *Runtime) Execute(
 	}
 
 	vm := vm.New(ctx, rt.state, rt.vmConfig)
-	to := clause.To()
 	if to == nil {
 		return vm.Create(txOrigin, clause.Data(), gas, clause.Value())
+	}
+	if isStatic {
+		return vm.StaticCall(txOrigin, *to, clause.Data(), gas)
 	}
 	return vm.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 }
 
+// StaticCall executes signle clause which ensure no modifications to state.
+func (rt *Runtime) StaticCall(
+	clause *Tx.Clause,
+	index int,
+	gas uint64,
+	txOrigin thor.Address,
+	txGasPrice *big.Int,
+	txID thor.Hash,
+) *vm.Output {
+	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, true)
+}
+
+// Call executes single clause.
+func (rt *Runtime) Call(
+	clause *Tx.Clause,
+	index int,
+	gas uint64,
+	txOrigin thor.Address,
+	txGasPrice *big.Int,
+	txID thor.Hash,
+) *vm.Output {
+	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
+}
+
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
-	data := contracts.Energy.PackConsume(caller, callee, amount)
-	output := rt.Execute(
-		Tx.NewClause(&contracts.Energy.Address).WithData(data),
-		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+	clause := contracts.Energy.PackConsume(caller, callee, amount)
+	output := rt.execute(clause,
+		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
 	}
@@ -105,12 +133,9 @@ func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amoun
 }
 
 func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
-
-	data := contracts.Energy.PackCharge(addr, amount)
-
-	output := rt.Execute(
-		Tx.NewClause(&contracts.Energy.Address).WithData(data),
-		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+	clause := contracts.Energy.PackCharge(addr, amount)
+	output := rt.execute(clause,
+		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
@@ -159,7 +184,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	vmOutputs = make([]*vm.Output, len(clauses))
 
 	for i, clause := range clauses {
-		vmOutput := rt.Execute(clause, i, leftOverGas, origin, gasPrice, tx.ID())
+		vmOutput := rt.execute(clause, i, leftOverGas, origin, gasPrice, tx.ID(), false)
 		vmOutputs[i] = vmOutput
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
