@@ -1,6 +1,9 @@
 package contracts_test
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	. "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/lvldb"
@@ -9,8 +12,6 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-	"math/big"
-	"testing"
 )
 
 type account struct {
@@ -29,6 +30,15 @@ func checkChargeAncConsume(t *testing.T) {
 	st, _ := state.New(thor.Hash{}, kv)
 	st.SetCode(Energy.Address, Energy.RuntimeBytecodes())
 
+	rt := runtime.New(st,
+		thor.Address{}, 0, 1000000, 1000000,
+		func(uint32) thor.Hash { return thor.Hash{} })
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, Energy.Address, &big.Int{}, thor.Hash{})
+	}
+
 	balance := big.NewInt(1e18)
 
 	accounts := []account{
@@ -43,14 +53,6 @@ func checkChargeAncConsume(t *testing.T) {
 		},
 	}
 
-	rt := runtime.New(st,
-		thor.Address{}, 0, 1000000, 1000000,
-		func(uint32) thor.Hash { return thor.Hash{} })
-	call := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Energy.Address).WithData(data),
-			0, 100000, Energy.Address, &big.Int{}, thor.Hash{})
-	}
 	for _, a := range accounts {
 		//gasused 100000-45336
 		out := call(Energy.PackCharge(a.addr, a.balance))
@@ -63,9 +65,9 @@ func checkChargeAncConsume(t *testing.T) {
 		rt := runtime.New(st,
 			thor.Address{}, 0, 1000000, 1000000,
 			func(uint32) thor.Hash { return thor.Hash{} })
-		call := func(data []byte) *vm.Output {
-			return rt.Execute(
-				tx.NewClause(&Energy.Address).WithData(data),
+		call := func(clause *tx.Clause) *vm.Output {
+			return rt.Call(
+				clause,
 				0, 100000, Energy.Address, &big.Int{}, thor.Hash{})
 		}
 		consume := new(big.Int).Div(a.balance, big.NewInt(2))
@@ -86,9 +88,9 @@ func checkBalanceGrowth(t *testing.T) {
 	rt := runtime.New(st,
 		thor.Address{}, 0, 1000000, 1000000,
 		func(uint32) thor.Hash { return thor.Hash{} })
-	call := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Energy.Address).WithData(data),
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Energy.Address, &big.Int{}, thor.Hash{})
 	}
 	//gasused 100000-978800
@@ -100,9 +102,9 @@ func checkBalanceGrowth(t *testing.T) {
 	out = call(Energy.PackUpdateBalance(addr))
 	assert.Equal(t, int64(0), new(big.Int).SetBytes(out.Value).Int64())
 
-	callFromVoting := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Energy.Address).WithData(data),
+	callFromVoting := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Voting.Address, &big.Int{}, thor.Hash{})
 	}
 
@@ -128,9 +130,9 @@ func checkMulBalanceGrowth(t *testing.T) {
 	rt := runtime.New(st,
 		thor.Address{}, 0, 1000000, 1000000,
 		func(uint32) thor.Hash { return thor.Hash{} })
-	call := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Energy.Address).WithData(data),
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Energy.Address, &big.Int{}, thor.Hash{})
 	}
 	//gasused 100000-978800
@@ -143,9 +145,9 @@ func checkMulBalanceGrowth(t *testing.T) {
 	assert.Equal(t, int64(0), new(big.Int).SetBytes(out.Value).Int64())
 	//initialize birth
 	birth := big.NewInt(100)
-	callFromVoting := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Energy.Address).WithData(data),
+	callFromVoting := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Voting.Address, &big.Int{}, thor.Hash{})
 	}
 	callFromVoting(Energy.PackSetBalanceBirth(birth))

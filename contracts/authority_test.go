@@ -30,9 +30,9 @@ func TestAuthority(t *testing.T) {
 		thor.Address{}, 0, 0, 0,
 		func(uint32) thor.Hash { return thor.Hash{} })
 
-	call := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Authority.Address).WithData(data),
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
 	}
 
@@ -75,9 +75,9 @@ func BenchmarkProposers(b *testing.B) {
 		thor.Address{}, 0, 0, 0,
 		func(uint32) thor.Hash { return thor.Hash{} })
 
-	call := func(data []byte) *vm.Output {
-		return rt.Execute(
-			tx.NewClause(&Authority.Address).WithData(data),
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
 			0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
 	}
 
