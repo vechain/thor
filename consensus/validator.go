@@ -29,6 +29,7 @@ func (v *validator) validate() (*block.Header, error) {
 
 	header := v.block.Header()
 	gasLimit := header.GasLimit()
+	transactions := v.block.Transactions()
 
 	// Signer and IntrinsicGas will be validate in runtime.
 
@@ -39,9 +40,9 @@ func (v *validator) validate() (*block.Header, error) {
 		return nil, errGasLimit
 	case header.GasUsed() > gasLimit:
 		return nil, errGasUsed
-	case header.TxsRoot() != v.block.Body().Txs.RootHash():
+	case header.TxsRoot() != transactions.RootHash():
 		return nil, errTxsRoot
-	case !v.validateTransactions(make(map[thor.Hash]bool), v.block.Transactions()):
+	case !v.validateTransactions(make(map[thor.Hash]bool), transactions):
 		return nil, errTransaction
 	default:
 		return preHeader, nil
