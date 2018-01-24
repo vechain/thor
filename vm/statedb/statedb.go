@@ -26,6 +26,7 @@ type (
 	preimageKey        common.Hash
 	logKey             struct{}
 	affectedAddressKey common.Address
+	createdContractKey common.Address
 )
 
 // New create a statedb object.
@@ -58,6 +59,7 @@ func (s *StateDB) GetRefund() *big.Int {
 func (s *StateDB) GetOutputs(
 	logCB func(*Log) bool,
 	affectedAddressCB func(thor.Address) bool,
+	createdContractCB func(thor.Address) bool,
 	preimagesCB func(thor.Hash, []byte) bool,
 ) {
 	s.repo.Journal(func(k, v interface{}) bool {
@@ -66,6 +68,8 @@ func (s *StateDB) GetOutputs(
 			return logCB(vmlogToLog(v.(*types.Log)))
 		case affectedAddressKey:
 			return affectedAddressCB(thor.Address(key))
+		case createdContractKey:
+			return createdContractCB(thor.Address(key))
 		case preimageKey:
 			return preimagesCB(thor.Hash(key), v.([]byte))
 		}
@@ -131,6 +135,9 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 
 // SetCode stub.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
+	if len(code) > 0 {
+		s.repo.Put(createdContractKey(addr), nil)
+	}
 	s.state.SetCode(thor.Address(addr), code)
 }
 
