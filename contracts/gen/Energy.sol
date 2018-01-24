@@ -98,7 +98,7 @@ contract Energy is Token {
         //hash the caller address and the contract address to ensure the key unique.
         bytes32 key = keccak256(_from,_reciever);
         SharedCredit storage s = sharedCredits[key];
-
+        
         if (now > s.expire) {
             return 0;
         }
@@ -169,10 +169,8 @@ contract Energy is Token {
 
         uint256 vetamount = balances[_owner].vetamount;
         uint256 version = balances[_owner].version;
-        if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1) {
-            uint256 birth = birthWithVer(revisionLen - 1);
-            amount = amount.add(birth.mul(vetamount.mul(now.sub(time))));
-            return amount;
+        if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1 ) {
+            return amount.add(birthWithVer(revisionLen-1).mul(vetamount.mul(now.sub(time))).div(10**18));
         }
 
         //`_owner` has not operated his account for a long time
