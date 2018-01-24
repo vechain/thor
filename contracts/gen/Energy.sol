@@ -9,9 +9,10 @@ contract Energy is Token {
     event Approval(address indexed _owner, address indexed _spender, uint256 _value);
     event SetBalanceBirth(address indexed executor,uint256 time,uint256 birth);
     event ShareFrom(address indexed from,address indexed to,uint256 _limit,uint256 creditGrowthRate,uint256 expire);
-
+    
     using SafeMath for uint256;
     
+    uint64 public constant UNIT = 10**18;
     //which represents an owner's balance
     struct Balance {
         uint256 balance;    //the energy balance
@@ -47,7 +48,7 @@ contract Energy is Token {
     mapping (bytes32 => SharedCredit) public sharedCredits;
     
     address public voting; 
-
+    
     ///@return ERC20 token name
     function name() public pure returns (string) {
         return "VET Energy";
@@ -137,7 +138,6 @@ contract Energy is Token {
             revert();
         }
         balances[_caller].balance = b.sub(_amount);
-        balances[_caller].timestamp = uint64(now);
         return _caller;
 
     }
@@ -170,7 +170,7 @@ contract Energy is Token {
         uint256 vetamount = balances[_owner].vetamount;
         uint256 version = balances[_owner].version;
         if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1 ) {
-            return amount.add(birthWithVer(revisionLen-1).mul(vetamount.mul(now.sub(time))).div(10**18));
+            return amount.add(birthWithVer(revisionLen-1).mul(vetamount.mul(now.sub(time))).div(UNIT));
         }
 
         //`_owner` has not operated his account for a long time
@@ -179,17 +179,17 @@ contract Energy is Token {
             uint256 currentTime = timeWithVer(i);
             if ( i == version ) {
                 uint256 nextTime = timeWithVer(i+1);
-                amount = amount.add(currentBirth.mul(vetamount.mul(nextTime.sub(time))));
+                amount = amount.add(currentBirth.mul(vetamount.mul(nextTime.sub(time))).div(UNIT));
                 continue;
             }
             
             if ( i == revisionLen - 1 ) {
-                amount = amount.add(currentBirth.mul(vetamount.mul(now.sub(currentTime))));
+                amount = amount.add(currentBirth.mul(vetamount.mul(now.sub(currentTime))).div(UNIT));
                 return amount;
             }
 
             uint256 nTime = timeWithVer(i+1);
-            amount = amount.add(currentBirth.mul(vetamount.mul(nTime.sub(currentTime))));
+            amount = amount.add(currentBirth.mul(vetamount.mul(nTime.sub(currentTime))).div(UNIT));
         }
     }
 
@@ -359,11 +359,10 @@ contract Energy is Token {
     function setBalanceBirth(uint256 _birth) public {
         require(msg.sender == voting);
         require(_birth > 0);
-        if (lengthOfRevisions() > 0) {
-            uint256 latestVer = lengthOfRevisions()-1;
-            uint256 latestime = timeWithVer(latestVer);
-            if (now == latestime) {
-                birthRevisions[latestVer].birth = _birth;
+        uint256 len = lengthOfRevisions();
+        if (len > 0) {
+            if (now == timeWithVer(len-1)) {
+                birthRevisions[len-1].birth = _birth;
                 SetBalanceBirth(msg.sender,now,_birth);
                 return;
             }
