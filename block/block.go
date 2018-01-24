@@ -19,10 +19,10 @@ type Body struct {
 	Txs tx.Transactions
 }
 
-// New create a block instance.
+// Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func New(header *Header, txs tx.Transactions) *Block {
+func Compose(header *Header, txs tx.Transactions) *Block {
 	return &Block{
 		header,
 		append(tx.Transactions(nil), txs...),

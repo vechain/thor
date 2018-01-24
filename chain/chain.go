@@ -254,7 +254,7 @@ func (c *Chain) getBlock(id thor.Hash) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	return block.New(header, body.Txs), nil
+	return block.Compose(header, body.Txs), nil
 }
 
 // GetBlockIDByNumber returns block id by block number on trunk.
