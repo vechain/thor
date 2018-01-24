@@ -12,30 +12,32 @@ import (
 type proposerHandler struct {
 	rt        *runtime.Runtime
 	header    *block.Header
-	signer    thor.Address
 	preHeader *block.Header
 }
 
 func newProposerHandler(
 	rt *runtime.Runtime,
 	header *block.Header,
-	signer thor.Address,
 	preHeader *block.Header,
 ) *proposerHandler {
 	return &proposerHandler{
 		rt:        rt,
 		header:    header,
-		signer:    signer,
 		preHeader: preHeader}
 }
 
 func (ph *proposerHandler) handle() error {
+	signer, err := ph.header.Signer()
+	if err != nil {
+		return err
+	}
+
 	proposers, err := ph.getProposers()
 	if err != nil {
 		return err
 	}
 
-	updates, err := ph.validateProposers(proposers)
+	updates, err := ph.validateProposers(signer, proposers)
 	if err != nil {
 		return err
 	}
@@ -44,7 +46,7 @@ func (ph *proposerHandler) handle() error {
 }
 
 func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
-	output := handleClause(ph.rt, contracts.Authority.Address, contracts.Authority.PackProposers())
+	output := handleClause(ph.rt, contracts.Authority.PackProposers())
 	if output.VMErr != nil {
 		return nil, errors.Wrap(output.VMErr, "get proposers")
 	}
@@ -52,18 +54,18 @@ func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
 }
 
 func (ph *proposerHandler) updateProposers(updates []schedule.Proposer) error {
-	output := handleClause(ph.rt, contracts.Authority.Address, contracts.Authority.PackUpdate(updates))
+	output := handleClause(ph.rt, contracts.Authority.PackUpdate(updates))
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "set absent")
 	}
 	return nil
 }
 
-func (ph *proposerHandler) validateProposers(proposers []schedule.Proposer) ([]schedule.Proposer, error) {
+func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []schedule.Proposer) ([]schedule.Proposer, error) {
 	legal, updates, err := schedule.New(
 		proposers,
 		ph.preHeader.Number(),
-		ph.preHeader.Timestamp()).Validate(ph.signer, ph.header.Timestamp())
+		ph.preHeader.Timestamp()).Validate(addr, ph.header.Timestamp())
 
 	switch {
 	case err != nil:

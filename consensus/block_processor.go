@@ -2,20 +2,17 @@ package consensus
 
 import (
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/tx"
 )
 
 type blockProcessor struct {
-	rt   *runtime.Runtime
-	sign *cry.Signing
+	rt *runtime.Runtime
 }
 
-func newBlockProcessor(rt *runtime.Runtime, sign *cry.Signing) *blockProcessor {
+func newBlockProcessor(rt *runtime.Runtime) *blockProcessor {
 	return &blockProcessor{
-		rt:   rt,
-		sign: sign}
+		rt: rt}
 }
 
 // ProcessBlock can execute all transactions in a block.
@@ -47,7 +44,7 @@ func (bp *blockProcessor) processTransactions(
 		return receipts, totalGasUsed, totalEnergyUsed, nil
 	}
 
-	receipt, _, err := bp.rt.ExecuteTransaction(transactions[0], bp.sign)
+	receipt, _, err := bp.rt.ExecuteTransaction(transactions[0])
 	if err != nil {
 		return nil, 0, 0, err
 	}

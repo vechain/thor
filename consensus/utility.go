@@ -15,8 +15,8 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
-func handleClause(rt *runtime.Runtime, to thor.Address, data []byte) *vm.Output {
-	return rt.Execute(tx.NewClause(&to).WithData(data), 0, math.MaxUint64, to, &big.Int{}, thor.Hash{})
+func handleClause(rt *runtime.Runtime, clause *tx.Clause) *vm.Output {
+	return rt.Call(clause, 0, math.MaxUint64, *clause.To(), &big.Int{}, thor.Hash{})
 }
 
 func checkState(state *state.State, header *block.Header) error {
@@ -56,7 +56,6 @@ func getPresentProposers(witness map[thor.Address]bool, proposers []schedule.Pro
 
 func getRewardPercentage(rt *runtime.Runtime) (uint64, error) {
 	output := handleClause(rt,
-		contracts.Params.Address,
 		contracts.Params.PackGet(contracts.ParamRewardPercentage))
 
 	if output.VMErr != nil {
