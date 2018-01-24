@@ -156,13 +156,13 @@ contract Energy is Token {
     ///
     ///@return how much energy the _owner holds
     function balanceOf(address _owner) public constant returns (uint256 balance) {
+        uint256 amount = balances[_owner].balance;
         uint256 time = balances[_owner].timestamp;
         if ( time == 0 ) {
-            return 0;
+            return amount;
         }
 
         uint256 revisionLen = lengthOfRevisions();
-        uint256 amount = balances[_owner].balance;
         if ( revisionLen == 0 ) {
             return amount;   
         }
