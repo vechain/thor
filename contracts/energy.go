@@ -34,6 +34,26 @@ func (e *energy) PackInitialize(params thor.Address) []byte {
 	return e.mustPack("initialize", params)
 }
 
+// PackUpdateBalance pack input data of `Energy.updateBalance` function.
+func (e *energy) PackUpdateBalance(owner thor.Address) []byte {
+	return e.mustPack("updateBalance", owner)
+}
+
+// PackUpdateBalance pack input data of `Energy.balanceOf` function.
+func (e *energy) PackBalanceOf(owner thor.Address) []byte {
+	return e.mustPack("balanceOf", owner)
+}
+
+// PackSetBalanceBirth pack input data of `Energy.setBalanceBirth` function.
+func (e *energy) PackSetBalanceBirth(birth *big.Int) []byte {
+	return e.mustPack("setBalanceBirth", birth)
+}
+
+// PackSetOwnerForContract pack input data of `Energy.setOwnerForContract` function.
+func (e *energy) PackSetOwnerForContract(owner *thor.Address) []byte {
+	return e.mustPack("setOwnerForContract", owner)
+}
+
 // Energy binder of `Energy` contract.
 var Energy = energy{mustLoad(
 	thor.BytesToAddress([]byte("eng")),
