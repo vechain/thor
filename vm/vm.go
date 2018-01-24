@@ -18,6 +18,7 @@ type Output struct {
 	Value             []byte
 	Logs              []*Log
 	AffectedAddresses []thor.Address // addresses which balance changed
+	CreatedContracts  []thor.Address // contracts created in VM life-cycle
 	LeftOverGas       uint64
 	RefundGas         *big.Int
 	Preimages         map[thor.Hash][]byte
@@ -114,31 +115,8 @@ func (vm *VM) Cancel() {
 // create accounts and reverses the state in case of an execution error or failed value transfer.
 func (vm *VM) Call(caller thor.Address, addr thor.Address, input []byte, gas uint64, value *big.Int) *Output {
 	ret, leftOverGas, vmErr := vm.evm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	logs, affectedAddrs, preimages := vm.extractStateDBOutputs()
-	return &Output{ret, logs, affectedAddrs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
-}
-
-// CallCode executes the contract associated with the addr with the given input as parameters.
-// It also handles any necessary value transfer required and takes the necessary steps to create
-// accounts and reverses the state in case of an execution error or failed value transfer.
-//
-// CallCode differs from Call in the sense that it executes the given address'
-// code with the caller as context.
-func (vm *VM) CallCode(caller thor.Address, addr thor.Address, input []byte, gas uint64, value *big.Int) *Output {
-	ret, leftOverGas, vmErr := vm.evm.CallCode(&vmContractRef{caller}, common.Address(addr), input, gas, value)
-	logs, affectedAddrs, preimages := vm.extractStateDBOutputs()
-	return &Output{ret, logs, affectedAddrs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
-}
-
-// DelegateCall executes the contract associated with the addr with the given input as parameters.
-// It reverses the state in case of an execution error.
-//
-// DelegateCall differs from CallCode in the sense that it executes the given address' code with
-// the caller as context and the caller is set to the caller of the caller.
-func (vm *VM) DelegateCall(caller thor.Address, addr thor.Address, input []byte, gas uint64) *Output {
-	ret, leftOverGas, vmErr := vm.evm.DelegateCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	logs, affectedAddrs, preimages := vm.extractStateDBOutputs()
-	return &Output{ret, logs, affectedAddrs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
+	logs, affectedAddrs, createdContracts, preimages := vm.extractStateDBOutputs()
+	return &Output{ret, logs, affectedAddrs, createdContracts, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
 }
 
 // StaticCall executes the contract associated with the addr with the given input as parameters
@@ -148,16 +126,16 @@ func (vm *VM) DelegateCall(caller thor.Address, addr thor.Address, input []byte,
 // the modifications.
 func (vm *VM) StaticCall(caller thor.Address, addr thor.Address, input []byte, gas uint64) *Output {
 	ret, leftOverGas, vmErr := vm.evm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
-	logs, affectedAddrs, preimages := vm.extractStateDBOutputs()
-	return &Output{ret, logs, affectedAddrs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
+	logs, affectedAddrs, createdContracts, preimages := vm.extractStateDBOutputs()
+	return &Output{ret, logs, affectedAddrs, createdContracts, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
 }
 
 // Create creates a new contract using code as deployment code.
 func (vm *VM) Create(caller thor.Address, code []byte, gas uint64, value *big.Int) *Output {
 	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
 	contractAddress := thor.Address(contractAddr)
-	logs, affectedAddrs, preimages := vm.extractStateDBOutputs()
-	return &Output{ret, logs, affectedAddrs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, &contractAddress}
+	logs, affectedAddrs, createdContracts, preimages := vm.extractStateDBOutputs()
+	return &Output{ret, logs, affectedAddrs, createdContracts, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, &contractAddress}
 }
 
 // ChainConfig returns the evmironment's chain configuration
@@ -165,7 +143,12 @@ func (vm *VM) ChainConfig() *params.ChainConfig {
 	return vm.evm.ChainConfig()
 }
 
-func (vm *VM) extractStateDBOutputs() (logs []*Log, affectedAddrs []thor.Address, preimages map[thor.Hash][]byte) {
+func (vm *VM) extractStateDBOutputs() (
+	logs []*Log,
+	affectedAddrs []thor.Address,
+	createdContracts []thor.Address,
+	preimages map[thor.Hash][]byte,
+) {
 	vm.statedb.GetOutputs(
 		func(log *statedb.Log) bool {
 			logs = append(logs, (*Log)(log))
@@ -173,6 +156,10 @@ func (vm *VM) extractStateDBOutputs() (logs []*Log, affectedAddrs []thor.Address
 		},
 		func(newAddr thor.Address) bool {
 			affectedAddrs = append(affectedAddrs, newAddr)
+			return true
+		},
+		func(newAddr thor.Address) bool {
+			createdContracts = append(createdContracts, newAddr)
 			return true
 		},
 		func(key thor.Hash, value []byte) bool {
