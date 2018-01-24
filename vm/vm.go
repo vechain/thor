@@ -165,14 +165,14 @@ func (vm *VM) ChainConfig() *params.ChainConfig {
 	return vm.evm.ChainConfig()
 }
 
-func (vm *VM) extractStateDBOutputs() (logs []*Log, affectedAdds []thor.Address, preimages map[thor.Hash][]byte) {
+func (vm *VM) extractStateDBOutputs() (logs []*Log, affectedAddrs []thor.Address, preimages map[thor.Hash][]byte) {
 	vm.statedb.GetOutputs(
 		func(log *statedb.Log) bool {
 			logs = append(logs, (*Log)(log))
 			return true
 		},
 		func(newAddr thor.Address) bool {
-			affectedAdds = append(affectedAdds, newAddr)
+			affectedAddrs = append(affectedAddrs, newAddr)
 			return true
 		},
 		func(key thor.Hash, value []byte) bool {
