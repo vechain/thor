@@ -158,13 +158,10 @@ contract Energy is Token {
     function balanceOf(address _owner) public constant returns (uint256 balance) {
         uint256 amount = balances[_owner].balance;
         uint256 time = balances[_owner].timestamp;
-        if ( time == 0 ) {
-            return amount;
-        }
-
         uint256 revisionLen = lengthOfRevisions();
-        if ( revisionLen == 0 ) {
-            return amount;   
+
+        if ( time == 0 || revisionLen == 0) {
+            return amount;
         }
 
         uint256 vetamount = balances[_owner].vetamount;
@@ -271,7 +268,7 @@ contract Energy is Token {
         Approval(msg.sender, _reciever, _amount);
         return true;
     }
-
+    
     /// @notice set the contract owner
     /// @param _contractAddr a contract address
     function setOwnerForContract(address _contractAddr,address _owner) public {

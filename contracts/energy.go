@@ -61,12 +61,27 @@ func (e *energy) PackSetBalanceBirth(birth *big.Int) *tx.Clause {
 	return e.clause.WithData(e.mustPack("setBalanceBirth", birth))
 }
 
-// PackSetOwnerForContract pack input data of `Energy.setOwnerForContract` function.
-func (e *energy) PackSetOwnerForContract(owner thor.Address) *tx.Clause {
-	return e.clause.WithData(e.mustPack("setOwnerForContract", owner))
-}
-
 // PackTransfer pack input data of `Energy.transfer` function.
 func (e *energy) PackTransfer(to thor.Address, amount *big.Int) *tx.Clause {
 	return e.clause.WithData(e.mustPack("transfer", to, amount))
+}
+
+// PackTransferFrom pack input data of `Energy.transferFrom` function.
+func (e *energy) PackTransferFrom(from thor.Address, to thor.Address, amount *big.Int) *tx.Clause {
+	return e.clause.WithData(e.mustPack("transferFrom", from, to, amount))
+}
+
+// PackSetOwnerForContract pack input data of `Energy.setOwnerForContract` function.
+func (e *energy) PackSetOwnerForContract(contractAddr thor.Address, owner thor.Address) *tx.Clause {
+	return e.clause.WithData(e.mustPack("setOwnerForContract", contractAddr, owner))
+}
+
+// PackOwnerApprove pack input data of `Energy.ownerApprove` function.
+func (e *energy) PackOwnerApprove(contractAddr thor.Address, reciever thor.Address, amount *big.Int) *tx.Clause {
+	return e.clause.WithData(e.mustPack("ownerApprove", contractAddr, reciever, amount))
+}
+
+// PackApprove pack input data of `Energy.approve` function.
+func (e *energy) PackApprove(reciever thor.Address, amount *big.Int) *tx.Clause {
+	return e.clause.WithData(e.mustPack("approve", reciever, amount))
 }

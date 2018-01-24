@@ -1,9 +1,6 @@
 package contracts_test
 
 import (
-	"math/big"
-	"testing"
-
 	"github.com/stretchr/testify/assert"
 	. "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/lvldb"
@@ -12,6 +9,8 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
+	"math/big"
+	"testing"
 )
 
 type account struct {
@@ -24,6 +23,7 @@ func TestEnergy(t *testing.T) {
 	checkBalanceGrowth(t)
 	checkMulBalanceGrowth(t)
 	checkTransferBalance(t)
+	checkTransferFrom(t)
 }
 
 func checkChargeAncConsume(t *testing.T) {
@@ -212,4 +212,65 @@ func checkTransferBalance(t *testing.T) {
 	b2 := call(Energy.PackBalanceOf(acc2))
 	assert.Equal(t, new(big.Int).Sub(balance1, transfer), new(big.Int).SetBytes(b1.Value))
 	assert.Equal(t, new(big.Int).Add(balance2, transfer), new(big.Int).SetBytes(b2.Value))
+}
+
+func checkTransferFrom(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	st, _ := state.New(thor.Hash{}, kv)
+	st.SetCode(Energy.Address, Energy.RuntimeBytecodes())
+	st.SetCode(Params.Address, Params.RuntimeBytecodes())
+
+	rt := runtime.New(st,
+		thor.Address{}, 0, 1000000, 1000000,
+		func(uint32) thor.Hash { return thor.Hash{} })
+	call := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, Energy.Address, &big.Int{}, thor.Hash{})
+	}
+
+	acc1 := thor.BytesToAddress([]byte("acc1"))
+	balance1 := big.NewInt(10000)
+	acc2 := thor.BytesToAddress([]byte("acc2"))
+	balance2 := big.NewInt(10000)
+	transfer := big.NewInt(2000)
+
+	call(Energy.PackCharge(acc1, balance1))
+	call(Energy.PackCharge(acc2, balance2))
+	calledByAcc1 := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, acc1, &big.Int{}, thor.Hash{})
+	}
+	calledByAcc1(Energy.PackApprove(acc2, transfer))
+
+	call(Energy.PackTransferFrom(acc1, acc2, transfer))
+
+	b1 := call(Energy.PackBalanceOf(acc1))
+	b2 := call(Energy.PackBalanceOf(acc2))
+
+	assert.Equal(t, new(big.Int).Sub(balance1, transfer), new(big.Int).SetBytes(b1.Value))
+	assert.Equal(t, new(big.Int).Add(balance2, transfer), new(big.Int).SetBytes(b2.Value))
+
+	contractAddr := Params.Address
+	contractBalance := big.NewInt(10000)
+	contractOwner := thor.BytesToAddress([]byte("contractOwner"))
+	receiver := thor.BytesToAddress([]byte("receiver"))
+	trans := big.NewInt(2000)
+
+	call(Energy.PackSetOwnerForContract(contractAddr, contractOwner))
+	call(Energy.PackCharge(contractAddr, contractBalance))
+	calledByContractOwner := func(clause *tx.Clause) *vm.Output {
+		return rt.Call(
+			clause,
+			0, 1000000, contractOwner, &big.Int{}, thor.Hash{})
+	}
+	calledByContractOwner(Energy.PackOwnerApprove(contractAddr, receiver, trans))
+	calledByContractOwner(Energy.PackTransferFrom(contractAddr, receiver, trans))
+
+	bc := call(Energy.PackBalanceOf(contractAddr))
+	br := call(Energy.PackBalanceOf(receiver))
+
+	assert.Equal(t, new(big.Int).Sub(contractBalance, trans), new(big.Int).SetBytes(bc.Value))
+	assert.Equal(t, new(big.Int).Add(trans, new(big.Int)), new(big.Int).SetBytes(br.Value))
 }
