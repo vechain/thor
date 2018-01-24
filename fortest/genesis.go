@@ -52,17 +52,17 @@ func BuildGenesis(state *state.State) (*block.Block, error) {
 		Alloc(cs.Authority.Address, &big.Int{}, cs.Authority.RuntimeBytecodes()).
 		Alloc(cs.Energy.Address, &big.Int{}, cs.Energy.RuntimeBytecodes()).
 		Alloc(cs.Params.Address, &big.Int{}, cs.Params.RuntimeBytecodes()).
-		Call(cs.Authority.Address, cs.Authority.PackInitialize(cs.Voting.Address)).
-		Call(cs.Energy.Address, cs.Energy.PackInitialize(cs.Voting.Address)).
-		Call(cs.Params.Address, cs.Params.PackInitialize(cs.Voting.Address)).
-		Call(cs.Params.Address, cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30))).
-		Call(cs.Params.Address, cs.Params.PackPreset(cs.ParamBaseGasPrice, big.NewInt(1000)))
+		Call(cs.Authority.PackInitialize(cs.Voting.Address)).
+		Call(cs.Energy.PackInitialize(cs.Voting.Address)).
+		Call(cs.Params.PackInitialize(cs.Voting.Address)).
+		Call(cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30))).
+		Call(cs.Params.PackPreset(cs.ParamBaseGasPrice, big.NewInt(1000)))
 
 	for _, a := range Accounts {
 		balance, _ := new(big.Int).SetString("10000000000000000000000", 10)
 		builder.Alloc(a.Address, balance, nil).
-			Call(cs.Authority.Address, cs.Authority.PackPreset(a.Address, "a1")).
-			Call(cs.Energy.Address, cs.Energy.PackCharge(a.Address, balance))
+			Call(cs.Authority.PackPreset(a.Address, "a1")).
+			Call(cs.Energy.PackCharge(a.Address, balance))
 	}
 
 	return builder.Build(state)

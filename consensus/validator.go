@@ -19,7 +19,7 @@ func newValidator(blk *block.Block, chain *chain.Chain) *validator {
 }
 
 func (v *validator) validate() (*block.Header, error) {
-	preHeader, err := v.chain.GetBlockHeader(v.block.ParentHash())
+	preHeader, err := v.chain.GetBlockHeader(v.block.ParentID())
 	if err != nil {
 		if v.chain.IsNotFound(err) {
 			return nil, errParentNotFound
@@ -29,6 +29,8 @@ func (v *validator) validate() (*block.Header, error) {
 
 	header := v.block.Header()
 	gasLimit := header.GasLimit()
+
+	// Signer and IntrinsicGas will be validate in runtime.
 
 	switch {
 	case preHeader.Timestamp() >= v.block.Timestamp():
@@ -53,7 +55,7 @@ func (v *validator) validateTransactions(validTx map[thor.Hash]bool, transaction
 	case !v.validateTransaction(validTx, transactions[0]):
 		return false
 	default:
-		validTx[transactions[0].Hash()] = true
+		validTx[transactions[0].ID()] = true
 		return v.validateTransactions(validTx, transactions[1:len(transactions)])
 	}
 }
@@ -72,19 +74,19 @@ func (v *validator) validateTransaction(validTx map[thor.Hash]bool, transaction 
 }
 
 func (v *validator) isTxNotFound(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
-	if _, ok := validTx[transaction.Hash()]; ok { // 在当前块中找到相同交易
+	if _, ok := validTx[transaction.ID()]; ok { // 在当前块中找到相同交易
 		return false
 	}
 
-	_, err := v.chain.LookupTransaction(v.block.ParentHash(), transaction.Hash())
+	_, err := v.chain.LookupTransaction(v.block.ParentID(), transaction.ID())
 	return v.chain.IsNotFound(err)
 }
 
 func (v *validator) isTxDependFound(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
-	if _, ok := validTx[transaction.Hash()]; ok { // 在当前块中找到依赖
+	if _, ok := validTx[transaction.ID()]; ok { // 在当前块中找到依赖
 		return true
 	}
 
-	_, err := v.chain.LookupTransaction(v.block.ParentHash(), *transaction.DependsOn())
+	_, err := v.chain.LookupTransaction(v.block.ParentID(), *transaction.DependsOn())
 	return err != nil // 在 chain 中找到依赖
 }

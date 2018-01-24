@@ -8,7 +8,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -19,14 +18,12 @@ import (
 type Consensus struct {
 	chain        *chain.Chain
 	stateCreator func(thor.Hash) *state.State
-	sign         *cry.Signing
 }
 
 // New is Consensus factory.
-func New(chain *chain.Chain, sign *cry.Signing, stateCreator func(thor.Hash) *state.State) *Consensus {
+func New(chain *chain.Chain, stateCreator func(thor.Hash) *state.State) *Consensus {
 	return &Consensus{
 		chain:        chain,
-		sign:         sign,
 		stateCreator: stateCreator}
 }
 
@@ -45,19 +42,14 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 		return false, err
 	}
 
-	return c.predicateTrunk(blk)
+	return c.isTrunk(blk)
 }
 
 func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	header := blk.Header()
-	signer, err := c.sign.Signer(header)
-	if err != nil {
-		return err
-	}
-
 	preHash := preHeader.StateRoot()
 	state := c.stateCreator(preHash)
-	getHash := chain.NewHashGetter(c.chain, preHash).GetHash
+	getHash := chain.NewBlockIDGetter(c.chain, preHash).GetID
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
@@ -65,11 +57,11 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		header.GasLimit(),
 		getHash)
 
-	if err := newProposerHandler(rt, header, signer, preHeader).handle(); err != nil {
+	if err := newProposerHandler(rt, header, preHeader).handle(); err != nil {
 		return err
 	}
 
-	energyUsed, err := newBlockProcessor(rt, c.sign).process(blk)
+	energyUsed, err := newBlockProcessor(rt).process(blk)
 	if err != nil {
 		return err
 	}
@@ -79,9 +71,10 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		return err
 	}
 
-	if output := handleClause(rt,
-		contracts.Energy.Address,
-		contracts.Energy.PackCharge(header.Beneficiary(),
+	if output := handleClause(
+		rt,
+		contracts.Energy.PackCharge(
+			header.Beneficiary(),
 			new(big.Int).SetUint64(energyUsed*rewardPercentage))); output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
@@ -89,24 +82,22 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	return checkState(state, header)
 }
 
-func (c *Consensus) predicateTrunk(block *block.Block) (bool, error) {
+func (c *Consensus) isTrunk(block *block.Block) (bool, error) {
 	bestBlock, err := c.chain.GetBestBlock()
-	if err != nil {
+
+	switch {
+	case err != nil:
 		return false, err
-	}
-
-	if block.TotalScore() < bestBlock.TotalScore() {
+	case block.TotalScore() < bestBlock.TotalScore():
 		return false, nil
-	}
-
-	if block.TotalScore() == bestBlock.TotalScore() {
-		blockHash := block.Hash()
-		bestHash := bestBlock.Hash()
-		if bytes.Compare(blockHash[:], bestHash[:]) > 0 { // blockHash[:] >  bestHash[:]
+	case block.TotalScore() == bestBlock.TotalScore():
+		blockID := block.ID()
+		bestID := bestBlock.ID()
+		if bytes.Compare(blockID[:], bestID[:]) > 0 {
 			return true, nil
 		}
 		return false, nil
+	default:
+		return true, nil
 	}
-
-	return true, nil
 }
