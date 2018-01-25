@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/thor"
 )
 
@@ -23,26 +22,29 @@ func NewTransactionInterface(chain *chain.Chain) *TransactionInterface {
 //GetTransactionByHash return transaction by address
 func (ti *TransactionInterface) GetTransactionByHash(txHash thor.Hash) (*types.Transaction, error) {
 
-	tx, _, err := ti.chain.GetTransaction(txHash)
+	tx, location, err := ti.chain.GetTransaction(txHash)
 	if err != nil {
 		return nil, err
 	}
-	genesisHash, err := thor.ParseHash("0x000000006d2958e8510b1503f612894e9223936f1008be2a218c310fa8c11423")
-	if err != nil {
-		return nil, err
-	}
-	signing := cry.NewSigning(genesisHash)
 
-	return types.ConvertTransactionWithSigning(tx, signing), nil
+	t, err := types.ConvertTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := ti.chain.GetBlock(location.BlockID)
+	if err != nil {
+		return nil, err
+	}
+
+	t.BlockID = location.BlockID.String()
+	t.BlockNumber = block.Number()
+	t.Index = location.Index
+	return t, nil
 }
 
 //GetTransactionFromBlock return transaction from block with transaction index
 func (ti *TransactionInterface) GetTransactionFromBlock(blockNumber uint32, index uint64) (*types.Transaction, error) {
-	genesisHash, err := thor.ParseHash("0x000000006d2958e8510b1503f612894e9223936f1008be2a218c310fa8c11423")
-	if err != nil {
-		return nil, err
-	}
-	signing := cry.NewSigning(genesisHash)
 
 	block, err := ti.chain.GetBlockByNumber(blockNumber)
 	if err != nil {
@@ -55,6 +57,12 @@ func (ti *TransactionInterface) GetTransactionFromBlock(blockNumber uint32, inde
 	}
 
 	tx := txs[index]
-
-	return types.ConvertTransactionWithSigning(tx, signing), nil
+	t, err := types.ConvertTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+	t.BlockID = block.ID().String()
+	t.BlockNumber = block.Number()
+	t.Index = index
+	return t, nil
 }

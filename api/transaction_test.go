@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -23,13 +22,18 @@ import (
 	"testing"
 )
 
+var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
+
 func TestTransaction(t *testing.T) {
 
-	signing, tx, ts := addTxToBlock(t)
-	raw := types.ConvertTransactionWithSigning(tx, signing)
+	tx, ts := addTxToBlock(t)
+	raw, err := types.ConvertTransaction(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/transaction/hash/%v", tx.Hash().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/transaction/hash/%v", tx.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +42,6 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	rtx := new(types.Transaction)
 	if err := json.Unmarshal(r, &rtx); err != nil {
 		t.Fatal(err)
@@ -66,7 +69,7 @@ func TestTransaction(t *testing.T) {
 
 }
 
-func addTxToBlock(t *testing.T) (*cry.Signing, *tx.Transaction, *httptest.Server) {
+func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	hash, _ := thor.ParseHash(emptyRootHash)
 	s, _ := state.New(hash, db)
@@ -82,39 +85,44 @@ func addTxToBlock(t *testing.T) (*cry.Signing, *tx.Transaction, *httptest.Server
 	}
 
 	chain.WriteGenesis(b)
-	key, _ := crypto.GenerateKey()
 	address, _ := thor.ParseAddress(testAddress)
-	cla := &tx.Clause{To: &address, Value: big.NewInt(10), Data: nil}
-	genesisHash, _ := thor.ParseHash("0x000000006d2958e8510b1503f612894e9223936f1008be2a218c310fa8c11423")
-	signing := cry.NewSigning(genesisHash)
+	cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
 	tx := new(tx.Builder).
 		GasPrice(big.NewInt(1000)).
 		Gas(1000).
-		TimeBarrier(10000).
 		Clause(cla).
 		Nonce(1).
 		Build()
 
-	sig, _ := signing.Sign(tx, crypto.FromECDSA(key))
+	key, err := crypto.HexToECDSA(testPrivHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+	if err != nil {
+		t.Errorf("Sign error: %s", err)
+	}
 	tx = tx.WithSignature(sig)
+
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
-		ParentHash(best.Hash()).
+		ParentID(best.ID()).
 		Transaction(tx).
 		Build()
 	if err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
 
-	return signing, tx, ts
+	return tx, ts
 }
 
 func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transaction) {
+	fmt.Println(expectedTx.From)
 	assert.Equal(t, expectedTx.From, actualTx.From)
-	assert.Equal(t, expectedTx.Hash, actualTx.Hash)
+	assert.Equal(t, expectedTx.ID, actualTx.ID)
+	assert.Equal(t, expectedTx.Index, actualTx.Index)
 	assert.Equal(t, expectedTx.GasPrice.String(), actualTx.GasPrice.String())
 	assert.Equal(t, expectedTx.Gas, actualTx.Gas)
-	assert.Equal(t, expectedTx.TimeBarrier, actualTx.TimeBarrier)
 	for i, c := range expectedTx.Clauses {
 		assert.Equal(t, string(c.Data), string(actualTx.Clauses[i].Data))
 		assert.Equal(t, c.Value.String(), actualTx.Clauses[i].Value.String())
