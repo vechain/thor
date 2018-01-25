@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cry"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -29,7 +28,7 @@ func TestBlock(t *testing.T) {
 	raw := types.ConvertBlock(block)
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/block/hash/%v", block.Hash().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/block/hash/%v", block.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,24 +81,29 @@ func addBlock(t *testing.T) (*block.Block, *httptest.Server) {
 	}
 
 	chain.WriteGenesis(b)
-	key, _ := crypto.GenerateKey()
 	address, _ := thor.ParseAddress(testAddress)
-	cla := &tx.Clause{To: &address, Value: big.NewInt(10), Data: nil}
-	genesisHash, _ := thor.ParseHash("0x000000006d2958e8510b1503f612894e9223936f1008be2a218c310fa8c11423")
-	signing := cry.NewSigning(genesisHash)
+
+	cla := tx.NewClause(&address).WithData(nil).WithValue(big.NewInt(10))
 	tx := new(tx.Builder).
 		GasPrice(big.NewInt(1000)).
 		Gas(1000).
-		TimeBarrier(10000).
 		Clause(cla).
 		Nonce(1).
 		Build()
 
-	sig, _ := signing.Sign(tx, crypto.FromECDSA(key))
+	key, err := crypto.HexToECDSA(testPrivHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+	if err != nil {
+		t.Errorf("Sign error: %s", err)
+	}
 	tx = tx.WithSignature(sig)
+
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
-		ParentHash(best.Hash()).
+		ParentID(best.ID()).
 		Transaction(tx).
 		Build()
 	if err := chain.AddBlock(bl, true); err != nil {
@@ -111,8 +115,8 @@ func addBlock(t *testing.T) (*block.Block, *httptest.Server) {
 
 func checkBlock(t *testing.T, expBl *types.Block, actBl *types.Block) {
 	assert.Equal(t, expBl.Number, actBl.Number, "Number should be equal")
-	assert.Equal(t, expBl.Hash, actBl.Hash, "Hash should be equal")
-	assert.Equal(t, expBl.ParentHash, actBl.ParentHash, "ParentHash should be equal")
+	assert.Equal(t, expBl.ID, actBl.ID, "Hash should be equal")
+	assert.Equal(t, expBl.ParentID, actBl.ParentID, "ParentID should be equal")
 	assert.Equal(t, expBl.Timestamp, actBl.Timestamp, "Timestamp should be equal")
 	assert.Equal(t, expBl.TotalScore, actBl.TotalScore, "TotalScore should be equal")
 	assert.Equal(t, expBl.GasLimit, actBl.GasLimit, "GasLimit should be equal")

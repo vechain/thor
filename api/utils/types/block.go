@@ -7,8 +7,8 @@ import (
 //Block block
 type Block struct {
 	Number      uint32
-	Hash        string
-	ParentHash  string
+	ID          string
+	ParentID    string
 	Timestamp   uint64
 	TotalScore  uint64
 	GasLimit    uint64
@@ -25,17 +25,17 @@ type Block struct {
 func ConvertBlock(b *block.Block) *Block {
 
 	txs := b.Transactions()
-	txhs := make([]string, len(txs))
+	txIds := make([]string, len(txs))
 	for i, tx := range txs {
-		txhs[i] = tx.Hash().String()
+		txIds[i] = tx.ID().String()
 	}
 
 	header := b.Header()
 
 	return &Block{
 		Number:       b.Number(),
-		Hash:         b.Hash().String(),
-		ParentHash:   b.ParentHash().String(),
+		ID:           b.ID().String(),
+		ParentID:     b.ParentID().String(),
 		Timestamp:    b.Timestamp(),
 		TotalScore:   header.TotalScore(),
 		GasLimit:     header.GasLimit(),
@@ -45,6 +45,6 @@ func ConvertBlock(b *block.Block) *Block {
 		ReceiptsRoot: header.ReceiptsRoot().String(),
 		TxsRoot:      header.TxsRoot().String(),
 
-		Txs: txhs,
+		Txs: txIds,
 	}
 }
