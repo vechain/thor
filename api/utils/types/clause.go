@@ -17,11 +17,10 @@ type Clauses []Clause
 
 //ConvertClause convert a raw clause into a jason format clause
 func ConvertClause(c *tx.Clause) Clause {
-
 	return Clause{
-		c.To.String(),
-		c.Value,
-		c.Data,
+		c.To().String(),
+		c.Value(),
+		c.Data(),
 	}
 
 }
@@ -33,4 +32,5 @@ func (cs Clauses) Do(fn func(c Clause) bool) {
 			break
 		}
 	}
+
 }
