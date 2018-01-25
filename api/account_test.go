@@ -6,6 +6,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -21,46 +24,45 @@ const (
 	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
 )
 
+type account struct {
+	addr    thor.Address
+	balance *big.Int
+	code    []byte
+	storage thor.Hash
+}
+
+var accounts = []struct {
+	in, want account
+}{
+	{
+		account{thor.BytesToAddress([]byte("acc1")), big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
+		account{thor.BytesToAddress([]byte("acc1")), big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
+	},
+	{
+		account{thor.BytesToAddress([]byte("acc2")), big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
+		account{thor.BytesToAddress([]byte("acc2")), big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
+	},
+	{
+		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
+		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
+	},
+}
+var storageKey = thor.BytesToHash([]byte("key"))
+
 func TestAccount(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	hash, _ := thor.ParseHash(emptyRootHash)
-	s, _ := state.New(hash, db)
-	ai := api.NewAccountInterface(s)
+	chain, db := addBestBlock(t)
+
+	ai := api.NewAccountInterface(chain, func(hash thor.Hash) *state.State {
+		s, _ := state.New(hash, db)
+		return s
+	})
 	router := mux.NewRouter()
 	api.NewAccountHTTPRouter(router, ai)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
-	address, _ := thor.ParseAddress(testAddress)
-	storageKey := thor.BytesToHash([]byte("key"))
-	type account struct {
-		balance *big.Int
-		code    []byte
-		storage thor.Hash
-	}
-
-	accounts := []struct {
-		in, want account
-	}{
-		{
-			account{big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
-			account{big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
-		},
-		{
-			account{big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
-			account{big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
-		},
-		{
-			account{big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
-			account{big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
-		},
-	}
 
 	for _, v := range accounts {
-		s.SetBalance(address, v.in.balance)
-		s.SetCode(address, v.in.code)
-		s.SetStorage(address, storageKey, v.in.storage)
-		s.Stage().Commit()
-
+		address := v.in.addr
 		res, err := http.Get(ts.URL + fmt.Sprintf("/account/address/%v/balance", address.String()))
 		if err != nil {
 			t.Fatal(err)
@@ -114,4 +116,35 @@ func TestAccount(t *testing.T) {
 
 	}
 
+}
+
+func addBestBlock(t *testing.T) (*chain.Chain, *lvldb.LevelDB) {
+	db, _ := lvldb.NewMem()
+	hash, _ := thor.ParseHash(emptyRootHash)
+	s, _ := state.New(hash, db)
+
+	for _, v := range accounts {
+		address := v.in.addr
+		s.SetBalance(address, v.in.balance)
+		s.SetCode(address, v.in.code)
+		s.SetStorage(address, storageKey, v.in.storage)
+	}
+	stateRoot, _ := s.Stage().Commit()
+
+	chain := chain.New(db)
+	b, err := genesis.Build(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain.WriteGenesis(b)
+	best, _ := chain.GetBestBlock()
+	bl := new(block.Builder).
+		ParentID(best.ID()).
+		StateRoot(stateRoot).
+		Build()
+	if err := chain.AddBlock(bl, true); err != nil {
+		t.Fatal(err)
+	}
+
+	return chain, db
 }
