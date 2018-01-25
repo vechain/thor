@@ -52,9 +52,8 @@ var storageKey = thor.BytesToHash([]byte("key"))
 func TestAccount(t *testing.T) {
 	chain, db := addBestBlock(t)
 
-	ai := api.NewAccountInterface(chain, func(hash thor.Hash) *state.State {
-		s, _ := state.New(hash, db)
-		return s
+	ai := api.NewAccountInterface(chain, func(hash thor.Hash) (*state.State, error) {
+		return state.New(hash, db)
 	})
 	router := mux.NewRouter()
 	api.NewAccountHTTPRouter(router, ai)
