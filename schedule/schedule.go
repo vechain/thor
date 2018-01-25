@@ -119,6 +119,25 @@ func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []Propos
 	return t == timestamp, absentee, nil
 }
 
+// CalcScore calculates score of proposers status.
+func CalcScore(all []Proposer, updates []Proposer) uint64 {
+	absentee := make(map[thor.Address]interface{})
+	for _, p := range all {
+		if p.IsAbsent() {
+			absentee[p.Address] = nil
+		}
+	}
+
+	for _, p := range updates {
+		if p.IsAbsent() {
+			absentee[p.Address] = nil
+		} else {
+			delete(absentee, p.Address)
+		}
+	}
+	return uint64(len(all) - len(absentee))
+}
+
 type proposerMap map[thor.Address]Proposer
 
 func (pm proposerMap) toSlice() []Proposer {
