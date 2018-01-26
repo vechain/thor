@@ -38,7 +38,7 @@ func (a *authority) PackUpdate(proposers []schedule.Proposer) *tx.Clause {
 	for i, p := range proposers {
 		encoded[i] = p.Encode()
 	}
-	return a.clause.WithData(a.mustPack("sysUdpate", encoded))
+	return a.clause.WithData(a.mustPack("sysUpdate", encoded))
 }
 
 // PackProposers pack input data of `Authority.proposers` function.
