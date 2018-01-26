@@ -3,6 +3,7 @@ package tx
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -234,4 +235,38 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		return 0, errors.New("intrinsic gas too large")
 	}
 	return total.Uint64(), nil
+}
+
+func (t *Transaction) String() string {
+	var (
+		from      string
+		br        BlockRef
+		dependsOn string
+	)
+	signer, err := t.Signer()
+	if err != nil {
+		from = "N/A"
+	} else {
+		from = signer.String()
+	}
+
+	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
+	if t.body.DependsOn == nil {
+		dependsOn = "nil"
+	} else {
+		dependsOn = t.body.DependsOn.String()
+	}
+
+	return fmt.Sprintf(`
+	Tx(%v)
+	From:		%v
+	ChainTag:	%v
+	Clauses:	%v
+	GasPrice:	%v
+	Gas:		%v
+	BlockRef:	%v-%x
+	DependsOn:	%v
+	Signature:	0x%x
+`, t.ID(), from, t.body.ChainTag, t.body.Clauses,
+		t.body.GasPrice, t.body.Gas, br.Number(), br[4:], dependsOn, t.body.Signature)
 }

@@ -1,6 +1,7 @@
 package tx_test
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -42,4 +43,11 @@ func BenchmarkTxMining(b *testing.B) {
 	}
 
 	b.Log(maxWork)
+}
+
+func TestClause(t *testing.T) {
+	fmt.Println(tx.NewClause(nil))
+	c1 := tx.NewClause(nil)
+	tx := new(tx.Builder).Clause(c1).Clause(c1).Build()
+	fmt.Println(tx)
 }
