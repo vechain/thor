@@ -88,10 +88,15 @@ func (v *validator) isTxNotFound(validTx map[thor.Hash]bool, transaction *tx.Tra
 }
 
 func (v *validator) isTxDependFound(validTx map[thor.Hash]bool, transaction *tx.Transaction) bool {
-	if _, ok := validTx[transaction.ID()]; ok { // 在当前块中找到依赖
+	dependID := transaction.DependsOn()
+	if dependID == nil { // 不依赖其它交易
 		return true
 	}
 
-	_, err := v.chain.LookupTransaction(v.block.ParentID(), *transaction.DependsOn())
+	if _, ok := validTx[*dependID]; ok { // 在当前块中找到依赖
+		return true
+	}
+
+	_, err := v.chain.LookupTransaction(v.block.ParentID(), *dependID)
 	return err != nil // 在 chain 中找到依赖
 }
