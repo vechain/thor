@@ -22,7 +22,9 @@ type Header struct {
 	body headerBody
 
 	cache struct {
-		hash *thor.Hash
+		signingHash *thor.Hash
+		signer      *thor.Address
+		id          *thor.Hash
 	}
 }
 
@@ -97,31 +99,44 @@ func (h *Header) ReceiptsRoot() thor.Hash {
 	return h.body.ReceiptsRoot
 }
 
-func (h *Header) hash() (hash thor.Hash) {
-	if cached := h.cache.hash; cached != nil {
+// ID computes id of block.
+// The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
+func (h *Header) ID() (id thor.Hash) {
+	if cached := h.cache.id; cached != nil {
 		return *cached
+	}
+	defer func() {
+		// overwrite first 4 bytes of block hash to block number.
+		binary.BigEndian.PutUint32(id[:], h.Number())
+		h.cache.id = &id
+	}()
+
+	if h.Number() == 0 {
+		// genesis
+		id = h.SigningHash()
+		return
+	}
+
+	signer, err := h.Signer()
+	if err != nil {
+		return
 	}
 
 	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, h)
+	hw.Write(h.SigningHash().Bytes())
+	hw.Write(signer.Bytes())
+	hw.Sum(id[:0])
 
-	hw.Sum(hash[:0])
-
-	h.cache.hash = &hash
-	return
-}
-
-// ID computes id of block.
-// The block ID is defined as: blockNumber + blockHash[4:].
-func (h *Header) ID() (id thor.Hash) {
-	id = h.hash()
-	// overwrite first 4 bytes of block hash to block number.
-	binary.BigEndian.PutUint32(id[:], h.Number())
 	return
 }
 
 // SigningHash computes hash of all header fields excluding signature.
-func (h *Header) SigningHash() thor.Hash {
+func (h *Header) SigningHash() (hash thor.Hash) {
+	if cached := h.cache.signingHash; cached != nil {
+		return *cached
+	}
+	defer func() { h.cache.signingHash = &hash }()
+
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
@@ -135,10 +150,8 @@ func (h *Header) SigningHash() thor.Hash {
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
 	})
-
-	var hash thor.Hash
 	hw.Sum(hash[:0])
-	return hash
+	return
 }
 
 // Signature returns signature.
@@ -154,18 +167,37 @@ func (h *Header) WithSignature(sig []byte) *Header {
 }
 
 // Signer extract signer of the block from signature.
-func (h *Header) Signer() (thor.Address, error) {
-	cacheKey := h.hash()
-	if v, ok := signerCache.Get(cacheKey); ok {
-		return v.(thor.Address), nil
+func (h *Header) Signer() (signer thor.Address, err error) {
+	if cached := h.cache.signer; cached != nil {
+		return *cached, nil
 	}
+	defer func() {
+		if err == nil {
+			h.cache.signer = &signer
+		}
+	}()
+
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, h)
+	var hash thor.Hash
+	hw.Sum(hash[:0])
+
+	if v, ok := signerCache.Get(hash); ok {
+		signer = v.(thor.Address)
+		return
+	}
+	defer func() {
+		if err == nil {
+			signerCache.Add(hash, signer)
+		}
+	}()
 	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), h.body.Signature)
 	if err != nil {
 		return thor.Address{}, err
 	}
-	signer := thor.Address(crypto.PubkeyToAddress(*pub))
-	signerCache.Add(cacheKey, signer)
-	return signer, nil
+
+	signer = thor.Address(crypto.PubkeyToAddress(*pub))
+	return
 }
 
 // EncodeRLP implements rlp.Encoder
