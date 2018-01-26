@@ -28,7 +28,7 @@ func Build(state *state.State) (*block.Block, error) {
 		Call(cs.Energy.PackInitialize(cs.Voting.Address)).
 		Call(cs.Params.PackInitialize(cs.Voting.Address)).
 		/// preset
-		Call(cs.Params.PackPreset(cs.ParamRewardPercentage, big.NewInt(30))).
+		Call(cs.Params.PackPreset(cs.ParamRewardRatio, big.NewInt(3e17))).
 		Call(cs.Params.PackPreset(cs.ParamBaseGasPrice, big.NewInt(1000))).
 		Build(state)
 }
