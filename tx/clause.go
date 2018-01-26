@@ -1,6 +1,7 @@
 package tx
 
 import (
+	"fmt"
 	"io"
 	"math/big"
 
@@ -81,4 +82,17 @@ func (c *Clause) DecodeRLP(s *rlp.Stream) error {
 	}
 	*c = Clause{body}
 	return nil
+}
+
+func (c *Clause) String() string {
+	var to string
+	if c.body.To == nil {
+		to = "nil"
+	} else {
+		to = c.body.To.String()
+	}
+	return fmt.Sprintf(`
+		(To:	%v
+		 Value:	%v
+		 Data:	0x%x)`, to, c.body.Value, c.body.Data)
 }

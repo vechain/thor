@@ -71,7 +71,7 @@ func (b *Builder) Build() *Block {
 	header.body.TxsRoot = b.txs.RootHash()
 
 	return &Block{
-		&header,
-		b.txs,
+		header: &header,
+		txs:    b.txs,
 	}
 }

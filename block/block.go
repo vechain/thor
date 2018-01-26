@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -12,6 +13,9 @@ import (
 type Block struct {
 	header *Header
 	txs    tx.Transactions
+	cache  struct {
+		size *int
+	}
 }
 
 // Body defines body of a block.
@@ -24,16 +28,16 @@ type Body struct {
 // To build up a block, use a Builder.
 func Compose(header *Header, txs tx.Transactions) *Block {
 	return &Block{
-		header,
-		append(tx.Transactions(nil), txs...),
+		header: header,
+		txs:    append(tx.Transactions(nil), txs...),
 	}
 }
 
 // WithSignature create a new block object with signature set.
 func (b *Block) WithSignature(sig []byte) *Block {
 	return &Block{
-		b.header.WithSignature(sig),
-		b.txs,
+		header: b.header.WithSignature(sig),
+		txs:    b.txs,
 	}
 }
 
@@ -102,8 +106,36 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	*b = Block{
-		&payload.Header,
-		payload.Txs,
+		header: &payload.Header,
+		txs:    payload.Txs,
 	}
 	return nil
+}
+
+// Size returns block size in bytes.
+func (b *Block) Size() (size int) {
+	if cached := b.cache.size; cached != nil {
+		return *cached
+	}
+	defer func() { b.cache.size = &size }()
+	cw := &counterWriter{}
+	rlp.Encode(cw, b)
+
+	return cw.count
+}
+
+func (b *Block) String() string {
+	return fmt.Sprintf(`Block(%v bytes)
+%v
+Transactions: %v`, b.Size(), b.header, b.txs)
+}
+
+type counterWriter struct {
+	count int
+}
+
+func (cw *counterWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	cw.count += n
+	return
 }

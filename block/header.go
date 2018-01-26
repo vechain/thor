@@ -2,11 +2,11 @@ package block
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/thor"
@@ -214,6 +214,31 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	}
 	*h = Header{body: body}
 	return nil
+}
+
+func (h *Header) String() string {
+	var signerStr string
+	if signer, err := h.Signer(); err != nil {
+		signerStr = "N/A"
+	} else {
+		signerStr = signer.String()
+	}
+
+	return fmt.Sprintf(`Header(%v):
+	Number:			%v
+	ParentID:		%v	
+	Timestamp:		%v
+	Signer:			%v
+	TotalScore:		%v
+	GasLimit:		%v
+	GasUsed:		%v
+	Beneficiary:	%v
+	TxsRoot:		%v
+	StateRoot:		%v
+	ReceiptsRoot:	%v
+	Signature:		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+		h.body.TotalScore, h.body.GasLimit, h.body.GasUsed,
+		h.body.Beneficiary, h.body.TxsRoot, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
 }
 
 // Number extract block number from block id.
