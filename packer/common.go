@@ -39,7 +39,11 @@ func MeasureTxDelay(blockRef tx.BlockRef, parentBlockID thor.Hash, chain *chain.
 	return math.MaxUint32, nil
 }
 
-func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (when uint64, score uint64, err error) {
+func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
+	uint64, // when
+	uint64, // score
+	error,
+) {
 	// invoke `Authority.proposers()` to get current proposers whitelist
 	out := rt.StaticCall(
 		contracts.Authority.PackProposers(),
@@ -54,6 +58,10 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (when uint
 	// calc the time when it's turn to produce block
 	targetTime, updates, err := schedule.New(proposers, rt.BlockNumber(), rt.BlockTime()).
 		Timing(proposer, now)
+
+	if err != nil {
+		return 0, 0, err
+	}
 
 	// update proposers' status
 	out = rt.Call(
