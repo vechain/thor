@@ -6,20 +6,17 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-)
-
-var (
-	callGas uint64 = 1000 * 1000
 )
 
 // Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig   vm.Config
 	getBlockID func(uint32) thor.Hash
-	state      State
+	state      *state.State
 
 	// block env
 	blockBeneficiary thor.Address
@@ -28,21 +25,14 @@ type Runtime struct {
 	blockGasLimit    uint64
 }
 
-// State to decouple state.State.
-type State interface {
-	vm.State
-	RevertTo(revision int)
-}
-
 // New create a Runtime object.
 func New(
-	state State,
+	state *state.State,
 	blockBeneficiary thor.Address,
 	blockNumber uint32,
 	blockTime,
 	blockGasLimit uint64,
-	getBlockID func(uint32) thor.Hash,
-) *Runtime {
+	getBlockID func(uint32) thor.Hash) *Runtime {
 	return &Runtime{
 		getBlockID:       getBlockID,
 		state:            state,
@@ -52,6 +42,12 @@ func New(
 		blockGasLimit:    blockGasLimit,
 	}
 }
+
+func (rt *Runtime) State() *state.State            { return rt.state }
+func (rt *Runtime) BlockBeneficiary() thor.Address { return rt.blockBeneficiary }
+func (rt *Runtime) BlockNumber() uint32            { return rt.blockNumber }
+func (rt *Runtime) BlockTime() uint64              { return rt.blockTime }
+func (rt *Runtime) BlockGasLimit() uint64          { return rt.blockGasLimit }
 
 // SetVMConfig config VM.
 // Returns this runtime.
@@ -124,7 +120,7 @@ func (rt *Runtime) Call(
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
 	clause := contracts.Energy.PackConsume(caller, callee, amount)
 	output := rt.execute(clause,
-		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
+		0, math.MaxUint32, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
 	}
@@ -135,7 +131,7 @@ func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amoun
 func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
 	clause := contracts.Energy.PackCharge(addr, amount)
 	output := rt.execute(clause,
-		0, callGas, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
+		0, math.MaxUint32, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
