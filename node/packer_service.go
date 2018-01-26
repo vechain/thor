@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"crypto/ecdsa"
-	"fmt"
 	"log"
 	"math/big"
 	"time"
@@ -57,13 +56,14 @@ func packerService(ctx context.Context, bp *blockPool, chain *chain.Chain, pk *p
 			log.Fatalln(err)
 		}
 
-		timeout := time.After(time.Duration(ts-now) * time.Second)
+		log.Println(time.Duration(ts-now) * time.Second)
+		target := time.After(time.Duration(ts-now) * time.Second)
 
 		select {
 		case <-ctx.Done():
-			fmt.Println("proposerService exit")
+			log.Println("proposerService exit")
 			return
-		case <-timeout:
+		case <-target:
 			block, _, err := pack(&fakeTxFeed{})
 			if err != nil {
 				log.Fatalln(err)
@@ -75,8 +75,9 @@ func packerService(ctx context.Context, bp *blockPool, chain *chain.Chain, pk *p
 			}
 
 			block = block.WithSignature(sig)
-
 			bp.insertBlock(*block)
+			log.Println("[packer]: build a block, and sleep 10s")
+			time.Sleep(10 * time.Second)
 		}
 	}
 }

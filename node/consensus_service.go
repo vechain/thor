@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/vechain/thor/chain"
@@ -20,13 +19,16 @@ func consensusService(ctx context.Context, bp *blockPool, chain *chain.Chain, st
 	for {
 		block, err := bp.frontBlock()
 		if err != nil {
-			fmt.Println("consensusService exit")
+			log.Println("consensusService exit")
 			return
 		}
+		log.Println("[consensus]: get a block form block pool.")
 
 		isTrunk, err := cs.Consent(&block)
 		if err != nil {
+			log.Println(err)
 			if consensus.IsDelayBlock(err) {
+				log.Println("[consensus]: is a delay block.")
 				bp.insertBlock(block)
 			}
 			continue

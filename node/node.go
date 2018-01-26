@@ -38,9 +38,14 @@ func New(op Options) *Node {
 		wg: new(sync.WaitGroup)}
 }
 
-// Run will start some block chain services and block func exit,
-// until the parent context had been canceled.
+// Run will start node.Start with genesis.Build.
 func (n *Node) Run(ctx context.Context) error {
+	return n.Start(ctx, genesis.Build)
+}
+
+// Start use give genesis block,
+// it will and block func exit until the parent context had been canceled.
+func (n *Node) Start(ctx context.Context, genesisBuild blockBuilder) error {
 	lv, err := n.openDatabase()
 	if err != nil {
 		return err
@@ -49,7 +54,7 @@ func (n *Node) Run(ctx context.Context) error {
 
 	stateC := state.NewCreator(lv)
 
-	genesisBlock, err := makeGenesisBlock(stateC.NewState, genesis.Build)
+	genesisBlock, err := makeGenesisBlock(stateC.NewState, genesisBuild)
 	if err != nil {
 		return err
 	}
