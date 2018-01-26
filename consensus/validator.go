@@ -1,6 +1,8 @@
 package consensus
 
 import (
+	"time"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -34,8 +36,10 @@ func (v *validator) validate() (*block.Header, error) {
 	// Signer and IntrinsicGas will be validate in runtime.
 
 	switch {
-	case preHeader.Timestamp() >= v.block.Timestamp():
+	case preHeader.Timestamp() >= header.Timestamp():
 		return nil, errTimestamp
+	case header.Timestamp() > uint64(time.Now().Unix())+thor.BlockInterval:
+		return nil, errDelay
 	case !thor.GasLimit(gasLimit).IsValid(preHeader.GasLimit()):
 		return nil, errGasLimit
 	case header.GasUsed() > gasLimit:

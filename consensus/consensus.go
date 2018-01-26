@@ -17,11 +17,11 @@ import (
 // and predicate which trunk it belong to.
 type Consensus struct {
 	chain        *chain.Chain
-	stateCreator func(thor.Hash) *state.State
+	stateCreator func(thor.Hash) (*state.State, error)
 }
 
 // New is Consensus factory.
-func New(chain *chain.Chain, stateCreator func(thor.Hash) *state.State) *Consensus {
+func New(chain *chain.Chain, stateCreator func(thor.Hash) (*state.State, error)) *Consensus {
 	return &Consensus{
 		chain:        chain,
 		stateCreator: stateCreator}
@@ -48,7 +48,11 @@ func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
 func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	header := blk.Header()
 	preHash := preHeader.StateRoot()
-	state := c.stateCreator(preHash)
+	state, err := c.stateCreator(preHash)
+	if err != nil {
+		return err
+	}
+
 	getHash := chain.NewBlockIDGetter(c.chain, preHash).GetID
 	rt := runtime.New(state,
 		header.Beneficiary(),

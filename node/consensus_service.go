@@ -3,18 +3,37 @@ package node
 import (
 	"context"
 	"fmt"
-	"time"
+	"log"
+
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/consensus"
 )
 
-func consensusService(ctx context.Context) {
+func consensusService(ctx context.Context, bp *blockPool, chain *chain.Chain, stateC stateCreater) {
+	cs := consensus.New(chain, stateC)
+
+	go func() {
+		defer bp.close()
+		<-ctx.Done()
+	}()
+
 	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("++++++++++++++++++")
+		block, err := bp.frontBlock()
+		if err != nil {
+			fmt.Println("consensusService exit")
 			return
-		default:
-			time.Sleep(1 * time.Second)
-			fmt.Println("-----------------")
+		}
+
+		isTrunk, err := cs.Consent(&block)
+		if err != nil {
+			if consensus.IsDelayBlock(err) {
+				bp.insertBlock(block)
+			}
+			continue
+		}
+
+		if err = chain.AddBlock(&block, isTrunk); err != nil {
+			log.Fatalln(err)
 		}
 	}
 }

@@ -2,6 +2,8 @@ package node
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net"
 	"net/http"
 
@@ -19,6 +21,7 @@ func restfulService(ctx context.Context, listener net.Listener, chain *chain.Cha
 	}()
 
 	if err := srv.Serve(listener); err != http.ErrServerClosed {
-		panic(err)
+		log.Fatalln(err)
 	}
+	fmt.Println("restfulService exit")
 }
