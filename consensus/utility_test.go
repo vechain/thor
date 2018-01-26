@@ -38,5 +38,5 @@ func Test_calcScore(t *testing.T) {
 		proposer4,
 	}
 
-	assert.Equal(calcScore(proposers, proposers), uint64(3))
+	assert.Equal(schedule.CalcScore(proposers, proposers), uint64(3))
 }
