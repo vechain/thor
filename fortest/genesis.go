@@ -1,6 +1,7 @@
 package fortest
 
 import (
+	"crypto/ecdsa"
 	"math/big"
 
 	"github.com/vechain/thor/block"
@@ -14,7 +15,7 @@ import (
 
 type Account struct {
 	Address    thor.Address
-	PrivateKey []byte
+	PrivateKey *ecdsa.PrivateKey
 }
 
 var (
@@ -37,11 +38,10 @@ func hexToAccount(str string) Account {
 	if err != nil {
 		panic(err)
 	}
-	priv := crypto.FromECDSA(pk)
 	addr := crypto.PubkeyToAddress(pk.PublicKey)
 	return Account{
 		thor.Address(addr),
-		priv,
+		pk,
 	}
 }
 
