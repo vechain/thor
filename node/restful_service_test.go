@@ -9,7 +9,6 @@ import (
 
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 )
 
 func Test_restfulService(t *testing.T) {
@@ -18,9 +17,7 @@ func Test_restfulService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stateC := func(hash thor.Hash) (*state.State, error) {
-		return state.New(hash, lv)
-	}
+	stateC := state.NewCreator(lv).NewState
 
 	genesis, err := makeGenesisBlock(stateC, fortest.BuildGenesis)
 	if err != nil {

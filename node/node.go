@@ -38,9 +38,7 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	defer lv.Close()
 
-	stateC := func(hash thor.Hash) (*state.State, error) {
-		return state.New(hash, lv)
-	}
+	stateC := state.NewCreator(lv).NewState
 
 	genesisBlock, err := makeGenesisBlock(stateC, genesis.Build)
 	if err != nil {
