@@ -31,8 +31,7 @@ func (tf *txFeed) Next() *tx.Transaction {
 		tx := new(tx.Builder).Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
 			Gas(300000).Nonce(nonce).Build()
 		nonce++
-		pv, _ := crypto.ToECDSA(a0.PrivateKey)
-		sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pv)
+		sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
 		tx = tx.WithSignature(sig)
 
 		tf.i++

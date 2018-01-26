@@ -23,5 +23,6 @@ func restfulService(ctx context.Context, listener net.Listener, chain *chain.Cha
 	if err := srv.Serve(listener); err != http.ErrServerClosed {
 		log.Fatalln(err)
 	}
+
 	fmt.Println("restfulService exit")
 }

@@ -2,12 +2,14 @@ package node
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"errors"
 	"net"
 	"sync"
 
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -16,8 +18,11 @@ type stateCreater func(thor.Hash) (*state.State, error)
 
 // Options for Node.
 type Options struct {
-	DataPath string
-	Bind     string
+	DataPath    string
+	Bind        string
+	Proposer    thor.Address
+	Beneficiary thor.Address
+	PrivateKey  *ecdsa.PrivateKey
 }
 
 // Node is the abstraction of local node.
@@ -42,9 +47,9 @@ func (n *Node) Run(ctx context.Context) error {
 	}
 	defer lv.Close()
 
-	stateC := state.NewCreator(lv).NewState
+	stateC := state.NewCreator(lv)
 
-	genesisBlock, err := makeGenesisBlock(stateC, genesis.Build)
+	genesisBlock, err := makeGenesisBlock(stateC.NewState, genesis.Build)
 	if err != nil {
 		return err
 	}
@@ -69,9 +74,15 @@ func (n *Node) Run(ctx context.Context) error {
 		}()
 	}
 
-	routine(func() { restfulService(ctx, listener, chain, stateC) })
-	routine(func() { consensusService(ctx, bp, chain, stateC) })
-	routine(func() { proposerService(ctx, bp) })
+	routine(func() {
+		restfulService(ctx, listener, chain, stateC.NewState)
+	})
+	routine(func() {
+		consensusService(ctx, bp, chain, stateC.NewState)
+	})
+	routine(func() {
+		packerService(ctx, bp, chain, packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey)
+	})
 
 	n.wg.Wait()
 	return nil
