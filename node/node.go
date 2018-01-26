@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -15,18 +16,21 @@ type stateCreater func(thor.Hash) (*state.State, error)
 
 // Options for Node.
 type Options struct {
-	dataPath string
-	bind     string
+	DataPath string
+	Bind     string
 }
 
 // Node is the abstraction of local node.
 type Node struct {
 	op Options
+	wg *sync.WaitGroup
 }
 
 // New is a factory for Node.
 func New(op Options) *Node {
-	return &Node{op}
+	return &Node{
+		op: op,
+		wg: new(sync.WaitGroup)}
 }
 
 // Run will start some block chain services and block func exit,
@@ -50,24 +54,32 @@ func (n *Node) Run(ctx context.Context) error {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", n.op.bind)
+	listener, err := net.Listen("tcp", n.op.Bind)
 	if err != nil {
 		return err
 	}
 
-	go restfulService(ctx, listener, chain, stateC)
+	bp := newBlockPool()
 
-	go consensusService(ctx)
+	routine := func(f func()) {
+		n.wg.Add(1)
+		go func() {
+			defer n.wg.Done()
+			f()
+		}()
+	}
 
-	go proposerService(ctx)
+	routine(func() { restfulService(ctx, listener, chain, stateC) })
+	routine(func() { consensusService(ctx, bp, chain, stateC) })
+	routine(func() { proposerService(ctx, bp) })
 
-	<-ctx.Done()
+	n.wg.Wait()
 	return nil
 }
 
 func (n *Node) openDatabase() (*lvldb.LevelDB, error) {
-	if n.op.dataPath == "" {
+	if n.op.DataPath == "" {
 		return nil, errors.New("open batabase") // ephemeral
 	}
-	return lvldb.New(n.op.dataPath, lvldb.Options{})
+	return lvldb.New(n.op.DataPath, lvldb.Options{})
 }

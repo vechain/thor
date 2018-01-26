@@ -31,11 +31,11 @@ func checkState(state *state.State, header *block.Header) error {
 
 func getRewardPercentage(rt *runtime.Runtime) (uint64, error) {
 	output := handleClause(rt,
-		contracts.Params.PackGet(contracts.ParamRewardPercentage))
+		contracts.Params.PackGet(contracts.ParamRewardRatio))
 
 	if output.VMErr != nil {
 		return 0, errors.Wrap(output.VMErr, "reward percentage")
 	}
 
-	return contracts.Params.UnpackGet(output.Value).Uint64() / 100, nil
+	return contracts.Params.UnpackGet(output.Value).Uint64() / 1E18, nil
 }

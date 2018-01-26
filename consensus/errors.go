@@ -3,21 +3,21 @@ package consensus
 import "errors"
 
 var (
-	errTxsRoot        = errors.New("")
-	errGasUsed        = errors.New("")
-	errGasLimit       = errors.New("")
-	errStateRoot      = errors.New("")
-	errReceiptsRoot   = errors.New("")
-	errParentNotFound = errors.New("")
-	errTimestamp      = errors.New("")
-	errNumber         = errors.New("")
-	errVerify         = errors.New("")
-	errKnownBlock     = errors.New("")
-	errTransaction    = errors.New("block already known")
-	errSinger         = errors.New("")
-	errTotalScore     = errors.New("")
+	errTxsRoot      = errors.New("txs root in header !equal in block body")
+	errGasUsed      = errors.New("gas used in header !equal execute block")
+	errStateRoot    = errors.New("state root in header !equal execute block")
+	errReceiptsRoot = errors.New("receipts root in header !equal execute block")
+	errGasLimit     = errors.New("current gas limit -- parent")
+	errTimestamp    = errors.New("current timestamp -- parent")
+	errTransaction  = errors.New("transaction in block body is bad")
+	errSinger       = errors.New("singer err")
+	errTotalScore   = errors.New("total score err")
+
+	errDelay          = errors.New("timestamp > (current time + thor.BlockInterval)")
+	errParentNotFound = errors.New("parent not found in current chain")
 )
 
-// 1. 丢弃
-// 2. 未来
-// 3. 未知
+// IsDelayBlock judge whether block is delay.
+func IsDelayBlock(err error) bool {
+	return err == errParentNotFound || err == errDelay
+}
