@@ -9,8 +9,8 @@ import (
 
 // keys of governance params.
 const (
-	ParamRewardPercentage = "reward-percentage"
-	ParamBaseGasPrice     = "base-gas-price"
+	ParamRewardRatio  = "reward-ratio" // use 1e18 as denominator
+	ParamBaseGasPrice = "base-gas-price"
 )
 
 // Params binder of `Params` contract.
