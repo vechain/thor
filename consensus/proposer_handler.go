@@ -72,7 +72,7 @@ func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []sche
 		return nil, err
 	case !legal:
 		return nil, errSinger
-	case ph.preHeader.TotalScore()+calcScore(proposers, updates) != ph.header.TotalScore():
+	case ph.preHeader.TotalScore()+schedule.CalcScore(proposers, updates) != ph.header.TotalScore():
 		return nil, errTotalScore
 	default:
 		return updates, nil
