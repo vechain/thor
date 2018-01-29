@@ -28,12 +28,12 @@ func New(chain *chain.Chain, stateCreator func(thor.Hash) (*state.State, error))
 }
 
 // Consent is Consensus's main func.
-func (c *Consensus) Consent(blk *block.Block) (isTrunk bool, err error) {
+func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err error) {
 	if blk == nil {
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	preHeader, err := newValidator(blk, c.chain).validate()
+	preHeader, err := newValidator(blk, c.chain).validate(nowTime)
 	if err != nil {
 		return false, err
 	}
@@ -53,17 +53,16 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		return err
 	}
 
-	getHash := chain.NewBlockIDGetter(c.chain, preHash).GetID
+	if err := newProposerHandler(c.chain, state, header, preHeader).handle(); err != nil {
+		return err
+	}
+
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		getHash)
-
-	if err := newProposerHandler(rt, header, preHeader).handle(); err != nil {
-		return err
-	}
+		chain.NewBlockIDGetter(c.chain, preHash).GetID)
 
 	energyUsed, err := newBlockProcessor(rt).process(blk)
 	if err != nil {

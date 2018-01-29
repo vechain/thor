@@ -10,7 +10,7 @@ var (
 	errGasLimit     = errors.New("current gas limit -- parent")
 	errTimestamp    = errors.New("current timestamp -- parent")
 	errTransaction  = errors.New("transaction in block body is bad")
-	errSinger       = errors.New("singer err")
+	errSchedule     = errors.New("schedule err")
 	errTotalScore   = errors.New("total score err")
 
 	errDelay          = errors.New("timestamp > (current time + thor.BlockInterval)")

@@ -3,9 +3,11 @@ package consensus
 import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	Chain "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/schedule"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
@@ -16,10 +18,20 @@ type proposerHandler struct {
 }
 
 func newProposerHandler(
-	rt *runtime.Runtime,
+	chain *Chain.Chain,
+	state *state.State,
 	header *block.Header,
 	preHeader *block.Header,
 ) *proposerHandler {
+
+	preHash := preHeader.StateRoot()
+	rt := runtime.New(state,
+		header.Beneficiary(),
+		header.Number(),
+		header.Timestamp(),
+		header.GasLimit(),
+		Chain.NewBlockIDGetter(chain, preHash).GetID)
+
 	return &proposerHandler{
 		rt:        rt,
 		header:    header,
@@ -45,7 +57,7 @@ func (ph *proposerHandler) handle() error {
 	return ph.updateProposers(updates)
 }
 
-func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
+func (ph *proposerHandler) getProposers() ([]poa.Proposer, error) {
 	output := handleClause(ph.rt, contracts.Authority.PackProposers())
 	if output.VMErr != nil {
 		return nil, errors.Wrap(output.VMErr, "get proposers")
@@ -53,7 +65,7 @@ func (ph *proposerHandler) getProposers() ([]schedule.Proposer, error) {
 	return contracts.Authority.UnpackProposers(output.Value), nil
 }
 
-func (ph *proposerHandler) updateProposers(updates []schedule.Proposer) error {
+func (ph *proposerHandler) updateProposers(updates []poa.Proposer) error {
 	output := handleClause(ph.rt, contracts.Authority.PackUpdate(updates))
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "set absent")
@@ -61,19 +73,16 @@ func (ph *proposerHandler) updateProposers(updates []schedule.Proposer) error {
 	return nil
 }
 
-func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []schedule.Proposer) ([]schedule.Proposer, error) {
-	legal, updates, err := schedule.New(
-		proposers,
-		ph.preHeader.Number(),
-		ph.preHeader.Timestamp()).
-		Validate(addr, ph.header.Timestamp())
+func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []poa.Proposer) ([]poa.Proposer, error) {
+	targetTime, updates, err := poa.NewScheduler(proposers, ph.preHeader.Number(), ph.preHeader.Timestamp()).
+		Schedule(addr, ph.header.Timestamp())
 
 	switch {
 	case err != nil:
 		return nil, err
-	case !legal:
-		return nil, errSinger
-	case ph.preHeader.TotalScore()+schedule.CalcScore(proposers, updates) != ph.header.TotalScore():
+	case targetTime != ph.header.Timestamp():
+		return nil, errSchedule
+	case ph.preHeader.TotalScore()+poa.CalculateScore(proposers, updates) != ph.header.TotalScore():
 		return nil, errTotalScore
 	default:
 		return updates, nil

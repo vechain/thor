@@ -56,15 +56,15 @@ func packerService(ctx context.Context, bestBlockUpdate chan bool, bp *blockPool
 			log.Fatalln(err)
 		}
 
-		log.Println(time.Duration(ts-now) * time.Second)
+		log.Printf("[packer]: %v\n", time.Duration(ts-now)*time.Second)
 		target := time.After(time.Duration(ts-now) * time.Second)
 
 		select {
 		case <-ctx.Done():
-			log.Println("proposerService exit")
+			log.Printf("[packer]: packerService exit\n")
 			return
 		case <-bestBlockUpdate:
-			log.Println("best block update")
+			log.Printf("[packer]: best block update\n")
 			continue
 		case <-target:
 			block, _, err := pack(&fakeTxFeed{})
@@ -85,7 +85,7 @@ func packerService(ctx context.Context, bestBlockUpdate chan bool, bp *blockPool
 			// }
 			// 在测试环境下:
 			bp.insertBlock(*block)
-			log.Println("[packer]: build a block, and sleep 5s")
+			log.Printf("[packer]: build a block, and sleep 5s\n")
 			time.Sleep(5 * time.Second)
 		}
 	}

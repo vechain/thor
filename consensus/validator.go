@@ -1,8 +1,6 @@
 package consensus
 
 import (
-	"time"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -20,7 +18,7 @@ func newValidator(blk *block.Block, chain *chain.Chain) *validator {
 		chain: chain}
 }
 
-func (v *validator) validate() (*block.Header, error) {
+func (v *validator) validate(nowTime uint64) (*block.Header, error) {
 	preHeader, err := v.chain.GetBlockHeader(v.block.ParentID())
 	if err != nil {
 		if v.chain.IsNotFound(err) {
@@ -38,7 +36,7 @@ func (v *validator) validate() (*block.Header, error) {
 	switch {
 	case preHeader.Timestamp() >= header.Timestamp():
 		return nil, errTimestamp
-	case header.Timestamp() > uint64(time.Now().Unix())+thor.BlockInterval:
+	case header.Timestamp() > nowTime+thor.BlockInterval:
 		return nil, errDelay
 	case !thor.GasLimit(gasLimit).IsValid(preHeader.GasLimit()):
 		return nil, errGasLimit
