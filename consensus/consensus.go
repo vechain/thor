@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"bytes"
-	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
@@ -64,12 +63,7 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		header.GasLimit(),
 		chain.NewBlockIDGetter(c.chain, preHash).GetID)
 
-	energyUsed, err := newBlockProcessor(rt).process(blk)
-	if err != nil {
-		return err
-	}
-
-	rewardPercentage, err := getRewardPercentage(rt)
+	totalReward, err := newBlockProcessor(rt, c.chain).process(blk)
 	if err != nil {
 		return err
 	}
@@ -78,7 +72,7 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		rt,
 		contracts.Energy.PackCharge(
 			header.Beneficiary(),
-			new(big.Int).SetUint64(energyUsed*rewardPercentage))); output.VMErr != nil {
+			totalReward)); output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}
 

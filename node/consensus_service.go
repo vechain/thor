@@ -20,6 +20,7 @@ func consensusService(ctx context.Context, bestBlockUpdate chan bool, bp *blockP
 	for {
 		block, err := bp.frontBlock()
 		if err != nil {
+			close(bestBlockUpdate)
 			log.Printf("[consensus]: consensusService exit")
 			return
 		}

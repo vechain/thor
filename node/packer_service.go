@@ -27,7 +27,7 @@ func (tf *fakeTxFeed) Next() *tx.Transaction {
 		a1 := fortest.Accounts[1]
 
 		tx := new(tx.Builder).Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
-			Gas(300000).Nonce(nonce).Build()
+			Gas(300000).Nonce(nonce).GasPrice(big.NewInt(7)).Build()
 		nonce++
 		sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
 		tx = tx.WithSignature(sig)
