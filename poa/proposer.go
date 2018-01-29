@@ -12,17 +12,17 @@ type Proposer struct {
 	Status  uint32
 }
 
-// IsAbsent returns if its status marked to absent.
-func (p *Proposer) IsAbsent() bool {
-	return (p.Status & uint32(1)) != 0
+// IsOnline returns if its status marked to online.
+func (p *Proposer) IsOnline() bool {
+	return (p.Status & uint32(1)) == 0
 }
 
-// SetAbsent marks absent or not.
-func (p *Proposer) SetAbsent(b bool) {
-	if b {
-		p.Status |= uint32(1)
-	} else {
+// SetOnline marks online or not.
+func (p *Proposer) SetOnline(online bool) {
+	if online {
 		p.Status &= uint32(0xfffffffe)
+	} else {
+		p.Status |= uint32(1)
 	}
 }
 

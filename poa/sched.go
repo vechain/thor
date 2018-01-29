@@ -35,16 +35,16 @@ func (s *Scheduler) Schedule(addr thor.Address, nowTime uint64) (
 	updates []Proposer,
 	err error,
 ) {
-	// gather present proposers including addr
+	// gather online proposers including addr
 	// and check if addr is listed
-	presents := make([]Proposer, 0, len(s.proposers))
+	onlines := make([]Proposer, 0, len(s.proposers))
 	authorized := false
 	for _, p := range s.proposers {
 		if p.Address == addr {
-			presents = append(presents, p)
+			onlines = append(onlines, p)
 			authorized = true
-		} else if !p.IsAbsent() {
-			presents = append(presents, p)
+		} else if p.IsOnline() {
+			onlines = append(onlines, p)
 		}
 	}
 	if !authorized {
@@ -65,12 +65,12 @@ func (s *Scheduler) Schedule(addr thor.Address, nowTime uint64) (
 	for {
 		if newBlockTime >= nowTime {
 			// deterministic pseudo-random process
-			index := s.rand(newBlockTime) % uint32(len(presents))
-			p := presents[index]
+			index := s.rand(newBlockTime) % uint32(len(onlines))
+			p := onlines[index]
 			if p.Address == addr {
-				if p.IsAbsent() {
-					// mark addr present if not
-					p.SetAbsent(false)
+				if !p.IsOnline() {
+					// mark addr online if not
+					p.SetOnline(true)
 					updateMap[p.Address] = p
 				}
 				break
@@ -80,19 +80,19 @@ func (s *Scheduler) Schedule(addr thor.Address, nowTime uint64) (
 	}
 
 	// traverse back at most len(s.proposers) periods of T
-	// to collect absent proposers.
+	// to collect offline proposers.
 	for i := range s.proposers {
 		t := newBlockTime - uint64(i+1)*T
 		if t <= s.parentBlockTime {
 			break
 		}
 
-		index := s.rand(t) % uint32(len(presents))
-		p := presents[index]
+		index := s.rand(t) % uint32(len(onlines))
+		p := onlines[index]
 		if p.Address != addr {
-			if !p.IsAbsent() {
-				// mark absent if not
-				p.SetAbsent(true)
+			if p.IsOnline() {
+				// mark offline if not
+				p.SetOnline(false)
 				updateMap[p.Address] = p
 			}
 		}
@@ -112,23 +112,23 @@ func (s *Scheduler) rand(t uint64) uint32 {
 	return binary.BigEndian.Uint32(sum[:])
 }
 
-// CalculateScore calculates score, which is the count of currently present proposers.
+// CalculateScore calculates score, which is the count of currently online proposers.
 func CalculateScore(all []Proposer, updates []Proposer) uint64 {
-	present := make(map[thor.Address]interface{})
+	onlines := make(map[thor.Address]interface{})
 	for _, p := range all {
-		if !p.IsAbsent() {
-			present[p.Address] = nil
+		if p.IsOnline() {
+			onlines[p.Address] = nil
 		}
 	}
 
 	for _, p := range updates {
-		if p.IsAbsent() {
-			delete(present, p.Address)
+		if p.IsOnline() {
+			onlines[p.Address] = nil
 		} else {
-			present[p.Address] = nil
+			delete(onlines, p.Address)
 		}
 	}
-	return uint64(len(present))
+	return uint64(len(onlines))
 }
 
 type proposerMap map[thor.Address]Proposer
