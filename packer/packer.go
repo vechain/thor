@@ -52,7 +52,8 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 
 	blockIDGetter := chain.NewBlockIDGetter(p.chain, parent.ID())
 
-	poaRT := runtime.New(state, thor.Address{}, 0, 0, 0, blockIDGetter.GetID)
+	// the runtime for PoA always use parent block env
+	poaRT := runtime.New(state, thor.Address{}, parent.Number(), parent.Timestamp(), parent.GasLimit(), blockIDGetter.GetID)
 	targetTime, score, err := Schedule(poaRT, p.proposer, now)
 	if err != nil {
 		return 0, nil, err
