@@ -3,6 +3,7 @@ package schedule
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/vechain/thor/schedule/shuffle"
 	"github.com/vechain/thor/thor"
@@ -112,6 +113,8 @@ func (s *Schedule) Timing(addr thor.Address, nowTime uint64) (
 // Validate returns if the timestamp of addr is valid.
 // Error returned if addr is not in proposers list.
 func (s *Schedule) Validate(addr thor.Address, timestamp uint64) (bool, []Proposer, error) {
+	fmt.Println(addr)
+	fmt.Println(s.proposers)
 	t, absentee, err := s.Timing(addr, timestamp)
 	if err != nil {
 		return false, nil, err

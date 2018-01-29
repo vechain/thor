@@ -21,6 +21,7 @@ func main() {
 		Proposer:    fortest.Accounts[0].Address,
 		Beneficiary: fortest.Accounts[0].Address,
 		PrivateKey:  fortest.Accounts[0].PrivateKey})
+	node.SetGenesisBuild(fortest.BuildGenesis)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -30,7 +31,7 @@ func main() {
 		cancel()
 	}()
 
-	if err := node.Start(ctx, fortest.BuildGenesis); err != nil {
+	if err := node.Run(ctx); err != nil {
 		log.Println(err)
 	}
 }
