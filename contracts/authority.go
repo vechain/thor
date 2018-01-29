@@ -1,7 +1,7 @@
 package contracts
 
 import (
-	"github.com/vechain/thor/schedule"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -33,7 +33,7 @@ func (a *authority) PackPreset(addr thor.Address, identity string) *tx.Clause {
 }
 
 // PackUpdate pack input data of `Authority.sysUpdate` function.
-func (a *authority) PackUpdate(proposers []schedule.Proposer) *tx.Clause {
+func (a *authority) PackUpdate(proposers []poa.Proposer) *tx.Clause {
 	encoded := make([][32]byte, len(proposers))
 	for i, p := range proposers {
 		encoded[i] = p.Encode()
@@ -47,11 +47,11 @@ func (a *authority) PackProposers() *tx.Clause {
 }
 
 // UnpackProposers unpack return data of `Authority.proposers` function.
-func (a *authority) UnpackProposers(output []byte) (proposers []schedule.Proposer) {
+func (a *authority) UnpackProposers(output []byte) (proposers []poa.Proposer) {
 	var encoded [][32]byte
 	a.mustUnpack(&encoded, "proposers", output)
 	if len(encoded) > 0 {
-		proposers = make([]schedule.Proposer, len(encoded))
+		proposers = make([]poa.Proposer, len(encoded))
 		for i, e := range encoded {
 			proposers[i].Decode(e)
 		}

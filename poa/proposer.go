@@ -1,4 +1,4 @@
-package schedule
+package poa
 
 import (
 	"encoding/binary"
