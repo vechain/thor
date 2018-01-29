@@ -9,11 +9,11 @@ import (
 
 func TestProposer(t *testing.T) {
 	p := poa.Proposer{}
-	assert.False(t, p.IsAbsent())
-	p.SetAbsent(true)
-	assert.True(t, p.IsAbsent())
-	p.SetAbsent(false)
-	assert.False(t, p.IsAbsent())
+	assert.True(t, p.IsOnline())
+	p.SetOnline(false)
+	assert.False(t, p.IsOnline())
+	p.SetOnline(true)
+	assert.True(t, p.IsOnline())
 
 	var q poa.Proposer
 	q.Decode(p.Encode())
