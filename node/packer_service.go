@@ -56,7 +56,7 @@ func packerService(ctx context.Context, bestBlockUpdate chan bool, bp *blockPool
 			log.Fatalln(err)
 		}
 
-		log.Printf("[packer]: %v\n", time.Duration(ts-now)*time.Second)
+		log.Printf("[packer]: will pack block after %v\n", time.Duration(ts-now)*time.Second)
 		target := time.After(time.Duration(ts-now) * time.Second)
 
 		select {

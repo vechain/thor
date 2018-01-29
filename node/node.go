@@ -81,7 +81,7 @@ func (n *Node) Run(ctx context.Context) error {
 		}()
 	}
 
-	bestBlockUpdate := make(chan bool)
+	bestBlockUpdate := make(chan bool, 2)
 
 	routine(func() {
 		restfulService(ctx, listener, chain, stateC.NewState)
