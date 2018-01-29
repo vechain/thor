@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	. "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -61,7 +61,7 @@ func TestAuthority(t *testing.T) {
 	//// proposers
 	out = call(Authority.PackProposers())
 	assert.Nil(t, out.VMErr)
-	assert.Equal(t, []schedule.Proposer{
+	assert.Equal(t, []poa.Proposer{
 		{Address: addr1, Status: 0},
 	}, Authority.UnpackProposers(out.Value))
 }

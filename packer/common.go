@@ -9,8 +9,8 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/schedule"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -56,8 +56,8 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
 	proposers := contracts.Authority.UnpackProposers(out.Value)
 
 	// calc the time when it's turn to produce block
-	targetTime, updates, err := schedule.New(proposers, rt.BlockNumber(), rt.BlockTime()).
-		Timing(proposer, now)
+	targetTime, updates, err := poa.NewScheduler(proposers, rt.BlockNumber(), rt.BlockTime()).
+		Schedule(proposer, now)
 
 	if err != nil {
 		return 0, 0, err
@@ -71,7 +71,7 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
 	if out.VMErr != nil {
 		return 0, 0, errors.Wrap(out.VMErr, "vm")
 	}
-	return targetTime, schedule.CalcScore(proposers, updates), nil
+	return targetTime, poa.CalculateScore(proposers, updates), nil
 }
 
 func CalcReward(tx *tx.Transaction, gasUsed uint64, ratio *big.Int, blockNum uint32, delay uint32) *big.Int {

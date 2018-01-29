@@ -90,5 +90,6 @@ func TestP(t *testing.T) {
 
 	best, _ := c.GetBestBlock()
 	fmt.Println(best.Number(), best.Header().GasUsed())
+	fmt.Println(best)
 
 }
