@@ -16,7 +16,7 @@ func main() {
 	signal.Notify(interrupt, os.Interrupt)
 
 	node := node.New(node.Options{
-		DataPath:    "/Users/hanxiao/Desktop/asfasfd",
+		DataPath:    "/tmp/node_test",
 		Bind:        ":8080",
 		Proposer:    fortest.Accounts[0].Address,
 		Beneficiary: fortest.Accounts[0].Address,

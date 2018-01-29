@@ -65,7 +65,8 @@ func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []sche
 	legal, updates, err := schedule.New(
 		proposers,
 		ph.preHeader.Number(),
-		ph.preHeader.Timestamp()).Validate(addr, ph.header.Timestamp())
+		ph.preHeader.Timestamp()).
+		Validate(addr, ph.header.Timestamp())
 
 	switch {
 	case err != nil:

@@ -8,7 +8,7 @@ import (
 	"github.com/vechain/thor/consensus"
 )
 
-func consensusService(ctx context.Context, bp *blockPool, chain *chain.Chain, stateC stateCreater) {
+func consensusService(ctx context.Context, bestBlockUpdate chan bool, bp *blockPool, chain *chain.Chain, stateC stateCreater) {
 	cs := consensus.New(chain, stateC)
 
 	go func() {
@@ -36,6 +36,9 @@ func consensusService(ctx context.Context, bp *blockPool, chain *chain.Chain, st
 
 		if err = chain.AddBlock(&block, isTrunk); err != nil {
 			log.Fatalln(err)
+		}
+		if isTrunk {
+			bestBlockUpdate <- true
 		}
 	}
 }
