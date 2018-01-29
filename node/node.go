@@ -40,7 +40,7 @@ func New(op Options) *Node {
 		genesisBuild: genesis.Build}
 }
 
-//
+// SetGenesisBuild 现在是专门为测试时方便选择 genesisBuild 的.
 func (n *Node) SetGenesisBuild(genesisBuild blockBuilder) {
 	n.genesisBuild = genesisBuild
 }
@@ -81,14 +81,16 @@ func (n *Node) Run(ctx context.Context) error {
 		}()
 	}
 
+	bestBlockUpdate := make(chan bool)
+
 	routine(func() {
 		restfulService(ctx, listener, chain, stateC.NewState)
 	})
 	routine(func() {
-		consensusService(ctx, bp, chain, stateC.NewState)
+		consensusService(ctx, bestBlockUpdate, bp, chain, stateC.NewState)
 	})
 	routine(func() {
-		packerService(ctx, bp, chain, packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey)
+		packerService(ctx, bestBlockUpdate, bp, chain, packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey)
 	})
 
 	n.wg.Wait()

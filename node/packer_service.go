@@ -43,7 +43,7 @@ func (tf *fakeTxFeed) MarkTxBad(tx *tx.Transaction) {
 
 }
 
-func packerService(ctx context.Context, bp *blockPool, chain *chain.Chain, pk *packer.Packer, privateKey *ecdsa.PrivateKey) {
+func packerService(ctx context.Context, bestBlockUpdate chan bool, bp *blockPool, chain *chain.Chain, pk *packer.Packer, privateKey *ecdsa.PrivateKey) {
 	for {
 		best, err := chain.GetBestBlock()
 		if err != nil {
@@ -63,6 +63,9 @@ func packerService(ctx context.Context, bp *blockPool, chain *chain.Chain, pk *p
 		case <-ctx.Done():
 			log.Println("proposerService exit")
 			return
+		case <-bestBlockUpdate:
+			log.Println("best block update")
+			continue
 		case <-target:
 			block, _, err := pack(&fakeTxFeed{})
 			if err != nil {
@@ -75,9 +78,15 @@ func packerService(ctx context.Context, bp *blockPool, chain *chain.Chain, pk *p
 			}
 
 			block = block.WithSignature(sig)
+
+			// 在分布式环境下:
+			// if err = chain.AddBlock(block, true); err != nil {
+			// 	log.Fatalln(err)
+			// }
+			// 在测试环境下:
 			bp.insertBlock(*block)
-			log.Println("[packer]: build a block, and sleep 10s")
-			time.Sleep(10 * time.Second)
+			log.Println("[packer]: build a block, and sleep 5s")
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
