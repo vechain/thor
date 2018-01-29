@@ -27,25 +27,27 @@ type Options struct {
 
 // Node is the abstraction of local node.
 type Node struct {
-	op Options
-	wg *sync.WaitGroup
+	op           Options
+	wg           *sync.WaitGroup
+	genesisBuild blockBuilder
 }
 
 // New is a factory for Node.
 func New(op Options) *Node {
 	return &Node{
-		op: op,
-		wg: new(sync.WaitGroup)}
+		op:           op,
+		wg:           new(sync.WaitGroup),
+		genesisBuild: genesis.Build}
 }
 
-// Run will start node.Start with genesis.Build.
+//
+func (n *Node) SetGenesisBuild(genesisBuild blockBuilder) {
+	n.genesisBuild = genesisBuild
+}
+
+// Run start node services and block func exit,
+// until the parent context had been canceled.
 func (n *Node) Run(ctx context.Context) error {
-	return n.Start(ctx, genesis.Build)
-}
-
-// Start use give genesis block,
-// it will and block func exit until the parent context had been canceled.
-func (n *Node) Start(ctx context.Context, genesisBuild blockBuilder) error {
 	lv, err := n.openDatabase()
 	if err != nil {
 		return err
@@ -54,7 +56,7 @@ func (n *Node) Start(ctx context.Context, genesisBuild blockBuilder) error {
 
 	stateC := state.NewCreator(lv)
 
-	genesisBlock, err := makeGenesisBlock(stateC.NewState, genesisBuild)
+	genesisBlock, err := makeGenesisBlock(stateC.NewState, n.genesisBuild)
 	if err != nil {
 		return err
 	}
