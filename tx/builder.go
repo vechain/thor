@@ -13,7 +13,7 @@ type Builder struct {
 }
 
 // ChainTag set chain tag.
-func (b *Builder) ChainTag(tag uint32) *Builder {
+func (b *Builder) ChainTag(tag byte) *Builder {
 	b.body.ChainTag = tag
 	return b
 }
