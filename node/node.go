@@ -5,16 +5,22 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"net"
+	"net/http"
 	"sync"
+
+	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/consensus"
+	"github.com/vechain/thor/packer"
 
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
-type stateCreater func(thor.Hash) (*state.State, error)
+type blockBuilder func(*state.State) (*block.Block, error)
 
 // Options for Node.
 type Options struct {
@@ -27,17 +33,21 @@ type Options struct {
 
 // Node is the abstraction of local node.
 type Node struct {
-	op           Options
-	wg           *sync.WaitGroup
-	genesisBuild blockBuilder
+	op              Options
+	wg              *sync.WaitGroup
+	genesisBuild    blockBuilder
+	bp              *blockPool
+	bestBlockUpdate chan bool
 }
 
 // New is a factory for Node.
 func New(op Options) *Node {
 	return &Node{
-		op:           op,
-		wg:           new(sync.WaitGroup),
-		genesisBuild: genesis.Build}
+		op:              op,
+		wg:              new(sync.WaitGroup),
+		genesisBuild:    genesis.Build,
+		bp:              newBlockPool(),
+		bestBlockUpdate: make(chan bool, 2)}
 }
 
 // SetGenesisBuild 现在是专门为测试时方便选择 genesisBuild 的.
@@ -48,58 +58,71 @@ func (n *Node) SetGenesisBuild(genesisBuild blockBuilder) {
 // Run start node services and block func exit,
 // until the parent context had been canceled.
 func (n *Node) Run(ctx context.Context) error {
-	lv, err := n.openDatabase()
+	stateC, chain, lv, lsr, err := n.prepare()
 	if err != nil {
 		return err
 	}
 	defer lv.Close()
 
-	stateC := state.NewCreator(lv)
+	svr := service{
+		ctx:   ctx,
+		chain: chain}
 
-	genesisBlock, err := makeGenesisBlock(stateC.NewState, n.genesisBuild)
-	if err != nil {
-		return err
-	}
-
-	chain, err := makeChain(lv, genesisBlock)
-	if err != nil {
-		return err
-	}
-
-	listener, err := net.Listen("tcp", n.op.Bind)
-	if err != nil {
-		return err
-	}
-
-	bp := newBlockPool()
-
-	routine := func(f func()) {
-		n.wg.Add(1)
-		go func() {
-			defer n.wg.Done()
-			f()
-		}()
-	}
-
-	bestBlockUpdate := make(chan bool, 2)
-
-	routine(func() {
-		restfulService(ctx, listener, chain, stateC.NewState)
+	n.routine(func() {
+		svr.withRestful(&http.Server{Handler: api.NewHTTPHandler(chain, stateC)}, lsr).run()
 	})
-	routine(func() {
-		consensusService(ctx, bestBlockUpdate, bp, chain, stateC.NewState)
+
+	n.routine(func() {
+		svr.withConsensus(consensus.New(chain, stateC), n.bestBlockUpdate, n.bp).run()
 	})
-	routine(func() {
-		packerService(ctx, bestBlockUpdate, bp, chain, packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey)
+
+	n.routine(func() {
+		svr.withPacker(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.bestBlockUpdate, n.op.PrivateKey).run()
 	})
 
 	n.wg.Wait()
 	return nil
 }
 
-func (n *Node) openDatabase() (*lvldb.LevelDB, error) {
+func (n *Node) routine(f func()) {
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		f()
+	}()
+}
+
+func (n *Node) prepare() (*state.Creator, *chain.Chain, *lvldb.LevelDB, net.Listener, error) {
 	if n.op.DataPath == "" {
-		return nil, errors.New("open batabase") // ephemeral
+		return nil, nil, nil, nil, errors.New("open batabase") // ephemeral
 	}
-	return lvldb.New(n.op.DataPath, lvldb.Options{})
+
+	lv, err := lvldb.New(n.op.DataPath, lvldb.Options{})
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	stateC := state.NewCreator(lv)
+
+	state, err := stateC.NewState(thor.Hash{})
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	genesisBlock, err := n.genesisBuild(state)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	chain := chain.New(lv)
+	if err := chain.WriteGenesis(genesisBlock); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	lsr, err := net.Listen("tcp", n.op.Bind)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return stateC, chain, lv, lsr, nil
 }
