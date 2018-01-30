@@ -21,6 +21,12 @@ const signerCacheSize = 1024
 var (
 	signerCache = cache.NewLRU(signerCacheSize)
 	maxUint256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+	invalidTxID = func() (h thor.Hash) {
+		for i := range h {
+			h[i] = 0xff
+		}
+		return
+	}()
 )
 
 // Transaction is an immutable tx type.
@@ -36,24 +42,31 @@ type Transaction struct {
 
 // body describes details of a tx.
 type body struct {
-	ChainTag  uint32
-	Clauses   []*Clause
-	GasPrice  *big.Int
-	Gas       uint64
-	Nonce     uint64
-	BlockRef  uint64
-	DependsOn *thor.Hash `rlp:"nil"`
-	Signature []byte
+	ChainTag     byte
+	BlockRef     uint64
+	Clauses      []*Clause
+	GasPrice     *big.Int
+	Gas          uint64
+	Nonce        uint64
+	DependsOn    *thor.Hash `rlp:"nil"`
+	ReservedBits uint32
+	Signature    []byte
 }
 
 // ChainTag returns chain tag.
-func (t *Transaction) ChainTag() uint32 {
+func (t *Transaction) ChainTag() byte {
 	return t.body.ChainTag
+}
+
+// BlockRef returns block reference, which is first 8 bytes of block hash.
+func (t *Transaction) BlockRef() (br BlockRef) {
+	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
+	return
 }
 
 // ID returns id of tx.
 // ID = hash(signingHash, signer).
-// It returns empty hash if signer not available.
+// It returns invalidTxID if signer not available.
 func (t *Transaction) ID() (id thor.Hash) {
 	if cached := t.cache.id; cached != nil {
 		return *cached
@@ -62,7 +75,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 
 	signer, err := t.Signer()
 	if err != nil {
-		return
+		return invalidTxID
 	}
 	return t.makeID(signer)
 }
@@ -75,6 +88,11 @@ func (t *Transaction) makeID(signer thor.Address) (id thor.Hash) {
 	return
 }
 
+func idToWork(id thor.Hash) *big.Int {
+	result := new(big.Int).SetBytes(id[:])
+	return result.Div(maxUint256, result)
+}
+
 // ProvedWork returns proved work of this tx.
 // It returns 0, if tx is not signed.
 func (t *Transaction) ProvedWork() *big.Int {
@@ -82,8 +100,7 @@ func (t *Transaction) ProvedWork() *big.Int {
 	if err != nil {
 		return &big.Int{}
 	}
-	result := new(big.Int).SetBytes(t.ID().Bytes())
-	return result.Div(maxUint256, result)
+	return idToWork(t.ID())
 }
 
 // EvaluateWork try to compute work when tx signer assumed.
@@ -102,12 +119,13 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
+		t.body.BlockRef,
 		t.body.Clauses,
 		t.body.GasPrice,
 		t.body.Gas,
 		t.body.Nonce,
-		t.body.BlockRef,
 		t.body.DependsOn,
+		t.body.ReservedBits,
 	})
 	hw.Sum(hash[:0])
 	return
@@ -121,12 +139,6 @@ func (t *Transaction) GasPrice() *big.Int {
 // Gas returns gas provision for this tx.
 func (t *Transaction) Gas() uint64 {
 	return t.body.Gas
-}
-
-// BlockRef returns block reference, which is first 8 bytes of block hash.
-func (t *Transaction) BlockRef() (br BlockRef) {
-	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
-	return
 }
 
 // Clauses returns caluses in tx.
@@ -189,6 +201,11 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	// copy sig
 	newTx.body.Signature = append([]byte(nil), sig...)
 	return &newTx
+}
+
+// ReservedBits returns reserved bits for backward compatibility purpose.
+func (t *Transaction) ReservedBits() uint32 {
+	return t.body.ReservedBits
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -259,14 +276,15 @@ func (t *Transaction) String() string {
 
 	return fmt.Sprintf(`
 	Tx(%v)
-	From:		%v
-	ChainTag:	%v
-	Clauses:	%v
-	GasPrice:	%v
-	Gas:		%v
-	BlockRef:	%v-%x
-	DependsOn:	%v
-	Signature:	0x%x
-`, t.ID(), from, t.body.ChainTag, t.body.Clauses,
-		t.body.GasPrice, t.body.Gas, br.Number(), br[4:], dependsOn, t.body.Signature)
+	From:			%v	
+	Clauses:		%v
+	GasPrice:		%v
+	Gas:			%v
+	ChainTag:		%v
+	BlockRef:		%v-%x
+	DependsOn:		%v
+	ReservedBits:	%v
+	Signature:		0x%x
+`, t.ID(), from, t.body.Clauses, t.body.GasPrice, t.body.Gas,
+		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.ReservedBits, t.body.Signature)
 }
