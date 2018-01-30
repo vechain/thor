@@ -14,11 +14,11 @@ type bestBlockGetter interface {
 //AccountInterface manage accounts
 type AccountInterface struct {
 	bestBlkGetter bestBlockGetter
-	stateCreator  func(thor.Hash) (*state.State, error)
+	stateCreator  *state.Creator
 }
 
 //NewAccountInterface create new AccountManager
-func NewAccountInterface(bestBlkGetter bestBlockGetter, stateCreator func(thor.Hash) (*state.State, error)) *AccountInterface {
+func NewAccountInterface(bestBlkGetter bestBlockGetter, stateCreator *state.Creator) *AccountInterface {
 	return &AccountInterface{
 		bestBlkGetter,
 		stateCreator,
@@ -31,7 +31,7 @@ func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 	if err != nil {
 		return new(big.Int)
 	}
-	state, err := ai.stateCreator(bestBlk.Header().StateRoot())
+	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
 	if err != nil {
 		return new(big.Int)
 	}
@@ -44,7 +44,7 @@ func (ai *AccountInterface) GetCode(address thor.Address) []byte {
 	if err != nil {
 		return nil
 	}
-	state, err := ai.stateCreator(bestBlk.Header().StateRoot())
+	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
 	if err != nil {
 		return nil
 	}
@@ -57,7 +57,7 @@ func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor
 	if err != nil {
 		return thor.Hash{}
 	}
-	state, err := ai.stateCreator(bestBlk.Header().StateRoot())
+	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
 	if err != nil {
 		return thor.Hash{}
 	}

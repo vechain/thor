@@ -16,9 +16,9 @@ const AccountHTTPPathPrefix = "/account"
 func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
 	sub := router.PathPrefix(AccountHTTPPathPrefix).Subrouter()
 
-	sub.Path("/address/{address}/balance").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetBalance))
-	sub.Path("/address/{address}/code").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetCode))
-	sub.Path("/address/{address}/key/{key}/storage").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetStorage))
+	sub.Path("/balance/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetBalance))
+	sub.Path("/code/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetCode))
+	sub.Path("/storage/{address}/{key}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetStorage))
 }
 
 func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Request) error {
@@ -101,7 +101,6 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	data := map[string]string{
 		key: value.String(),
 	}
-
 	d, err := json.Marshal(data)
 	if err != nil {
 		return httpx.Error(" System Error! ", 500)
