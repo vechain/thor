@@ -4,22 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
 	"time"
 )
 
 var (
-	//ErrOversizedData ErrOversizedData
-	ErrOversizedData = errors.New("too large data")
-	//ErrNegativeValue ErrNegativeValue
-	ErrNegativeValue = errors.New("neg value")
-	//ErrInsufficientFunds ErrInsufficientFunds
-	ErrInsufficientFunds = errors.New("ErrInsufficientFunds")
-	//ErrReplaceUnderpriced ErrReplaceUnderpriced
-	ErrReplaceUnderpriced = errors.New("ErrReplaceUnderpriced")
-	//ErrGasLimit ErrGasLimit
-	ErrGasLimit = errors.New("exceeds block gas limit")
 	//ErrUnderpriced ErrUnderpriced
 	ErrUnderpriced = errors.New("transaction underpriced")
 	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
@@ -99,6 +91,19 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		}
 		pool.all.DiscardTail(pool.all.Len() - int(pool.config.PoolSize-1))
 	}
-	pool.all.AddTransaction(tx, 20)
+	bestBlock, err := pool.chain.GetBestBlock()
+	if err != nil {
+		return err
+	}
+
+	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.ID(), pool.chain)
+	en := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Number(), delay)
+	pool.all.AddTransaction(tx, en)
+	pool.all.Reset()
 	return nil
+}
+
+//NewIterator return an Iterator
+func (pool *TxPool) NewIterator() *Iterator {
+	return newIterator(pool.all)
 }

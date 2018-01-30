@@ -3,20 +3,21 @@ package txpool
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"math/big"
 	"sort"
 	"time"
 )
 
 type txList struct {
-	txs            map[thor.Hash]*transaction // the map of all transactions
-	items          transactions               // Heap of prices of all the stored transactions
+	objs           map[thor.Hash]*TxObject // the map of all transactions
+	items          TxObjects               // Heap of prices of all the stored transactions
 	discardCounter int
 }
 
 // newTxList creates a new price-sorted transaction heap.
 func newTxList() *txList {
 	return &txList{
-		txs:   make(map[thor.Hash]*transaction),
+		objs:  make(map[thor.Hash]*TxObject),
 		items: nil,
 	}
 }
@@ -47,7 +48,7 @@ func (l *txList) DiscardTail(count int) {
 }
 
 func (l *txList) IsExists(tx *tx.Transaction) bool {
-	if _, ok := l.txs[tx.ID()]; ok {
+	if _, ok := l.objs[tx.ID()]; ok {
 		return true
 	}
 	return false
@@ -55,34 +56,30 @@ func (l *txList) IsExists(tx *tx.Transaction) bool {
 
 func (l *txList) Delete(tx *tx.Transaction) {
 	txID := tx.ID()
-	if _, ok := l.txs[txID]; !ok {
+	if _, ok := l.objs[txID]; !ok {
 		return
 	}
-	delete(l.txs, txID)
+	delete(l.objs, txID)
 	l.discardCounter++
 }
 
-func (l *txList) AddTransaction(tx *tx.Transaction, converstion uint64) {
-	trans := newTransaction(tx, converstion, time.Now().Unix())
+func (l *txList) AddTransaction(tx *tx.Transaction, converstion *big.Int) {
+	trans := NewTxObject(tx, converstion, time.Now().Unix())
 	txID := tx.ID()
-	if _, ok := l.txs[txID]; !ok {
+	if _, ok := l.objs[txID]; !ok {
 		l.items.Push(trans)
 	}
-	l.txs[txID] = trans
+	l.objs[txID] = trans
 }
 
 func (l *txList) Reset() {
-	if l.discardCounter < l.Len()/4 {
+	if l.discardCounter > l.Len()/4 {
 		return
 	}
-	all := l.txs
-	txs := make(transactions, len(all))
+	all := l.objs
+	objs := make(TxObjects, len(all))
 	for _, tx := range all {
-		txs.Push(tx)
+		objs.Push(tx)
 	}
-	l.items = txs
+	l.items, l.discardCounter = objs, 0
 }
-
-// func (l *txList) List() transactions {
-
-// }
