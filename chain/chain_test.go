@@ -27,4 +27,5 @@ func TestChain(t *testing.T) {
 	}
 	best, _ := chain.GetBestBlock()
 	fmt.Println(best.Number())
+	fmt.Println(chain.GetGenesisBlock())
 }
