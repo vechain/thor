@@ -107,14 +107,21 @@ func (p *Packer) txExists(txID thor.Hash, parentID thor.Hash, processed map[thor
 	return true, nil
 }
 
-func (p *Packer) precheckTx(tx *tx.Transaction, parentID thor.Hash, processed map[thor.Hash]interface{}) (bool, error) {
+func (p *Packer) precheckTx(tx *tx.Transaction, parent *block.Header, processed map[thor.Hash]interface{}) (bool, error) {
+	if tx.ReservedBits() != 0 {
+		return false, nil
+	}
+	if tx.ChainTag() != parent.ChainTag() {
+		return false, nil
+	}
+
 	br := tx.BlockRef()
-	if br.Number() > block.Number(parentID) {
+	if br.Number() > parent.Number() {
 		return false, nil
 	}
 
 	// check if tx already there
-	if found, err := p.txExists(tx.ID(), parentID, processed); err != nil {
+	if found, err := p.txExists(tx.ID(), parent.ID(), processed); err != nil {
 		return false, err
 	} else if found {
 		return false, nil
@@ -122,7 +129,7 @@ func (p *Packer) precheckTx(tx *tx.Transaction, parentID thor.Hash, processed ma
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		if found, err := p.txExists(*dependsOn, parentID, processed); err != nil {
+		if found, err := p.txExists(*dependsOn, parent.ID(), processed); err != nil {
 			return false, err
 		} else if !found {
 			return false, nil
@@ -178,7 +185,7 @@ func (p *Packer) pack(
 			continue
 		}
 
-		if ok, err := p.precheckTx(tx, parent.ID(), processed); err != nil {
+		if ok, err := p.precheckTx(tx, parent, processed); err != nil {
 			return nil, err
 		} else if !ok {
 			continue
