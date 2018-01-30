@@ -19,24 +19,36 @@ func TestGenesis(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
-	st, _ := state.New(thor.Hash{}, kv)
-	block, err := genesis.Build(st)
+	block, err := genesis.Mainnet.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	st, _ = state.New(block.Header().StateRoot(), kv)
+	st, _ := state.New(block.Header().StateRoot(), kv)
+	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
+}
+func TestDevGenesis(t *testing.T) {
+	assert := assert.New(t)
+	kv, _ := lvldb.NewMem()
+	defer kv.Close()
+	block, err := genesis.Dev.Build(state.NewCreator(kv))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	st, _ := state.New(block.Header().StateRoot(), kv)
 	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
 }
 
 func BenchmarkChargeEnergy(b *testing.B) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
-	_, err := genesis.Build(st)
+
+	b0, err := genesis.Mainnet.Build(state.NewCreator(kv))
 	if err != nil {
 		b.Fatal(err)
 	}
 
+	st, _ := state.New(b0.Header().StateRoot(), kv)
 	for n := 0; n < b.N; n++ {
 		// st, err := state.New(root, kv)
 		// if err != nil {
@@ -66,13 +78,13 @@ func BenchmarkChargeEnergy(b *testing.B) {
 
 func BenchmarkConsumeEnergy(b *testing.B) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
 
-	_, err := genesis.Build(st)
+	b0, err := genesis.Mainnet.Build(state.NewCreator(kv))
 	if err != nil {
 		b.Fatal(err)
 	}
 
+	st, _ := state.New(b0.Header().StateRoot(), kv)
 	rt := runtime.New(st,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
