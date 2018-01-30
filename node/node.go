@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type blockBuilder func(*state.State) (*block.Block, error)
+type blockBuilder func(*state.Creator) (*block.Block, error)
 
 // Options for Node.
 type Options struct {
@@ -45,7 +45,7 @@ func New(op Options) *Node {
 	return &Node{
 		op:              op,
 		wg:              new(sync.WaitGroup),
-		genesisBuild:    genesis.Build,
+		genesisBuild:    genesis.Mainnet.Build,
 		bp:              newBlockPool(),
 		bestBlockUpdate: make(chan bool, 2)}
 }
@@ -104,12 +104,7 @@ func (n *Node) prepare() (*state.Creator, *chain.Chain, *lvldb.LevelDB, net.List
 
 	stateC := state.NewCreator(lv)
 
-	state, err := stateC.NewState(thor.Hash{})
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
-	genesisBlock, err := n.genesisBuild(state)
+	genesisBlock, err := n.genesisBuild(stateC)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
