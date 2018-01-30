@@ -25,6 +25,7 @@ var errNotFound = errors.New("not found")
 type Chain struct {
 	kv        kv.GetPutter
 	bestBlock *block.Block
+	genesis   *block.Block
 	cached    cached
 	rw        sync.RWMutex
 }
@@ -49,10 +50,14 @@ func New(kv kv.GetPutter) *Chain {
 
 // WriteGenesis writes in genesis block.
 // It will compare the given genesis block with the existed one. If not the same, an error returned.
-func (c *Chain) WriteGenesis(genesis *block.Block) error {
+func (c *Chain) WriteGenesis(genesis *block.Block) (err error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
-
+	defer func() {
+		if err != nil {
+			c.genesis = genesis
+		}
+	}()
 	b, err := c.getBlockByNumber(0)
 	if err != nil {
 		if !c.IsNotFound(err) {
@@ -310,6 +315,25 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	}
 	c.bestBlock = best
 	return best, nil
+}
+
+// GetGenesisBlock get the genesis block.
+func (c *Chain) GetGenesisBlock() (*block.Block, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.getGenesisBlock()
+}
+
+func (c *Chain) getGenesisBlock() (*block.Block, error) {
+	if genesis := c.genesis; genesis != nil {
+		return genesis, nil
+	}
+	genesis, err := c.getBlockByNumber(0)
+	if err != nil {
+		return nil, err
+	}
+	c.genesis = genesis
+	return genesis, nil
 }
 
 // GetTransaction get transaction by id on trunk.
