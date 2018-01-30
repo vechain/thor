@@ -31,7 +31,7 @@ func TestTx(t *testing.T) {
 }
 
 func BenchmarkTxMining(b *testing.B) {
-	builder := new(tx.Builder).GenesisID(thor.Hash{1})
+	builder := new(tx.Builder)
 	signer := thor.BytesToAddress([]byte("acc1"))
 	maxWork := &big.Int{}
 	for i := 0; i < b.N; i++ {
