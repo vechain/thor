@@ -9,11 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/fortest"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -25,8 +24,9 @@ var nonce uint64 = uint64(time.Now().UnixNano())
 
 func (tf *txFeed) Next() *tx.Transaction {
 	if tf.i < 100 {
-		a0 := fortest.Accounts[0]
-		a1 := fortest.Accounts[1]
+		accs := genesis.Dev.Accounts()
+		a0 := accs[0]
+		a1 := accs[1]
 
 		tx := new(tx.Builder).Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
 			Gas(300000).Nonce(nonce).Build()
@@ -48,13 +48,12 @@ func (tf *txFeed) MarkTxBad(tx *tx.Transaction) {
 func TestP(t *testing.T) {
 	kv, _ := lvldb.New("/tmp/thor", lvldb.Options{})
 	defer kv.Close()
-	st, _ := state.New(thor.Hash{}, kv)
 
-	b0, _ := fortest.BuildGenesis(st)
+	b0, _ := genesis.Dev.Build(state.NewCreator(kv))
 
 	c := chain.New(kv)
 	c.WriteGenesis(b0)
-	a1 := fortest.Accounts[0]
+	a1 := genesis.Dev.Accounts()[0]
 
 	start := time.Now().UnixNano()
 	stateCreator := state.NewCreator(kv)

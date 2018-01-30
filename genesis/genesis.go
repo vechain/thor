@@ -9,15 +9,14 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-const (
-	// Timestamp timestamp of genesis block.
-	Timestamp uint64 = 1234567890
-)
+var Mainnet = &mainnet{}
 
-// Build build the genesis block.
-func Build(state *state.State) (*block.Block, error) {
-	return new(Builder).
-		Timestamp(Timestamp).
+type mainnet struct {
+}
+
+func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
+	genesis, err := new(Builder).
+		Timestamp(1517304350).
 		GasLimit(thor.InitialGasLimit).
 		/// deploy
 		Alloc(cs.Authority.Address, &big.Int{}, cs.Authority.RuntimeBytecodes()).
@@ -30,5 +29,10 @@ func Build(state *state.State) (*block.Block, error) {
 		/// preset
 		Call(cs.Params.PackPreset(cs.ParamRewardRatio, big.NewInt(3e17))).
 		Call(cs.Params.PackPreset(cs.ParamBaseGasPrice, big.NewInt(1000))).
-		Build(state)
+		Build(stateCreator)
+	if err != nil {
+		return nil, err
+	}
+	// set chain tag to 1
+	return genesis.WithSignature([]byte{1}), nil
 }

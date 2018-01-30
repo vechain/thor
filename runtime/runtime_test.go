@@ -17,11 +17,13 @@ import (
 
 func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := state.New(thor.Hash{}, kv)
-	_, err := genesis.Build(state)
+
+	b0, err := genesis.Mainnet.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	state, _ := state.New(b0.Header().StateRoot(), kv)
 
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
@@ -62,18 +64,17 @@ func TestCall(t *testing.T) {
 func TestExecuteTransaction(t *testing.T) {
 
 	kv, _ := lvldb.NewMem()
-	state, _ := state.New(thor.Hash{}, kv)
 
 	key, _ := crypto.GenerateKey()
 	addr1 := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
 	addr2 := thor.BytesToAddress([]byte("acc2"))
 	balance1 := big.NewInt(1000 * 1000 * 1000)
 
-	_, err := new(genesis.Builder).
+	b0, err := new(genesis.Builder).
 		Alloc(contracts.Energy.Address, &big.Int{}, contracts.Energy.RuntimeBytecodes()).
 		Alloc(addr1, balance1, nil).
 		Call(contracts.Energy.PackCharge(addr1, big.NewInt(1000000))).
-		Build(state)
+		Build(state.NewCreator(kv))
 
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +89,7 @@ func TestExecuteTransaction(t *testing.T) {
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), key)
 	tx = tx.WithSignature(sig)
 
+	state, _ := state.New(b0.Header().StateRoot(), kv)
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 	receipt, _, err := rt.ExecuteTransaction(tx)

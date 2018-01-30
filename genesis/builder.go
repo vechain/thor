@@ -1,6 +1,7 @@
 package genesis
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -9,11 +10,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-)
-
-const (
-	// gas limit when execute vm call in build steps.
-	execGasLimit = 100000000
 )
 
 // Builder helper to build genesis block.
@@ -60,14 +56,11 @@ func (b *Builder) Call(clause *tx.Clause) *Builder {
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
-
-	checkpoint := state.NewCheckpoint()
-	defer func() {
-		if err != nil {
-			state.RevertTo(checkpoint)
-		}
-	}()
+func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, err error) {
+	state, err := stateCreator.NewState(thor.Hash{})
+	if err != nil {
+		return nil, err
+	}
 
 	// alloc all requested accounts
 	for _, alloc := range b.allocs {
@@ -80,7 +73,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 
 	rt := runtime.New(
 		state,
-		thor.Address{}, 0, 0, 0,
+		thor.Address{}, 0, b.timestamp, b.gasLimit,
 		func(uint32) thor.Hash { return thor.Hash{} })
 
 	// execute all calls
@@ -88,7 +81,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 		output := rt.Call(
 			call,
 			0,
-			execGasLimit,
+			math.MaxUint64,
 			*call.To(),
 			&big.Int{},
 			thor.Hash{})
@@ -108,7 +101,7 @@ func (b *Builder) Build(state *state.State) (blk *block.Block, err error) {
 			Timestamp(b.timestamp).
 			GasLimit(b.gasLimit).
 			StateRoot(stateRoot).
-			ReceiptsRoot(tx.EmptyRoot).
+			ReceiptsRoot(tx.Transactions(nil).RootHash()).
 			Build(),
 		nil
 }
