@@ -9,21 +9,20 @@ import (
 	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 )
 
 // Consensus check whether the block is verified,
 // and predicate which trunk it belong to.
 type Consensus struct {
-	chain        *chain.Chain
-	stateCreator func(thor.Hash) (*state.State, error)
+	chain  *chain.Chain
+	stateC *state.Creator
 }
 
 // New is Consensus factory.
-func New(chain *chain.Chain, stateCreator func(thor.Hash) (*state.State, error)) *Consensus {
+func New(chain *chain.Chain, stateC *state.Creator) *Consensus {
 	return &Consensus{
-		chain:        chain,
-		stateCreator: stateCreator}
+		chain:  chain,
+		stateC: stateC}
 }
 
 // Consent is Consensus's main func.
@@ -47,7 +46,7 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 	header := blk.Header()
 	preHash := preHeader.StateRoot()
-	state, err := c.stateCreator(preHash)
+	state, err := c.stateC.NewState(preHash)
 	if err != nil {
 		return err
 	}
