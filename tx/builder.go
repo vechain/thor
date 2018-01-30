@@ -9,8 +9,13 @@ import (
 
 // Builder to make it easy to build transaction.
 type Builder struct {
-	body      body
-	genesisID thor.Hash
+	body body
+}
+
+// ChainTag set chain tag.
+func (b *Builder) ChainTag(tag uint32) *Builder {
+	b.body.ChainTag = tag
+	return b
 }
 
 // Clause add a clause.
@@ -44,19 +49,13 @@ func (b *Builder) Nonce(nonce uint64) *Builder {
 }
 
 // DependsOn set depended tx.
-func (b *Builder) DependsOn(txID *thor.Hash) *Builder {
-	if txID == nil {
+func (b *Builder) DependsOn(txHash *thor.Hash) *Builder {
+	if txHash == nil {
 		b.body.DependsOn = nil
 	} else {
-		cpy := *txID
+		cpy := *txHash
 		b.body.DependsOn = &cpy
 	}
-	return b
-}
-
-// GenesisID set genesis block ID.
-func (b *Builder) GenesisID(genesisID thor.Hash) *Builder {
-	b.genesisID = genesisID
 	return b
 }
 
@@ -65,6 +64,6 @@ func (b *Builder) Build() *Transaction {
 	if b.body.GasPrice == nil {
 		b.body.GasPrice = &big.Int{}
 	}
-	tx := Transaction{body: b.body, genesisID: b.genesisID}
+	tx := Transaction{body: b.body}
 	return &tx
 }

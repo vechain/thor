@@ -25,7 +25,6 @@ var errNotFound = errors.New("not found")
 type Chain struct {
 	kv        kv.GetPutter
 	bestBlock *block.Block
-	genesis   *block.Header
 	cached    cached
 	rw        sync.RWMutex
 }
@@ -50,14 +49,10 @@ func New(kv kv.GetPutter) *Chain {
 
 // WriteGenesis writes in genesis block.
 // It will compare the given genesis block with the existed one. If not the same, an error returned.
-func (c *Chain) WriteGenesis(genesis *block.Block) (err error) {
+func (c *Chain) WriteGenesis(genesis *block.Block) error {
 	c.rw.Lock()
 	defer c.rw.Unlock()
-	defer func() {
-		if err != nil {
-			c.genesis = genesis.Header()
-		}
-	}()
+
 	b, err := c.getBlockByNumber(0)
 	if err != nil {
 		if !c.IsNotFound(err) {
@@ -233,18 +228,8 @@ func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
 }
 
 func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
-	genesis, err := c.getGenesisHeader()
-	if err != nil {
-		return nil, err
-	}
 	body, err := c.cached.body.GetOrLoad(id, func(interface{}) (interface{}, error) {
-		body, err := persist.LoadBlockBody(c.kv, id)
-		if err == nil {
-			for i := range body.Txs {
-				body.Txs[i] = body.Txs[i].WithGenesisID(genesis.ID())
-			}
-		}
-		return body, err
+		return persist.LoadBlockBody(c.kv, id)
 	})
 	if err != nil {
 		return nil, err
@@ -327,43 +312,16 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 	return best, nil
 }
 
-// GetGenesisHeader get the genesis block header.
-func (c *Chain) GetGenesisHeader() (*block.Header, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getGenesisHeader()
-}
-
-func (c *Chain) getGenesisHeader() (*block.Header, error) {
-	if genesis := c.genesis; genesis != nil {
-		return genesis, nil
-	}
-	genesisID, err := c.getBlockIDByNumber(0)
-	if err != nil {
-		return nil, err
-	}
-	header, err := c.getBlockHeader(genesisID)
-	if err != nil {
-		return nil, err
-	}
-	c.genesis = header
-	return header, nil
-}
-
 // GetTransaction get transaction by id on trunk.
 func (c *Chain) GetTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	loc, err := persist.LoadTxLocation(c.kv, txID)
+	tx, loc, err := persist.LoadTx(c.kv, txID)
 	if err != nil {
 		return nil, nil, err
 	}
-	body, err := c.getBlockBody(loc.BlockID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return body.Txs[loc.Index], loc, nil
+	return tx, loc, nil
 }
 
 func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {

@@ -2,11 +2,13 @@ package persist
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 var (
@@ -153,4 +155,20 @@ func LoadTxLocation(r kv.Getter, txID thor.Hash) (*TxLocation, error) {
 		return nil, err
 	}
 	return &loc, nil
+}
+
+// LoadTx load tx by tx id.
+func LoadTx(r kv.Getter, txID thor.Hash) (*tx.Transaction, *TxLocation, error) {
+	loc, err := LoadTxLocation(r, txID)
+	if err != nil {
+		return nil, nil, err
+	}
+	body, err := LoadBlockBody(r, loc.BlockID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if int(loc.Index) >= len(body.Txs) {
+		return nil, nil, errors.New("tx index out of bound")
+	}
+	return body.Txs[loc.Index], loc, nil
 }
