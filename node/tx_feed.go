@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/contracts"
-	"github.com/vechain/thor/fortest"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/tx"
 )
 
@@ -18,11 +18,12 @@ var nonce = uint64(time.Now().UnixNano())
 
 func (tf *fakeTxFeed) Next() *tx.Transaction {
 	if tf.i < 100 {
-		a0 := fortest.Accounts[0]
-		a1 := fortest.Accounts[1]
+		accs := genesis.Dev.Accounts()
+		a0 := accs[0]
+		a1 := accs[1]
 
 		tx := new(tx.Builder).Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
-			Gas(300000).Nonce(nonce).GasPrice(big.NewInt(7)).Build()
+			Gas(300000).GasPrice(big.NewInt(2)).Nonce(nonce).Build()
 		nonce++
 		sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
 		tx = tx.WithSignature(sig)
