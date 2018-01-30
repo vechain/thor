@@ -1,0 +1,56 @@
+swagger: "2.0"
+info:
+  version: "1.0.0"
+  title: "Thor API"
+  termsOfService: "https://www.vechain.com"
+  contact:
+    email: "apiteam@swagger.io"
+  description: "Get chain info through the API"
+host: "localhost:3000"
+basePath: "/v1"
+tags:
+- name: "account"
+  description: "Everything about account"
+- name: "transaction"
+  description: "Everything about transaction"
+- name: "block"
+  description: "Everything about block"
+schemes:
+- "http"
+paths:
+  /account/balance/{address}
+    get:
+      tags:
+      - "account"
+      summary: "Get balance with address"
+      description: "Multiple status values can be provided with comma separated strings"
+      operationId: "findPetsByStatus"
+      produces:
+      - "application/json"
+      parameters:
+      - name: "address"
+        in: "query"
+        description: "Status values that need to be considered for filter"
+        required: true
+        type: "array"
+        items:
+          type: "string"
+          enum:
+          - "available"
+          - "pending"
+          - "sold"
+          default: "available"
+        collectionFormat: "multi"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/Pet"
+        400:
+          description: "Invalid status value"
+      security:
+      - petstore_auth:
+        - "write:pets"
+        - "read:pets"

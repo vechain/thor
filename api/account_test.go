@@ -51,10 +51,8 @@ var storageKey = thor.BytesToHash([]byte("key"))
 
 func TestAccount(t *testing.T) {
 	chain, db := addBestBlock(t)
-
-	ai := api.NewAccountInterface(chain, func(hash thor.Hash) (*state.State, error) {
-		return state.New(hash, db)
-	})
+	stateC := state.NewCreator(db)
+	ai := api.NewAccountInterface(chain, stateC)
 	router := mux.NewRouter()
 	api.NewAccountHTTPRouter(router, ai)
 	ts := httptest.NewServer(router)
@@ -62,7 +60,7 @@ func TestAccount(t *testing.T) {
 
 	for _, v := range accounts {
 		address := v.in.addr
-		res, err := http.Get(ts.URL + fmt.Sprintf("/account/address/%v/balance", address.String()))
+		res, err := http.Get(ts.URL + fmt.Sprintf("/account/balance/%v", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +76,7 @@ func TestAccount(t *testing.T) {
 		}
 		assert.Equal(t, v.want.balance, b["balance"], "balance should be equal")
 
-		res, err = http.Get(ts.URL + fmt.Sprintf("/account/address/%v/code", address.String()))
+		res, err = http.Get(ts.URL + fmt.Sprintf("/account/code/%v", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +91,7 @@ func TestAccount(t *testing.T) {
 		}
 		assert.Equal(t, v.want.code, c["code"], "code should be equal")
 
-		res, err = http.Get(ts.URL + fmt.Sprintf("/account/address/%v/key/%v/storage", address.String(), storageKey.String()))
+		res, err = http.Get(ts.URL + fmt.Sprintf("/account/storage/%v/%v", address.String(), storageKey.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
