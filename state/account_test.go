@@ -59,16 +59,16 @@ func TestStorageTrie(t *testing.T) {
 
 	key := thor.BytesToHash([]byte("key"))
 	assert.Equal(t,
-		M(loadStorage(trie, key)),
+		M(loadStorage(trie, storageKey{key, HashStorageCodec})),
 		[]interface{}{thor.Hash{}, nil})
 
 	value := thor.BytesToHash([]byte("value"))
-	saveStorage(trie, key, value)
+	saveStorage(trie, storageKey{key, HashStorageCodec}, value)
 	assert.Equal(t,
-		M(loadStorage(trie, key)),
+		M(loadStorage(trie, storageKey{key, HashStorageCodec})),
 		[]interface{}{value, nil})
 
-	saveStorage(trie, key, thor.Hash{})
+	saveStorage(trie, storageKey{key, HashStorageCodec}, thor.Hash{})
 	assert.Equal(t,
 		M(trie.TryGet(key[:])),
 		[]interface{}{[]byte(nil), nil},

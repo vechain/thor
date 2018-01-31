@@ -29,7 +29,7 @@ func TestCachedObject(t *testing.T) {
 	}
 
 	for _, s := range storages {
-		saveStorage(stgTrie, s.k, s.v)
+		saveStorage(stgTrie, storageKey{s.k, HashStorageCodec}, s.v)
 	}
 
 	storageRoot, _ := stgTrie.Commit()
@@ -54,7 +54,7 @@ func TestCachedObject(t *testing.T) {
 
 	for _, s := range storages {
 		assert.Equal(t,
-			M(obj.GetStorage(s.k)),
+			M(obj.GetStorage(storageKey{s.k, HashStorageCodec})),
 			[]interface{}{s.v, nil})
 	}
 }

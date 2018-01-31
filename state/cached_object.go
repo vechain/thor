@@ -15,20 +15,39 @@ type cachedObject struct {
 	cache struct {
 		code        []byte
 		storageTrie trieReader
-		storage     map[thor.Hash]thor.Hash
+		storage     map[storageKey]interface{}
 	}
+}
+
+type storageKey struct {
+	key   thor.Hash
+	codec StorageCodec
 }
 
 func newCachedObject(kv kv.GetPutter, data Account) *cachedObject {
 	return &cachedObject{kv: kv, data: data}
 }
 
+func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
+	if co.cache.storageTrie != nil {
+		return co.cache.storageTrie, nil
+	}
+
+	root := common.BytesToHash(co.data.StorageRoot)
+	trie, err := trie.NewSecure(root, co.kv, 0)
+	if err != nil {
+		return nil, err
+	}
+	co.cache.storageTrie = trie
+	return trie, nil
+}
+
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Hash) (thor.Hash, error) {
+func (co *cachedObject) GetStorage(key storageKey) (interface{}, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage == nil {
-		cache.storage = make(map[thor.Hash]thor.Hash)
+		cache.storage = make(map[storageKey]interface{})
 	} else {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil
@@ -36,20 +55,15 @@ func (co *cachedObject) GetStorage(key thor.Hash) (thor.Hash, error) {
 	}
 	// not found in cache
 
-	// create storage trie if not yet created
-	if cache.storageTrie == nil {
-		root := common.BytesToHash(co.data.StorageRoot)
-		trie, err := trie.NewSecure(root, co.kv, 0)
-		if err != nil {
-			return thor.Hash{}, err
-		}
-		cache.storageTrie = trie
+	trie, err := co.getOrCreateStorageTrie()
+	if err != nil {
+		return nil, err
 	}
 
 	// load from trie
-	v, err := loadStorage(cache.storageTrie, key)
+	v, err := loadStorage(trie, key)
 	if err != nil {
-		return thor.Hash{}, err
+		return nil, err
 	}
 	// put into cache
 	cache.storage[key] = v

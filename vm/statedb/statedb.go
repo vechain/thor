@@ -76,8 +76,9 @@ func (s *StateDB) GetOutputs(
 
 // ForEachStorage see state.State.ForEachStorage.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) {
-	s.state.ForEachStorage(thor.Address(addr), func(k thor.Hash, v thor.Hash) bool {
-		return cb(common.Hash(k), common.Hash(v))
+	s.state.ForEachStorage(thor.Address(addr), func(k thor.Hash, v []byte) bool {
+		// TODO should rlp decode v
+		return cb(common.Hash(k), common.BytesToHash(v))
 	})
 }
 

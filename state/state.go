@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
-
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
@@ -72,11 +71,11 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 		return code, true
 	case codeHashKey:
 		return s.getCachedObject(thor.Address(k)).data.CodeHash, true
-	case storageKey: // get storage
-		v, err := s.getCachedObject(k.addr).GetStorage(k.key)
+	case accountStorageKey: // get storage
+		v, err := s.getCachedObject(k.addr).GetStorage(storageKey{k.key, k.codec})
 		if err != nil {
 			s.setError(err)
-			return thor.Hash{}, true
+			return k.codec.Default(), true
 		}
 		return v, true
 	}
@@ -106,12 +105,12 @@ func (s *State) changes() map[thor.Address]*changedObject {
 			getObj(thor.Address(key)).code = v.([]byte)
 		case codeHashKey:
 			getObj(thor.Address(key)).data.CodeHash = v.([]byte)
-		case storageKey:
+		case accountStorageKey:
 			o := getObj(key.addr)
 			if o.storage == nil {
-				o.storage = make(map[thor.Hash]thor.Hash)
+				o.storage = make(map[storageKey]interface{})
 			}
-			o.storage[key.key] = v.(thor.Hash)
+			o.storage[storageKey{key.key, key.codec}] = v
 		}
 		// abort if error occurred
 		return s.err == nil
@@ -135,18 +134,19 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 
 // ForEachStorage iterates all storage key-value pairs for given address.
 // It's for debug purpose.
-func (s *State) ForEachStorage(addr thor.Address, cb func(key, value thor.Hash) bool) {
+func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Hash, value []byte) bool) {
 	// skip if no code
 	if (s.GetCodeHash(addr) == thor.Hash{}) {
 		return
 	}
 
 	// build ongoing key-value pairs
-	ongoing := make(map[thor.Hash]thor.Hash)
+	ongoing := make(map[thor.Hash][]byte)
 	s.sm.Journal(func(k, v interface{}) bool {
-		if sk, ok := k.(storageKey); ok {
-			if sk.addr == addr {
-				ongoing[sk.key] = v.(thor.Hash)
+		if key, ok := k.(accountStorageKey); ok {
+			if key.addr == addr {
+				data, _ := key.codec.Encode(v)
+				ongoing[key.key] = data
 			}
 		}
 		return true
@@ -173,7 +173,7 @@ func (s *State) ForEachStorage(addr thor.Address, cb func(key, value thor.Hash) 
 		// skip cached values
 		key := thor.BytesToHash(strie.GetKey(iter.Key))
 		if _, ok := ongoing[key]; !ok {
-			if !cb(key, thor.BytesToHash(iter.Value)) {
+			if !cb(key, iter.Value) {
 				return
 			}
 		}
@@ -202,15 +202,27 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 	s.sm.Put(addr, balance)
 }
 
-// GetStorage returns storage value for the given address and key.
+// GetStorage returns Hash type storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Hash) thor.Hash {
-	v, _ := s.sm.Get(storageKey{addr, key})
-	return v.(thor.Hash)
+	return s.GetStructedStorage(addr, HashStorageCodec, key).(thor.Hash)
 }
 
-// SetStorage set storage value for the given address and key.
+// SetStorage set Hash type storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
-	s.sm.Put(storageKey{addr, key}, value)
+	s.SetStructedStorage(addr, HashStorageCodec, key, value)
+}
+
+// GetStructedStorage get raw storage value for given address and key, then decode
+// it using the given codec.
+func (s *State) GetStructedStorage(addr thor.Address, codec StorageCodec, key thor.Hash) interface{} {
+	v, _ := s.sm.Get(accountStorageKey{addr, key, codec})
+	return v
+}
+
+// SetStructedStorage encode structed value using the given codec,
+// and set as raw storage value for given address and key.
+func (s *State) SetStructedStorage(addr thor.Address, codec StorageCodec, key thor.Hash, value interface{}) {
+	s.sm.Put(accountStorageKey{addr, key, codec}, value)
 }
 
 // GetCode returns code for the given address.
@@ -286,9 +298,10 @@ func (s *State) Stage() *Stage {
 }
 
 type (
-	storageKey struct {
-		addr thor.Address
-		key  thor.Hash
+	accountStorageKey struct {
+		addr  thor.Address
+		key   thor.Hash
+		codec StorageCodec
 	}
 
 	codeKey     thor.Address
@@ -296,7 +309,7 @@ type (
 
 	changedObject struct {
 		data    Account
-		storage map[thor.Hash]thor.Hash
+		storage map[storageKey]interface{}
 		code    []byte
 	}
 )
