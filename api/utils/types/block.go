@@ -33,10 +33,10 @@ func ConvertBlock(b *block.Block) *Block {
 	header := b.Header()
 
 	return &Block{
-		Number:       b.Number(),
-		ID:           b.ID().String(),
-		ParentID:     b.ParentID().String(),
-		Timestamp:    b.Timestamp(),
+		Number:       header.Number(),
+		ID:           header.ID().String(),
+		ParentID:     header.ParentID().String(),
+		Timestamp:    header.Timestamp(),
 		TotalScore:   header.TotalScore(),
 		GasLimit:     header.GasLimit(),
 		GasUsed:      header.GasUsed(),

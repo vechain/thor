@@ -29,7 +29,7 @@ func newBlockProcessor(rt *runtime.Runtime, chain *chain.Chain) *blockProcessor 
 
 func (bp *blockProcessor) preparePickerContext(blk *block.Block) (*packerContext, error) {
 	txDelay := func(blockRef tx.BlockRef) (uint32, error) {
-		return MeasureTxDelay(blockRef, blk.ParentID(), bp.chain)
+		return MeasureTxDelay(blockRef, blk.Header().ParentID(), bp.chain)
 	}
 
 	output := handleClause(bp.rt,

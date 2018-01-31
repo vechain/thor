@@ -84,11 +84,11 @@ func (c *Consensus) isTrunk(block *block.Block) (bool, error) {
 	switch {
 	case err != nil:
 		return false, err
-	case block.TotalScore() < bestBlock.TotalScore():
+	case block.Header().TotalScore() < bestBlock.Header().TotalScore():
 		return false, nil
-	case block.TotalScore() == bestBlock.TotalScore():
-		blockID := block.ID()
-		bestID := bestBlock.ID()
+	case block.Header().TotalScore() == bestBlock.Header().TotalScore():
+		blockID := block.Header().ID()
+		bestID := bestBlock.Header().ID()
 		if bytes.Compare(blockID[:], bestID[:]) > 0 {
 			return true, nil
 		}

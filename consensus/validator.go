@@ -19,7 +19,7 @@ func newValidator(blk *block.Block, chain *chain.Chain) *validator {
 }
 
 func (v *validator) validate(nowTime uint64) (*block.Header, error) {
-	preHeader, err := v.chain.GetBlockHeader(v.block.ParentID())
+	preHeader, err := v.chain.GetBlockHeader(v.block.Header().ParentID())
 	if err != nil {
 		if v.chain.IsNotFound(err) {
 			return nil, errParentNotFound
@@ -67,7 +67,7 @@ func (v *validator) validateTransaction(validTx map[thor.Hash]bool, transaction 
 	switch {
 	case len(transaction.Clauses()) == 0:
 		return false
-	case transaction.BlockRef().Number() >= v.block.Number():
+	case transaction.BlockRef().Number() >= v.block.Header().Number():
 		return false
 	case !v.isTxDependFound(validTx, transaction):
 		return false
@@ -81,7 +81,7 @@ func (v *validator) isTxNotFound(validTx map[thor.Hash]bool, transaction *tx.Tra
 		return false
 	}
 
-	_, err := v.chain.LookupTransaction(v.block.ParentID(), transaction.ID())
+	_, err := v.chain.LookupTransaction(v.block.Header().ParentID(), transaction.ID())
 	return v.chain.IsNotFound(err)
 }
 
@@ -95,6 +95,6 @@ func (v *validator) isTxDependFound(validTx map[thor.Hash]bool, transaction *tx.
 		return true
 	}
 
-	_, err := v.chain.LookupTransaction(v.block.ParentID(), *dependID)
+	_, err := v.chain.LookupTransaction(v.block.Header().ParentID(), *dependID)
 	return err != nil // 在 chain 中找到依赖
 }
