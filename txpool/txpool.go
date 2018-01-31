@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	//ErrUnderpriced ErrUnderpriced
+	//ErrUnderpriced transaction underpriced
 	ErrUnderpriced = errors.New("transaction underpriced")
-	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
-	// than required to start the invocation.
+	// ErrIntrinsicGas intrinsic gas too low
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 )
 
@@ -47,6 +46,7 @@ func NewTxPool(chain *chain.Chain) *TxPool {
 		chain:  chain,
 		all:    newTxList(),
 	}
+	//config santize
 	return pool
 }
 
@@ -81,24 +81,22 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 	if err := pool.validateTx(tx); err != nil {
 		return err
 	}
-	//交易池已满，舍弃低价交易
-	if uint64(pool.all.Len()) >= pool.config.PoolSize {
-		pool.all.SortByPrice()
-		cheapestTx := pool.all.Index(0)
-		//价格比较准则需更改
-		if cheapestTx.GasPrice().Cmp(tx.GasPrice()) >= 0 {
-			return ErrUnderpriced
-		}
-		pool.all.DiscardTail(pool.all.Len() - int(pool.config.PoolSize-1))
-	}
+
 	bestBlock, err := pool.chain.GetBestBlock()
 	if err != nil {
 		return err
 	}
 
 	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.ID(), pool.chain)
-	en := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Number(), delay)
-	pool.all.AddTransaction(tx, en)
+	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Number(), delay)
+
+	obj := NewTxObject(tx, conversionEn, time.Now().Unix())
+	pool.all.AddTxObject(obj)
+	pool.all.SortByPrice()
+	//交易池已满，舍弃低价交易
+	if uint64(pool.all.Len()) >= pool.config.PoolSize {
+		pool.all.DiscardTail(pool.all.Len() - int(pool.config.PoolSize-1))
+	}
 	pool.all.Reset()
 	return nil
 }
@@ -106,4 +104,9 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 //NewIterator return an Iterator
 func (pool *TxPool) NewIterator() *Iterator {
 	return newIterator(pool.all)
+}
+
+//GetTxObject return txobj
+func (pool *TxPool) GetTxObject(objID thor.Hash) *TxObject {
+	return pool.all.GetObj(objID)
 }
