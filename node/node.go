@@ -12,10 +12,10 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/packer"
-
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/node/blockpool"
+	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -36,7 +36,7 @@ type Node struct {
 	op              Options
 	wg              *sync.WaitGroup
 	genesisBuild    blockBuilder
-	bp              *blockPool
+	bp              *blockpool.BlockPool
 	bestBlockUpdate chan bool
 }
 
@@ -46,7 +46,7 @@ func New(op Options) *Node {
 		op:              op,
 		wg:              new(sync.WaitGroup),
 		genesisBuild:    genesis.Mainnet.Build,
-		bp:              newBlockPool(),
+		bp:              blockpool.New(),
 		bestBlockUpdate: make(chan bool, 2)}
 }
 
