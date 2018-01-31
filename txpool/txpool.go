@@ -105,6 +105,15 @@ func (pool *TxPool) GetTxObject(objID thor.Hash) *TxObject {
 	return pool.all[objID]
 }
 
+//Delete delete a transaction
+func (pool *TxPool) Delete(objID thor.Hash) {
+	pool.m.Lock()
+	defer pool.m.Unlock()
+	if _, ok := pool.all[objID]; ok {
+		delete(pool.all, objID)
+	}
+}
+
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 	if _, err := tx.Signer(); err != nil {
 		return err

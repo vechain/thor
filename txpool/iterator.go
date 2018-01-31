@@ -35,11 +35,7 @@ func (i *Iterator) Next() *tx.Transaction {
 
 //OnProcessed OnProcessed
 func (i *Iterator) OnProcessed(txID thor.Hash, err error) {
-	i.pool.m.Lock()
-	defer i.pool.m.Unlock()
 	if err != nil {
-		if _, ok := i.pool.all[txID]; ok {
-			delete(i.pool.all, txID)
-		}
+		i.pool.Delete(txID)
 	}
 }
