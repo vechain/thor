@@ -36,20 +36,28 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 		return false, err
 	}
 
-	if err = c.verify(blk, preHeader); err != nil {
+	state, err := c.stateC.NewState(preHeader.StateRoot())
+	if err != nil {
 		return false, err
 	}
 
-	return c.isTrunk(blk)
+	if err = c.verify(blk, preHeader, state); err != nil {
+		return false, err
+	}
+
+	if isTrunk, err = c.isTrunk(blk); err != nil {
+		return false, err
+	}
+
+	if _, err = state.Stage().Commit(); err != nil {
+		return false, err
+	}
+
+	return isTrunk, nil
 }
 
-func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
+func (c *Consensus) verify(blk *block.Block, preHeader *block.Header, state *state.State) error {
 	header := blk.Header()
-	preHash := preHeader.StateRoot()
-	state, err := c.stateC.NewState(preHash)
-	if err != nil {
-		return err
-	}
 
 	if err := newProposerHandler(c.chain, state, header, preHeader).handle(); err != nil {
 		return err
@@ -60,7 +68,7 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header) error {
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		chain.NewBlockIDGetter(c.chain, preHash).GetID)
+		chain.NewBlockIDGetter(c.chain, preHeader.StateRoot()).GetID)
 
 	totalReward, err := newBlockProcessor(rt, c.chain).process(blk)
 	if err != nil {

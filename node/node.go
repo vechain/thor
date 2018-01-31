@@ -14,7 +14,7 @@ import (
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/node/blockpool"
+	"github.com/vechain/thor/node/network"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -29,25 +29,20 @@ type Options struct {
 	Proposer    thor.Address
 	Beneficiary thor.Address
 	PrivateKey  *ecdsa.PrivateKey
+	IP          string // 暂时为了区分本地 node
 }
 
 // Node is the abstraction of local node.
 type Node struct {
-	op              Options
-	wg              *sync.WaitGroup
-	genesisBuild    blockBuilder
-	bp              *blockpool.BlockPool
-	bestBlockUpdate chan bool
+	op           Options
+	genesisBuild blockBuilder
 }
 
 // New is a factory for Node.
 func New(op Options) *Node {
 	return &Node{
-		op:              op,
-		wg:              new(sync.WaitGroup),
-		genesisBuild:    genesis.Mainnet.Build,
-		bp:              blockpool.New(),
-		bestBlockUpdate: make(chan bool, 2)}
+		op:           op,
+		genesisBuild: genesis.Mainnet.Build}
 }
 
 // SetGenesisBuild 现在是专门为测试时方便选择 genesisBuild 的.
@@ -57,44 +52,43 @@ func (n *Node) SetGenesisBuild(genesisBuild blockBuilder) {
 
 // Run start node services and block func exit,
 // until the parent context had been canceled.
-func (n *Node) Run(ctx context.Context) error {
+func (n *Node) Run(ctx context.Context, nw *network.Network) error {
 	stateC, chain, lv, lsr, err := n.prepare()
 	if err != nil {
 		return err
 	}
 	defer lv.Close()
 
-	svr := service{
-		ctx:   ctx,
-		chain: chain}
+	bestBlockUpdate := make(chan bool, 2)
+	defer close(bestBlockUpdate)
 
-	n.routine(func() {
+	svr := newService(ctx, chain, stateC, nw, n.op.IP, bestBlockUpdate)
+	wg := new(sync.WaitGroup)
+	routine := func(f func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f()
+		}()
+	}
+
+	routine(func() {
 		svr.withRestful(&http.Server{Handler: api.NewHTTPHandler(chain, stateC)}, lsr).run()
 	})
-
-	n.routine(func() {
-		svr.withConsensus(consensus.New(chain, stateC), n.bestBlockUpdate, n.bp).run()
+	routine(func() {
+		svr.withConsensus(consensus.New(chain, stateC)).run()
+	})
+	routine(func() {
+		svr.withPacker(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey).run()
 	})
 
-	n.routine(func() {
-		svr.withPacker(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.bestBlockUpdate, n.op.PrivateKey).run()
-	})
-
-	n.wg.Wait()
+	wg.Wait()
 	return nil
-}
-
-func (n *Node) routine(f func()) {
-	n.wg.Add(1)
-	go func() {
-		defer n.wg.Done()
-		f()
-	}()
 }
 
 func (n *Node) prepare() (*state.Creator, *chain.Chain, *lvldb.LevelDB, net.Listener, error) {
 	if n.op.DataPath == "" {
-		return nil, nil, nil, nil, errors.New("open batabase") // ephemeral
+		return nil, nil, nil, nil, errors.New("open batabase")
 	}
 
 	lv, err := lvldb.New(n.op.DataPath, lvldb.Options{})
