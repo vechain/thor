@@ -27,5 +27,5 @@ func (i *Iterator) HasNext() bool {
 func (i *Iterator) Next() *tx.Transaction {
 	v := i.data.Index(i.index)
 	i.index++
-	return v
+	return v.Transaction()
 }

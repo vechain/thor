@@ -3,18 +3,16 @@ package txpool
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"math/big"
 	"sort"
-	"time"
 )
 
 type txList struct {
-	objs           map[thor.Hash]*TxObject // the map of all transactions
-	items          TxObjects               // Heap of prices of all the stored transactions
+	objs           map[thor.Hash]*TxObject // the map of all TxObjects
+	items          TxObjects               // price-sorted TxObjects
 	discardCounter int
 }
 
-// newTxList creates a new price-sorted transaction heap.
+// newTxList creates a new price-sorted TxObjects.
 func newTxList() *txList {
 	return &txList{
 		objs:  make(map[thor.Hash]*TxObject),
@@ -30,12 +28,12 @@ func (l *txList) Len() int {
 	return len(l.items)
 }
 
-func (l *txList) Index(i int) *tx.Transaction {
+func (l *txList) Index(i int) *TxObject {
 	if l.Len() == 0 {
 		return nil
 	}
 	txs := l.items
-	return txs[i].tx
+	return txs[i]
 }
 
 func (l *txList) DiscardTail(count int) {
@@ -43,7 +41,7 @@ func (l *txList) DiscardTail(count int) {
 		return
 	}
 	for i := l.Len() - count; i < l.Len(); i++ {
-		l.Delete(l.items[i].tx)
+		l.Delete(l.items[i])
 	}
 }
 
@@ -54,8 +52,8 @@ func (l *txList) IsExists(tx *tx.Transaction) bool {
 	return false
 }
 
-func (l *txList) Delete(tx *tx.Transaction) {
-	txID := tx.ID()
+func (l *txList) Delete(obj *TxObject) {
+	txID := obj.tx.ID()
 	if _, ok := l.objs[txID]; !ok {
 		return
 	}
@@ -63,13 +61,12 @@ func (l *txList) Delete(tx *tx.Transaction) {
 	l.discardCounter++
 }
 
-func (l *txList) AddTransaction(tx *tx.Transaction, converstion *big.Int) {
-	trans := NewTxObject(tx, converstion, time.Now().Unix())
-	txID := tx.ID()
+func (l *txList) AddTxObject(obj *TxObject) {
+	txID := obj.tx.ID()
 	if _, ok := l.objs[txID]; !ok {
-		l.items.Push(trans)
+		l.items.Push(obj)
 	}
-	l.objs[txID] = trans
+	l.objs[txID] = obj
 }
 
 func (l *txList) Reset() {
@@ -82,4 +79,9 @@ func (l *txList) Reset() {
 		objs.Push(tx)
 	}
 	l.items, l.discardCounter = objs, 0
+}
+
+//GetObj
+func (l *txList) GetObj(objID thor.Hash) *TxObject {
+	return l.objs[objID]
 }

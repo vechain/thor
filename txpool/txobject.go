@@ -1,6 +1,7 @@
 package txpool
 
 import (
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
 )
@@ -28,4 +29,14 @@ func (obj *TxObject) Cost() *big.Int {
 		return en.Mul(en, big.NewInt(2))
 	}
 	return new(big.Int).Add(en, obj.conversion)
+}
+
+//Transaction returns a transaction
+func (obj *TxObject) Transaction() *tx.Transaction {
+	return obj.tx
+}
+
+//ID txID
+func (obj *TxObject) ID() thor.Hash {
+	return obj.tx.ID()
 }
