@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/thor"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
@@ -16,33 +18,34 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-type txFeed struct {
+type txIterator struct {
 	i int
 }
 
 var nonce uint64 = uint64(time.Now().UnixNano())
 
-func (tf *txFeed) Next() *tx.Transaction {
-	if tf.i < 100 {
-		accs := genesis.Dev.Accounts()
-		a0 := accs[0]
-		a1 := accs[1]
+func (ti *txIterator) HasNext() bool {
+	return ti.i < 100
+}
+func (ti *txIterator) Next() *tx.Transaction {
+	ti.i++
 
-		tx := new(tx.Builder).Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
-			Gas(300000).Nonce(nonce).Build()
-		nonce++
-		sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
-		tx = tx.WithSignature(sig)
+	accs := genesis.Dev.Accounts()
+	a0 := accs[0]
+	a1 := accs[1]
 
-		tf.i++
-		return tx
-	}
+	tx := new(tx.Builder).
+		ChainTag(2).
+		Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
+		Gas(300000).Nonce(nonce).Build()
+	nonce++
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
+	tx = tx.WithSignature(sig)
 
-	return nil
+	return tx
 }
 
-func (tf *txFeed) MarkTxBad(tx *tx.Transaction) {
-
+func (ti *txIterator) OnProcessed(txID thor.Hash, err error) {
 }
 
 func TestP(t *testing.T) {
@@ -73,7 +76,7 @@ func TestP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		blk, receipts, err := pack(&txFeed{})
+		blk, receipts, err := pack(&txIterator{})
 		if err := c.AddBlock(blk, true); err != nil {
 			t.Fatal(err)
 		}
