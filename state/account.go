@@ -1,7 +1,6 @@
 package state
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -58,31 +57,27 @@ func saveAccount(trie trieWriter, addr thor.Address, a Account) error {
 }
 
 // loadStorage load storage value for given key.
-func loadStorage(trie trieReader, key thor.Hash) (thor.Hash, error) {
-	data, err := trie.TryGet(key[:])
+func loadStorage(trie trieReader, key storageKey) (interface{}, error) {
+	data, err := trie.TryGet(key.key[:])
 	if err != nil {
-		return thor.Hash{}, err
+		return nil, err
 	}
 	if len(data) == 0 {
-		return thor.Hash{}, nil
+		return key.codec.Default(), nil
 	}
-
-	_, content, _, err := rlp.Split(data)
-	if err != nil {
-		return thor.Hash{}, err
-	}
-
-	return thor.BytesToHash(content), nil
+	return key.codec.Decode(data)
 }
 
 // saveStorage save value for given key.
 // If the value is all zero, the given key will be deleted.
-func saveStorage(trie trieWriter, key thor.Hash, value thor.Hash) error {
-	if (thor.Hash{}) == value {
-		// release storage is value is zero
-		return trie.TryDelete(key[:])
+func saveStorage(trie trieWriter, key storageKey, value interface{}) error {
+	data, err := key.codec.Encode(value)
+	if err != nil {
+		return err
 	}
-
-	trimed, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-	return trie.TryUpdate(key[:], trimed)
+	if len(data) == 0 {
+		// release storage if data is zero length
+		return trie.TryDelete(key.key[:])
+	}
+	return trie.TryUpdate(key.key[:], data)
 }
