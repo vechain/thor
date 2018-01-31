@@ -188,16 +188,13 @@ func (p *Packer) pack(
 			}
 		}
 
-		cp := rt.State().NewCheckpoint()
-		receipt, vmouts, err := rt.ExecuteTransaction(tx)
+		delay, err := MeasureTxDelay(tx.BlockRef(), parent.ID(), p.chain)
 		if err != nil {
-			// skip and revert state
-			rt.State().RevertTo(cp)
-			txIter.OnProcessed(tx.ID(), err)
-			continue
+			return nil, err
 		}
 
-		delay, err := MeasureTxDelay(tx.BlockRef(), parent.ID(), p.chain)
+		cp := rt.State().NewCheckpoint()
+		receipt, vmouts, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			// skip and revert state
 			rt.State().RevertTo(cp)

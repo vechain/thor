@@ -19,7 +19,7 @@ func MeasureTxDelay(blockRef tx.BlockRef, parentBlockID thor.Hash, chain *chain.
 	parentNum := block.Number(parentBlockID)
 	refNum := blockRef.Number()
 	if refNum > parentNum {
-		return 0, errors.New("ref num > parent block num")
+		return math.MaxUint32, nil
 	}
 	diff := parentNum - refNum
 	if diff > thor.MaxTxWorkDelay {
