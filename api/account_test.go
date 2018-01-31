@@ -128,16 +128,16 @@ func addBestBlock(t *testing.T) (*chain.Chain, *lvldb.LevelDB) {
 		s.SetStorage(address, storageKey, v.in.storage)
 	}
 	stateRoot, _ := s.Stage().Commit()
-
+	stateC := state.NewCreator(db)
 	chain := chain.New(db)
-	b, err := genesis.Build(s)
+	b, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	chain.WriteGenesis(b)
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
-		ParentID(best.ID()).
+		ParentID(best.Header().ID()).
 		StateRoot(stateRoot).
 		Build()
 	if err := chain.AddBlock(bl, true); err != nil {

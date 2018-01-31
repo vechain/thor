@@ -71,15 +71,14 @@ func TestTransaction(t *testing.T) {
 
 func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
-	hash, _ := thor.ParseHash(emptyRootHash)
-	s, _ := state.New(hash, db)
 	chain := chain.New(db)
 	ti := api.NewTransactionInterface(chain)
 	router := mux.NewRouter()
 	api.NewTransactionHTTPRouter(router, ti)
 	ts := httptest.NewServer(router)
 
-	b, err := genesis.Build(s)
+	stateC := state.NewCreator(db)
+	b, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +105,7 @@ func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
-		ParentID(best.ID()).
+		ParentID(best.Header().ID()).
 		Transaction(tx).
 		Build()
 	if err := chain.AddBlock(bl, true); err != nil {
