@@ -83,8 +83,8 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 	return nil
 }
 
-//NewIterator NewIterator
-func (pool *TxPool) NewIterator() {
+//CreateIterator CreateIterator for pool
+func (pool *TxPool) CreateIterator() {
 	pool.m.RLock()
 	defer pool.m.RUnlock()
 
@@ -106,7 +106,7 @@ func (pool *TxPool) HasNext() bool {
 	if pool.iterator == nil {
 		return false
 	}
-	return pool.iterator.HasNext()
+	return pool.iterator.hasNext()
 }
 
 //Next Next
@@ -114,12 +114,16 @@ func (pool *TxPool) Next() *tx.Transaction {
 	if pool.iterator == nil {
 		return nil
 	}
-	return pool.iterator.Next()
+	return pool.iterator.next()
 }
 
 //OnProcessed OnProcessed
 func (pool *TxPool) OnProcessed(txID thor.Hash, err error) {
-	//TODO
+	pool.m.Lock()
+	defer pool.m.Unlock()
+	if err != nil {
+		delete(pool.all, txID)
+	}
 }
 
 //GetTxObject returns a txobj
