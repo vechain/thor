@@ -1,9 +1,11 @@
 package txpool
 
 import (
+	"fmt"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"sort"
+	"time"
 )
 
 type txList struct {
@@ -53,30 +55,35 @@ func (l *txList) IsExists(tx *tx.Transaction) bool {
 }
 
 func (l *txList) Delete(obj *TxObject) {
-	txID := obj.tx.ID()
-	if _, ok := l.objs[txID]; !ok {
+	objID := obj.Transaction().ID()
+	if _, ok := l.objs[objID]; !ok {
 		return
 	}
-	delete(l.objs, txID)
+	delete(l.objs, objID)
 	l.discardCounter++
 }
 
 func (l *txList) AddTxObject(obj *TxObject) {
-	txID := obj.tx.ID()
-	if _, ok := l.objs[txID]; !ok {
+	objID := obj.Transaction().ID()
+	if _, ok := l.objs[objID]; !ok {
 		l.items.Push(obj)
 	}
-	l.objs[txID] = obj
+	l.objs[objID] = obj
 }
 
-func (l *txList) Reset() {
+func (l *txList) Reset(lifetime int64) {
+	fmt.Println("l.discardCounter:", l.discardCounter, "l.Len()", l.Len())
 	if l.discardCounter > l.Len()/4 {
 		return
 	}
 	all := l.objs
 	objs := make(TxObjects, len(all))
-	for _, tx := range all {
-		objs.Push(tx)
+	for key, obj := range all {
+		if time.Now().Unix()-obj.CreateTime() > lifetime {
+			delete(all, key)
+			continue
+		}
+		objs.Push(obj)
 	}
 	l.items, l.discardCounter = objs, 0
 }

@@ -1,14 +1,13 @@
 package txpool
 
 import (
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
 )
 
 //TxObject wrap transaction
 type TxObject struct {
-	addTime    int64
+	createTime int64
 	conversion *big.Int
 	tx         *tx.Transaction
 }
@@ -36,7 +35,7 @@ func (obj *TxObject) Transaction() *tx.Transaction {
 	return obj.tx
 }
 
-//ID txID
-func (obj *TxObject) ID() thor.Hash {
-	return obj.tx.ID()
+//CreateTime returns obj's createTime
+func (obj *TxObject) CreateTime() int64 {
+	return obj.createTime
 }
