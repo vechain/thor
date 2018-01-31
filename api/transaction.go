@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/chain/persist"
 	"github.com/vechain/thor/thor"
@@ -44,7 +45,7 @@ func (ti *TransactionInterface) GetTransactionByHash(txHash thor.Hash) (*types.T
 	}
 
 	t.BlockID = location.BlockID.String()
-	t.BlockNumber = block.Number()
+	t.BlockNumber = block.Header().Number()
 	t.Index = location.Index
 	return t, nil
 }
@@ -67,8 +68,10 @@ func (ti *TransactionInterface) GetTransactionFromBlock(blockNumber uint32, inde
 	if err != nil {
 		return nil, err
 	}
-	t.BlockID = block.ID().String()
-	t.BlockNumber = block.Number()
+
+	header := block.Header()
+	t.BlockID = header.ID().String()
+	t.BlockNumber = header.Number()
 	t.Index = index
 	return t, nil
 }

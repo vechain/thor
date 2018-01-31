@@ -3,6 +3,12 @@ package api_test
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
@@ -12,11 +18,6 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 const (
