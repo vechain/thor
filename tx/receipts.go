@@ -13,7 +13,7 @@ type Receipts []*Receipt
 func (rs Receipts) RootHash() thor.Hash {
 	if len(rs) == 0 {
 		// optimized
-		return EmptyRoot
+		return emptyRoot
 	}
 	return thor.Hash(types.DeriveSha(derivableReceipts(rs)))
 }

@@ -7,8 +7,7 @@ import (
 )
 
 var (
-	// EmptyRoot root hash of empty tx/receipt slice
-	EmptyRoot = thor.Hash(types.DeriveSha(&derivableTxs{}))
+	emptyRoot = thor.Hash(types.DeriveSha(&derivableTxs{}))
 )
 
 // Transactions a slice of transactions.
@@ -18,7 +17,7 @@ type Transactions []*Transaction
 func (txs Transactions) RootHash() thor.Hash {
 	if len(txs) == 0 {
 		// optimized
-		return EmptyRoot
+		return emptyRoot
 	}
 	return thor.Hash(types.DeriveSha(derivableTxs(txs)))
 }
