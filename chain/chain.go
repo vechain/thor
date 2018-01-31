@@ -68,10 +68,10 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		if err := persist.SaveTxLocations(batch, genesis); err != nil {
 			return err
 		}
-		if err := persist.SaveTrunkBlockID(batch, genesis.ID()); err != nil {
+		if err := persist.SaveTrunkBlockID(batch, genesis.Header().ID()); err != nil {
 			return err
 		}
-		if err := persist.SaveBestBlockID(batch, genesis.ID()); err != nil {
+		if err := persist.SaveBestBlockID(batch, genesis.Header().ID()); err != nil {
 			return err
 		}
 		if err := batch.Write(); err != nil {
@@ -80,7 +80,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		c.bestBlock = genesis
 		return nil
 	}
-	if b.ID() != genesis.ID() {
+	if b.Header().ID() != genesis.Header().ID() {
 		return errors.New("genesis mismatch")
 	}
 	return nil
@@ -92,7 +92,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
-	if _, err := c.getBlock(newBlock.ID()); err != nil {
+	if _, err := c.getBlock(newBlock.Header().ID()); err != nil {
 		if !c.IsNotFound(err) {
 			return err
 		}
@@ -101,7 +101,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 		return nil
 	}
 
-	if _, err := c.getBlock(newBlock.ParentID()); err != nil {
+	if _, err := c.getBlock(newBlock.Header().ParentID()); err != nil {
 		if c.IsNotFound(err) {
 			return errors.New("parent missing")
 		}
@@ -124,7 +124,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 			return err
 		}
 		for _, ob := range oldBlocks {
-			if err := persist.EraseTrunkBlockID(batch, ob.ID()); err != nil {
+			if err := persist.EraseTrunkBlockID(batch, ob.Header().ID()); err != nil {
 				return err
 			}
 			if err := persist.EraseTxLocations(batch, ob); err != nil {
@@ -133,22 +133,22 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 		}
 
 		for _, nb := range newBlocks {
-			if err := persist.SaveTrunkBlockID(batch, nb.ID()); err != nil {
+			if err := persist.SaveTrunkBlockID(batch, nb.Header().ID()); err != nil {
 				return err
 			}
 			if err := persist.SaveTxLocations(batch, nb); err != nil {
 				return err
 			}
 		}
-		persist.SaveBestBlockID(batch, newBlock.ID())
+		persist.SaveBestBlockID(batch, newBlock.Header().ID())
 	}
 
 	if err := batch.Write(); err != nil {
 		return err
 	}
 
-	c.cached.header.Add(newBlock.ID(), newBlock.Header())
-	c.cached.body.Add(newBlock.ID(), newBlock.Body())
+	c.cached.header.Add(newBlock.Header().ID(), newBlock.Header())
+	c.cached.body.Add(newBlock.Header().ID(), newBlock.Body())
 
 	if isTrunk {
 		c.bestBlock = newBlock
@@ -172,32 +172,32 @@ func (c *Chain) traceBackToCommonAncestor(b1 *block.Block, b2 *block.Block) (*bl
 	)
 
 	for {
-		if b1.Number() > b2.Number() {
+		if b1.Header().Number() > b2.Header().Number() {
 			c1 = append(c1, b1)
-			if b1, err = c.getBlock(b1.ParentID()); err != nil {
+			if b1, err = c.getBlock(b1.Header().ParentID()); err != nil {
 				return nil, nil, nil, err
 			}
 			continue
 		}
-		if b1.Number() < b2.Number() {
+		if b1.Header().Number() < b2.Header().Number() {
 			c2 = append(c2, b2)
-			if b2, err = c.getBlock(b2.ParentID()); err != nil {
+			if b2, err = c.getBlock(b2.Header().ParentID()); err != nil {
 				return nil, nil, nil, err
 			}
 			continue
 		}
-		if b1.ID() == b2.ID() {
+		if b1.Header().ID() == b2.Header().ID() {
 			return b1, c1, c2, nil
 		}
 
 		c1 = append(c1, b1)
 		c2 = append(c2, b2)
 
-		if b1, err = c.getBlock(b1.ParentID()); err != nil {
+		if b1, err = c.getBlock(b1.Header().ParentID()); err != nil {
 			return nil, nil, nil, err
 		}
 
-		if b2, err = c.getBlock(b2.ParentID()); err != nil {
+		if b2, err = c.getBlock(b2.Header().ParentID()); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -364,13 +364,13 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 		return nil, err
 	}
 	for _, b := range branch {
-		ids, err := c.getTransactionIDs(b.ID())
+		ids, err := c.getTransactionIDs(b.Header().ID())
 		if err != nil {
 			return nil, err
 		}
 		if index, found := ids[txID]; found {
 			return &persist.TxLocation{
-				BlockID: b.ID(),
+				BlockID: b.Header().ID(),
 				Index:   uint64(index),
 			}, nil
 		}
@@ -379,7 +379,7 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 	if err != nil {
 		return nil, err
 	}
-	if block.Number(loc.BlockID) <= ancestor.Number() {
+	if block.Number(loc.BlockID) <= ancestor.Header().Number() {
 		return loc, nil
 	}
 	return nil, errNotFound

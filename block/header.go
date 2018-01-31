@@ -175,8 +175,8 @@ func (h *Header) Signature() []byte {
 	return append([]byte(nil), h.body.Signature...)
 }
 
-// WithSignature create a new Header object with signature set.
-func (h *Header) WithSignature(sig []byte) *Header {
+// withSignature create a new Header object with signature set.
+func (h *Header) withSignature(sig []byte) *Header {
 	cpy := Header{body: h.body}
 	cpy.body.Signature = append([]byte(nil), sig...)
 	return &cpy

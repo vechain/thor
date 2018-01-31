@@ -18,13 +18,13 @@ func TestChain(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
 		b := new(block.Builder).
-			ParentID(best.ID()).
+			ParentID(best.Header().ID()).
 			Build()
-		fmt.Println(b.ID())
+		fmt.Println(b.Header().ID())
 		if err := chain.AddBlock(b, true); err != nil {
 			fmt.Println(err)
 		}
 	}
 	best, _ := chain.GetBestBlock()
-	fmt.Println(best.Number())
+	fmt.Println(best.Header().Number())
 }
