@@ -1,4 +1,4 @@
-package node
+package blockpool
 
 import (
 	"container/list"
@@ -11,25 +11,25 @@ import (
 
 var errPoolClosed = errors.New("block pool closed")
 
-type blockPool struct {
+type BlockPool struct {
 	l      *list.List
 	mutex  *sync.Mutex
 	wg     *sync.WaitGroup
 	closed bool
 }
 
-func newBlockPool() *blockPool {
+func New() *BlockPool {
 	wg := new(sync.WaitGroup)
 	wg.Add(1)
 
-	return &blockPool{
+	return &BlockPool{
 		l:      list.New(),
 		mutex:  new(sync.Mutex),
 		wg:     wg,
 		closed: false}
 }
 
-func (bp *blockPool) insertBlock(block block.Block) {
+func (bp *BlockPool) InsertBlock(block block.Block) {
 	defer bp.wg.Done()
 
 	bp.mutex.Lock()
@@ -38,7 +38,7 @@ func (bp *blockPool) insertBlock(block block.Block) {
 	bp.l.PushBack(block)
 }
 
-func (bp *blockPool) frontBlock() (block.Block, error) {
+func (bp *BlockPool) FrontBlock() (block.Block, error) {
 	bp.wg.Wait()
 	defer bp.wg.Add(1)
 
@@ -57,7 +57,7 @@ func (bp *blockPool) frontBlock() (block.Block, error) {
 	return block, nil
 }
 
-func (bp *blockPool) close() {
+func (bp *BlockPool) Close() {
 	bp.wg.Done()
 
 	bp.mutex.Lock()

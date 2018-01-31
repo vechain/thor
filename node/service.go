@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vechain/thor/node/blockpool"
 	"github.com/vechain/thor/packer"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -44,12 +45,12 @@ func (svr *service) withRestful(rf *http.Server, listener net.Listener) *service
 	return newSvr
 }
 
-func (svr *service) withConsensus(cs *consensus.Consensus, bestBlockUpdate chan bool, bp *blockPool) *service {
+func (svr *service) withConsensus(cs *consensus.Consensus, bestBlockUpdate chan bool, bp *blockpool.BlockPool) *service {
 	newSvr := &service{ctx: svr.ctx}
-	newSvr.destructor = func() { bp.close() }
+	newSvr.destructor = func() { bp.Close() }
 	newSvr.runner = func() {
 		for {
-			block, err := bp.frontBlock()
+			block, err := bp.FrontBlock()
 			if err != nil {
 				close(bestBlockUpdate)
 				log.Printf("[consensus]: consensusService exit")
@@ -62,7 +63,7 @@ func (svr *service) withConsensus(cs *consensus.Consensus, bestBlockUpdate chan 
 				log.Println(err)
 				if consensus.IsDelayBlock(err) {
 					log.Printf("[consensus]: is a delay block\n")
-					bp.insertBlock(block)
+					bp.InsertBlock(block)
 				}
 				continue
 			}
