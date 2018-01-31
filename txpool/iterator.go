@@ -18,13 +18,11 @@ func newIterator(data TxObjects) *Iterator {
 	}
 }
 
-//HasNext whether has next
-func (i *Iterator) HasNext() bool {
+func (i *Iterator) hasNext() bool {
 	return i.index < i.data.Len()
 }
 
-//Next Next
-func (i *Iterator) Next() *tx.Transaction {
+func (i *Iterator) next() *tx.Transaction {
 	obj := i.data[i.index]
 	i.index++
 	return obj.Transaction()
