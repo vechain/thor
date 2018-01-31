@@ -41,7 +41,7 @@ func New(
 }
 
 // PackFn function to do packing things.
-type PackFn func(TxFeed) (*block.Block, tx.Receipts, error)
+type PackFn func(TxIterator) (*block.Block, tx.Receipts, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
 func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack PackFn, err error) {
@@ -59,7 +59,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 		return 0, nil, err
 	}
 
-	return targetTime, func(txFeed TxFeed) (*block.Block, tx.Receipts, error) {
+	return targetTime, func(txIter TxIterator) (*block.Block, tx.Receipts, error) {
 
 		var gasLimit uint64
 		if p.targetGasLimit != 0 {
@@ -77,7 +77,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 
 		rt := runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, blockIDGetter.GetID)
 
-		receipts, err := p.pack(builder, rt, parent, txFeed)
+		receipts, err := p.pack(builder, rt, parent, txIter)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -107,37 +107,6 @@ func (p *Packer) txExists(txID thor.Hash, parentID thor.Hash, processed map[thor
 	return true, nil
 }
 
-func (p *Packer) precheckTx(tx *tx.Transaction, parent *block.Header, processed map[thor.Hash]interface{}) (bool, error) {
-	if tx.ReservedBits() != 0 {
-		return false, nil
-	}
-	if tx.ChainTag() != parent.ChainTag() {
-		return false, nil
-	}
-
-	br := tx.BlockRef()
-	if br.Number() > parent.Number() {
-		return false, nil
-	}
-
-	// check if tx already there
-	if found, err := p.txExists(tx.ID(), parent.ID(), processed); err != nil {
-		return false, err
-	} else if found {
-		return false, nil
-	}
-
-	if dependsOn := tx.DependsOn(); dependsOn != nil {
-		// check if deps exists
-		if found, err := p.txExists(*dependsOn, parent.ID(), processed); err != nil {
-			return false, err
-		} else if !found {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 // SetTargetGasLimit set target gas limit, the Packer will adjust block gas limit close to
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
@@ -148,7 +117,7 @@ func (p *Packer) pack(
 	builder *block.Builder,
 	rt *runtime.Runtime,
 	parent *block.Header,
-	txFeed TxFeed) (tx.Receipts, error) {
+	txIter TxIterator) (tx.Receipts, error) {
 
 	var receipts tx.Receipts
 	var totalGasUsed uint64
@@ -170,25 +139,53 @@ func (p *Packer) pack(
 
 	rewardRatio := contracts.Params.UnpackGet(out.Value)
 
-	for {
-		tx := txFeed.Next()
-		if tx == nil {
-			break
+	for txIter.HasNext() {
+		tx := txIter.Next()
+
+		if tx.ReservedBits() != 0 {
+			txIter.OnProcessed(tx.ID(), errors.New("unacceptable tx: reserved bits != 0"))
+			continue
+		}
+		if tx.ChainTag() != parent.ChainTag() {
+			txIter.OnProcessed(tx.ID(), errors.New("unacceptable tx: chain tag mismatch"))
+			continue
+		}
+
+		blockRef := tx.BlockRef()
+		if blockRef.Number() > parent.Number() {
+			continue
 		}
 
 		if totalGasUsed+tx.Gas() > rt.BlockGasLimit() {
+			// gasUsed < 90% gas limit
+			if float64(rt.BlockGasLimit()-totalGasUsed)/float64(rt.BlockGasLimit()) < 0.9 {
+				// try to find a lower gas tx
+				continue
+			}
 			break
 		}
 
 		signer, err := tx.Signer()
 		if err != nil {
+			txIter.OnProcessed(tx.ID(), err)
 			continue
 		}
 
-		if ok, err := p.precheckTx(tx, parent, processed); err != nil {
+		// check if tx already there
+		if found, err := p.txExists(tx.ID(), parent.ID(), processed); err != nil {
 			return nil, err
-		} else if !ok {
+		} else if found {
+			txIter.OnProcessed(tx.ID(), errors.New("tx found"))
 			continue
+		}
+
+		if dependsOn := tx.DependsOn(); dependsOn != nil {
+			// check if deps exists
+			if found, err := p.txExists(*dependsOn, parent.ID(), processed); err != nil {
+				return nil, err
+			} else if !found {
+				continue
+			}
 		}
 
 		cp := rt.State().NewCheckpoint()
@@ -196,6 +193,7 @@ func (p *Packer) pack(
 		if err != nil {
 			// skip and revert state
 			rt.State().RevertTo(cp)
+			txIter.OnProcessed(tx.ID(), err)
 			continue
 		}
 
@@ -203,6 +201,7 @@ func (p *Packer) pack(
 		if err != nil {
 			// skip and revert state
 			rt.State().RevertTo(cp)
+			txIter.OnProcessed(tx.ID(), err)
 			continue
 		}
 
@@ -223,6 +222,7 @@ func (p *Packer) pack(
 
 		processed[tx.ID()] = nil
 		builder.Transaction(tx)
+		txIter.OnProcessed(tx.ID(), nil)
 	}
 
 	builder.GasUsed(totalGasUsed)

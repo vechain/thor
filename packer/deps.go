@@ -1,10 +1,13 @@
 package packer
 
 import (
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
-type TxFeed interface {
+type TxIterator interface {
+	HasNext() bool
 	Next() *tx.Transaction
-	MarkTxBad(tx *tx.Transaction)
+
+	OnProcessed(txID thor.Hash, err error)
 }
