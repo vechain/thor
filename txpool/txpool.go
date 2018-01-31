@@ -87,8 +87,8 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 
-	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.ID(), pool.chain)
-	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Number(), delay)
+	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.Header().ID(), pool.chain)
+	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Header().Number(), delay)
 
 	obj := NewTxObject(tx, conversionEn, time.Now().Unix())
 	pool.all.AddTxObject(obj)
@@ -97,7 +97,7 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 	if uint64(pool.all.Len()) >= pool.config.PoolSize {
 		pool.all.DiscardTail(pool.all.Len() - int(pool.config.PoolSize-1))
 	}
-	pool.all.Reset()
+	pool.all.Reset(int64(pool.config.Lifetime))
 	return nil
 }
 
