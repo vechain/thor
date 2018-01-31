@@ -69,6 +69,8 @@ func (v *validator) validateTransaction(validTx map[thor.Hash]bool, transaction 
 		return false
 	case transaction.BlockRef().Number() >= v.block.Header().Number():
 		return false
+	case transaction.ChainTag() != v.block.Header().ChainTag():
+		return false
 	case !v.isTxDependFound(validTx, transaction):
 		return false
 	default:
