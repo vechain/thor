@@ -8,6 +8,8 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
+	"sort"
+	"sync"
 	"time"
 )
 
@@ -34,9 +36,11 @@ var DefaultTxPoolConfig = PoolConfig{
 
 //TxPool TxPool
 type TxPool struct {
-	config PoolConfig
-	chain  *chain.Chain
-	all    *txList
+	config   PoolConfig
+	chain    *chain.Chain
+	iterator *Iterator
+	all      map[thor.Hash]*TxObject
+	m        *sync.RWMutex
 }
 
 //NewTxPool NewTxPool
@@ -44,36 +48,20 @@ func NewTxPool(chain *chain.Chain) *TxPool {
 	pool := &TxPool{
 		config: DefaultTxPoolConfig,
 		chain:  chain,
-		all:    newTxList(),
+		all:    make(map[thor.Hash]*TxObject),
+		m:      new(sync.RWMutex),
 	}
 	//config santize
 	return pool
 }
 
-//检查transaction
-func (pool *TxPool) validateTx(tx *tx.Transaction) error {
-	if _, err := tx.Signer(); err != nil {
-		return err
-	}
-	if big.NewInt(int64(pool.config.PriceLimit)).Cmp(tx.GasPrice()) > 0 {
-		return ErrUnderpriced
-	}
-	//TODO value 验证
-	intrGas, err := tx.IntrinsicGas()
-	if err != nil {
-		return err
-	}
-	if tx.Gas() < intrGas {
-		return ErrIntrinsicGas
-	}
-
-	return nil
-}
-
 //Add transaction
 func (pool *TxPool) Add(tx *tx.Transaction) error {
+	pool.m.Lock()
+	defer pool.m.Unlock()
+
 	txID := tx.ID()
-	if pool.all.IsExists(tx) {
+	if _, ok := pool.all[txID]; ok {
 		return fmt.Errorf("known transaction: %x", txID)
 	}
 
@@ -91,22 +79,68 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Header().Number(), delay)
 
 	obj := NewTxObject(tx, conversionEn, time.Now().Unix())
-	pool.all.AddTxObject(obj)
-	pool.all.SortByPrice()
-	//交易池已满，舍弃低价交易
-	if uint64(pool.all.Len()) >= pool.config.PoolSize {
-		pool.all.DiscardTail(pool.all.Len() - int(pool.config.PoolSize-1))
-	}
-	pool.all.Reset(int64(pool.config.Lifetime))
+	pool.all[txID] = obj
 	return nil
 }
 
-//NewIterator return an Iterator
-func (pool *TxPool) NewIterator() *Iterator {
-	return newIterator(pool.all)
+//NewIterator NewIterator
+func (pool *TxPool) NewIterator() {
+	pool.m.RLock()
+	defer pool.m.RUnlock()
+
+	var objs TxObjects
+	for key, obj := range pool.all {
+		if time.Now().Unix()-obj.CreateTime() > int64(pool.config.Lifetime) {
+			delete(pool.all, key)
+			continue
+		}
+		objs = append(objs, obj)
+	}
+	sort.Sort(objs)
+	pool.iterator = newIterator(objs)
+
 }
 
-//GetTxObject return txobj
+//HasNext HasNext
+func (pool *TxPool) HasNext() bool {
+	if pool.iterator == nil {
+		return false
+	}
+	return pool.iterator.HasNext()
+}
+
+//Next Next
+func (pool *TxPool) Next() *tx.Transaction {
+	if pool.iterator == nil {
+		return nil
+	}
+	return pool.iterator.Next()
+}
+
+//OnProcessed OnProcessed
+func (pool *TxPool) OnProcessed(txID thor.Hash, err error) {
+	//TODO
+}
+
+//GetTxObject returns a txobj
 func (pool *TxPool) GetTxObject(objID thor.Hash) *TxObject {
-	return pool.all.GetObj(objID)
+	return pool.all[objID]
+}
+
+func (pool *TxPool) validateTx(tx *tx.Transaction) error {
+	if _, err := tx.Signer(); err != nil {
+		return err
+	}
+	if big.NewInt(int64(pool.config.PriceLimit)).Cmp(tx.GasPrice()) > 0 {
+		return ErrUnderpriced
+	}
+	intrGas, err := tx.IntrinsicGas()
+	if err != nil {
+		return err
+	}
+	if tx.Gas() < intrGas {
+		return ErrIntrinsicGas
+	}
+
+	return nil
 }

@@ -6,12 +6,12 @@ import (
 
 //Iterator Iterator
 type Iterator struct {
-	data  *txList
+	data  TxObjects
 	index int
 }
 
 //NewIterator constructor
-func newIterator(data *txList) *Iterator {
+func newIterator(data TxObjects) *Iterator {
 	return &Iterator{
 		data:  data,
 		index: 0,
@@ -25,7 +25,7 @@ func (i *Iterator) HasNext() bool {
 
 //Next Next
 func (i *Iterator) Next() *tx.Transaction {
-	v := i.data.Index(i.index)
+	obj := i.data[i.index]
 	i.index++
-	return v.Transaction()
+	return obj.Transaction()
 }

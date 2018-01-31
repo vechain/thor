@@ -8,7 +8,7 @@ func (objs TxObjects) Len() int {
 }
 
 func (objs TxObjects) Less(i, j int) bool {
-	return objs[i].Cost().Cmp(objs[j].Cost()) < 0
+	return objs[i].Cost().Cmp(objs[j].Cost()) > 0
 }
 
 func (objs TxObjects) Swap(i, j int) {
