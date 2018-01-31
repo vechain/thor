@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -36,39 +35,9 @@ func Compose(header *Header, txs tx.Transactions) *Block {
 // WithSignature create a new block object with signature set.
 func (b *Block) WithSignature(sig []byte) *Block {
 	return &Block{
-		header: b.header.WithSignature(sig),
+		header: b.header.withSignature(sig),
 		txs:    b.txs,
 	}
-}
-
-// Number same as Header.Number().
-func (b *Block) Number() uint32 {
-	return b.header.Number()
-}
-
-// Timestamp same as Header.Timestamp().
-func (b *Block) Timestamp() uint64 {
-	return b.header.Timestamp()
-}
-
-// TotalScore same as Header.TotalScore().
-func (b *Block) TotalScore() uint64 {
-	return b.header.TotalScore()
-}
-
-// ParentID same as Header.ParentID().
-func (b *Block) ParentID() thor.Hash {
-	return b.header.ParentID()
-}
-
-// ID same as Header.ID().
-func (b *Block) ID() thor.Hash {
-	return b.header.ID()
-}
-
-// Signer same as Header.Signer
-func (b *Block) Signer() (thor.Address, error) {
-	return b.header.Signer()
 }
 
 // Header returns the block header.

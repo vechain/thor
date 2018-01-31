@@ -86,7 +86,7 @@ func LoadBlockBody(r kv.Getter, id thor.Hash) (*block.Body, error) {
 
 // SaveBlock save block header and body.
 func SaveBlock(w kv.Putter, b *block.Block) error {
-	id := b.ID()
+	id := b.Header().ID()
 	if err := saveRLP(w, append(headerPrefix, id[:]...), b.Header()); err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func LoadTrunkBlockID(r kv.Getter, num uint32) (thor.Hash, error) {
 func SaveTxLocations(w kv.Putter, block *block.Block) error {
 	for i, tx := range block.Transactions() {
 		loc := TxLocation{
-			block.ID(),
+			block.Header().ID(),
 			uint64(i),
 		}
 		data, err := rlp.EncodeToBytes(&loc)
