@@ -317,11 +317,15 @@ func (c *Chain) GetTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLoca
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	tx, loc, err := persist.LoadTx(c.kv, txID)
+	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		return nil, nil, err
 	}
-	return tx, loc, nil
+	body, err := c.getBlockBody(loc.BlockID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return body.Txs[loc.Index], loc, nil
 }
 
 func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {
