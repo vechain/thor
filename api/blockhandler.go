@@ -19,6 +19,7 @@ func NewBlockHTTPRouter(router *mux.Router, bi *BlockInterface) {
 
 	sub.Path("/hash/{hash}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
 	sub.Path("/number/{number}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
+	sub.Path("/best").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBestBlock))
 }
 
 func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.Request) error {
@@ -38,11 +39,11 @@ func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.
 	if err != nil {
 		return httpx.Error(" Block not found! ", 400)
 	}
-	str, err := json.Marshal(block)
+	data, err := json.Marshal(block)
 	if err != nil {
 		return httpx.Error(" System Error! ", 400)
 	}
-	w.Write(str)
+	w.Write(data)
 	return nil
 }
 
@@ -63,10 +64,23 @@ func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *htt
 	if err != nil {
 		return httpx.Error(" Get block failed! ", 400)
 	}
-	str, err := json.Marshal(block)
+	data, err := json.Marshal(block)
 	if err != nil {
 		return httpx.Error(" System Error! ", 400)
 	}
-	w.Write(str)
+	w.Write(data)
+	return nil
+}
+
+func (bi *BlockInterface) handleGetBestBlock(w http.ResponseWriter, req *http.Request) error {
+	block, err := bi.GetBestBlock()
+	if err != nil {
+		return httpx.Error(" Block not found! ", 400)
+	}
+	data, err := json.Marshal(block)
+	if err != nil {
+		return httpx.Error(" System Error! ", 400)
+	}
+	w.Write(data)
 	return nil
 }
