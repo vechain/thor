@@ -9,6 +9,7 @@ import (
 type blockGetter interface {
 	GetBlockByNumber(uint32) (*block.Block, error)
 	GetBlock(thor.Hash) (*block.Block, error)
+	bestBlockGetter
 }
 
 //BlockInterface for manage block with chain
@@ -37,6 +38,16 @@ func (bi *BlockInterface) GetBlockByHash(blockHash thor.Hash) (*types.Block, err
 //GetBlockByNumber return block by address
 func (bi *BlockInterface) GetBlockByNumber(blockNumber uint32) (*types.Block, error) {
 	b, err := bi.blkGetter.GetBlockByNumber(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.ConvertBlock(b), nil
+}
+
+//GetBestBlock returns latest block
+func (bi *BlockInterface) GetBestBlock() (*types.Block, error) {
+	b, err := bi.blkGetter.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
