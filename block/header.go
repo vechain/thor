@@ -32,10 +32,11 @@ type Header struct {
 type headerBody struct {
 	ParentID    thor.Hash
 	Timestamp   uint64
-	TotalScore  uint64
 	GasLimit    uint64
-	GasUsed     uint64
 	Beneficiary thor.Address
+
+	GasUsed    uint64
+	TotalScore uint64
 
 	TxsRoot      thor.Hash
 	StateRoot    thor.Hash
@@ -157,10 +158,11 @@ func (h *Header) SigningHash() (hash thor.Hash) {
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
 		h.body.Timestamp,
-		h.body.TotalScore,
 		h.body.GasLimit,
-		h.body.GasUsed,
 		h.body.Beneficiary,
+
+		h.body.GasUsed,
+		h.body.TotalScore,
 
 		h.body.TxsRoot,
 		h.body.StateRoot,
@@ -245,16 +247,16 @@ func (h *Header) String() string {
 	ParentID:		%v
 	Timestamp:		%v
 	Signer:			%v
-	TotalScore:		%v
+	Beneficiary:	%v
 	GasLimit:		%v
 	GasUsed:		%v
-	Beneficiary:	%v
+	TotalScore:		%v
 	TxsRoot:		%v
 	StateRoot:		%v
 	ReceiptsRoot:	%v
 	Signature:		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
-		h.body.TotalScore, h.body.GasLimit, h.body.GasUsed,
-		h.body.Beneficiary, h.body.TxsRoot, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
+		h.body.TxsRoot, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
 }
 
 // Number extract block number from block id.
