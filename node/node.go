@@ -62,28 +62,37 @@ func (n *Node) Run(ctx context.Context, nw *network.Network) error {
 	bestBlockUpdate := make(chan bool, 2)
 	defer close(bestBlockUpdate)
 
-	svr := newService(ctx, chain, stateC, nw, n.op.IP, bestBlockUpdate)
-	wg := new(sync.WaitGroup)
-	routine := func(f func()) {
+	wg, svr, routine := n.routineService(chain, stateC, nw, bestBlockUpdate)
+	defer wg.Wait()
+
+	routine(func() {
+		svr.restful(&http.Server{Handler: api.NewHTTPHandler(chain, stateC)}, lsr).run(ctx)
+	})
+	routine(func() {
+		svr.consensus(consensus.New(chain, stateC)).run(ctx)
+	})
+	routine(func() {
+		svr.packer(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey).run(ctx)
+	})
+
+	return nil
+}
+
+func (n *Node) routineService(
+	chain *chain.Chain,
+	stateC *state.Creator,
+	nw *network.Network,
+	bestBlockUpdate chan bool) (wg *sync.WaitGroup, svr *service, routine func(func())) {
+	wg = new(sync.WaitGroup)
+	svr = newService(chain, stateC, nw, n.op.IP, bestBlockUpdate)
+	routine = func(f func()) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			f()
 		}()
 	}
-
-	routine(func() {
-		svr.withRestful(&http.Server{Handler: api.NewHTTPHandler(chain, stateC)}, lsr).run()
-	})
-	routine(func() {
-		svr.withConsensus(consensus.New(chain, stateC)).run()
-	})
-	routine(func() {
-		svr.withPacker(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey).run()
-	})
-
-	wg.Wait()
-	return nil
+	return
 }
 
 func (n *Node) prepare() (*state.Creator, *chain.Chain, *lvldb.LevelDB, net.Listener, error) {
