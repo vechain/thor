@@ -68,8 +68,13 @@ func (svr *service) restful(rf *http.Server, listener net.Listener) *runner {
 }
 
 func (svr *service) consensus(cs *consensus.Consensus) *runner {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &runner{
-		destructor: func() { svr.bp.Close() },
+		destructor: func() {
+			svr.bp.Close()
+			cancel()
+		},
 		runner: func() {
 			for {
 				block, err := svr.bp.FrontBlock()
@@ -84,7 +89,15 @@ func (svr *service) consensus(cs *consensus.Consensus) *runner {
 					log.Printf("[%v consensus]: %v\n", svr.ip, err)
 					if consensus.IsDelayBlock(err) {
 						log.Printf("[%v consensus]: is a delay block\n", svr.ip)
-						//svr.bp.InsertBlock(block)
+						go func() {
+							select {
+							case <-time.After(15 * time.Second):
+								log.Printf("[%v consensus]: the delay block re insert to bp\n", svr.ip)
+								svr.bp.InsertBlock(block)
+							case <-ctx.Done():
+								return
+							}
+						}()
 					}
 					continue
 				}
