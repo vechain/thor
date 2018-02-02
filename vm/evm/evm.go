@@ -49,6 +49,10 @@ func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, erro
 		if p := precompiles[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
 		}
+		// handle native contracts
+		if p := evm.nativeContractCallback(*contract.CodeAddr); p != nil {
+			return RunPrecompiledContract(p, input, contract)
+		}
 	}
 	return evm.interpreter.Run(snapshot, contract, input)
 }
@@ -117,6 +121,8 @@ type EVM struct {
 	// contract created during execution.
 	// this value is important for generating contract address.
 	contractCreationCount uint64
+
+	nativeContractCallback func(common.Address) PrecompiledContract
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -132,6 +138,11 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 
 	evm.interpreter = NewInterpreter(evm, vmConfig)
 	return evm
+}
+
+// RegisterNativeContracts register native contracts.
+func (evm *EVM) RegisterNativeContracts(cb func(common.Address) PrecompiledContract) {
+	evm.nativeContractCallback = cb
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -167,7 +178,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		if evm.ChainConfig().IsByzantium(evm.BlockNumber) {
 			precompiles = PrecompiledContractsByzantium
 		}
-		if precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
+		isPrecompiled := precompiles[addr] != nil
+		// also check native contracts
+		if !isPrecompiled && evm.nativeContractCallback != nil {
+			isPrecompiled = evm.nativeContractCallback(addr) != nil
+		}
+		if !isPrecompiled && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
