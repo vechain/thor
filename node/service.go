@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vechain/thor/txpool"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -18,6 +16,7 @@ import (
 	"github.com/vechain/thor/node/network"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/txpool"
 )
 
 type runner struct {
@@ -80,7 +79,7 @@ func (svr *service) consensus(cs *consensus.Consensus) *runner {
 				}
 				log.Printf("[%v consensus]: get a block form block pool\n", svr.ip)
 
-				isTrunk, err := cs.Consent(&block, uint64(time.Now().Unix()))
+				isTrunk, err := cs.Consent(block.Body, uint64(time.Now().Unix()))
 				if err != nil {
 					log.Printf("[%v consensus]: %v\n", svr.ip, err)
 					if consensus.IsDelayBlock(err) {
@@ -90,12 +89,8 @@ func (svr *service) consensus(cs *consensus.Consensus) *runner {
 					continue
 				}
 
-				if err = svr.chain.AddBlock(&block, isTrunk); err != nil {
-					log.Fatalf("[%v consensus]: %v\n", svr.ip, err)
-				}
+				svr.updateChain(block.Body, isTrunk, block.TTL-1, "consensus")
 
-				log.Printf("[%v consensus]: add block to chain %v\n", svr.ip, isTrunk)
-				//svr.BePacked(block)
 				if isTrunk {
 					svr.bestBlockUpdate <- true
 				}
@@ -144,22 +139,28 @@ func (svr *service) packer(pk *packer.Packer, privateKey *ecdsa.PrivateKey) *run
 					}
 
 					block = block.WithSignature(sig)
-					if err = svr.chain.AddBlock(block, true); err != nil {
-						log.Fatalf("[%v packer]: %v\n", svr.ip, err)
-					}
-
-					log.Printf("[%v packer]: a block has packed\n", svr.ip)
-					svr.BePacked(*block)
+					svr.updateChain(block, true, 10, "packer")
 				}
 			}
 		}}
 }
 
-func (svr *service) BePacked(block block.Block) {
+func (svr *service) updateChain(block *block.Block, isTrunk bool, ttl int, tag string) {
+	if err := svr.chain.AddBlock(block, true); err != nil {
+		log.Fatalf("[%v %v]: %v\n", svr.ip, tag, err)
+	}
+
+	log.Printf("[%v %v]: a block has add to chain, %v\n", svr.ip, tag, isTrunk)
+	svr.BePacked(network.Block{
+		Body: block,
+		TTL:  ttl})
+}
+
+func (svr *service) BePacked(block network.Block) {
 	svr.nw.Notify(svr, block)
 }
 
-func (svr *service) UpdateBlockPool(block block.Block) {
+func (svr *service) UpdateBlockPool(block network.Block) {
 	svr.bp.InsertBlock(block)
 }
 

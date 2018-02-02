@@ -6,30 +6,27 @@ import (
 	"log"
 	"sync"
 
-	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/node/network"
 )
 
 var errPoolClosed = errors.New("block pool closed")
 
 type BlockPool struct {
 	l      *list.List
-	mutex  *sync.Mutex
-	wg     *sync.WaitGroup
+	mutex  sync.Mutex
+	wg     sync.WaitGroup
 	closed bool
 }
 
 func New() *BlockPool {
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-
-	return &BlockPool{
+	bp := &BlockPool{
 		l:      list.New(),
-		mutex:  new(sync.Mutex),
-		wg:     wg,
 		closed: false}
+	bp.wg.Add(1)
+	return bp
 }
 
-func (bp *BlockPool) InsertBlock(block block.Block) {
+func (bp *BlockPool) InsertBlock(block network.Block) {
 	defer bp.wg.Done()
 
 	bp.mutex.Lock()
@@ -38,7 +35,7 @@ func (bp *BlockPool) InsertBlock(block block.Block) {
 	bp.l.PushBack(block)
 }
 
-func (bp *BlockPool) FrontBlock() (block.Block, error) {
+func (bp *BlockPool) FrontBlock() (network.Block, error) {
 	bp.wg.Wait()
 	defer bp.wg.Add(1)
 
@@ -46,10 +43,10 @@ func (bp *BlockPool) FrontBlock() (block.Block, error) {
 	defer bp.mutex.Unlock()
 
 	if bp.closed {
-		return block.Block{}, errPoolClosed
+		return network.Block{}, errPoolClosed
 	}
 
-	block, ok := bp.l.Remove(bp.l.Front()).(block.Block)
+	block, ok := bp.l.Remove(bp.l.Front()).(network.Block)
 	if !ok {
 		log.Fatalln(errors.New("front block"))
 	}

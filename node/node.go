@@ -83,7 +83,7 @@ func (n *Node) routineService(
 	stateC *state.Creator,
 	nw *network.Network,
 	bestBlockUpdate chan bool) (wg *sync.WaitGroup, svr *service, routine func(func())) {
-	wg = new(sync.WaitGroup)
+	wg = &sync.WaitGroup{}
 	svr = newService(chain, stateC, nw, n.op.IP, bestBlockUpdate)
 	routine = func(f func()) {
 		wg.Add(1)
