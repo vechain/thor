@@ -26,6 +26,11 @@ func (h Hash) Bytes() []byte {
 	return h[:]
 }
 
+// IsZero returns if hash is all zero bytes.
+func (h Hash) IsZero() bool {
+	return h == Hash{}
+}
+
 // ParseHash convert string presented hash into Hash type
 func ParseHash(s string) (Hash, error) {
 	if len(s) == HashLength*2 {

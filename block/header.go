@@ -52,7 +52,7 @@ func (h *Header) ParentID() thor.Hash {
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
-	if (thor.Hash{}) == h.body.ParentID {
+	if h.body.ParentID.IsZero() {
 		// genesis block
 		return 0
 	}
@@ -63,7 +63,7 @@ func (h *Header) Number() uint32 {
 // ChainTag returns chain tag.
 // It's the last byte of block ID.
 func (h *Header) ChainTag() byte {
-	if (thor.Hash{}) == h.body.ParentID {
+	if h.Number() == 0 {
 		// genesis block
 		if len(h.body.Signature) == 1 {
 			return h.body.Signature[0]
