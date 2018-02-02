@@ -112,6 +112,13 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 	return &VM{evm, statedb}
 }
 
+// RegisterNativeContracts register native contracts.
+func (vm *VM) RegisterNativeContracts(cb func(thor.Address) evm.PrecompiledContract) {
+	vm.evm.RegisterNativeContracts(func(addr common.Address) evm.PrecompiledContract {
+		return cb(thor.Address(addr))
+	})
+}
+
 // Cancel cancels any running EVM operation.
 // This may be called concurrently and it's safe to be called multiple times.
 func (vm *VM) Cancel() {
