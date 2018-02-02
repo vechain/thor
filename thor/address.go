@@ -28,6 +28,11 @@ func (a Address) Bytes() []byte {
 	return a[:]
 }
 
+// IsZero returns if address is all zero bytes.
+func (a Address) IsZero() bool {
+	return a == Address{}
+}
+
 // ParseAddress convert string presented address into Address type.
 func ParseAddress(s string) (Address, error) {
 	if len(s) == AddressLength*2 {
