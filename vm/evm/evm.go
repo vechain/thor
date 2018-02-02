@@ -50,8 +50,10 @@ func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, erro
 			return RunPrecompiledContract(p, input, contract)
 		}
 		// handle native contracts
-		if p := evm.nativeContractCallback(*contract.CodeAddr); p != nil {
-			return RunPrecompiledContract(p, input, contract)
+		if evm.nativeContractCallback != nil {
+			if p := evm.nativeContractCallback(*contract.CodeAddr); p != nil {
+				return RunPrecompiledContract(p, input, contract)
+			}
 		}
 	}
 	return evm.interpreter.Run(snapshot, contract, input)
