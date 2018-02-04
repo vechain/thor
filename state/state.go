@@ -14,12 +14,12 @@ import (
 
 // State manages the main accounts trie.
 type State struct {
-	root      thor.Hash // root of initial accounts trie
-	kv        kv.GetPutter
-	trie      trieReader                     // the accounts trie reader
-	trieCache map[thor.Address]*cachedObject // cache of accounts trie
-	sm        *stackedmap.StackedMap         // keeps revisions of accounts state
-	err       error
+	root  thor.Hash // root of initial accounts trie
+	kv    kv.GetPutter
+	trie  trieReader                     // the accounts trie reader
+	cache map[thor.Address]*cachedObject // cache of accounts trie
+	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
+	err   error
 }
 
 // to constrain ability of trie
@@ -41,10 +41,10 @@ func New(root thor.Hash, kv kv.GetPutter) (*State, error) {
 	}
 
 	state := State{
-		root:      root,
-		kv:        kv,
-		trie:      trie,
-		trieCache: make(map[thor.Address]*cachedObject),
+		root:  root,
+		kv:    kv,
+		trie:  trie,
+		cache: make(map[thor.Address]*cachedObject),
 	}
 
 	state.sm = stackedmap.New(func(key interface{}) (value interface{}, exist bool) {
@@ -71,11 +71,11 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 		return code, true
 	case codeHashKey:
 		return s.getCachedObject(thor.Address(k)).data.CodeHash, true
-	case accountStorageKey: // get storage
-		v, err := s.getCachedObject(k.addr).GetStorage(storageKey{k.key, k.codec})
+	case storageKey: // get storage
+		v, err := s.getCachedObject(k.addr).GetStorage(k.key)
 		if err != nil {
 			s.setError(err)
-			return k.codec.Default(), true
+			return []byte(nil), true
 		}
 		return v, true
 	}
@@ -105,12 +105,12 @@ func (s *State) changes() map[thor.Address]*changedObject {
 			getObj(thor.Address(key)).code = v.([]byte)
 		case codeHashKey:
 			getObj(thor.Address(key)).data.CodeHash = v.([]byte)
-		case accountStorageKey:
+		case storageKey:
 			o := getObj(key.addr)
 			if o.storage == nil {
-				o.storage = make(map[storageKey]interface{})
+				o.storage = make(map[thor.Hash][]byte)
 			}
-			o.storage[storageKey{key.key, key.codec}] = v
+			o.storage[key.key] = v.([]byte)
 		}
 		// abort if error occurred
 		return s.err == nil
@@ -119,7 +119,7 @@ func (s *State) changes() map[thor.Address]*changedObject {
 }
 
 func (s *State) getCachedObject(addr thor.Address) *cachedObject {
-	if co, ok := s.trieCache[addr]; ok {
+	if co, ok := s.cache[addr]; ok {
 		return co
 	}
 	a, err := loadAccount(s.trie, addr)
@@ -128,7 +128,7 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 		return newCachedObject(s.kv, emptyAccount)
 	}
 	co := newCachedObject(s.kv, a)
-	s.trieCache[addr] = co
+	s.cache[addr] = co
 	return co
 }
 
@@ -143,10 +143,9 @@ func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Hash, value [
 	// build ongoing key-value pairs
 	ongoing := make(map[thor.Hash][]byte)
 	s.sm.Journal(func(k, v interface{}) bool {
-		if key, ok := k.(accountStorageKey); ok {
+		if key, ok := k.(storageKey); ok {
 			if key.addr == addr {
-				data, _ := key.codec.Encode(v)
-				ongoing[key.key] = data
+				ongoing[key.key] = v.([]byte)
 			}
 		}
 		return true
@@ -204,25 +203,30 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 
 // GetStorage returns Hash type storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Hash) thor.Hash {
-	return s.GetStructedStorage(addr, HashStorageCodec, key).(thor.Hash)
+	var hs hashStorage
+	s.GetStructedStorage(addr, key, &hs)
+	return hs.Hash
 }
 
 // SetStorage set Hash type storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
-	s.SetStructedStorage(addr, HashStorageCodec, key, value)
+	s.SetStructedStorage(addr, key, &hashStorage{value})
 }
 
-// GetStructedStorage get raw storage value for given address and key, then decode
-// it using the given codec.
-func (s *State) GetStructedStorage(addr thor.Address, codec StorageCodec, key thor.Hash) interface{} {
-	v, _ := s.sm.Get(accountStorageKey{addr, key, codec})
-	return v
+// GetStructedStorage get raw storage value for given address and key, and decode to StructedStorage.
+func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val StructedStorage) {
+	data, _ := s.sm.Get(storageKey{addr, key})
+	s.setError(val.Decode(data.([]byte)))
 }
 
-// SetStructedStorage encode structed value using the given codec,
-// and set as raw storage value for given address and key.
-func (s *State) SetStructedStorage(addr thor.Address, codec StorageCodec, key thor.Hash, value interface{}) {
-	s.sm.Put(accountStorageKey{addr, key, codec}, value)
+// SetStructedStorage encode StructedStorage and set as raw storage value for given address and key.
+func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val StructedStorage) {
+	data, err := val.Encode()
+	if err != nil {
+		s.setError(err)
+		return
+	}
+	s.sm.Put(storageKey{addr, key}, data)
 }
 
 // GetCode returns code for the given address.
@@ -298,10 +302,9 @@ func (s *State) Stage() *Stage {
 }
 
 type (
-	accountStorageKey struct {
-		addr  thor.Address
-		key   thor.Hash
-		codec StorageCodec
+	storageKey struct {
+		addr thor.Address
+		key  thor.Hash
 	}
 
 	codeKey     thor.Address
@@ -309,7 +312,7 @@ type (
 
 	changedObject struct {
 		data    Account
-		storage map[storageKey]interface{}
+		storage map[thor.Hash][]byte
 		code    []byte
 	}
 )
