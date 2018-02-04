@@ -56,28 +56,17 @@ func saveAccount(trie trieWriter, addr thor.Address, a Account) error {
 	return trie.TryUpdate(addr[:], data)
 }
 
-// loadStorage load storage value for given key.
-func loadStorage(trie trieReader, key storageKey) (interface{}, error) {
-	data, err := trie.TryGet(key.key[:])
-	if err != nil {
-		return nil, err
-	}
-	if len(data) == 0 {
-		return key.codec.Default(), nil
-	}
-	return key.codec.Decode(data)
+// loadStorage load storage data for given key.
+func loadStorage(trie trieReader, key thor.Hash) ([]byte, error) {
+	return trie.TryGet(key[:])
 }
 
 // saveStorage save value for given key.
-// If the value is all zero, the given key will be deleted.
-func saveStorage(trie trieWriter, key storageKey, value interface{}) error {
-	data, err := key.codec.Encode(value)
-	if err != nil {
-		return err
-	}
+// If the data is zero, the given key will be deleted.
+func saveStorage(trie trieWriter, key thor.Hash, data []byte) error {
 	if len(data) == 0 {
 		// release storage if data is zero length
-		return trie.TryDelete(key.key[:])
+		return trie.TryDelete(key[:])
 	}
-	return trie.TryUpdate(key.key[:], data)
+	return trie.TryUpdate(key[:], data)
 }

@@ -15,13 +15,8 @@ type cachedObject struct {
 	cache struct {
 		code        []byte
 		storageTrie trieReader
-		storage     map[storageKey]interface{}
+		storage     map[thor.Hash][]byte
 	}
-}
-
-type storageKey struct {
-	key   thor.Hash
-	codec StorageCodec
 }
 
 func newCachedObject(kv kv.GetPutter, data Account) *cachedObject {
@@ -43,11 +38,11 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key storageKey) (interface{}, error) {
+func (co *cachedObject) GetStorage(key thor.Hash) ([]byte, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage == nil {
-		cache.storage = make(map[storageKey]interface{})
+		cache.storage = make(map[thor.Hash][]byte)
 	} else {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil

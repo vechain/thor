@@ -20,16 +20,16 @@ func TestCachedObject(t *testing.T) {
 	stgTrie, _ := trie.NewSecure(common.Hash{}, kv, 0)
 	storages := []struct {
 		k thor.Hash
-		v thor.Hash
+		v []byte
 	}{
-		{thor.BytesToHash([]byte("key1")), thor.BytesToHash([]byte("value1"))},
-		{thor.BytesToHash([]byte("key2")), thor.BytesToHash([]byte("value2"))},
-		{thor.BytesToHash([]byte("key3")), thor.BytesToHash([]byte("value3"))},
-		{thor.BytesToHash([]byte("key4")), thor.BytesToHash([]byte("value4"))},
+		{thor.BytesToHash([]byte("key1")), []byte("value1")},
+		{thor.BytesToHash([]byte("key2")), []byte("value2")},
+		{thor.BytesToHash([]byte("key3")), []byte("value3")},
+		{thor.BytesToHash([]byte("key4")), []byte("value4")},
 	}
 
 	for _, s := range storages {
-		saveStorage(stgTrie, storageKey{s.k, HashStorageCodec}, s.v)
+		saveStorage(stgTrie, s.k, s.v)
 	}
 
 	storageRoot, _ := stgTrie.Commit()
@@ -54,7 +54,7 @@ func TestCachedObject(t *testing.T) {
 
 	for _, s := range storages {
 		assert.Equal(t,
-			M(obj.GetStorage(storageKey{s.k, HashStorageCodec})),
+			M(obj.GetStorage(s.k)),
 			[]interface{}{s.v, nil})
 	}
 }
