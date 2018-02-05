@@ -33,7 +33,7 @@ func TestTransaction(t *testing.T) {
 	}
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/transaction/hash/%v", tx.ID().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/transaction/id/%v", tx.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,6 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	rt := new(types.Transaction)
 	if err := json.Unmarshal(r, &rt); err != nil {
 		t.Fatal(err)
@@ -102,7 +101,6 @@ func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Errorf("Sign error: %s", err)
 	}
 	tx = tx.WithSignature(sig)
-
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
 		ParentID(best.Header().ID()).
@@ -116,7 +114,6 @@ func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 }
 
 func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transaction) {
-	fmt.Println(expectedTx.From)
 	assert.Equal(t, expectedTx.From, actualTx.From)
 	assert.Equal(t, expectedTx.ID, actualTx.ID)
 	assert.Equal(t, expectedTx.Index, actualTx.Index)

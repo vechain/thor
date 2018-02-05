@@ -17,7 +17,7 @@ const BlockHTTPPathPrefix = "/block"
 func NewBlockHTTPRouter(router *mux.Router, bi *BlockInterface) {
 	sub := router.PathPrefix(BlockHTTPPathPrefix).Subrouter()
 
-	sub.Path("/hash/{hash}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
+	sub.Path("/id/{id}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
 	sub.Path("/number/{number}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
 	sub.Path("/best").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBestBlock))
 }
@@ -27,7 +27,7 @@ func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.
 	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
 	}
-	hashstring, ok := query["hash"]
+	hashstring, ok := query["id"]
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}
