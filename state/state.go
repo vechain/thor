@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
@@ -213,15 +214,29 @@ func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
 	s.SetStructedStorage(addr, key, &hashStorage{value})
 }
 
-// GetStructedStorage get raw storage value for given address and key, and decode to StructedStorage.
-func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val StructedStorage) {
+// GetStructedStorage get and decode raw storage for given address and key.
+// 'val' should either implements StorageDecoder, or RLP decodable.
+func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
 	data, _ := s.sm.Get(storageKey{addr, key})
-	s.setError(val.Decode(data.([]byte)))
+	if dec, ok := val.(StorageDecoder); ok {
+		s.setError(dec.Decode(data.([]byte)))
+		return
+	}
+	s.setError(rlp.DecodeBytes(data.([]byte), val))
 }
 
-// SetStructedStorage encode StructedStorage and set as raw storage value for given address and key.
-func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val StructedStorage) {
-	data, err := val.Encode()
+// SetStructedStorage encode val and set as raw storage value for given address and key.
+// 'val' should ether implements StorageEncoder, or RLP encodable.
+func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
+	var (
+		data []byte
+		err  error
+	)
+	if enc, ok := val.(StorageEncoder); ok {
+		data, err = enc.Encode()
+	} else {
+		data, err = rlp.EncodeToBytes(val)
+	}
 	if err != nil {
 		s.setError(err)
 		return
