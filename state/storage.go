@@ -7,9 +7,13 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// StructedStorage storage data type should implement this.
-type StructedStorage interface {
+// StorageEncoder implement it to customize enconding process for storage data.
+type StorageEncoder interface {
 	Encode() ([]byte, error)
+}
+
+// StorageDecoder implement it to customize decoding process for storage data.
+type StorageDecoder interface {
 	Decode([]byte) error
 }
 
@@ -17,6 +21,10 @@ type hashStorage struct {
 	thor.Hash
 }
 
+var _ StorageEncoder = (*hashStorage)(nil)
+var _ StorageDecoder = (*hashStorage)(nil)
+
+// implements StorageEncoder.
 func (h *hashStorage) Encode() ([]byte, error) {
 	if h.Hash.IsZero() {
 		return nil, nil
@@ -25,6 +33,7 @@ func (h *hashStorage) Encode() ([]byte, error) {
 	return trimed, nil
 }
 
+// implements StorageDecoder.
 func (h *hashStorage) Decode(data []byte) error {
 	if len(data) == 0 {
 		h.Hash = thor.Hash{}
