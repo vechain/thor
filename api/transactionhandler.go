@@ -17,7 +17,7 @@ const TransactionHTTPPathPrefix = "/transaction"
 func NewTransactionHTTPRouter(router *mux.Router, ti *TransactionInterface) {
 	sub := router.PathPrefix(TransactionHTTPPathPrefix).Subrouter()
 
-	sub.Path("/hash/{hash}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ti.handleGetTransactionByHash))
+	sub.Path("/id/{id}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ti.handleGetTransactionByHash))
 	sub.Path("/blocknumber/{number}/txindex/{index}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ti.handleGetTransactionFromBlock))
 }
 
@@ -26,7 +26,7 @@ func (ti *TransactionInterface) handleGetTransactionByHash(w http.ResponseWriter
 	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
 	}
-	hashstring, ok := query["hash"]
+	hashstring, ok := query["id"]
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}

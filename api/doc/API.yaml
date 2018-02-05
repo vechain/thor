@@ -9,48 +9,262 @@ info:
 host: "localhost:3000"
 basePath: "/v1"
 tags:
-- name: "account"
+- name: "Account"
   description: "Everything about account"
-- name: "transaction"
+- name: "Transaction"
   description: "Everything about transaction"
-- name: "block"
+- name: "Block"
   description: "Everything about block"
 schemes:
-- "http"
+  - http
 paths:
-  /account/balance/{address}
+  /account/balance/{address}:
     get:
       tags:
-      - "account"
-      summary: "Get balance with address"
-      description: "Multiple status values can be provided with comma separated strings"
-      operationId: "findPetsByStatus"
+      - "Account"
+      summary: "Get balance by address"
+      description: "return account balance"
+      parameters:
+        - in: path
+          required: true
+          name: address
+          type: string
+          description: account address
       produces:
       - "application/json"
-      parameters:
-      - name: "address"
-        in: "query"
-        description: "Status values that need to be considered for filter"
-        required: true
-        type: "array"
-        items:
-          type: "string"
-          enum:
-          - "available"
-          - "pending"
-          - "sold"
-          default: "available"
-        collectionFormat: "multi"
       responses:
         200:
           description: "successful operation"
           schema:
-            type: "array"
-            items:
-              $ref: "#/definitions/Pet"
+            type: "object"
+            example: {
+                      "balance":0
+            }
         400:
-          description: "Invalid status value"
-      security:
-      - petstore_auth:
-        - "write:pets"
-        - "read:pets"
+          description: "Invalid address"
+  /account/code/{address}:
+    get:
+      tags:
+      - "Account"
+      summary: "Get code by address"
+      description: "only a contract returns its code ,otherwise returns nil"
+      parameters:
+        - in: path
+          required: true
+          name: address
+          type: string
+          description: account address
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example: {
+              "code":["0x00"]
+            }
+        400:
+          description: "Invalid address"
+  /account/storage/{address}/{key}:
+    get:
+      tags:
+      - "Account"
+      summary: "Get storage by address"
+      description: "returns storage value by address"
+      parameters:
+        - in: path
+          required: true
+          name: address
+          type: string
+          description: account address
+        - in: path
+          required: true
+          name: key
+          type: string
+          format: hash
+          description: storage hash
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example: {
+              "storagkey":"storagevalue" #both hash
+            }
+        400:
+          description: "Invalid params"
+  /transaction/id/{id}:
+    get:
+      tags:
+      - "Transaction"
+      summary: "Get transaction by transaction id"
+      description: "returns transaction by transaction id"
+      parameters:
+        - in: path
+          required: true
+          name: id
+          type: string
+          description: transaction id
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example: {
+                        "ID":"0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd",
+                        "Index":0,
+                        "BlockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
+                        "BlockNumber":1,
+                        "GasPrice":1000,
+                        "Gas":1000,
+                        "From":"0x970e8128ab834e8eac17ab8e3812f010678cf791",
+                        "Clauses":[
+                                    {
+                                      "To":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01a",
+                                      "Value":10,
+                                      "Data":null
+                                    }
+                                  ]
+                      }
+        400:
+          description: "Invalid params"
+  /transaction/blocknumber/{number}/txindex/{index}:
+    get:
+      tags:
+      - "Transaction"
+      summary: "Get transaction by blocknumber with transaction index"
+      description: "returns transaction by transaction index"
+      parameters:
+        - in: path
+          required: true
+          name: number
+          type: integer
+          description: block number
+        - in: path
+          required: true
+          name: index
+          type: integer
+          description: transaction index
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example:  {
+                        "ID":"0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd",
+                        "Index":0,
+                        "BlockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
+                        "BlockNumber":1,
+                        "GasPrice":1000,
+                        "Gas":1000,
+                        "From":"0x970e8128ab834e8eac17ab8e3812f010678cf791",
+                        "Clauses":[
+                                    {
+                                      "To":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01a",
+                                      "Value":10,
+                                      "Data":null
+                                    }
+                                  ]
+                      }
+        400:
+          description: "Invalid params"
+  /block/id/{id}:
+    get:
+      tags:
+      - "Block"
+      summary: "Get block by block id"
+      description: "returns block by block id"
+      parameters:
+        - in: path
+          required: true
+          name: id
+          type: string
+          description: block id
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example:  {
+                        "Number":1,
+                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "Timestamp":0,
+                        "TotalScore":0,
+                        "GasLimit":0,
+                        "GasUsed":0,
+                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "Txs":[
+                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
+                              ]
+                      }
+        400:
+          description: "Invalid params"
+  /block/number/{number}:
+    get:
+      tags:
+      - "Block"
+      summary: "Get block by block number"
+      description: "returns block by block number"
+      parameters:
+        - in: path
+          required: true
+          name: number
+          type: integer
+          description: block number
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example:  {
+                        "Number":1,
+                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "Timestamp":0,
+                        "TotalScore":0,
+                        "GasLimit":0,
+                        "GasUsed":0,
+                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "Txs":[
+                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
+                              ]
+                      }
+        400:
+          description: "Invalid params"
+  /block/best:
+    get:
+      tags:
+      - "Block"
+      summary: "Get best block"
+      description: "returns best block"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "successful operation"
+          schema:
+            type: "object"
+            example:  {
+                        "Number":0,
+                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "Timestamp":0,
+                        "TotalScore":0,
+                        "GasLimit":0,
+                        "GasUsed":0,
+                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "Txs":[
+                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
+                              ]
+                      }
+        400:
+          description: "Invalid params"

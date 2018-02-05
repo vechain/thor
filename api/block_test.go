@@ -28,7 +28,7 @@ func TestBlock(t *testing.T) {
 	raw := types.ConvertBlock(block)
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/block/hash/%v", block.Header().ID().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/block/id/%v", block.Header().ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
