@@ -124,7 +124,7 @@ type EVM struct {
 	// this value is important for generating contract address.
 	contractCreationCount uint64
 
-	nativeContractCallback func(common.Address) PrecompiledContract
+	nativeContractCallback func(common.Address) CheckedPrecompiledContract
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -143,7 +143,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 }
 
 // RegisterNativeContracts register native contracts.
-func (evm *EVM) RegisterNativeContracts(cb func(common.Address) PrecompiledContract) {
+func (evm *EVM) RegisterNativeContracts(cb func(common.Address) CheckedPrecompiledContract) {
 	evm.nativeContractCallback = cb
 }
 

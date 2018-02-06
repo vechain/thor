@@ -41,6 +41,9 @@ type Log struct {
 // State to decouple with state.State
 type State statedb.State
 
+// CheckedPrecompiledContract ref evm.CheckedPrecompiledContract.
+type CheckedPrecompiledContract evm.CheckedPrecompiledContract
+
 // VM is a facade for ethEvm.
 type VM struct {
 	evm     *evm.EVM
@@ -113,8 +116,8 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 }
 
 // RegisterNativeContracts register native contracts.
-func (vm *VM) RegisterNativeContracts(cb func(thor.Address) evm.PrecompiledContract) {
-	vm.evm.RegisterNativeContracts(func(addr common.Address) evm.PrecompiledContract {
+func (vm *VM) RegisterNativeContracts(cb func(thor.Address) CheckedPrecompiledContract) {
+	vm.evm.RegisterNativeContracts(func(addr common.Address) evm.CheckedPrecompiledContract {
 		return cb(thor.Address(addr))
 	})
 }
