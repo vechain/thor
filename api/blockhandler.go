@@ -2,40 +2,39 @@ package api
 
 import (
 	"encoding/json"
-	"net/http"
-	"strconv"
-
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
+	"net/http"
+	"strconv"
 )
 
 //BlockHTTPPathPrefix http path prefix
-const BlockHTTPPathPrefix = "/block"
+const BlockHTTPPathPrefix = "/blocks"
 
 //NewBlockHTTPRouter add path to router
 func NewBlockHTTPRouter(router *mux.Router, bi *BlockInterface) {
 	sub := router.PathPrefix(BlockHTTPPathPrefix).Subrouter()
 
-	sub.Path("/id/{id}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByHash))
-	sub.Path("/number/{number}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
+	sub.Path("").Queries("number", "{number:[0-9]+}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByNumber))
+	sub.Path("/{id}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBlockByID))
 	sub.Path("/best").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(bi.handleGetBestBlock))
 }
 
-func (bi *BlockInterface) handleGetBlockByHash(w http.ResponseWriter, req *http.Request) error {
+func (bi *BlockInterface) handleGetBlockByID(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
 	}
-	hashstring, ok := query["id"]
+	id, ok := query["id"]
 	if !ok {
 		return httpx.Error(" Invalid Params! ", 400)
 	}
-	hash, err := thor.ParseHash(hashstring)
+	blkID, err := thor.ParseHash(id)
 	if err != nil {
 		return httpx.Error(" Invalid blockhash! ", 400)
 	}
-	block, err := bi.GetBlockByHash(hash)
+	block, err := bi.GetBlockByID(blkID)
 	if err != nil {
 		return httpx.Error(" Block not found! ", 400)
 	}

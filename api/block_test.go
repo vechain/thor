@@ -28,7 +28,7 @@ func TestBlock(t *testing.T) {
 	raw := types.ConvertBlock(block)
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/block/id/%v", block.Header().ID().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/blocks/%v", block.Header().ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(string(r))
+
 	rb := new(types.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
@@ -45,8 +45,8 @@ func TestBlock(t *testing.T) {
 
 	checkBlock(t, raw, rb)
 
-	//get transaction from blocknumber with index
-	res, err = http.Get(ts.URL + fmt.Sprintf("/block/number/%v", 1))
+	// get transaction from blocknumber with index
+	res, err = http.Get(ts.URL + "/blocks?number=1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	fmt.Println(string(r))
 	rb = new(types.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
@@ -71,7 +71,9 @@ func addBlock(t *testing.T) (*block.Block, *httptest.Server) {
 	bi := api.NewBlockInterface(chain)
 	router := mux.NewRouter()
 	api.NewBlockHTTPRouter(router, bi)
+	fmt.Println(bi, router)
 	ts := httptest.NewServer(router)
+
 	stateC := state.NewCreator(db)
 	b, err := genesis.Dev.Build(stateC)
 	if err != nil {

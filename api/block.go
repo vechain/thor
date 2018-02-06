@@ -25,9 +25,9 @@ func NewBlockInterface(blkGetter blockGetter) *BlockInterface {
 
 }
 
-//GetBlockByHash return block by address
-func (bi *BlockInterface) GetBlockByHash(blockHash thor.Hash) (*types.Block, error) {
-	b, err := bi.blkGetter.GetBlock(blockHash)
+//GetBlockByID return block by address
+func (bi *BlockInterface) GetBlockByID(blockID thor.Hash) (*types.Block, error) {
+	b, err := bi.blkGetter.GetBlock(blockID)
 	if err != nil {
 		return nil, err
 	}

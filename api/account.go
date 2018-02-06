@@ -1,10 +1,10 @@
 package api
 
 import (
+	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"math/big"
 )
 
 type bestBlockGetter interface {
@@ -25,32 +25,6 @@ func NewAccountInterface(bestBlkGetter bestBlockGetter, stateCreator *state.Crea
 	}
 }
 
-//GetBalance return balance from account
-func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
-	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
-	if err != nil {
-		return new(big.Int)
-	}
-	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
-	if err != nil {
-		return new(big.Int)
-	}
-	return state.GetBalance(address)
-}
-
-//GetCode return code from account
-func (ai *AccountInterface) GetCode(address thor.Address) []byte {
-	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
-	if err != nil {
-		return nil
-	}
-	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
-	if err != nil {
-		return nil
-	}
-	return state.GetCode(address)
-}
-
 //GetStorage return storage value from key
 func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor.Hash {
 	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
@@ -62,4 +36,22 @@ func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor
 		return thor.Hash{}
 	}
 	return state.GetStorage(address, key)
+}
+
+//GetAccount returns account by address
+func (ai *AccountInterface) GetAccount(address thor.Address) *types.Account {
+	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
+	if err != nil {
+		return nil
+	}
+	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
+	if err != nil {
+		return nil
+	}
+	balance := state.GetBalance(address)
+	code := state.GetCode(address)
+	return &types.Account{
+		Balance: balance,
+		Code:    code,
+	}
 }
