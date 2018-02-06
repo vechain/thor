@@ -43,7 +43,7 @@ paths:
                       }
         400:
           description: "Invalid address"
-  /accounts/storage/{address}/{key}:
+  /accounts/{address}/storage:
     get:
       tags:
       - "Account"
@@ -55,7 +55,7 @@ paths:
           name: address
           type: string
           description: account address
-        - in: path
+        - in: query
           required: true
           name: key
           type: string
@@ -176,7 +176,7 @@ paths:
                       }
         400:
           description: "Invalid params"
-  /block/best:
+  /blocks/best:
     get:
       tags:
       - "Block"
