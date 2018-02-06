@@ -62,6 +62,7 @@ func TestAccount(t *testing.T) {
 
 	for _, v := range accounts {
 		address := v.in.addr
+		fmt.Println(address.String(), len(address.String()))
 		res, err := http.Get(ts.URL + fmt.Sprintf("/accounts/%v", address.String()))
 		if err != nil {
 			t.Fatal(err)
@@ -75,11 +76,10 @@ func TestAccount(t *testing.T) {
 		if err := json.Unmarshal(r, &a); err != nil {
 			t.Fatal(err)
 		}
-		fmt.Println(a)
 		assert.Equal(t, v.want.balance, a.Balance, "balance should be equal")
 		assert.Equal(t, v.want.code, a.Code, "code should be equal")
 
-		res, err = http.Get(ts.URL + fmt.Sprintf("/accounts/storage/%v/%v", address.String(), storageKey.String()))
+		res, err = http.Get(ts.URL + fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
 		if err != nil {
 			t.Fatal(err)
 		}

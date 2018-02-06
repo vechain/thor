@@ -16,7 +16,7 @@ func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
 	sub := router.PathPrefix(AccountHTTPPathPrefix).Subrouter()
 
 	sub.Path("/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetAccount))
-	sub.Path("/storage/{address}/{key}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetStorage))
+	sub.Path("/{address}/storage").Queries("key", "{key}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetStorage))
 }
 
 func (ai *AccountInterface) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
