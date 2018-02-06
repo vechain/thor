@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -61,7 +62,7 @@ func TestAccount(t *testing.T) {
 
 	for _, v := range accounts {
 		address := v.in.addr
-		res, err := http.Get(ts.URL + fmt.Sprintf("/account/balance/%v", address.String()))
+		res, err := http.Get(ts.URL + fmt.Sprintf("/accounts/%v", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,29 +71,15 @@ func TestAccount(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		var a types.Account
+		if err := json.Unmarshal(r, &a); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println(a)
+		assert.Equal(t, v.want.balance, a.Balance, "balance should be equal")
+		assert.Equal(t, v.want.code, a.Code, "code should be equal")
 
-		b := make(map[string]*big.Int)
-		if err := json.Unmarshal(r, &b); err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, v.want.balance, b["balance"], "balance should be equal")
-
-		res, err = http.Get(ts.URL + fmt.Sprintf("/account/code/%v", address.String()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		r, err = ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		c := make(map[string][]byte)
-		if err := json.Unmarshal(r, &c); err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, v.want.code, c["code"], "code should be equal")
-
-		res, err = http.Get(ts.URL + fmt.Sprintf("/account/storage/%v/%v", address.String(), storageKey.String()))
+		res, err = http.Get(ts.URL + fmt.Sprintf("/accounts/storage/%v/%v", address.String(), storageKey.String()))
 		if err != nil {
 			t.Fatal(err)
 		}

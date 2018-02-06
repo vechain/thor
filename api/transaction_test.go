@@ -33,7 +33,7 @@ func TestTransaction(t *testing.T) {
 	}
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/transaction/id/%v", tx.ID().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/transactions/%v", tx.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,23 +48,6 @@ func TestTransaction(t *testing.T) {
 	}
 
 	checkTx(t, raw, rtx)
-
-	//get transaction from blocknumber with index
-	res, err = http.Get(ts.URL + fmt.Sprintf("/transaction/blocknumber/%v/txindex/%v", 1, 0))
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err = ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	rt := new(types.Transaction)
-	if err := json.Unmarshal(r, &rt); err != nil {
-		t.Fatal(err)
-	}
-
-	checkTx(t, raw, rt)
 
 }
 
