@@ -38,6 +38,7 @@ type params struct {
 	sslot   *sslot.StorageSlot
 }
 
+// RuntimeBytecodes load runtime byte codes.
 func (p *params) RuntimeBytecodes() []byte {
 	return mustLoadHexData("compiled/Params.bin-runtime")
 }
@@ -54,16 +55,19 @@ func (p *params) PackSet(key string, value *big.Int) *tx.Clause {
 		WithData(mustPack(p.abi, "set", key, value))
 }
 
+// NativeGet native way to get param.
 func (p *params) NativeGet(state *state.State, key string) *big.Int {
 	var v big.Int
 	p.sslot.Get(state, p.sslot.MapKey(key), (*stgBigInt)(&v))
 	return &v
 }
 
+// NativeSet native way to set param.
 func (p *params) NativeSet(state *state.State, key string, value *big.Int) {
 	p.sslot.Set(state, p.sslot.MapKey(key), (*stgBigInt)(value))
 }
 
+// HandleNative helper method to hook VM contract calls.
 func (p *params) HandleNative(state *state.State, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 	name, err := p.rabi.NameOf(input)
 	if err != nil {
@@ -84,6 +88,7 @@ func (p *params) HandleNative(state *state.State, input []byte) func(useGas func
 	case "nativeSet":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 			if caller != p.Address {
+				// only allow params' address to access this method
 				return nil, errNativeNotPermitted
 			}
 			if !useGas(ethparams.SstoreResetGas) {

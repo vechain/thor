@@ -34,6 +34,7 @@ type authority struct {
 	proposerIndexMap *sslot.StorageSlot
 }
 
+// RuntimeBytecodes load runtime byte codes.
 func (a *authority) RuntimeBytecodes() []byte {
 	return mustLoadHexData("compiled/Authority.bin-runtime")
 }
@@ -55,6 +56,7 @@ func (a *authority) nativeIndexOfProposer(state *state.State, addr thor.Address)
 	return
 }
 
+// NativeAddProposer native way to add proposer.
 func (a *authority) NativeAddProposer(state *state.State, addr thor.Address) bool {
 	if a.nativeIndexOfProposer(state, addr) > 0 {
 		// aready exists
@@ -73,6 +75,7 @@ func (a *authority) NativeAddProposer(state *state.State, addr thor.Address) boo
 	return true
 }
 
+// NativeRemoveProposer native way to remove proposer.
 func (a *authority) NativeRemoveProposer(state *state.State, addr thor.Address) bool {
 	index := a.nativeIndexOfProposer(state, addr)
 	if index == 0 {
@@ -99,6 +102,7 @@ func (a *authority) NativeRemoveProposer(state *state.State, addr thor.Address) 
 
 }
 
+// NativeGetProposer native way to get proposer status.
 func (a *authority) NativeGetProposer(state *state.State, addr thor.Address) (bool, uint32) {
 	indexMapKey := a.proposerIndexMap.MapKey(addr)
 	var arrayIndex uint32
@@ -112,6 +116,7 @@ func (a *authority) NativeGetProposer(state *state.State, addr thor.Address) (bo
 	return true, p.Status
 }
 
+// NativeUpdateProposer native way to update proposer status.
 func (a *authority) NativeUpdateProposer(state *state.State, addr thor.Address, status uint32) bool {
 	indexMapKey := a.proposerIndexMap.MapKey(addr)
 	var arrayIndex uint32
@@ -127,6 +132,7 @@ func (a *authority) NativeUpdateProposer(state *state.State, addr thor.Address, 
 	return true
 }
 
+// NativeGetProposers native way to get proposers list.
 func (a *authority) NativeGetProposers(state *state.State) []poa.Proposer {
 	var plen uint32
 	a.proposers.Get(state, a.proposers.DataKey(), (*stgUInt32)(&plen))
@@ -141,6 +147,7 @@ func (a *authority) NativeGetProposers(state *state.State) []poa.Proposer {
 	return proposers
 }
 
+// HandleNative helper method to hook VM contract calls.
 func (a *authority) HandleNative(state *state.State, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 	name, err := a.rabi.NameOf(input)
 	if err != nil {
@@ -149,6 +156,7 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 	switch name {
 	case "nativeAddProposer":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+			// permission check
 			if caller != a.Address {
 				return nil, errNativeNotPermitted
 			}
@@ -163,6 +171,7 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 		}
 	case "nativeRemoveProposer":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+			// permission check
 			if caller != a.Address {
 				return nil, errNativeNotPermitted
 			}
