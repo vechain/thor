@@ -14,15 +14,15 @@ type Proposer struct {
 
 // IsOnline returns if its status marked to online.
 func (p *Proposer) IsOnline() bool {
-	return (p.Status & uint32(1)) == 0
+	return (p.Status & uint32(1)) == 1
 }
 
 // SetOnline marks online or not.
 func (p *Proposer) SetOnline(online bool) {
 	if online {
-		p.Status &= uint32(0xfffffffe)
-	} else {
 		p.Status |= uint32(1)
+	} else {
+		p.Status &= uint32(0xfffffffe)
 	}
 }
 
