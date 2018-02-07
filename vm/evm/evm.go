@@ -20,11 +20,10 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/vechain/thor/thor"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/vechain/thor/thor"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -49,10 +48,12 @@ func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, erro
 		if p := precompiles[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
 		}
-		// handle native contracts
-		if evm.nativeContractCallback != nil {
-			if p := evm.nativeContractCallback(*contract.CodeAddr); p != nil {
-				return RunPrecompiledContract(p, input, contract)
+		// handle contract hook
+		if evm.contractHooks != nil {
+			if hook := evm.contractHooks[thor.Address(*contract.CodeAddr)]; hook != nil {
+				if runFn := hook(input); runFn != nil {
+					return runFn(contract.UseGas, thor.Address(contract.CallerAddress))
+				}
 			}
 		}
 	}
@@ -89,6 +90,9 @@ type Context struct {
 	ClauseIndex uint64
 }
 
+// ContractHook hooks contract calls.
+type ContractHook func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error)
+
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
 // the provided context. It should be noted that any error
@@ -124,7 +128,7 @@ type EVM struct {
 	// this value is important for generating contract address.
 	contractCreationCount uint64
 
-	nativeContractCallback func(common.Address) CheckedPrecompiledContract
+	contractHooks map[thor.Address]ContractHook
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -142,9 +146,12 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	return evm
 }
 
-// RegisterNativeContracts register native contracts.
-func (evm *EVM) RegisterNativeContracts(cb func(common.Address) CheckedPrecompiledContract) {
-	evm.nativeContractCallback = cb
+// HookContract hook contract calls.
+func (evm *EVM) HookContract(addr thor.Address, hook ContractHook) {
+	if evm.contractHooks == nil {
+		evm.contractHooks = make(map[thor.Address]ContractHook)
+	}
+	evm.contractHooks[addr] = hook
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -181,10 +188,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			precompiles = PrecompiledContractsByzantium
 		}
 		isPrecompiled := precompiles[addr] != nil
-		// also check native contracts
-		if !isPrecompiled && evm.nativeContractCallback != nil {
-			isPrecompiled = evm.nativeContractCallback(addr) != nil
-		}
 		if !isPrecompiled && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
 			return nil, gas, nil
 		}
