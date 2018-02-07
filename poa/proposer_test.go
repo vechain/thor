@@ -9,7 +9,7 @@ import (
 
 func TestProposer(t *testing.T) {
 	p := poa.Proposer{}
-	assert.True(t, p.IsOnline())
+	assert.False(t, p.IsOnline())
 	p.SetOnline(false)
 	assert.False(t, p.IsOnline())
 	p.SetOnline(true)
