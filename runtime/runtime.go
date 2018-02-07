@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/contracts"
+	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
@@ -83,14 +83,22 @@ func (rt *Runtime) execute(
 		ClauseIndex: uint64(index),
 	}
 
-	vm := vm.New(ctx, rt.state, rt.vmConfig)
+	env := vm.New(ctx, rt.state, rt.vmConfig)
+	env.HookContract(cs.Authority.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+		return cs.Authority.HandleNative(rt.state, input)
+	})
+
+	env.HookContract(cs.Params.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+		return cs.Params.HandleNative(rt.state, input)
+	})
+
 	if to == nil {
-		return vm.Create(txOrigin, clause.Data(), gas, clause.Value())
+		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
 	}
 	if isStatic {
-		return vm.StaticCall(txOrigin, *to, clause.Data(), gas)
+		return env.StaticCall(txOrigin, *to, clause.Data(), gas)
 	}
-	return vm.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
+	return env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 }
 
 // StaticCall executes signle clause which ensure no modifications to state.
@@ -118,20 +126,20 @@ func (rt *Runtime) Call(
 }
 
 func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
-	clause := contracts.Energy.PackConsume(caller, callee, amount)
+	clause := cs.Energy.PackConsume(caller, callee, amount)
 	output := rt.execute(clause,
-		0, math.MaxUint32, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
+		0, math.MaxUint32, cs.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
 	}
 
-	return contracts.Energy.UnpackConsume(output.Value), nil
+	return cs.Energy.UnpackConsume(output.Value), nil
 }
 
 func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
-	clause := contracts.Energy.PackCharge(addr, amount)
+	clause := cs.Energy.PackCharge(addr, amount)
 	output := rt.execute(clause,
-		0, math.MaxUint32, contracts.Energy.Address, &big.Int{}, thor.Hash{}, false)
+		0, math.MaxUint32, cs.Energy.Address, &big.Int{}, thor.Hash{}, false)
 	if output.VMErr != nil {
 		return errors.Wrap(output.VMErr, "charge energy")
 	}

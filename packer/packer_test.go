@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/thor"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/contracts"
@@ -15,6 +13,7 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 

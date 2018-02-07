@@ -1,8 +1,6 @@
 package sslot_test
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestSSlot(t *testing.T) {
 

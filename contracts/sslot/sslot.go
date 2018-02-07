@@ -12,8 +12,8 @@ import (
 
 // StorageSlot similar concept as solidity's storage layout slot.
 // The slot is bound to address and slot index.
+// Note that it's NOT compiant with solidity storage layout.
 type StorageSlot struct {
-	state   *state.State
 	address thor.Address
 	slot    uint32
 
@@ -22,12 +22,11 @@ type StorageSlot struct {
 }
 
 // New create a slot instance.
-func New(state *state.State, address thor.Address, slot uint32) *StorageSlot {
+func New(address thor.Address, slot uint32) *StorageSlot {
 	var dataKey thor.Hash
 	binary.BigEndian.PutUint32(dataKey[thor.HashLength-4:], slot)
 
 	return &StorageSlot{
-		state,
 		address,
 		slot,
 		dataKey,
@@ -38,14 +37,14 @@ func New(state *state.State, address thor.Address, slot uint32) *StorageSlot {
 // Get get value for given key.
 // 'val' is to recevei decoded value, and it should implement
 // state.StorageDecoder or rlp decodable.
-func (ss *StorageSlot) Get(key thor.Hash, val interface{}) {
-	ss.state.GetStructedStorage(ss.address, key, val)
+func (ss *StorageSlot) Get(state *state.State, key thor.Hash, val interface{}) {
+	state.GetStructedStorage(ss.address, key, val)
 }
 
 // Set set value for given key.
 // 'val' should implement state.StorageEncoder or rlp encodable.
-func (ss *StorageSlot) Set(key thor.Hash, val interface{}) {
-	ss.state.SetStructedStorage(ss.address, key, val)
+func (ss *StorageSlot) Set(state *state.State, key thor.Hash, val interface{}) {
+	state.SetStructedStorage(ss.address, key, val)
 }
 
 // DataKey returns the key for accessing slot data.
