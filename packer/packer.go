@@ -7,7 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/contracts"
+	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -129,15 +129,7 @@ func (p *Packer) pack(
 	affectedAddresses := make(map[thor.Address]interface{})
 	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> owner
 
-	out := rt.StaticCall(
-		contracts.Params.PackGet(contracts.ParamRewardRatio),
-		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
-
-	if out.VMErr != nil {
-		return nil, errors.Wrap(out.VMErr, "vm")
-	}
-
-	rewardRatio := contracts.Params.UnpackGet(out.Value)
+	rewardRatio := cs.Params.NativeGet(rt.State(), cs.ParamRewardRatio)
 
 	for txIter.HasNext() {
 		tx := txIter.Next()
@@ -224,24 +216,24 @@ func (p *Packer) pack(
 
 	builder.GasUsed(totalGasUsed)
 
-	out = rt.Call(
-		contracts.Energy.PackCharge(p.beneficiary, totalReward),
-		0, math.MaxUint64, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+	out := rt.Call(
+		cs.Energy.PackCharge(p.beneficiary, totalReward),
+		0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
 	if out.VMErr != nil {
 		return nil, errors.Wrap(out.VMErr, "vm")
 	}
 
 	for addr := range affectedAddresses {
-		out := rt.Call(contracts.Energy.PackUpdateBalance(addr),
-			0, math.MaxUint64, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+		out := rt.Call(cs.Energy.PackUpdateBalance(addr),
+			0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
 		if out.VMErr != nil {
 			return nil, errors.Wrap(out.VMErr, "vm")
 		}
 	}
 
 	for addr, owner := range createdContracts {
-		out := rt.Call(contracts.Energy.PackSetOwnerForContract(addr, owner),
-			0, math.MaxUint64, contracts.Energy.Address, &big.Int{}, thor.Hash{})
+		out := rt.Call(cs.Energy.PackSetOwnerForContract(addr, owner),
+			0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
 		if out.VMErr != nil {
 			return nil, errors.Wrap(out.VMErr, "vm")
 		}

@@ -23,12 +23,12 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
 		Alloc(cs.Energy.Address, &big.Int{}, cs.Energy.RuntimeBytecodes()).
 		Alloc(cs.Params.Address, &big.Int{}, cs.Params.RuntimeBytecodes()).
 		/// initialize
-		Call(cs.Authority.PackInitialize(cs.Voting.Address)).
+		Call(cs.Authority.PackInitialize()).
 		Call(cs.Energy.PackInitialize(cs.Voting.Address)).
-		Call(cs.Params.PackInitialize(cs.Voting.Address)).
+		Call(cs.Params.PackInitialize()).
 		/// preset
-		Call(cs.Params.PackPreset(cs.ParamRewardRatio, big.NewInt(3e17))).
-		Call(cs.Params.PackPreset(cs.ParamBaseGasPrice, big.NewInt(1000))).
+		Call(cs.Params.PackSet(cs.ParamRewardRatio, big.NewInt(3e17))).
+		Call(cs.Params.PackSet(cs.ParamBaseGasPrice, big.NewInt(1000))).
 		Build(stateCreator)
 	if err != nil {
 		return nil, err

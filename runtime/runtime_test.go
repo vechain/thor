@@ -43,22 +43,22 @@ func TestCall(t *testing.T) {
 			t.Fatal(out.VMErr)
 		}
 	}
-	{
+	// {
 
-		out := rt.StaticCall(
-			contracts.Energy.PackBalanceOf(addr),
-			0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
-		if out.VMErr != nil {
-			t.Fatal(out.VMErr)
-		}
+	// 	out := rt.StaticCall(
+	// 		contracts.Energy.PackBalanceOf(addr),
+	// 		0, 1000000, thor.Address{}, new(big.Int), thor.Hash{})
+	// 	if out.VMErr != nil {
+	// 		t.Fatal(out.VMErr)
+	// 	}
 
-		var retAmount *big.Int
-		if err := contracts.Energy.ABI.Unpack(&retAmount, "balanceOf", out.Value); err != nil {
-			t.Fatal(err)
-		}
+	// 	var retAmount *big.Int
+	// 	if err := contracts.Energy.ABI.Unpack(&retAmount, "balanceOf", out.Value); err != nil {
+	// 		t.Fatal(err)
+	// 	}
 
-		assert.Equal(t, amount, retAmount)
-	}
+	// 	assert.Equal(t, amount, retAmount)
+	// }
 }
 
 func TestExecuteTransaction(t *testing.T) {

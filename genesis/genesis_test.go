@@ -1,8 +1,6 @@
 package genesis_test
 
 import (
-	"fmt"
-	"math"
 	"math/big"
 	"testing"
 
@@ -98,11 +96,11 @@ func BenchmarkConsumeEnergy(b *testing.B) {
 		b.Fatal(out.VMErr)
 	}
 
-	out = rt.StaticCall(contracts.Energy.PackBalanceOf(thor.BytesToAddress([]byte("acc1"))),
-		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
-	var bal *big.Int
-	fmt.Println(contracts.Energy.ABI.Unpack(&bal, "balanceOf", out.Value))
-	fmt.Println(bal)
+	// out = rt.StaticCall(contracts.Energy.PackBalanceOf(thor.BytesToAddress([]byte("acc1"))),
+	// 	0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
+	// var bal *big.Int
+	// fmt.Println(contracts.Energy.ABI.Unpack(&bal, "balanceOf", out.Value))
+	// fmt.Println(bal)
 
 	// root, err := st.Stage().Commit()
 	// if err != nil {
