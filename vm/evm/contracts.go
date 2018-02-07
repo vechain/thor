@@ -37,12 +37,6 @@ type PrecompiledContract interface {
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
-// CheckedPrecompiledContract extends PrecompiledContract, with caller permission check.
-type CheckedPrecompiledContract interface {
-	PrecompiledContract
-	IsCallerPermitted(input []byte, caller common.Address) bool
-}
-
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
 // contracts used in the Frontier and Homestead releases.
 var PrecompiledContractsHomestead = map[common.Address]PrecompiledContract{
@@ -67,11 +61,6 @@ var PrecompiledContractsByzantium = map[common.Address]PrecompiledContract{
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	if checked, ok := p.(CheckedPrecompiledContract); ok {
-		if !checked.IsCallerPermitted(input, contract.CallerAddress) {
-			return nil, errors.New("evm: caller not permitted")
-		}
-	}
 	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
 		return p.Run(input)
