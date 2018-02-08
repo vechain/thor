@@ -18,7 +18,6 @@ contract Energy is Token {
         uint256 balance;    //the energy balance
         uint64 timestamp;   //for calculate how much energy would be grown
         uint128 vetamount;  //vet balance
-        uint64 version;     //index of `snapGRs`
     }
 
     //which represents the detail info for a shared energy credits
@@ -165,28 +164,28 @@ contract Energy is Token {
         }
 
         uint256 vetamount = balances[_owner].vetamount;
-        uint256 version = balances[_owner].version;
-        if ( timeWithVer(revisionLen-1) <= time || version == revisionLen - 1 ) {
+        if ( timeWithVer(revisionLen-1) <= time || revisionLen == 1 ) {
             return amount.add(birthWithVer(revisionLen-1).mul(vetamount.mul(now.sub(time))).div(UNIT));
-        }
+        } 
 
+        amount = amount.add(birthWithVer(revisionLen-1).mul(vetamount.mul(now.sub(timeWithVer(revisionLen-1)))).div(UNIT));
         //`_owner` has not operated his account for a long time
-        for ( uint256 i = version; i < revisionLen; i++ ) {
+        for ( uint256 i = revisionLen - 1; i >= 0; i-- ) {
             uint256 currentBirth = birthWithVer(i);
             uint256 currentTime = timeWithVer(i);
-            if ( i == version ) {
-                uint256 nextTime = timeWithVer(i+1);
-                amount = amount.add(currentBirth.mul(vetamount.mul(nextTime.sub(time))).div(UNIT));
-                continue;
+            if ( i >= 1 ) {
+                uint256 lastBirth = birthWithVer(i-1);
+                uint256 lastTime = timeWithVer(i-1);
+                if ( lastTime >= time ) {
+                    if ( i-1 == 0 ) {
+                        return amount.add(lastBirth.mul(vetamount.mul(currentTime.sub(lastTime))).div(UNIT));
+                    }
+                    amount = amount.add(lastBirth.mul(vetamount.mul(currentTime.sub(lastTime))).div(UNIT));
+                    continue;
+                } else {
+                    return amount.add(currentBirth.mul(vetamount.mul(currentTime.sub(time))).div(UNIT));
+                }
             }
-            
-            if ( i == revisionLen - 1 ) {
-                amount = amount.add(currentBirth.mul(vetamount.mul(now.sub(currentTime))).div(UNIT));
-                return amount;
-            }
-
-            uint256 nTime = timeWithVer(i+1);
-            amount = amount.add(currentBirth.mul(vetamount.mul(nTime.sub(currentTime))).div(UNIT));
         }
     }
 
@@ -202,10 +201,6 @@ contract Energy is Token {
         balances[_owner].balance = balanceOf(_owner);
         balances[_owner].vetamount = _owner.balance.toUINT128();
         balances[_owner].timestamp = uint64(now);
-        uint256 revisionLen = lengthOfRevisions();
-        if ( revisionLen > 0 ) {
-            balances[_owner].version = uint64(revisionLen - 1);
-        }
         return balances[_owner].balance;
     }
 
