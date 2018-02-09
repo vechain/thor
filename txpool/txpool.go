@@ -22,7 +22,8 @@ var (
 
 //PoolConfig PoolConfig
 type PoolConfig struct {
-	PriceLimit uint64        // Minimum gas price to enforce for acceptance into the pool
+	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
+	QueueLimit uint64
 	PoolSize   uint64        // Maximum number of executable transaction slots for all accounts
 	Lifetime   time.Duration // Maximum amount of time non-executable transaction are queued
 }
@@ -30,7 +31,8 @@ type PoolConfig struct {
 //DefaultTxPoolConfig DefaultTxPoolConfig
 var DefaultTxPoolConfig = PoolConfig{
 	PriceLimit: 1000,
-	PoolSize:   1000,
+	QueueLimit: 1024,
+	PoolSize:   10000,
 	Lifetime:   200,
 }
 
@@ -40,19 +42,33 @@ type TxPool struct {
 	chain    *chain.Chain
 	iterator *Iterator
 	all      map[thor.Hash]*TxObject
-	m        *sync.RWMutex
+	m        sync.RWMutex
 }
 
 //NewTxPool NewTxPool
-func NewTxPool(chain *chain.Chain) *TxPool {
+func NewTxPool(chain *chain.Chain, poolConfig PoolConfig) *TxPool {
 	pool := &TxPool{
-		config: DefaultTxPoolConfig,
+		config: poolConfig,
 		chain:  chain,
 		all:    make(map[thor.Hash]*TxObject),
-		m:      new(sync.RWMutex),
 	}
-	//config santize
+	pool.sanitize()
 	return pool
+}
+
+func (pool *TxPool) sanitize() {
+	if pool.config.Lifetime <= 0 {
+		pool.config.Lifetime = DefaultTxPoolConfig.Lifetime
+	}
+	if pool.config.PoolSize <= 0 {
+		pool.config.PoolSize = DefaultTxPoolConfig.PoolSize
+	}
+	if pool.config.QueueLimit <= 0 || pool.config.QueueLimit > pool.config.PoolSize {
+		pool.config.QueueLimit = DefaultTxPoolConfig.QueueLimit
+	}
+	if pool.config.PriceLimit <= 0 {
+		pool.config.PriceLimit = DefaultTxPoolConfig.PriceLimit
+	}
 }
 
 //Add transaction
@@ -77,9 +93,8 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 
 	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.Header().ID(), pool.chain)
 	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Header().Number(), delay)
+	pool.all[txID] = NewTxObject(tx, conversionEn, time.Now().Unix())
 
-	obj := NewTxObject(tx, conversionEn, time.Now().Unix())
-	pool.all[txID] = obj
 	return nil
 }
 
@@ -89,20 +104,22 @@ func (pool *TxPool) NewIterator() *Iterator {
 	defer pool.m.RUnlock()
 
 	var objs TxObjects
+	l := uint64(len(pool.all))
+	i := uint64(0)
 	for key, obj := range pool.all {
 		if time.Now().Unix()-obj.CreateTime() > int64(pool.config.Lifetime) {
-			delete(pool.all, key)
+			pool.Delete(key)
 			continue
 		}
-		objs = append(objs, obj)
+		if l > pool.config.QueueLimit && i < pool.config.QueueLimit {
+			objs = append(objs, obj)
+			i++
+		} else {
+			break
+		}
 	}
 	sort.Sort(objs)
 	return newIterator(objs, pool)
-}
-
-//GetTxObject returns a txobj
-func (pool *TxPool) GetTxObject(objID thor.Hash) *TxObject {
-	return pool.all[objID]
 }
 
 //Delete delete a transaction
@@ -112,6 +129,16 @@ func (pool *TxPool) Delete(objID thor.Hash) {
 	if _, ok := pool.all[objID]; ok {
 		delete(pool.all, objID)
 	}
+}
+
+//GetTransaction returns a transaction
+func (pool *TxPool) GetTransaction(txID thor.Hash) *tx.Transaction {
+	pool.m.RLock()
+	defer pool.m.RUnlock()
+	if obj, ok := pool.all[txID]; ok {
+		return obj.Transaction()
+	}
+	return nil
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
