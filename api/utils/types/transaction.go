@@ -1,21 +1,34 @@
 package types
 
 import (
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
 )
 
+//RawTransaction a raw transaction
+type RawTransaction struct {
+	GasPrice    *big.Int
+	Gas         uint64
+	DependsOn   string
+	Sig         []byte
+	BlockNumber uint32
+	Clauses     Clauses
+}
+
 //Transaction transaction
 type Transaction struct {
-	ID          string
+	ChainTag  byte
+	ID        string
+	GasPrice  *big.Int
+	Gas       uint64
+	From      string
+	DependsOn string
+	Clauses   Clauses
+
 	Index       uint64
 	BlockID     string
 	BlockNumber uint32
-	GasPrice    *big.Int
-	Gas         uint64
-	From        string
-
-	Clauses Clauses
 }
 
 //Transactions transactions
@@ -33,13 +46,45 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	for i, c := range tx.Clauses() {
 		cls[i] = ConvertClause(c)
 	}
-
-	return &Transaction{
+	t := &Transaction{
+		ChainTag: tx.ChainTag(),
 		ID:       tx.ID().String(),
 		From:     from.String(),
 		GasPrice: tx.GasPrice(),
 		Gas:      tx.Gas(),
 		Clauses:  cls,
-	}, nil
+	}
+	if tx.DependsOn() != nil {
+		t.DependsOn = (*tx.DependsOn()).String()
+	}
+	return t, nil
 
+}
+
+//BuilcRawTransaction returns tx.Builder
+func BuilcRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
+	builder := new(tx.Builder)
+	if rawTransaction.GasPrice != nil {
+		builder.GasPrice(rawTransaction.GasPrice)
+	}
+	if rawTransaction.Gas > 0 {
+		builder.Gas(rawTransaction.Gas)
+	}
+	if rawTransaction.BlockNumber > 0 {
+		builder.BlockRef(tx.NewBlockRef(rawTransaction.BlockNumber))
+	}
+	dependsOn, err := thor.ParseHash(rawTransaction.DependsOn)
+	if err != nil {
+		builder.DependsOn(nil)
+	}
+	builder.DependsOn(&dependsOn)
+	for _, clause := range rawTransaction.Clauses {
+		to, err := thor.ParseAddress(clause.To)
+		if err != nil {
+			return nil, err
+		}
+		c := tx.NewClause(&to).WithData(clause.Data).WithValue(clause.Value)
+		builder.Clause(c)
+	}
+	return builder, nil
 }

@@ -15,10 +15,12 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 	"io/ioutil"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -46,25 +48,60 @@ func TestTransaction(t *testing.T) {
 	if err := json.Unmarshal(r, &rtx); err != nil {
 		t.Fatal(err)
 	}
-
 	checkTx(t, raw, rtx)
+
+	key, err := crypto.HexToECDSA(testPrivHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+	if err != nil {
+		t.Errorf("Sign error: %s", err)
+	}
+	rawTransaction := &types.RawTransaction{
+		GasPrice:    big.NewInt(100000),
+		Gas:         30000,
+		DependsOn:   "",
+		Sig:         sig,
+		BlockNumber: 20,
+		Clauses: types.Clauses{
+			types.Clause{
+				To:    thor.BytesToAddress([]byte("acc1")).String(),
+				Value: big.NewInt(10000),
+				Data:  []byte{0x11, 0x12},
+			},
+		},
+	}
+	txData, err := json.Marshal(rawTransaction)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = http.PostForm(ts.URL+"/transactions", url.Values{"rawTransaction": {string(txData)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err = ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 }
 
 func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	ti := api.NewTransactionInterface(chain)
+	ti := api.NewTransactionInterface(chain, txpool.NewTxPool(chain, txpool.PoolConfig{}))
 	router := mux.NewRouter()
 	api.NewTransactionHTTPRouter(router, ti)
 	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
+
 	b, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	chain.WriteGenesis(b)
 	address, _ := thor.ParseAddress(testAddress)
 	cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
@@ -89,6 +126,12 @@ func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		ParentID(best.Header().ID()).
 		Transaction(tx).
 		Build()
+	stat, err := state.New(bl.Header().StateRoot(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stat.SetBalance(thor.BytesToAddress([]byte("acc1")), big.NewInt(10000000000000))
+	stat.Stage().Commit()
 	if err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
