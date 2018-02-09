@@ -226,11 +226,18 @@ func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val interfa
 
 // SetStructedStorage encode val and set as raw storage value for given address and key.
 // 'val' should ether implements StorageEncoder, or RLP encodable.
+// If 'val' is nil, the storage is cleared.
 func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
+	if val == nil {
+		s.sm.Put(storageKey{addr, key}, []byte(nil))
+		return
+	}
+
 	var (
 		data []byte
 		err  error
 	)
+
 	if enc, ok := val.(StorageEncoder); ok {
 		data, err = enc.Encode()
 	} else {
