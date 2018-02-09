@@ -2,6 +2,7 @@ package sslot
 
 import (
 	"encoding/binary"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -10,80 +11,141 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// StorageSlot similar concept as solidity's storage layout slot.
-// The slot is bound to address and slot index.
-// Note that it's NOT compiant with solidity storage layout.
+// StorageSlot entry to access account storage.
+// Note: it's not compliant with Solidity storage layout.
 type StorageSlot struct {
-	address thor.Address
-	slot    uint32
-
-	dataKey  thor.Hash
-	indexKey thor.Hash
+	address  thor.Address
+	position thor.Hash
 }
 
 // New create a slot instance.
 func New(address thor.Address, slot uint32) *StorageSlot {
-	var dataKey thor.Hash
-	binary.BigEndian.PutUint32(dataKey[thor.HashLength-4:], slot)
+	var position thor.Hash
+	binary.BigEndian.PutUint32(position[thor.HashLength-4:], slot)
 
 	return &StorageSlot{
 		address,
-		slot,
-		dataKey,
-		thor.Hash(crypto.Keccak256Hash(dataKey[:])),
+		position,
 	}
 }
 
-// Get get value for given key.
+// LoadStructed load structed value.
 // 'val' is to recevei decoded value, and it should implement
 // state.StorageDecoder or rlp decodable.
-func (ss *StorageSlot) Get(state *state.State, key thor.Hash, val interface{}) {
-	state.GetStructedStorage(ss.address, key, val)
+func (ss *StorageSlot) LoadStructed(state *state.State, val interface{}) {
+	state.GetStructedStorage(ss.address, ss.position, val)
 }
 
-// Set set value for given key.
+// SaveStructed save structed value.
 // 'val' should implement state.StorageEncoder or rlp encodable.
-func (ss *StorageSlot) Set(state *state.State, key thor.Hash, val interface{}) {
-	state.SetStructedStorage(ss.address, key, val)
+// If 'val is nil, corresponded storage will be cleared.
+func (ss *StorageSlot) SaveStructed(state *state.State, val interface{}) {
+	state.SetStructedStorage(ss.address, ss.position, val)
 }
 
-// DataKey returns the key for accessing slot data.
-func (ss *StorageSlot) DataKey() thor.Hash {
-	return ss.dataKey
+// Load load value as machine word.
+func (ss *StorageSlot) Load(state *state.State) thor.Hash {
+	return state.GetStorage(ss.address, ss.position)
 }
 
-// IndexKey computes the key for accessing slot as an array.
-func (ss *StorageSlot) IndexKey(index uint32) thor.Hash {
-	var bytes [4]byte
-	binary.BigEndian.PutUint32(bytes[:], index)
-	ik := ss.indexKey
-	var overflow uint
-	for i := range ik {
-		i0 := thor.HashLength - i - 1
-		i1 := 4 - i - 1
-		var sum uint
-		if i1 >= 0 {
-			sum = uint(ik[i0]) + uint(bytes[i1]) + overflow
-		} else {
-			sum = uint(ik[i0]) + overflow
-		}
-		if sum > 255 {
-			overflow = 1
-		} else {
-			overflow = 0
-		}
-		ik[i0] = byte(sum % 256)
-	}
-	return ik
+// Save save value as machine word.
+func (ss *StorageSlot) Save(state *state.State, val thor.Hash) {
+	state.SetStorage(ss.address, ss.position, val)
 }
 
-// MapKey computes the key for accessing slot as an map.
-func (ss *StorageSlot) MapKey(key interface{}) (mk thor.Hash) {
+// Map provides map access to at 'slot'.
+type Map StorageSlot
+
+// NewMap create a Map instance.
+func NewMap(address thor.Address, slot uint32) *Map {
+	return (*Map)(New(address, slot))
+}
+
+func (m *Map) transformKey(key interface{}) (keyPos thor.Hash) {
 	hw := sha3.NewKeccak256()
-	err := rlp.Encode(hw, []interface{}{ss.dataKey, key})
+	err := rlp.Encode(hw, []interface{}{m.position, key})
 	if err != nil {
 		panic(err)
 	}
-	hw.Sum(mk[:0])
+	hw.Sum(keyPos[:0])
 	return
+}
+
+// ForKey create a new StorageSlot for accessing value for given key.
+func (m *Map) ForKey(key interface{}) *StorageSlot {
+	keyPos := m.transformKey(key)
+	return &StorageSlot{
+		m.address,
+		keyPos,
+	}
+}
+
+// Array provides array access to 'slot'.
+type Array struct {
+	ss         *StorageSlot
+	startIndex *big.Int
+}
+
+// NewArray create a new Array instance.
+func NewArray(address thor.Address, slot uint32) *Array {
+	ss := New(address, slot)
+	return &Array{
+		ss,
+		new(big.Int).SetBytes(crypto.Keccak256(ss.position[:])),
+	}
+}
+
+// Len returns length of array.
+func (a *Array) Len(state *state.State) (l uint64) {
+	a.ss.LoadStructed(state, (*stgUInt64)(&l))
+	return
+}
+
+// SetLen reset length of array.
+// If new length is smaller, elements that are out of range will be erased.
+func (a *Array) SetLen(state *state.State, newLen uint64) {
+	curLen := a.Len(state)
+	for i := newLen; i < curLen; i++ {
+		a.ForIndex(i).SaveStructed(state, nil)
+	}
+	a.ss.LoadStructed(state, stgUInt64(newLen))
+}
+
+// Append appends a new element, and returns new length.
+func (a *Array) Append(state *state.State, elem interface{}) uint64 {
+	l := a.Len(state)
+	a.ForIndex(l).SaveStructed(state, elem)
+	l++
+	a.ss.SaveStructed(state, stgUInt64(l))
+	return l
+}
+
+// ForIndex create a new StorageSlot for accessing element at given index.
+func (a *Array) ForIndex(index uint64) *StorageSlot {
+	x := new(big.Int).SetUint64(index)
+	x.Add(x, a.startIndex)
+	return &StorageSlot{
+		a.ss.address,
+		thor.BytesToHash(x.Bytes()),
+	}
+}
+
+type stgUInt64 uint64
+
+var _ state.StorageDecoder = (*stgUInt64)(nil)
+var _ state.StorageEncoder = (*stgUInt64)(nil)
+
+func (s *stgUInt64) Encode() ([]byte, error) {
+	if *s == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(s)
+}
+
+func (s *stgUInt64) Decode(data []byte) error {
+	if len(data) == 0 {
+		*s = 0
+		return nil
+	}
+	return rlp.DecodeBytes(data, s)
 }
