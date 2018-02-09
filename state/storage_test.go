@@ -18,19 +18,19 @@ func TestHashStorageCodec(t *testing.T) {
 	value := thor.BytesToHash([]byte("value"))
 
 	st.SetBalance(addr, big.NewInt(1))
-	st.SetStructedStorage(addr, key, &hashStorage{value})
-	var rv hashStorage
+	st.SetStructedStorage(addr, key, stgHash(value))
+	var rv stgHash
 	st.GetStructedStorage(addr, key, &rv)
-	assert.Equal(t, value, rv.Hash)
+	assert.Equal(t, value, thor.Hash(rv))
 
 	root, _ := st.Stage().Commit()
 
 	st, _ = New(root, kv)
-	rv = hashStorage{}
+	rv = stgHash{}
 	st.GetStructedStorage(addr, key, &rv)
-	assert.Equal(t, value, rv.Hash)
+	assert.Equal(t, value, thor.Hash(rv))
 
-	var emtpyHashStorage hashStorage
+	var emtpyHashStorage stgHash
 	assert.Equal(t, M(emtpyHashStorage.Encode()), []interface{}{[]byte(nil), nil})
 	assert.Nil(t, emtpyHashStorage.Decode(nil))
 }

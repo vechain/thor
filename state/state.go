@@ -203,15 +203,14 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 }
 
 // GetStorage returns Hash type storage value for the given address and key.
-func (s *State) GetStorage(addr thor.Address, key thor.Hash) thor.Hash {
-	var hs hashStorage
-	s.GetStructedStorage(addr, key, &hs)
-	return hs.Hash
+func (s *State) GetStorage(addr thor.Address, key thor.Hash) (value thor.Hash) {
+	s.GetStructedStorage(addr, key, (*stgHash)(&value))
+	return
 }
 
 // SetStorage set Hash type storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
-	s.SetStructedStorage(addr, key, &hashStorage{value})
+	s.SetStructedStorage(addr, key, stgHash(value))
 }
 
 // GetStructedStorage get and decode raw storage for given address and key.
