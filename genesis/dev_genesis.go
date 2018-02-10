@@ -47,6 +47,7 @@ func (d *dev) Accounts() (accs [10]struct {
 
 func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 	builder := new(Builder).
+		ChainTag(2).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(1516333644).
 		Alloc(cs.Authority.Address, &big.Int{}, cs.Authority.RuntimeBytecodes()).
@@ -65,9 +66,5 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 			Call(cs.Energy.PackCharge(a.Address, balance))
 	}
 
-	genesis, err := builder.Build(stateCreator)
-	if err != nil {
-		return nil, err
-	}
-	return genesis.WithSignature([]byte{2}), nil
+	return builder.Build(stateCreator)
 }

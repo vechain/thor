@@ -14,6 +14,7 @@ import (
 
 // Builder helper to build genesis block.
 type Builder struct {
+	chainTag  byite
 	timestamp uint64
 	gasLimit  uint64
 
@@ -25,6 +26,12 @@ type alloc struct {
 	address          thor.Address
 	balance          *big.Int
 	runtimeBytecodes []byte
+}
+
+// ChainTag set chain tag.
+func (b *Builder) ChainTag(tag byte) *Builder {
+	b.chainTag = tag
+	return b
 }
 
 // Timestamp set timestamp.
@@ -98,6 +105,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, err erro
 	}
 
 	return new(block.Builder).
+			ParentID(thor.BytesToHash([]byte{b.chainTag})).
 			Timestamp(b.timestamp).
 			GasLimit(b.gasLimit).
 			StateRoot(stateRoot).

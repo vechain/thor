@@ -15,7 +15,7 @@ type mainnet struct {
 }
 
 func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
-	genesis, err := new(Builder).
+	return new(Builder).
 		Timestamp(1517304350).
 		GasLimit(thor.InitialGasLimit).
 		/// deploy
@@ -30,9 +30,4 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
 		Call(cs.Params.PackSet(cs.ParamRewardRatio, big.NewInt(3e17))).
 		Call(cs.Params.PackSet(cs.ParamBaseGasPrice, big.NewInt(1000))).
 		Build(stateCreator)
-	if err != nil {
-		return nil, err
-	}
-	// set chain tag to 1
-	return genesis.WithSignature([]byte{1}), nil
 }
