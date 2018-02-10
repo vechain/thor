@@ -91,6 +91,9 @@ func (rt *Runtime) execute(
 	env.HookContract(cs.Params.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 		return cs.Params.HandleNative(rt.state, input)
 	})
+	env.HookContract(cs.Energy.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+		return cs.Energy.HandleNative(rt.state, rt.blockTime, input)
+	})
 
 	if to == nil {
 		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
@@ -125,27 +128,6 @@ func (rt *Runtime) Call(
 	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
 }
 
-func (rt *Runtime) consumeEnergy(caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, error) {
-	clause := cs.Energy.PackConsume(caller, callee, amount)
-	output := rt.execute(clause,
-		0, math.MaxUint32, cs.Energy.Address, &big.Int{}, thor.Hash{}, false)
-	if output.VMErr != nil {
-		return thor.Address{}, errors.Wrap(output.VMErr, "consume energy")
-	}
-
-	return cs.Energy.UnpackConsume(output.Value), nil
-}
-
-func (rt *Runtime) chargeEnergy(addr thor.Address, amount *big.Int) error {
-	clause := cs.Energy.PackCharge(addr, amount)
-	output := rt.execute(clause,
-		0, math.MaxUint32, cs.Energy.Address, &big.Int{}, thor.Hash{}, false)
-	if output.VMErr != nil {
-		return errors.Wrap(output.VMErr, "charge energy")
-	}
-	return nil
-}
-
 // ExecuteTransaction executes a transaction.
 // Note that the elements of returned []*vm.Output may be nil if corresponded clause failed.
 func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
@@ -169,14 +151,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyPrepayed := new(big.Int).SetUint64(gas)
 	energyPrepayed.Mul(energyPrepayed, gasPrice)
 
-	// pre pay energy for tx gas
-	energyPayer, err := rt.consumeEnergy(
-		origin,
-		commonTo(clauses),
-		energyPrepayed)
-
-	if err != nil {
-		return nil, nil, err
+	energyPayer, ok := cs.Energy.Consume(rt.state, rt.blockTime, origin, commonTo(clauses), energyPrepayed)
+	if !ok {
+		return nil, nil, errors.New("insufficient energy")
 	}
 
 	// checkpoint to be reverted when clause failure.
@@ -223,10 +200,10 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn := new(big.Int).SetUint64(leftOverGas)
 	energyToReturn.Mul(energyToReturn, gasPrice)
 
-	// return overpayed energy to whom payed
-	if err := rt.chargeEnergy(energyPayer, energyToReturn); err != nil {
-		return nil, nil, err
-	}
+	// return overpayed energy to payer
+	payerBalance := cs.Energy.GetBalance(rt.state, rt.blockTime, energyPayer)
+	cs.Energy.SetBalance(rt.state, rt.blockTime, energyPayer, payerBalance.Add(payerBalance, energyToReturn))
+
 	return receipt, vmOutputs, nil
 }
 

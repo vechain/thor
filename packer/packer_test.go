@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/contracts"
+	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
@@ -33,9 +33,11 @@ func (ti *txIterator) Next() *tx.Transaction {
 	a0 := accs[0]
 	a1 := accs[1]
 
+	data, _ := cs.Energy.ABI.Pack("transfer", a1.Address, big.NewInt(1))
+
 	tx := new(tx.Builder).
 		ChainTag(2).
-		Clause(contracts.Energy.PackTransfer(a1.Address, big.NewInt(1))).
+		Clause(tx.NewClause(&cs.Energy.Address).WithData(data)).
 		Gas(300000).Nonce(nonce).Build()
 	nonce++
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
@@ -91,6 +93,6 @@ func TestP(t *testing.T) {
 
 	best, _ := c.GetBestBlock()
 	fmt.Println(best.Header().Number(), best.Header().GasUsed())
-	fmt.Println(best)
+	//	fmt.Println(best)
 
 }

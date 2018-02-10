@@ -10,6 +10,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/contracts/gen"
 	"github.com/vechain/thor/poa"
+	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 func mustLoadABI(assetName string) *abi.ABI {
@@ -65,22 +67,6 @@ func (bi *stgBigInt) Decode(data []byte) error {
 }
 
 //////
-type stgUInt32 uint32
-
-func (s *stgUInt32) Encode() ([]byte, error) {
-	if *s == 0 {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(s)
-}
-
-func (s *stgUInt32) Decode(data []byte) error {
-	if len(data) == 0 {
-		*s = 0
-		return nil
-	}
-	return rlp.DecodeBytes(data, s)
-}
 
 /////
 type stgProposer poa.Proposer
@@ -113,6 +99,49 @@ func (s *stgString) Encode() ([]byte, error) {
 func (s *stgString) Decode(data []byte) error {
 	if len(data) == 0 {
 		*s = ""
+		return nil
+	}
+	return rlp.DecodeBytes(data, s)
+}
+
+type stgAddress thor.Address
+
+func (s *stgAddress) Encode() ([]byte, error) {
+	if *s == (stgAddress{}) {
+		return nil, nil
+	}
+	trimed, _ := rlp.EncodeToBytes(bytes.TrimLeft(s[:], "\x00"))
+	return trimed, nil
+}
+
+func (s *stgAddress) Decode(data []byte) error {
+	if len(data) == 0 {
+		*s = stgAddress{}
+		return nil
+	}
+	_, content, _, err := rlp.Split(data)
+	if err != nil {
+		return err
+	}
+	*s = stgAddress(thor.BytesToAddress(content))
+	return nil
+}
+
+type stgUInt64 uint64
+
+var _ state.StorageDecoder = (*stgUInt64)(nil)
+var _ state.StorageEncoder = (*stgUInt64)(nil)
+
+func (s *stgUInt64) Encode() ([]byte, error) {
+	if *s == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(s)
+}
+
+func (s *stgUInt64) Decode(data []byte) error {
+	if len(data) == 0 {
+		*s = 0
 		return nil
 	}
 	return rlp.DecodeBytes(data, s)

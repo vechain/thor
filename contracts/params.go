@@ -4,19 +4,19 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/contracts/rabi"
 	"github.com/vechain/thor/contracts/sslot"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm/evm"
 )
 
 // keys of governance params.
-const (
-	ParamRewardRatio  = "reward-ratio" // use 1e18 as denominator
-	ParamBaseGasPrice = "base-gas-price"
+var (
+	ParamRewardRatio  = thor.BytesToHash([]byte("reward-ratio")) // use 1e18 as denominator
+	ParamBaseGasPrice = thor.BytesToHash([]byte("base-gas-price"))
 )
 
 // Params binder of `Params` contract.
@@ -27,15 +27,15 @@ var Params = func() *params {
 		addr,
 		abi,
 		rabi.New(abi),
-		sslot.New(addr, 100),
+		sslot.NewMap(addr, 100),
 	}
 }()
 
 type params struct {
 	Address thor.Address
-	abi     *abi.ABI
+	ABI     *abi.ABI
 	rabi    *rabi.ReversedABI
-	sslot   *sslot.StorageSlot
+	data    *sslot.Map
 }
 
 // RuntimeBytecodes load runtime byte codes.
@@ -43,28 +43,16 @@ func (p *params) RuntimeBytecodes() []byte {
 	return mustLoadHexData("compiled/Params.bin-runtime")
 }
 
-// PackInitialize packs input data of `Params._initialize` function.
-func (p *params) PackInitialize() *tx.Clause {
-	return tx.NewClause(&p.Address).
-		WithData(mustPack(p.abi, "_initialize", Voting.Address))
-}
-
-// PackSet packs input data of `Params.set` function.
-func (p *params) PackSet(key string, value *big.Int) *tx.Clause {
-	return tx.NewClause(&p.Address).
-		WithData(mustPack(p.abi, "set", key, value))
-}
-
 // NativeGet native way to get param.
-func (p *params) NativeGet(state *state.State, key string) *big.Int {
+func (p *params) Get(state *state.State, key thor.Hash) *big.Int {
 	var v big.Int
-	p.sslot.Get(state, p.sslot.MapKey(key), (*stgBigInt)(&v))
+	p.data.ForKey(key).LoadStructed(state, (*stgBigInt)(&v))
 	return &v
 }
 
 // NativeSet native way to set param.
-func (p *params) NativeSet(state *state.State, key string, value *big.Int) {
-	p.sslot.Set(state, p.sslot.MapKey(key), (*stgBigInt)(value))
+func (p *params) Set(state *state.State, key thor.Hash, value *big.Int) {
+	p.data.ForKey(key).SaveStructed(state, (*stgBigInt)(value))
 }
 
 // HandleNative helper method to hook VM contract calls.
@@ -74,16 +62,23 @@ func (p *params) HandleNative(state *state.State, input []byte) func(useGas func
 		return nil
 	}
 	switch name {
+	case "nativeGetVoting":
+		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+			if !useGas(ethparams.SloadGas) {
+				return nil, evm.ErrOutOfGas
+			}
+			return p.rabi.PackOutput(name, Voting.Address)
+		}
 	case "nativeGet":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 			if !useGas(ethparams.SloadGas) {
 				return nil, evm.ErrOutOfGas
 			}
-			var key string
+			var key common.Hash
 			if err := p.rabi.UnpackInput(&key, name, input); err != nil {
 				return nil, err
 			}
-			return p.rabi.PackOutput(name, p.NativeGet(state, key))
+			return p.rabi.PackOutput(name, p.Get(state, thor.Hash(key)))
 		}
 	case "nativeSet":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
@@ -95,13 +90,13 @@ func (p *params) HandleNative(state *state.State, input []byte) func(useGas func
 				return nil, evm.ErrOutOfGas
 			}
 			var args struct {
-				Key   string
+				Key   common.Hash
 				Value *big.Int
 			}
 			if err := p.rabi.UnpackInput(&args, name, input); err != nil {
 				return nil, err
 			}
-			p.NativeSet(state, args.Key, args.Value)
+			p.Set(state, thor.Hash(args.Key), args.Value)
 			return nil, nil
 		}
 	}

@@ -1,27 +1,26 @@
 pragma solidity ^0.4.18;
 
 contract Params {
-    // address of voting contract, which controls the params.
-    address public voting;
 
-    function _initialize(address _voting) public {
-        require(msg.sender == address(this));
-        voting = _voting;
+    function voting() public view returns(address) {
+        return this.nativeGetVoting();
     }
 
-    function set(string _key, int256 _value) public {
-        require(msg.sender == voting || msg.sender == address(this));
+    function set(bytes32 _key, uint256 _value) public {
+        require(msg.sender == this.nativeGetVoting());
 
-        this.nativeSet(_key, _value);        
-        Set(_key, _key, _value);
+        this.nativeSet(_key, _value);
+        Set(_key, _value);
     }
 
-    function get(string _key) public view returns(int256) {
+    function get(bytes32 _key) public view returns(uint256) {
         return this.nativeGet(_key);
     }
 
-    function nativeSet(string key, int256 value) public {}
-    function nativeGet(string key) public view returns(int256) {}
+    function nativeGetVoting() public view returns(address) {}
 
-    event Set(string indexed _indexedKey, string _key, int256 _value);
+    function nativeSet(bytes32 key, uint256 value) public {}
+    function nativeGet(bytes32 key) public view returns(uint256) {}
+
+    event Set(bytes32 indexed key, uint256 value);
 }

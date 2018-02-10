@@ -50,21 +50,21 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 		ChainTag(2).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(1516333644).
-		Alloc(cs.Authority.Address, &big.Int{}, cs.Authority.RuntimeBytecodes()).
-		Alloc(cs.Energy.Address, &big.Int{}, cs.Energy.RuntimeBytecodes()).
-		Alloc(cs.Params.Address, &big.Int{}, cs.Params.RuntimeBytecodes()).
-		Call(cs.Authority.PackInitialize()).
-		Call(cs.Energy.PackInitialize(cs.Voting.Address)).
-		Call(cs.Params.PackInitialize()).
-		Call(cs.Params.PackSet(cs.ParamRewardRatio, big.NewInt(3e17))).
-		Call(cs.Params.PackSet(cs.ParamBaseGasPrice, big.NewInt(1000)))
+		State(func(state *state.State) error {
+			state.SetCode(cs.Authority.Address, cs.Authority.RuntimeBytecodes())
+			state.SetCode(cs.Energy.Address, cs.Energy.RuntimeBytecodes())
+			state.SetCode(cs.Params.Address, cs.Params.RuntimeBytecodes())
 
-	for _, a := range d.Accounts() {
-		balance, _ := new(big.Int).SetString("10000000000000000000000", 10)
-		builder.Alloc(a.Address, balance, nil).
-			Call(cs.Authority.PackAuthorize(a.Address, "a1")).
-			Call(cs.Energy.PackCharge(a.Address, balance))
-	}
+			cs.Params.Set(state, cs.ParamRewardRatio, big.NewInt(3e17))
+			cs.Params.Set(state, cs.ParamBaseGasPrice, big.NewInt(1000))
+			for _, a := range d.Accounts() {
+				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
+				state.SetBalance(a.Address, b)
+				cs.Authority.AddProposer(state, a.Address, thor.BytesToHash([]byte("a1")))
+				cs.Energy.SetBalance(state, 0, a.Address, b)
+			}
+			return nil
+		})
 
 	return builder.Build(stateCreator)
 }

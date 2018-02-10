@@ -1,7 +1,6 @@
 package packer
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/pkg/errors"
@@ -127,9 +126,9 @@ func (p *Packer) pack(
 	processed := make(map[thor.Hash]interface{})
 
 	affectedAddresses := make(map[thor.Address]interface{})
-	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> owner
+	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> master
 
-	rewardRatio := cs.Params.NativeGet(rt.State(), cs.ParamRewardRatio)
+	rewardRatio := cs.Params.Get(rt.State(), cs.ParamRewardRatio)
 
 	for txIter.HasNext() {
 		tx := txIter.Next()
@@ -157,7 +156,7 @@ func (p *Packer) pack(
 			break
 		}
 
-		signer, err := tx.Signer()
+		txSigner, err := tx.Signer()
 		if err != nil {
 			txIter.OnProcessed(tx.ID(), err)
 			continue
@@ -199,7 +198,7 @@ func (p *Packer) pack(
 				affectedAddresses[addr] = nil
 			}
 			for _, addr := range vmout.CreatedContracts {
-				createdContracts[addr] = signer
+				createdContracts[addr] = txSigner
 			}
 		}
 
@@ -216,27 +215,16 @@ func (p *Packer) pack(
 
 	builder.GasUsed(totalGasUsed)
 
-	out := rt.Call(
-		cs.Energy.PackCharge(p.beneficiary, totalReward),
-		0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
-	if out.VMErr != nil {
-		return nil, errors.Wrap(out.VMErr, "vm")
-	}
+	beneficiaryBalance := cs.Energy.GetBalance(rt.State(), rt.BlockTime(), p.beneficiary)
+	cs.Energy.SetBalance(rt.State(), rt.BlockTime(), p.beneficiary, beneficiaryBalance.Add(beneficiaryBalance, totalReward))
 
 	for addr := range affectedAddresses {
-		out := rt.Call(cs.Energy.PackUpdateBalance(addr),
-			0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
-		if out.VMErr != nil {
-			return nil, errors.Wrap(out.VMErr, "vm")
-		}
+		bal := cs.Energy.GetBalance(rt.State(), rt.BlockTime(), addr)
+		cs.Energy.SetBalance(rt.State(), rt.BlockTime(), addr, bal)
 	}
 
-	for addr, owner := range createdContracts {
-		out := rt.Call(cs.Energy.PackSetOwnerForContract(addr, owner),
-			0, math.MaxUint64, cs.Energy.Address, &big.Int{}, thor.Hash{})
-		if out.VMErr != nil {
-			return nil, errors.Wrap(out.VMErr, "vm")
-		}
+	for addr, master := range createdContracts {
+		cs.Energy.SetContractMaster(rt.State(), addr, master)
 	}
 
 	return receipts, nil

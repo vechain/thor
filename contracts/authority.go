@@ -9,7 +9,6 @@ import (
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm/evm"
 )
 
@@ -21,17 +20,19 @@ var Authority = func() *authority {
 		addr,
 		abi,
 		rabi.New(abi),
-		sslot.New(addr, 100),
-		sslot.New(addr, 101),
+		sslot.NewArray(addr, 100),
+		sslot.NewMap(addr, 101),
+		sslot.NewMap(addr, 102),
 	}
 }()
 
 type authority struct {
-	Address          thor.Address
-	abi              *abi.ABI
-	rabi             *rabi.ReversedABI
-	proposers        *sslot.StorageSlot
-	proposerIndexMap *sslot.StorageSlot
+	Address     thor.Address
+	ABI         *abi.ABI
+	rabi        *rabi.ReversedABI
+	array       *sslot.Array
+	indexMap    *sslot.Map
+	identityMap *sslot.Map
 }
 
 // RuntimeBytecodes load runtime byte codes.
@@ -39,110 +40,76 @@ func (a *authority) RuntimeBytecodes() []byte {
 	return mustLoadHexData("compiled/Authority.bin-runtime")
 }
 
-// PackInitialize pack input data of `Authority._initialize` function.
-func (a *authority) PackInitialize() *tx.Clause {
-	return tx.NewClause(&a.Address).
-		WithData(mustPack(a.abi, "_initialize", Voting.Address))
+func (a *authority) indexOfProposer(state *state.State, addr thor.Address) uint64 {
+	var index stgUInt64
+	a.indexMap.ForKey(addr).LoadStructed(state, &index)
+	return uint64(index)
 }
 
-// PackAuthorize pack input data of `Authority.authorize` function.
-func (a *authority) PackAuthorize(addr thor.Address, identity string) *tx.Clause {
-	return tx.NewClause(&a.Address).
-		WithData(mustPack(a.abi, "authorize", addr, identity))
-}
-
-func (a *authority) nativeIndexOfProposer(state *state.State, addr thor.Address) (index uint32) {
-	a.proposerIndexMap.Get(state, a.proposerIndexMap.MapKey(addr), (*stgUInt32)(&index))
-	return
-}
-
-// NativeAddProposer native way to add proposer.
-func (a *authority) NativeAddProposer(state *state.State, addr thor.Address) bool {
-	if a.nativeIndexOfProposer(state, addr) > 0 {
+func (a *authority) AddProposer(state *state.State, addr thor.Address, identity thor.Hash) bool {
+	if a.indexOfProposer(state, addr) > 0 {
 		// aready exists
 		return false
 	}
-	var arrayLen uint32
-	a.proposers.Get(state, a.proposers.DataKey(), (*stgUInt32)(&arrayLen))
+	length := a.array.Append(state, stgProposer{Address: addr})
+	a.indexMap.ForKey(addr).SaveStructed(state, stgUInt64(length))
 
-	// increase array len
-	a.proposers.Set(state, a.proposers.DataKey(), stgUInt32(arrayLen+1))
-
-	// append
-	a.proposers.Set(state, a.proposers.IndexKey(arrayLen), stgProposer{Address: addr})
-
-	a.proposerIndexMap.Set(state, a.proposerIndexMap.MapKey(addr), stgUInt32(arrayLen+1))
+	a.identityMap.ForKey(addr).Save(state, identity)
 	return true
 }
 
-// NativeRemoveProposer native way to remove proposer.
-func (a *authority) NativeRemoveProposer(state *state.State, addr thor.Address) bool {
-	index := a.nativeIndexOfProposer(state, addr)
+func (a *authority) RemoveProposer(state *state.State, addr thor.Address) bool {
+	index := a.indexOfProposer(state, addr)
 	if index == 0 {
 		// not found
 		return false
 	}
-	a.proposerIndexMap.Set(state, a.proposerIndexMap.MapKey(addr), stgUInt32(0))
-
-	var arrayLen uint32
-	a.proposers.Get(state, a.proposers.DataKey(), (*stgUInt32)(&arrayLen))
-	if arrayLen == index {
-		// is the last elem
-		a.proposers.Set(state, a.proposers.IndexKey(index-1), stgProposer{})
-	} else {
+	a.indexMap.ForKey(addr).SaveStructed(state, nil)
+	length := a.array.Len(state)
+	if length != index {
 		var last stgProposer
 		// move last elem to gap of removed one
-		a.proposers.Get(state, a.proposers.IndexKey(arrayLen-1), &last)
-		a.proposers.Set(state, a.proposers.IndexKey(arrayLen-1), stgProposer{})
-		a.proposers.Set(state, a.proposers.IndexKey(index-1), last)
+		a.array.ForIndex(length-1).LoadStructed(state, &last)
+		a.array.ForIndex(index-1).SaveStructed(state, &last)
 	}
-
-	a.proposers.Set(state, a.proposers.DataKey(), stgUInt32(arrayLen-1))
+	a.array.SetLen(state, length-1)
+	a.identityMap.ForKey(addr).SaveStructed(state, nil)
 	return true
 
 }
 
-// NativeGetProposer native way to get proposer status.
-func (a *authority) NativeGetProposer(state *state.State, addr thor.Address) (bool, uint32) {
-	indexMapKey := a.proposerIndexMap.MapKey(addr)
-	var arrayIndex uint32
-	a.proposerIndexMap.Get(state, indexMapKey, (*stgUInt32)(&arrayIndex))
-	if arrayIndex == 0 {
+func (a *authority) GetProposer(state *state.State, addr thor.Address) (bool, thor.Hash, uint32) {
+	index := a.indexOfProposer(state, addr)
+	if index == 0 {
 		// not found
-		return false, 0
+		return false, thor.Hash{}, 0
 	}
-	var p poa.Proposer
-	a.proposers.Get(state, a.proposers.IndexKey(arrayIndex-1), (*stgProposer)(&p))
-	return true, p.Status
+
+	var p stgProposer
+	a.array.ForIndex(index-1).LoadStructed(state, &p)
+	identity := a.identityMap.ForKey(addr).Load(state)
+	return false, identity, p.Status
 }
 
-// NativeUpdateProposer native way to update proposer status.
-func (a *authority) NativeUpdateProposer(state *state.State, addr thor.Address, status uint32) bool {
-	indexMapKey := a.proposerIndexMap.MapKey(addr)
-	var arrayIndex uint32
-	a.proposerIndexMap.Get(state, indexMapKey, (*stgUInt32)(&arrayIndex))
-	if arrayIndex == 0 {
+// UpdateProposer update proposer status.
+func (a *authority) UpdateProposer(state *state.State, addr thor.Address, status uint32) bool {
+	index := a.indexOfProposer(state, addr)
+	if index == 0 {
 		// not found
 		return false
 	}
-	a.proposers.Set(
-		state,
-		a.proposers.IndexKey(arrayIndex-1),
-		stgProposer{addr, status})
+	a.array.ForIndex(index-1).SaveStructed(state, stgProposer{addr, status})
 	return true
 }
 
-// NativeGetProposers native way to get proposers list.
-func (a *authority) NativeGetProposers(state *state.State) []poa.Proposer {
-	var plen uint32
-	a.proposers.Get(state, a.proposers.DataKey(), (*stgUInt32)(&plen))
-	proposers := make([]poa.Proposer, 0, plen)
-
-	for i := uint32(0); i < plen; i++ {
-		k := a.proposers.IndexKey(i)
-		var p poa.Proposer
-		a.proposers.Get(state, k, (*stgProposer)(&p))
-		proposers = append(proposers, p)
+// GetProposers get proposers list.
+func (a *authority) GetProposers(state *state.State) []poa.Proposer {
+	length := a.array.Len(state)
+	proposers := make([]poa.Proposer, 0, length)
+	for i := uint64(0); i < length; i++ {
+		var p stgProposer
+		a.array.ForIndex(i).LoadStructed(state, &p)
+		proposers = append(proposers, poa.Proposer(p))
 	}
 	return proposers
 }
@@ -154,6 +121,13 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 		return nil
 	}
 	switch name {
+	case "nativeGetVoting":
+		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+			if !useGas(ethparams.SloadGas) {
+				return nil, evm.ErrOutOfGas
+			}
+			return a.rabi.PackOutput(name, Voting.Address)
+		}
 	case "nativeAddProposer":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 			// permission check
@@ -163,11 +137,14 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 			if !useGas(ethparams.SstoreSetGas) {
 				return nil, evm.ErrOutOfGas
 			}
-			var addr common.Address
-			if err := a.rabi.UnpackInput(&addr, name, input); err != nil {
+			var args struct {
+				Addr     common.Address
+				Identity common.Hash
+			}
+			if err := a.rabi.UnpackInput(&args, name, input); err != nil {
 				return nil, err
 			}
-			return a.rabi.PackOutput(name, a.NativeAddProposer(state, thor.Address(addr)))
+			return a.rabi.PackOutput(name, a.AddProposer(state, thor.Address(args.Addr), thor.Hash(args.Identity)))
 		}
 	case "nativeRemoveProposer":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
@@ -182,7 +159,7 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 			if err := a.rabi.UnpackInput(&addr, name, input); err != nil {
 				return nil, err
 			}
-			return a.rabi.PackOutput(name, a.NativeRemoveProposer(state, thor.Address(addr)))
+			return a.rabi.PackOutput(name, a.RemoveProposer(state, thor.Address(addr)))
 		}
 	case "nativeGetProposer":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
@@ -193,8 +170,8 @@ func (a *authority) HandleNative(state *state.State, input []byte) func(useGas f
 			if err := a.rabi.UnpackInput(&addr, name, input); err != nil {
 				return nil, err
 			}
-			found, status := a.NativeGetProposer(state, thor.Address(addr))
-			return a.rabi.PackOutput(name, found, status)
+			found, identity, status := a.GetProposer(state, thor.Address(addr))
+			return a.rabi.PackOutput(name, found, identity, status)
 		}
 	}
 	return nil
