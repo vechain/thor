@@ -31,8 +31,9 @@ func TestStackedMap(t *testing.T) {
 	}{
 		{func() {}, 0, "", "", "foo", []interface{}{"bar", true}},
 		{func() { sm.Push() }, 1, "foo", "baz", "foo", []interface{}{"baz", true}},
+		{func() {}, 1, "foo", "baz1", "foo", []interface{}{"baz1", true}},
 		{func() { sm.Push() }, 2, "foo", "qux", "foo", []interface{}{"qux", true}},
-		{func() { sm.Pop() }, 1, "", "", "foo", []interface{}{"baz", true}},
+		{func() { sm.Pop() }, 1, "", "", "foo", []interface{}{"baz1", true}},
 		{func() { sm.Pop() }, 0, "", "", "foo", []interface{}{"bar", true}},
 
 		{func() { sm.Push(); sm.Push() }, 2, "", "", "", nil},

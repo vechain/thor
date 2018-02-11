@@ -93,7 +93,9 @@ func (sm *StackedMap) Put(key, value interface{}) {
 	// records key revision for fast access
 	rev := len(sm.mapStack) - 1
 	if revs, ok := sm.keyRevisionMap[key]; ok {
-		revs.push(rev)
+		if revs.top().(int) != rev {
+			revs.push(rev)
+		}
 	} else {
 		sm.keyRevisionMap[key] = &stack{rev}
 	}
