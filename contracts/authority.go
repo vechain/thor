@@ -40,10 +40,9 @@ func (a *authority) RuntimeBytecodes() []byte {
 	return mustLoadHexData("compiled/Authority.bin-runtime")
 }
 
-func (a *authority) indexOfProposer(state *state.State, addr thor.Address) uint64 {
-	var index stgUInt64
+func (a *authority) indexOfProposer(state *state.State, addr thor.Address) (index uint64) {
 	a.indexMap.ForKey(addr).LoadStructed(state, &index)
-	return uint64(index)
+	return
 }
 
 func (a *authority) AddProposer(state *state.State, addr thor.Address, identity thor.Hash) bool {
@@ -51,8 +50,8 @@ func (a *authority) AddProposer(state *state.State, addr thor.Address, identity 
 		// aready exists
 		return false
 	}
-	length := a.array.Append(state, stgProposer{Address: addr})
-	a.indexMap.ForKey(addr).SaveStructed(state, stgUInt64(length))
+	length := a.array.Append(state, &stgProposer{Address: addr})
+	a.indexMap.ForKey(addr).SaveStructed(state, length)
 
 	a.identityMap.ForKey(addr).Save(state, identity)
 	return true
@@ -98,7 +97,7 @@ func (a *authority) UpdateProposer(state *state.State, addr thor.Address, status
 		// not found
 		return false
 	}
-	a.array.ForIndex(index-1).SaveStructed(state, stgProposer{addr, status})
+	a.array.ForIndex(index-1).SaveStructed(state, &stgProposer{addr, status})
 	return true
 }
 

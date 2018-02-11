@@ -150,11 +150,11 @@ func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Addre
 }
 
 func (e *energy) SetContractMaster(state *state.State, contractAddr thor.Address, master thor.Address) {
-	e.masters.ForKey(contractAddr).SaveStructed(state, stgAddress(master))
+	e.masters.ForKey(contractAddr).SaveStructed(state, master)
 }
 
 func (e *energy) GetContractMaster(state *state.State, contractAddr thor.Address) (master thor.Address) {
-	e.masters.ForKey(contractAddr).LoadStructed(state, (*stgAddress)(&master))
+	e.masters.ForKey(contractAddr).LoadStructed(state, &master)
 	return
 }
 
