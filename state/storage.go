@@ -1,8 +1,11 @@
 package state
 
 import (
-	"bytes"
+	"errors"
+	"math/big"
+	"reflect"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
@@ -17,30 +20,142 @@ type StorageDecoder interface {
 	Decode([]byte) error
 }
 
-type stgHash thor.Hash
-
-var _ StorageEncoder = (*stgHash)(nil)
-var _ StorageDecoder = (*stgHash)(nil)
-
-// implements StorageEncoder.
-func (h *stgHash) Encode() ([]byte, error) {
-	if (*thor.Hash)(h).IsZero() {
+func encodeUint(i uint64) ([]byte, error) {
+	if i == 0 {
 		return nil, nil
 	}
-	trimed, _ := rlp.EncodeToBytes(bytes.TrimLeft(h[:], "\x00"))
-	return trimed, nil
+	return rlp.EncodeToBytes(i)
+}
+func encodeBytesTrimed(bs []byte) ([]byte, error) {
+	var i int
+	for ; i < len(bs); i++ {
+		if bs[i] != 0 {
+			break
+		}
+	}
+	trimed := bs[i:]
+	if len(trimed) == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(trimed)
 }
 
-// implements StorageDecoder.
-func (h *stgHash) Decode(data []byte) error {
-	if len(data) == 0 {
-		*h = stgHash{}
+func encodeString(str string) ([]byte, error) {
+	if str == "" {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(str)
+}
+
+func encodeStorage(val interface{}) ([]byte, error) {
+	switch v := val.(type) {
+	case thor.Hash:
+		return encodeBytesTrimed(v[:])
+	case *thor.Hash:
+		return encodeBytesTrimed(v[:])
+	case thor.Address:
+		return encodeBytesTrimed(v[:])
+	case *thor.Address:
+		return encodeBytesTrimed(v[:])
+	case string:
+		return encodeString(v)
+	case *string:
+		return encodeString(*v)
+	case uint:
+		return encodeUint(uint64(v))
+	case *uint:
+		return encodeUint(uint64(*v))
+	case uint8:
+		return encodeUint(uint64(v))
+	case *uint8:
+		return encodeUint(uint64(*v))
+	case uint16:
+		return encodeUint(uint64(v))
+	case *uint16:
+		return encodeUint(uint64(*v))
+	case uint32:
+		return encodeUint(uint64(v))
+	case *uint32:
+		return encodeUint(uint64(*v))
+	case uint64:
+		return encodeUint(v)
+	case *uint64:
+		return encodeUint(*v)
+	case *big.Int:
+		if v.Sign() == 0 {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(v)
+	}
+	return nil, errors.New("encode storage value: type " + reflect.TypeOf(val).String())
+}
+
+func decodeStorage(data []byte, val interface{}) error {
+	switch v := val.(type) {
+	case *thor.Hash:
+		if len(data) == 0 {
+			*v = thor.Hash{}
+			return nil
+		}
+		_, content, _, err := rlp.Split(data)
+		if err != nil {
+			return err
+		}
+		(*common.Hash)(v).SetBytes(content)
 		return nil
+	case *thor.Address:
+		if len(data) == 0 {
+			*v = thor.Address{}
+			return nil
+		}
+		_, content, _, err := rlp.Split(data)
+		if err != nil {
+			return err
+		}
+		(*common.Address)(v).SetBytes(content)
+		return nil
+	case *string:
+		if len(data) == 0 {
+			*v = ""
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *uint:
+		if len(data) == 0 {
+			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *uint8:
+		if len(data) == 0 {
+			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *uint16:
+		if len(data) == 0 {
+			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *uint32:
+		if len(data) == 0 {
+			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *uint64:
+		if len(data) == 0 {
+			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *big.Int:
+		if len(data) == 0 {
+			v.SetUint64(0)
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
 	}
-	_, content, _, err := rlp.Split(data)
-	if err != nil {
-		return err
-	}
-	*h = stgHash(thor.BytesToHash(content))
-	return nil
+	return errors.New("decode storage value: type " + reflect.TypeOf(val).String())
 }
