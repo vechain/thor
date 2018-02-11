@@ -6,8 +6,8 @@ import './ERC223Receiver.sol';
 contract Energy is Token {
     mapping(address => mapping (address => uint256)) allowed;
   
-    function voting() public view returns(address) {
-        return this.nativeGetVoting();
+    function executor() public view returns(address) {
+        return this.nativeGetExecutor();
     }
 
     ///@return ERC20 token name
@@ -126,7 +126,7 @@ contract Energy is Token {
     }
 
     function adjustGrowthRate(uint256 rate) public {
-        require(msg.sender == this.nativeGetVoting());
+        require(msg.sender == this.nativeGetExecutor());
         this.nativeAdjustGrowthRate(rate);
 
         AdjustGrowthRate(rate);
@@ -146,7 +146,7 @@ contract Energy is Token {
         return size > 0;
     }
     
-    function nativeGetVoting() public view returns(address) {}
+    function nativeGetExecutor() public view returns(address) {}
 
     function nativeGetTotalSupply() public view returns(uint256) {}
     

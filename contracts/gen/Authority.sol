@@ -3,8 +3,8 @@ pragma solidity ^0.4.18;
 /// @title Authority manages the whitelist of block proposers.
 contract Authority {
 
-    function voting() public view returns(address) {
-        return this.nativeGetVoting();
+    function executor() public view returns(address) {
+        return this.nativeGetExecutor();
     }
     
     // @notice authorize someone to be a block proposer.
@@ -12,7 +12,7 @@ contract Authority {
     // @param _addr address of someone.
     // @param _identity identity to identify someone. Must be non-empty. 
     function authorize(address _addr, bytes32 _identity) public {
-        require(msg.sender == this.nativeGetVoting());
+        require(msg.sender == this.nativeGetExecutor());
         require(_addr != 0 && _identity != 0);
 
         require(this.nativeAddProposer(_addr, _identity));
@@ -22,7 +22,7 @@ contract Authority {
     // @notice deauthorize a block proposer by its address.
     // @param _addr address of the proposer.
     function deauthorize(address _addr) public {
-        require(msg.sender == this.nativeGetVoting());
+        require(msg.sender == this.nativeGetExecutor());
 
         require(this.nativeRemoveProposer(_addr));
         Deauthorize(_addr);
@@ -32,7 +32,7 @@ contract Authority {
         return this.nativeGetProposer(_addr);
     }
 
-    function nativeGetVoting() public view returns(address) {}
+    function nativeGetExecutor() public view returns(address) {}
 
     function nativeAddProposer(address addr, bytes32 identity) public returns(bool) {}
     function nativeRemoveProposer(address addr) public returns(bool) {}

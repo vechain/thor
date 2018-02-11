@@ -62,12 +62,12 @@ func (p *params) HandleNative(state *state.State, input []byte) func(useGas func
 		return nil
 	}
 	switch name {
-	case "nativeGetVoting":
+	case "nativeGetExecutor":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 			if !useGas(ethparams.SloadGas) {
 				return nil, evm.ErrOutOfGas
 			}
-			return p.rabi.PackOutput(name, Voting.Address)
+			return p.rabi.PackOutput(name, Executor.Address)
 		}
 	case "nativeGet":
 		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
