@@ -2,6 +2,7 @@ package state
 
 import (
 	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,27 +11,88 @@ import (
 )
 
 func TestHashStorageCodec(t *testing.T) {
+	tests := []interface{}{
+		thor.BytesToHash([]byte("hash")),
+		thor.BytesToAddress([]byte("address")),
+		"foo",
+		uint(10),
+		uint8(20),
+		uint16(257),
+		uint32(65537),
+		uint64(5e9),
+	}
+	for _, tt := range tests {
+		{
+			data, err := encodeStorage(tt)
+			assert.Nil(t, err)
+			cpy := reflect.New(reflect.TypeOf(tt))
+			err = decodeStorage(data, cpy.Interface())
+			assert.Nil(t, err)
+			assert.Equal(t, tt, cpy.Elem().Interface())
+		}
+		// test pointer type encoding
+		{
+			ptr := reflect.New(reflect.TypeOf(tt))
+			ptr.Elem().Set(reflect.ValueOf(tt))
+			data, err := encodeStorage(ptr.Interface())
+			assert.Nil(t, err)
+			cpy := reflect.New(reflect.TypeOf(tt))
+			err = decodeStorage(data, cpy.Interface())
+			assert.Nil(t, err)
+			assert.Equal(t, tt, cpy.Elem().Interface())
+		}
+		// test zero value encoding
+		{
+			data, err := encodeStorage(reflect.Zero(reflect.TypeOf(tt)).Interface())
+			assert.Nil(t, err)
+			assert.Zero(t, len(data), reflect.TypeOf(tt).String())
+		}
+		// test zero value decoding
+		{
+			cpy := reflect.New(reflect.TypeOf(tt))
+			err := decodeStorage(nil, cpy.Interface())
+			assert.Nil(t, err)
+			assert.Equal(t, reflect.Zero(reflect.TypeOf(tt)).Interface(), cpy.Elem().Interface())
+		}
+	}
+
+	// special test for big.Int
+	{
+		data, err := encodeStorage(&big.Int{})
+		assert.Nil(t, err)
+		assert.Zero(t, len(data))
+
+		bi := big.NewInt(10)
+		err = decodeStorage(nil, bi)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(0), bi.Uint64())
+
+		data, _ = encodeStorage(big.NewInt(10))
+		err = decodeStorage(data, bi)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(10), bi.Uint64())
+	}
+}
+
+func BenchmarkStorageSet(b *testing.B) {
 	kv, _ := lvldb.NewMem()
 	st, _ := New(thor.Hash{}, kv)
 
 	addr := thor.BytesToAddress([]byte("acc"))
 	key := thor.BytesToHash([]byte("key"))
-	value := thor.BytesToHash([]byte("value"))
+	for i := 0; i < b.N; i++ {
+		st.SetStorage(addr, key, thor.BytesToHash([]byte{1}))
+	}
+}
 
-	st.SetBalance(addr, big.NewInt(1))
-	st.SetStructedStorage(addr, key, stgHash(value))
-	var rv stgHash
-	st.GetStructedStorage(addr, key, &rv)
-	assert.Equal(t, value, thor.Hash(rv))
+func BenchmarkStorageGet(b *testing.B) {
+	kv, _ := lvldb.NewMem()
+	st, _ := New(thor.Hash{}, kv)
 
-	root, _ := st.Stage().Commit()
-
-	st, _ = New(root, kv)
-	rv = stgHash{}
-	st.GetStructedStorage(addr, key, &rv)
-	assert.Equal(t, value, thor.Hash(rv))
-
-	var emtpyHashStorage stgHash
-	assert.Equal(t, M(emtpyHashStorage.Encode()), []interface{}{[]byte(nil), nil})
-	assert.Nil(t, emtpyHashStorage.Decode(nil))
+	addr := thor.BytesToAddress([]byte("acc"))
+	key := thor.BytesToHash([]byte("key"))
+	st.SetStructedStorage(addr, key, thor.Hash{1})
+	for i := 0; i < b.N; i++ {
+		st.GetStorage(addr, key)
+	}
 }

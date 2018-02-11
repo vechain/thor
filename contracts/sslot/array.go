@@ -4,7 +4,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -25,8 +24,8 @@ func NewArray(address thor.Address, slot uint32) *Array {
 }
 
 // Len returns length of array.
-func (a *Array) Len(state *state.State) (l uint64) {
-	a.ss.LoadStructed(state, (*stgUInt64)(&l))
+func (a *Array) Len(state *state.State) (length uint64) {
+	a.ss.LoadStructed(state, &length)
 	return
 }
 
@@ -37,7 +36,7 @@ func (a *Array) SetLen(state *state.State, newLen uint64) {
 	for i := newLen; i < curLen; i++ {
 		a.ForIndex(i).SaveStructed(state, nil)
 	}
-	a.ss.LoadStructed(state, stgUInt64(newLen))
+	a.ss.SaveStructed(state, newLen)
 }
 
 // Append appends a new element, and returns new length.
@@ -45,7 +44,7 @@ func (a *Array) Append(state *state.State, elem interface{}) uint64 {
 	l := a.Len(state)
 	a.ForIndex(l).SaveStructed(state, elem)
 	l++
-	a.ss.SaveStructed(state, stgUInt64(l))
+	a.ss.SaveStructed(state, l)
 	return l
 }
 
@@ -57,24 +56,4 @@ func (a *Array) ForIndex(index uint64) *StorageSlot {
 		a.ss.address,
 		thor.BytesToHash(x.Bytes()),
 	}
-}
-
-type stgUInt64 uint64
-
-var _ state.StorageDecoder = (*stgUInt64)(nil)
-var _ state.StorageEncoder = (*stgUInt64)(nil)
-
-func (s *stgUInt64) Encode() ([]byte, error) {
-	if *s == 0 {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(s)
-}
-
-func (s *stgUInt64) Decode(data []byte) error {
-	if len(data) == 0 {
-		*s = 0
-		return nil
-	}
-	return rlp.DecodeBytes(data, s)
 }

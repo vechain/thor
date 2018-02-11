@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
@@ -204,45 +203,57 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 
 // GetStorage returns Hash type storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Hash) (value thor.Hash) {
-	s.GetStructedStorage(addr, key, (*stgHash)(&value))
+	s.GetStructedStorage(addr, key, &value)
 	return
 }
 
 // SetStorage set Hash type storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
-	s.SetStructedStorage(addr, key, stgHash(value))
+	s.SetStructedStorage(addr, key, value)
 }
 
 // GetStructedStorage get and decode raw storage for given address and key.
-// 'val' should either implements StorageDecoder, or RLP decodable.
+// 'val' should either implements StorageDecoder, or int type of
+// [
+//   *thor.Hash, *thor.Address,
+//   *string
+//   *uintx
+//   *big.Int
+// ]
 func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
 	data, _ := s.sm.Get(storageKey{addr, key})
 	if dec, ok := val.(StorageDecoder); ok {
 		s.setError(dec.Decode(data.([]byte)))
 		return
 	}
-	s.setError(rlp.DecodeBytes(data.([]byte), val))
+	s.setError(decodeStorage(data.([]byte), val))
 }
 
 // SetStructedStorage encode val and set as raw storage value for given address and key.
-// 'val' should ether implements StorageEncoder, or RLP encodable.
+// 'val' should ether implements StorageEncoder, or in type of
+// [
+//	  thor.Hash, thor.Address,
+//    string
+//    uintx
+//    *big.Int
+// ]
 // If 'val' is nil, the storage is cleared.
 func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
 	if val == nil {
 		s.sm.Put(storageKey{addr, key}, []byte(nil))
 		return
 	}
-
-	var (
-		data []byte
-		err  error
-	)
-
 	if enc, ok := val.(StorageEncoder); ok {
-		data, err = enc.Encode()
-	} else {
-		data, err = rlp.EncodeToBytes(val)
+		data, err := enc.Encode()
+		if err != nil {
+			s.setError(err)
+			return
+		}
+		s.sm.Put(storageKey{addr, key}, data)
+		return
 	}
+
+	data, err := encodeStorage(val)
 	if err != nil {
 		s.setError(err)
 		return
