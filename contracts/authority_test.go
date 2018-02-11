@@ -36,7 +36,7 @@ func TestAuthority(t *testing.T) {
 			0, 1000000, Authority.Address, &big.Int{}, thor.Hash{})
 	}
 
-	out := call(Authority.PackInitialize(thor.BytesToAddress([]byte("voting"))))
+	out := call(Authority.PackInitialize(thor.BytesToAddress([]byte("executor"))))
 	assert.Nil(t, out.VMErr)
 
 	addr1 := thor.BytesToAddress([]byte("a1"))

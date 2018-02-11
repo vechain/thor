@@ -2,12 +2,12 @@ pragma solidity ^0.4.18;
 
 contract Params {
 
-    function voting() public view returns(address) {
-        return this.nativeGetVoting();
+    function executor() public view returns(address) {
+        return this.nativeGetExecutor();
     }
 
     function set(bytes32 _key, uint256 _value) public {
-        require(msg.sender == this.nativeGetVoting());
+        require(msg.sender == this.nativeGetExecutor());
 
         this.nativeSet(_key, _value);
         Set(_key, _value);
@@ -17,7 +17,7 @@ contract Params {
         return this.nativeGet(_key);
     }
 
-    function nativeGetVoting() public view returns(address) {}
+    function nativeGetExecutor() public view returns(address) {}
 
     function nativeSet(bytes32 key, uint256 value) public {}
     function nativeGet(bytes32 key) public view returns(uint256) {}
