@@ -41,7 +41,7 @@ func (a *authority) RuntimeBytecodes() []byte {
 }
 
 func (a *authority) indexOfProposer(state *state.State, addr thor.Address) (index uint64) {
-	a.indexMap.ForKey(addr).LoadStructed(state, &index)
+	a.indexMap.ForKey(addr).Load(state, &index)
 	return
 }
 
@@ -51,7 +51,7 @@ func (a *authority) AddProposer(state *state.State, addr thor.Address, identity 
 		return false
 	}
 	length := a.array.Append(state, &stgProposer{Address: addr})
-	a.indexMap.ForKey(addr).SaveStructed(state, length)
+	a.indexMap.ForKey(addr).Save(state, length)
 
 	a.identityMap.ForKey(addr).Save(state, identity)
 	return true
@@ -63,21 +63,21 @@ func (a *authority) RemoveProposer(state *state.State, addr thor.Address) bool {
 		// not found
 		return false
 	}
-	a.indexMap.ForKey(addr).SaveStructed(state, nil)
+	a.indexMap.ForKey(addr).Save(state, nil)
 	length := a.array.Len(state)
 	if length != index {
 		var last stgProposer
 		// move last elem to gap of removed one
-		a.array.ForIndex(length-1).LoadStructed(state, &last)
-		a.array.ForIndex(index-1).SaveStructed(state, &last)
+		a.array.ForIndex(length-1).Load(state, &last)
+		a.array.ForIndex(index-1).Save(state, &last)
 	}
 	a.array.SetLen(state, length-1)
-	a.identityMap.ForKey(addr).SaveStructed(state, nil)
+	a.identityMap.ForKey(addr).Save(state, nil)
 	return true
 
 }
 
-func (a *authority) GetProposer(state *state.State, addr thor.Address) (bool, thor.Hash, uint32) {
+func (a *authority) GetProposer(state *state.State, addr thor.Address) (ok bool, identity thor.Hash, status uint32) {
 	index := a.indexOfProposer(state, addr)
 	if index == 0 {
 		// not found
@@ -85,8 +85,9 @@ func (a *authority) GetProposer(state *state.State, addr thor.Address) (bool, th
 	}
 
 	var p stgProposer
-	a.array.ForIndex(index-1).LoadStructed(state, &p)
-	identity := a.identityMap.ForKey(addr).Load(state)
+	a.array.ForIndex(index-1).Load(state, &p)
+
+	a.identityMap.ForKey(addr).Load(state, &identity)
 	return false, identity, p.Status
 }
 
@@ -97,7 +98,7 @@ func (a *authority) UpdateProposer(state *state.State, addr thor.Address, status
 		// not found
 		return false
 	}
-	a.array.ForIndex(index-1).SaveStructed(state, &stgProposer{addr, status})
+	a.array.ForIndex(index-1).Save(state, &stgProposer{addr, status})
 	return true
 }
 
@@ -107,7 +108,7 @@ func (a *authority) GetProposers(state *state.State) []poa.Proposer {
 	proposers := make([]poa.Proposer, 0, length)
 	for i := uint64(0); i < length; i++ {
 		var p stgProposer
-		a.array.ForIndex(i).LoadStructed(state, &p)
+		a.array.ForIndex(i).Load(state, &p)
 		proposers = append(proposers, poa.Proposer(p))
 	}
 	return proposers

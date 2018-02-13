@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/vechain/thor/contracts/sslot"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -24,7 +23,7 @@ func TestArray(t *testing.T) {
 	assert.Equal(t, uint64(1), array.Append(st, "s"))
 
 	var v string
-	array.ForIndex(0).LoadStructed(st, &v)
+	array.ForIndex(0).Load(st, &v)
 	assert.Equal(t, "s", v)
 
 	array.SetLen(st, 10)
@@ -33,6 +32,6 @@ func TestArray(t *testing.T) {
 	array.SetLen(st, 0)
 	assert.Zero(t, array.Len(st))
 
-	array.ForIndex(0).LoadStructed(st, &v)
+	array.ForIndex(0).Load(st, &v)
 	assert.Equal(t, "", v)
 }

@@ -25,7 +25,7 @@ func NewArray(address thor.Address, slot uint32) *Array {
 
 // Len returns length of array.
 func (a *Array) Len(state *state.State) (length uint64) {
-	a.ss.LoadStructed(state, &length)
+	a.ss.Load(state, &length)
 	return
 }
 
@@ -34,21 +34,22 @@ func (a *Array) Len(state *state.State) (length uint64) {
 func (a *Array) SetLen(state *state.State, newLen uint64) {
 	curLen := a.Len(state)
 	for i := newLen; i < curLen; i++ {
-		a.ForIndex(i).SaveStructed(state, nil)
+		a.ForIndex(i).Save(state, nil)
 	}
-	a.ss.SaveStructed(state, newLen)
+	a.ss.Save(state, newLen)
 }
 
 // Append appends a new element, and returns new length.
 func (a *Array) Append(state *state.State, elem interface{}) uint64 {
 	l := a.Len(state)
-	a.ForIndex(l).SaveStructed(state, elem)
+	a.ForIndex(l).Save(state, elem)
 	l++
-	a.ss.SaveStructed(state, l)
+	a.ss.Save(state, l)
 	return l
 }
 
 // ForIndex create a new StorageSlot for accessing element at given index.
+// TODO: check the case index is out of bound
 func (a *Array) ForIndex(index uint64) *StorageSlot {
 	x := new(big.Int).SetUint64(index)
 	x.Add(x, a.startIndex)
