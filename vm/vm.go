@@ -68,12 +68,12 @@ var chainConfig = &params.ChainConfig{
 type Context struct {
 	Origin      thor.Address
 	Beneficiary thor.Address
-	BlockNumber *big.Int
-	Time        *big.Int
-	GasLimit    *big.Int
+	BlockNumber uint32
+	Time        uint64
+	GasLimit    uint64
 	GasPrice    *big.Int
-	TxHash      thor.Hash
-	ClauseIndex uint64
+	TxID        thor.Hash
+	ClauseIndex uint32
 	GetHash     func(uint32) thor.Hash
 }
 
@@ -91,24 +91,24 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 // New retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
 func New(ctx Context, state State, vmConfig Config) *VM {
-	tGetHash := func(n uint64) common.Hash {
-		return common.Hash(ctx.GetHash(uint32(n)))
-	}
 
 	statedb := statedb.New(state)
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
-		GetHash:     tGetHash,
-		Difficulty:  new(big.Int),
+		GetHash: func(n uint64) common.Hash {
+			return common.Hash(ctx.GetHash(uint32(n)))
+		},
+		Difficulty: new(big.Int),
 
 		Origin:      common.Address(ctx.Origin),
 		Coinbase:    common.Address(ctx.Beneficiary),
-		BlockNumber: ctx.BlockNumber,
-		Time:        ctx.Time,
-		GasLimit:    ctx.GasLimit,
+		BlockNumber: new(big.Int).SetUint64(uint64(ctx.BlockNumber)),
+		Time:        new(big.Int).SetUint64(ctx.Time),
+		GasLimit:    new(big.Int).SetUint64(ctx.GasLimit),
 		GasPrice:    ctx.GasPrice,
-		TxHash:      common.Hash(ctx.TxHash),
+		TxID:        ctx.TxID,
+		ClauseIndex: ctx.ClauseIndex,
 	}
 	evm := evm.NewEVM(evmCtx, statedb, chainConfig, evm.Config(vmConfig))
 

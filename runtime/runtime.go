@@ -58,7 +58,7 @@ func (rt *Runtime) SetVMConfig(config vm.Config) *Runtime {
 
 func (rt *Runtime) execute(
 	clause *Tx.Clause,
-	index int,
+	index uint32,
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
@@ -71,16 +71,16 @@ func (rt *Runtime) execute(
 	}
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
-		BlockNumber: new(big.Int).SetUint64(uint64(rt.blockNumber)),
-		Time:        new(big.Int).SetUint64(rt.blockTime),
-		GasLimit:    new(big.Int).SetUint64(rt.blockGasLimit),
+		BlockNumber: rt.blockNumber,
+		Time:        rt.blockTime,
+		GasLimit:    rt.blockGasLimit,
 
 		Origin:   txOrigin,
 		GasPrice: txGasPrice,
-		TxHash:   txID,
+		TxID:     txID,
 
 		GetHash:     rt.getBlockID,
-		ClauseIndex: uint64(index),
+		ClauseIndex: index,
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
@@ -107,7 +107,7 @@ func (rt *Runtime) execute(
 // StaticCall executes signle clause which ensure no modifications to state.
 func (rt *Runtime) StaticCall(
 	clause *Tx.Clause,
-	index int,
+	index uint32,
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
@@ -119,7 +119,7 @@ func (rt *Runtime) StaticCall(
 // Call executes single clause.
 func (rt *Runtime) Call(
 	clause *Tx.Clause,
-	index int,
+	index uint32,
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
@@ -165,7 +165,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	vmOutputs = make([]*vm.Output, len(clauses))
 
 	for i, clause := range clauses {
-		vmOutput := rt.execute(clause, i, leftOverGas, origin, gasPrice, tx.ID(), false)
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, origin, gasPrice, tx.ID(), false)
 		vmOutputs[i] = vmOutput
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
