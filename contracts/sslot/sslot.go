@@ -25,26 +25,13 @@ func New(address thor.Address, slot uint32) *StorageSlot {
 	}
 }
 
-// LoadStructed load structed value.
-// 'val' is to recevei decoded value, and it should implement
-// state.StorageDecoder or rlp decodable.
-func (ss *StorageSlot) LoadStructed(state *state.State, val interface{}) {
+// Load load value.
+// 'val' is to recevei decoded value. See state.State.GetStructedStorage.
+func (ss *StorageSlot) Load(state *state.State, val interface{}) {
 	state.GetStructedStorage(ss.address, ss.position, val)
 }
 
-// SaveStructed save structed value.
-// 'val' should implement state.StorageEncoder or rlp encodable.
-// If 'val is nil, corresponded storage will be cleared.
-func (ss *StorageSlot) SaveStructed(state *state.State, val interface{}) {
+// Save save value. See state.State.SetStructedStorage.
+func (ss *StorageSlot) Save(state *state.State, val interface{}) {
 	state.SetStructedStorage(ss.address, ss.position, val)
-}
-
-// Load load value as machine word.
-func (ss *StorageSlot) Load(state *state.State) thor.Hash {
-	return state.GetStorage(ss.address, ss.position)
-}
-
-// Save save value as machine word.
-func (ss *StorageSlot) Save(state *state.State, val thor.Hash) {
-	state.SetStorage(ss.address, ss.position, val)
 }

@@ -4,13 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
+	"github.com/vechain/thor/contracts/sslot"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
-
 	"github.com/vechain/thor/thor"
-
-	"github.com/vechain/thor/contracts/sslot"
 )
 
 func TestSSlot(t *testing.T) {
@@ -20,8 +17,8 @@ func TestSSlot(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("acc"))
 	ss := sslot.New(addr, 0)
 
-	ss.SaveStructed(st, thor.Hash{1})
+	ss.Save(st, thor.Hash{1})
 	var v thor.Hash
-	ss.LoadStructed(st, &v)
+	ss.Load(st, &v)
 	assert.Equal(t, thor.Hash{1}, v)
 }

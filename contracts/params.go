@@ -46,13 +46,13 @@ func (p *params) RuntimeBytecodes() []byte {
 // NativeGet native way to get param.
 func (p *params) Get(state *state.State, key thor.Hash) *big.Int {
 	var v big.Int
-	p.data.ForKey(key).LoadStructed(state, &v)
+	p.data.ForKey(key).Load(state, &v)
 	return &v
 }
 
 // NativeSet native way to set param.
 func (p *params) Set(state *state.State, key thor.Hash, value *big.Int) {
-	p.data.ForKey(key).SaveStructed(state, value)
+	p.data.ForKey(key).Save(state, value)
 }
 
 // HandleNative helper method to hook VM contract calls.

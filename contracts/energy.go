@@ -52,7 +52,7 @@ func (e *energy) GetTotalSupply(state *state.State) *big.Int {
 
 func (e *energy) GetBalance(state *state.State, blockTime uint64, addr thor.Address) *big.Int {
 	var acc energyAccount
-	e.accounts.ForKey(addr).LoadStructed(state, &acc)
+	e.accounts.ForKey(addr).Load(state, &acc)
 	if acc.Timestamp >= blockTime {
 		return acc.Balance
 	}
@@ -85,7 +85,7 @@ func (e *energy) GetBalance(state *state.State, blockTime uint64, addr thor.Addr
 }
 
 func (e *energy) SetBalance(state *state.State, blockTime uint64, addr thor.Address, balance *big.Int) {
-	e.accounts.ForKey(addr).SaveStructed(state, &energyAccount{
+	e.accounts.ForKey(addr).Save(state, &energyAccount{
 		Balance:    balance,
 		Timestamp:  blockTime,
 		VETBalance: state.GetBalance(addr),
@@ -93,20 +93,20 @@ func (e *energy) SetBalance(state *state.State, blockTime uint64, addr thor.Addr
 }
 
 func (e *energy) GetGrowthRates(state *state.State) (rates energyGrowthRates) {
-	e.growthRates.LoadStructed(state, &rates)
+	e.growthRates.Load(state, &rates)
 	return
 }
 
 func (e *energy) AdjustGrowthRate(state *state.State, blockTime uint64, rate *big.Int) {
 	var rates energyGrowthRates
-	e.growthRates.LoadStructed(state, &rates)
+	e.growthRates.Load(state, &rates)
 	rates = append(rates, energyGrowthRate{Rate: rate, Timestamp: blockTime})
-	e.growthRates.SaveStructed(state, rates)
+	e.growthRates.Save(state, rates)
 }
 
 func (e *energy) SetSharing(state *state.State, blockTime uint64, from thor.Address, to thor.Address,
 	credit *big.Int, recoveryRate *big.Int, expiration uint64) {
-	e.sharings.ForKey([]interface{}{from, to}).SaveStructed(state, &energySharing{
+	e.sharings.ForKey([]interface{}{from, to}).Save(state, &energySharing{
 		Credit:       credit,
 		RecoveryRate: recoveryRate,
 		Expiration:   expiration,
@@ -117,7 +117,7 @@ func (e *energy) SetSharing(state *state.State, blockTime uint64, from thor.Addr
 
 func (e *energy) GetSharingRemained(state *state.State, blockTime uint64, from thor.Address, to thor.Address) *big.Int {
 	var es energySharing
-	e.sharings.ForKey([]interface{}{from, to}).LoadStructed(state, &es)
+	e.sharings.ForKey([]interface{}{from, to}).Load(state, &es)
 	return es.RemainedAt(blockTime)
 }
 
@@ -127,14 +127,14 @@ func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Addre
 		if calleeBalance.Cmp(amount) >= 0 {
 			shareEntry := e.sharings.ForKey([]interface{}{callee, caller})
 			var share energySharing
-			shareEntry.LoadStructed(state, &share)
+			shareEntry.Load(state, &share)
 			remainedSharing := share.RemainedAt(blockTime)
 			if remainedSharing.Cmp(amount) >= 0 {
 				e.SetBalance(state, blockTime, callee, calleeBalance.Sub(calleeBalance, amount))
 
 				share.Remained.Sub(remainedSharing, amount)
 				share.Timestamp = blockTime
-				shareEntry.SaveStructed(state, &share)
+				shareEntry.Save(state, &share)
 				return callee, true
 			}
 		}
@@ -150,11 +150,11 @@ func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Addre
 }
 
 func (e *energy) SetContractMaster(state *state.State, contractAddr thor.Address, master thor.Address) {
-	e.masters.ForKey(contractAddr).SaveStructed(state, master)
+	e.masters.ForKey(contractAddr).Save(state, master)
 }
 
 func (e *energy) GetContractMaster(state *state.State, contractAddr thor.Address) (master thor.Address) {
-	e.masters.ForKey(contractAddr).LoadStructed(state, &master)
+	e.masters.ForKey(contractAddr).Load(state, &master)
 	return
 }
 
