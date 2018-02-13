@@ -62,7 +62,7 @@ func BytesToAddress(b []byte) Address {
 
 // CreateContractAddress to generate contract address according to tx hash, clause index and
 // contract creation count.
-func CreateContractAddress(txHash Hash, clauseIndex uint64, creationCount uint64) Address {
+func CreateContractAddress(txHash Hash, clauseIndex uint32, creationCount uint32) Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{txHash, clauseIndex, creationCount})
 	return BytesToAddress(crypto.Keccak256(data)[12:])
 }

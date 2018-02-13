@@ -29,7 +29,7 @@ func TestCall(t *testing.T) {
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
-	data, err := contracts.Params.ABI.Pack("voting")
+	data, err := contracts.Params.ABI.Pack("executor")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,11 +43,11 @@ func TestCall(t *testing.T) {
 	}
 
 	var addr common.Address
-	if err := contracts.Energy.ABI.Unpack(&addr, "voting", out.Value); err != nil {
+	if err := contracts.Energy.ABI.Unpack(&addr, "executor", out.Value); err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, thor.Address(addr), contracts.Voting.Address)
+	assert.Equal(t, thor.Address(addr), contracts.Executor.Address)
 }
 
 func TestExecuteTransaction(t *testing.T) {

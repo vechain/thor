@@ -85,9 +85,9 @@ type Context struct {
 	/// The following two vars are required to generating contract address.
 
 	// The transaction where the message contained.
-	TxHash common.Hash
+	TxID thor.Hash
 	// The index of clause that generates this message.
-	ClauseIndex uint64
+	ClauseIndex uint32
 }
 
 // ContractHook hooks contract calls.
@@ -126,7 +126,7 @@ type EVM struct {
 
 	// contract created during execution.
 	// this value is important for generating contract address.
-	contractCreationCount uint64
+	contractCreationCount uint32
 
 	contractHooks map[thor.Address]ContractHook
 }
@@ -350,7 +350,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	// differ with ethereum here!!!
 	evm.contractCreationCount++
-	contractAddr = common.Address(thor.CreateContractAddress(thor.Hash(evm.TxHash), evm.ClauseIndex, evm.contractCreationCount))
+	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	//
 
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)

@@ -37,15 +37,15 @@ func newEnv() *VM {
 	db, _ := lvldb.NewMem()
 	statr, _ := dbstate.New(thor.Hash{}, db)
 	ctx := Context{
-		TxHash:      thor.Hash{1},
+		TxID:        thor.Hash{1},
 		ClauseIndex: 1,
 		GetHash: func(n uint32) thor.Hash {
 			return thor.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(uint64(n)).String())))
 		},
-		BlockNumber: nil,
+		BlockNumber: 0,
 		GasPrice:    nil,
-		Time:        big.NewInt(time.Now().Unix()),
-		GasLimit:    new(big.Int).SetUint64(math.MaxUint64),
+		Time:        uint64(time.Now().Unix()),
+		GasLimit:    math.MaxUint64,
 	}
 	return New(ctx, statr, Config{})
 }
