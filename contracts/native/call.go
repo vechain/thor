@@ -2,6 +2,7 @@ package native
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/vechain/thor/contracts/abi"
 	"github.com/vechain/thor/state"
@@ -14,19 +15,10 @@ var errNativeNotPermitted = errors.New("native: not permitted")
 
 // Callable describes a native call.
 type Callable struct {
-	MethodPacker   *abi.MethodPacker
+	MethodCodec    *abi.MethodCodec
 	Gas            uint64
 	RequiredCaller *thor.Address
-	AllocArg       func() interface{}
 	Proc           func(env *Env) ([]interface{}, error)
-}
-
-// Env env of native call invocation.
-type Env struct {
-	State     *state.State
-	VMContext *vm.Context
-	Caller    thor.Address
-	Arg       interface{}
 }
 
 // Call do native call.
@@ -35,7 +27,7 @@ func (c *Callable) Call(
 	vmCtx *vm.Context,
 	caller thor.Address,
 	useGas func(uint64) bool,
-	input []byte) ([]byte, error) {
+	input []byte) (output []byte, err error) {
 
 	if c.RequiredCaller != nil {
 		if caller != *c.RequiredCaller {
@@ -46,20 +38,40 @@ func (c *Callable) Call(
 		return nil, evm.ErrOutOfGas
 	}
 
-	var arg interface{}
-	if c.AllocArg != nil {
-		arg = c.AllocArg()
-		if err := c.MethodPacker.UnpackInput(input, arg); err != nil {
-			return nil, err
+	defer func() {
+		// handle panic in Env.Args
+		if e := recover(); e != nil {
+			err = fmt.Errorf("native: %v", e)
 		}
-	}
+	}()
 
-	out, err := c.Proc(&Env{state, vmCtx, caller, arg})
+	out, err := c.Proc(&Env{
+		state,
+		vmCtx,
+		caller,
+		c,
+		input})
+
 	if err != nil {
 		return nil, err
 	}
-	if len(out) == 0 {
-		return nil, nil
+	return c.MethodCodec.EncodeOutput(out...)
+}
+
+// Env env of native call invocation.
+type Env struct {
+	State     *state.State
+	VMContext *vm.Context
+	Caller    thor.Address
+
+	callable *Callable
+	input    []byte
+}
+
+// Args unpack input into args.
+func (env *Env) Args(v interface{}) {
+	if err := env.callable.MethodCodec.DecodeInput(env.input, v); err != nil {
+		// Callable.Call will handle it
+		panic(err)
 	}
-	return c.MethodPacker.PackOutput(out...)
 }

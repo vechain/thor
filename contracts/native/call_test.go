@@ -21,7 +21,7 @@ func TestCall(t *testing.T) {
 	data := gen.MustAsset("compiled/Params.abi")
 	abi, _ := abi.New(bytes.NewReader(data))
 
-	mp, _ := abi.ForMethod("get")
+	methodCodec, _ := abi.ForMethod("get")
 	requiredCaller := thor.BytesToAddress([]byte("addr"))
 
 	key := thor.BytesToHash([]byte("key"))
@@ -29,23 +29,20 @@ func TestCall(t *testing.T) {
 	gas := uint64(1)
 
 	callable := Callable{
-		MethodPacker:   mp,
+		MethodCodec:    methodCodec,
 		Gas:            gas,
 		RequiredCaller: &requiredCaller,
-		AllocArg: func() interface{} {
-			return &common.Hash{}
-		},
 		Proc: func(env *Env) ([]interface{}, error) {
-			k, ok := env.Arg.(*common.Hash)
-			assert.True(t, ok)
-			assert.Equal(t, key, thor.Hash(*k))
+			var k common.Hash
+			env.Args(&k)
+			assert.Equal(t, key, thor.Hash(k))
 			return []interface{}{value}, nil
 		},
 	}
 
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Hash{}, kv)
-	input, _ := mp.PackInput(key)
+	input, _ := methodCodec.EncodeInput(key)
 
 	// good case
 	out, err := callable.Call(st, &vm.Context{}, requiredCaller, func(_gas uint64) bool {
@@ -56,7 +53,7 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 
 	var v *big.Int
-	assert.Nil(t, mp.UnpackOutput(out, &v))
+	assert.Nil(t, methodCodec.DecodeOutput(out, &v))
 	assert.Equal(t, value, v)
 
 	// bad cases
