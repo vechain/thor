@@ -52,11 +52,11 @@ func (a *ABI) MethodName(input []byte) (string, error) {
 	return a.idToMethodName[id], nil
 }
 
-// ForMethod create Packer instance for the given method name.
+// ForMethod create MethodCodec instance for the given method name.
 // error returned if method not found.
-func (a *ABI) ForMethod(name string) (*MethodPacker, error) {
+func (a *ABI) ForMethod(name string) (*MethodCodec, error) {
 	if name == "" {
-		return &MethodPacker{
+		return &MethodCodec{
 			forward: &ethabi.ABI{Constructor: a.abi.Constructor},
 		}, nil
 	}
@@ -69,7 +69,7 @@ func (a *ABI) ForMethod(name string) (*MethodPacker, error) {
 	rmethod := method
 	rmethod.Inputs, rmethod.Outputs = rmethod.Outputs, rmethod.Inputs
 
-	return &MethodPacker{
+	return &MethodCodec{
 		method.Id(),
 		name,
 		&ethabi.ABI{Methods: map[string]ethabi.Method{name: method}},
@@ -77,9 +77,9 @@ func (a *ABI) ForMethod(name string) (*MethodPacker, error) {
 	}, nil
 }
 
-// ForEvent create event unpacker for the given event name.
+// ForEvent create event decoder for the given event name.
 // error returned if event not found.
-func (a *ABI) ForEvent(name string) (unpack func(output []byte, v interface{}) error, err error) {
+func (a *ABI) ForEvent(name string) (decode func(output []byte, v interface{}) error, err error) {
 	event, ok := a.abi.Events[name]
 	if !ok {
 		return nil, errors.New("no such event")
@@ -94,47 +94,55 @@ func (a *ABI) ForEvent(name string) (unpack func(output []byte, v interface{}) e
 	}, nil
 }
 
-// MethodPacker to pack/unpack input/output.
-type MethodPacker struct {
+// MethodCodec to encode/decode input/output.
+type MethodCodec struct {
 	id       []byte
 	name     string
 	forward  *ethabi.ABI
 	reversed *ethabi.ABI
 }
 
-// PackInput packs input args into input data.
-func (p *MethodPacker) PackInput(args ...interface{}) ([]byte, error) {
-	return p.forward.Pack(p.name, args...)
+// Name returns method name.
+func (mc *MethodCodec) Name() string {
+	return mc.name
 }
 
-// UnpackOutput unpacks output data.
-func (p *MethodPacker) UnpackOutput(output []byte, v interface{}) error {
-	return p.forward.Unpack(v, p.name, output)
+// EncodeInput encodes input args into input data.
+func (mc *MethodCodec) EncodeInput(args ...interface{}) ([]byte, error) {
+	return mc.forward.Pack(mc.name, args...)
 }
 
-// PackOutput packs outputs into output data.
-func (p *MethodPacker) PackOutput(args ...interface{}) ([]byte, error) {
-	if p.reversed == nil {
-		return nil, errors.New("pack ouput unsupported")
+// DecodeOutput decodes output data.
+func (mc *MethodCodec) DecodeOutput(output []byte, v interface{}) error {
+	return mc.forward.Unpack(v, mc.name, output)
+}
+
+// EncodeOutput encodes outputs into output data.
+func (mc *MethodCodec) EncodeOutput(args ...interface{}) ([]byte, error) {
+	if mc.reversed == nil {
+		return nil, errors.New("encode ouput unsupported")
 	}
-	out, err := p.reversed.Pack(p.name, args...)
+	out, err := mc.reversed.Pack(mc.name, args...)
 	if err != nil {
 		return nil, err
 	}
 	return out[4:], nil
 }
 
-// UnpackInput unpacks input data into args.
-func (p *MethodPacker) UnpackInput(input []byte, v interface{}) error {
-	if p.reversed == nil {
-		return errors.New("unpack input unsupported")
+// DecodeInput decodes input data into args.
+func (mc *MethodCodec) DecodeInput(input []byte, v interface{}) error {
+	if mc.reversed == nil {
+		return errors.New("decode input unsupported")
 	}
-	if !bytes.HasPrefix(input, p.id) {
+	if !bytes.HasPrefix(input, mc.id) {
 		return errors.New("input mismatch")
 	}
-	return p.reversed.Unpack(v, p.name, input[4:])
+	return mc.reversed.Unpack(v, mc.name, input[4:])
 }
 
+// decode multi args into struct requires exported field names.
+// while solidity's function args usually are underscored.
+// so we should remove underscores.
 func removeUnderscore(args []ethabi.Argument) {
 	for i := range args {
 		arg := &args[i]

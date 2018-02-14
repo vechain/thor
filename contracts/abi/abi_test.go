@@ -20,13 +20,14 @@ func TestABI(t *testing.T) {
 	// pack/unpack input
 	{
 		method := "set"
-		packer, err := abi.ForMethod(method)
+		codec, err := abi.ForMethod(method)
 		assert.Nil(t, err)
+		assert.Equal(t, method, codec.Name())
 
 		key := thor.BytesToHash([]byte("k"))
 		value := big.NewInt(1)
 
-		input, err := packer.PackInput(key, value)
+		input, err := codec.EncodeInput(key, value)
 		assert.Nil(t, err)
 
 		name, err := abi.MethodName(input)
@@ -37,7 +38,7 @@ func TestABI(t *testing.T) {
 			Key   common.Hash
 			Value *big.Int
 		}
-		assert.Nil(t, packer.UnpackInput(input, &v))
+		assert.Nil(t, codec.DecodeInput(input, &v))
 		assert.Equal(t, key, thor.Hash(v.Key))
 		assert.Equal(t, value, v.Value)
 	}
@@ -45,15 +46,15 @@ func TestABI(t *testing.T) {
 	// pack/unpack output
 	{
 		method := "get"
-		packer, err := abi.ForMethod(method)
+		codec, err := abi.ForMethod(method)
 		assert.Nil(t, err)
 
 		value := big.NewInt(1)
-		output, err := packer.PackOutput(value)
+		output, err := codec.EncodeOutput(value)
 		assert.Nil(t, err)
 
 		var v *big.Int
-		assert.Nil(t, packer.UnpackOutput(output, &v))
+		assert.Nil(t, codec.DecodeOutput(output, &v))
 		assert.Equal(t, value, v)
 	}
 }
