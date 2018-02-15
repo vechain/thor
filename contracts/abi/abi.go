@@ -77,6 +77,16 @@ func (a *ABI) ForMethod(name string) (*MethodCodec, error) {
 	}, nil
 }
 
+// MustForMethod create MethodCodec instance for the given method name.
+// panic if not found.
+func (a *ABI) MustForMethod(name string) *MethodCodec {
+	codec, err := a.ForMethod(name)
+	if err != nil {
+		panic(err)
+	}
+	return codec
+}
+
 // ForEvent create event decoder for the given event name.
 // error returned if event not found.
 func (a *ABI) ForEvent(name string) (decode func(output []byte, v interface{}) error, err error) {
@@ -92,6 +102,16 @@ func (a *ABI) ForEvent(name string) (decode func(output []byte, v interface{}) e
 	return func(output []byte, v interface{}) error {
 		return abi.Unpack(v, event.Name, output)
 	}, nil
+}
+
+// MustForEvent create event decoder for the given event name.
+// panic if not found.
+func (a *ABI) MustForEvent(name string) func(output []byte, v interface{}) error {
+	dec, err := a.ForEvent(name)
+	if err != nil {
+		panic(err)
+	}
+	return dec
 }
 
 // MethodCodec to encode/decode input/output.
