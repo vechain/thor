@@ -115,9 +115,9 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 	return &VM{evm, statedb}
 }
 
-// HookContract hook contract calls.
-func (vm *VM) HookContract(addr thor.Address, hook ContractHook) {
-	vm.evm.HookContract(addr, evm.ContractHook(hook))
+// SetContractHook set the hook to hijack contract calls.
+func (vm *VM) SetContractHook(hook ContractHook) {
+	vm.evm.SetContractHook(evm.ContractHook(hook))
 }
 
 // Cancel cancels any running EVM operation.
