@@ -49,11 +49,9 @@ func run(evm *EVM, snapshot int, contract *Contract, input []byte) ([]byte, erro
 			return RunPrecompiledContract(p, input, contract)
 		}
 		// handle contract hook
-		if evm.contractHooks != nil {
-			if hook := evm.contractHooks[thor.Address(*contract.CodeAddr)]; hook != nil {
-				if runFn := hook(input); runFn != nil {
-					return runFn(contract.UseGas, thor.Address(contract.CallerAddress))
-				}
+		if evm.contractHook != nil {
+			if proc := evm.contractHook(thor.Address(*contract.CodeAddr), input); proc != nil {
+				return proc(contract.UseGas, thor.Address(contract.CallerAddress))
 			}
 		}
 	}
@@ -91,7 +89,7 @@ type Context struct {
 }
 
 // ContractHook hooks contract calls.
-type ContractHook func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error)
+type ContractHook func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error)
 
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
@@ -128,7 +126,7 @@ type EVM struct {
 	// this value is important for generating contract address.
 	contractCreationCount uint32
 
-	contractHooks map[thor.Address]ContractHook
+	contractHook ContractHook
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -146,12 +144,9 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	return evm
 }
 
-// HookContract hook contract calls.
-func (evm *EVM) HookContract(addr thor.Address, hook ContractHook) {
-	if evm.contractHooks == nil {
-		evm.contractHooks = make(map[thor.Address]ContractHook)
-	}
-	evm.contractHooks[addr] = hook
+// SetContractHook set the hook to hijack contract calls.
+func (evm *EVM) SetContractHook(hook ContractHook) {
+	evm.contractHook = hook
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
