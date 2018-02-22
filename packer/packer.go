@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -128,7 +128,7 @@ func (p *Packer) pack(
 	affectedAddresses := make(map[thor.Address]interface{})
 	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> master
 
-	rewardRatio := cs.Params.Get(rt.State(), thor.KeyRewardRatio)
+	rewardRatio := builtin.Params.Get(rt.State(), thor.KeyRewardRatio)
 
 	for txIter.HasNext() {
 		tx := txIter.Next()
@@ -215,16 +215,16 @@ func (p *Packer) pack(
 
 	builder.GasUsed(totalGasUsed)
 
-	beneficiaryBalance := cs.Energy.GetBalance(rt.State(), rt.BlockTime(), p.beneficiary)
-	cs.Energy.SetBalance(rt.State(), rt.BlockTime(), p.beneficiary, beneficiaryBalance.Add(beneficiaryBalance, totalReward))
+	beneficiaryBalance := builtin.Energy.GetBalance(rt.State(), rt.BlockTime(), p.beneficiary)
+	builtin.Energy.SetBalance(rt.State(), rt.BlockTime(), p.beneficiary, beneficiaryBalance.Add(beneficiaryBalance, totalReward))
 
 	for addr := range affectedAddresses {
-		bal := cs.Energy.GetBalance(rt.State(), rt.BlockTime(), addr)
-		cs.Energy.SetBalance(rt.State(), rt.BlockTime(), addr, bal)
+		bal := builtin.Energy.GetBalance(rt.State(), rt.BlockTime(), addr)
+		builtin.Energy.SetBalance(rt.State(), rt.BlockTime(), addr, bal)
 	}
 
 	for addr, master := range createdContracts {
-		cs.Energy.SetContractMaster(rt.State(), addr, master)
+		builtin.Energy.SetContractMaster(rt.State(), addr, master)
 	}
 
 	return receipts, nil

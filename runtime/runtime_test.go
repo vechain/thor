@@ -7,7 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
@@ -29,14 +29,14 @@ func TestCall(t *testing.T) {
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
-	codec := contracts.Params.ABI.MustForMethod("executor")
+	codec := builtin.Params.ABI.MustForMethod("executor")
 	data, err := codec.EncodeInput()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	out := rt.StaticCall(
-		tx.NewClause(&contracts.Params.Address).WithData(data),
+		tx.NewClause(&builtin.Params.Address).WithData(data),
 		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
 
 	if out.VMErr != nil {
@@ -48,7 +48,7 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, thor.Address(addr), contracts.Executor.Address)
+	assert.Equal(t, thor.Address(addr), builtin.Executor.Address)
 }
 
 func TestExecuteTransaction(t *testing.T) {

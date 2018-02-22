@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
-	cs "github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
@@ -85,7 +85,7 @@ func (rt *Runtime) execute(
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
 	env.SetContractHook(func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-		return cs.HandleNativeCall(rt.state, &ctx, to, input)
+		return builtin.HandleNativeCall(rt.state, &ctx, to, input)
 	})
 
 	if to == nil {
@@ -144,7 +144,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyPrepayed := new(big.Int).SetUint64(gas)
 	energyPrepayed.Mul(energyPrepayed, gasPrice)
 
-	energyPayer, ok := cs.Energy.Consume(rt.state, rt.blockTime, origin, commonTo(clauses), energyPrepayed)
+	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, origin, commonTo(clauses), energyPrepayed)
 	if !ok {
 		return nil, nil, errors.New("insufficient energy")
 	}
@@ -194,8 +194,8 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn.Mul(energyToReturn, gasPrice)
 
 	// return overpayed energy to payer
-	payerBalance := cs.Energy.GetBalance(rt.state, rt.blockTime, energyPayer)
-	cs.Energy.SetBalance(rt.state, rt.blockTime, energyPayer, payerBalance.Add(payerBalance, energyToReturn))
+	payerBalance := builtin.Energy.GetBalance(rt.state, rt.blockTime, energyPayer)
+	builtin.Energy.SetBalance(rt.state, rt.blockTime, energyPayer, payerBalance.Add(payerBalance, energyToReturn))
 
 	return receipt, vmOutputs, nil
 }

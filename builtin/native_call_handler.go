@@ -1,11 +1,11 @@
-package contracts
+package builtin
 
 import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/contracts/native"
+	"github.com/vechain/thor/builtin/native"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"

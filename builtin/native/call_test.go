@@ -7,8 +7,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/contracts/abi"
-	"github.com/vechain/thor/contracts/gen"
+	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"

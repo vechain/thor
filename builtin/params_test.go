@@ -1,14 +1,13 @@
-package contracts
+package builtin
 
 import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParams(t *testing.T) {

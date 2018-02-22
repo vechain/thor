@@ -1,8 +1,8 @@
-package contracts
+package builtin
 
 import (
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/contracts/sslot"
+	"github.com/vechain/thor/builtin/sslot"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"

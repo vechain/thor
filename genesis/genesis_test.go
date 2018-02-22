@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -21,7 +21,7 @@ func TestGenesis(t *testing.T) {
 	}
 
 	st, _ := state.New(b0.Header().StateRoot(), kv)
-	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
+	assert.True(len(st.GetCode(builtin.Authority.Address)) > 0)
 }
 func TestDevGenesis(t *testing.T) {
 	assert := assert.New(t)
@@ -33,6 +33,6 @@ func TestDevGenesis(t *testing.T) {
 	}
 
 	st, _ := state.New(b0.Header().StateRoot(), kv)
-	assert.True(len(st.GetCode(contracts.Authority.Address)) > 0)
+	assert.True(len(st.GetCode(builtin.Authority.Address)) > 0)
 	fmt.Println(b0)
 }
