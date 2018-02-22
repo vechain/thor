@@ -15,7 +15,8 @@ contract Authority {
         require(msg.sender == this.nativeGetExecutor());
         require(_addr != 0 && _identity != 0);
 
-        require(this.nativeAddProposer(_addr, _identity));
+        require(this.nativeAdd(_addr, _identity));
+
         Authorize(_addr, _identity);
     }
 
@@ -24,19 +25,25 @@ contract Authority {
     function deauthorize(address _addr) public {
         require(msg.sender == this.nativeGetExecutor());
 
-        require(this.nativeRemoveProposer(_addr));
+        require(this.nativeRemove(_addr));
+
         Deauthorize(_addr);
     }
 
-    function getProposer(address _addr) public view returns(bool found, bytes32 identity, uint32 status) {
-        return this.nativeGetProposer(_addr);
+    function status(address _addr) public view returns(bool listed, bytes32 identity, uint32) {
+        return this.nativeStatus(_addr);
+    }
+
+    function count() public view returns(uint64) {
+        return this.nativeCount();
     }
 
     function nativeGetExecutor() public view returns(address) {}
 
-    function nativeAddProposer(address addr, bytes32 identity) public returns(bool) {}
-    function nativeRemoveProposer(address addr) public returns(bool) {}
-    function nativeGetProposer(address addr) public view returns(bool, bytes32, uint32) {}
+    function nativeAdd(address addr, bytes32 identity) public returns(bool) {}
+    function nativeRemove(address addr) public returns(bool) {}
+    function nativeStatus(address addr) public view returns(bool, bytes32, uint32) {}
+    function nativeCount() public view returns(uint64) {}
 
     // fired when an address authorized to be a proposer.
     event Authorize(address indexed addr, bytes32 identity);

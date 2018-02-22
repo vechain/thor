@@ -33,7 +33,9 @@ func (ti *txIterator) Next() *tx.Transaction {
 	a0 := accs[0]
 	a1 := accs[1]
 
-	data, _ := cs.Energy.ABI.Pack("transfer", a1.Address, big.NewInt(1))
+	codec, _ := cs.Energy.ABI.ForMethod("transfer")
+
+	data, _ := codec.EncodeInput(a1.Address, big.NewInt(1))
 
 	tx := new(tx.Builder).
 		ChainTag(2).

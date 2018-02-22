@@ -84,15 +84,8 @@ func (rt *Runtime) execute(
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
-	env.HookContract(cs.Authority.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-		return cs.Authority.HandleNative(rt.state, input)
-	})
-
-	env.HookContract(cs.Params.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-		return cs.Params.HandleNative(rt.state, input)
-	})
-	env.HookContract(cs.Energy.Address, func(input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-		return cs.Energy.HandleNative(rt.state, rt.blockTime, input)
+	env.SetContractHook(func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
+		return cs.HandleNativeCall(rt.state, &ctx, to, input)
 	})
 
 	if to == nil {

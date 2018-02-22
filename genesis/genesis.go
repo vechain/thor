@@ -23,8 +23,8 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
 			state.SetCode(cs.Energy.Address, cs.Energy.RuntimeBytecodes())
 			state.SetCode(cs.Params.Address, cs.Params.RuntimeBytecodes())
 
-			cs.Params.Set(state, cs.ParamRewardRatio, big.NewInt(3e17))
-			cs.Params.Set(state, cs.ParamBaseGasPrice, big.NewInt(1000))
+			cs.Params.Set(state, thor.KeyRewardRatio, big.NewInt(3e17))
+			cs.Params.Set(state, thor.KeyBaseGasPrice, big.NewInt(1000))
 			return nil
 		}).
 		Build(stateCreator)

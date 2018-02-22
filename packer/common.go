@@ -43,21 +43,23 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
 	uint64, // score
 	error,
 ) {
-	proposers := cs.Authority.GetProposers(rt.State())
+	proposers := cs.Authority.All(rt.State())
 
 	// calc the time when it's turn to produce block
-	targetTime, updates, err := poa.NewScheduler(proposers, rt.BlockNumber(), rt.BlockTime()).
-		Schedule(proposer, now)
-
+	sched, err := poa.NewScheduler(proposer, proposers, rt.BlockNumber(), rt.BlockTime())
 	if err != nil {
 		return 0, 0, err
 	}
 
+	newBlockTime := sched.Schedule(now)
+
+	updates, score := sched.Updates(newBlockTime)
+
 	for _, u := range updates {
-		cs.Authority.UpdateProposer(rt.State(), u.Address, u.Status)
+		cs.Authority.Update(rt.State(), u.Address, u.Status)
 	}
 
-	return targetTime, poa.CalculateScore(proposers, updates), nil
+	return newBlockTime, score, nil
 }
 
 func CalcReward(tx *tx.Transaction, gasUsed uint64, ratio *big.Int, blockNum uint32, delay uint32) *big.Int {
