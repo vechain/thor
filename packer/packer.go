@@ -128,7 +128,7 @@ func (p *Packer) pack(
 	affectedAddresses := make(map[thor.Address]interface{})
 	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> master
 
-	rewardRatio := cs.Params.Get(rt.State(), cs.ParamRewardRatio)
+	rewardRatio := cs.Params.Get(rt.State(), thor.KeyRewardRatio)
 
 	for txIter.HasNext() {
 		tx := txIter.Next()

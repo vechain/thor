@@ -29,7 +29,8 @@ func TestCall(t *testing.T) {
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
-	data, err := contracts.Params.ABI.Pack("executor")
+	codec := contracts.Params.ABI.MustForMethod("executor")
+	data, err := codec.EncodeInput()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestCall(t *testing.T) {
 	}
 
 	var addr common.Address
-	if err := contracts.Energy.ABI.Unpack(&addr, "executor", out.Value); err != nil {
+	if err := codec.DecodeOutput(out.Value, &addr); err != nil {
 		t.Fatal(err)
 	}
 

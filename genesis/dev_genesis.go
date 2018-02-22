@@ -55,12 +55,12 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 			state.SetCode(cs.Energy.Address, cs.Energy.RuntimeBytecodes())
 			state.SetCode(cs.Params.Address, cs.Params.RuntimeBytecodes())
 
-			cs.Params.Set(state, cs.ParamRewardRatio, big.NewInt(3e17))
-			cs.Params.Set(state, cs.ParamBaseGasPrice, big.NewInt(1000))
+			cs.Params.Set(state, thor.KeyRewardRatio, big.NewInt(3e17))
+			cs.Params.Set(state, thor.KeyBaseGasPrice, big.NewInt(1000))
 			for _, a := range d.Accounts() {
 				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
-				cs.Authority.AddProposer(state, a.Address, thor.BytesToHash([]byte("a1")))
+				cs.Authority.Add(state, a.Address, thor.BytesToHash([]byte("a1")))
 				cs.Energy.SetBalance(state, 0, a.Address, b)
 			}
 			return nil

@@ -3,36 +3,27 @@ package contracts
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/contracts/rabi"
 	"github.com/vechain/thor/contracts/sslot"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm/evm"
 )
 
 // Energy binder of `Energy` contract.
 var Energy = func() *energy {
-	addr := thor.BytesToAddress([]byte("eng"))
-	abi := mustLoadABI("compiled/Energy.abi")
+	c := loadContract("Energy")
 	return &energy{
-		addr,
-		abi,
-		rabi.New(abi),
-		sslot.NewMap(addr, 100),
-		sslot.New(addr, 101),
-		sslot.NewMap(addr, 102),
-		sslot.NewMap(addr, 103),
+		c,
+		sslot.NewMap(c.Address, 100),
+		sslot.New(c.Address, 101),
+		sslot.NewMap(c.Address, 102),
+		sslot.NewMap(c.Address, 103),
 	}
 }()
 
 type energy struct {
-	Address     thor.Address
-	ABI         *abi.ABI
-	rabi        *rabi.ReversedABI
+	*contract
+
 	accounts    *sslot.Map
 	growthRates *sslot.StorageSlot
 	sharings    *sslot.Map
@@ -40,11 +31,6 @@ type energy struct {
 }
 
 var bigE18 = big.NewInt(1e18)
-
-// RuntimeBytecodes load runtime byte codes.
-func (e *energy) RuntimeBytecodes() []byte {
-	return mustLoadHexData("compiled/Energy.bin-runtime")
-}
 
 func (e *energy) GetTotalSupply(state *state.State) *big.Int {
 	return &big.Int{}
@@ -123,6 +109,7 @@ func (e *energy) GetSharingRemained(state *state.State, blockTime uint64, from t
 
 func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, bool) {
 	{
+		// try to consume callee's sharing
 		calleeBalance := e.GetBalance(state, blockTime, callee)
 		if calleeBalance.Cmp(amount) >= 0 {
 			shareEntry := e.sharings.ForKey([]interface{}{callee, caller})
@@ -140,6 +127,7 @@ func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Addre
 		}
 	}
 	{
+		// consume self
 		callerBalance := e.GetBalance(state, blockTime, caller)
 		if callerBalance.Cmp(amount) >= 0 {
 			e.SetBalance(state, blockTime, caller, callerBalance.Sub(callerBalance, amount))
@@ -156,141 +144,6 @@ func (e *energy) SetContractMaster(state *state.State, contractAddr thor.Address
 func (e *energy) GetContractMaster(state *state.State, contractAddr thor.Address) (master thor.Address) {
 	e.masters.ForKey(contractAddr).Load(state, &master)
 	return
-}
-
-// HandleNative helper method to hook VM contract calls.
-func (e *energy) HandleNative(state *state.State, blockTime uint64, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-	name, err := e.rabi.NameOf(input)
-	if err != nil {
-		return nil
-	}
-	switch name {
-	case "nativeGetExecutor":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if !useGas(ethparams.SloadGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			return e.rabi.PackOutput(name, Executor.Address)
-		}
-	case "nativeGetTotalSupply":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if !useGas(ethparams.SloadGas * 2) {
-				return nil, evm.ErrOutOfGas
-			}
-			return e.rabi.PackOutput(name, e.GetTotalSupply(state))
-		}
-	case "nativeGetBalance":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if !useGas(ethparams.SloadGas * 2) {
-				return nil, evm.ErrOutOfGas
-			}
-			var addr common.Address
-			if err := e.rabi.UnpackInput(&addr, name, input); err != nil {
-				return nil, err
-			}
-			return e.rabi.PackOutput(name, e.GetBalance(state, blockTime, thor.Address(addr)))
-		}
-	case "nativeSetBalance":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if caller != e.Address {
-				return nil, errNativeNotPermitted
-			}
-			if !useGas(ethparams.SstoreResetGas * 2) {
-				return nil, evm.ErrOutOfGas
-			}
-			var args struct {
-				Addr    common.Address
-				Balance *big.Int
-			}
-			if err := e.rabi.UnpackInput(&args, name, input); err != nil {
-				return nil, err
-			}
-			e.SetBalance(state, blockTime, thor.Address(args.Addr), args.Balance)
-			return nil, nil
-		}
-	case "nativeAdjustGrowthRate":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if caller != e.Address {
-				return nil, errNativeNotPermitted
-			}
-			if !useGas(ethparams.SstoreSetGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			var rate big.Int
-			if err := e.rabi.UnpackInput(&rate, name, input); err != nil {
-				return nil, err
-			}
-			e.AdjustGrowthRate(state, blockTime, &rate)
-			return nil, nil
-		}
-	case "nativeSetSharing":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if caller != e.Address {
-				return nil, errNativeNotPermitted
-			}
-			if !useGas(ethparams.SstoreSetGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			var args struct {
-				From         common.Address
-				To           common.Address
-				Credit       *big.Int
-				RecoveryRate *big.Int
-				Expiration   uint64
-			}
-			if err := e.rabi.UnpackInput(&args, name, input); err != nil {
-				return nil, err
-			}
-			e.SetSharing(state, blockTime,
-				thor.Address(args.From), thor.Address(args.To), args.Credit, args.RecoveryRate, args.Expiration)
-			return nil, nil
-		}
-	case "nativeGetSharingRemained":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if !useGas(ethparams.SloadGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			var args struct {
-				From common.Address
-				To   common.Address
-			}
-			if err := e.rabi.UnpackInput(&args, name, input); err != nil {
-				return nil, err
-			}
-			return e.rabi.PackOutput(name, e.GetSharingRemained(state, blockTime,
-				thor.Address(args.From), thor.Address(args.To)))
-		}
-	case "nativeSetContractMaster":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if caller != e.Address {
-				return nil, errNativeNotPermitted
-			}
-			if !useGas(ethparams.SstoreSetGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			var args struct {
-				ContractAddr common.Address
-				Master       common.Address
-			}
-			if err := e.rabi.UnpackInput(&args, name, input); err != nil {
-				return nil, err
-			}
-			e.SetContractMaster(state, thor.Address(args.ContractAddr), thor.Address(args.Master))
-			return nil, nil
-		}
-	case "nativeGetContractMaster":
-		return func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-			if !useGas(ethparams.SloadGas) {
-				return nil, evm.ErrOutOfGas
-			}
-			var contractAddr common.Address
-			if err := e.rabi.UnpackInput(&contractAddr, name, input); err != nil {
-				return nil, err
-			}
-			return e.rabi.PackOutput(name, e.GetContractMaster(state, thor.Address(contractAddr)))
-		}
-	}
-	return nil
 }
 
 type energyAccount struct {
