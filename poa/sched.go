@@ -10,133 +10,127 @@ import (
 
 // Scheduler to schedule the time when a proposer to produce a block.
 type Scheduler struct {
-	proposers         []Proposer
+	proposer          Proposer
+	onlines           []Proposer
 	parentBlockNumber uint32
 	parentBlockTime   uint64
 }
 
 // NewScheduler create a Scheduler object.
+// `addr` is the proposer to be scheduled.
+// If `addr` is not listed in `proposers`, an error returned.
 func NewScheduler(
+	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
-	parentBlockTime uint64) *Scheduler {
+	parentBlockTime uint64) (*Scheduler, error) {
+
+	onlines := make([]Proposer, 0, len(proposers))
+	var proposer Proposer
+	listed := false
+	for _, p := range proposers {
+		if p.Address == addr {
+			proposer = p
+			onlines = append(onlines, p)
+			listed = true
+		} else {
+			if p.IsOnline() {
+				onlines = append(onlines, p)
+			}
+		}
+	}
+
+	if !listed {
+		return nil, errors.New("unauthorized block proposer")
+	}
+
 	return &Scheduler{
-		append([]Proposer(nil), proposers...),
+		proposer,
+		onlines,
 		parentBlockNumber,
 		parentBlockTime,
-	}
+	}, nil
+}
+
+func (s *Scheduler) whoseTurn(t uint64) Proposer {
+	index := dprp(s.parentBlockNumber, t) % uint64(len(s.onlines))
+	return s.onlines[index]
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
-// If the proposer is not listed, an error returned.
-// `newBlockTime` is promised to be >= nowTime
-func (s *Scheduler) Schedule(addr thor.Address, nowTime uint64) (
-	newBlockTime uint64,
-	updates []Proposer,
-	err error,
-) {
-	// gather online proposers including addr
-	// and check if addr is listed
-	onlines := make([]Proposer, 0, len(s.proposers))
-	authorized := false
-	for _, p := range s.proposers {
-		if p.Address == addr {
-			onlines = append(onlines, p)
-			authorized = true
-		} else if p.IsOnline() {
-			onlines = append(onlines, p)
-		}
-	}
-	if !authorized {
-		return 0, nil, errors.New("unauthorized block proposer")
-	}
-
+// `newBlockTime` is promised to be >= nowTime and > parentBlockTime
+func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 	const T = thor.BlockInterval
 
-	// initialize newBlockTime
-	if nowTime > s.parentBlockTime {
-		// ensure T aligned
-		newBlockTime += s.parentBlockTime + (nowTime-s.parentBlockTime)/T*T
-	} else {
-		newBlockTime = s.parentBlockTime + T
+	newBlockTime = s.parentBlockTime + T
+
+	if nowTime > newBlockTime {
+		// ensure T aligned, and >= nowTime
+		newBlockTime += (nowTime - newBlockTime + T - 1) / T * T
 	}
 
-	updateMap := make(proposerMap)
 	for {
-		if newBlockTime >= nowTime {
-			// deterministic pseudo-random process
-			index := s.rand(newBlockTime) % uint32(len(onlines))
-			p := onlines[index]
-			if p.Address == addr {
-				if !p.IsOnline() {
-					// mark addr online if not
-					p.SetOnline(true)
-					updateMap[p.Address] = p
-				}
-				break
-			}
+		p := s.whoseTurn(newBlockTime)
+		if p.Address == s.proposer.Address {
+			return newBlockTime
 		}
+
+		// try next time slot
 		newBlockTime += T
 	}
+}
 
-	// traverse back at most len(s.proposers) periods of T
-	// to collect offline proposers.
-	for i := range s.proposers {
-		t := newBlockTime - uint64(i+1)*T
-		if t <= s.parentBlockTime {
-			break
-		}
-
-		index := s.rand(t) % uint32(len(onlines))
-		p := onlines[index]
-		if p.Address != addr {
-			if p.IsOnline() {
-				// mark offline if not
-				p.SetOnline(false)
-				updateMap[p.Address] = p
-			}
-		}
+// IsTheTime returns if the newBlockTime is correct for the proposer.
+func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
+	if s.parentBlockTime >= newBlockTime {
+		// invalid block time
+		return false
 	}
 
-	updates = updateMap.toSlice()
+	if (newBlockTime-s.parentBlockTime)%thor.BlockInterval != 0 {
+		// invalid block time
+		return false
+	}
+
+	return s.whoseTurn(newBlockTime).Address == s.proposer.Address
+}
+
+// Updates returns proposers whose status are change, and the score when new block time is assumed to be newBlockTime.
+func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+
+	toBeOffline := make(map[thor.Address]Proposer)
+
+	t := newBlockTime - thor.BlockInterval
+	for i := uint64(0); i < thor.MaxBlockProposers && t > s.parentBlockTime; i++ {
+		p := s.whoseTurn(t)
+		if p.Address != s.proposer.Address {
+			toBeOffline[p.Address] = p
+		}
+		t -= thor.BlockInterval
+	}
+
+	updates = make([]Proposer, 0, len(toBeOffline)+1)
+	for _, p := range toBeOffline {
+		p.SetOnline(false)
+		updates = append(updates, p)
+	}
+
+	if !s.proposer.IsOnline() {
+		cpy := s.proposer
+		cpy.SetOnline(true)
+		updates = append(updates, cpy)
+	}
+
+	score = uint64(len(s.onlines)) - uint64(len(toBeOffline))
 	return
 }
 
-// rand deterministic pseudo-random function.
-// H(B, t)[:4]
-func (s *Scheduler) rand(t uint64) uint32 {
+// dprp deterministic pseudo-random process.
+// H(B, t)[:8]
+func dprp(blockNumber uint32, time uint64) uint64 {
 	var bin [12]byte
-	binary.BigEndian.PutUint32(bin[:], s.parentBlockNumber)
-	binary.BigEndian.PutUint64(bin[4:], t)
+	binary.BigEndian.PutUint32(bin[:], blockNumber)
+	binary.BigEndian.PutUint64(bin[4:], time)
 	sum := sha256.Sum256(bin[:])
-	return binary.BigEndian.Uint32(sum[:])
-}
-
-// CalculateScore calculates score, which is the count of currently online proposers.
-func CalculateScore(all []Proposer, updates []Proposer) uint64 {
-	onlines := make(map[thor.Address]interface{})
-	for _, p := range all {
-		if p.IsOnline() {
-			onlines[p.Address] = nil
-		}
-	}
-
-	for _, p := range updates {
-		if p.IsOnline() {
-			onlines[p.Address] = nil
-		} else {
-			delete(onlines, p.Address)
-		}
-	}
-	return uint64(len(onlines))
-}
-
-type proposerMap map[thor.Address]Proposer
-
-func (pm proposerMap) toSlice() []Proposer {
-	slice := make([]Proposer, 0, len(pm))
-	for _, p := range pm {
-		slice = append(slice, p)
-	}
-	return slice
+	return binary.BigEndian.Uint64(sum[:])
 }
