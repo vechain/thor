@@ -1,9 +1,9 @@
-package contracts
+package builtin
 
 import (
 	"math/big"
 
-	"github.com/vechain/thor/contracts/sslot"
+	"github.com/vechain/thor/builtin/sslot"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )

@@ -6,7 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
-	cs "github.com/vechain/thor/contracts"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -51,17 +51,17 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(1516333644).
 		State(func(state *state.State) error {
-			state.SetCode(cs.Authority.Address, cs.Authority.RuntimeBytecodes())
-			state.SetCode(cs.Energy.Address, cs.Energy.RuntimeBytecodes())
-			state.SetCode(cs.Params.Address, cs.Params.RuntimeBytecodes())
+			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			cs.Params.Set(state, thor.KeyRewardRatio, big.NewInt(3e17))
-			cs.Params.Set(state, thor.KeyBaseGasPrice, big.NewInt(1000))
+			builtin.Params.Set(state, thor.KeyRewardRatio, big.NewInt(3e17))
+			builtin.Params.Set(state, thor.KeyBaseGasPrice, big.NewInt(1000))
 			for _, a := range d.Accounts() {
 				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
-				cs.Authority.Add(state, a.Address, thor.BytesToHash([]byte("a1")))
-				cs.Energy.SetBalance(state, 0, a.Address, b)
+				builtin.Authority.Add(state, a.Address, thor.BytesToHash([]byte("a1")))
+				builtin.Energy.SetBalance(state, 0, a.Address, b)
 			}
 			return nil
 		})

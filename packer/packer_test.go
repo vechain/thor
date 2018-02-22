@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
@@ -33,13 +33,13 @@ func (ti *txIterator) Next() *tx.Transaction {
 	a0 := accs[0]
 	a1 := accs[1]
 
-	codec, _ := cs.Energy.ABI.ForMethod("transfer")
+	codec, _ := builtin.Energy.ABI.ForMethod("transfer")
 
 	data, _ := codec.EncodeInput(a1.Address, big.NewInt(1))
 
 	tx := new(tx.Builder).
 		ChainTag(2).
-		Clause(tx.NewClause(&cs.Energy.Address).WithData(data)).
+		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
 		Gas(300000).Nonce(nonce).Build()
 	nonce++
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)

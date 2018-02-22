@@ -1,4 +1,4 @@
-package contracts_test
+package builtin
 
 import (
 	"math/big"

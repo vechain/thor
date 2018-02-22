@@ -1,12 +1,12 @@
-package contracts
+package builtin
 
 import (
 	"bytes"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/contracts/abi"
-	"github.com/vechain/thor/contracts/gen"
+	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/thor"
 )
 

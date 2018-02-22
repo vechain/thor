@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vechain/thor/contracts/abi"
+	"github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"

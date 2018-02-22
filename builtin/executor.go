@@ -1,4 +1,4 @@
-package contracts
+package builtin
 
 // Executor binder of `Executor` contract.
 var Executor = func() *executor {

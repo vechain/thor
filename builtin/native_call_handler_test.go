@@ -1,4 +1,4 @@
-package contracts
+package builtin
 
 import (
 	"testing"

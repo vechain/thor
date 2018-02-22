@@ -6,8 +6,8 @@ import (
 	"math/big"
 
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	cs "github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/thor"
@@ -43,7 +43,7 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
 	uint64, // score
 	error,
 ) {
-	proposers := cs.Authority.All(rt.State())
+	proposers := builtin.Authority.All(rt.State())
 
 	// calc the time when it's turn to produce block
 	sched, err := poa.NewScheduler(proposer, proposers, rt.BlockNumber(), rt.BlockTime())
@@ -56,7 +56,7 @@ func Schedule(rt *runtime.Runtime, proposer thor.Address, now uint64) (
 	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
-		cs.Authority.Update(rt.State(), u.Address, u.Status)
+		builtin.Authority.Update(rt.State(), u.Address, u.Status)
 	}
 
 	return newBlockTime, score, nil
