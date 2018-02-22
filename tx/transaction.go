@@ -276,7 +276,7 @@ func (t *Transaction) String() string {
 
 	return fmt.Sprintf(`
 	Tx(%v)
-	From:			%v	
+	From:			%v
 	Clauses:		%v
 	GasPrice:		%v
 	Gas:			%v
