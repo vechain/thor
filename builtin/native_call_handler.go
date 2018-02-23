@@ -113,7 +113,8 @@ var nativeCalls = map[thor.Address]struct {
 			"nativeGetTotalSupply": {
 				Gas: ethparams.SloadGas,
 				Proc: func(env *native.Env) ([]interface{}, error) {
-					return []interface{}{Energy.GetTotalSupply(env.State)}, nil
+					supply := Energy.GetTotalSupply(env.State, env.VMContext.Time)
+					return []interface{}{supply}, nil
 				}},
 			"nativeGetBalance": {
 				Gas: ethparams.SloadGas,
