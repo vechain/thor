@@ -14,7 +14,7 @@ const (
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
 
-	MaxTxWorkDelay uint32 = 32 // (unit: block number) if tx delay exeeds this value, no energy can be exchanged.
+	MaxTxWorkDelay uint64 = 60 * 5 // (unit: second) if tx delay exeeds this value, no energy can be exchanged.
 
 	MaxBlockProposers uint64 = 101
 )

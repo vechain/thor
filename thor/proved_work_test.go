@@ -9,6 +9,6 @@ import (
 
 func BenchmarkProvedWorkToEnergy(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		thor.ProvedWorkToEnergy(big.NewInt(100000), 18*30*3600*24/10, 10)
+		thor.ProvedWork.ToEnergy(big.NewInt(100000), 1519515348)
 	}
 }
