@@ -179,7 +179,7 @@ func (p *Packer) pack(
 			}
 		}
 
-		delay, err := MeasureTxDelay(tx.BlockRef(), parent.ID(), p.chain)
+		delay, err := MeasureTxDelay(tx.BlockRef(), parent, p.chain)
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +205,7 @@ func (p *Packer) pack(
 		receipts = append(receipts, receipt)
 		totalGasUsed += receipt.GasUsed
 
-		reward := CalcReward(tx, receipt.GasUsed, rewardRatio, rt.BlockNumber(), delay)
+		reward := CalcReward(tx, receipt.GasUsed, rewardRatio, rt.BlockTime(), delay)
 		totalReward.Add(totalReward, reward)
 
 		processed[tx.ID()] = nil
