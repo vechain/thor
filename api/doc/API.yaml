@@ -1,4 +1,4 @@
-swagger: "2.0"
+openapi: 3.0.0
 info:
   version: "1.0.0"
   title: "Thor API"
@@ -6,8 +6,9 @@ info:
   contact:
     email: "apiteam@swagger.io"
   description: "Get chain info through the API"
-host: "localhost:3000"
-basePath: "/v1"
+servers:
+  - url: http://localhost:3000/v1
+    description: Optional server description, local server
 tags:
 - name: "Account"
   description: "Everything about account"
@@ -15,8 +16,6 @@ tags:
   description: "Everything about transaction"
 - name: "Block"
   description: "Everything about block"
-schemes:
-  - http
 paths:
   /accounts/{address}:
     get:
@@ -25,19 +24,21 @@ paths:
       summary: "Get balance by address"
       description: "return account balance"
       parameters:
-        - in: path
+        - in: query
           required: true
           name: address
-          type: string
+          schema:
+            type: string
+            format: address
           description: account address
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example: {
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
                       "Balance":0,
                       "Code":null
                       }
@@ -50,27 +51,30 @@ paths:
       summary: "Get storage by address"
       description: "returns storage value by address"
       parameters:
-        - in: path
+        - in: query
           required: true
           name: address
-          type: string
+          schema:
+            type: string
+            format: address
           description: account address
         - in: query
           required: true
           name: key
-          type: string
-          format: hash
+          schema:
+            type: string
+            format: hash
           description: storage hash
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example: {
-              "storagkey":"storagevalue" #both hash
-            }
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
+                            "storagkey":"storagevalue" #both hash
+                          }
         400:
           description: "Invalid params"
   /transactions/{id}:
@@ -80,19 +84,20 @@ paths:
       summary: "Get transaction by transaction id"
       description: "returns transaction by transaction id"
       parameters:
-        - in: path
+        - in: query
           required: true
           name: id
-          type: string
+          schema:
+            type: string
           description: transaction id
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example: {
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
                         "ID":"0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd",
                         "Index":0,
                         "BlockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
@@ -110,6 +115,38 @@ paths:
                       }
         400:
           description: "Invalid params"
+  /transactions:
+    post:
+      tags:
+      - "Transaction"
+      summary: "send rawtransaction"
+      description: "send rawtransaction"
+      requestBody:
+        description: a rawtransaction
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example: {
+                          "GasPrice":    100000,
+                          "Gas":         30000,
+                          "DependsOn":   optional,
+                          "Sig":         signature,
+                          "BlockNumber": 20,
+                          "Clauses": [
+                                      {
+                                        "To":    addressTo,
+                                        "Value": 10000,
+                                        "Data":  [0x11, 0x12],
+                                      }
+                                    ]
+                        }
+      responses:
+        200:
+          description: "successful operation"
+        400:
+          description: "Invalid params"
   /blocks/{id}:
     get:
       tags:
@@ -117,19 +154,20 @@ paths:
       summary: "Get block by block id"
       description: "returns block by block id"
       parameters:
-        - in: path
+        - in: query
           required: true
           name: id
-          type: string
+          schema:
+            type: string
           description: block id
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example:  {
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
                         "Number":1,
                         "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
                         "Timestamp":0,
@@ -153,16 +191,17 @@ paths:
         - in: query
           required: true
           name: number
-          type: integer
+          schema:
+            type: integer
           description: block number
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example:  {
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
                         "Number":1,
                         "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
                         "Timestamp":0,
@@ -182,14 +221,14 @@ paths:
       - "Block"
       summary: "Get best block"
       description: "returns best block"
-      produces:
-      - "application/json"
       responses:
         200:
-          description: "successful operation"
-          schema:
-            type: "object"
-            example:  {
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example:  {
                         "Number":0,
                         "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
                         "Timestamp":0,
