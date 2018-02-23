@@ -54,13 +54,13 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 	return t, nil
 }
 
-//SendTransaction send a transactoion
-func (ti *TransactionInterface) SendTransaction(raw *types.RawTransaction) error {
+//SendRawTransaction send a raw transactoion
+func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) error {
 	bestblk, err := ti.chain.GetBestBlock()
 	if err != nil {
 		return err
 	}
-	builder, err := types.BuilcRawTransaction(raw)
+	builder, err := types.BuildRawTransaction(raw)
 	if err != nil {
 		return err
 	}

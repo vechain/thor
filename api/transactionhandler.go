@@ -52,7 +52,7 @@ func (ti *TransactionInterface) handleSendTransactionByID(w http.ResponseWriter,
 	if err := json.Unmarshal(raw, &rawTransaction); err != nil {
 		return err
 	}
-	if err := ti.SendTransaction(rawTransaction); err != nil {
+	if err := ti.SendRawTransaction(rawTransaction); err != nil {
 		return err
 	}
 	w.Write(nil)
