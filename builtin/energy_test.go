@@ -27,8 +27,6 @@ func TestEnergy(t *testing.T) {
 		{Energy.GetBalance(st, 0, acc), &big.Int{}},
 		{func() bool { Energy.SetBalance(st, 0, acc, big.NewInt(10)); return true }(), true},
 		{Energy.GetBalance(st, 0, acc), big.NewInt(10)},
-		{func() bool { Energy.AdjustGrowthRate(st, 0, thor.InitialEnergyGrowthRate); return true }(), true},
-		{Energy.GetGrowthRates(st), energyGrowthRates{{thor.InitialEnergyGrowthRate, 0}}},
 		{func() bool { Energy.SetContractMaster(st, contractAddr, acc); return true }(), true},
 		{Energy.GetContractMaster(st, contractAddr), acc},
 	}

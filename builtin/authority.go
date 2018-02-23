@@ -21,9 +21,9 @@ var Authority = func() *authority {
 
 type authority struct {
 	*contract
-	array    *sslot.Array
-	indexMap *sslot.Map
-	idMap    *sslot.Map
+	array    *sslot.Array // slot to store whitelist
+	indexMap *sslot.Map   // slot to map address to index of proposer in whitelist
+	idMap    *sslot.Map   // slot to map address to identity
 }
 
 func (a *authority) indexOf(state *state.State, addr thor.Address) (index uint64) {
@@ -64,6 +64,8 @@ func (a *authority) Remove(state *state.State, addr thor.Address) bool {
 		a.array.ForIndex(length-1).Load(state, &last)
 		a.array.ForIndex(index-1).Save(state, &last)
 	}
+
+	// will clear last elem
 	a.array.SetLen(state, length-1)
 	a.idMap.ForKey(addr).Save(state, nil)
 	return true
@@ -113,8 +115,10 @@ func (a *authority) All(state *state.State) []poa.Proposer {
 	return all
 }
 
-/////
 type stgProposer poa.Proposer
+
+var _ state.StorageDecoder = (*stgProposer)(nil)
+var _ state.StorageEncoder = (*stgProposer)(nil)
 
 func (s *stgProposer) Encode() ([]byte, error) {
 	if s.Address.IsZero() && s.Status == 0 {

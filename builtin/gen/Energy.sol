@@ -81,7 +81,7 @@ contract Energy is Token {
     /// @param _to who receive the `_amount` tokens
     /// @param _amount The amount of wei to be approved for transfer
     /// @return Whether the approval was successful or not
-    function withdrawFromContract(address _contractAddr, address _to, uint256 _amount) public returns (bool success) {
+    function transferFromContract(address _contractAddr, address _to, uint256 _amount) public returns (bool success) {
         require(msg.sender == this.nativeGetContractMaster(_contractAddr));        
         return _transfer(_contractAddr, _to, _amount);
     }
