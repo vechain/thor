@@ -61,8 +61,8 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 
 }
 
-//BuilcRawTransaction returns tx.Builder
-func BuilcRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
+//BuildRawTransaction returns tx.Builder
+func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
 	builder := new(tx.Builder)
 	if rawTransaction.GasPrice != nil {
 		builder.GasPrice(rawTransaction.GasPrice)
