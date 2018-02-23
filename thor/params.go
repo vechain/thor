@@ -1,6 +1,8 @@
 package thor
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -23,4 +25,8 @@ const (
 var (
 	KeyRewardRatio  = BytesToHash([]byte("reward-ratio"))
 	KeyBaseGasPrice = BytesToHash([]byte("base-gas-price"))
+
+	InitialRewardRatio      = big.NewInt(3e17)       // 30%
+	InitialBaseGasPrice     = big.NewInt(10000000)   //TODO
+	InitialEnergyGrowthRate = big.NewInt(5000000000) // per VET per second. about 0.000432 per VET per day.
 )
