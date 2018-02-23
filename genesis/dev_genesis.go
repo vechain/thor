@@ -11,17 +11,27 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-var Dev = &dev{}
-
-type dev struct {
+var Dev = &dev{
+	launchTime: 1519356186,
 }
 
-func (d *dev) Accounts() (accs [10]struct {
+type dev struct {
+	launchTime   uint64
+	testAccounts []testAccount
+}
+
+type testAccount struct {
 	Address    thor.Address
 	PrivateKey *ecdsa.PrivateKey
-}) {
+}
 
-	privKeys := [10]string{
+func (d *dev) Accounts() []testAccount {
+	if tas := d.testAccounts; tas != nil {
+		return tas
+	}
+
+	var accs []testAccount
+	privKeys := []string{
 		"dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65",
 		"321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51",
 		"2d7c882bad2a01105e36dda3646693bc1aaaa45b0ed63fb0ce23c060294f3af2",
@@ -33,30 +43,32 @@ func (d *dev) Accounts() (accs [10]struct {
 		"c8c53657e41a8d669349fc287f57457bd746cb1fcfc38cf94d235deb2cfca81b",
 		"87e0eba9c86c494d98353800571089f316740b0cb84c9a7cdf2fe5c9997c7966",
 	}
-	for i, str := range privKeys {
+	for _, str := range privKeys {
 		pk, err := crypto.HexToECDSA(str)
 		if err != nil {
 			panic(err)
 		}
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
-		accs[i].Address = thor.Address(addr)
-		accs[i].PrivateKey = pk
+		accs = append(accs, testAccount{thor.Address(addr), pk})
 	}
-	return
+	d.testAccounts = accs
+	return accs
 }
 
 func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 	builder := new(Builder).
 		ChainTag(2).
 		GasLimit(thor.InitialGasLimit).
-		Timestamp(1516333644).
+		Timestamp(d.launchTime).
 		State(func(state *state.State) error {
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Params.Set(state, thor.KeyRewardRatio, big.NewInt(3e17))
-			builtin.Params.Set(state, thor.KeyBaseGasPrice, big.NewInt(1000))
+			builtin.Params.Set(state, thor.KeyRewardRatio, thor.InitialRewardRatio)
+			builtin.Params.Set(state, thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
+			builtin.Energy.AdjustGrowthRate(state, d.launchTime, thor.InitialEnergyGrowthRate)
+
 			for _, a := range d.Accounts() {
 				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
