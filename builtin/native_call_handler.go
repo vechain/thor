@@ -1,22 +1,34 @@
 package builtin
 
 import (
+	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/native"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
 )
 
+func mustLoadNativeABI(name string) *abi.ABI {
+	data := gen.MustAsset("compiled/" + name + "Native.abi")
+	abi, err := abi.New(bytes.NewReader(data))
+	if err != nil {
+		panic(err)
+	}
+	return abi
+}
+
 var nativeCalls = map[thor.Address]struct {
-	*contract
-	calls map[string]*native.Callable
+	nativeABI *abi.ABI
+	calls     map[string]*native.Callable
 }{
 	Params.Address: {
-		Params.contract,
+		mustLoadNativeABI(Params.name),
 		map[string]*native.Callable{
 			"nativeGetExecutor": {
 				Gas: ethparams.SloadGas,
@@ -46,7 +58,7 @@ var nativeCalls = map[thor.Address]struct {
 			}},
 	},
 	Authority.Address: {
-		Authority.contract,
+		mustLoadNativeABI(Authority.name),
 		map[string]*native.Callable{
 			"nativeGetExecutor": {
 				Gas: ethparams.SloadGas,
@@ -91,7 +103,7 @@ var nativeCalls = map[thor.Address]struct {
 		},
 	},
 	Energy.Address: {
-		Energy.contract,
+		mustLoadNativeABI(Energy.name),
 		map[string]*native.Callable{
 			"nativeGetExecutor": {
 				Gas: ethparams.SloadGas,
@@ -192,7 +204,7 @@ var nativeCalls = map[thor.Address]struct {
 func init() {
 	for _, contract := range nativeCalls {
 		for name, call := range contract.calls {
-			call.MethodCodec = contract.ABI.MustForMethod(name)
+			call.MethodCodec = contract.nativeABI.MustForMethod(name)
 		}
 	}
 }
@@ -203,7 +215,7 @@ func HandleNativeCall(state *state.State, vmCtx *vm.Context, to thor.Address, in
 		return nil
 	}
 
-	name, err := contract.ABI.MethodName(input)
+	name, err := contract.nativeABI.MethodName(input)
 	if err != nil {
 		return nil
 	}

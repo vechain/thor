@@ -5,9 +5,13 @@ import './ERC223Receiver.sol';
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
     mapping(address => mapping (address => uint256)) allowed;
+
+    function n() internal view returns(EnergyNative) {
+        return EnergyNative(this);
+    }
   
     function executor() public view returns(address) {
-        return this.nativeGetExecutor();
+        return n().nativeGetExecutor();
     }
 
     ///@return ERC20 token name
@@ -27,20 +31,20 @@ contract Energy is Token {
 
     ///@return ERC20 token total supply
     function totalSupply() public constant returns (uint256) {
-        return this.nativeGetTotalSupply();
+        return n().nativeGetTotalSupply();
     }
 
     function balanceOf(address _owner) public view returns (uint256 balance) {
-        return this.nativeGetBalance(_owner);
+        return n().nativeGetBalance(_owner);
     }
 
     function _transfer(address _from, address _to, uint256 _amount) internal returns(bool) {
-        uint256 fromBalance = this.nativeGetBalance(_from);
-        uint256 toBalance = this.nativeGetBalance(_to);        
+        uint256 fromBalance = n().nativeGetBalance(_from);
+        uint256 toBalance = n().nativeGetBalance(_to);        
 
         if (_amount > 0 && fromBalance >= _amount && toBalance + _amount > toBalance) {
-            this.nativeSetBalance(_from, fromBalance - _amount);
-            this.nativeSetBalance(_to, toBalance + _amount);
+            n().nativeSetBalance(_from, fromBalance - _amount);
+            n().nativeSetBalance(_to, toBalance + _amount);
             if (isContract(_to)) {
                 // Require proper transaction handling.
                 ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
@@ -82,7 +86,7 @@ contract Energy is Token {
     /// @param _amount The amount of wei to be approved for transfer
     /// @return Whether the approval was successful or not
     function transferFromContract(address _contractAddr, address _to, uint256 _amount) public returns (bool success) {
-        require(msg.sender == this.nativeGetContractMaster(_contractAddr));        
+        require(msg.sender == n().nativeGetContractMaster(_contractAddr));        
         return _transfer(_contractAddr, _to, _amount);
     }
   
@@ -94,7 +98,7 @@ contract Energy is Token {
     ///@param _expiration a timestamp, if block time exceeded that, the credit will be unusable.
     function share(address _from, address _to,uint256 _credit,uint256 _recoveryRate,uint64 _expiration) public {
         // the origin can be contract itself or master
-        require(msg.sender == _from || msg.sender == this.nativeGetContractMaster(_from));
+        require(msg.sender == _from || msg.sender == n().nativeGetContractMaster(_from));
 
         //the expiration time should be greater than block time
         require(_expiration > now);
@@ -102,7 +106,7 @@ contract Energy is Token {
         //the _to should not be contract
         require(!isContract(_to));
 
-        this.nativeSetSharing(_from, _to, _credit, _recoveryRate, _expiration);
+        n().nativeSetSharing(_from, _to, _credit, _recoveryRate, _expiration);
 
         Share(_from, _to, _credit, _recoveryRate, _expiration);
     }
@@ -111,23 +115,23 @@ contract Energy is Token {
     ///@param _to who obtain the sharing
     ///@return remained sharing credit
     function getSharingRemained(address _from, address _to) public view returns (uint256) {
-        return this.nativeGetSharingRemained(_from, _to);        
+        return n().nativeGetSharingRemained(_from, _to);        
     }
 
     function getContractMaster(address _contractAddr) public view returns(address) {
-        return this.nativeGetContractMaster(_contractAddr);
+        return n().nativeGetContractMaster(_contractAddr);
     }
 
     function setContractMaster(address _contractAddr, address _newMaster) public {
-        address oldMaster = this.nativeGetContractMaster(_contractAddr);
+        address oldMaster = n().nativeGetContractMaster(_contractAddr);
         require(msg.sender == oldMaster);
-        this.nativeSetContractMaster(_contractAddr, _newMaster);
+        n().nativeSetContractMaster(_contractAddr, _newMaster);
         SetContractMaster(_contractAddr, oldMaster, _newMaster);
     }
 
     function adjustGrowthRate(uint256 rate) public {
-        require(msg.sender == this.nativeGetExecutor());
-        this.nativeAdjustGrowthRate(rate);
+        require(msg.sender == n().nativeGetExecutor());
+        n().nativeAdjustGrowthRate(rate);
 
         AdjustGrowthRate(rate);
     }
@@ -146,21 +150,25 @@ contract Energy is Token {
         return size > 0;
     }
     
-    function nativeGetExecutor() public view returns(address) {}
-
-    function nativeGetTotalSupply() public view returns(uint256) {}
     
-    function nativeGetBalance(address addr) public view returns(uint256) {}
-    function nativeSetBalance(address addr, uint256 balance) public {}
-    function nativeAdjustGrowthRate(uint256 rate) public {}
-
-    function nativeSetSharing(address from, address to, uint256 credit, uint256 recoveryRate, uint64 expiration) public {}
-    function nativeGetSharingRemained(address from, address to) public view returns(uint256) {}
-
-    function nativeSetContractMaster(address contractAddr, address master) public {}
-    function nativeGetContractMaster(address contractAddr) public view returns(address) {}
-
     event AdjustGrowthRate(uint256 rate);
     event Share(address indexed from, address indexed to, uint256 credit, uint256 recoveryRate, uint64 expiration);
     event SetContractMaster(address indexed contractAddr, address oldMaster, address newMaster);
+}
+
+contract EnergyNative {
+    function nativeGetExecutor() public view returns(address);
+
+    function nativeGetTotalSupply() public view returns(uint256);
+    
+    function nativeGetBalance(address addr) public view returns(uint256);
+    function nativeSetBalance(address addr, uint256 balance) public;
+    function nativeAdjustGrowthRate(uint256 rate) public;
+
+    function nativeSetSharing(address from, address to, uint256 credit, uint256 recoveryRate, uint64 expiration) public;
+    function nativeGetSharingRemained(address from, address to) public view returns(uint256);
+
+    function nativeSetContractMaster(address contractAddr, address master) public;
+    function nativeGetContractMaster(address contractAddr) public view returns(address);
+
 }
