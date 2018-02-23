@@ -3,14 +3,16 @@ package builtin
 import (
 	"testing"
 
-	"github.com/vechain/thor/poa"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-
-	"github.com/stretchr/testify/assert"
 )
+
+func M(a ...interface{}) []interface{} {
+	return a
+}
 
 func TestAuthority(t *testing.T) {
 	kv, _ := lvldb.NewMem()
@@ -22,24 +24,23 @@ func TestAuthority(t *testing.T) {
 	p2 := thor.BytesToAddress([]byte("p2"))
 	p3 := thor.BytesToAddress([]byte("p3"))
 
-	assert.True(t, Authority.Add(st, p1, thor.Hash{}))
-	assert.True(t, Authority.Add(st, p2, thor.Hash{}))
-	assert.True(t, Authority.Add(st, p3, thor.Hash{}))
+	tests := []struct {
+		ret      interface{}
+		expected interface{}
+	}{
+		{Authority.Add(st, p1, thor.Hash{}), true},
+		{Authority.Add(st, p2, thor.Hash{}), true},
+		{Authority.Add(st, p3, thor.Hash{}), true},
+		{Authority.All(st), []poa.Proposer{{p1, 0}, {p2, 0}, {p3, 0}}},
+		{M(Authority.Status(st, p1)), []interface{}{true, thor.Hash{}, uint32(0)}},
+		{Authority.Update(st, p1, 1), true},
+		{M(Authority.Status(st, p1)), []interface{}{true, thor.Hash{}, uint32(1)}},
+		{Authority.Remove(st, p1), true},
+		{Authority.All(st), []poa.Proposer{{p3, 0}, {p2, 0}}},
+	}
 
-	assert.False(t, Authority.Add(st, p1, thor.Hash{}), "add duped proposer should fail")
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, tt.ret)
+	}
 
-	assert.Equal(t, uint64(3), Authority.Count(st))
-
-	assert.Equal(t, []poa.Proposer{{p1, 0}, {p2, 0}, {p3, 0}}, Authority.All(st))
-
-	listed, _, status := Authority.Status(st, p1)
-	assert.True(t, listed)
-	assert.Equal(t, uint32(0), status)
-
-	assert.True(t, Authority.Update(st, p1, 1))
-	_, _, status = Authority.Status(st, p1)
-	assert.Equal(t, uint32(1), status)
-
-	assert.True(t, Authority.Remove(st, p1))
-	assert.Equal(t, []poa.Proposer{{p3, 0}, {p2, 0}}, Authority.All(st))
 }
