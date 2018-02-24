@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/params"
@@ -226,28 +225,22 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 }
 
 // IntrinsicGas returns intrinsic gas of tx.
-// That's sum of all clauses intrinsic gas.
 func (t *Transaction) IntrinsicGas() (uint64, error) {
-	clauseCount := len(t.body.Clauses)
-	if clauseCount == 0 {
-		return params.TxGas, nil
+	if len(t.body.Clauses) == 0 {
+		return thor.TxGas + thor.ClauseGas, nil
 	}
 
-	firstClause := t.body.Clauses[0]
-	total := core.IntrinsicGas(firstClause.body.Data, firstClause.body.To == nil, true)
-
-	for _, c := range t.body.Clauses[1:] {
-		contractCreation := c.body.To == nil
-		total.Add(total, core.IntrinsicGas(c.body.Data, contractCreation, true))
-
-		// sub over-payed gas for clauses after the first one.
-		if contractCreation {
-			total.Sub(total, new(big.Int).SetUint64(params.TxGasContractCreation-thor.ClauseGasContractCreation))
+	total := new(big.Int).SetUint64(thor.TxGas)
+	for _, c := range t.body.Clauses {
+		gas := dataGas(c.body.Data)
+		if c.body.To == nil {
+			// contract creation
+			gas += thor.ClauseGasContractCreation
 		} else {
-			total.Sub(total, new(big.Int).SetUint64(params.TxGas-thor.ClauseGas))
+			gas += thor.ClauseGas
 		}
+		total.Add(total, new(big.Int).SetUint64(gas))
 	}
-
 	if total.BitLen() > 64 {
 		return 0, errors.New("intrinsic gas too large")
 	}
@@ -287,4 +280,21 @@ func (t *Transaction) String() string {
 	Signature:		0x%x
 `, t.ID(), from, t.body.Clauses, t.body.GasPrice, t.body.Gas,
 		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.ReservedBits, t.body.Signature)
+}
+
+// see core.IntrinsicGas
+func dataGas(data []byte) (gas uint64) {
+	if len(data) == 0 {
+		return
+	}
+	var z, nz uint64
+	for _, byt := range data {
+		if byt == 0 {
+			z++
+		} else {
+			nz++
+		}
+	}
+	gas = (params.TxDataZeroGas*z + params.TxDataNonZeroGas*nz)
+	return
 }
