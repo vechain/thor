@@ -73,7 +73,7 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
 				builtin.Authority.Add(state, a.Address, thor.BytesToHash([]byte("a1")))
-				builtin.Energy.SetBalance(state, 0, a.Address, b)
+				builtin.Energy.AddBalance(state, d.launchTime, a.Address, b)
 			}
 			return nil
 		})

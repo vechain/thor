@@ -25,8 +25,10 @@ func TestEnergy(t *testing.T) {
 		expected interface{}
 	}{
 		{Energy.GetBalance(st, 0, acc), &big.Int{}},
-		{func() bool { Energy.SetBalance(st, 0, acc, big.NewInt(10)); return true }(), true},
+		{func() bool { Energy.AddBalance(st, 0, acc, big.NewInt(10)); return true }(), true},
 		{Energy.GetBalance(st, 0, acc), big.NewInt(10)},
+		{Energy.SubBalance(st, 0, acc, big.NewInt(5)), true},
+		{Energy.SubBalance(st, 0, acc, big.NewInt(6)), false},
 		{func() bool { Energy.SetContractMaster(st, contractAddr, acc); return true }(), true},
 		{Energy.GetContractMaster(st, contractAddr), acc},
 	}
@@ -47,7 +49,7 @@ func TestEnergyGrowth(t *testing.T) {
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	Energy.SetBalance(st, 0, acc, &big.Int{})
+	Energy.AddBalance(st, 0, acc, &big.Int{})
 	Energy.AdjustGrowthRate(st, 0, thor.InitialEnergyGrowthRate)
 
 	bal1 := Energy.GetBalance(st, blockTime1, acc)
@@ -88,7 +90,7 @@ func TestEnergyShare(t *testing.T) {
 	recRate := big.NewInt(100)
 	exp := uint64(2000)
 
-	Energy.SetBalance(st, blockTime1, callee, bal)
+	Energy.AddBalance(st, blockTime1, callee, bal)
 	Energy.SetSharing(st, blockTime1, callee, caller, credit, recRate, exp)
 
 	remained := Energy.GetSharingRemained(st, blockTime1, callee, caller)

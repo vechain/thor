@@ -215,12 +215,11 @@ func (p *Packer) pack(
 
 	builder.GasUsed(totalGasUsed)
 
-	beneficiaryBalance := builtin.Energy.GetBalance(rt.State(), rt.BlockTime(), p.beneficiary)
-	builtin.Energy.SetBalance(rt.State(), rt.BlockTime(), p.beneficiary, beneficiaryBalance.Add(beneficiaryBalance, totalReward))
+	builtin.Energy.AddBalance(rt.State(), rt.BlockTime(), p.beneficiary, totalReward)
 
 	for addr := range affectedAddresses {
-		bal := builtin.Energy.GetBalance(rt.State(), rt.BlockTime(), addr)
-		builtin.Energy.SetBalance(rt.State(), rt.BlockTime(), addr, bal)
+		// touch
+		builtin.Energy.AddBalance(rt.State(), rt.BlockTime(), addr, &big.Int{})
 	}
 
 	for addr, master := range createdContracts {

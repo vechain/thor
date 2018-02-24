@@ -194,8 +194,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn.Mul(energyToReturn, gasPrice)
 
 	// return overpayed energy to payer
-	payerBalance := builtin.Energy.GetBalance(rt.state, rt.blockTime, energyPayer)
-	builtin.Energy.SetBalance(rt.state, rt.blockTime, energyPayer, payerBalance.Add(payerBalance, energyToReturn))
+	builtin.Energy.AddBalance(rt.state, rt.blockTime, energyPayer, energyToReturn)
 
 	return receipt, vmOutputs, nil
 }
