@@ -23,6 +23,8 @@ type Packer struct {
 	targetGasLimit uint64
 }
 
+var big2 = big.NewInt(2)
+
 // New create a new Packer instance.
 func New(
 	proposer thor.Address,
@@ -129,6 +131,9 @@ func (p *Packer) pack(
 	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> master
 
 	rewardRatio := builtin.Params.Get(rt.State(), thor.KeyRewardRatio)
+	baseGasPrice := builtin.Params.Get(rt.State(), thor.KeyBaseGasPrice)
+	lowGasPrice := new(big.Int).Div(baseGasPrice, big2)
+	highGasPrice := new(big.Int).Mul(baseGasPrice, big2)
 
 	for txIter.HasNext() {
 		tx := txIter.Next()
@@ -144,6 +149,11 @@ func (p *Packer) pack(
 
 		blockRef := tx.BlockRef()
 		if blockRef.Number() > parent.Number() {
+			continue
+		}
+
+		gasPrice := tx.GasPrice()
+		if gasPrice.Cmp(highGasPrice) > 0 || gasPrice.Cmp(lowGasPrice) < 0 {
 			continue
 		}
 
