@@ -128,20 +128,31 @@ paths:
           application/json:
             schema:
               type: object
-              example: {
-                          "GasPrice":    100000,
-                          "Gas":         30000,
-                          "DependsOn":   optional,
-                          "Sig":         signature,
-                          "BlockNumber": 20,
-                          "Clauses": [
-                                      {
-                                        "To":    addressTo,
-                                        "Value": 10000,
-                                        "Data":  [0x11, 0x12],
-                                      }
-                                    ]
-                        }
+              properties: 
+                GasPrice:
+                  type: integer
+                  example: 10000
+                Gas:
+                  type: integer
+                  example: 30000
+                DependsOn:
+                  type: string
+                  example: ""
+                Sig: 
+                  type: array
+                  example: [0x11, 0x12]
+                BlockNumber:
+                  type: integer
+                  example: 20
+                Clauses:
+                  type: array
+                  example: [
+                            {
+                              "To":    addressTo,
+                              "Value": 10000,
+                              "Data":  [0x11, 0x12],
+                            }
+                            ]
       responses:
         200:
           description: "successful operation"
