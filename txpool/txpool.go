@@ -91,8 +91,13 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 
-	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.Header().ID(), pool.chain)
-	conversionEn := thor.ProvedWorkToEnergy(tx.ProvedWork(), bestBlock.Header().Number(), delay)
+	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.Header(), pool.chain)
+	var conversionEn *big.Int
+	if delay > thor.MaxTxWorkDelay {
+		conversionEn = &big.Int{}
+	} else {
+		conversionEn = thor.ProvedWork.ToEnergy(tx.ProvedWork(), bestBlock.Header().Timestamp())
+	}
 	pool.all[txID] = NewTxObject(tx, conversionEn, time.Now().Unix())
 
 	return nil
