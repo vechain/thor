@@ -28,14 +28,14 @@ var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232
 
 func TestTransaction(t *testing.T) {
 
-	tx, ts := addTxToBlock(t)
-	raw, err := types.ConvertTransaction(tx)
+	ntx, ts := addTxToBlock(t)
+	raw, err := types.ConvertTransaction(ntx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/transactions/%v", tx.ID().String()))
+	res, err := http.Get(ts.URL + fmt.Sprintf("/transactions/%v", ntx.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,16 +54,17 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+	sig, err := crypto.Sign(ntx.SigningHash().Bytes(), key)
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
 	rawTransaction := &types.RawTransaction{
-		GasPrice:    big.NewInt(100000),
-		Gas:         30000,
-		DependsOn:   "",
-		Sig:         sig,
-		BlockNumber: 20,
+		Nonce:     1,
+		GasPrice:  big.NewInt(100000),
+		Gas:       30000,
+		DependsOn: "",
+		Sig:       sig,
+		BlockRef:  [8]byte(tx.NewBlockRef(20)),
 		Clauses: types.Clauses{
 			types.Clause{
 				To:    thor.BytesToAddress([]byte("acc1")).String(),

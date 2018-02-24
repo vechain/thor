@@ -8,12 +8,13 @@ import (
 
 //RawTransaction a raw transaction
 type RawTransaction struct {
-	GasPrice    *big.Int
-	Gas         uint64
-	DependsOn   string
-	Sig         []byte
-	BlockNumber uint32
-	Clauses     Clauses
+	Nonce     uint64
+	GasPrice  *big.Int
+	Gas       uint64
+	DependsOn string
+	Sig       []byte
+	BlockRef  [8]byte
+	Clauses   Clauses
 }
 
 //Transaction transaction
@@ -70,13 +71,12 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
 	if rawTransaction.Gas > 0 {
 		builder.Gas(rawTransaction.Gas)
 	}
-	if rawTransaction.BlockNumber > 0 {
-		builder.BlockRef(tx.NewBlockRef(rawTransaction.BlockNumber))
-	}
 	dependsOn, err := thor.ParseHash(rawTransaction.DependsOn)
 	if err != nil {
 		builder.DependsOn(nil)
 	}
+	builder.BlockRef(rawTransaction.BlockRef)
+	builder.Nonce(rawTransaction.Nonce)
 	builder.DependsOn(&dependsOn)
 	for _, clause := range rawTransaction.Clauses {
 		to, err := thor.ParseAddress(clause.To)

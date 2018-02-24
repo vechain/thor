@@ -23,6 +23,7 @@ func NewTransactionHTTPRouter(router *mux.Router, ti *TransactionInterface) {
 func (ti *TransactionInterface) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
 
 	query := mux.Vars(req)
+
 	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
 	}
