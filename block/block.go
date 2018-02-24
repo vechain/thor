@@ -3,6 +3,7 @@ package block
 import (
 	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/tx"
@@ -13,7 +14,7 @@ type Block struct {
 	header *Header
 	txs    tx.Transactions
 	cache  struct {
-		size *int
+		size atomic.Value
 	}
 }
 
@@ -83,10 +84,10 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 
 // Size returns block size in bytes.
 func (b *Block) Size() (size int) {
-	if cached := b.cache.size; cached != nil {
-		return *cached
+	if cached := b.cache.size.Load(); cached != nil {
+		return cached.(int)
 	}
-	defer func() { b.cache.size = &size }()
+	defer func() { b.cache.size.Store(size) }()
 	cw := &counterWriter{}
 	rlp.Encode(cw, b)
 

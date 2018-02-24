@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -22,9 +23,9 @@ type Header struct {
 	body headerBody
 
 	cache struct {
-		signingHash *thor.Hash
-		signer      *thor.Address
-		id          *thor.Hash
+		signingHash atomic.Value
+		signer      atomic.Value
+		id          atomic.Value
 	}
 }
 
@@ -118,14 +119,14 @@ func (h *Header) ReceiptsRoot() thor.Hash {
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:],
 // and the last byte is the chain tag.
 func (h *Header) ID() (id thor.Hash) {
-	if cached := h.cache.id; cached != nil {
-		return *cached
+	if cached := h.cache.id.Load(); cached != nil {
+		return cached.(thor.Hash)
 	}
 	defer func() {
 		// overwrite first 4 bytes of block hash to block number.
 		binary.BigEndian.PutUint32(id[:], h.Number())
 		id[len(id)-1] = h.ChainTag()
-		h.cache.id = &id
+		h.cache.id.Store(id)
 	}()
 
 	if h.Number() == 0 {
@@ -149,10 +150,10 @@ func (h *Header) ID() (id thor.Hash) {
 
 // SigningHash computes hash of all header fields excluding signature.
 func (h *Header) SigningHash() (hash thor.Hash) {
-	if cached := h.cache.signingHash; cached != nil {
-		return *cached
+	if cached := h.cache.signingHash.Load(); cached != nil {
+		return cached.(thor.Hash)
 	}
-	defer func() { h.cache.signingHash = &hash }()
+	defer func() { h.cache.signingHash.Store(hash) }()
 
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
@@ -186,12 +187,12 @@ func (h *Header) withSignature(sig []byte) *Header {
 
 // Signer extract signer of the block from signature.
 func (h *Header) Signer() (signer thor.Address, err error) {
-	if cached := h.cache.signer; cached != nil {
-		return *cached, nil
+	if cached := h.cache.signer.Load(); cached != nil {
+		return cached.(thor.Address), nil
 	}
 	defer func() {
 		if err == nil {
-			h.cache.signer = &signer
+			h.cache.signer.Store(signer)
 		}
 	}()
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -33,9 +34,9 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		signingHash *thor.Hash
-		signer      *thor.Address
-		id          *thor.Hash
+		signingHash atomic.Value
+		signer      atomic.Value
+		id          atomic.Value
 	}
 }
 
@@ -67,10 +68,10 @@ func (t *Transaction) BlockRef() (br BlockRef) {
 // ID = hash(signingHash, signer).
 // It returns invalidTxID if signer not available.
 func (t *Transaction) ID() (id thor.Hash) {
-	if cached := t.cache.id; cached != nil {
-		return *cached
+	if cached := t.cache.id.Load(); cached != nil {
+		return cached.(thor.Hash)
 	}
-	defer func() { t.cache.id = &id }()
+	defer func() { t.cache.id.Store(id) }()
 
 	signer, err := t.Signer()
 	if err != nil {
@@ -110,10 +111,10 @@ func (t *Transaction) EvaluateWork(signer thor.Address) *big.Int {
 
 // SigningHash returns hash of tx excludes signature.
 func (t *Transaction) SigningHash() (hash thor.Hash) {
-	if cached := t.cache.signingHash; cached != nil {
-		return *cached
+	if cached := t.cache.signingHash.Load(); cached != nil {
+		return cached.(thor.Hash)
 	}
-	defer func() { t.cache.signingHash = &hash }()
+	defer func() { t.cache.signingHash.Store(hash) }()
 
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
@@ -161,12 +162,12 @@ func (t *Transaction) Signature() []byte {
 
 // Signer extract signer of tx from signature.
 func (t *Transaction) Signer() (signer thor.Address, err error) {
-	if cached := t.cache.signer; cached != nil {
-		return *t.cache.signer, nil
+	if cached := t.cache.signer.Load(); cached != nil {
+		return cached.(thor.Address), nil
 	}
 	defer func() {
 		if err == nil {
-			t.cache.signer = &signer
+			t.cache.signer.Store(signer)
 		}
 	}()
 
