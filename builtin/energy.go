@@ -20,6 +20,7 @@ var Energy = func() *energy {
 		sslot.NewMap(c.Address, 103),
 		sslot.New(c.Address, 104),
 		sslot.New(c.Address, 105),
+		sslot.New(c.Address, 106),
 	}
 }()
 
@@ -30,31 +31,41 @@ type energy struct {
 	growthRates *sslot.Array
 	sharings    *sslot.Map
 	masters     *sslot.Map
-	vetSupply   *sslot.StorageSlot
-	variation   *sslot.StorageSlot
+	tokenSupply *sslot.StorageSlot
+	totalSub    *sslot.StorageSlot
+	totalAdd    *sslot.StorageSlot
 }
 
 var bigE18 = big.NewInt(1e18)
 
-func (e *energy) SetVETSupply(state *state.State, supply *big.Int) {
-	e.vetSupply.Save(state, supply)
+func (e *energy) SetTokenSupply(state *state.State, supply *big.Int) {
+	e.tokenSupply.Save(state, supply)
 }
 
 // GetTotalSupply returns total supply of energy.
 func (e *energy) GetTotalSupply(state *state.State, blockTime uint64) *big.Int {
-	var vetSupply big.Int
-	e.vetSupply.Load(state, &vetSupply)
-	supply := e.calcBalance(state, blockTime, energyAccount{
+	var tokenSupply big.Int
+	e.tokenSupply.Load(state, &tokenSupply)
+
+	// calc grown energy for total token supply
+	grown := e.calcBalance(state, blockTime, energyAccount{
 		&big.Int{},
 		0,
-		&vetSupply,
+		&tokenSupply,
 	})
 
-	var variantion energyVariation
-	e.variation.Load(state, &variantion)
-	supply.Add(supply, variantion.TotalIncrement)
-	supply.Sub(supply, variantion.TotalDecrement)
-	return supply
+	var totalAdd, totalSub big.Int
+	e.totalAdd.Load(state, &totalAdd)
+	e.totalSub.Load(state, &totalSub)
+	grown.Add(grown, &totalAdd)
+	return grown.Sub(grown, &totalSub)
+}
+
+func (e *energy) GetTotalBurned(state *state.State) *big.Int {
+	var totalAdd, totalSub big.Int
+	e.totalAdd.Load(state, &totalAdd)
+	e.totalSub.Load(state, &totalSub)
+	return new(big.Int).Sub(&totalSub, &totalAdd)
 }
 
 func (e *energy) calcBalance(state *state.State, blockTime uint64, acc energyAccount) *big.Int {
@@ -63,7 +74,7 @@ func (e *energy) calcBalance(state *state.State, blockTime uint64, acc energyAcc
 		return acc.Balance
 	}
 
-	if acc.VETBalance.Sign() == 0 {
+	if acc.TokenBalance.Sign() == 0 {
 		return acc.Balance
 	}
 
@@ -71,6 +82,8 @@ func (e *energy) calcBalance(state *state.State, blockTime uint64, acc energyAcc
 
 	t2 := blockTime
 	newBalance := new(big.Int).Set(acc.Balance)
+
+	// reversedly iterates rates
 	for i := rateCount; i > 0; i-- {
 		var rate energyGrowthRate
 		e.growthRates.ForIndex(i-1).Load(state, &rate)
@@ -81,11 +94,11 @@ func (e *energy) calcBalance(state *state.State, blockTime uint64, acc energyAcc
 			return acc.Balance
 		}
 
-		if t1 != t2 && acc.VETBalance.Sign() != 0 && rate.Rate.Sign() != 0 {
-			// energy growth (vet * rate * dt / 1e18)
+		if t1 != t2 && acc.TokenBalance.Sign() != 0 && rate.Rate.Sign() != 0 {
+			// energy growth (token * rate * dt / 1e18)
 			x := new(big.Int).SetUint64(t2 - t1)
 			x.Mul(x, rate.Rate)
-			x.Mul(x, acc.VETBalance)
+			x.Mul(x, acc.TokenBalance)
 			x.Div(x, bigE18)
 			newBalance.Add(newBalance, x)
 		}
@@ -106,26 +119,42 @@ func (e *energy) GetBalance(state *state.State, blockTime uint64, addr thor.Addr
 	return e.calcBalance(state, blockTime, acc)
 }
 
-// SetBalance set balance for an account.
-func (e *energy) SetBalance(state *state.State, blockTime uint64, addr thor.Address, newBalance *big.Int) {
-	oldBalance := e.GetBalance(state, blockTime, addr)
-	var variation energyVariation
-	e.variation.Load(state, &variation)
-	switch newBalance.Cmp(oldBalance) {
-	case 1:
-		variation.TotalIncrement.Add(variation.TotalIncrement, newBalance)
-		variation.TotalIncrement.Sub(variation.TotalIncrement, oldBalance)
-	case -1:
-		variation.TotalDecrement.Add(variation.TotalDecrement, oldBalance)
-		variation.TotalDecrement.Sub(variation.TotalDecrement, newBalance)
-	}
-	e.variation.Save(state, &variation)
+func (e *energy) AddBalance(state *state.State, blockTime uint64, addr thor.Address, amount *big.Int) {
+	bal := e.GetBalance(state, blockTime, addr)
+	if amount.Sign() != 0 {
+		bal.Add(bal, amount)
 
+		var totalAdd big.Int
+		e.totalAdd.Load(state, &totalAdd)
+		totalAdd.Add(&totalAdd, amount)
+		e.totalAdd.Save(state, &totalAdd)
+	}
 	e.accounts.ForKey(addr).Save(state, &energyAccount{
-		Balance:    newBalance,
-		Timestamp:  blockTime,
-		VETBalance: state.GetBalance(addr),
+		Balance:      bal,
+		Timestamp:    blockTime,
+		TokenBalance: state.GetBalance(addr),
 	})
+}
+
+func (e *energy) SubBalance(state *state.State, blockTime uint64, addr thor.Address, amount *big.Int) bool {
+	bal := e.GetBalance(state, blockTime, addr)
+	if bal.Cmp(amount) < 0 {
+		return false
+	}
+	if amount.Sign() != 0 {
+		bal.Sub(bal, amount)
+
+		var totalSub big.Int
+		e.totalSub.Load(state, &totalSub)
+		totalSub.Add(&totalSub, amount)
+		e.totalSub.Save(state, &totalSub)
+	}
+	e.accounts.ForKey(addr).Save(state, &energyAccount{
+		Balance:      bal,
+		Timestamp:    blockTime,
+		TokenBalance: state.GetBalance(addr),
+	})
+	return true
 }
 
 func (e *energy) AdjustGrowthRate(state *state.State, blockTime uint64, rate *big.Int) {
@@ -149,22 +178,8 @@ func (e *energy) GetSharingRemained(state *state.State, blockTime uint64, from t
 	return es.RemainedAt(blockTime)
 }
 
-func (e *energy) consumeCaller(state *state.State, blockTime uint64, caller thor.Address, callee thor.Address, amount *big.Int) bool {
-	// consume caller
-	callerBalance := e.GetBalance(state, blockTime, caller)
-	if callerBalance.Cmp(amount) < 0 {
-		return false
-	}
-	e.SetBalance(state, blockTime, caller, callerBalance.Sub(callerBalance, amount))
-	return true
-}
-
 func (e *energy) consumeCallee(state *state.State, blockTime uint64, caller thor.Address, callee thor.Address, amount *big.Int) bool {
 	// try to consume callee's sharing
-	calleeBalance := e.GetBalance(state, blockTime, callee)
-	if calleeBalance.Cmp(amount) < 0 {
-		return false
-	}
 	shareEntry := e.sharings.ForKey([]interface{}{callee, caller})
 	var share energySharing
 	shareEntry.Load(state, &share)
@@ -172,7 +187,10 @@ func (e *energy) consumeCallee(state *state.State, blockTime uint64, caller thor
 	if remainedSharing.Cmp(amount) < 0 {
 		return false
 	}
-	e.SetBalance(state, blockTime, callee, calleeBalance.Sub(calleeBalance, amount))
+
+	if !e.SubBalance(state, blockTime, callee, amount) {
+		return false
+	}
 
 	share.Remained.Sub(remainedSharing, amount)
 	share.Timestamp = blockTime
@@ -184,7 +202,8 @@ func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Addre
 	if e.consumeCallee(state, blockTime, caller, callee, amount) {
 		return callee, true
 	}
-	if e.consumeCaller(state, blockTime, caller, callee, amount) {
+
+	if e.SubBalance(state, blockTime, caller, amount) {
 		return caller, true
 	}
 	return thor.Address{}, false
@@ -203,8 +222,8 @@ type energyAccount struct {
 	Balance *big.Int
 
 	// snapshot
-	Timestamp  uint64
-	VETBalance *big.Int
+	Timestamp    uint64
+	TokenBalance *big.Int
 }
 
 var _ state.StorageEncoder = (*energyAccount)(nil)
@@ -213,7 +232,7 @@ var _ state.StorageDecoder = (*energyAccount)(nil)
 func (ea *energyAccount) Encode() ([]byte, error) {
 	if isBigZero(ea.Balance) &&
 		ea.Timestamp == 0 &&
-		isBigZero(ea.VETBalance) {
+		isBigZero(ea.TokenBalance) {
 		return nil, nil
 	}
 	return rlp.EncodeToBytes(ea)
@@ -287,29 +306,6 @@ func (es *energySharing) RemainedAt(blockTime uint64) *big.Int {
 		return x
 	}
 	return es.Credit
-}
-
-type energyVariation struct {
-	TotalIncrement *big.Int
-	TotalDecrement *big.Int
-}
-
-var _ state.StorageEncoder = (*energyVariation)(nil)
-var _ state.StorageDecoder = (*energyVariation)(nil)
-
-func (ev *energyVariation) Encode() ([]byte, error) {
-	if isBigZero(ev.TotalIncrement) && isBigZero(ev.TotalDecrement) {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(ev)
-}
-
-func (ev *energyVariation) Decode(data []byte) error {
-	if len(data) == 0 {
-		*ev = energyVariation{&big.Int{}, &big.Int{}}
-		return nil
-	}
-	return rlp.DecodeBytes(data, ev)
 }
 
 func isBigZero(b *big.Int) bool {

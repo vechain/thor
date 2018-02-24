@@ -116,6 +116,12 @@ var nativeCalls = map[thor.Address]struct {
 					supply := Energy.GetTotalSupply(env.State, env.VMContext.Time)
 					return []interface{}{supply}, nil
 				}},
+			"nativeGetTotalBurned": {
+				Gas: ethparams.SloadGas,
+				Proc: func(env *native.Env) ([]interface{}, error) {
+					burned := Energy.GetTotalBurned(env.State)
+					return []interface{}{burned}, nil
+				}},
 			"nativeGetBalance": {
 				Gas: ethparams.SloadGas,
 				Proc: func(env *native.Env) ([]interface{}, error) {
@@ -124,17 +130,30 @@ var nativeCalls = map[thor.Address]struct {
 					bal := Energy.GetBalance(env.State, env.VMContext.Time, thor.Address(addr))
 					return []interface{}{bal}, nil
 				}},
-			"nativeSetBalance": {
+			"nativeAddBalance": {
 				Gas:            ethparams.SstoreResetGas,
 				RequiredCaller: &Energy.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
-						Addr    common.Address
-						Balance *big.Int
+						Addr   common.Address
+						Amount *big.Int
 					}
 					env.Args(&args)
-					Energy.SetBalance(env.State, env.VMContext.Time, thor.Address(args.Addr), args.Balance)
+					Energy.AddBalance(env.State, env.VMContext.Time, thor.Address(args.Addr), args.Amount)
 					return nil, nil
+				},
+			},
+			"nativeSubBalance": {
+				Gas:            ethparams.SstoreResetGas,
+				RequiredCaller: &Energy.Address,
+				Proc: func(env *native.Env) ([]interface{}, error) {
+					var args struct {
+						Addr   common.Address
+						Amount *big.Int
+					}
+					env.Args(&args)
+					ok := Energy.SubBalance(env.State, env.VMContext.Time, thor.Address(args.Addr), args.Amount)
+					return []interface{}{ok}, nil
 				},
 			},
 			"nativeAdjustGrowthRate": {

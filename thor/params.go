@@ -28,5 +28,5 @@ var (
 
 	InitialRewardRatio      = big.NewInt(3e17)       // 30%
 	InitialBaseGasPrice     = big.NewInt(10000000)   //TODO
-	InitialEnergyGrowthRate = big.NewInt(5000000000) // per VET per second. about 0.000432 per VET per day.
+	InitialEnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )

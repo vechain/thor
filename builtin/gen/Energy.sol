@@ -34,40 +34,40 @@ contract Energy is Token {
         return n().nativeGetTotalSupply();
     }
 
+    function totalBurned() public constant returns(uint256) {
+        return n().nativeGetTotalBurned();
+    }
+
     function balanceOf(address _owner) public view returns (uint256 balance) {
         return n().nativeGetBalance(_owner);
     }
 
-    function _transfer(address _from, address _to, uint256 _amount) internal returns(bool) {
-        uint256 fromBalance = n().nativeGetBalance(_from);
-        uint256 toBalance = n().nativeGetBalance(_to);        
+    function _transfer(address _from, address _to, uint256 _amount) internal {
+        if (_amount > 0) {
+            require(n().nativeSubBalance(_from, _amount));
 
-        if (_amount > 0 && fromBalance >= _amount && toBalance + _amount > toBalance) {
-            n().nativeSetBalance(_from, fromBalance - _amount);
-            n().nativeSetBalance(_to, toBalance + _amount);
-            if (isContract(_to)) {
-                // Require proper transaction handling.
-                ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
-            }
-            Transfer(_from, _to, _amount);
-            return true;
+            // believed that will never overflow
+            n().nativeAddBalance(_to, _amount);
         }
-        return false;        
+    
+        if (isContract(_to)) {
+            // Require proper transaction handling.
+            ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
+        }
+        Transfer(_from, _to, _amount);
     }
 
     function transfer(address _to, uint256 _amount) public returns (bool success) {
-        return _transfer(msg.sender, _to, _amount);
+        _transfer(msg.sender, _to, _amount);
+        return true;
     }
 
     function transferFrom(address _from,address _to,uint256 _amount) public returns(bool success) {
-        if (_amount == 0 || allowed[_from][_to] < _amount)
-            return false;
+        require(allowed[_from][_to] >= _amount);
+        allowed[_from][_to] -= _amount;
 
-        if (_transfer(_from, _to, _amount)) {
-            allowed[_from][_to] -= _amount;
-            return true;
-        }
-        return false;
+        _transfer(_from, _to, _amount);        
+        return true;
     }
 
     function allowance(address _owner, address _spender)  public view returns (uint256 remaining) {
@@ -87,7 +87,8 @@ contract Energy is Token {
     /// @return Whether the approval was successful or not
     function transferFromContract(address _contractAddr, address _to, uint256 _amount) public returns (bool success) {
         require(msg.sender == n().nativeGetContractMaster(_contractAddr));        
-        return _transfer(_contractAddr, _to, _amount);
+        _transfer(_contractAddr, _to, _amount);
+        return true;
     }
   
     ///@notice share `_credit` with `_to`. The shared credit can only be consumed, but never be transferred.
@@ -99,9 +100,6 @@ contract Energy is Token {
     function share(address _from, address _to,uint256 _credit,uint256 _recoveryRate,uint64 _expiration) public {
         // the origin can be contract itself or master
         require(msg.sender == _from || msg.sender == n().nativeGetContractMaster(_from));
-
-        //the expiration time should be greater than block time
-        require(_expiration > now);
 
         //the _to should not be contract
         require(!isContract(_to));
@@ -160,9 +158,12 @@ contract EnergyNative {
     function nativeGetExecutor() public view returns(address);
 
     function nativeGetTotalSupply() public view returns(uint256);
+    function nativeGetTotalBurned() public view returns(uint256);
     
     function nativeGetBalance(address addr) public view returns(uint256);
-    function nativeSetBalance(address addr, uint256 balance) public;
+    function nativeAddBalance(address addr, uint256 amount) public;
+    function nativeSubBalance(address addr, uint256 amount) public returns(bool);
+
     function nativeAdjustGrowthRate(uint256 rate) public;
 
     function nativeSetSharing(address from, address to, uint256 credit, uint256 recoveryRate, uint64 expiration) public;
