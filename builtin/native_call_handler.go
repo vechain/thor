@@ -44,7 +44,7 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{v}, nil
 				}},
 			"nativeSet": {
-				Gas:            ethparams.SstoreResetGas,
+				Gas:            ethparams.SstoreSetGas,
 				RequiredCaller: &Params.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
@@ -66,7 +66,7 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{Executor.Address}, nil
 				}},
 			"nativeAdd": {
-				Gas:            ethparams.SstoreSetGas,
+				Gas:            ethparams.SstoreSetGas * 3,
 				RequiredCaller: &Authority.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
@@ -78,7 +78,7 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{ok}, nil
 				}},
 			"nativeRemove": {
-				Gas:            ethparams.SstoreClearGas,
+				Gas:            ethparams.SstoreClearGas * 3,
 				RequiredCaller: &Authority.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var addr common.Address
@@ -87,7 +87,7 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{ok}, nil
 				}},
 			"nativeStatus": {
-				Gas: ethparams.SloadGas,
+				Gas: ethparams.SloadGas * 3,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var addr common.Address
 					env.Args(&addr)
@@ -111,19 +111,19 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{Executor.Address}, nil
 				}},
 			"nativeGetTotalSupply": {
-				Gas: ethparams.SloadGas,
+				Gas: 3000,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					supply := Energy.GetTotalSupply(env.State, env.VMContext.Time)
 					return []interface{}{supply}, nil
 				}},
 			"nativeGetTotalBurned": {
-				Gas: ethparams.SloadGas,
+				Gas: ethparams.SloadGas * 2,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					burned := Energy.GetTotalBurned(env.State)
 					return []interface{}{burned}, nil
 				}},
 			"nativeGetBalance": {
-				Gas: ethparams.SloadGas,
+				Gas: 2000,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var addr common.Address
 					env.Args(&addr)
@@ -131,7 +131,7 @@ var nativeCalls = map[thor.Address]struct {
 					return []interface{}{bal}, nil
 				}},
 			"nativeAddBalance": {
-				Gas:            ethparams.SstoreResetGas,
+				Gas:            ethparams.SstoreSetGas,
 				RequiredCaller: &Energy.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
