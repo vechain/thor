@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/vechain/thor/thor"
-
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/vechain/thor/block"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
