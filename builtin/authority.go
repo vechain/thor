@@ -1,7 +1,6 @@
 package builtin
 
 import (
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/builtin/sslot"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
@@ -113,24 +112,4 @@ func (a *authority) All(state *state.State) []poa.Proposer {
 		all = append(all, poa.Proposer(p))
 	}
 	return all
-}
-
-type stgProposer poa.Proposer
-
-var _ state.StorageDecoder = (*stgProposer)(nil)
-var _ state.StorageEncoder = (*stgProposer)(nil)
-
-func (s *stgProposer) Encode() ([]byte, error) {
-	if s.Address.IsZero() && s.Status == 0 {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(s)
-}
-
-func (s *stgProposer) Decode(data []byte) error {
-	if len(data) == 0 {
-		*s = stgProposer{}
-		return nil
-	}
-	return rlp.DecodeBytes(data, s)
 }

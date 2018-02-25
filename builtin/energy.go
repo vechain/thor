@@ -3,7 +3,6 @@ package builtin
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/builtin/sslot"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -88,7 +87,11 @@ func (e *energy) calcBalance(state *state.State, blockTime uint64, acc energyAcc
 		var rate energyGrowthRate
 		e.growthRates.ForIndex(i-1).Load(state, &rate)
 
-		t1 := maxUInt64(acc.Timestamp, rate.Timestamp)
+		t1 := rate.Timestamp
+		if t1 < acc.Timestamp {
+			t1 = acc.Timestamp
+		}
+
 		if t1 > t2 {
 			// never occur in real env.
 			return acc.Balance
@@ -216,105 +219,4 @@ func (e *energy) SetContractMaster(state *state.State, contractAddr thor.Address
 func (e *energy) GetContractMaster(state *state.State, contractAddr thor.Address) (master thor.Address) {
 	e.masters.ForKey(contractAddr).Load(state, &master)
 	return
-}
-
-type energyAccount struct {
-	Balance *big.Int
-
-	// snapshot
-	Timestamp    uint64
-	TokenBalance *big.Int
-}
-
-var _ state.StorageEncoder = (*energyAccount)(nil)
-var _ state.StorageDecoder = (*energyAccount)(nil)
-
-func (ea *energyAccount) Encode() ([]byte, error) {
-	if isBigZero(ea.Balance) &&
-		ea.Timestamp == 0 &&
-		isBigZero(ea.TokenBalance) {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(ea)
-}
-
-func (ea *energyAccount) Decode(data []byte) error {
-	if len(data) == 0 {
-		*ea = energyAccount{&big.Int{}, 0, &big.Int{}}
-		return nil
-	}
-	return rlp.DecodeBytes(data, ea)
-}
-
-type energyGrowthRate struct {
-	Rate      *big.Int
-	Timestamp uint64
-}
-
-var _ state.StorageEncoder = (*energyGrowthRate)(nil)
-var _ state.StorageDecoder = (*energyGrowthRate)(nil)
-
-func (egr *energyGrowthRate) Encode() ([]byte, error) {
-	if isBigZero(egr.Rate) && egr.Timestamp == 0 {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(egr)
-}
-
-func (egr *energyGrowthRate) Decode(data []byte) error {
-	if len(data) == 0 {
-		*egr = energyGrowthRate{&big.Int{}, 0}
-		return nil
-	}
-	return rlp.DecodeBytes(data, egr)
-}
-
-type energySharing struct {
-	Credit       *big.Int
-	RecoveryRate *big.Int
-	Expiration   uint64
-	Remained     *big.Int
-	Timestamp    uint64
-}
-
-var _ state.StorageEncoder = (*energySharing)(nil)
-var _ state.StorageDecoder = (*energySharing)(nil)
-
-func (es *energySharing) Encode() ([]byte, error) {
-	if isBigZero(es.Credit) {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(es)
-}
-
-func (es *energySharing) Decode(data []byte) error {
-	if len(data) == 0 {
-		*es = energySharing{&big.Int{}, &big.Int{}, 0, &big.Int{}, 0}
-		return nil
-	}
-	return rlp.DecodeBytes(data, es)
-}
-func (es *energySharing) RemainedAt(blockTime uint64) *big.Int {
-	if blockTime >= es.Expiration {
-		return &big.Int{}
-	}
-
-	x := new(big.Int).SetUint64(blockTime - es.Timestamp)
-	x.Mul(x, es.RecoveryRate)
-	x.Add(x, es.Remained)
-	if x.Cmp(es.Credit) < 0 {
-		return x
-	}
-	return es.Credit
-}
-
-func isBigZero(b *big.Int) bool {
-	return b == nil || b.Sign() == 0
-}
-
-func maxUInt64(a, b uint64) uint64 {
-	if a > b {
-		return a
-	}
-	return b
 }
