@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/tx"
 )
 
@@ -83,29 +84,18 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 }
 
 // Size returns block size in bytes.
-func (b *Block) Size() (size int) {
+func (b *Block) Size() metric.StorageSize {
 	if cached := b.cache.size.Load(); cached != nil {
-		return cached.(int)
+		return cached.(metric.StorageSize)
 	}
-	defer func() { b.cache.size.Store(size) }()
-	cw := &counterWriter{}
-	rlp.Encode(cw, b)
-
-	return cw.count
+	var size metric.StorageSize
+	rlp.Encode(&size, b)
+	b.cache.size.Store(size)
+	return size
 }
 
 func (b *Block) String() string {
-	return fmt.Sprintf(`Block(%v bytes)
+	return fmt.Sprintf(`Block(%v)
 %v
 Transactions: %v`, b.Size(), b.header, b.txs)
-}
-
-type counterWriter struct {
-	count int
-}
-
-func (cw *counterWriter) Write(p []byte) (n int, err error) {
-	n = len(p)
-	cw.count += n
-	return
 }

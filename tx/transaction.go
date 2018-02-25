@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/cache"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
 )
 
@@ -37,6 +38,7 @@ type Transaction struct {
 		signingHash atomic.Value
 		signer      atomic.Value
 		id          atomic.Value
+		size        atomic.Value
 	}
 }
 
@@ -225,6 +227,17 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// Size returns size in bytes when RLP encoded.
+func (t *Transaction) Size() metric.StorageSize {
+	if cached := t.cache.size.Load(); cached != nil {
+		return cached.(metric.StorageSize)
+	}
+	var size metric.StorageSize
+	rlp.Encode(&size, t)
+	t.cache.size.Store(size)
+	return size
+}
+
 // IntrinsicGas returns intrinsic gas of tx.
 func (t *Transaction) IntrinsicGas() (uint64, error) {
 	if len(t.body.Clauses) == 0 {
@@ -269,7 +282,7 @@ func (t *Transaction) String() string {
 	}
 
 	return fmt.Sprintf(`
-	Tx(%v)
+	Tx(%v, %v)
 	From:			%v
 	Clauses:		%v
 	GasPrice:		%v
@@ -279,7 +292,7 @@ func (t *Transaction) String() string {
 	DependsOn:		%v
 	ReservedBits:	%v
 	Signature:		0x%x
-`, t.ID(), from, t.body.Clauses, t.body.GasPrice, t.body.Gas,
+`, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPrice, t.body.Gas,
 		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.ReservedBits, t.body.Signature)
 }
 
