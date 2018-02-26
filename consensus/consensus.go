@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 )
@@ -70,18 +70,12 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header, state *sta
 		header.GasLimit(),
 		chain.NewBlockIDGetter(c.chain, preHeader.StateRoot()).GetID)
 
-	totalReward, err := newBlockProcessor(rt, c.chain).process(blk)
+	totalReward, err := newBlockProcessor(rt, c.chain).process(blk, preHeader)
 	if err != nil {
 		return err
 	}
 
-	if output := handleClause(
-		rt,
-		contracts.Energy.PackCharge(
-			header.Beneficiary(),
-			totalReward)); output.VMErr != nil {
-		return errors.Wrap(output.VMErr, "charge energy")
-	}
+	builtin.Energy.AddBalance(state, header.Timestamp(), header.Beneficiary(), totalReward)
 
 	return checkState(state, header)
 }

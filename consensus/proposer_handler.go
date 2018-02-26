@@ -1,10 +1,9 @@
 package consensus
 
 import (
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	Chain "github.com/vechain/thor/chain"
-	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -44,47 +43,33 @@ func (ph *proposerHandler) handle() error {
 		return err
 	}
 
-	proposers, err := ph.getProposers()
+	updates, err := ph.validateProposers(signer, builtin.Authority.All(ph.rt.State()))
 	if err != nil {
 		return err
 	}
 
-	updates, err := ph.validateProposers(signer, proposers)
-	if err != nil {
-		return err
+	for _, proposer := range updates {
+		builtin.Authority.Update(ph.rt.State(), proposer.Address, proposer.Status)
 	}
 
-	return ph.updateProposers(updates)
-}
-
-func (ph *proposerHandler) getProposers() ([]poa.Proposer, error) {
-	output := handleClause(ph.rt, contracts.Authority.PackProposers())
-	if output.VMErr != nil {
-		return nil, errors.Wrap(output.VMErr, "get proposers")
-	}
-	return contracts.Authority.UnpackProposers(output.Value), nil
-}
-
-func (ph *proposerHandler) updateProposers(updates []poa.Proposer) error {
-	output := handleClause(ph.rt, contracts.Authority.PackUpdate(updates))
-	if output.VMErr != nil {
-		return errors.Wrap(output.VMErr, "set absent")
-	}
 	return nil
 }
 
 func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []poa.Proposer) ([]poa.Proposer, error) {
-	targetTime, updates, err := poa.NewScheduler(proposers, ph.preHeader.Number(), ph.preHeader.Timestamp()).
-		Schedule(addr, ph.header.Timestamp())
-
-	switch {
-	case err != nil:
+	sched, err := poa.NewScheduler(addr, proposers, ph.preHeader.Number(), ph.preHeader.Timestamp())
+	if err != nil {
 		return nil, err
-	case targetTime != ph.header.Timestamp():
-		return nil, errSchedule
-	case ph.preHeader.TotalScore()+poa.CalculateScore(proposers, updates) != ph.header.TotalScore():
-		return nil, errTotalScore
-	default:
-		return updates, nil
 	}
+
+	targetTime := sched.Schedule(ph.header.Timestamp())
+	if !sched.IsTheTime(targetTime) {
+		return nil, errSchedule
+	}
+
+	updates, score := sched.Updates(targetTime)
+	if ph.preHeader.TotalScore()+score != ph.header.TotalScore() {
+		return nil, errTotalScore
+	}
+
+	return updates, nil
 }
