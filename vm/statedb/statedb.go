@@ -18,12 +18,10 @@ type StateDB struct {
 }
 
 type (
-	suicideFlagKey     common.Address
-	refundKey          struct{}
-	preimageKey        common.Hash
-	logKey             struct{}
-	affectedAddressKey common.Address
-	createdContractKey common.Address
+	suicideFlagKey common.Address
+	refundKey      struct{}
+	preimageKey    common.Hash
+	logKey         struct{}
 )
 
 // New create a statedb object.
@@ -55,18 +53,12 @@ func (s *StateDB) GetRefund() *big.Int {
 // Merge callbacks for performance reasons.
 func (s *StateDB) GetOutputs(
 	logCB func(*types.Log) bool,
-	affectedAddressCB func(common.Address) bool,
-	createdContractCB func(common.Address) bool,
 	preimagesCB func(common.Hash, []byte) bool,
 ) {
 	s.repo.Journal(func(k, v interface{}) bool {
 		switch key := k.(type) {
 		case logKey:
 			return logCB(v.(*types.Log))
-		case affectedAddressKey:
-			return affectedAddressCB(common.Address(key))
-		case createdContractKey:
-			return createdContractCB(common.Address(key))
 		case preimageKey:
 			return preimagesCB(common.Hash(key), v.([]byte))
 		}
@@ -95,7 +87,6 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	s.repo.Put(affectedAddressKey(addr), nil)
 	balance := s.state.GetBalance(thor.Address(addr))
 	s.state.SetBalance(thor.Address(addr), new(big.Int).Sub(balance, amount))
 }
@@ -105,7 +96,6 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	s.repo.Put(affectedAddressKey(addr), nil)
 	balance := s.state.GetBalance(thor.Address(addr))
 	s.state.SetBalance(thor.Address(addr), new(big.Int).Add(balance, amount))
 }
@@ -133,9 +123,6 @@ func (s *StateDB) GetCodeSize(addr common.Address) int {
 
 // SetCode stub.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	if len(code) > 0 {
-		s.repo.Put(createdContractKey(addr), nil)
-	}
 	s.state.SetCode(thor.Address(addr), code)
 }
 
