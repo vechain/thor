@@ -87,6 +87,18 @@ func (rt *Runtime) execute(
 	env.SetContractHook(func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
 		return builtin.HandleNativeCall(rt.state, &ctx, to, input)
 	})
+	env.SetOnContractCreated(func(contractAddr thor.Address) {
+		// set master for created contract
+		builtin.Energy.SetContractMaster(rt.state, contractAddr, txOrigin)
+	})
+	env.SetOnTransfer(func(sender, recipient thor.Address, amount *big.Int) {
+		if amount.Sign() == 0 {
+			return
+		}
+		// touch energy accounts which token balance changed
+		builtin.Energy.AddBalance(rt.state, rt.blockTime, sender, &big.Int{})
+		builtin.Energy.AddBalance(rt.state, rt.blockTime, recipient, &big.Int{})
+	})
 
 	if to == nil {
 		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
@@ -185,16 +197,6 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			logs = append(logs, (*Tx.Log)(vmLog))
 		}
 		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Logs: logs})
-
-		// touch energy accounts which token balance changed
-		for _, addr := range vmOutput.AffectedAddresses {
-			builtin.Energy.AddBalance(rt.state, rt.blockTime, addr, &big.Int{})
-		}
-
-		// set master for created contract
-		for _, addr := range vmOutput.CreatedContracts {
-			builtin.Energy.SetContractMaster(rt.state, addr, origin)
-		}
 	}
 
 	receipt.GasUsed = gas - leftOverGas
