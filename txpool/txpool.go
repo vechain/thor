@@ -46,29 +46,13 @@ type TxPool struct {
 }
 
 //NewTxPool NewTxPool
-func NewTxPool(chain *chain.Chain, poolConfig PoolConfig) *TxPool {
+func NewTxPool(chain *chain.Chain) *TxPool {
 	pool := &TxPool{
-		config: poolConfig,
+		config: DefaultTxPoolConfig,
 		chain:  chain,
 		all:    make(map[thor.Hash]*TxObject),
 	}
-	pool.sanitize()
 	return pool
-}
-
-func (pool *TxPool) sanitize() {
-	if pool.config.Lifetime <= 0 {
-		pool.config.Lifetime = DefaultTxPoolConfig.Lifetime
-	}
-	if pool.config.PoolSize <= 0 {
-		pool.config.PoolSize = DefaultTxPoolConfig.PoolSize
-	}
-	if pool.config.QueueLimit <= 0 || pool.config.QueueLimit > pool.config.PoolSize {
-		pool.config.QueueLimit = DefaultTxPoolConfig.QueueLimit
-	}
-	if pool.config.PriceLimit <= 0 {
-		pool.config.PriceLimit = DefaultTxPoolConfig.PriceLimit
-	}
 }
 
 //Add transaction
