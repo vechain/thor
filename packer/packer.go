@@ -127,9 +127,6 @@ func (p *Packer) pack(
 
 	processed := make(map[thor.Hash]interface{})
 
-	affectedAddresses := make(map[thor.Address]interface{})
-	createdContracts := make(map[thor.Address]thor.Address) // contract addr -> master
-
 	rewardRatio := builtin.Params.Get(rt.State(), thor.KeyRewardRatio)
 	baseGasPrice := builtin.Params.Get(rt.State(), thor.KeyBaseGasPrice)
 	lowGasPrice := new(big.Int).Div(baseGasPrice, big2)
@@ -166,12 +163,6 @@ func (p *Packer) pack(
 			break
 		}
 
-		txSigner, err := tx.Signer()
-		if err != nil {
-			txIter.OnProcessed(tx.ID(), err)
-			continue
-		}
-
 		// check if tx already there
 		if found, err := p.txExists(tx.ID(), parent.ID(), processed); err != nil {
 			return nil, err
@@ -195,21 +186,12 @@ func (p *Packer) pack(
 		}
 
 		cp := rt.State().NewCheckpoint()
-		receipt, vmouts, err := rt.ExecuteTransaction(tx)
+		receipt, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			// skip and revert state
 			rt.State().RevertTo(cp)
 			txIter.OnProcessed(tx.ID(), err)
 			continue
-		}
-
-		for _, vmout := range vmouts {
-			for _, addr := range vmout.AffectedAddresses {
-				affectedAddresses[addr] = nil
-			}
-			for _, addr := range vmout.CreatedContracts {
-				createdContracts[addr] = txSigner
-			}
 		}
 
 		receipts = append(receipts, receipt)
@@ -226,15 +208,6 @@ func (p *Packer) pack(
 	builder.GasUsed(totalGasUsed)
 
 	builtin.Energy.AddBalance(rt.State(), rt.BlockTime(), p.beneficiary, totalReward)
-
-	for addr := range affectedAddresses {
-		// touch
-		builtin.Energy.AddBalance(rt.State(), rt.BlockTime(), addr, &big.Int{})
-	}
-
-	for addr, master := range createdContracts {
-		builtin.Energy.SetContractMaster(rt.State(), addr, master)
-	}
 
 	return receipts, nil
 }

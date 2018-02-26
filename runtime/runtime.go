@@ -122,7 +122,7 @@ func (rt *Runtime) Call(
 }
 
 // ExecuteTransaction executes a transaction.
-// Note that the elements of returned []*vm.Output may be nil if corresponded clause failed.
+// If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
 func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	// precheck
 	origin, err := tx.Signer()
@@ -154,12 +154,12 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	leftOverGas := gas - intrinsicGas
 
-	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, len(clauses))}
-	vmOutputs = make([]*vm.Output, len(clauses))
+	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(clauses))}
+	vmOutputs = make([]*vm.Output, 0, len(clauses))
 
 	for i, clause := range clauses {
 		vmOutput := rt.execute(clause, uint32(i), leftOverGas, origin, gasPrice, tx.ID(), false)
-		vmOutputs[i] = vmOutput
+		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
 		leftOverGas = vmOutput.LeftOverGas
@@ -184,7 +184,17 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		for _, vmLog := range vmOutput.Logs {
 			logs = append(logs, (*Tx.Log)(vmLog))
 		}
-		receipt.Outputs[i] = &Tx.Output{Logs: logs}
+		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Logs: logs})
+
+		// touch energy accounts which token balance changed
+		for _, addr := range vmOutput.AffectedAddresses {
+			builtin.Energy.AddBalance(rt.state, rt.blockTime, addr, &big.Int{})
+		}
+
+		// set master for created contract
+		for _, addr := range vmOutput.CreatedContracts {
+			builtin.Energy.SetContractMaster(rt.state, addr, origin)
+		}
 	}
 
 	receipt.GasUsed = gas - leftOverGas
