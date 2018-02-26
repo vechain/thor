@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"github.com/vechain/thor/api/utils/types"
+	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -55,17 +57,38 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 }
 
 //SendRawTransaction send a raw transactoion
-func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) error {
+func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*thor.Hash, error) {
 	bestblk, err := ti.chain.GetBestBlock()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	builder, err := types.BuildRawTransaction(raw)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	builder.ChainTag(bestblk.Header().ChainTag())
 	transaction := builder.Build().WithSignature(raw.Sig)
-	return ti.txPool.Add(transaction)
+	if err := ti.txPool.Add(transaction); err != nil {
+		return nil, err
+	}
+	txID := transaction.ID()
+	return &txID, nil
+}
 
+//GetContractInputData get contract input with method and args
+func (ti *TransactionInterface) GetContractInputData(contractAddr thor.Address, abi string, methodName string, args ...interface{}) (input []byte, err error) {
+	a, err := ABI.New(bytes.NewReader([]byte(abi)))
+	if err != nil {
+		return nil, err
+	}
+
+	codec, err := a.ForMethod(methodName)
+	if err != nil {
+		return nil, err
+	}
+	data, err := codec.EncodeInput(args...)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }

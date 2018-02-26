@@ -92,7 +92,7 @@ func TestTransaction(t *testing.T) {
 func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	ti := api.NewTransactionInterface(chain, txpool.NewTxPool(chain, txpool.PoolConfig{}))
+	ti := api.NewTransactionInterface(chain, txpool.NewTxPool(chain))
 	router := mux.NewRouter()
 	api.NewTransactionHTTPRouter(router, ti)
 	ts := httptest.NewServer(router)
