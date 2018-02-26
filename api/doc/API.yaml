@@ -51,7 +51,7 @@ paths:
       summary: "Get storage by address"
       description: "returns storage value by address"
       parameters:
-        - in: query
+        - in: path
           required: true
           name: address
           schema:
@@ -129,30 +129,36 @@ paths:
             schema:
               type: object
               properties: 
-                GasPrice:
-                  type: integer
-                  example: 10000
-                Gas:
-                  type: integer
-                  example: 30000
-                DependsOn:
-                  type: string
-                  example: ""
-                Sig: 
-                  type: array
-                  example: [0x11, 0x12]
-                BlockNumber:
-                  type: integer
-                  example: 20
-                Clauses:
-                  type: array
-                  example: [
-                            {
-                              "To":    addressTo,
-                              "Value": 10000,
-                              "Data":  [0x11, 0x12],
-                            }
-                            ]
+                rawTransaction:
+                  type: object
+                  properties: 
+                    Nonce:
+                      type: integer
+                      example: 1
+                    GasPrice:
+                      type: integer
+                      example: 10000
+                    Gas:
+                      type: integer
+                      example: 30000
+                    DependsOn:
+                      type: string
+                      example: ""
+                    Sig: 
+                      type: array
+                      example: [0x11, 0x12]
+                    BlockRef:
+                      type: array
+                      example: [0,0,0,0,0,0,0,0]
+                    Clauses:
+                      type: array
+                      example: [
+                                {
+                                  "To":    addressTo,
+                                  "Value": 10000,
+                                  "Data":  [0x11, 0x12],
+                                }
+                                ]
       responses:
         200:
           description: "successful operation"
