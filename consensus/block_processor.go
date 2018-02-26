@@ -3,16 +3,16 @@ package consensus
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/contracts"
 	"github.com/vechain/thor/runtime"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
 type packerContext struct {
-	txDelayFunc func(tx.BlockRef) (uint32, error)
+	txDelayFunc func(tx.BlockRef) (uint64, error)
 	rewardRatio *big.Int
 }
 
@@ -27,29 +27,13 @@ func newBlockProcessor(rt *runtime.Runtime, chain *chain.Chain) *blockProcessor 
 		chain: chain}
 }
 
-func (bp *blockProcessor) preparePickerContext(blk *block.Block) (*packerContext, error) {
-	txDelay := func(blockRef tx.BlockRef) (uint32, error) {
-		return MeasureTxDelay(blockRef, blk.Header().ParentID(), bp.chain)
-	}
-
-	output := handleClause(bp.rt,
-		contracts.Params.PackGet(contracts.ParamRewardRatio))
-
-	if output.VMErr != nil {
-		return nil, errors.Wrap(output.VMErr, "reward percentage")
-	}
-
-	return &packerContext{
-		txDelayFunc: txDelay,
-		rewardRatio: contracts.Params.UnpackGet(output.Value)}, nil
-}
-
 // ProcessBlock can execute all transactions in a block.
-func (bp *blockProcessor) process(blk *block.Block) (*big.Int, error) {
-	pc, err := bp.preparePickerContext(blk)
-	if err != nil {
-		return nil, err
-	}
+func (bp *blockProcessor) process(blk *block.Block, preHeader *block.Header) (*big.Int, error) {
+	pc := &packerContext{
+		txDelayFunc: func(blockRef tx.BlockRef) (uint64, error) {
+			return MeasureTxDelay(blockRef, preHeader, bp.chain)
+		},
+		rewardRatio: builtin.Params.Get(bp.rt.State(), thor.KeyRewardRatio)}
 
 	receipts, totalGasUsed, totalReward, err := bp.processTransactions(pc, blk.Transactions(), nil, 0, big.NewInt(0))
 	if err != nil {
@@ -101,5 +85,5 @@ func (bp *blockProcessor) processTransaction(pc *packerContext, transaction *tx.
 		return nil, nil, err
 	}
 
-	return receipt, CalcReward(transaction, receipt.GasUsed, pc.rewardRatio, bp.rt.BlockNumber(), delay), nil
+	return receipt, CalcReward(transaction, receipt.GasUsed, pc.rewardRatio, bp.rt.BlockTime(), delay), nil
 }

@@ -5,19 +5,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
-
-func handleClause(rt *runtime.Runtime, clause *tx.Clause) *vm.Output {
-	return rt.Call(clause, 0, math.MaxUint64, *clause.To(), &big.Int{}, thor.Hash{})
-}
 
 func checkState(state *state.State, header *block.Header) error {
 	if stateRoot, err := state.Stage().Hash(); err == nil {
@@ -31,37 +24,48 @@ func checkState(state *state.State, header *block.Header) error {
 }
 
 // MeasureTxDelay 返回该交易的延迟时间.
-func MeasureTxDelay(blockRef tx.BlockRef, parentBlockID thor.Hash, chain *chain.Chain) (uint32, error) {
-	parentNum := block.Number(parentBlockID)
+func MeasureTxDelay(blockRef tx.BlockRef, parent *block.Header, chain *chain.Chain) (uint64, error) {
+	parentNum := parent.Number()
 	refNum := blockRef.Number()
 	if refNum > parentNum {
-		return 0, errors.New("ref num > parent block num")
+		return math.MaxUint64, nil
 	}
-	diff := parentNum - refNum
-	if diff > thor.MaxTxWorkDelay {
-		return math.MaxUint32, nil
+
+	if uint64(parentNum-refNum)*thor.BlockInterval > thor.MaxTxWorkDelay {
+		return math.MaxUint64, nil
 	}
-	blockID := parentBlockID
-	for i := uint32(0); i < diff; i++ {
-		header, err := chain.GetBlockHeader(blockID)
+
+	header := parent
+	var err error
+	for refNum <= header.Number() {
+		if header.Number() == refNum {
+			if bytes.HasPrefix(header.ID().Bytes(), blockRef[:]) {
+				return parent.Timestamp() - header.Timestamp(), nil
+			}
+			break
+		}
+
+		header, err = chain.GetBlockHeader(header.ParentID())
 		if err != nil {
 			return 0, err
 		}
-		blockID = header.ParentID()
 	}
-	if bytes.HasPrefix(blockID[:], blockRef[:]) {
-		return diff, nil
-	}
-	return math.MaxUint32, nil
+	return math.MaxUint64, nil
 }
 
 // CalcReward 返回交易的 reward.
-func CalcReward(tx *tx.Transaction, gasUsed uint64, ratio *big.Int, blockNum uint32, delay uint32) *big.Int {
+func CalcReward(tx *tx.Transaction, gasUsed uint64, ratio *big.Int, timestamp uint64, delay uint64) *big.Int {
+
 	x := new(big.Int).SetUint64(tx.Gas())
 	x.Mul(x, tx.GasPrice()) // tx defined energy (TDE)
 
-	// work produced energy (WPE)
-	y := thor.ProvedWorkToEnergy(tx.ProvedWork(), blockNum, delay)
+	var y *big.Int
+	if delay > thor.MaxTxWorkDelay {
+		y = &big.Int{}
+	} else {
+		// work produced energy (WPE)
+		y = thor.ProvedWork.ToEnergy(tx.ProvedWork(), timestamp)
+	}
 
 	// limit WPE to atmost TDE
 	if y.Cmp(x) > 0 {
