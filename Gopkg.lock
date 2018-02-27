@@ -5,7 +5,7 @@
   branch = "master"
   name = "github.com/aristanetworks/goarista"
   packages = ["monotime"]
-  revision = "18a2f1dd52bb9abbc1e898439df06c74f28f63a4"
+  revision = "c41ed3986faaeb0aeed2bd98e92468f8ea317954"
 
 [[projects]]
   branch = "master"
@@ -20,14 +20,8 @@
   version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/edsrzf/mmap-go"
-  packages = ["."]
-  revision = "0bce6a6887123b67a60366d2c9fe2dfb74289d2e"
-
-[[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["accounts/abi","common","common/bitutil","common/hexutil","common/math","common/mclock","consensus","consensus/ethash","consensus/misc","core","core/state","core/types","core/vm","crypto","crypto/bn256","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","params","rlp","rpc","trie"]
+  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/secp256k1","crypto/sha3","log","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
   revision = "4bb3c89d44e372e6a9ab85a8be0c9345265c763a"
   version = "v1.7.3"
 
@@ -62,6 +56,18 @@
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/huin/goupnp"
+  packages = [".","dcps/internetgateway1","dcps/internetgateway2","httpu","scpd","soap","ssdp"]
+  revision = "dceda08e705b2acee36aab47d765ed801f64cfc7"
+
+[[projects]]
+  name = "github.com/jackpal/go-nat-pmp"
+  packages = ["."]
+  revision = "c9cfead9f2a36ddf3daa40ba269aa7f4bbba6b62"
+  version = "v1.0.1"
+
+[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
@@ -76,14 +82,8 @@
 [[projects]]
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
-  packages = [".","exp"]
-  revision = "e181e095bae94582363434144c61a9653aff6e50"
-
-[[projects]]
-  name = "github.com/rs/cors"
   packages = ["."]
-  revision = "7af7a1e09ba336d2ea14b1ce73bf693c6837dbf6"
-  version = "v1.2"
+  revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
@@ -112,7 +112,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["websocket"]
+  packages = ["html","html/atom","html/charset"]
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
@@ -122,22 +122,16 @@
   revision = "b8f5ef32195cae6470b728e8ca677f0dbed1a004"
 
 [[projects]]
-  name = "gopkg.in/fatih/set.v0"
-  packages = ["."]
-  revision = "57907de300222151a123d29255ed17f5ed43fad3"
-  version = "v0.1.0"
+  name = "golang.org/x/text"
+  packages = ["encoding","encoding/charmap","encoding/htmlindex","encoding/internal","encoding/internal/identifier","encoding/japanese","encoding/korean","encoding/simplifiedchinese","encoding/traditionalchinese","encoding/unicode","internal/gen","internal/tag","internal/utf8internal","language","runes","transform","unicode/cldr"]
+  revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
+  version = "v0.3.0"
 
 [[projects]]
   branch = "v2"
   name = "gopkg.in/karalabe/cookiejar.v2"
   packages = ["collections/prque"]
   revision = "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
-
-[[projects]]
-  branch = "v2"
-  name = "gopkg.in/natefinch/npipe.v2"
-  packages = ["."]
-  revision = "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6"
 
 [[projects]]
   name = "gopkg.in/urfave/cli.v1"
@@ -148,6 +142,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9934f582e51dbad26f2d0b9ee049bca32bb003a94589f0ff5736c5390339014b"
+  inputs-digest = "271229764dfe27fcc500679fdaa0e912cc728508dffe5f70ba979eb20bbf169e"
   solver-name = "gps-cdcl"
   solver-version = 1
