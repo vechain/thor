@@ -12,6 +12,7 @@ var (
 	errTransaction  = errors.New("transaction in block body is bad")
 	errSchedule     = errors.New("schedule err")
 	errTotalScore   = errors.New("total score err")
+	errPrice        = errors.New("price ineffective range")
 
 	errDelay          = errors.New("timestamp > (current time + thor.BlockInterval)")
 	errParentNotFound = errors.New("parent not found in current chain")

@@ -80,6 +80,15 @@ func (bp *blockProcessor) processTransaction(pc *packerContext, transaction *tx.
 		return nil, nil, err
 	}
 
+	baseGasPrice := builtin.Params.Get(bp.rt.State(), thor.KeyBaseGasPrice)
+	big2 := big.NewInt(2)
+	lowGasPrice := new(big.Int).Div(baseGasPrice, big2)
+	highGasPrice := new(big.Int).Mul(baseGasPrice, big2)
+	gasPrice := transaction.GasPrice()
+	if gasPrice.Cmp(highGasPrice) > 0 || gasPrice.Cmp(lowGasPrice) < 0 {
+		return nil, nil, errPrice
+	}
+
 	receipt, _, err := bp.rt.ExecuteTransaction(transaction)
 	if err != nil {
 		return nil, nil, err

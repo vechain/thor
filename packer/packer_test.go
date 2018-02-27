@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
@@ -87,6 +88,13 @@ func TestP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), a1.PrivateKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		fmt.Println(consensus.New(c, stateCreator).Consent(blk.WithSignature(sig), uint64(time.Now().Unix()*2)))
 
 		if time.Now().UnixNano() > start+1000*1000*1000*1 {
 			break

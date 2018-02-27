@@ -32,7 +32,6 @@ func (v *validator) validate(nowTime uint64) (*block.Header, error) {
 	transactions := v.block.Transactions()
 
 	// Signer and IntrinsicGas will be validate in runtime.
-
 	switch {
 	case preHeader.Timestamp() >= header.Timestamp():
 		return nil, errTimestamp
