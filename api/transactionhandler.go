@@ -16,9 +16,8 @@ const TransactionHTTPPathPrefix = "/transactions"
 func NewTransactionHTTPRouter(router *mux.Router, ti *TransactionInterface) {
 	sub := router.PathPrefix(TransactionHTTPPathPrefix).Subrouter()
 
+	sub.Path("").Methods("POST").HandlerFunc(httpx.WrapHandlerFunc(ti.handleSendTransaction))
 	sub.Path("/{id}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ti.handleGetTransactionByID))
-	sub.Path("").Methods("POST").HandlerFunc(httpx.WrapHandlerFunc(ti.handleSendTransactionByID))
-	sub.Path("/input").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ti.handleGetContractInputData))
 }
 
 func (ti *TransactionInterface) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
@@ -48,28 +47,7 @@ func (ti *TransactionInterface) handleGetTransactionByID(w http.ResponseWriter, 
 	return nil
 }
 
-func (ti *TransactionInterface) handleGetContractInputData(w http.ResponseWriter, req *http.Request) error {
-	raw := []byte(req.FormValue("rawTransaction"))
-	rawTransaction := new(types.RawTransaction)
-	if err := json.Unmarshal(raw, &rawTransaction); err != nil {
-		return err
-	}
-	txID, err := ti.SendRawTransaction(rawTransaction)
-	if err != nil {
-		return err
-	}
-	txIDMap := map[string]string{
-		"txID": txID.String(),
-	}
-	data, err := json.Marshal(txIDMap)
-	if err != nil {
-		return httpx.Error(" System Error! ", 400)
-	}
-	w.Write(data)
-	return nil
-}
-
-func (ti *TransactionInterface) handleSendTransactionByID(w http.ResponseWriter, req *http.Request) error {
+func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	raw := []byte(req.FormValue("rawTransaction"))
 	rawTransaction := new(types.RawTransaction)
 	if err := json.Unmarshal(raw, &rawTransaction); err != nil {

@@ -79,11 +79,11 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
 	builder.Nonce(rawTransaction.Nonce)
 	builder.DependsOn(&dependsOn)
 	for _, clause := range rawTransaction.Clauses {
-		to, err := thor.ParseAddress(clause.To)
-		if err != nil {
-			return nil, err
-		}
-		c := tx.NewClause(&to).WithData(clause.Data).WithValue(clause.Value)
+		// to, err := thor.ParseAddress(clause.To)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		c := tx.NewClause(clause.To).WithData(clause.Data).WithValue(clause.Value)
 		builder.Clause(c)
 	}
 	return builder, nil

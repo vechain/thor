@@ -28,19 +28,14 @@ var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232
 
 func TestTransaction(t *testing.T) {
 
-	ntx, ts := addTxToBlock(t)
+	ntx, ts := initTransactionServer(t)
 	raw, err := types.ConvertTransaction(ntx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/transactions/%v", ntx.ID().String()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
+	r, err := httpGet(ts, ts.URL+fmt.Sprintf("/transactions/%v", ntx.ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,6 +53,7 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
+	to := thor.BytesToAddress([]byte("acc1"))
 	rawTransaction := &types.RawTransaction{
 		Nonce:     1,
 		GasPrice:  big.NewInt(100000),
@@ -67,7 +63,7 @@ func TestTransaction(t *testing.T) {
 		BlockRef:  [8]byte(tx.NewBlockRef(20)),
 		Clauses: types.Clauses{
 			types.Clause{
-				To:    thor.BytesToAddress([]byte("acc1")).String(),
+				To:    &to,
 				Value: big.NewInt(10000),
 				Data:  []byte{0x11, 0x12},
 			},
@@ -77,19 +73,28 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err = http.PostForm(ts.URL+"/transactions", url.Values{"rawTransaction": {string(txData)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err = ioutil.ReadAll(res.Body)
-	res.Body.Close()
+
+	r, err = httpPost(ts, ts.URL+"/transactions", url.Values{"rawTransaction": {string(txData)}})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 }
 
-func addTxToBlock(t *testing.T) (*tx.Transaction, *httptest.Server) {
+func httpPost(ts *httptest.Server, url string, body url.Values) ([]byte, error) {
+	res, err := http.PostForm(url, body)
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
 	ti := api.NewTransactionInterface(chain, txpool.NewTxPool(chain))
@@ -149,7 +154,7 @@ func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transa
 	for i, c := range expectedTx.Clauses {
 		assert.Equal(t, string(c.Data), string(actualTx.Clauses[i].Data))
 		assert.Equal(t, c.Value.String(), actualTx.Clauses[i].Value.String())
-		assert.Equal(t, c.To, actualTx.Clauses[i].To)
+		assert.Equal(t, c.To.String(), actualTx.Clauses[i].To.String())
 	}
 
 }
