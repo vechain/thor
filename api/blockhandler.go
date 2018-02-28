@@ -5,8 +5,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
+	"math/big"
 	"net/http"
-	"strconv"
 )
 
 //BlockHTTPPathPrefix http path prefix
@@ -51,15 +51,11 @@ func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *htt
 	if query == nil {
 		return httpx.Error(" No Params! ", 400)
 	}
-	number, ok := query["number"]
+	number, ok := new(big.Int).SetString(query["number"], 10)
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error(" Invalid Number! ", 400)
 	}
-	bn, err := strconv.Atoi(number)
-	if err != nil {
-		return httpx.Error(" Parse block hash failed! ", 400)
-	}
-	block, err := bi.GetBlockByNumber(uint32(bn))
+	block, err := bi.GetBlockByNumber(uint32(number.Int64()))
 	if err != nil {
 		return httpx.Error(" Get block failed! ", 400)
 	}

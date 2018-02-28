@@ -15,11 +15,11 @@ const AccountHTTPPathPrefix = "/accounts"
 func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
 	sub := router.PathPrefix(AccountHTTPPathPrefix).Subrouter()
 
-	sub.Path("/{address}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetAccount))
+	sub.Path("/{address}/balance").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetBalance))
+	sub.Path("/{address}/code").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetCode))
 	sub.Path("/{address}/storage").Queries("key", "{key}").Methods("GET").HandlerFunc(httpx.WrapHandlerFunc(ai.handleGetStorage))
 }
-
-func (ai *AccountInterface) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
+func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
 		return httpx.Error(" No Params! ", 400)
@@ -33,12 +33,26 @@ func (ai *AccountInterface) handleGetAccount(w http.ResponseWriter, req *http.Re
 		return httpx.Error(" Invalid address! ", 400)
 	}
 
-	account := ai.GetAccount(address)
-	data, err := json.Marshal(account)
-	if err != nil {
-		return httpx.Error(" System Error! ", 500)
+	balance := ai.GetBalance(address)
+	w.Write(balance.Bytes())
+	return nil
+}
+func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Request) error {
+	query := mux.Vars(req)
+	if len(query) == 0 {
+		return httpx.Error(" No Params! ", 400)
 	}
-	w.Write(data)
+	addr, ok := query["address"]
+	if !ok {
+		return httpx.Error(" Invalid Params! ", 400)
+	}
+	address, err := thor.ParseAddress(addr)
+	if err != nil {
+		return httpx.Error(" Invalid address! ", 400)
+	}
+
+	code := ai.GetCode(address)
+	w.Write(code)
 	return nil
 }
 

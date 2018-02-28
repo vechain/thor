@@ -1,10 +1,10 @@
 package api
 
 import (
-	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"math/big"
 )
 
 type bestBlockGetter interface {
@@ -38,8 +38,8 @@ func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor
 	return state.GetStorage(address, key)
 }
 
-//GetAccount returns account by address
-func (ai *AccountInterface) GetAccount(address thor.Address) *types.Account {
+//GetBalance returns balance by address
+func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
 	if err != nil {
 		return nil
@@ -48,10 +48,19 @@ func (ai *AccountInterface) GetAccount(address thor.Address) *types.Account {
 	if err != nil {
 		return nil
 	}
-	balance := state.GetBalance(address)
-	code := state.GetCode(address)
-	return &types.Account{
-		Balance: balance,
-		Code:    code,
+	return state.GetBalance(address)
+}
+
+//GetCode returns code by address
+func (ai *AccountInterface) GetCode(address thor.Address) []byte {
+	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
+	if err != nil {
+		return nil
 	}
+	state, err := ai.stateCreator.NewState(bestBlk.Header().StateRoot())
+	if err != nil {
+		return nil
+	}
+	return state.GetCode(address)
+
 }

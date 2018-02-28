@@ -4,8 +4,8 @@ info:
   title: "Thor API"
   termsOfService: "https://www.vechain.com"
   contact:
-    email: "apiteam@swagger.io"
-  description: "Get chain info through the API"
+    email: "vechain@vechain.com"
+  description: "Get block chain info through the API"
 servers:
   - url: http://localhost:3000/v1
     description: Optional server description, local server
@@ -16,8 +16,10 @@ tags:
   description: "Everything about transaction"
 - name: "Block"
   description: "Everything about block"
+- name: "Contract"
+  description: "Everything about contract"
 paths:
-  /accounts/{address}:
+  /accounts/{address}/balance:
     get:
       tags:
       - "Account"
@@ -31,17 +33,38 @@ paths:
             type: string
             format: address
           description: account address
-      responses:
+      responses: 
         200:
           description: OK
           content:
-            application/json:
+            application/octet-stream:
               schema:
-                type: object
-                example: {
-                      "Balance":0,
-                      "Code":null
-                      }
+                type: integer
+                description: balance of account
+        400:
+          description: "Invalid address"
+  /accounts/{address}/code:
+    get:
+      tags:
+      - "Account"
+      summary: "Get code by address"
+      description: "return account code"
+      parameters:
+        - in: query
+          required: true
+          name: address
+          schema:
+            type: string
+            format: address
+          description: account address
+      responses: 
+        200:
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: array
+                description: code of account
         400:
           description: "Invalid address"
   /accounts/{address}/storage:
@@ -156,7 +179,7 @@ paths:
                                 {
                                   "To":    addressTo,
                                   "Value": 10000,
-                                  "Data":  [0x11, 0x12],
+                                  "Data":  [0x00, 0x00],
                                 }
                                 ]
       responses:
@@ -257,5 +280,60 @@ paths:
                                 "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
                               ]
                       }
+        400:
+          description: "Invalid params"
+  /contracts/{contractAddr}:
+    post:
+      tags:
+      - "Contract"
+      summary: "call contract"
+      description: "call contract"
+      parameters:
+        - in: path
+          required: true
+          name: contractAddr
+          schema:
+            type: string
+          description: contract address
+      requestBody:
+        description: contract calling params
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: 
+                input:
+                  type: array
+                  description: an input binary 
+                options: 
+                  type: object
+                  properties: 
+                    Index:
+                      type: integer
+                      example: 1
+                    Gas:
+                      type: integer
+                      example: 100000
+                    From:
+                      type: string
+                      example: 0x000000000000000000000000636f6e7472616374
+                    GasPrice:
+                      type: integer
+                      example: 10000
+                    TxID: 
+                      type: string
+                      example: 0x000000000000000000000000636f6e74
+                    Value:
+                      type: integer
+                      example: 0
+      responses:
+        200:
+          content:
+            application/octet-stream:
+              schema:
+                type: array
+                description: an output binary 
+          description: "successful operation"
         400:
           description: "Invalid params"
