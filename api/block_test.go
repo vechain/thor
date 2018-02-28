@@ -15,63 +15,46 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"io/ioutil"
 	"math/big"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestBlock(t *testing.T) {
 
-	block, ts := addBlock(t)
+	block, ts := initBlockServer(t)
 	raw := types.ConvertBlock(block)
 	defer ts.Close()
 
-	res, err := http.Get(ts.URL + fmt.Sprintf("/blocks/%v", block.Header().ID().String()))
+	r, err := httpGet(ts, ts.URL+fmt.Sprintf("/blocks/%v", block.Header().ID().String()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	rb := new(types.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
 	}
-
 	checkBlock(t, raw, rb)
 
-	// get transaction from blocknumber with index
-	res, err = http.Get(ts.URL + "/blocks?number=1")
+	// get block info with blocknumber
+	r, err = httpGet(ts, ts.URL+"/blocks?number=1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err = ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(string(r))
 	rb = new(types.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
 	}
-
 	checkBlock(t, raw, rb)
 
 }
 
-func addBlock(t *testing.T) (*block.Block, *httptest.Server) {
+func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
 	bi := api.NewBlockInterface(chain)
 	router := mux.NewRouter()
 	api.NewBlockHTTPRouter(router, bi)
-	fmt.Println(bi, router)
 	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
