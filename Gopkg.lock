@@ -21,9 +21,9 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/secp256k1","crypto/sha3","log","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
-  revision = "4bb3c89d44e372e6a9ab85a8be0c9345265c763a"
-  version = "v1.7.3"
+  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
+  revision = "1e67410e88d2685bc54611a7c9f75c327b553ccc"
+  version = "v1.8.1"
 
 [[projects]]
   name = "github.com/go-stack/stack"
@@ -82,7 +82,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/rcrowley/go-metrics"
-  packages = ["."]
+  packages = [".","exp"]
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
@@ -142,6 +142,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "271229764dfe27fcc500679fdaa0e912cc728508dffe5f70ba979eb20bbf169e"
+  inputs-digest = "b7fdc74cb2d560aeb49dd6b9a112caadfaf594c1428302b0267d57bc5011ecd9"
   solver-name = "gps-cdcl"
   solver-version = 1
