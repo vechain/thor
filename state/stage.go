@@ -2,7 +2,6 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/vechain/thor/thor"
 )
@@ -84,38 +83,32 @@ func (s *Stage) Commit() (thor.Hash, error) {
 		return thor.Hash{}, s.err
 	}
 
+	// commit accounts trie
+	root, err := s.accountTrie.Commit(nil)
+	if err != nil {
+		return thor.Hash{}, err
+	}
+
 	// write codes
 	for _, code := range s.codes {
-		s.db.Insert(common.BytesToHash(code.hash), code.code)
+		codeHash := common.BytesToHash(code.hash)
+		s.db.Insert(codeHash, code.code)
+		s.db.Reference(codeHash, root)
 	}
 
 	// commit storage tries
 	for _, strie := range s.storageTries {
-		if _, err := strie.Commit(nil); err != nil {
+		shash, err := strie.Commit(nil)
+		if err != nil {
 			return thor.Hash{}, err
 		}
+		s.db.Reference(shash, root)
 	}
 
-	// commit accounts trie
-	root, err := s.accountTrie.Commit(func(leaf []byte, parent common.Hash) error {
-		var account Account
-		if err := rlp.DecodeBytes(leaf, &account); err != nil {
-			return nil
-		}
-		if len(account.StorageRoot) > 0 {
-			s.db.Reference(common.BytesToHash(account.StorageRoot), parent)
-		}
-
-		if len(account.CodeHash) > 0 {
-			s.db.Reference(common.BytesToHash(account.CodeHash), parent)
-		}
-		return nil
-	})
+	// flush to db
 	if err := s.db.Commit(root, false); err != nil {
 		return thor.Hash{}, err
 	}
-	if err != nil {
-		return thor.Hash{}, err
-	}
+
 	return thor.Hash(root), nil
 }
