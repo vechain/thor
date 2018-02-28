@@ -25,7 +25,7 @@ func TestAccount(t *testing.T) {
 
 func newTrie() *trie.SecureTrie {
 	kv, _ := lvldb.NewMem()
-	trie, _ := trie.NewSecure(common.Hash{}, kv, 0)
+	trie, _ := trie.NewSecure(common.Hash{}, newTrieDatabase(kv), 0)
 	return trie
 }
 func TestTrie(t *testing.T) {

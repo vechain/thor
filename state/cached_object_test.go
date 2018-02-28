@@ -16,7 +16,8 @@ import (
 func TestCachedObject(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	stgTrie, _ := trie.NewSecure(common.Hash{}, kv, 0)
+	db := newTrieDatabase(kv)
+	stgTrie, _ := trie.NewSecure(common.Hash{}, db, 0)
 	storages := []struct {
 		k thor.Hash
 		v []byte
@@ -31,7 +32,8 @@ func TestCachedObject(t *testing.T) {
 		saveStorage(stgTrie, s.k, s.v)
 	}
 
-	storageRoot, _ := stgTrie.Commit()
+	storageRoot, _ := stgTrie.Commit(nil)
+	db.Commit(storageRoot, false)
 
 	code := make([]byte, 100)
 	rand.Read(code)
@@ -44,8 +46,8 @@ func TestCachedObject(t *testing.T) {
 		CodeHash:    codeHash,
 		StorageRoot: storageRoot[:],
 	}
-
-	obj := newCachedObject(kv, account)
+	db = newTrieDatabase(kv)
+	obj := newCachedObject(db, account)
 
 	assert.Equal(t,
 		M(obj.GetCode()),

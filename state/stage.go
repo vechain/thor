@@ -2,8 +2,8 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 )
 
@@ -11,8 +11,7 @@ import (
 type Stage struct {
 	err error
 
-	kv kv.GetPutter
-
+	db           *trie.Database
 	accountTrie  *trie.SecureTrie
 	storageTries []*trie.SecureTrie
 	codes        []codeWithHash
@@ -23,8 +22,9 @@ type codeWithHash struct {
 	hash []byte
 }
 
-func newStage(root thor.Hash, kv kv.GetPutter, changes map[thor.Address]*changedObject) *Stage {
-	accountTrie, err := trie.NewSecure(common.Hash(root), kv, 0)
+func newStage(root thor.Hash, db *trie.Database, changes map[thor.Address]*changedObject) *Stage {
+
+	accountTrie, err := trie.NewSecure(common.Hash(root), db, 0)
 	if err != nil {
 		return &Stage{err: err}
 	}
@@ -44,7 +44,7 @@ func newStage(root thor.Hash, kv kv.GetPutter, changes map[thor.Address]*changed
 		// skip storage changes if account is empty
 		if !dataCpy.IsEmpty() {
 			if len(obj.storage) > 0 {
-				strie, err := trie.NewSecure(common.BytesToHash(dataCpy.StorageRoot), kv, 0)
+				strie, err := trie.NewSecure(common.BytesToHash(dataCpy.StorageRoot), db, 0)
 				if err != nil {
 					return &Stage{err: err}
 				}
@@ -63,7 +63,7 @@ func newStage(root thor.Hash, kv kv.GetPutter, changes map[thor.Address]*changed
 		}
 	}
 	return &Stage{
-		kv:           kv,
+		db:           db,
 		accountTrie:  accountTrie,
 		storageTries: storageTries,
 		codes:        codes,
@@ -84,30 +84,38 @@ func (s *Stage) Commit() (thor.Hash, error) {
 		return thor.Hash{}, s.err
 	}
 
-	batch := s.kv.NewBatch()
 	// write codes
 	for _, code := range s.codes {
-		if err := batch.Put(code.hash, code.code); err != nil {
-			return thor.Hash{}, err
-		}
+		s.db.Insert(common.BytesToHash(code.hash), code.code)
 	}
 
 	// commit storage tries
 	for _, strie := range s.storageTries {
-		if _, err := strie.CommitTo(batch); err != nil {
+		if _, err := strie.Commit(nil); err != nil {
 			return thor.Hash{}, err
 		}
 	}
 
 	// commit accounts trie
-	root, err := s.accountTrie.CommitTo(batch)
+	root, err := s.accountTrie.Commit(func(leaf []byte, parent common.Hash) error {
+		var account Account
+		if err := rlp.DecodeBytes(leaf, &account); err != nil {
+			return nil
+		}
+		if len(account.StorageRoot) > 0 {
+			s.db.Reference(common.BytesToHash(account.StorageRoot), parent)
+		}
+
+		if len(account.CodeHash) > 0 {
+			s.db.Reference(common.BytesToHash(account.CodeHash), parent)
+		}
+		return nil
+	})
+	if err := s.db.Commit(root, false); err != nil {
+		return thor.Hash{}, err
+	}
 	if err != nil {
 		return thor.Hash{}, err
 	}
-
-	if err := batch.Write(); err != nil {
-		return thor.Hash{}, err
-	}
-
 	return thor.Hash(root), nil
 }
