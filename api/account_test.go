@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -45,46 +44,31 @@ var accounts = []struct {
 		account{thor.BytesToAddress([]byte("acc2")), big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
 	},
 	{
-		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
-		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v2"))},
+		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v3"))},
+		account{thor.BytesToAddress([]byte("acc3")), big.NewInt(1000), []byte{0x20, 0x21}, thor.BytesToHash([]byte("v3"))},
 	},
 }
 var storageKey = thor.BytesToHash([]byte("key"))
 
 func TestAccount(t *testing.T) {
-	chain, db := addBestBlock(t)
-	stateC := state.NewCreator(db)
-	ai := api.NewAccountInterface(chain, stateC)
-	router := mux.NewRouter()
-	api.NewAccountHTTPRouter(router, ai)
-	ts := httptest.NewServer(router)
+	ts := initAccountServer(t)
 	defer ts.Close()
 
 	for _, v := range accounts {
 		address := v.in.addr
-		fmt.Println(address.String(), len(address.String()))
-		res, err := http.Get(ts.URL + fmt.Sprintf("/accounts/%v", address.String()))
+		r, err := httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/balance", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		r, err := ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		var a types.Account
-		if err := json.Unmarshal(r, &a); err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, v.want.balance, a.Balance, "balance should be equal")
-		assert.Equal(t, v.want.code, a.Code, "code should be equal")
+		assert.Equal(t, v.want.balance, new(big.Int).SetBytes(r), "balance should be equal")
 
-		res, err = http.Get(ts.URL + fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
+		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/code", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		r, err = ioutil.ReadAll(res.Body)
-		res.Body.Close()
+		assert.Equal(t, v.want.code, r, "code should be equal")
+
+		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -103,11 +87,11 @@ func TestAccount(t *testing.T) {
 
 }
 
-func addBestBlock(t *testing.T) (*chain.Chain, *lvldb.LevelDB) {
+func initAccountServer(t *testing.T) *httptest.Server {
 	db, _ := lvldb.NewMem()
 	hash, _ := thor.ParseHash(emptyRootHash)
-	s, _ := state.New(hash, db)
-
+	stateC := state.NewCreator(db)
+	s, _ := stateC.NewState(hash)
 	for _, v := range accounts {
 		address := v.in.addr
 		s.SetBalance(address, v.in.balance)
@@ -115,7 +99,6 @@ func addBestBlock(t *testing.T) (*chain.Chain, *lvldb.LevelDB) {
 		s.SetStorage(address, storageKey, v.in.storage)
 	}
 	stateRoot, _ := s.Stage().Commit()
-	stateC := state.NewCreator(db)
 	chain := chain.New(db)
 	b, err := genesis.Dev.Build(stateC)
 	if err != nil {
@@ -130,6 +113,22 @@ func addBestBlock(t *testing.T) (*chain.Chain, *lvldb.LevelDB) {
 	if err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
+	ai := api.NewAccountInterface(chain, stateC)
+	router := mux.NewRouter()
+	api.NewAccountHTTPRouter(router, ai)
+	ts := httptest.NewServer(router)
+	return ts
+}
 
-	return chain, db
+func httpGet(ts *httptest.Server, url string) ([]byte, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
