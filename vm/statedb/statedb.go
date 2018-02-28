@@ -4,18 +4,21 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/vechain/thor/vm/evm"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
 )
 
-// StateDB is facade for account.Manager, snapshot.Snapshot and Log.
-// It implements evm.StateDB, only adapt to evm.
+// StateDB implements evm.StateDB, only adapt to evm.
 type StateDB struct {
 	state State
 	repo  *stackedmap.StackedMap
 }
+
+var _ evm.StateDB = (*StateDB)(nil)
 
 type (
 	suicideFlagKey common.Address
@@ -31,7 +34,7 @@ func New(state State) *StateDB {
 		case suicideFlagKey:
 			return false, true
 		case refundKey:
-			return &big.Int{}, true
+			return uint64(0), true
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -44,9 +47,9 @@ func New(state State) *StateDB {
 }
 
 // GetRefund returns total refund during VM life-cycle.
-func (s *StateDB) GetRefund() *big.Int {
+func (s *StateDB) GetRefund() uint64 {
 	v, _ := s.repo.Get(refundKey{})
-	return v.(*big.Int)
+	return v.(uint64)
 }
 
 // GetOutputs callback ouputs include logs, new addresses and preimages.
@@ -167,9 +170,9 @@ func (s *StateDB) Empty(addr common.Address) bool {
 }
 
 // AddRefund stub.
-func (s *StateDB) AddRefund(gas *big.Int) {
+func (s *StateDB) AddRefund(gas uint64) {
 	v, _ := s.repo.Get(refundKey{})
-	total := new(big.Int).Add(v.(*big.Int), gas)
+	total := v.(uint64) + gas
 	s.repo.Put(refundKey{}, total)
 }
 

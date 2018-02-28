@@ -19,7 +19,7 @@ type Output struct {
 	Value           []byte
 	Logs            []*Log
 	LeftOverGas     uint64
-	RefundGas       *big.Int
+	RefundGas       uint64
 	Preimages       map[thor.Hash][]byte
 	VMErr           error         // VMErr identify the execution result of the contract function, not evm function's err.
 	ContractAddress *thor.Address // if create a new contract, or is nil.
@@ -115,7 +115,7 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 		Coinbase:    common.Address(ctx.Beneficiary),
 		BlockNumber: new(big.Int).SetUint64(uint64(ctx.BlockNumber)),
 		Time:        new(big.Int).SetUint64(ctx.Time),
-		GasLimit:    new(big.Int).SetUint64(ctx.GasLimit),
+		GasLimit:    ctx.GasLimit,
 		GasPrice:    ctx.GasPrice,
 		TxID:        ctx.TxID,
 		ClauseIndex: ctx.ClauseIndex,
