@@ -3,7 +3,6 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
@@ -177,11 +176,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		leftOverGas = vmOutput.LeftOverGas
 
 		// Apply refund counter, capped to half of the used gas.
-		halfUsed := new(big.Int).SetUint64(gasUsed / 2)
-		refund := math.BigMin(vmOutput.RefundGas, halfUsed)
+		refund := gasUsed / 2
+		if refund > vmOutput.RefundGas {
+			refund = vmOutput.RefundGas
+		}
 
 		// won't overflow
-		leftOverGas += refund.Uint64()
+		leftOverGas += refund
 
 		if vmOutput.VMErr != nil {
 			// vm exception here

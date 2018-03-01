@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-package evm implements the Ethereum Virtual Machine.
+Package evm implements the Ethereum Virtual Machine.
 
 The vm package implements two EVMs, a byte code VM and a JIT VM. The BC
 (Byte Code) VM loops over a set of bytes and executes them according to the set
