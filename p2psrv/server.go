@@ -1,4 +1,4 @@
-package p2p
+package p2psrv
 
 import (
 	"crypto/ecdsa"
@@ -87,8 +87,8 @@ type Server struct {
 	done   chan struct{}
 }
 
-// NewServer create a p2p server.
-func NewServer(opts Options) *Server {
+// New create a p2p server.
+func New(opts Options) *Server {
 
 	v5nodes := make([]*discv5.Node, 0, len(opts.BootstrapNodes))
 	for _, n := range opts.BootstrapNodes {
