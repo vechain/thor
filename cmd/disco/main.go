@@ -4,6 +4,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"net"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -53,7 +55,7 @@ func newApp() *cli.App {
 		},
 		cli.IntFlag{
 			Name:  "verbosity",
-			Value: int(log.LvlInfo),
+			Value: int(log.LvlWarn),
 			Usage: "log verbosity (0-9)",
 		},
 		cli.StringFlag{
@@ -69,7 +71,7 @@ func newApp() *cli.App {
 
 		natm, err := nat.Parse(ctx.String("nat"))
 		if err != nil {
-			return err
+			return errors.Wrap(err, "-nat")
 		}
 
 		key, err := loadKey(ctx)
@@ -82,11 +84,30 @@ func newApp() *cli.App {
 		if netrestrict != "" {
 			restrictList, err = netutil.ParseNetlist(netrestrict)
 			if err != nil {
-				return err
+				return errors.Wrap(err, "-netrestrict")
 			}
 		}
 
-		net, err := discv5.ListenUDP(key, ctx.String("addr"), natm, "", restrictList)
+		addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
+		if err != nil {
+			return errors.Wrap(err, "-addr")
+		}
+		conn, err := net.ListenUDP("udp", addr)
+		if err != nil {
+			return err
+		}
+
+		realAddr := conn.LocalAddr().(*net.UDPAddr)
+		if natm != nil {
+			if !realAddr.IP.IsLoopback() {
+				go nat.Map(natm, nil, "udp", realAddr.Port, realAddr.Port, "ethereum discovery")
+			}
+			// TODO: react to external IP changes over time.
+			if ext, err := natm.ExternalIP(); err == nil {
+				realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
+			}
+		}
+		net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
 		if err != nil {
 			return err
 		}
