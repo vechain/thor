@@ -2,11 +2,13 @@ package tx
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/vm/evm"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -244,21 +246,32 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		return thor.TxGas + thor.ClauseGas, nil
 	}
 
-	total := new(big.Int).SetUint64(thor.TxGas)
+	var total = thor.TxGas
+	var overflow bool
 	for _, c := range t.body.Clauses {
-		gas := dataGas(c.body.Data)
+		gas, err := dataGas(c.body.Data)
+		if err != nil {
+			return 0, err
+		}
+		total, overflow = math.SafeAdd(total, gas)
+		if overflow {
+			return 0, evm.ErrOutOfGas
+		}
+
+		var cgas uint64
 		if c.body.To == nil {
 			// contract creation
-			gas += thor.ClauseGasContractCreation
+			cgas = thor.ClauseGasContractCreation
 		} else {
-			gas += thor.ClauseGas
+			cgas = thor.ClauseGas
 		}
-		total.Add(total, new(big.Int).SetUint64(gas))
+
+		total, overflow = math.SafeAdd(total, cgas)
+		if overflow {
+			return 0, evm.ErrOutOfGas
+		}
 	}
-	if total.BitLen() > 64 {
-		return 0, errors.New("intrinsic gas too large")
-	}
-	return total.Uint64(), nil
+	return total, nil
 }
 
 func (t *Transaction) String() string {
@@ -297,9 +310,9 @@ func (t *Transaction) String() string {
 }
 
 // see core.IntrinsicGas
-func dataGas(data []byte) (gas uint64) {
+func dataGas(data []byte) (uint64, error) {
 	if len(data) == 0 {
-		return
+		return 0, nil
 	}
 	var z, nz uint64
 	for _, byt := range data {
@@ -309,6 +322,18 @@ func dataGas(data []byte) (gas uint64) {
 			nz++
 		}
 	}
-	gas = (params.TxDataZeroGas*z + params.TxDataNonZeroGas*nz)
-	return
+	zgas, overflow := math.SafeMul(params.TxDataZeroGas, z)
+	if overflow {
+		return 0, evm.ErrOutOfGas
+	}
+	nzgas, overflow := math.SafeMul(params.TxDataNonZeroGas, nz)
+	if overflow {
+		return 0, evm.ErrOutOfGas
+	}
+
+	gas, overflow := math.SafeAdd(zgas, nzgas)
+	if overflow {
+		return 0, evm.ErrOutOfGas
+	}
+	return gas, nil
 }
