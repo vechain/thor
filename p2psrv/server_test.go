@@ -1,4 +1,4 @@
-package p2p_test
+package p2psrv_test
 
 import (
 	"crypto/ecdsa"
@@ -9,7 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	pp "github.com/vechain/thor/p2p"
+	"github.com/vechain/thor/p2psrv"
 )
 
 var boot1 = "enode://ec0ccfaeefa53c6a7ec73ca36940c911902d1f6f9da7567d05c44d1aa841b309260f7b228008331b61c8890ece0297eb0c3541af1a51fd5fcc749bee9104e64a@192.168.31.182:55555"
@@ -63,8 +63,8 @@ func msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 }
 
 func TestServer(t *testing.T) {
-	srv1 := pp.NewServer(
-		pp.Options{
+	srv1 := p2psrv.New(
+		p2psrv.Options{
 			PrivateKey: mustHexToECDSA(k1),
 			MaxPeers:   25,
 			ListenAddr: ":40001",
@@ -80,7 +80,7 @@ func TestServer(t *testing.T) {
 			Topic: "thor@111111",
 		})
 
-	srv2 := pp.NewServer(pp.Options{
+	srv2 := p2psrv.New(p2psrv.Options{
 		PrivateKey:     mustHexToECDSA(k2),
 		MaxPeers:       25,
 		ListenAddr:     ":50001",
