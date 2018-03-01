@@ -8,7 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	pp "github.com/vechain/thor/p2p"
 )
 
@@ -63,13 +63,13 @@ func msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
 }
 
 func TestServer(t *testing.T) {
-	srv1 := &pp.Server{
-		Options: pp.Options{
+	srv1 := pp.NewServer(
+		pp.Options{
 			PrivateKey: mustHexToECDSA(k1),
 			MaxPeers:   25,
 			ListenAddr: ":40001",
 
-			BootstrapNodes: []*discv5.Node{discv5.MustParseNode(boot1), discv5.MustParseNode(boot2)},
+			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 			Protocols: []p2p.Protocol{p2p.Protocol{
 				Name:    "MyProtocol", // 2.
 				Version: 1,            // 3.
@@ -78,29 +78,30 @@ func TestServer(t *testing.T) {
 			}},
 			//NAT:   nat.ExtIP(net.ParseIP("11.2.3.4")),
 			Topic: "thor@111111",
-		}}
+		})
 
-	srv2 := &pp.Server{
-		Options: pp.Options{
-			PrivateKey:     mustHexToECDSA(k2),
-			MaxPeers:       25,
-			ListenAddr:     ":50001",
-			BootstrapNodes: []*discv5.Node{discv5.MustParseNode(boot1), discv5.MustParseNode(boot2)},
-			Protocols: []p2p.Protocol{p2p.Protocol{
-				Name:    "MyProtocol", // 2.
-				Version: 1,            // 3.
-				Length:  1,            // 4.
-				Run:     msgHandler,   // 5.
-			}},
-			//NAT:   nat.ExtIP(net.ParseIP("21.2.3.5")),
-			Topic: "thor@111111",
-		}}
+	srv2 := pp.NewServer(pp.Options{
+		PrivateKey:     mustHexToECDSA(k2),
+		MaxPeers:       25,
+		ListenAddr:     ":50001",
+		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
+		Protocols: []p2p.Protocol{p2p.Protocol{
+			Name:    "MyProtocol", // 2.
+			Version: 1,            // 3.
+			Length:  1,            // 4.
+			Run:     msgHandler,   // 5.
+		}},
+		//NAT:   nat.ExtIP(net.ParseIP("21.2.3.5")),
+		Topic: "thor@111111",
+	})
 
 	srv1.Start()
+	defer srv1.Stop()
 	srv2.Start()
+	defer srv2.Stop()
 
 	fmt.Println(srv1.Self())
 	fmt.Println(srv2.Self())
-	<-time.After(time.Second * 10)
+	<-time.After(time.Second * 4)
 
 }
