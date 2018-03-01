@@ -2,8 +2,6 @@ package p2p
 
 import (
 	"crypto/ecdsa"
-	"fmt"
-	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -23,7 +21,7 @@ type Options struct {
 	Name string
 
 	// This field must be set to a valid secp256k1 private key.
-	PrivateKey *ecdsa.PrivateKey `toml:"-"`
+	PrivateKey *ecdsa.PrivateKey
 
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
@@ -32,7 +30,7 @@ type Options struct {
 	// MaxPendingPeers is the maximum number of peers that can be pending in the
 	// handshake phase, counted separately for inbound and outbound connections.
 	// Zero defaults to preset values.
-	MaxPendingPeers int `toml:",omitempty"`
+	MaxPendingPeers int
 
 	// NoDiscovery can be used to disable the peer discovery mechanism.
 	// Disabling is useful for protocol debugging (manual topology).
@@ -49,7 +47,7 @@ type Options struct {
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodes []*discv5.Node `toml:",omitempty"`
+	BootstrapNodes []*discover.Node
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
@@ -62,20 +60,20 @@ type Options struct {
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
-	NetRestrict *netutil.Netlist `toml:",omitempty"`
+	NetRestrict *netutil.Netlist
 
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT nat.Interface `toml:",omitempty"`
+	NAT nat.Interface
 
 	// If NoDial is true, the server will not dial any peers.
-	NoDial bool `toml:",omitempty"`
+	NoDial bool
 
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []p2p.Protocol `toml:"-"`
+	Protocols []p2p.Protocol
 
 	// Discovery v5 topic
 	Topic string
@@ -83,75 +81,100 @@ type Options struct {
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	Options
-	runner co.Runner
 	srv    *p2p.Server
+	topic  discv5.Topic
+	runner co.Runner
 	done   chan struct{}
+}
+
+// NewServer create a p2p server.
+func NewServer(opts Options) *Server {
+
+	v5nodes := make([]*discv5.Node, 0, len(opts.BootstrapNodes))
+	for _, n := range opts.BootstrapNodes {
+		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
+	}
+
+	return &Server{
+		srv: &p2p.Server{
+			Config: p2p.Config{
+				Name:             opts.Name,
+				PrivateKey:       opts.PrivateKey,
+				MaxPeers:         opts.MaxPeers,
+				MaxPendingPeers:  opts.MaxPendingPeers,
+				NoDiscovery:      true,
+				DiscoveryV5:      !opts.NoDiscovery,
+				ListenAddr:       opts.ListenAddr,
+				BootstrapNodesV5: v5nodes,
+				StaticNodes:      opts.StaticNodes,
+				TrustedNodes:     opts.TrustedNodes,
+				NetRestrict:      opts.NetRestrict,
+				NAT:              opts.NAT,
+				NoDial:           opts.NoDial,
+				Protocols:        opts.Protocols,
+			},
+		},
+		topic: discv5.Topic(opts.Topic),
+		done:  make(chan struct{}),
+	}
 }
 
 // Self returns self enode url.
 // Only available when server is running.
 func (s *Server) Self() *discover.Node {
-	if s.srv != nil {
-		return s.srv.Self()
-	}
-	return &discover.Node{IP: net.ParseIP("0.0.0.0")}
+	return s.srv.Self()
 }
 
 // Start start the server.
 func (s *Server) Start() error {
-	addr, err := net.ResolveUDPAddr("udp", s.ListenAddr)
-	if err != nil {
-		return err
-	}
-	// discv5 use discport-1 as peer port
-	discAddr := addr
-	discAddr.Port++
-	s.srv = &p2p.Server{
-		Config: p2p.Config{
-			Name:             s.Name,
-			PrivateKey:       s.PrivateKey,
-			MaxPeers:         s.MaxPeers,
-			MaxPendingPeers:  s.MaxPendingPeers,
-			NoDiscovery:      true,
-			DiscoveryV5:      !s.NoDiscovery,
-			DiscoveryV5Addr:  discAddr.String(),
-			ListenAddr:       s.ListenAddr,
-			BootstrapNodesV5: s.BootstrapNodes,
-			StaticNodes:      s.StaticNodes,
-			TrustedNodes:     s.TrustedNodes,
-			NetRestrict:      s.NetRestrict,
-			NAT:              s.NAT,
-			NoDial:           s.NoDial,
-			Protocols:        s.Protocols,
-		},
-	}
-
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	s.done = make(chan struct{})
-
 	s.startDiscoverLoop()
 	return nil
 }
 
 // Stop stop the server.
 func (s *Server) Stop() {
-	if s.srv != nil {
-		s.srv.Stop()
-	}
-	if s.done != nil {
-		close(s.done)
-	}
+	s.srv.Stop()
+	close(s.done)
 	s.runner.Wait()
-	s.srv = nil
-	s.done = nil
+}
+
+// AddPeer connects to the given node and maintains the connection until the
+// server is shut down. If the connection fails for any reason, the server will
+// attempt to reconnect the peer.
+func (s *Server) AddPeer(node *discover.Node) {
+	s.srv.AddPeer(node)
+}
+
+// RemovePeer disconnects from the given node
+func (s *Server) RemovePeer(node *discover.Node) {
+	s.srv.RemovePeer(node)
+}
+
+// NodeInfo gathers and returns a collection of metadata known about the host.
+func (s *Server) NodeInfo() *p2p.NodeInfo {
+	return s.srv.NodeInfo()
+}
+
+// PeerCount returns the number of connected peers.
+func (s *Server) PeerCount() int {
+	return s.srv.PeerCount()
+}
+
+// PeersInfo returns an array of metadata objects describing connected peers.
+func (s *Server) PeersInfo() []*p2p.PeerInfo {
+	return s.srv.PeersInfo()
 }
 
 func (s *Server) startDiscoverLoop() {
+	if s.srv.DiscV5 == nil {
+		return
+	}
+
 	s.runner.Go(func() {
-		s.srv.DiscV5.RegisterTopic(discv5.Topic(s.Topic), s.done)
+		s.srv.DiscV5.RegisterTopic(s.topic, s.done)
 	})
 
 	var (
@@ -181,12 +204,7 @@ func (s *Server) startDiscoverLoop() {
 					}
 				}
 			case node := <-discNodes:
-				fmt.Println(node.ID, node.UDP, node.TCP)
-				n, err := discover.ParseNode(node.String())
-				if err != nil {
-					continue
-				}
-				s.srv.AddPeer(n)
+				s.srv.AddPeer(discover.NewNode(discover.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 			case <-s.done:
 				return
 			}
@@ -194,6 +212,6 @@ func (s *Server) startDiscoverLoop() {
 	})
 
 	s.runner.Go(func() {
-		s.srv.DiscV5.SearchTopic(discv5.Topic(s.Topic), setPeriod, discNodes, discLookups)
+		s.srv.DiscV5.SearchTopic(s.topic, setPeriod, discNodes, discLookups)
 	})
 }
