@@ -83,6 +83,10 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 			return nil, nil, err
 		}
 
+		if err := blockIDGetter.Error(); err != nil {
+			return nil, nil, err
+		}
+
 		stateRoot, err := state.Stage().Commit()
 		if err != nil {
 			return nil, nil, err
