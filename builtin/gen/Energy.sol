@@ -89,31 +89,43 @@ contract Energy is Token {
         require(msg.sender == n().nativeGetContractMaster(_contractAddr));        
         _transfer(_contractAddr, _to, _amount);
         return true;
-    }
-  
-    ///@notice share `_credit` with `_to`. The shared credit can only be consumed, but never be transferred.
-    ///@param _from who offers the credit
-    ///@param _to who obtains the credit
-    ///@param _credit max credit can be consumed
-    ///@param _recoveryRate credit recovery rate in the unit of energy/second
-    ///@param _expiration a timestamp, if block time exceeded that, the credit will be unusable.
-    function share(address _from, address _to,uint256 _credit,uint256 _recoveryRate,uint64 _expiration) public {
+    }  
+    
+    function approveConsumption(address _contractAddr, address _caller,uint256 _credit,uint256 _recoveryRate,uint64 _expiration) public {
         // the origin can be contract itself or master
-        require(msg.sender == _from || msg.sender == n().nativeGetContractMaster(_from));
+        require(msg.sender == _contractAddr || msg.sender == n().nativeGetContractMaster(_contractAddr));
 
-        //the _to should not be contract
-        require(!isContract(_to));
+        require(isContract(_contractAddr));
+        require(!isContract(_caller));
 
-        n().nativeSetSharing(_from, _to, _credit, _recoveryRate, _expiration);
+        n().nativeApproveConsumption(_contractAddr, _caller, _credit, _recoveryRate, _expiration);
 
-        Share(_from, _to, _credit, _recoveryRate, _expiration);
+        ApproveConsumption(_contractAddr, _caller, _credit, _recoveryRate, _expiration);
     }
 
-    ///@param _from who offered sharing
-    ///@param _to who obtain the sharing
-    ///@return remained sharing credit
-    function getSharingRemained(address _from, address _to) public view returns (uint256) {
-        return n().nativeGetSharingRemained(_from, _to);        
+    function consumptionAllowance(address _contractAddr, address _caller) public view returns (uint256) {
+        return n().nativeGetConsumptionAllowance(_contractAddr, _caller);        
+    }
+
+    function setSupplier(address _contractAddr, address _supplier) public {
+        require(msg.sender == _contractAddr || msg.sender == n().nativeGetContractMaster(_contractAddr));
+        require(isContract(_contractAddr));
+
+        n().nativeSetSupplier(_contractAddr, _supplier, false);
+
+        SetSupplier(_contractAddr, _supplier);
+    }
+
+    function getSupplier(address _contractAddr) public view returns(address supplier, bool agreed) {
+        return n().nativeGetSupplier(_contractAddr);
+    }
+
+    function agreeToBeSupplier(address _contractAddr) public {
+        var (supplier, agreed) = n().nativeGetSupplier(_contractAddr);
+        require(!agreed && supplier == msg.sender);
+
+        n().nativeSetSupplier(_contractAddr, supplier, true);
+        AgreeToBeSupplier(_contractAddr, supplier);
     }
 
     function getContractMaster(address _contractAddr) public view returns(address) {
@@ -150,7 +162,9 @@ contract Energy is Token {
     
     
     event AdjustGrowthRate(uint256 rate);
-    event Share(address indexed from, address indexed to, uint256 credit, uint256 recoveryRate, uint64 expiration);
+    event ApproveConsumption(address indexed contractAddr, address indexed caller, uint256 credit, uint256 recoveryRate, uint64 expiration);    
+    event SetSupplier(address contractAddr, address supplier);
+    event AgreeToBeSupplier(address contractAddr, address supplier);
     event SetContractMaster(address indexed contractAddr, address oldMaster, address newMaster);
 }
 
@@ -166,10 +180,12 @@ contract EnergyNative {
 
     function nativeAdjustGrowthRate(uint256 rate) public;
 
-    function nativeSetSharing(address from, address to, uint256 credit, uint256 recoveryRate, uint64 expiration) public;
-    function nativeGetSharingRemained(address from, address to) public view returns(uint256);
+    function nativeApproveConsumption(address contractAddr, address caller, uint256 credit, uint256 recoveryRate, uint64 expiration) public;
+    function nativeGetConsumptionAllowance(address contractAddr, address caller) public view returns(uint256);
+
+    function nativeSetSupplier(address contractAddr, address supplier, bool agreed) public;
+    function nativeGetSupplier(address contractAddr) public view returns(address supplier, bool agreed);
 
     function nativeSetContractMaster(address contractAddr, address master) public;
     function nativeGetContractMaster(address contractAddr) public view returns(address);
-
 }

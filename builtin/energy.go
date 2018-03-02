@@ -20,19 +20,21 @@ var Energy = func() *energy {
 		sslot.New(c.Address, 104),
 		sslot.New(c.Address, 105),
 		sslot.New(c.Address, 106),
+		sslot.NewMap(c.Address, 107),
 	}
 }()
 
 type energy struct {
 	*contract
 
-	accounts    *sslot.Map
-	growthRates *sslot.Array
-	sharings    *sslot.Map
-	masters     *sslot.Map
-	tokenSupply *sslot.StorageSlot
-	totalSub    *sslot.StorageSlot
-	totalAdd    *sslot.StorageSlot
+	accounts             *sslot.Map
+	growthRates          *sslot.Array
+	consumptionApprovals *sslot.Map
+	masters              *sslot.Map
+	tokenSupply          *sslot.StorageSlot
+	totalSub             *sslot.StorageSlot
+	totalAdd             *sslot.StorageSlot
+	suppliers            *sslot.Map
 }
 
 var bigE18 = big.NewInt(1e18)
@@ -164,9 +166,9 @@ func (e *energy) AdjustGrowthRate(state *state.State, blockTime uint64, rate *bi
 	e.growthRates.Append(state, &energyGrowthRate{Rate: rate, Timestamp: blockTime})
 }
 
-func (e *energy) SetSharing(state *state.State, blockTime uint64, from thor.Address, to thor.Address,
+func (e *energy) ApproveConsumption(state *state.State, blockTime uint64, contractAddr thor.Address, caller thor.Address,
 	credit *big.Int, recoveryRate *big.Int, expiration uint64) {
-	e.sharings.ForKey([]interface{}{from, to}).Save(state, &energySharing{
+	e.consumptionApprovals.ForKey([]interface{}{contractAddr, caller}).Save(state, &energyConsumptionApproval{
 		Credit:       credit,
 		RecoveryRate: recoveryRate,
 		Expiration:   expiration,
@@ -175,37 +177,60 @@ func (e *energy) SetSharing(state *state.State, blockTime uint64, from thor.Addr
 	})
 }
 
-func (e *energy) GetSharingRemained(state *state.State, blockTime uint64, from thor.Address, to thor.Address) *big.Int {
-	var es energySharing
-	e.sharings.ForKey([]interface{}{from, to}).Load(state, &es)
-	return es.RemainedAt(blockTime)
+func (e *energy) GetConsumptionAllowance(state *state.State, blockTime uint64, contractAddr thor.Address, caller thor.Address) *big.Int {
+	var ca energyConsumptionApproval
+	e.consumptionApprovals.ForKey([]interface{}{contractAddr, caller}).Load(state, &ca)
+	return ca.RemainedAt(blockTime)
 }
 
-func (e *energy) consumeCallee(state *state.State, blockTime uint64, caller thor.Address, callee thor.Address, amount *big.Int) bool {
-	// try to consume callee's sharing
-	shareEntry := e.sharings.ForKey([]interface{}{callee, caller})
-	var share energySharing
-	shareEntry.Load(state, &share)
-	remainedSharing := share.RemainedAt(blockTime)
-	if remainedSharing.Cmp(amount) < 0 {
-		return false
-	}
-
-	if !e.SubBalance(state, blockTime, callee, amount) {
-		return false
-	}
-
-	share.Remained.Sub(remainedSharing, amount)
-	share.Timestamp = blockTime
-	shareEntry.Save(state, &share)
-	return true
+func (e *energy) SetSupplier(state *state.State, contractAddr thor.Address, supplier thor.Address, agreed bool) {
+	e.suppliers.ForKey(contractAddr).Save(state, energySupplier{
+		supplier,
+		agreed,
+	})
 }
 
-func (e *energy) Consume(state *state.State, blockTime uint64, caller thor.Address, callee thor.Address, amount *big.Int) (thor.Address, bool) {
-	if e.consumeCallee(state, blockTime, caller, callee, amount) {
-		return callee, true
+func (e *energy) GetSupplier(state *state.State, contractAddr thor.Address) (thor.Address, bool) {
+	var supplier energySupplier
+	e.suppliers.ForKey(contractAddr).Load(state, &supplier)
+	return supplier.Address, supplier.Agreed
+}
+
+func (e *energy) consumeContract(state *state.State, blockTime uint64, contractAddr thor.Address, caller thor.Address, amount *big.Int) (payer thor.Address, ok bool) {
+	entry := e.consumptionApprovals.ForKey([]interface{}{contractAddr, caller})
+	var ca energyConsumptionApproval
+	entry.Load(state, &ca)
+	remained := ca.RemainedAt(blockTime)
+	if remained.Cmp(amount) < 0 {
+		return thor.Address{}, false
 	}
 
+	defer func() {
+		if ok {
+			ca.Remained.Sub(remained, amount)
+			ca.Timestamp = blockTime
+			entry.Save(state, &ca)
+		}
+	}()
+
+	var supplier energySupplier
+	e.suppliers.ForKey(contractAddr).Load(state, &supplier)
+	if supplier.Agreed {
+		if e.SubBalance(state, blockTime, supplier.Address, amount) {
+			return supplier.Address, true
+		}
+	}
+
+	if e.SubBalance(state, blockTime, contractAddr, amount) {
+		return contractAddr, true
+	}
+	return thor.Address{}, false
+}
+
+func (e *energy) Consume(state *state.State, blockTime uint64, contractAddr thor.Address, caller thor.Address, amount *big.Int) (thor.Address, bool) {
+	if payer, ok := e.consumeContract(state, blockTime, contractAddr, caller, amount); ok {
+		return payer, true
+	}
 	if e.SubBalance(state, blockTime, caller, amount) {
 		return caller, true
 	}
