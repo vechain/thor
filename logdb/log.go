@@ -6,6 +6,21 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+//DBLog format with raw type
+type DBLog struct {
+	blockID     string
+	blockNumber uint32
+	txID        string
+	txOrigin    string
+	address     string
+	data        string
+	topic0      string
+	topic1      string
+	topic2      string
+	topic3      string
+	topic4      string
+}
+
 //Log format tx.Log to store in db
 type Log struct {
 	blockID     thor.Hash
@@ -58,51 +73,50 @@ func NewLog(blockID thor.Hash, blockNumber uint32, txID thor.Hash, txOrigin thor
 	return l
 }
 
-//CreateLog create a log with db params
-func CreateLog(blockID string, blockNumber uint32, txID string, txOrigin string, address string, data string, topic0 string, topic1 string, topic2 string, topic3 string, topic4 string) (*Log, error) {
-	bid, err := thor.ParseHash(blockID)
+func (dbLog *DBLog) toLog() (*Log, error) {
+	bid, err := thor.ParseHash(dbLog.blockID)
 	if err != nil {
 		return nil, err
 	}
-	txid, err := thor.ParseHash(txID)
+	txid, err := thor.ParseHash(dbLog.txID)
 	if err != nil {
 		return nil, err
 	}
-	txori, err := thor.ParseAddress(txOrigin)
+	txori, err := thor.ParseAddress(dbLog.txOrigin)
 	if err != nil {
 		return nil, err
 	}
-	addr, err := thor.ParseAddress(address)
+	addr, err := thor.ParseAddress(dbLog.address)
 	if err != nil {
 		return nil, err
 	}
-	t0, err := thor.ParseHash(topic0)
+	t0, err := thor.ParseHash(dbLog.topic0)
 	if err != nil {
 		return nil, err
 	}
-	t1, err := thor.ParseHash(topic1)
+	t1, err := thor.ParseHash(dbLog.topic1)
 	if err != nil {
 		return nil, err
 	}
-	t2, err := thor.ParseHash(topic2)
+	t2, err := thor.ParseHash(dbLog.topic2)
 	if err != nil {
 		return nil, err
 	}
-	t3, err := thor.ParseHash(topic3)
+	t3, err := thor.ParseHash(dbLog.topic3)
 	if err != nil {
 		return nil, err
 	}
-	t4, err := thor.ParseHash(topic4)
+	t4, err := thor.ParseHash(dbLog.topic4)
 	if err != nil {
 		return nil, err
 	}
 	return &Log{
 		blockID:     bid,
-		blockNumber: blockNumber,
+		blockNumber: dbLog.blockNumber,
 		txID:        txid,
 		txOrigin:    txori,
 		address:     addr,
-		data:        []byte(data),
+		data:        []byte(dbLog.data),
 		topic0:      t0,
 		topic1:      t1,
 		topic2:      t2,
@@ -110,6 +124,7 @@ func CreateLog(blockID string, blockNumber uint32, txID string, txOrigin string,
 		topic4:      t4,
 	}, nil
 }
+
 func (log *Log) String() string {
 	return fmt.Sprintf(`
 		Log(

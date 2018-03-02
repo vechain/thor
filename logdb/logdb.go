@@ -71,7 +71,14 @@ func (db *DB) Filter(options []*FilterOption) ([]*Log, error) {
 	stmt := "select * from log where 1 "
 	if len(options) != 0 {
 		for _, op := range options {
-			stmt += fmt.Sprintf(" or (blockNumber >= %v and blockNumber <= %v and address = %v and topic0 = %v and topic1 = %v and topic2 = %v and topic3 = %v and topic4 = %v ) ", op.FromBlock, op.ToBlock, op.Address, op.Topics[0], op.Topics[1], op.Topics[2], op.Topics[3], op.Topics[4])
+			stmt += fmt.Sprintf(" or (blockNumber >= %v and blockNumber <= %v and address = %v and topic0 = %v and topic1 = %v and topic2 = %v and topic3 = %v and topic4 = %v ) ", op.FromBlock,
+				op.ToBlock,
+				op.Address,
+				op.Topics[0],
+				op.Topics[1],
+				op.Topics[2],
+				op.Topics[3],
+				op.Topics[4])
 		}
 	}
 	return db.Query(stmt)
@@ -104,22 +111,23 @@ func (db *DB) Query(stmt string) ([]*Log, error) {
 
 	var logs []*Log
 	for rows.Next() {
-		var blockID string
-		var blockNumber uint32
-		var txID string
-		var txOrigin string
-		var address string
-		var data string
-		var topic0 string
-		var topic1 string
-		var topic2 string
-		var topic3 string
-		var topic4 string
-		err = rows.Scan(&blockID, &blockNumber, &txID, &txOrigin, &address, &data, &topic0, &topic1, &topic2, &topic3, &topic4)
+		dbLog := &DBLog{}
+		err = rows.Scan(&dbLog.blockID,
+			&dbLog.blockNumber,
+			&dbLog.txID,
+			&dbLog.txOrigin,
+			&dbLog.address,
+			&dbLog.data,
+			&dbLog.topic0,
+			&dbLog.topic1,
+			&dbLog.topic2,
+			&dbLog.topic3,
+			&dbLog.topic4)
 		if err != nil {
 			return nil, err
 		}
-		log, err := CreateLog(blockID, blockNumber, txID, txOrigin, address, data, topic0, topic1, topic2, topic3, topic4)
+
+		log, err := dbLog.toLog()
 		if err != nil {
 			return nil, err
 		}
