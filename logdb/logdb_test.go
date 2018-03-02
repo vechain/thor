@@ -30,14 +30,28 @@ func TestLogDB(t *testing.T) {
 	}
 
 	var logs []*logdb.Log
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 	}
-	err = db.Store(logs)
+	err = db.Insert(logs)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	los, err := db.Filter([]*logdb.FilterOption{{
+		FromBlock: 0,
+		ToBlock:   1,
+		Address:   thor.BytesToAddress([]byte("addr")),
+		Topics:    [5]thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1")), {}, {}, {}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range los {
+		fmt.Println(l)
+	}
+
 }
 
 func home() (string, error) {
