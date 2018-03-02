@@ -83,35 +83,35 @@ func TestEnergyShare(t *testing.T) {
 	st, _ := state.New(thor.Hash{}, kv)
 
 	caller := thor.BytesToAddress([]byte("caller"))
-	callee := thor.BytesToAddress([]byte("callee"))
+	contract := thor.BytesToAddress([]byte("contract"))
 	blockTime1 := uint64(1000)
 	bal := big.NewInt(1e18)
 	credit := big.NewInt(1e18)
 	recRate := big.NewInt(100)
 	exp := uint64(2000)
 
-	Energy.AddBalance(st, blockTime1, callee, bal)
-	Energy.SetSharing(st, blockTime1, callee, caller, credit, recRate, exp)
+	Energy.AddBalance(st, blockTime1, contract, bal)
+	Energy.ApproveConsumption(st, blockTime1, contract, caller, credit, recRate, exp)
 
-	remained := Energy.GetSharingRemained(st, blockTime1, callee, caller)
+	remained := Energy.GetConsumptionAllowance(st, blockTime1, contract, caller)
 	assert.Equal(t, credit, remained)
 
 	consumed := big.NewInt(1e9)
-	payer, ok := Energy.Consume(st, blockTime1, caller, callee, consumed)
-	assert.Equal(t, callee, payer)
+	payer, ok := Energy.Consume(st, blockTime1, contract, caller, consumed)
+	assert.Equal(t, contract, payer)
 	assert.True(t, ok)
 
-	remained = Energy.GetSharingRemained(st, blockTime1, callee, caller)
+	remained = Energy.GetConsumptionAllowance(st, blockTime1, contract, caller)
 	assert.Equal(t, new(big.Int).Sub(credit, consumed), remained)
 
 	blockTime2 := uint64(1500)
-	remained = Energy.GetSharingRemained(st, blockTime2, callee, caller)
+	remained = Energy.GetConsumptionAllowance(st, blockTime2, contract, caller)
 	x := new(big.Int).SetUint64(blockTime2 - blockTime1)
 	x.Mul(x, recRate)
 	x.Add(x, credit)
 	x.Sub(x, consumed)
 	assert.Equal(t, x, remained)
 
-	remained = Energy.GetSharingRemained(st, math.MaxUint64, callee, caller)
+	remained = Energy.GetConsumptionAllowance(st, math.MaxUint64, contract, caller)
 	assert.Equal(t, &big.Int{}, remained)
 }

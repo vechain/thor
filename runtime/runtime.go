@@ -155,7 +155,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyPrepayed := new(big.Int).SetUint64(gas)
 	energyPrepayed.Mul(energyPrepayed, gasPrice)
 
-	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, origin, commonTo(clauses), energyPrepayed)
+	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, commonTo(clauses), origin, energyPrepayed)
 	if !ok {
 		return nil, nil, errors.New("insufficient energy")
 	}

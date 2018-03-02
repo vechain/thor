@@ -166,33 +166,56 @@ var nativeCalls = map[thor.Address]struct {
 					return nil, nil
 				},
 			},
-			"nativeSetSharing": {
+			"nativeApproveConsumption": {
 				Gas:            ethparams.SstoreSetGas,
 				RequiredCaller: &Energy.Address,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
-						From         common.Address
-						To           common.Address
+						ContractAddr common.Address
+						Caller       common.Address
 						Credit       *big.Int
 						RecoveryRate *big.Int
 						Expiration   uint64
 					}
 					env.Args(&args)
-					Energy.SetSharing(env.State, env.VMContext.Time,
-						thor.Address(args.From), thor.Address(args.To), args.Credit, args.RecoveryRate, args.Expiration)
+					Energy.ApproveConsumption(env.State, env.VMContext.Time,
+						thor.Address(args.ContractAddr), thor.Address(args.Caller), args.Credit, args.RecoveryRate, args.Expiration)
 					return nil, nil
 				},
 			},
-			"nativeGetSharingRemained": {
+			"nativeGetConsumptionAllowance": {
 				Gas: ethparams.SloadGas,
 				Proc: func(env *native.Env) ([]interface{}, error) {
 					var args struct {
-						From common.Address
-						To   common.Address
+						ContractAddr common.Address
+						Caller       common.Address
 					}
 					env.Args(&args)
-					remained := Energy.GetSharingRemained(env.State, env.VMContext.Time, thor.Address(args.From), thor.Address(args.To))
+					remained := Energy.GetConsumptionAllowance(env.State, env.VMContext.Time,
+						thor.Address(args.ContractAddr), thor.Address(args.Caller))
 					return []interface{}{remained}, nil
+				},
+			},
+			"nativeSetSupplier": {
+				Gas: ethparams.SstoreSetGas,
+				Proc: func(env *native.Env) ([]interface{}, error) {
+					var args struct {
+						ContractAddr common.Address
+						Supplier     common.Address
+						Agreed       bool
+					}
+					env.Args(&args)
+					Energy.SetSupplier(env.State, thor.Address(args.ContractAddr), thor.Address(args.Supplier), args.Agreed)
+					return nil, nil
+				},
+			},
+			"nativeGetSupplier": {
+				Gas: ethparams.SloadGas,
+				Proc: func(env *native.Env) ([]interface{}, error) {
+					var contractAddr common.Address
+					env.Args(&contractAddr)
+					supplier, ok := Energy.GetSupplier(env.State, thor.Address(contractAddr))
+					return []interface{}{supplier, ok}, nil
 				},
 			},
 			"nativeSetContractMaster": {

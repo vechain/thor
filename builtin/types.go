@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 type (
@@ -24,12 +25,17 @@ type (
 		Timestamp uint64
 	}
 
-	energySharing struct {
+	energyConsumptionApproval struct {
 		Credit       *big.Int
 		RecoveryRate *big.Int
 		Expiration   uint64
 		Remained     *big.Int
 		Timestamp    uint64
+	}
+
+	energySupplier struct {
+		Address thor.Address
+		Agreed  bool
 	}
 )
 
@@ -43,8 +49,11 @@ var (
 	_ state.StorageEncoder = (*energyGrowthRate)(nil)
 	_ state.StorageDecoder = (*energyGrowthRate)(nil)
 
-	_ state.StorageEncoder = (*energySharing)(nil)
-	_ state.StorageDecoder = (*energySharing)(nil)
+	_ state.StorageEncoder = (*energyConsumptionApproval)(nil)
+	_ state.StorageDecoder = (*energyConsumptionApproval)(nil)
+
+	_ state.StorageEncoder = (*energySupplier)(nil)
+	_ state.StorageDecoder = (*energySupplier)(nil)
 )
 
 func (s *stgProposer) Encode() ([]byte, error) {
@@ -100,30 +109,47 @@ func (egr *energyGrowthRate) Decode(data []byte) error {
 
 ///
 
-func (es *energySharing) Encode() ([]byte, error) {
-	if es.Credit.Sign() == 0 {
+func (eca *energyConsumptionApproval) Encode() ([]byte, error) {
+	if eca.Credit.Sign() == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(eca)
+}
+
+func (eca *energyConsumptionApproval) Decode(data []byte) error {
+	if len(data) == 0 {
+		*eca = energyConsumptionApproval{&big.Int{}, &big.Int{}, 0, &big.Int{}, 0}
+		return nil
+	}
+	return rlp.DecodeBytes(data, eca)
+}
+
+func (eca *energyConsumptionApproval) RemainedAt(blockTime uint64) *big.Int {
+	if blockTime >= eca.Expiration {
+		return &big.Int{}
+	}
+
+	x := new(big.Int).SetUint64(blockTime - eca.Timestamp)
+	x.Mul(x, eca.RecoveryRate)
+	x.Add(x, eca.Remained)
+	if x.Cmp(eca.Credit) < 0 {
+		return x
+	}
+	return eca.Credit
+}
+
+///
+func (es *energySupplier) Encode() ([]byte, error) {
+	if !es.Agreed && es.Address.IsZero() {
 		return nil, nil
 	}
 	return rlp.EncodeToBytes(es)
 }
 
-func (es *energySharing) Decode(data []byte) error {
+func (es *energySupplier) Decode(data []byte) error {
 	if len(data) == 0 {
-		*es = energySharing{&big.Int{}, &big.Int{}, 0, &big.Int{}, 0}
+		*es = energySupplier{}
 		return nil
 	}
 	return rlp.DecodeBytes(data, es)
-}
-func (es *energySharing) RemainedAt(blockTime uint64) *big.Int {
-	if blockTime >= es.Expiration {
-		return &big.Int{}
-	}
-
-	x := new(big.Int).SetUint64(blockTime - es.Timestamp)
-	x.Mul(x, es.RecoveryRate)
-	x.Add(x, es.Remained)
-	if x.Cmp(es.Credit) < 0 {
-		return x
-	}
-	return es.Credit
 }
