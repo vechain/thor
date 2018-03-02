@@ -1,6 +1,7 @@
 package logdb
 
 import (
+	"fmt"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -55,4 +56,82 @@ func NewLog(blockID thor.Hash, blockNumber uint32, txID thor.Hash, txOrigin thor
 		}
 	}
 	return l
+}
+
+//CreateLog create a log with db params
+func CreateLog(blockID string, blockNumber uint32, txID string, txOrigin string, address string, data string, topic0 string, topic1 string, topic2 string, topic3 string, topic4 string) (*Log, error) {
+	bid, err := thor.ParseHash(blockID)
+	if err != nil {
+		return nil, err
+	}
+	txid, err := thor.ParseHash(txID)
+	if err != nil {
+		return nil, err
+	}
+	txori, err := thor.ParseAddress(txOrigin)
+	if err != nil {
+		return nil, err
+	}
+	addr, err := thor.ParseAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	t0, err := thor.ParseHash(topic0)
+	if err != nil {
+		return nil, err
+	}
+	t1, err := thor.ParseHash(topic1)
+	if err != nil {
+		return nil, err
+	}
+	t2, err := thor.ParseHash(topic2)
+	if err != nil {
+		return nil, err
+	}
+	t3, err := thor.ParseHash(topic3)
+	if err != nil {
+		return nil, err
+	}
+	t4, err := thor.ParseHash(topic4)
+	if err != nil {
+		return nil, err
+	}
+	return &Log{
+		blockID:     bid,
+		blockNumber: blockNumber,
+		txID:        txid,
+		txOrigin:    txori,
+		address:     addr,
+		data:        []byte(data),
+		topic0:      t0,
+		topic1:      t1,
+		topic2:      t2,
+		topic3:      t3,
+		topic4:      t4,
+	}, nil
+}
+func (log *Log) String() string {
+	return fmt.Sprintf(`
+		Log(
+			blockID:     %v,
+			blockNumber: %v,
+			txID:        %v,
+			txOrigin:    %v,
+			address:     %v,
+			data:        %v,
+			topic0:      %v,
+			topic1:      %v,
+			topic2:      %v,
+			topic3:      %v,
+			topic4:      %v)`, log.blockID.String(),
+		log.blockNumber,
+		log.txID.String(),
+		log.txOrigin.String(),
+		log.address.String(),
+		[]byte(log.data),
+		log.topic0.String(),
+		log.topic1.String(),
+		log.topic2.String(),
+		log.topic3.String(),
+		log.topic4.String())
 }
