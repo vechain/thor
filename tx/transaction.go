@@ -1,6 +1,7 @@
 package tx
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -8,8 +9,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/vm/evm"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/params"
@@ -17,6 +16,7 @@ import (
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vm/evm"
 )
 
 const signerCacheSize = 1024
@@ -272,6 +272,25 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		}
 	}
 	return total, nil
+}
+
+// MeasureDelay measure tx delay count in blocks, according to head block number.
+func (t *Transaction) MeasureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Hash) uint32 {
+	ref := t.BlockRef()
+	refNum := ref.Number()
+	if refNum >= headBlockNum {
+		return math.MaxUint32
+	}
+
+	if headBlockNum-refNum > thor.MaxTxWorkDelay {
+		return math.MaxUint32
+	}
+
+	id := getBlockID(refNum)
+	if bytes.HasPrefix(id[:], ref[:]) {
+		return headBlockNum - refNum
+	}
+	return math.MaxUint32
 }
 
 func (t *Transaction) String() string {
