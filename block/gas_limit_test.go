@@ -1,10 +1,11 @@
-package thor_test
+package block_test
 
 import (
 	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
 
@@ -24,7 +25,7 @@ func TestGasLimit_IsValid(t *testing.T) {
 		{thor.MinGasLimit*2 - thor.MinGasLimit/thor.GasLimitBoundDivisor, thor.MinGasLimit * 2, true},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, thor.GasLimit(tt.gl).IsValid(tt.parentGL))
+		assert.Equal(t, tt.want, block.GasLimit(tt.gl).IsValid(tt.parentGL))
 	}
 }
 
@@ -42,7 +43,7 @@ func TestGasLimit_Adjust(t *testing.T) {
 		{thor.MinGasLimit * 2, -int64(thor.MinGasLimit), thor.MinGasLimit*2 - (thor.MinGasLimit*2)/thor.GasLimitBoundDivisor},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, thor.GasLimit(tt.gl).Adjust(tt.delta))
+		assert.Equal(t, tt.want, block.GasLimit(tt.gl).Adjust(tt.delta))
 	}
 }
 
@@ -58,6 +59,6 @@ func TestGasLimit_Qualify(t *testing.T) {
 		{thor.MinGasLimit * 2, thor.MinGasLimit, thor.MinGasLimit + thor.MinGasLimit/thor.GasLimitBoundDivisor},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, thor.GasLimit(tt.gl).Qualify(tt.parentGL))
+		assert.Equal(t, tt.want, block.GasLimit(tt.gl).Qualify(tt.parentGL))
 	}
 }
