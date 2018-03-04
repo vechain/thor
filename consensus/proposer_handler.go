@@ -23,13 +23,13 @@ func newProposerHandler(
 	preHeader *block.Header,
 ) *proposerHandler {
 
-	preHash := preHeader.StateRoot()
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		Chain.NewBlockIDGetter(chain, preHash).GetID)
+		nil, //safe here
+	)
 
 	return &proposerHandler{
 		rt:        rt,

@@ -389,3 +389,8 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 func (c *Chain) IsNotFound(err error) bool {
 	return err == errNotFound || c.kv.IsNotFound(err)
 }
+
+// NewTraverser create a block traverser to access blocks on the chain defined by headID.
+func (c *Chain) NewTraverser(headID thor.Hash) *Traverser {
+	return &Traverser{headID, c, nil}
+}

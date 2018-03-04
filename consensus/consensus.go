@@ -5,10 +5,10 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 // Consensus check whether the block is verified,
@@ -63,20 +63,22 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header, state *sta
 		return err
 	}
 
+	traverser := c.chain.NewTraverser(preHeader.ID())
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		chain.NewBlockIDGetter(c.chain, preHeader.StateRoot()).GetID)
+		func(num uint32) thor.Hash {
+			return traverser.Get(num).ID()
+		})
 
-	totalReward, err := newBlockProcessor(rt, c.chain).process(blk, preHeader)
-	if err != nil {
+	if err := newBlockProcessor(rt, c.chain).process(blk, preHeader); err != nil {
 		return err
 	}
-
-	builtin.Energy.AddBalance(state, header.Timestamp(), header.Beneficiary(), totalReward)
-
+	if err := traverser.Error(); err != nil {
+		return err
+	}
 	return checkState(state, header)
 }
 

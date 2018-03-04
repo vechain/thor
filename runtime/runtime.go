@@ -149,13 +149,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, errors.New("intrinsic gas exceeds provided gas")
 	}
 
-	gasPrice := tx.GasPrice()
+	baseGasPrice := builtin.Params.Get(rt.state, thor.KeyBaseGasPrice)
+	gasPrice := tx.GasPrice(baseGasPrice)
+
+	prepayedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice)
+
 	clauses := tx.Clauses()
-
-	energyPrepayed := new(big.Int).SetUint64(gas)
-	energyPrepayed.Mul(energyPrepayed, gasPrice)
-
-	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, commonTo(clauses), origin, energyPrepayed)
+	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, commonTo(clauses), origin, prepayedEnergy)
 	if !ok {
 		return nil, nil, errors.New("insufficient energy")
 	}
@@ -201,13 +201,22 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	}
 
 	receipt.GasUsed = gas - leftOverGas
+	receipt.GasPayer = energyPayer
 
 	// entergy to return = leftover gas * gas price
-	energyToReturn := new(big.Int).SetUint64(leftOverGas)
-	energyToReturn.Mul(energyToReturn, gasPrice)
+	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), gasPrice)
 
 	// return overpayed energy to payer
 	builtin.Energy.AddBalance(rt.state, rt.blockTime, energyPayer, energyToReturn)
+
+	// reward
+	rewardRatio := builtin.Params.Get(rt.state, thor.KeyRewardRatio)
+	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.blockNumber-1, rt.getBlockID)
+	reward := new(big.Int).SetUint64(receipt.GasUsed)
+	reward.Mul(reward, overallGasPrice)
+	reward.Mul(reward, rewardRatio)
+	reward.Div(reward, big.NewInt(1e18))
+	builtin.Energy.AddBalance(rt.state, rt.blockTime, rt.blockBeneficiary, reward)
 
 	return receipt, vmOutputs, nil
 }
