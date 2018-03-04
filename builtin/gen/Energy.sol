@@ -16,7 +16,7 @@ contract Energy is Token {
 
     ///@return ERC20 token name
     function name() public pure returns (string) {
-        return "Thor Power";
+        return "VeThor";
     }
 
     ///@return ERC20 token decimals
@@ -26,7 +26,7 @@ contract Energy is Token {
 
     ///@return ERC20 token symbol
     function symbol() public pure returns (string) {
-        return "THOR";
+        return "VTHO";
     }
 
     ///@return ERC20 token total supply
