@@ -7,6 +7,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -51,11 +52,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 		return 0, nil, errors.Wrap(err, "state")
 	}
 
-	blockIDGetter := chain.NewBlockIDGetter(p.chain, parent.ID())
-
-	// the runtime for PoA always use parent block env
-	poaRT := runtime.New(state, thor.Address{}, parent.Number(), parent.Timestamp(), parent.GasLimit(), blockIDGetter.GetID)
-	targetTime, score, err := Schedule(poaRT, p.proposer, now)
+	targetTime, score, err := p.schedule(state, parent, now)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -64,7 +61,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 
 		var gasLimit uint64
 		if p.targetGasLimit != 0 {
-			gasLimit = thor.GasLimit(p.targetGasLimit).Qualify(parent.GasLimit())
+			gasLimit = block.GasLimit(p.targetGasLimit).Qualify(parent.GasLimit())
 		} else {
 			gasLimit = parent.GasLimit()
 		}
@@ -76,14 +73,17 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 			Timestamp(targetTime).
 			TotalScore(parent.TotalScore() + score)
 
-		rt := runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, blockIDGetter.GetID)
+		traverser := p.chain.NewTraverser(parent.ID())
+		rt := runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Hash {
+			return traverser.Get(num).ID()
+		})
 
 		receipts, err := p.pack(builder, rt, parent, txIter)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if err := blockIDGetter.Error(); err != nil {
+		if err := traverser.Error(); err != nil {
 			return nil, nil, err
 		}
 
@@ -96,6 +96,32 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack Pack
 			ReceiptsRoot(receipts.RootHash()).
 			StateRoot(stateRoot).Build(), receipts, nil
 	}, nil
+}
+
+func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) (
+	uint64, // when
+	uint64, // score
+	error,
+) {
+	// use parent block as env
+	rt := runtime.New(state, thor.Address{}, parent.Number(), parent.Timestamp(), parent.GasLimit(), nil /*nil is safe here*/)
+	proposers := builtin.Authority.All(rt.State())
+
+	// calc the time when it's turn to produce block
+	sched, err := poa.NewScheduler(p.proposer, proposers, rt.BlockNumber(), rt.BlockTime())
+	if err != nil {
+		return 0, 0, err
+	}
+
+	newBlockTime := sched.Schedule(now)
+
+	updates, score := sched.Updates(newBlockTime)
+
+	for _, u := range updates {
+		builtin.Authority.Update(rt.State(), u.Address, u.Status)
+	}
+
+	return newBlockTime, score, nil
 }
 
 func (p *Packer) txExists(txID thor.Hash, parentID thor.Hash, processed map[thor.Hash]interface{}) (bool, error) {
@@ -127,15 +153,7 @@ func (p *Packer) pack(
 	var receipts tx.Receipts
 	var totalGasUsed uint64
 
-	totalReward := &big.Int{}
-
 	processed := make(map[thor.Hash]interface{})
-
-	rewardRatio := builtin.Params.Get(rt.State(), thor.KeyRewardRatio)
-	baseGasPrice := builtin.Params.Get(rt.State(), thor.KeyBaseGasPrice)
-	lowGasPrice := new(big.Int).Div(baseGasPrice, big2)
-	highGasPrice := new(big.Int).Mul(baseGasPrice, big2)
-
 	for txIter.HasNext() {
 		tx := txIter.Next()
 
@@ -150,11 +168,6 @@ func (p *Packer) pack(
 
 		blockRef := tx.BlockRef()
 		if blockRef.Number() > parent.Number() {
-			continue
-		}
-
-		gasPrice := tx.GasPrice()
-		if gasPrice.Cmp(highGasPrice) > 0 || gasPrice.Cmp(lowGasPrice) < 0 {
 			continue
 		}
 
@@ -184,11 +197,6 @@ func (p *Packer) pack(
 			}
 		}
 
-		delay, err := MeasureTxDelay(tx.BlockRef(), parent, p.chain)
-		if err != nil {
-			return nil, err
-		}
-
 		cp := rt.State().NewCheckpoint()
 		receipt, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
@@ -201,17 +209,12 @@ func (p *Packer) pack(
 		receipts = append(receipts, receipt)
 		totalGasUsed += receipt.GasUsed
 
-		reward := CalcReward(tx, receipt.GasUsed, rewardRatio, rt.BlockTime(), delay)
-		totalReward.Add(totalReward, reward)
-
 		processed[tx.ID()] = nil
 		builder.Transaction(tx)
 		txIter.OnProcessed(tx.ID(), nil)
 	}
 
 	builder.GasUsed(totalGasUsed)
-
-	builtin.Energy.AddBalance(rt.State(), rt.BlockTime(), p.beneficiary, totalReward)
 
 	return receipts, nil
 }

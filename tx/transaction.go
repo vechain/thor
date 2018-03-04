@@ -23,13 +23,7 @@ const signerCacheSize = 1024
 
 var (
 	signerCache = cache.NewLRU(signerCacheSize)
-	maxUint256  = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
-	invalidTxID = func() (h thor.Hash) {
-		for i := range h {
-			h[i] = 0xff
-		}
-		return
-	}()
+	invalidTxID = thor.BytesToHash(math.MaxBig256.Bytes())
 )
 
 // Transaction is an immutable tx type.
@@ -49,7 +43,7 @@ type body struct {
 	ChainTag     byte
 	BlockRef     uint64
 	Clauses      []*Clause
-	GasPrice     *big.Int
+	GasPriceCoef uint8
 	Gas          uint64
 	Nonce        uint64
 	DependsOn    *thor.Hash `rlp:"nil"`
@@ -94,7 +88,7 @@ func (t *Transaction) makeID(signer thor.Address) (id thor.Hash) {
 
 func idToWork(id thor.Hash) *big.Int {
 	result := new(big.Int).SetBytes(id[:])
-	return result.Div(maxUint256, result)
+	return result.Div(math.MaxBig256, result)
 }
 
 // ProvedWork returns proved work of this tx.
@@ -109,8 +103,7 @@ func (t *Transaction) ProvedWork() *big.Int {
 
 // EvaluateWork try to compute work when tx signer assumed.
 func (t *Transaction) EvaluateWork(signer thor.Address) *big.Int {
-	result := new(big.Int).SetBytes(t.makeID(signer).Bytes())
-	return result.Div(maxUint256, result)
+	return idToWork(t.makeID(signer))
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -125,7 +118,7 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 		t.body.ChainTag,
 		t.body.BlockRef,
 		t.body.Clauses,
-		t.body.GasPrice,
+		t.body.GasPriceCoef,
 		t.body.Gas,
 		t.body.Nonce,
 		t.body.DependsOn,
@@ -135,9 +128,10 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 	return
 }
 
-// GasPrice returns gas price.
-func (t *Transaction) GasPrice() *big.Int {
-	return new(big.Int).Set(t.body.GasPrice)
+// GasPriceCoef returns gas price coef.
+// gas price = bgp + bgp * gpc / 255.
+func (t *Transaction) GasPriceCoef() uint8 {
+	return t.body.GasPriceCoef
 }
 
 // Gas returns gas provision for this tx.
@@ -274,8 +268,37 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 	return total, nil
 }
 
-// MeasureDelay measure tx delay count in blocks, according to head block number.
-func (t *Transaction) MeasureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Hash) uint32 {
+// GasPrice returns gas price.
+// gasPrice = baseGasPrice + baseGasPrice * gasPriceCoef / 255
+func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
+	x := big.NewInt(int64(t.body.GasPriceCoef))
+	x.Mul(x, baseGasPrice)
+	x.Div(x, big.NewInt(int64(math.MaxUint8)))
+	return x.Add(x, baseGasPrice)
+}
+
+// OverallGasPrice calculate overall gas price.
+// overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
+func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Hash) *big.Int {
+	gasPrice := t.GasPrice(baseGasPrice)
+	if t.measureDelay(headBlockNum, getBlockID) > thor.MaxTxWorkDelay {
+		return gasPrice
+	}
+
+	work := t.ProvedWork()
+	wgas := workToGas(work, headBlockNum)
+	if wgas > t.body.Gas {
+		wgas = t.body.Gas
+	}
+
+	x := new(big.Int).SetUint64(wgas)
+	x.Mul(x, baseGasPrice)
+	x.Div(x, new(big.Int).SetUint64(t.body.Gas))
+	return x.Add(x, gasPrice)
+}
+
+// measureDelay measure tx delay count in blocks, according to head block number.
+func (t *Transaction) measureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Hash) uint32 {
 	ref := t.BlockRef()
 	refNum := ref.Number()
 	if refNum >= headBlockNum {
@@ -317,14 +340,14 @@ func (t *Transaction) String() string {
 	Tx(%v, %v)
 	From:			%v
 	Clauses:		%v
-	GasPrice:		%v
+	GasPriceCoef:	%v
 	Gas:			%v
 	ChainTag:		%v
 	BlockRef:		%v-%x
 	DependsOn:		%v
 	ReservedBits:	%v
 	Signature:		0x%x
-`, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPrice, t.body.Gas,
+`, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
 		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.ReservedBits, t.body.Signature)
 }
 

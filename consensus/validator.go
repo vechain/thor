@@ -37,7 +37,7 @@ func (v *validator) validate(nowTime uint64) (*block.Header, error) {
 		return nil, errTimestamp
 	case header.Timestamp() > nowTime+thor.BlockInterval:
 		return nil, errDelay
-	case !thor.GasLimit(gasLimit).IsValid(preHeader.GasLimit()):
+	case !block.GasLimit(gasLimit).IsValid(preHeader.GasLimit()):
 		return nil, errGasLimit
 	case header.GasUsed() > gasLimit:
 		return nil, errGasUsed
