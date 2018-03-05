@@ -1,8 +1,9 @@
 package packer
 
 import (
-	"math/big"
+	"crypto/ecdsa"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
@@ -16,86 +17,121 @@ import (
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
-	proposer     thor.Address
-	beneficiary  thor.Address
-	chain        *chain.Chain
-	stateCreator *state.Creator
-
+	chain          *chain.Chain
+	stateCreator   *state.Creator
+	proposer       thor.Address
+	beneficiary    thor.Address
 	targetGasLimit uint64
 }
 
-var big2 = big.NewInt(2)
-
 // New create a new Packer instance.
 func New(
-	proposer thor.Address,
-	beneficiary thor.Address,
 	chain *chain.Chain,
-	stateCreator *state.Creator) *Packer {
+	stateCreator *state.Creator,
+	proposer thor.Address,
+	beneficiary thor.Address) *Packer {
 
 	return &Packer{
-		proposer,
-		beneficiary,
 		chain,
 		stateCreator,
+		proposer,
+		beneficiary,
 		0,
 	}
 }
 
-// PackFn function to do packing things.
-type PackFn func(TxIterator) (*block.Block, tx.Receipts, error)
+// Adopt adopt transaction into new block.
+type Adopt func(tx *tx.Transaction) error
+
+// Commit generate new block.
+type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error)
+
+type context struct {
+	parent       *block.Header
+	receipts     tx.Receipts
+	totalGasUsed uint64
+	processed    map[thor.Hash]interface{}
+	rt           *runtime.Runtime
+}
 
 // Prepare calculates the time to pack and do necessary things before pack.
-func (p *Packer) Prepare(parent *block.Header, now uint64) (ts uint64, pack PackFn, err error) {
+func (p *Packer) Prepare(now uint64) (
+	uint64, // target time
+	Adopt,
+	Commit,
+	error) {
+
+	bestBlock, err := p.chain.GetBestBlock()
+	if err != nil {
+		return 0, nil, nil, errors.Wrap(err, "chain")
+	}
+	parent := bestBlock.Header()
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "state")
+		return 0, nil, nil, errors.Wrap(err, "state")
 	}
 
 	targetTime, score, err := p.schedule(state, parent, now)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 
-	return targetTime, func(txIter TxIterator) (*block.Block, tx.Receipts, error) {
+	var gasLimit uint64
+	if p.targetGasLimit != 0 {
+		gasLimit = block.GasLimit(p.targetGasLimit).Qualify(parent.GasLimit())
+	} else {
+		gasLimit = parent.GasLimit()
+	}
 
-		var gasLimit uint64
-		if p.targetGasLimit != 0 {
-			gasLimit = block.GasLimit(p.targetGasLimit).Qualify(parent.GasLimit())
-		} else {
-			gasLimit = parent.GasLimit()
-		}
+	traverser := p.chain.NewTraverser(parent.ID())
+	builder := new(block.Builder).
+		Beneficiary(p.beneficiary).
+		GasLimit(gasLimit).
+		ParentID(parent.ID()).
+		Timestamp(targetTime).
+		TotalScore(parent.TotalScore() + score)
 
-		builder := new(block.Builder).
-			Beneficiary(p.beneficiary).
-			GasLimit(gasLimit).
-			ParentID(parent.ID()).
-			Timestamp(targetTime).
-			TotalScore(parent.TotalScore() + score)
-
-		traverser := p.chain.NewTraverser(parent.ID())
-		rt := runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Hash {
+	ctx := &context{
+		parent:    parent,
+		processed: make(map[thor.Hash]interface{}),
+		rt: runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Hash {
 			return traverser.Get(num).ID()
-		})
+		}),
+	}
 
-		receipts, err := p.pack(builder, rt, parent, txIter)
-		if err != nil {
-			return nil, nil, err
-		}
+	return targetTime,
+		func(tx *tx.Transaction) error {
+			if err := p.processTx(ctx, tx); err != nil {
+				return err
+			}
+			builder.Transaction(tx)
+			return nil
+		},
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
+			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
+				return nil, nil, errors.New("private key mismatch")
+			}
 
-		if err := traverser.Error(); err != nil {
-			return nil, nil, err
-		}
+			if err := traverser.Error(); err != nil {
+				return nil, nil, err
+			}
 
-		stateRoot, err := state.Stage().Commit()
-		if err != nil {
-			return nil, nil, err
-		}
+			stateRoot, err := state.Stage().Commit()
+			if err != nil {
+				return nil, nil, err
+			}
 
-		return builder.
-			ReceiptsRoot(receipts.RootHash()).
-			StateRoot(stateRoot).Build(), receipts, nil
-	}, nil
+			newBlock := builder.
+				GasUsed(ctx.totalGasUsed).
+				ReceiptsRoot(ctx.receipts.RootHash()).
+				StateRoot(stateRoot).Build()
+
+			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+			if err != nil {
+				return nil, nil, err
+			}
+			return newBlock.WithSignature(sig), ctx.receipts, nil
+		}, nil
 }
 
 func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) (
@@ -124,6 +160,54 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) 
 	return newBlockTime, score, nil
 }
 
+func (p *Packer) processTx(ctx *context, tx *tx.Transaction) error {
+	switch {
+	case tx.ReservedBits() != 0:
+		return badTxError{"reserved bits != 0"}
+	case tx.ChainTag() != ctx.parent.ChainTag():
+		return badTxError{"chain tag mismatch"}
+	case tx.BlockRef().Number() > ctx.parent.Number():
+		return errTxNotAdoptableNow
+	case ctx.totalGasUsed+tx.Gas() > ctx.rt.BlockGasLimit():
+		// gasUsed < 90% gas limit
+		if float64(ctx.rt.BlockGasLimit()-ctx.totalGasUsed)/float64(ctx.rt.BlockGasLimit()) < 0.9 {
+			// try to find a lower gas tx
+			return errTxNotAdoptableNow
+		}
+		return errGasLimitReached
+	}
+
+	// check if tx already there
+	if found, err := p.txExists(tx.ID(), ctx.parent.ID(), ctx.processed); err != nil {
+		return err
+	} else if found {
+		return errKnownTx
+	}
+
+	if dependsOn := tx.DependsOn(); dependsOn != nil {
+		// check if deps exists
+		if found, err := p.txExists(*dependsOn, ctx.parent.ID(), ctx.processed); err != nil {
+			return err
+		} else if !found {
+			return errTxNotAdoptableNow
+		}
+	}
+
+	cp := ctx.rt.State().NewCheckpoint()
+	receipt, _, err := ctx.rt.ExecuteTransaction(tx)
+	if err != nil {
+		// skip and revert state
+		ctx.rt.State().RevertTo(cp)
+		return badTxError{err.Error()}
+	}
+
+	ctx.receipts = append(ctx.receipts, receipt)
+	ctx.totalGasUsed += receipt.GasUsed
+
+	ctx.processed[tx.ID()] = nil
+	return nil
+}
+
 func (p *Packer) txExists(txID thor.Hash, parentID thor.Hash, processed map[thor.Hash]interface{}) (bool, error) {
 	if _, ok := processed[txID]; ok {
 		return true, nil
@@ -142,79 +226,4 @@ func (p *Packer) txExists(txID thor.Hash, parentID thor.Hash, processed map[thor
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
-}
-
-func (p *Packer) pack(
-	builder *block.Builder,
-	rt *runtime.Runtime,
-	parent *block.Header,
-	txIter TxIterator) (tx.Receipts, error) {
-
-	var receipts tx.Receipts
-	var totalGasUsed uint64
-
-	processed := make(map[thor.Hash]interface{})
-	for txIter.HasNext() {
-		tx := txIter.Next()
-
-		if tx.ReservedBits() != 0 {
-			txIter.OnProcessed(tx.ID(), errors.New("unacceptable tx: reserved bits != 0"))
-			continue
-		}
-		if tx.ChainTag() != parent.ChainTag() {
-			txIter.OnProcessed(tx.ID(), errors.New("unacceptable tx: chain tag mismatch"))
-			continue
-		}
-
-		blockRef := tx.BlockRef()
-		if blockRef.Number() > parent.Number() {
-			continue
-		}
-
-		if totalGasUsed+tx.Gas() > rt.BlockGasLimit() {
-			// gasUsed < 90% gas limit
-			if float64(rt.BlockGasLimit()-totalGasUsed)/float64(rt.BlockGasLimit()) < 0.9 {
-				// try to find a lower gas tx
-				continue
-			}
-			break
-		}
-
-		// check if tx already there
-		if found, err := p.txExists(tx.ID(), parent.ID(), processed); err != nil {
-			return nil, err
-		} else if found {
-			txIter.OnProcessed(tx.ID(), errors.New("tx found"))
-			continue
-		}
-
-		if dependsOn := tx.DependsOn(); dependsOn != nil {
-			// check if deps exists
-			if found, err := p.txExists(*dependsOn, parent.ID(), processed); err != nil {
-				return nil, err
-			} else if !found {
-				continue
-			}
-		}
-
-		cp := rt.State().NewCheckpoint()
-		receipt, _, err := rt.ExecuteTransaction(tx)
-		if err != nil {
-			// skip and revert state
-			rt.State().RevertTo(cp)
-			txIter.OnProcessed(tx.ID(), err)
-			continue
-		}
-
-		receipts = append(receipts, receipt)
-		totalGasUsed += receipt.GasUsed
-
-		processed[tx.ID()] = nil
-		builder.Transaction(tx)
-		txIter.OnProcessed(tx.ID(), nil)
-	}
-
-	builder.GasUsed(totalGasUsed)
-
-	return receipts, nil
 }

@@ -71,16 +71,18 @@ func TestP(t *testing.T) {
 	// pprof.StartCPUProfile(f)
 	// defer pprof.StopCPUProfile()
 	for {
-		parent, err := c.GetBestBlock()
+		p := packer.New(c, stateCreator, a1.Address, a1.Address)
+		_, adopt, commit, err := p.Prepare(uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		p := packer.New(a1.Address, a1.Address, c, stateCreator)
-		_, pack, err := p.Prepare(parent.Header(), uint64(time.Now().Unix()))
-		if err != nil {
-			t.Fatal(err)
+		iter := &txIterator{}
+		for iter.HasNext() {
+			tx := iter.Next()
+			adopt(tx)
 		}
-		blk, receipts, err := pack(&txIterator{})
+
+		blk, receipts, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
 		if err := c.AddBlock(blk, true); err != nil {
 			t.Fatal(err)
 		}
@@ -104,5 +106,4 @@ func TestP(t *testing.T) {
 	best, _ := c.GetBestBlock()
 	fmt.Println(best.Header().Number(), best.Header().GasUsed())
 	//	fmt.Println(best)
-
 }
