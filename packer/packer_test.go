@@ -82,21 +82,12 @@ func TestP(t *testing.T) {
 			adopt(tx)
 		}
 
-		blk, receipts, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
+		blk, _, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
 		if err := c.AddBlock(blk, true); err != nil {
 			t.Fatal(err)
 		}
-		_, _, _ = blk, receipts, err
-		if err != nil {
-			t.Fatal(err)
-		}
 
-		sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), a1.PrivateKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		fmt.Println(consensus.New(c, stateCreator).Consent(blk.WithSignature(sig), uint64(time.Now().Unix()*2)))
+		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
 
 		if time.Now().UnixNano() > start+1000*1000*1000*1 {
 			break
