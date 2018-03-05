@@ -29,11 +29,11 @@ type Log struct {
 	txOrigin    thor.Address //contract caller
 	address     thor.Address // always a contract address
 	data        []byte
-	topic0      thor.Hash
-	topic1      thor.Hash
-	topic2      thor.Hash
-	topic3      thor.Hash
-	topic4      thor.Hash
+	topic0      *thor.Hash
+	topic1      *thor.Hash
+	topic2      *thor.Hash
+	topic3      *thor.Hash
+	topic4      *thor.Hash
 }
 
 //NewLog return a format log
@@ -45,28 +45,28 @@ func NewLog(blockID thor.Hash, blockNumber uint32, txID thor.Hash, txOrigin thor
 		txOrigin:    txOrigin,
 		address:     txLog.Address, // always a contract address
 		data:        txLog.Data,
-		topic0:      thor.Hash{},
-		topic1:      thor.Hash{},
-		topic2:      thor.Hash{},
-		topic3:      thor.Hash{},
-		topic4:      thor.Hash{},
+		topic0:      nil,
+		topic1:      nil,
+		topic2:      nil,
+		topic3:      nil,
+		topic4:      nil,
 	}
 	for i := 0; i < len(txLog.Topics); i++ {
 		switch i {
 		case 0:
-			l.topic0 = txLog.Topics[0]
+			l.topic0 = &txLog.Topics[0]
 			break
 		case 1:
-			l.topic1 = txLog.Topics[1]
+			l.topic1 = &txLog.Topics[1]
 			break
 		case 2:
-			l.topic2 = txLog.Topics[2]
+			l.topic2 = &txLog.Topics[2]
 			break
 		case 3:
-			l.topic3 = txLog.Topics[3]
+			l.topic3 = &txLog.Topics[3]
 			break
 		case 4:
-			l.topic4 = txLog.Topics[4]
+			l.topic4 = &txLog.Topics[4]
 			break
 		}
 	}
@@ -90,39 +90,73 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	t0, err := thor.ParseHash(dbLog.topic0)
-	if err != nil {
-		return nil, err
-	}
-	t1, err := thor.ParseHash(dbLog.topic1)
-	if err != nil {
-		return nil, err
-	}
-	t2, err := thor.ParseHash(dbLog.topic2)
-	if err != nil {
-		return nil, err
-	}
-	t3, err := thor.ParseHash(dbLog.topic3)
-	if err != nil {
-		return nil, err
-	}
-	t4, err := thor.ParseHash(dbLog.topic4)
-	if err != nil {
-		return nil, err
-	}
-	return &Log{
+	l := &Log{
 		blockID:     bid,
 		blockNumber: dbLog.blockNumber,
 		txID:        txid,
 		txOrigin:    txori,
-		address:     addr,
+		address:     addr, // always a contract address
 		data:        []byte(dbLog.data),
-		topic0:      t0,
-		topic1:      t1,
-		topic2:      t2,
-		topic3:      t3,
-		topic4:      t4,
-	}, nil
+		topic0:      nil,
+		topic1:      nil,
+		topic2:      nil,
+		topic3:      nil,
+		topic4:      nil,
+	}
+	if dbLog.topic0 == "NULL" {
+		l.topic0 = nil
+	} else {
+		t0, err := thor.ParseHash(dbLog.topic0)
+		if err != nil {
+			return nil, err
+		}
+		l.topic0 = &t0
+	}
+	if dbLog.topic1 == "NULL" {
+		l.topic1 = nil
+	} else {
+		t1, err := thor.ParseHash(dbLog.topic1)
+		if err != nil {
+			return nil, err
+		}
+		l.topic1 = &t1
+	}
+	if dbLog.topic2 == "NULL" {
+		l.topic2 = nil
+	} else {
+		t2, err := thor.ParseHash(dbLog.topic2)
+		if err != nil {
+			return nil, err
+		}
+		l.topic2 = &t2
+	}
+	if dbLog.topic3 == "NULL" {
+		l.topic3 = nil
+	} else {
+		t3, err := thor.ParseHash(dbLog.topic3)
+		if err != nil {
+			return nil, err
+		}
+		l.topic3 = &t3
+	}
+	if dbLog.topic4 == "NULL" {
+		l.topic4 = nil
+	} else {
+		t4, err := thor.ParseHash(dbLog.topic4)
+		if err != nil {
+			return nil, err
+		}
+		l.topic4 = &t4
+	}
+	return l, nil
+
+}
+
+func formatHash(value *thor.Hash) interface{} {
+	if value == nil {
+		return "NULL"
+	}
+	return value
 }
 
 func (log *Log) String() string {
@@ -144,9 +178,9 @@ func (log *Log) String() string {
 		log.txOrigin.String(),
 		log.address.String(),
 		[]byte(log.data),
-		log.topic0.String(),
-		log.topic1.String(),
-		log.topic2.String(),
-		log.topic3.String(),
-		log.topic4.String())
+		formatHash(log.topic0),
+		formatHash(log.topic1),
+		formatHash(log.topic2),
+		formatHash(log.topic3),
+		formatHash(log.topic4))
 }

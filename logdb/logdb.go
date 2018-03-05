@@ -13,11 +13,11 @@ type FilterOption struct {
 	FromBlock uint32
 	ToBlock   uint32
 	Address   thor.Address // always a contract address
-	Topics    [5]thor.Hash
+	Topics    [5]*thor.Hash
 }
 
-//DB manages all logs
-type DB struct {
+//LDB manages all logs
+type LDB struct {
 	path          string
 	db            *sql.DB
 	sqliteVersion string
@@ -25,7 +25,7 @@ type DB struct {
 }
 
 //OpenDB open a logdb
-func OpenDB(path string) (*DB, error) {
+func OpenDB(path string) (*LDB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func OpenDB(path string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DB{
+	return &LDB{
 		path:          path,
 		db:            db,
 		sqliteVersion: s,
@@ -42,7 +42,7 @@ func OpenDB(path string) (*DB, error) {
 }
 
 //Insert insert logs into db
-func (db *DB) Insert(logs []*Log) error {
+func (db *LDB) Insert(logs []*Log) error {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -53,39 +53,40 @@ func (db *DB) Insert(logs []*Log) error {
 	for _, log := range logs {
 		stmt += "insert into log(blockID ,blockNumber ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values " + fmt.Sprintf(" ('%v',%v,'%v','%v','%v','%s','%v','%v','%v','%v','%v'); ", log.blockID.String(),
 			log.blockNumber,
-			log.txID.String(),
-			log.txOrigin.String(),
-			log.address.String(),
+			log.txID,
+			log.txOrigin,
+			log.address,
 			string(log.data),
-			log.topic0.String(),
-			log.topic1.String(),
-			log.topic2.String(),
-			log.topic3.String(),
-			log.topic4.String())
+			formatHash(log.topic0),
+			formatHash(log.topic1),
+			formatHash(log.topic2),
+			formatHash(log.topic3),
+			formatHash(log.topic4))
 	}
 	return db.ExecInTransaction(stmt)
 }
 
 //Filter return logs with options
-func (db *DB) Filter(options []*FilterOption) ([]*Log, error) {
+func (db *LDB) Filter(options []*FilterOption) ([]*Log, error) {
 	stmt := "select * from log where 1 "
 	if len(options) != 0 {
 		for _, op := range options {
-			stmt += fmt.Sprintf(" or (blockNumber >= %v and blockNumber <= %v and address = %v and topic0 = %v and topic1 = %v and topic2 = %v and topic3 = %v and topic4 = %v ) ", op.FromBlock,
+			stmt += fmt.Sprintf(" or ( blockNumber >= %v and blockNumber <= %v and address = %v and topic0 = %v and topic1 = %v and topic2 = %v and topic3 = %v and topic4 = %v ) ",
+				op.FromBlock,
 				op.ToBlock,
 				op.Address,
-				op.Topics[0],
-				op.Topics[1],
-				op.Topics[2],
-				op.Topics[3],
-				op.Topics[4])
+				formatHash(op.Topics[0]),
+				formatHash(op.Topics[1]),
+				formatHash(op.Topics[2]),
+				formatHash(op.Topics[3]),
+				formatHash(op.Topics[4]))
 		}
 	}
 	return db.Query(stmt)
 }
 
 //ExecInTransaction execute sql in a transaction
-func (db *DB) ExecInTransaction(sqlStmt string, args ...interface{}) error {
+func (db *LDB) ExecInTransaction(sqlStmt string, args ...interface{}) error {
 	tx, err := db.db.Begin()
 	if err != nil {
 		return err
@@ -99,10 +100,9 @@ func (db *DB) ExecInTransaction(sqlStmt string, args ...interface{}) error {
 }
 
 //Query query logs
-func (db *DB) Query(stmt string) ([]*Log, error) {
+func (db *LDB) Query(stmt string) ([]*Log, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
-
 	rows, err := db.db.Query(stmt)
 	if err != nil {
 		return nil, err
@@ -112,7 +112,8 @@ func (db *DB) Query(stmt string) ([]*Log, error) {
 	var logs []*Log
 	for rows.Next() {
 		dbLog := &DBLog{}
-		err = rows.Scan(&dbLog.blockID,
+		err = rows.Scan(
+			&dbLog.blockID,
 			&dbLog.blockNumber,
 			&dbLog.txID,
 			&dbLog.txOrigin,
@@ -141,6 +142,6 @@ func (db *DB) Query(stmt string) ([]*Log, error) {
 }
 
 //Path return db's directory
-func (db *DB) Path() string {
+func (db *LDB) Path() string {
 	return db.path
 }
