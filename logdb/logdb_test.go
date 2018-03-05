@@ -39,19 +39,18 @@ func TestLogDB(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t0 := thor.BytesToHash([]byte("topic0"))
+	t1 := thor.BytesToHash([]byte("topic1"))
 	los, err := db.Filter([]*logdb.FilterOption{{
 		FromBlock: 0,
 		ToBlock:   1,
 		Address:   thor.BytesToAddress([]byte("addr")),
-		Topics:    [5]thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1")), {}, {}, {}},
+		Topics:    [5]*thor.Hash{&t0, &t1, nil, nil, nil},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, l := range los {
-		fmt.Println(l)
-	}
-
+	fmt.Println(los)
 }
 
 func home() (string, error) {
