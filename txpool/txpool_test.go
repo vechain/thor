@@ -2,6 +2,7 @@ package txpool_test
 
 import (
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -28,12 +29,20 @@ func BenchmarkAddTx(b *testing.B) {
 		b.Fatal(err)
 	}
 	chain.WriteGenesis(bl)
+	best, _ := chain.GetBestBlock()
+	blk := new(block.Builder).
+		ParentID(best.Header().ID()).
+		StateRoot(best.Header().StateRoot()).
+		Build()
+	if err := chain.AddBlock(blk, true); err != nil {
+		b.Fatal(err)
+	}
 	address, _ := thor.ParseAddress(testAddress)
-	pool := txpool.NewTxPool(chain)
+	pool := txpool.New()
 	for i := 0; i < 2000; i++ {
 		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(i))).WithData(nil)
 		tx := new(tx.Builder).
-			GasPrice(big.NewInt(1000)).
+			GasPriceCoef(1).
 			Gas(1000 + uint64(i)).
 			Clause(cla).
 			Nonce(1).

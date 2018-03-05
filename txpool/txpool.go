@@ -3,26 +3,23 @@ package txpool
 import (
 	"errors"
 	"fmt"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"math/big"
 	"sort"
 	"sync"
 	"time"
 )
 
 var (
-	//ErrUnderpriced transaction underpriced
-	ErrUnderpriced = errors.New("transaction underpriced")
 	// ErrIntrinsicGas intrinsic gas too low
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 )
 
 //PoolConfig PoolConfig
 type PoolConfig struct {
-	PriceLimit uint64 // Minimum gas price to enforce for acceptance into the pool
 	QueueLimit uint64
 	PoolSize   uint64        // Maximum number of executable transaction slots for all accounts
 	Lifetime   time.Duration // Maximum amount of time non-executable transaction are queued
@@ -30,7 +27,6 @@ type PoolConfig struct {
 
 //DefaultTxPoolConfig DefaultTxPoolConfig
 var DefaultTxPoolConfig = PoolConfig{
-	PriceLimit: 1000,
 	QueueLimit: 1024,
 	PoolSize:   10000,
 	Lifetime:   200,
@@ -39,17 +35,15 @@ var DefaultTxPoolConfig = PoolConfig{
 //TxPool TxPool
 type TxPool struct {
 	config   PoolConfig
-	chain    *chain.Chain
 	iterator *Iterator
 	all      map[thor.Hash]*TxObject
 	m        sync.RWMutex
 }
 
-//NewTxPool NewTxPool
-func NewTxPool(chain *chain.Chain) *TxPool {
+//New construct a new txpool
+func New() *TxPool {
 	pool := &TxPool{
 		config: DefaultTxPoolConfig,
-		chain:  chain,
 		all:    make(map[thor.Hash]*TxObject),
 	}
 	return pool
@@ -69,38 +63,41 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 	if err := pool.validateTx(tx); err != nil {
 		return err
 	}
-
-	bestBlock, err := pool.chain.GetBestBlock()
-	if err != nil {
-		return err
-	}
-
-	delay, err := packer.MeasureTxDelay(tx.BlockRef(), bestBlock.Header(), pool.chain)
-	var conversionEn *big.Int
-	if delay > thor.MaxTxWorkDelay {
-		conversionEn = &big.Int{}
-	} else {
-		conversionEn = thor.ProvedWork.ToEnergy(tx.ProvedWork(), bestBlock.Header().Timestamp())
-	}
-	pool.all[txID] = NewTxObject(tx, conversionEn, time.Now().Unix())
-
+	pool.all[txID] = NewTxObject(tx, time.Now().Unix())
 	return nil
 }
 
 //NewIterator Create Iterator for pool
-func (pool *TxPool) NewIterator() *Iterator {
+func (pool *TxPool) NewIterator(chain *chain.Chain, stateC *state.Creator) (*Iterator, error) {
 	pool.m.RLock()
 	defer pool.m.RUnlock()
 
+	bestBlock, err := chain.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+	st, err := stateC.NewState(bestBlock.Header().StateRoot())
+	if err != nil {
+		return nil, err
+	}
+
+	baseGasPrice := builtin.Params.Get(st, thor.KeyBaseGasPrice)
+	traverser := chain.NewTraverser(bestBlock.Header().ID())
 	var objs TxObjects
 	l := uint64(len(pool.all))
 	i := uint64(0)
 	for key, obj := range pool.all {
-		if time.Now().Unix()-obj.CreateTime() > int64(pool.config.Lifetime) {
-			pool.Delete(key)
+		if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+			pool.Remove(key)
 			continue
 		}
-		if l > pool.config.QueueLimit && i < pool.config.QueueLimit {
+		overallGP := obj.Transaction().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
+			return traverser.Get(num).ID()
+		})
+		obj.SetOverallGP(overallGP)
+		if l <= pool.config.QueueLimit {
+			objs = append(objs, obj)
+		} else if i < pool.config.QueueLimit {
 			objs = append(objs, obj)
 			i++
 		} else {
@@ -108,11 +105,12 @@ func (pool *TxPool) NewIterator() *Iterator {
 		}
 	}
 	sort.Sort(objs)
-	return newIterator(objs, pool)
+
+	return newIterator(objs, pool), nil
 }
 
-//Delete delete a transaction
-func (pool *TxPool) Delete(objID thor.Hash) {
+//Remove remove a transaction
+func (pool *TxPool) Remove(objID thor.Hash) {
 	pool.m.Lock()
 	defer pool.m.Unlock()
 	if _, ok := pool.all[objID]; ok {
@@ -134,9 +132,6 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 	if _, err := tx.Signer(); err != nil {
 		return err
 	}
-	if big.NewInt(int64(pool.config.PriceLimit)).Cmp(tx.GasPrice()) > 0 {
-		return ErrUnderpriced
-	}
 	intrGas, err := tx.IntrinsicGas()
 	if err != nil {
 		return err
@@ -144,6 +139,5 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
-
 	return nil
 }
