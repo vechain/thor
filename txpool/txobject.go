@@ -7,35 +7,36 @@ import (
 
 //TxObject wrap transaction
 type TxObject struct {
-	createTime int64
-	conversion *big.Int
-	tx         *tx.Transaction
+	transaction  *tx.Transaction
+	overallGP    *big.Int
+	creationTime int64
 }
 
 //NewTxObject NewTxObject
-func NewTxObject(tx *tx.Transaction, conversion *big.Int, addTime int64) *TxObject {
+func NewTxObject(transaction *tx.Transaction, creationTime int64) *TxObject {
 	return &TxObject{
-		addTime,
-		conversion,
-		tx,
+		transaction:  transaction,
+		overallGP:    new(big.Int),
+		creationTime: creationTime,
 	}
 }
 
-//Cost Cost
-func (obj *TxObject) Cost() *big.Int {
-	en := new(big.Int).Mul(obj.tx.GasPrice(), big.NewInt(int64(obj.tx.Gas())))
-	if obj.conversion.Cmp(en) > 0 {
-		return en.Mul(en, big.NewInt(2))
-	}
-	return new(big.Int).Add(en, obj.conversion)
+//SetOverallGP set overallGP of txObejct
+func (obj *TxObject) SetOverallGP(overallGP *big.Int) {
+	obj.overallGP = overallGP
 }
 
-//Transaction returns a transaction
+//CreationTime returns obj's CreationTime
+func (obj *TxObject) CreationTime() int64 {
+	return obj.creationTime
+}
+
+//OverallGP returns obj's overallGP
+func (obj *TxObject) OverallGP() *big.Int {
+	return obj.overallGP
+}
+
+//Transaction returns obj's transaction
 func (obj *TxObject) Transaction() *tx.Transaction {
-	return obj.tx
-}
-
-//CreateTime returns obj's createTime
-func (obj *TxObject) CreateTime() int64 {
-	return obj.createTime
+	return obj.transaction
 }

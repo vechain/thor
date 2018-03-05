@@ -7,35 +7,33 @@ import (
 
 //Iterator Iterator
 type Iterator struct {
+	objs  TxObjects
 	pool  *TxPool
-	data  TxObjects
 	index int
 }
 
 //NewIterator constructor
-func newIterator(data TxObjects, pool *TxPool) *Iterator {
+func newIterator(objs TxObjects, pool *TxPool) *Iterator {
 	return &Iterator{
+		objs:  objs,
 		pool:  pool,
-		data:  data,
 		index: 0,
 	}
 }
 
 //HasNext HasNext
 func (i *Iterator) HasNext() bool {
-	return i.index < i.data.Len()
+	return i.index < i.objs.Len()
 }
 
 //Next Next
 func (i *Iterator) Next() *tx.Transaction {
-	obj := i.data[i.index]
+	obj := i.objs[i.index]
 	i.index++
 	return obj.Transaction()
 }
 
 //OnProcessed OnProcessed
 func (i *Iterator) OnProcessed(txID thor.Hash, err error) {
-	if err != nil {
-		i.pool.Delete(txID)
-	}
+	i.pool.Remove(txID)
 }
