@@ -47,7 +47,7 @@ type body struct {
 	Gas          uint64
 	Nonce        uint64
 	DependsOn    *thor.Hash `rlp:"nil"`
-	ReservedBits uint32
+	Reserved     []interface{}
 	Signature    []byte
 }
 
@@ -122,7 +122,7 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 		t.body.Gas,
 		t.body.Nonce,
 		t.body.DependsOn,
-		t.body.ReservedBits,
+		t.body.Reserved,
 	})
 	hw.Sum(hash[:0])
 	return
@@ -201,9 +201,10 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
-// ReservedBits returns reserved bits for backward compatibility purpose.
-func (t *Transaction) ReservedBits() uint32 {
-	return t.body.ReservedBits
+// HasReservedFields returns if there're reserved fields.
+// Reserved fields are for backward compatibility purpose.
+func (t *Transaction) HasReservedFields() bool {
+	return len(t.body.Reserved) > 0
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -345,10 +346,10 @@ func (t *Transaction) String() string {
 	ChainTag:		%v
 	BlockRef:		%v-%x
 	DependsOn:		%v
-	ReservedBits:	%v
+	ReservedFields:	%v
 	Signature:		0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.ReservedBits, t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.Reserved, t.body.Signature)
 }
 
 // see core.IntrinsicGas
