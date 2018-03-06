@@ -22,15 +22,15 @@ func NewAccountHTTPRouter(router *mux.Router, ai *AccountInterface) {
 func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
-		return httpx.Error(" No Params! ", 400)
+		return httpx.Error("No Params!", 400)
 	}
 	addr, ok := query["address"]
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error("Invalid Params!", 400)
 	}
 	address, err := thor.ParseAddress(addr)
 	if err != nil {
-		return httpx.Error(" Invalid address! ", 400)
+		return httpx.Error("Invalid address!", 400)
 	}
 
 	balance := ai.GetBalance(address)
@@ -40,15 +40,15 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
-		return httpx.Error(" No Params! ", 400)
+		return httpx.Error("No Params!", 400)
 	}
 	addr, ok := query["address"]
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error("Invalid Params!", 400)
 	}
 	address, err := thor.ParseAddress(addr)
 	if err != nil {
-		return httpx.Error(" Invalid address! ", 400)
+		return httpx.Error("Invalid address!", 400)
 	}
 
 	code := ai.GetCode(address)
@@ -59,23 +59,23 @@ func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Reque
 func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
-		return httpx.Error(" No Params! ", 400)
+		return httpx.Error("No Params!", 400)
 	}
 	addr, ok := query["address"]
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error("Invalid Params!", 400)
 	}
 	key, ok := query["key"]
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error("Invalid Params!", 400)
 	}
 	address, err := thor.ParseAddress(addr)
 	if err != nil {
-		return httpx.Error(" Invalid address! ", 400)
+		return httpx.Error("Invalid address!", 400)
 	}
 	keyhash, err := thor.ParseHash(key)
 	if err != nil {
-		return httpx.Error(" Invalid key! ", 400)
+		return httpx.Error("Invalid key!", 400)
 	}
 
 	value := ai.GetStorage(address, keyhash)
@@ -84,7 +84,7 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	}
 	data, err := json.Marshal(storage)
 	if err != nil {
-		return httpx.Error(" System Error! ", 500)
+		return httpx.Error("System Error!", 500)
 	}
 	w.Write(data)
 	return nil

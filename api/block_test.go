@@ -68,7 +68,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 
 	cla := tx.NewClause(&address).WithData(nil).WithValue(big.NewInt(10))
 	tx := new(tx.Builder).
-		GasPrice(big.NewInt(1000)).
+		GasPriceCoef(1).
 		Gas(1000).
 		Clause(cla).
 		Nonce(1).

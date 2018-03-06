@@ -54,13 +54,14 @@ func TestTransaction(t *testing.T) {
 		t.Errorf("Sign error: %s", err)
 	}
 	to := thor.BytesToAddress([]byte("acc1"))
+	hash := thor.BytesToHash([]byte("DependsOn"))
 	rawTransaction := &types.RawTransaction{
-		Nonce:     1,
-		GasPrice:  big.NewInt(100000),
-		Gas:       30000,
-		DependsOn: "",
-		Sig:       sig,
-		BlockRef:  [8]byte(tx.NewBlockRef(20)),
+		Nonce:        1,
+		GasPriceCoef: 1,
+		Gas:          30000,
+		DependsOn:    &hash,
+		Sig:          sig,
+		BlockRef:     [8]byte(tx.NewBlockRef(20)),
 		Clauses: types.Clauses{
 			types.Clause{
 				To:    &to,
@@ -97,7 +98,7 @@ func httpPost(ts *httptest.Server, url string, body url.Values) ([]byte, error) 
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	ti := api.NewTransactionInterface(chain, txpool.NewTxPool(chain))
+	ti := api.NewTransactionInterface(chain, txpool.New())
 	router := mux.NewRouter()
 	api.NewTransactionHTTPRouter(router, ti)
 	ts := httptest.NewServer(router)
@@ -112,7 +113,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	address, _ := thor.ParseAddress(testAddress)
 	cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
 	tx := new(tx.Builder).
-		GasPrice(big.NewInt(1000)).
+		GasPriceCoef(1).
 		Gas(1000).
 		Clause(cla).
 		Nonce(1).
@@ -149,7 +150,7 @@ func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transa
 	assert.Equal(t, expectedTx.From, actualTx.From)
 	assert.Equal(t, expectedTx.ID, actualTx.ID)
 	assert.Equal(t, expectedTx.Index, actualTx.Index)
-	assert.Equal(t, expectedTx.GasPrice.String(), actualTx.GasPrice.String())
+	assert.Equal(t, expectedTx.GasPriceCoef, actualTx.GasPriceCoef)
 	assert.Equal(t, expectedTx.Gas, actualTx.Gas)
 	for i, c := range expectedTx.Clauses {
 		assert.Equal(t, string(c.Data), string(actualTx.Clauses[i].Data))

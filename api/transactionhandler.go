@@ -25,23 +25,23 @@ func (ti *TransactionInterface) handleGetTransactionByID(w http.ResponseWriter, 
 	query := mux.Vars(req)
 
 	if len(query) == 0 {
-		return httpx.Error(" No Params! ", 400)
+		return httpx.Error("No Params!", 400)
 	}
 	id, ok := query["id"]
 	if !ok {
-		return httpx.Error(" Invalid Params! ", 400)
+		return httpx.Error("Invalid Params!", 400)
 	}
 	txID, err := thor.ParseHash(id)
 	if err != nil {
-		return httpx.Error(" Invalid hash! ", 400)
+		return httpx.Error("Invalid hash!", 400)
 	}
 	tx, err := ti.GetTransactionByID(txID)
 	if err != nil {
-		return httpx.Error(" Get transaction failed! ", 400)
+		return httpx.Error("Get transaction failed!", 400)
 	}
 	txData, err := json.Marshal(tx)
 	if err != nil {
-		return httpx.Error(" System Error! ", 400)
+		return httpx.Error("System Error!", 400)
 	}
 	w.Write(txData)
 	return nil

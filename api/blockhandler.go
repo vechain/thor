@@ -49,19 +49,19 @@ func (bi *BlockInterface) handleGetBlockByID(w http.ResponseWriter, req *http.Re
 func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if query == nil {
-		return httpx.Error(" No Params! ", 400)
+		return httpx.Error("No Params!", 400)
 	}
 	number, ok := new(big.Int).SetString(query["number"], 10)
 	if !ok {
-		return httpx.Error(" Invalid Number! ", 400)
+		return httpx.Error("Invalid Number!", 400)
 	}
 	block, err := bi.GetBlockByNumber(uint32(number.Int64()))
 	if err != nil {
-		return httpx.Error(" Get block failed! ", 400)
+		return httpx.Error("Get block failed!", 400)
 	}
 	data, err := json.Marshal(block)
 	if err != nil {
-		return httpx.Error(" System Error! ", 400)
+		return httpx.Error("System Error!", 400)
 	}
 	w.Write(data)
 	return nil
@@ -70,11 +70,11 @@ func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *htt
 func (bi *BlockInterface) handleGetBestBlock(w http.ResponseWriter, req *http.Request) error {
 	block, err := bi.GetBestBlock()
 	if err != nil {
-		return httpx.Error(" Block not found! ", 400)
+		return httpx.Error("Block not found!", 400)
 	}
 	data, err := json.Marshal(block)
 	if err != nil {
-		return httpx.Error(" System Error! ", 400)
+		return httpx.Error("System Error!", 400)
 	}
 	w.Write(data)
 	return nil
