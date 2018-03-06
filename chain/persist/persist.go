@@ -7,15 +7,17 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 var (
 	bestBlockKey = []byte("bestBlock")
 
-	headerPrefix     = []byte("h") // (prefix, block id) -> header
-	bodyPrefix       = []byte("b") // (prefix, block id) -> body
-	trunkPrefix      = []byte("t") // (prefix, number) -> block id
-	txLocationPrefix = []byte("l") // (prefix, tx id) -> tx location
+	headerPrefix        = []byte("h") // (prefix, block id) -> header
+	bodyPrefix          = []byte("b") // (prefix, block id) -> body
+	trunkPrefix         = []byte("t") // (prefix, number) -> block id
+	txLocationPrefix    = []byte("l") // (prefix, tx id) -> tx location
+	blockReceiptsPrefix = []byte("r") // (prefix, block id) -> receipts
 )
 
 // TxLocation contains information about a tx is settled.
@@ -125,15 +127,25 @@ func SaveTxLocations(w kv.Putter, block *block.Block) error {
 			block.Header().ID(),
 			uint64(i),
 		}
-		data, err := rlp.EncodeToBytes(&loc)
-		if err != nil {
-			return err
-		}
-		if err := w.Put(append(txLocationPrefix, tx.ID().Bytes()...), data); err != nil {
+		if err := saveRLP(w, append(txLocationPrefix, tx.ID().Bytes()...), &loc); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// SaveBlockReceipts save tx receipts of a block.
+func SaveBlockReceipts(w kv.Putter, blockID thor.Hash, receipts tx.Receipts) error {
+	return saveRLP(w, append(blockReceiptsPrefix, blockID[:]...), receipts)
+}
+
+// LoadBlockReceipts load tx receipts of a block.
+func LoadBlockReceipts(r kv.Getter, blockID thor.Hash) (tx.Receipts, error) {
+	var receipts tx.Receipts
+	if err := loadRLP(r, append(blockReceiptsPrefix, blockID[:]...), &receipts); err != nil {
+		return nil, err
+	}
+	return receipts, nil
 }
 
 // EraseTxLocations delete locations of all txs in a block.

@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	headerCacheLimit = 512
-	bodyCacheLimit   = 512
-	blockTxIDsLimit  = 1024
+	headerCacheLimit   = 512
+	bodyCacheLimit     = 512
+	blockTxIDsLimit    = 1024
+	receiptsCacheLimit = 512
 )
 
 var errNotFound = errors.New("not found")
@@ -33,6 +34,7 @@ type cached struct {
 	header     *cache.LRU
 	body       *cache.LRU
 	blockTxIDs *cache.LRU
+	receipts   *cache.LRU
 }
 
 // New create an instance of Chain.
@@ -43,6 +45,7 @@ func New(kv kv.GetPutter) *Chain {
 			cache.NewLRU(headerCacheLimit),
 			cache.NewLRU(bodyCacheLimit),
 			cache.NewLRU(blockTxIDsLimit),
+			cache.NewLRU(receiptsCacheLimit),
 		},
 	}
 }
@@ -317,6 +320,10 @@ func (c *Chain) GetTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLoca
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
+	return c.getTransaction(txID)
+}
+
+func (c *Chain) getTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
 	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		return nil, nil, err
@@ -383,6 +390,54 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 		return loc, nil
 	}
 	return nil, errNotFound
+}
+
+// SetBlockReceipts set tx receipts of a block.
+func (c *Chain) SetBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
+	c.rw.Lock()
+	defer c.rw.Unlock()
+	return c.setBlockReceipts(blockID, receipts)
+}
+
+func (c *Chain) setBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
+	c.cached.receipts.Add(blockID, receipts)
+	return persist.SaveBlockReceipts(c.kv, blockID, receipts)
+}
+
+// GetBlockReceipts get tx receipts of a block.
+func (c *Chain) GetBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.getBlockReceipts(blockID)
+}
+
+func (c *Chain) getBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
+	receipts, err := c.cached.receipts.GetOrLoad(blockID, func(interface{}) (interface{}, error) {
+		return persist.LoadBlockReceipts(c.kv, blockID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return receipts.(tx.Receipts), nil
+}
+
+// GetTransactionReceipt get receipt for given tx ID.
+func (c *Chain) GetTransactionReceipt(txID thor.Hash) (*tx.Receipt, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.getTransactionReceipt(txID)
+}
+
+func (c *Chain) getTransactionReceipt(txID thor.Hash) (*tx.Receipt, error) {
+	_, loc, err := c.getTransaction(txID)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := c.getBlockReceipts(loc.BlockID)
+	if err != nil {
+		return nil, err
+	}
+	return receipts[loc.Index], nil
 }
 
 // IsNotFound returns if an error means not found.
