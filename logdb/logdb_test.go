@@ -15,11 +15,7 @@ func TestLogDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := logdb.OpenDB(path + "/log.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = db.ExecInTransaction(logdb.LogSQL)
+	db, err := logdb.New(path + "/log.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,12 +37,22 @@ func TestLogDB(t *testing.T) {
 
 	t0 := thor.BytesToHash([]byte("topic0"))
 	t1 := thor.BytesToHash([]byte("topic1"))
-	los, err := db.Filter([]*logdb.FilterOption{{
+	addr := thor.BytesToAddress([]byte("addr"))
+	los, err := db.Filter(&logdb.FilterOption{
 		FromBlock: 0,
 		ToBlock:   1,
-		Address:   thor.BytesToAddress([]byte("addr")),
-		Topics:    [5]*thor.Hash{&t0, &t1, nil, nil, nil},
-	}})
+		Address:   &addr,
+		TopicSet: [][5]*thor.Hash{{&t0,
+			nil,
+			nil,
+			nil,
+			nil},
+			{nil,
+				&t1,
+				nil,
+				nil,
+				nil}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
