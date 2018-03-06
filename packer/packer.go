@@ -162,8 +162,8 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) 
 
 func (p *Packer) processTx(ctx *context, tx *tx.Transaction) error {
 	switch {
-	case tx.ReservedBits() != 0:
-		return badTxError{"reserved bits != 0"}
+	case tx.HasReservedFields():
+		return badTxError{"reserved bits not empty"}
 	case tx.ChainTag() != ctx.parent.ChainTag():
 		return badTxError{"chain tag mismatch"}
 	case tx.BlockRef().Number() > ctx.parent.Number():

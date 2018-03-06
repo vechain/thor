@@ -53,6 +53,7 @@ func (ti *txIterator) OnProcessed(txID thor.Hash, err error) {
 }
 
 func TestP(t *testing.T) {
+
 	kv, _ := lvldb.New("/tmp/thor", lvldb.Options{})
 	defer kv.Close()
 
