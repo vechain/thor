@@ -3,29 +3,28 @@ package types
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"math/big"
 )
 
 //RawTransaction a raw transaction
 type RawTransaction struct {
-	Nonce     uint64
-	GasPrice  *big.Int
-	Gas       uint64
-	DependsOn string
-	Sig       []byte
-	BlockRef  [8]byte
-	Clauses   Clauses
+	Nonce        uint64
+	GasPriceCoef uint8
+	Gas          uint64
+	DependsOn    *thor.Hash
+	Sig          []byte
+	BlockRef     [8]byte
+	Clauses      Clauses
 }
 
 //Transaction transaction
 type Transaction struct {
-	ChainTag  byte
-	ID        string
-	GasPrice  *big.Int
-	Gas       uint64
-	From      string
-	DependsOn string
-	Clauses   Clauses
+	ChainTag     byte
+	ID           string
+	GasPriceCoef uint8
+	Gas          uint64
+	From         string
+	DependsOn    string
+	Clauses      Clauses
 
 	Index       uint64
 	BlockID     string
@@ -48,12 +47,12 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 		cls[i] = ConvertClause(c)
 	}
 	t := &Transaction{
-		ChainTag: tx.ChainTag(),
-		ID:       tx.ID().String(),
-		From:     from.String(),
-		GasPrice: tx.GasPrice(),
-		Gas:      tx.Gas(),
-		Clauses:  cls,
+		ChainTag:     tx.ChainTag(),
+		ID:           tx.ID().String(),
+		From:         from.String(),
+		GasPriceCoef: tx.GasPriceCoef(),
+		Gas:          tx.Gas(),
+		Clauses:      cls,
 	}
 	if tx.DependsOn() != nil {
 		t.DependsOn = (*tx.DependsOn()).String()
@@ -65,24 +64,14 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 //BuildRawTransaction returns tx.Builder
 func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
 	builder := new(tx.Builder)
-	if rawTransaction.GasPrice != nil {
-		builder.GasPrice(rawTransaction.GasPrice)
+	if rawTransaction.GasPriceCoef != 0 {
+		builder.GasPriceCoef(rawTransaction.GasPriceCoef)
 	}
 	if rawTransaction.Gas > 0 {
 		builder.Gas(rawTransaction.Gas)
 	}
-	dependsOn, err := thor.ParseHash(rawTransaction.DependsOn)
-	if err != nil {
-		builder.DependsOn(nil)
-	}
-	builder.BlockRef(rawTransaction.BlockRef)
-	builder.Nonce(rawTransaction.Nonce)
-	builder.DependsOn(&dependsOn)
+	builder.DependsOn(rawTransaction.DependsOn).BlockRef(rawTransaction.BlockRef).Nonce(rawTransaction.Nonce)
 	for _, clause := range rawTransaction.Clauses {
-		// to, err := thor.ParseAddress(clause.To)
-		// if err != nil {
-		// 	return nil, err
-		// }
 		c := tx.NewClause(clause.To).WithData(clause.Data).WithValue(clause.Value)
 		builder.Clause(c)
 	}
