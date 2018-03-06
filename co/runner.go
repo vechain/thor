@@ -22,3 +22,13 @@ func (r *Runner) Go(f func()) {
 func (r *Runner) Wait() {
 	r.wg.Wait()
 }
+
+// Done return the done channel for exiting of all go routines.
+func (r *Runner) Done() chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		r.Wait()
+		close(done)
+	}()
+	return done
+}

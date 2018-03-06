@@ -11,4 +11,6 @@ func TestRunner(t *testing.T) {
 	r.Go(func() {})
 	r.Go(func() {})
 	r.Wait()
+
+	<-r.Done()
 }
