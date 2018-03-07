@@ -21,7 +21,7 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
+  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","consensus","consensus/misc","core","core/state","core/types","core/vm","crypto","crypto/bn256","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","rpc","trie"]
   revision = "1e67410e88d2685bc54611a7c9f75c327b553ccc"
   version = "v1.8.1"
 
@@ -92,10 +92,10 @@
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
-  name = "github.com/sirupsen/logrus"
+  name = "github.com/rs/cors"
   packages = ["."]
-  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
-  version = "v1.0.4"
+  revision = "feef513b9575b32f84bafa580aad89b011259019"
+  version = "v1.3.0"
 
 [[projects]]
   name = "github.com/stretchr/testify"
@@ -112,20 +112,14 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160","ssh/terminal"]
+  packages = ["ripemd160"]
   revision = "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["html","html/atom","html/charset"]
+  packages = ["html","html/atom","html/charset","websocket"]
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/sys"
-  packages = ["unix","windows"]
-  revision = "b8f5ef32195cae6470b728e8ca677f0dbed1a004"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -134,10 +128,22 @@
   version = "v0.3.0"
 
 [[projects]]
+  name = "gopkg.in/fatih/set.v0"
+  packages = ["."]
+  revision = "57907de300222151a123d29255ed17f5ed43fad3"
+  version = "v0.1.0"
+
+[[projects]]
   branch = "v2"
   name = "gopkg.in/karalabe/cookiejar.v2"
   packages = ["collections/prque"]
   revision = "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/natefinch/npipe.v2"
+  packages = ["."]
+  revision = "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6"
 
 [[projects]]
   name = "gopkg.in/urfave/cli.v1"
@@ -148,6 +154,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "bc7df98f37ca0e3a1fb5f2393bee9e44e0f317ebaee709887811027fee77fbda"
+  inputs-digest = "239fcbc4341561ec1251af631826f1905e9f2f2b0e0bc5333c76619c66bc079d"
   solver-name = "gps-cdcl"
   solver-version = 1
