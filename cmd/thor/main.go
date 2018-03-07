@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/ethereum/go-ethereum/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -24,10 +24,11 @@ func newApp() *cli.App {
 }
 
 func main() {
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp:   true,
-		TimestampFormat: "0102 15:04:05.000",
-	})
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	//glogger.Verbosity(log.Lvl(ctx.Int("verbosity")))
+	//glogger.Vmodule(ctx.String("vmodule"))
+	log.Root().SetHandler(glogger)
+
 	if err := newApp().Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
