@@ -10,6 +10,8 @@ type Receipt struct {
 	GasUsed uint64
 	// the one who payed for gas
 	GasPayer thor.Address
+	// if the tx reverted
+	Reverted bool
 	// outputs of clauses in tx
 	Outputs []*Output
 }
