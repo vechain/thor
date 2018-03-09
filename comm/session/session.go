@@ -1,143 +1,133 @@
 package session
 
 import (
-	"context"
 	"errors"
-	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/co"
 )
 
+// HandleRequest handles incoming request message, acts like a server.
+// The returned resp can be nil if don't want to response to incoming request.
+type HandleRequest func(session *Session, msg *p2p.Msg) (resp interface{})
+
+// Session p2p session which conforms request-response manner.
 type Session struct {
 	peer       *p2p.Peer
 	nextReqSeq uint32
-	reqCh      chan *request
+	localReqCh chan interface{}
 	closed     chan interface{}
 }
 
+// New create a new session.
 func New(peer *p2p.Peer) *Session {
 	return &Session{
 		peer,
 		0,
-		make(chan *request),
-		nil,
+		make(chan interface{}),
+		make(chan interface{}),
 	}
 }
 
-func (s *Session) Serve(ws p2p.MsgReadWriter) (rerr error) {
-	s.closed = make(chan interface{})
+// Disconnect initiatively disconnect with remote peer.
+func (s *Session) Disconnect() {
+	s.peer.Disconnect(p2p.DiscSelf)
+}
+
+// Serve handles p2p message.
+func (s *Session) Serve(ws p2p.MsgReadWriter, handleRequest HandleRequest) error {
 	defer func() { close(s.closed) }()
 
-	msgCh := make(chan *p2p.Msg)
 	var runner co.Runner
+	defer runner.Wait()
+
+	type remoteResponse struct {
+		sequence uint32
+		msg      *p2p.Msg
+	}
+	remoteRespCh := make(chan *remoteResponse)
+	defer close(remoteRespCh)
 
 	runner.Go(func() {
-		pendings := make(map[uint32]*request)
-		// tx loop
+		// handle local request and remote response
+		pendingReqs := make(map[uint32]*request)
 		for {
 			select {
-			case req := <-s.reqCh:
-				seq := req.code.Sequence()
-				if _, loaded := pendings[seq]; loaded {
-					req.respCh <- &response{err: errors.New("duplicated sequence number")}
-					continue
-				}
+			case v := <-s.localReqCh:
+				if req, ok := v.(*request); ok {
+					if _, loaded := pendingReqs[req.sequence]; loaded {
+						req.respCh <- &response{err: errors.New("duplicated sequence number")}
+						continue
+					}
 
-				pendings[seq] = req
-				if err := p2p.Send(ws, req.code.Uint64(), req.data); err != nil {
-					delete(pendings, seq)
-					req.respCh <- &response{err: err}
-					continue
+					pendingReqs[req.sequence] = req
+					if err := p2p.Send(ws, req.msgCode, []interface{}{req.sequence, false, req.payload}); err != nil {
+						delete(pendingReqs, req.sequence)
+						req.respCh <- &response{err: err}
+						continue
+					}
+				} else if seq, ok := v.(uint32); ok {
+					delete(pendingReqs, seq)
+				} else {
+					panic("unexpected")
 				}
-			case msg := <-msgCh:
-				if msg == nil {
+			case resp := <-remoteRespCh:
+				if resp == nil {
+					// session should be ended
 					return
 				}
-				msgCode := MsgCode(msg.Code)
-				seq := msgCode.Sequence()
-				req, loaded := pendings[seq]
+
+				req, loaded := pendingReqs[resp.sequence]
 				if !loaded {
-					msg.Discard()
+					resp.msg.Discard()
 					continue
 				}
-				if msgCode.Code() != req.code.Code() || !msgCode.IsResponse() {
-					msg.Discard()
+
+				if resp.msg.Code != req.msgCode {
+					resp.msg.Discard()
 					continue
 				}
-				delete(pendings, seq)
-				req.respCh <- &response{msg: msg}
+				delete(pendingReqs, resp.sequence)
+				req.respCh <- &response{msg: resp.msg}
 			}
 		}
+
 	})
-	runner.Go(func() {
-		defer close(msgCh)
-		// rx loop
-		for {
-			msg, err := ws.ReadMsg()
-			if err != nil {
-				rerr = err
-				return
+
+	// read msg loop
+	for {
+		msg, err := ws.ReadMsg()
+		if err != nil {
+			return err
+		}
+		var (
+			sequence   uint32
+			isResponse bool
+		)
+
+		// parse firt two elements, which are sequence and isResponse
+		stream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := stream.List(); err != nil {
+			return err
+		}
+		if err := stream.Decode(&sequence); err != nil {
+			return err
+		}
+		if err := stream.Decode(&isResponse); err != nil {
+			return err
+		}
+
+		if isResponse {
+			remoteRespCh <- &remoteResponse{sequence, &msg}
+		} else {
+			resp := handleRequest(s, &msg)
+			msg.Discard()
+			if resp != nil {
+				if err := p2p.Send(ws, msg.Code, []interface{}{sequence, true, resp}); err != nil {
+					return err
+				}
 			}
-			msgCh <- &msg
 		}
-	})
-	runner.Wait()
-	return
-}
-
-type Request struct {
-	code uint8
-	data interface{}
-}
-
-func NewRequest(code uint8, data interface{}) *Request {
-	return &Request{code, data}
-}
-
-func (r *Request) Do(ctx context.Context, session *Session, respData interface{}) error {
-	if session.closed == nil {
-		return errors.New("session not started")
 	}
-
-	req := &request{
-		make(chan *response, 1),
-		NewMsgCode(r.code, atomic.AddUint32(&session.nextReqSeq, 1), false),
-		r.data,
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-
-	select {
-	case session.reqCh <- req:
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-session.closed:
-		return errors.New("session closed")
-	}
-
-	select {
-	case resp := <-req.respCh:
-		if resp.err != nil {
-			return resp.err
-		}
-		return resp.msg.Decode(respData)
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-session.closed:
-		return errors.New("session closed")
-	}
-}
-
-type request struct {
-	respCh chan *response
-	code   MsgCode
-	data   interface{}
-}
-
-type response struct {
-	err error
-	msg *p2p.Msg
 }
