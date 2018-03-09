@@ -1,20 +1,58 @@
 package comm
 
 import (
+	"sync"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
 )
 
 type session struct {
-	p          *peer
-	rw         p2p.MsgReadWriter
-	blockChain *chain.Chain
-	txpl       *txpool.TxPool
+	*peer
+	rw p2p.MsgReadWriter
+
+	blockHeaderMsgNum uint32
+	blockHeaderMsg    map[uint32]chan *block.Header
+
+	blockBodyMsgNum uint32
+	blockBodyMsg    map[uint32]chan *block.Header
+
+	msgQueue []p2p.Msg
+	lock     sync.RWMutex
 }
+
+func (s *session) safeAppendMsg(msg p2p.Msg) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.msgQueue = append(s.msgQueue, msg)
+}
+
+func (s *session) remoteMsg() error {
+	msg, err := s.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+	s.safeAppendMsg(msg)
+	return nil
+}
+
+func (s *session) localMsg() error {
+	msg, err := s.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+	s.safeAppendMsg(msg)
+	return nil
+}
+
+// func (s *session) PeekMessage() msg {
+// 	s.lock.Lock()
+// 	defer s.lock.Unlock()
+
+// }
 
 func (s *session) DispatchMessage() error {
 	msg, err := s.rw.ReadMsg()
@@ -30,59 +68,52 @@ func (s *session) DispatchMessage() error {
 	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
-	case msg.Code == GetBlockHeadersMsg:
-		return handleGetBlockHeadersMsg(msg, s)
+	case msg.Code == GetBlockHeaderMsg:
+		return requestHeader(msg, s)
+	case msg.Code == BlockHeaderMsg:
+		var bh blockHeaderDate
+		if err := msg.Decode(&bh); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		if ch, ok := s.blockHeaderMsg[bh.num]; ok {
+			ch <- bh.header
+		}
 	case msg.Code == TxMsg:
 		return txMsg(msg, s)
+	case msg.Code == BlockIDMsg:
+		return blockIDMsg(msg, s)
 	}
 
 	return nil
 }
 
-// func (s *session) sendBlockHeaders(headers []*block.Header) error {
-// 	return p2p.Send(s.rw, BlockHeadersMsg, headers)
-// }
-
-func (s *session) sendTransaction(tx *tx.Transaction) error {
-	s.p.MarkTransaction(tx.ID())
+func (s *session) notifyTransaction(tx *tx.Transaction) error {
+	s.MarkTransaction(tx.ID())
 	return p2p.Send(s.rw, TxMsg, tx)
 }
 
-func (s *session) sendBlockID(id thor.Hash) error {
-	s.p.MarkBlock(id)
-	return p2p.Send(s.rw, NewBlockIDMsg, id)
+func (s *session) notifyBlockID(id thor.Hash) error {
+	s.MarkBlock(id)
+	return p2p.Send(s.rw, BlockIDMsg, id)
 }
 
-type sessions []*session
-
-func (ss sessions) sessionsWithoutFilter(filter func(*session) bool) sessions {
-	list := make(sessions, 0, len(ss))
-	for _, s := range ss {
-		if filter(s) {
-			list = append(list, s)
-		}
+func (s *session) GetHeader(id thor.Hash) (*block.Header, error) {
+	msgNum := s.blockHeaderMsgNum
+	s.blockHeaderMsg[msgNum] = make(chan *block.Header)
+	if err := p2p.Send(s.rw, GetBlockHeaderMsg, &getBlockHeaderDate{id: id, num: msgNum}); err != nil {
+		return nil, err
 	}
-	return list
+
+	header := <-s.blockHeaderMsg[msgNum]
+	delete(s.blockHeaderMsg, msgNum)
+
+	return header, nil
 }
 
-// 该方法将以回调的方式设置到 txpool 中.
-func (ss sessions) broadcastTx(tx *tx.Transaction) {
-	filter := func(s *session) bool {
-		return !s.p.knownTxs.Has(tx.ID())
-	}
+// func (s *session) getBody() error {
+// 	//p2p.Send(s.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+// }
 
-	for _, session := range ss.sessionsWithoutFilter(filter) {
-		session.sendTransaction(tx)
-	}
-}
-
-// 该方法将以回调的方式设置到 blockChain 中.
-func (ss sessions) broadcastBlk(blk *block.Block) {
-	filter := func(s *session) bool {
-		return !s.p.knownBlocks.Has(blk.Header().ID())
-	}
-
-	for _, session := range ss.sessionsWithoutFilter(filter) {
-		session.sendBlockID(blk.Header().ID())
-	}
-}
+// func (s *session) getBlock() error {
+// 	//p2p.Send(s.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
+// }

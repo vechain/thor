@@ -159,9 +159,9 @@ func (svr *service) packer(pk *packer.Packer, privateKey *ecdsa.PrivateKey) *run
 }
 
 func (svr *service) updateChain(block *block.Block, isTrunk bool, ttl int, tag string) {
-	if err := svr.chain.AddBlock(block, true); err != nil {
+	if err := consensus.AddBlock(nil, svr.chain, isTrunk) err != nil {
 		log.Fatalf("[%v %v]: %v\n", svr.ip, tag, err)
-	}
+	} 
 
 	log.Printf("[%v %v]: a block has add to chain, %v\n", svr.ip, tag, isTrunk)
 	svr.BePacked(network.Block{
