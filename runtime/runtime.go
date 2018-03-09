@@ -188,6 +188,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			// vm exception here
 			// revert all executed clauses
 			rt.state.RevertTo(clauseCheckpoint)
+			receipt.Reverted = true
 			receipt.Outputs = nil
 			break
 		}
