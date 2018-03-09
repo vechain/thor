@@ -5,6 +5,8 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/vechain/thor/block"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -33,14 +35,14 @@ const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a prot
 // eth protocol message codes
 const (
 	// Protocol messages belonging to eth/62
-	StatusMsg          = 0x00
-	NewBlockIDMsg      = 0x01
-	TxMsg              = 0x02
-	GetBlockHeadersMsg = 0x03
-	BlockHeadersMsg    = 0x04
-	GetBlockBodiesMsg  = 0x05
-	BlockBodiesMsg     = 0x06
-	NewBlockMsg        = 0x07
+	StatusMsg         = 0x00
+	BlockIDMsg        = 0x01
+	TxMsg             = 0x02
+	GetBlockHeaderMsg = 0x03
+	BlockHeaderMsg    = 0x04
+	GetBlockBodiesMsg = 0x05
+	BlockBodiesMsg    = 0x06
+	NewBlockMsg       = 0x07
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
@@ -61,6 +63,7 @@ const (
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
 	ErrSuspendedPeer
+	ErrChain
 )
 
 func (e errCode) String() string {
@@ -114,6 +117,26 @@ type getBlockHeadersData struct {
 	Amount  uint64       // Maximum number of headers to retrieve
 	Skip    uint64       // Blocks to skip between consecutive headers
 	Reverse bool         // Query direction (false = rising towards latest, true = falling towards genesis)
+}
+
+type getBlockHeaderDate struct {
+	num uint32
+	id  thor.Hash
+}
+
+type blockHeaderDate struct {
+	num    uint32
+	header *block.Header
+}
+
+type getBlockBodyDate struct {
+	num uint32
+	id  thor.Hash
+}
+
+type blockBodyDate struct {
+	num  uint32
+	body *block.Body
 }
 
 // hashOrNumber is a combined field for specifying an origin block.

@@ -17,7 +17,7 @@ func txMsg(msg p2p.Msg, s *session) error {
 		return errResp(ErrDecode, "transaction is nil")
 	}
 
-	s.p.MarkTransaction(tx.ID())
+	s.MarkTransaction(tx.ID())
 	s.txpl.Add(tx)
 
 	return nil
@@ -29,12 +29,12 @@ func blockIDMsg(msg p2p.Msg, s *session) error {
 		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
 
-	s.p.MarkBlock(id)
+	s.MarkBlock(id)
 	if _, err := s.blockChain.GetBlock(id); err != nil {
-		if !s.blockChain.IsNotFound(err) {
-			return errResp(ErrDecode, "%v: %v", msg, err)
+		if s.blockChain.IsNotFound(err) {
+			//pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
 		}
-		//pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
 
 	return nil
