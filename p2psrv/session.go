@@ -26,24 +26,30 @@ type HandleRequest func(session *Session, msg *p2p.Msg) (resp interface{})
 
 // Session p2p session which conforms request-response manner.
 type Session struct {
-	peer        *p2p.Peer
-	msgRW       p2p.MsgReadWriter
-	protoVer    uint32
-	pendingReqs map[uint32]*request
-	opCh        chan func() error
-	opDoneCh    chan error
-	doneCh      chan interface{}
+	peer            *p2p.Peer
+	protoVer        uint32
+	localReqCh      chan *localRequest
+	localReqAckCh   chan *localRequestAck
+	localReqDoneCh  chan uint32
+	remoteRespCh    chan *remoteResponse
+	remoteRespAckCh chan struct{}
+	remoteReqCh     chan *remoteRequest
+	remoteReqAckCh  chan struct{}
+	doneCh          chan struct{}
 }
 
-func newSession(peer *p2p.Peer, msgRW p2p.MsgReadWriter, protoVer uint32) *Session {
+func newSession(peer *p2p.Peer, protoVer uint32) *Session {
 	return &Session{
 		peer,
-		msgRW,
 		protoVer,
-		make(map[uint32]*request),
-		make(chan func() error),
-		make(chan error),
-		make(chan interface{}),
+		make(chan *localRequest),
+		make(chan *localRequestAck),
+		make(chan uint32),
+		make(chan *remoteResponse),
+		make(chan struct{}),
+		make(chan *remoteRequest),
+		make(chan struct{}),
+		make(chan struct{}),
 	}
 }
 
@@ -68,142 +74,152 @@ func (s *Session) Alive() bool {
 }
 
 // serve handles p2p message.
-func (s *Session) serve(handleRequest HandleRequest) error {
+func (s *Session) serve(rw p2p.MsgReadWriter, handleRequest HandleRequest) error {
+
 	var runner co.Runner
 	defer runner.Wait()
-	defer func() { close(s.doneCh) }()
+	defer close(s.doneCh)
 
-	runner.Go(s.opLoop)
+	runner.Go(func() { s.rrLoop(rw, handleRequest) })
 
-	// read msg loop
+	// msg read loop
 	for {
-		msg, err := s.msgRW.ReadMsg()
-
-		if err != nil {
+		if err := s.handleMsg(rw); err != nil {
 			return err
-		}
-		defer msg.Discard()
-
-		var (
-			reqID      uint32
-			isResponse bool
-		)
-
-		// parse firt two elements, which are reqID and isResponse
-		stream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := stream.List(); err != nil {
-			return err
-		}
-		if err := stream.Decode(&reqID); err != nil {
-			return err
-		}
-		if err := stream.Decode(&isResponse); err != nil {
-			return err
-		}
-
-		if isResponse {
-			s.handleResponse(reqID, &msg)
-		} else {
-			resp := handleRequest(s, &msg)
-			if resp != nil {
-				if err := p2p.Send(s.msgRW, msg.Code, &msgData{reqID, true, resp}); err != nil {
-					return err
-				}
-			}
 		}
 	}
 }
 
-func (s *Session) opLoop() {
+func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
+	msg, err := rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+	// ensure msg.Payload consumed
+	defer msg.Discard()
+
+	// parse firt two elements, which are reqID and isResponse
+	stream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+	if _, err := stream.List(); err != nil {
+		return err
+	}
+	var (
+		reqID      uint32
+		isResponse bool
+	)
+	if err := stream.Decode(&reqID); err != nil {
+		return err
+	}
+	if err := stream.Decode(&isResponse); err != nil {
+		return err
+	}
+	if isResponse {
+		s.remoteRespCh <- &remoteResponse{reqID, &msg}
+		<-s.remoteRespAckCh
+	} else {
+		s.remoteReqCh <- &remoteRequest{reqID, &msg}
+		<-s.remoteReqAckCh
+	}
+	return nil
+}
+
+func (s *Session) rrLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
+	pendingReqs := make(map[uint32]*localRequest)
+	// process loop
 	for {
 		select {
 		case <-s.doneCh:
 			return
-		case op := <-s.opCh:
-			s.opDoneCh <- op()
+		case resp := <-s.remoteRespCh:
+			req, ok := pendingReqs[resp.id]
+			if !ok {
+				s.remoteRespAckCh <- struct{}{}
+				continue
+			}
+			if resp.msg.Code != req.msgCode {
+				s.remoteRespAckCh <- struct{}{}
+				continue
+			}
+			delete(pendingReqs, resp.id)
+			req.onResponse(resp.msg)
+			s.remoteRespAckCh <- struct{}{}
+		case req := <-s.localReqCh:
+			id := rand.Uint32()
+			for {
+				if _, ok := pendingReqs[id]; !ok {
+					break
+				}
+			}
+			if err := p2p.Send(rw, req.msgCode, &msgData{id, false, req.payload}); err != nil {
+				// TODO log
+				s.localReqAckCh <- &localRequestAck{0, err}
+				continue
+			}
+			pendingReqs[id] = req
+			s.localReqAckCh <- &localRequestAck{id, nil}
+		case reqID := <-s.localReqDoneCh:
+			delete(pendingReqs, reqID)
+		case req := <-s.remoteReqCh:
+			resp := handleRequest(s, req.msg)
+			if resp != nil {
+				if err := p2p.Send(rw, req.msg.Code, &msgData{req.id, true, resp}); err != nil {
+					// TODO log
+					s.remoteReqAckCh <- struct{}{}
+					continue
+				}
+			}
+			s.remoteReqAckCh <- struct{}{}
 		}
-	}
-}
-
-func (s *Session) handleResponse(reqID uint32, msg *p2p.Msg) {
-	select {
-	case s.opCh <- func() error {
-		req, ok := s.pendingReqs[reqID]
-		if !ok {
-			return nil
-		}
-		if msg.Code != req.msgCode {
-			return nil
-		}
-		delete(s.pendingReqs, reqID)
-		req.onResponse(msg)
-		return nil
-	}:
-		<-s.opDoneCh
-	case <-s.doneCh:
 	}
 }
 
 // Request send request to remote peer and wait for response.
+// reqPayload must be rlp encodable
+// respPayload must be rlp decodable
 func (s *Session) Request(ctx context.Context, msgCode uint64, reqPayload interface{}, respPayload interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
-	var id uint32
-	respCh := make(chan error)
-
+	respCh := make(chan error, 1)
+	req := localRequest{
+		msgCode,
+		reqPayload,
+		func(msg *p2p.Msg) {
+			// should consume msg here, or msg will be discarded
+			respCh <- msg.Decode(respPayload)
+		},
+	}
+	var reqID uint32
 	// send request
 	select {
 	case <-s.doneCh:
 		return errSessionClosed
 	case <-ctx.Done():
 		return ctx.Err()
-	case s.opCh <- func() error {
-		id = rand.Uint32()
-		for {
-			if _, ok := s.pendingReqs[id]; !ok {
-				break
-			}
+	case s.localReqCh <- &req:
+		ack := <-s.localReqAckCh
+		if ack.err != nil {
+			return ack.err
 		}
-		if err := p2p.Send(s.msgRW, msgCode, &msgData{id, false, reqPayload}); err != nil {
-			return err
-		}
-		s.pendingReqs[id] = &request{
-			msgCode,
-			reqPayload,
-			func(msg *p2p.Msg) {
-				respCh <- msg.Decode(respPayload)
-			},
-		}
-		return nil
-	}:
-		if err := <-s.opDoneCh; err != nil {
-			return err
-		}
+		reqID = ack.id
 	}
+
+	//
 	defer func() {
-		s.syncRequest(id)
+		select {
+		case <-s.doneCh:
+		case s.localReqDoneCh <- reqID:
+		}
 	}()
 
 	// wait for response
 	select {
-	case err := <-respCh:
-		return err
 	case <-s.doneCh:
 		return errSessionClosed
 	case <-ctx.Done():
 		return ctx.Err()
-	}
-}
-
-func (s *Session) syncRequest(id uint32) {
-	select {
-	case <-s.doneCh:
-	case s.opCh <- func() error {
-		delete(s.pendingReqs, id)
-		return nil
-	}:
-		<-s.opDoneCh
+	case err := <-respCh:
+		return err
 	}
 }
 
@@ -213,8 +229,20 @@ type msgData struct {
 	Payload    interface{}
 }
 
-type request struct {
+type localRequest struct {
 	msgCode    uint64
 	payload    interface{}
 	onResponse func(*p2p.Msg)
 }
+
+type localRequestAck struct {
+	id  uint32
+	err error
+}
+
+type remoteResponse struct {
+	id  uint32
+	msg *p2p.Msg
+}
+
+type remoteRequest remoteResponse
