@@ -33,22 +33,26 @@ var ProtocolLengths = []uint64{17, 8}
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
 // eth protocol message codes
-const (
-	// Protocol messages belonging to eth/62
-	StatusMsg         = 0x00
-	BlockIDMsg        = 0x01
-	TxMsg             = 0x02
-	GetBlockHeaderMsg = 0x03
-	BlockHeaderMsg    = 0x04
-	GetBlockBodiesMsg = 0x05
-	BlockBodiesMsg    = 0x06
-	NewBlockMsg       = 0x07
+// const (
+// 	// Protocol messages belonging to eth/62
+// 	StatusMsg         = 0x00
+// 	BlockIDMsg        = 0x01
+// 	TxMsg             = 0x02
+// 	GetBlockHeaderMsg = 0x03
+// 	BlockHeaderMsg    = 0x04
+// 	GetBlockBodiesMsg = 0x05
+// 	BlockBodiesMsg    = 0x06
+// 	NewBlockMsg       = 0x07
 
-	// Protocol messages belonging to eth/63
-	GetNodeDataMsg = 0x0d
-	NodeDataMsg    = 0x0e
-	GetReceiptsMsg = 0x0f
-	ReceiptsMsg    = 0x10
+// 	// Protocol messages belonging to eth/63
+// 	GetNodeDataMsg = 0x0d
+// 	NodeDataMsg    = 0x0e
+// 	GetReceiptsMsg = 0x0f
+// 	ReceiptsMsg    = 0x10
+// )
+
+const (
+	StatusMsg = iota
 )
 
 type errCode int
