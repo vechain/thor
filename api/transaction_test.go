@@ -45,6 +45,16 @@ func TestTransaction(t *testing.T) {
 	}
 	checkTx(t, raw, rtx)
 
+	r, err = httpGet(ts, ts.URL+fmt.Sprintf("/transactions/%v/receipts", ntx.ID().String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(r))
+	// receipt := new(tx.Receipt)
+	// if err := json.Unmarshal(r, &receipt); err != nil {
+	// 	t.Fatal(err)
+	// }
+
 	key, err := crypto.HexToECDSA(testPrivHex)
 	if err != nil {
 		t.Fatal(err)
@@ -55,6 +65,7 @@ func TestTransaction(t *testing.T) {
 	}
 	to := thor.BytesToAddress([]byte("acc1"))
 	hash := thor.BytesToHash([]byte("DependsOn"))
+
 	rawTransaction := &types.RawTransaction{
 		Nonce:        1,
 		GasPriceCoef: 1,
@@ -110,12 +121,11 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Fatal(err)
 	}
 	chain.WriteGenesis(b)
-	address, _ := thor.ParseAddress(testAddress)
-	cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
+	// address, _ := thor.ParseAddress(testAddress)
+	// cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
 	tx := new(tx.Builder).
 		GasPriceCoef(1).
 		Gas(1000).
-		Clause(cla).
 		Nonce(1).
 		Build()
 
@@ -123,6 +133,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(tx.SigningHash())
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
 	if err != nil {
 		t.Errorf("Sign error: %s", err)

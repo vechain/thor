@@ -22,9 +22,5 @@ func (li *LogInterface) Filter(option *logdb.FilterOption) ([]*logdb.Log, error)
 	if err != nil {
 		return nil, err
 	}
-	// lgs := make([]*types.Log, len(logs))
-	// for i, log := range logs {
-	// 	lgs[i] = types.ConvertLog(log)
-	// }
 	return logs, nil
 }
