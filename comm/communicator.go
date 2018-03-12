@@ -48,8 +48,8 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 	}
 }
 
-func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}) {
-	return nil
+func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
+	return nil, nil
 }
 
 // 需要考虑线程同步的问题

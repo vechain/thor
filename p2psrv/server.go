@@ -113,22 +113,25 @@ func (s *Server) startDiscoverLoop(topic discv5.Topic) {
 		return
 	}
 
+	setPeriod := make(chan time.Duration, 1)
+	discNodes := make(chan *discv5.Node, 100)
+	discLookups := make(chan bool, 100)
+
 	s.runner.Go(func() {
 		s.srv.DiscV5.RegisterTopic(topic, s.done)
 	})
 
-	var (
-		setPeriod   = make(chan time.Duration, 1)
-		discNodes   = make(chan *discv5.Node, 100)
-		discLookups = make(chan bool, 100)
-
-		lookupCount  = 0
-		fastDiscover = true
-		convTime     mclock.AbsTime
-	)
-	setPeriod <- time.Millisecond * 100
+	s.runner.Go(func() {
+		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
+	})
 
 	s.runner.Go(func() {
+		setPeriod <- time.Millisecond * 100
+		var (
+			lookupCount  = 0
+			fastDiscover = true
+			convTime     mclock.AbsTime
+		)
 		// see go-ethereum serverpool.go
 		for {
 			select {
@@ -146,12 +149,9 @@ func (s *Server) startDiscoverLoop(topic discv5.Topic) {
 			case node := <-discNodes:
 				s.srv.AddPeer(discover.NewNode(discover.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 			case <-s.done:
+				close(setPeriod)
 				return
 			}
 		}
-	})
-
-	s.runner.Go(func() {
-		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
 	})
 }
