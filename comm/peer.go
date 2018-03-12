@@ -4,9 +4,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/txpool"
 	set "gopkg.in/fatih/set.v0"
 )
 
@@ -20,10 +18,9 @@ type peer struct {
 	*p2p.Peer
 
 	totalScore  uint64
+	bestBlockID thor.Hash
 	knownTxs    *set.Set
 	knownBlocks *set.Set
-	blockChain  *chain.Chain
-	txpl        *txpool.TxPool
 }
 
 func (p *peer) MarkTransaction(id thor.Hash) {

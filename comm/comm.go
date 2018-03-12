@@ -1,15 +1,27 @@
 package comm
 
 import (
+	"bytes"
+	"log"
+	"time"
+
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
 
-type Comm []*session
+const forceSyncCycle = 10 * time.Second
 
-func (c Comm) commWithoutFilter(filter func(*session) bool) Comm {
-	list := make(Comm, 0, len(c))
-	for _, s := range c {
+type Comm struct {
+	sessions []*session
+	ch       *chain.Chain
+	txpl     *txpool.TxPool
+}
+
+func (c Comm) sessionsWithoutFilter(filter func(*session) bool) []*session {
+	list := make([]*session, 0, len(c.sessions))
+	for _, s := range c.sessions {
 		if filter(s) {
 			list = append(list, s)
 		}
@@ -23,7 +35,7 @@ func (c Comm) bestSession() *session {
 		bestTc      uint64
 	)
 
-	for _, s := range c {
+	for _, s := range c.sessions {
 		if s.totalScore > bestTc {
 			bestTc = s.totalScore
 			bestSession = s
@@ -33,24 +45,45 @@ func (c Comm) bestSession() *session {
 	return bestSession
 }
 
-// 该方法将以回调的方式设置到 txpool 中.
+func (c Comm) sync() {
+	s := c.bestSession()
+
+	// Make sure the peer's TD is higher than our own
+	bestBlock, err := c.ch.GetBestBlock()
+	if err != nil {
+		log.Fatalf("[sync]: %v\n", err)
+	}
+
+	if bestBlock.Header().TotalScore() > s.totalScore {
+		return
+	}
+
+	if bestBlock.Header().TotalScore() == s.totalScore {
+		bestBlockID := bestBlock.Header().ID()
+		if bytes.Compare(bestBlockID[:], s.bestBlockID[:]) > 0 {
+			return
+		}
+	}
+
+	s.findAncestor(0, bestBlock.Header().Number(), 0, c.ch)
+}
+
 func (c Comm) BroadcastTx(tx *tx.Transaction) {
 	filter := func(s *session) bool {
 		return !s.knownTxs.Has(tx.ID())
 	}
 
-	for _, session := range c.commWithoutFilter(filter) {
+	for _, session := range c.sessionsWithoutFilter(filter) {
 		session.notifyTransaction(tx)
 	}
 }
 
-// 该方法将以回调的方式设置到 blockChain 中.
 func (c Comm) BroadcastBlk(blk *block.Block) {
 	filter := func(s *session) bool {
 		return !s.knownBlocks.Has(blk.Header().ID())
 	}
 
-	for _, session := range c.commWithoutFilter(filter) {
+	for _, session := range c.sessionsWithoutFilter(filter) {
 		session.notifyBlockID(blk.Header().ID())
 	}
 }
