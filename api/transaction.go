@@ -56,6 +56,15 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 	return t, nil
 }
 
+//GetTransactionReceiptByID get tx's receipt
+func (ti *TransactionInterface) GetTransactionReceiptByID(txID thor.Hash) (*tx.Receipt, error) {
+	receipt, err := ti.chain.GetTransactionReceipt(txID)
+	if err != nil {
+		return nil, err
+	}
+	return receipt, nil
+}
+
 //SendRawTransaction send a raw transactoion
 func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*thor.Hash, error) {
 	bestblk, err := ti.chain.GetBestBlock()
