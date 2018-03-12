@@ -18,6 +18,8 @@ tags:
   description: "Everything about block"
 - name: "Contract"
   description: "Everything about contract"
+- name: "Log"
+  description: "Everything about log"
 paths:
   /accounts/{address}/balance:
     get:
@@ -337,3 +339,54 @@ paths:
           description: "successful operation"
         400:
           description: "Invalid params"
+  /logs:
+    post:
+      tags:
+      - "Log"
+      summary: "return logs by params"
+      description: "get logs"
+      requestBody:
+        description: request params
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: 
+                options:
+                  type: object
+                  properties: 
+                    FromBlock:
+                      type: integer
+                      example: 0
+                    ToBlock:
+                      type: integer
+                      example: 1
+                    Address:
+                      type: string
+                      example: 0x000000000000000000000000636f6e7472616374
+                    TopicSet:
+                      type: array
+                      example: [[topic0,topic1,topic2,topic3,topic4],[topic0,topic1,topic2,topic3,topic4]]
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {
+                        "BlockID":"0x00000000000000000000000000000000000000000000000000626c6f636b4944",
+			                  "BlockNumber":1,
+			                  "TxID":"0x0000000000000000000000000000000000000000000000000000000074784944",
+			                  "TxOrigin":"0x00000000000000000000000074784f726967696e",
+			                  "Address":"0x0000000000000000000000000000000061646472",
+			                  "Data":[0x00,0x00],
+			                  "Topics":["0x0000000000000000000000000000000000000000000000000000746f70696330",
+                                  "0x0000000000000000000000000000000000000000000000000000746f70696331",
+                                  nil,
+                                  nil,
+                                  nil]
+                      }
+        400:
+          description: "unhandled error"
