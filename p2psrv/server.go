@@ -59,11 +59,11 @@ func (s *Server) Self() *discover.Node {
 func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 	for _, p := range protocols {
 		s.srv.Protocols = append(s.srv.Protocols, p2p.Protocol{
-			Name:     p.Name,
-			Version:  uint(p.Version),
-			Length:   p.Length,
-			NodeInfo: p.NodeInfo,
-			PeerInfo: p.PeerInfo,
+			Name:    p.Name,
+			Version: uint(p.Version),
+			Length:  p.Length,
+			//			NodeInfo: p.NodeInfo,
+			//			PeerInfo: p.PeerInfo,
 			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				session := newSession(peer, p.Version)
 				s.sessionSet.add(session)
