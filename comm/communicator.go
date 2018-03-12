@@ -148,18 +148,50 @@ func (c *Communicator) sync() {
 		log.Fatalf("[sync]: %v\n", err)
 	}
 
-	if bestBlock.Header().TotalScore() > s.totalScore {
+	if bestBlock.Header().TotalScore() > st.totalScore {
 		return
 	}
 
-	if bestBlock.Header().TotalScore() == s.totalScore {
+	if bestBlock.Header().TotalScore() == st.totalScore {
 		bestBlockID := bestBlock.Header().ID()
-		if bytes.Compare(bestBlockID[:], s.bestBlockID[:]) > 0 {
+		if bytes.Compare(bestBlockID[:], st.bestBlockID[:]) < 0 {
 			return
 		}
 	}
 
-	s.findAncestor(0, bestBlock.Header().Number(), 0, c.ch)
+	c.findAncestor(0, bestBlock.Header().Number(), 0)
+}
+
+func (c *Communicator) findAncestor(start uint32, end uint32, ancestor uint32) uint32 {
+	if start == end {
+		localID, remoteID := c.getLocalAndRemoteIDByNumber(start)
+		if bytes.Compare(localID[:], remoteID[:]) == 0 {
+			return start
+		}
+	} else {
+		mid := (start + end) / 2
+		midID, remoteID := c.getLocalAndRemoteIDByNumber(mid)
+
+		if bytes.Compare(midID[:], remoteID[:]) == 0 {
+			return c.findAncestor(mid+1, end, mid)
+		}
+
+		if bytes.Compare(midID[:], remoteID[:]) != 0 {
+			if mid > start {
+				return c.findAncestor(start, mid-1, ancestor)
+			}
+		}
+	}
+
+	return ancestor
+}
+
+func (c *Communicator) getLocalAndRemoteIDByNumber(num uint32) (thor.Hash, thor.Hash) {
+	blk, err := c.ch.GetBlockByNumber(num)
+	if err != nil {
+		log.Fatalf("[findAncestor]: %v\n", err)
+	}
+	return blk.Header().ID(), requestBlockHashByNumber(num)
 }
 
 // BroadcastTx 广播新插入池的交易
