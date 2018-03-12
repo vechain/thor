@@ -1,94 +1,25 @@
 package p2psrv
 
 import (
-	"crypto/ecdsa"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/vechain/thor/co"
 )
 
-// Options options for creating p2p server.
-// Partially copied from ethereum p2p.Config.
-type Options struct {
-	// Name sets the node name of this server.
-	// Use common.MakeName to create a name that follows existing conventions.
-	Name string
-
-	// This field must be set to a valid secp256k1 private key.
-	PrivateKey *ecdsa.PrivateKey
-
-	// MaxPeers is the maximum number of peers that can be
-	// connected. It must be greater than zero.
-	MaxPeers int
-
-	// MaxPendingPeers is the maximum number of peers that can be pending in the
-	// handshake phase, counted separately for inbound and outbound connections.
-	// Zero defaults to preset values.
-	MaxPendingPeers int
-
-	// NoDiscovery can be used to disable the peer discovery mechanism.
-	// Disabling is useful for protocol debugging (manual topology).
-	NoDiscovery bool
-
-	// If ListenAddr is set to a non-nil address, the server
-	// will listen for incoming connections.
-	//
-	// If the port is zero, the operating system will pick a port. The
-	// ListenAddr field will be updated with the actual address when
-	// the server is started.
-	ListenAddr string
-
-	// BootstrapNodes are used to establish connectivity
-	// with the rest of the network using the V5 discovery
-	// protocol.
-	BootstrapNodes []*discover.Node
-
-	// Static nodes are used as pre-configured connections which are always
-	// maintained and re-connected on disconnects.
-	StaticNodes []*discover.Node
-
-	// Trusted nodes are used as pre-configured connections which are always
-	// allowed to connect, even above the peer limit.
-	TrustedNodes []*discover.Node
-
-	// Connectivity can be restricted to certain IP networks.
-	// If this option is set to a non-nil value, only hosts which match one of the
-	// IP networks contained in the list are considered.
-	NetRestrict *netutil.Netlist
-
-	// If set to a non-nil value, the given NAT port mapper
-	// is used to make the listening port available to the
-	// Internet.
-	NAT nat.Interface
-
-	// If NoDial is true, the server will not dial any peers.
-	NoDial bool
-
-	// Protocols should contain the protocols supported
-	// by the server. Matching protocols are launched for
-	// each peer.
-	Protocols []p2p.Protocol
-
-	// Discovery v5 topic
-	Topic string
-}
-
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	srv    *p2p.Server
-	topic  discv5.Topic
-	runner co.Runner
-	done   chan struct{}
+	srv        *p2p.Server
+	runner     co.Runner
+	done       chan struct{}
+	sessionSet *SessionSet
 }
 
 // New create a p2p server.
-func New(opts Options) *Server {
+func New(opts *Options) *Server {
 
 	v5nodes := make([]*discv5.Node, 0, len(opts.BootstrapNodes))
 	for _, n := range opts.BootstrapNodes {
@@ -111,11 +42,10 @@ func New(opts Options) *Server {
 				NetRestrict:      opts.NetRestrict,
 				NAT:              opts.NAT,
 				NoDial:           opts.NoDial,
-				Protocols:        opts.Protocols,
 			},
 		},
-		topic: discv5.Topic(opts.Topic),
-		done:  make(chan struct{}),
+		done:       make(chan struct{}),
+		sessionSet: newSessionSet(),
 	}
 }
 
@@ -126,11 +56,26 @@ func (s *Server) Self() *discover.Node {
 }
 
 // Start start the server.
-func (s *Server) Start() error {
+func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
+	for _, p := range protocols {
+		s.srv.Protocols = append(s.srv.Protocols, p2p.Protocol{
+			Name:     p.Name,
+			Version:  uint(p.Version),
+			Length:   p.Length,
+			NodeInfo: p.NodeInfo,
+			PeerInfo: p.PeerInfo,
+			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+				session := newSession(peer, rw, p.Version)
+				s.sessionSet.add(session)
+				defer s.sessionSet.remove(session)
+				return session.serve(p.HandleRequest)
+			},
+		})
+	}
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	s.startDiscoverLoop()
+	s.startDiscoverLoop(discv5.Topic(discoTopic))
 	return nil
 }
 
@@ -158,23 +103,18 @@ func (s *Server) NodeInfo() *p2p.NodeInfo {
 	return s.srv.NodeInfo()
 }
 
-// PeerCount returns the number of connected peers.
-func (s *Server) PeerCount() int {
-	return s.srv.PeerCount()
+// SessionSet returns a set of alive sessions.
+func (s *Server) SessionSet() *SessionSet {
+	return s.sessionSet
 }
 
-// PeersInfo returns an array of metadata objects describing connected peers.
-func (s *Server) PeersInfo() []*p2p.PeerInfo {
-	return s.srv.PeersInfo()
-}
-
-func (s *Server) startDiscoverLoop() {
+func (s *Server) startDiscoverLoop(topic discv5.Topic) {
 	if s.srv.DiscV5 == nil {
 		return
 	}
 
 	s.runner.Go(func() {
-		s.srv.DiscV5.RegisterTopic(s.topic, s.done)
+		s.srv.DiscV5.RegisterTopic(topic, s.done)
 	})
 
 	var (
@@ -212,6 +152,6 @@ func (s *Server) startDiscoverLoop() {
 	})
 
 	s.runner.Go(func() {
-		s.srv.DiscV5.SearchTopic(s.topic, setPeriod, discNodes, discLookups)
+		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
 	})
 }
