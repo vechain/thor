@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -84,7 +85,8 @@ type status struct {
 	bestBlockID thor.Hash
 }
 
-func (c *Communicator) getAllStatus() chan *status {
+// timeout 移到参数, 内部加上 routine 执行完判断
+func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
 	bestBlock, err := c.ch.GetBestBlock()
 	if err != nil {
 		log.Fatalf("[sync]: %v\n", err)
@@ -99,8 +101,17 @@ func (c *Communicator) getAllStatus() chan *status {
 	ctx, cancel := context.WithCancel(context.Background())
 	cn := make(chan *status, sset.Len())
 
+	var wg sync.WaitGroup
+	wg.Add(sset.Len())
+	done := make(chan int)
+	go func() {
+		wg.Wait()
+		done <- 1
+	}()
+
 	for _, session := range sset.All() {
 		go func(s *p2psrv.Session) {
+			defer wg.Done()
 			st := &status{}
 			if err := s.Request(ctx, StatusMsg, localSt, st); err != nil {
 				return
@@ -109,9 +120,10 @@ func (c *Communicator) getAllStatus() chan *status {
 		}(session)
 	}
 
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	<-timer.C
+	select {
+	case <-done:
+	case <-timeout.C:
+	}
 	cancel()
 
 	return cn
@@ -119,7 +131,9 @@ func (c *Communicator) getAllStatus() chan *status {
 
 func (c *Communicator) bestSession() *status {
 	bestSt := &status{}
-	cn := c.getAllStatus()
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	cn := c.getAllStatus(timer)
 
 	for {
 		select {
