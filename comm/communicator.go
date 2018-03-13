@@ -1,8 +1,6 @@
 package comm
 
 import (
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/vechain/thor/block"
@@ -21,7 +19,7 @@ const (
 )
 
 type Communicator struct {
-	synced  uint32            // Flag whether we're synchronised
+	synced  bool              // Flag whether we're synchronised
 	BlockCh chan *block.Block // 100 缓冲区
 
 	ps          *p2psrv.Server
@@ -32,11 +30,13 @@ type Communicator struct {
 }
 
 func New() *Communicator {
-	return &Communicator{}
+	return &Communicator{
+		synced: false,
+	}
 }
 
-func (c *Communicator) isSynced() bool {
-	return atomic.LoadUint32(&c.synced) == 1
+func (c *Communicator) IsSynced() bool {
+	return c.synced == true
 }
 
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
@@ -71,6 +71,18 @@ func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (res
 		c.markTransaction(session.Peer().ID(), tx.ID())
 		c.txpl.Add(tx)
 		return &struct{}{}, nil
+	case msg.Code == proto.MsgNewBlock:
+
+	case msg.Code == proto.MsgGetBlockIDByNumber:
+		var num uint32
+		if err := msg.Decode(&num); err != nil {
+			return nil, err
+		}
+		id, err := c.ch.GetBlockIDByNumber(num)
+		if err != nil {
+			return nil, err
+		}
+		return &id, nil
 	case msg.Code == proto.MsgNewBlockID:
 		var id thor.Hash
 		if err := msg.Decode(&id); err != nil {
@@ -84,6 +96,32 @@ func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (res
 			return nil, err
 		}
 		return &struct{}{}, nil
+	case msg.Code == proto.MsgGetBlocksByNumber:
+		var num uint32
+		if err := msg.Decode(&num); err != nil {
+			return nil, err
+		}
+
+		bestBlk, err := c.ch.GetBestBlock()
+		if err != nil {
+			return nil, err
+		}
+
+		blks := make([]*block.Block, 0, 10)
+		for i := 0; i < 10; i++ {
+			num++
+			if num > bestBlk.Header().Number() {
+				break
+			}
+
+			blk, err := c.ch.GetBlockByNumber(num)
+			if err != nil {
+				return nil, err
+			}
+
+			blks[i] = blk
+		}
+		return blks, nil
 	}
 	return nil, nil
 }
@@ -108,9 +146,7 @@ func (c *Communicator) Sync() {
 		return
 	}
 
-	if atomic.LoadUint32(&c.synced) == 0 {
-		atomic.StoreUint32(&c.synced, 1)
-	}
+	c.synced = true
 }
 
 // BroadcastTx 广播新插入池的交易

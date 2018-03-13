@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 
@@ -83,7 +83,7 @@ func (c *Communicator) sync() error {
 
 	localBestBlock, err := c.ch.GetBestBlock()
 	if err != nil {
-		log.Fatalf("[sync]: %v\n", err)
+		return fmt.Errorf("[sync]: %v", err)
 	}
 
 	if !c.isBetterThanLocal(localBestBlock, st) {
@@ -162,7 +162,7 @@ func (c *Communicator) findAncestor(s *p2psrv.Session, start uint32, end uint32,
 func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32) (thor.Hash, thor.Hash, error) {
 	blk, err := c.ch.GetBlockByNumber(num)
 	if err != nil {
-		log.Fatalf("[findAncestor]: %v\n", err)
+		return thor.Hash{}, thor.Hash{}, fmt.Errorf("[findAncestor]: %v", err)
 	}
 	remoteID, err := proto.ReqGetBlockIDByNumber(num).Do(context.Background(), s)
 	if err != nil {
