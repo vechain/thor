@@ -43,6 +43,7 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 			Name:          proto.Name,
 			Version:       proto.Version,
 			Length:        proto.Length,
+			MaxMsgSize:    proto.MaxMsgSize,
 			HandleRequest: c.handleRequest,
 		},
 	}

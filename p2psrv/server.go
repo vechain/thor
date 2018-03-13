@@ -65,7 +65,7 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 			//			NodeInfo: p.NodeInfo,
 			//			PeerInfo: p.PeerInfo,
 			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-				session := newSession(peer, p.Version)
+				session := newSession(peer, p)
 				s.sessionSet.add(session)
 				defer s.sessionSet.remove(session)
 				return session.serve(rw, p.HandleRequest)

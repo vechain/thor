@@ -57,6 +57,7 @@ func TestServer(t *testing.T) {
 		Name:          "MyProtocol",
 		Version:       1,
 		Length:        1,
+		MaxMsgSize:    1024,
 		HandleRequest: handleRequest,
 	}
 

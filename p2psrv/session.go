@@ -25,26 +25,26 @@ type HandleRequest func(session *Session, msg *p2p.Msg) (resp interface{}, err e
 
 // Session p2p session which conforms request-response manner.
 type Session struct {
-	peer     *p2p.Peer
-	protoVer uint32
-	opCh     chan interface{}
-	opAckCh  chan struct{}
-	doneCh   chan struct{}
+	peer    *p2p.Peer
+	proto   *Protocol
+	opCh    chan interface{}
+	opAckCh chan struct{}
+	doneCh  chan struct{}
 }
 
-func newSession(peer *p2p.Peer, protoVer uint32) *Session {
+func newSession(peer *p2p.Peer, proto *Protocol) *Session {
 	return &Session{
 		peer,
-		protoVer,
+		proto,
 		make(chan interface{}),
 		make(chan struct{}),
 		make(chan struct{}),
 	}
 }
 
-// ProtocolVersion returns protocol version.
-func (s *Session) ProtocolVersion() uint32 {
-	return s.protoVer
+// Protocol returns protocol.
+func (s *Session) Protocol() *Protocol {
+	return s.proto
 }
 
 // Peer returns remote peer of this session.
@@ -86,6 +86,10 @@ func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
 	}
 	// ensure msg.Payload consumed
 	defer msg.Discard()
+
+	if msg.Size > s.proto.MaxMsgSize {
+		return errors.New("msg too large")
+	}
 
 	// parse firt two elements, which are reqID and isResponse
 	stream := rlp.NewStream(msg.Payload, uint64(msg.Size))

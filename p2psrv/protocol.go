@@ -13,5 +13,7 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
+	MaxMsgSize uint32
+
 	HandleRequest HandleRequest
 }
