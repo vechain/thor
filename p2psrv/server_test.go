@@ -27,13 +27,13 @@ func mustHexToECDSA(k string) *ecdsa.PrivateKey {
 	return pk
 }
 
-func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}) {
+func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
 	var req string
 	if err := msg.Decode(&req); err != nil {
 		panic(err)
 	}
 	fmt.Println("req: ", req)
-	return "bar"
+	return "bar", nil
 }
 
 func TestServer(t *testing.T) {
@@ -57,6 +57,7 @@ func TestServer(t *testing.T) {
 		Name:          "MyProtocol",
 		Version:       1,
 		Length:        1,
+		MaxMsgSize:    1024,
 		HandleRequest: handleRequest,
 	}
 
