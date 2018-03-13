@@ -19,17 +19,22 @@ const (
 
 // Protocol messages of thor
 const (
-	MsgStatus             = 0
-	MsgNewBlockID         = 1
-	MsgNewBlock           = 2
-	MsgGetBlockIDByNumber = 3
+	MsgStatus = iota
+	MsgNewBlockID
+	MsgNewBlock
+	MsgNewTx
+	MsgGetBlockIDByNumber
 )
 
-// ReqStatus request payload of MsgStatus.
-type ReqStatus struct {
-	ProtocalVersion uint32
-	BestBlockID     thor.Hash
+// RespStatus response payload of MsgStatus.
+type RespStatus struct {
+	Session     *p2psrv.Session
+	BestBlockID thor.Hash
+	TotalScore  uint64
 }
+
+// ReqStatus request payload of MsgStatus.
+type ReqStatus struct{}
 
 // Do make request to session.
 func (req ReqStatus) Do(ctx context.Context, session *p2psrv.Session) (*RespStatus, error) {
@@ -39,9 +44,6 @@ func (req ReqStatus) Do(ctx context.Context, session *p2psrv.Session) (*RespStat
 	}
 	return &resp, nil
 }
-
-// RespStatus response payload of MsgStatus.
-type RespStatus ReqStatus
 
 // ReqNewBlockID request payload of MsgNewBlockID.
 type ReqNewBlockID thor.Hash
