@@ -25,7 +25,7 @@ const (
 )
 
 type Communicator struct {
-	ps          p2pServer
+	ps          *p2psrv.Server
 	knownBlocks map[discover.NodeID]*set.Set
 	knownTxs    map[discover.NodeID]*set.Set
 	ch          *chain.Chain
@@ -37,7 +37,6 @@ func New() *Communicator {
 }
 
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
-
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
 			Name:          proto.Name,
@@ -50,6 +49,39 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 }
 
 func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
+	switch {
+	case msg.Code == proto.MsgStatus:
+		bestBlock, err := c.ch.GetBestBlock()
+		if err != nil {
+			return nil, err
+		}
+		header := bestBlock.Header()
+		return &proto.RespStatus{
+			TotalScore:  header.TotalScore(),
+			BestBlockID: header.ID(),
+		}, nil
+	case msg.Code == proto.MsgNewTx:
+		tx := &tx.Transaction{}
+		if err := msg.Decode(tx); err != nil {
+			return nil, err
+		}
+		c.markTransaction(session.Peer().ID(), tx.ID())
+		c.txpl.Add(tx)
+		return &struct{}{}, nil
+	case msg.Code == proto.MsgNewBlockID:
+		var id thor.Hash
+		if err := msg.Decode(&id); err != nil {
+			return nil, err
+		}
+		c.markBlock(session.Peer().ID(), id)
+		if _, err := c.ch.GetBlock(id); err != nil {
+			if c.ch.IsNotFound(err) {
+				//pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+			}
+			return nil, err
+		}
+		return &struct{}{}, nil
+	}
 	return nil, nil
 }
 
@@ -68,56 +100,29 @@ func (c *Communicator) markBlock(peer discover.NodeID, id thor.Hash) {
 	c.knownTxs[peer].Add(id)
 }
 
-func (c *Communicator) sessionsWithoutFilter(filter func(*p2psrv.Session) bool) []*p2psrv.Session {
-	sset := c.ps.SessionSet()
-
-	list := make([]*p2psrv.Session, 0, sset.Len())
-	for _, s := range sset.All() {
-		if filter(s) {
-			list = append(list, s)
-		}
-	}
-	return list
-}
-
-type status struct {
-	session     *p2psrv.Session
-	totalScore  uint64
-	bestBlockID thor.Hash
-}
-
 // timeout 移到参数, 内部加上 routine 执行完判断
-func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
-	bestBlock, err := c.ch.GetBestBlock()
-	if err != nil {
-		log.Fatalf("[sync]: %v\n", err)
-	}
-	header := bestBlock.Header()
-	localSt := &status{
-		totalScore:  header.TotalScore(),
-		bestBlockID: header.ID(),
-	}
-
-	sset := c.ps.SessionSet()
+func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus {
+	ss := c.ps.Sessions()
 	ctx, cancel := context.WithCancel(context.Background())
-	cn := make(chan *status, sset.Len())
+	cn := make(chan *proto.RespStatus, len(ss))
 
 	var wg sync.WaitGroup
-	wg.Add(sset.Len())
+	wg.Add(len(ss))
 	done := make(chan int)
 	go func() {
 		wg.Wait()
 		done <- 1
 	}()
 
-	for _, session := range sset.All() {
+	for _, session := range ss {
 		go func(s *p2psrv.Session) {
 			defer wg.Done()
-			st := &status{}
-			if err := s.Request(ctx, StatusMsg, localSt, st); err != nil {
+			respSt, err := proto.ReqStatus{}.Do(ctx, s)
+			if err != nil {
 				return
 			}
-			cn <- st
+			respSt.Session = s
+			cn <- respSt
 		}(session)
 	}
 
@@ -130,8 +135,8 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
 	return cn
 }
 
-func (c *Communicator) bestSession() *status {
-	bestSt := &status{}
+func (c *Communicator) bestSession() *proto.RespStatus {
+	bestSt := &proto.RespStatus{}
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	cn := c.getAllStatus(timer)
@@ -140,10 +145,10 @@ func (c *Communicator) bestSession() *status {
 		select {
 		case st, ok := <-cn:
 			if ok {
-				if st.totalScore > bestSt.totalScore {
+				if st.TotalScore > bestSt.TotalScore {
 					bestSt = st
-				} else if st.totalScore == bestSt.totalScore {
-					if bytes.Compare(st.bestBlockID[:], bestSt.bestBlockID[:]) < 0 {
+				} else if st.TotalScore == bestSt.TotalScore {
+					if bytes.Compare(st.BestBlockID[:], bestSt.BestBlockID[:]) < 0 {
 						bestSt = st
 					}
 				}
@@ -163,70 +168,85 @@ func (c *Communicator) sync() {
 		log.Fatalf("[sync]: %v\n", err)
 	}
 
-	if bestBlock.Header().TotalScore() > st.totalScore {
+	if bestBlock.Header().TotalScore() > st.TotalScore {
 		return
 	}
 
-	if bestBlock.Header().TotalScore() == st.totalScore {
+	if bestBlock.Header().TotalScore() == st.TotalScore {
 		bestBlockID := bestBlock.Header().ID()
-		if bytes.Compare(bestBlockID[:], st.bestBlockID[:]) < 0 {
+		if bytes.Compare(bestBlockID[:], st.BestBlockID[:]) < 0 {
 			return
 		}
 	}
 
-	c.findAncestor(0, bestBlock.Header().Number(), 0)
+	ancestor, err := c.findAncestor(st.Session, 0, bestBlock.Header().Number(), 0)
+	if err != nil {
+		return
+	}
+
+	_ = ancestor
 }
 
-func (c *Communicator) findAncestor(start uint32, end uint32, ancestor uint32) uint32 {
+func (c *Communicator) findAncestor(s *p2psrv.Session, start uint32, end uint32, ancestor uint32) (uint32, error) {
 	if start == end {
-		localID, remoteID := c.getLocalAndRemoteIDByNumber(start)
+		localID, remoteID, err := c.getLocalAndRemoteIDByNumber(s, start)
+		if err != nil {
+			return 0, err
+		}
+
 		if bytes.Compare(localID[:], remoteID[:]) == 0 {
-			return start
+			return start, nil
 		}
 	} else {
 		mid := (start + end) / 2
-		midID, remoteID := c.getLocalAndRemoteIDByNumber(mid)
+		midID, remoteID, err := c.getLocalAndRemoteIDByNumber(s, mid)
+		if err != nil {
+			return 0, err
+		}
 
 		if bytes.Compare(midID[:], remoteID[:]) == 0 {
-			return c.findAncestor(mid+1, end, mid)
+			return c.findAncestor(s, mid+1, end, mid)
 		}
 
 		if bytes.Compare(midID[:], remoteID[:]) != 0 {
 			if mid > start {
-				return c.findAncestor(start, mid-1, ancestor)
+				return c.findAncestor(s, start, mid-1, ancestor)
 			}
 		}
 	}
 
-	return ancestor
+	return ancestor, nil
 }
 
-func (c *Communicator) getLocalAndRemoteIDByNumber(num uint32) (thor.Hash, thor.Hash) {
+func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32) (thor.Hash, thor.Hash, error) {
 	blk, err := c.ch.GetBlockByNumber(num)
 	if err != nil {
 		log.Fatalf("[findAncestor]: %v\n", err)
 	}
-	return blk.Header().ID(), requestBlockHashByNumber(num)
+	remoteID, err := proto.ReqGetBlockIDByNumber(num).Do(context.Background(), s)
+	if err != nil {
+		return thor.Hash{}, thor.Hash{}, err
+	}
+
+	return blk.Header().ID(), thor.Hash(*remoteID), nil
 }
 
 // BroadcastTx 广播新插入池的交易
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
-	filter := func(s *p2psrv.Session) bool {
+	cond := func(s *p2psrv.Session) bool {
 		return !c.knownBlocks[s.Peer().ID()].Has(tx.ID())
 	}
 
-	for _, session := range c.sessionsWithoutFilter(filter) {
-		//session.notifyTransaction(tx)
-	}
+	ss := c.ps.Sessions().Filter(cond)
+	_ = ss
 }
 
 // BroadcastBlk 广播新插入链的块
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
-	filter := func(s *p2psrv.Session) bool {
+	cond := func(s *p2psrv.Session) bool {
 		return !c.knownTxs[s.Peer().ID()].Has(blk.Header().ID())
 	}
 
-	for _, session := range c.sessionsWithoutFilter(filter) {
-		//session.notifyBlockID(blk.Header().ID())
-	}
+	ss := c.ps.Sessions().Filter(cond)
+	_ = ss
 }
