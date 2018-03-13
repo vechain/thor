@@ -41,11 +41,11 @@ type Transaction struct {
 // body describes details of a tx.
 type body struct {
 	ChainTag     byte
+	Nonce        uint64
 	BlockRef     uint64
 	Clauses      []*Clause
 	GasPriceCoef uint8
 	Gas          uint64
-	Nonce        uint64
 	DependsOn    *thor.Hash `rlp:"nil"`
 	Reserved     []interface{}
 	Signature    []byte
@@ -116,11 +116,11 @@ func (t *Transaction) SigningHash() (hash thor.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
+		t.body.Nonce,
 		t.body.BlockRef,
 		t.body.Clauses,
 		t.body.GasPriceCoef,
 		t.body.Gas,
-		t.body.Nonce,
 		t.body.DependsOn,
 		t.body.Reserved,
 	})
