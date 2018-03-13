@@ -56,33 +56,37 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
+func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+		session := newSession(peer, proto)
+
+		s.sessionsMu.Lock()
+		s.sessions = append(s.sessions, session)
+		s.sessionsMu.Unlock()
+		defer func() {
+			s.sessionsMu.Lock()
+			defer s.sessionsMu.Unlock()
+			for i, ss := range s.sessions {
+				if ss == session {
+					s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
+					break
+				}
+			}
+		}()
+		return session.serve(rw, proto.HandleRequest)
+	}
+}
+
 // Start start the server.
 func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
-	for _, p := range protocols {
+	for _, proto := range protocols {
 		s.srv.Protocols = append(s.srv.Protocols, p2p.Protocol{
-			Name:    p.Name,
-			Version: uint(p.Version),
-			Length:  p.Length,
+			Name:    proto.Name,
+			Version: uint(proto.Version),
+			Length:  proto.Length,
 			//			NodeInfo: p.NodeInfo,
 			//			PeerInfo: p.PeerInfo,
-			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-				session := newSession(peer, p)
-
-				s.sessionsMu.Lock()
-				s.sessions = append(s.sessions, session)
-				s.sessionsMu.Unlock()
-				defer func() {
-					s.sessionsMu.Lock()
-					defer s.sessionsMu.Unlock()
-					for i, ss := range s.sessions {
-						if ss == session {
-							s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
-							break
-						}
-					}
-				}()
-				return session.serve(rw, p.HandleRequest)
-			},
+			Run: s.runProtocol(proto),
 		})
 	}
 	if err := s.srv.Start(); err != nil {
