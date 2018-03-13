@@ -1,6 +1,7 @@
 package p2psrv
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -15,7 +16,8 @@ type Server struct {
 	srv        *p2p.Server
 	runner     co.Runner
 	done       chan struct{}
-	sessionSet *SessionSet
+	sessions   Sessions
+	sessionsMu sync.Mutex
 }
 
 // New create a p2p server.
@@ -44,8 +46,7 @@ func New(opts *Options) *Server {
 				NoDial:           opts.NoDial,
 			},
 		},
-		done:       make(chan struct{}),
-		sessionSet: newSessionSet(),
+		done: make(chan struct{}),
 	}
 }
 
@@ -66,8 +67,20 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 			//			PeerInfo: p.PeerInfo,
 			Run: func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				session := newSession(peer, p)
-				s.sessionSet.add(session)
-				defer s.sessionSet.remove(session)
+
+				s.sessionsMu.Lock()
+				s.sessions = append(s.sessions, session)
+				s.sessionsMu.Unlock()
+				defer func() {
+					s.sessionsMu.Lock()
+					defer s.sessionsMu.Unlock()
+					for i, ss := range s.sessions {
+						if ss == session {
+							s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
+							break
+						}
+					}
+				}()
 				return session.serve(rw, p.HandleRequest)
 			},
 		})
@@ -103,9 +116,11 @@ func (s *Server) NodeInfo() *p2p.NodeInfo {
 	return s.srv.NodeInfo()
 }
 
-// SessionSet returns a set of alive sessions.
-func (s *Server) SessionSet() *SessionSet {
-	return s.sessionSet
+// Sessions returns slice of alive sessions.
+func (s *Server) Sessions() Sessions {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	return append(Sessions(nil), s.sessions...)
 }
 
 func (s *Server) startDiscoverLoop(topic discv5.Topic) {
