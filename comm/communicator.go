@@ -19,8 +19,9 @@ const (
 )
 
 type Communicator struct {
-	synced  bool              // Flag whether we're synchronised
-	BlockCh chan *block.Block // 100 缓冲区
+	synced         bool              // Flag whether we're synchronised
+	BlockCh        chan *block.Block // 100 缓冲区
+	unKnownBlockCh chan thor.Hash
 
 	ps          *p2psrv.Server
 	knownBlocks map[discover.NodeID]*set.Set
@@ -29,9 +30,15 @@ type Communicator struct {
 	txpl        *txpool.TxPool
 }
 
-func New() *Communicator {
+func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
 	return &Communicator{
-		synced: false,
+		synced:         false,
+		BlockCh:        make(chan *block.Block, 100),
+		unKnownBlockCh: make(chan thor.Hash, 100),
+		knownBlocks:    make(map[discover.NodeID]*set.Set),
+		knownTxs:       make(map[discover.NodeID]*set.Set),
+		ch:             ch,
+		txpl:           txpl,
 	}
 }
 
@@ -39,8 +46,9 @@ func (c *Communicator) IsSynced() bool {
 	return c.synced == true
 }
 
-func (c *Communicator) Protocols() []*p2psrv.Protocol {
-	return []*p2psrv.Protocol{
+func (c *Communicator) Start(ps *p2psrv.Server, discoTopic string) {
+	c.ps = ps
+	ps.Start(discoTopic, []*p2psrv.Protocol{
 		&p2psrv.Protocol{
 			Name:          proto.Name,
 			Version:       proto.Version,
@@ -48,7 +56,7 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 			MaxMsgSize:    proto.MaxMsgSize,
 			HandleRequest: c.handleRequest,
 		},
-	}
+	})
 }
 
 func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
@@ -72,32 +80,42 @@ func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (res
 		c.txpl.Add(tx)
 		return &struct{}{}, nil
 	case msg.Code == proto.MsgNewBlock:
-
-	case msg.Code == proto.MsgGetBlockIDByNumber:
-		var num uint32
-		if err := msg.Decode(&num); err != nil {
+		var reqBlk proto.ReqNewBlock
+		if err := msg.Decode(&reqBlk); err != nil {
 			return nil, err
 		}
-		id, err := c.ch.GetBlockIDByNumber(num)
-		if err != nil {
-			return nil, err
-		}
-		return &id, nil
+		go func() {
+			c.BlockCh <- reqBlk.Block
+		}()
+		return &struct{}{}, nil
 	case msg.Code == proto.MsgNewBlockID:
-		var id thor.Hash
+		var id proto.ReqNewBlockID
 		if err := msg.Decode(&id); err != nil {
 			return nil, err
 		}
-		c.markBlock(session.Peer().ID(), id)
-		if _, err := c.ch.GetBlock(id); err != nil {
+		c.markBlock(session.Peer().ID(), thor.Hash(id))
+		if _, err := c.ch.GetBlock(thor.Hash(id)); err != nil {
 			if c.ch.IsNotFound(err) {
-				//pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
+				go func() {
+					c.unKnownBlockCh <- thor.Hash(id)
+					//proto.ReqGetBlockByID(id).Do(context.Background(), session)
+				}()
 			}
 			return nil, err
 		}
 		return &struct{}{}, nil
+	case msg.Code == proto.MsgGetBlockIDByNumber:
+		var num proto.ReqGetBlockIDByNumber
+		if err := msg.Decode(&num); err != nil {
+			return nil, err
+		}
+		id, err := c.ch.GetBlockIDByNumber(uint32(num))
+		if err != nil {
+			return nil, err
+		}
+		return &id, nil
 	case msg.Code == proto.MsgGetBlocksByNumber:
-		var num uint32
+		var num proto.ReqGetBlockIDByNumber
 		if err := msg.Decode(&num); err != nil {
 			return nil, err
 		}
@@ -110,11 +128,11 @@ func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (res
 		blks := make([]*block.Block, 0, 10)
 		for i := 0; i < 10; i++ {
 			num++
-			if num > bestBlk.Header().Number() {
+			if uint32(num) > bestBlk.Header().Number() {
 				break
 			}
 
-			blk, err := c.ch.GetBlockByNumber(num)
+			blk, err := c.ch.GetBlockByNumber(uint32(num))
 			if err != nil {
 				return nil, err
 			}
