@@ -1,11 +1,7 @@
 package comm
 
 import (
-	"bytes"
-	"context"
-	"log"
-	"sync"
-	"time"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -25,6 +21,9 @@ const (
 )
 
 type Communicator struct {
+	synced  uint32            // Flag whether we're synchronised
+	BlockCh chan *block.Block // 100 缓冲区
+
 	ps          *p2psrv.Server
 	knownBlocks map[discover.NodeID]*set.Set
 	knownTxs    map[discover.NodeID]*set.Set
@@ -34,6 +33,10 @@ type Communicator struct {
 
 func New() *Communicator {
 	return &Communicator{}
+}
+
+func (c *Communicator) isSynced() bool {
+	return atomic.LoadUint32(&c.synced) == 1
 }
 
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
@@ -100,135 +103,14 @@ func (c *Communicator) markBlock(peer discover.NodeID, id thor.Hash) {
 	c.knownTxs[peer].Add(id)
 }
 
-// timeout 移到参数, 内部加上 routine 执行完判断
-func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus {
-	ss := c.ps.Sessions()
-	ctx, cancel := context.WithCancel(context.Background())
-	cn := make(chan *proto.RespStatus, len(ss))
-
-	var wg sync.WaitGroup
-	wg.Add(len(ss))
-	done := make(chan int)
-	go func() {
-		wg.Wait()
-		done <- 1
-	}()
-
-	for _, session := range ss {
-		go func(s *p2psrv.Session) {
-			defer wg.Done()
-			respSt, err := proto.ReqStatus{}.Do(ctx, s)
-			if err != nil {
-				return
-			}
-			respSt.Session = s
-			cn <- respSt
-		}(session)
-	}
-
-	select {
-	case <-done:
-	case <-timeout.C:
-	}
-	cancel()
-
-	return cn
-}
-
-func (c *Communicator) bestSession() *proto.RespStatus {
-	bestSt := &proto.RespStatus{}
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	cn := c.getAllStatus(timer)
-
-	for {
-		select {
-		case st, ok := <-cn:
-			if ok {
-				if st.TotalScore > bestSt.TotalScore {
-					bestSt = st
-				} else if st.TotalScore == bestSt.TotalScore {
-					if bytes.Compare(st.BestBlockID[:], bestSt.BestBlockID[:]) < 0 {
-						bestSt = st
-					}
-				}
-			}
-		default:
-			return bestSt
-		}
-	}
-}
-
-func (c *Communicator) sync() {
-	st := c.bestSession()
-
-	// Make sure the peer's TD is higher than our own
-	bestBlock, err := c.ch.GetBestBlock()
-	if err != nil {
-		log.Fatalf("[sync]: %v\n", err)
-	}
-
-	if bestBlock.Header().TotalScore() > st.TotalScore {
+func (c *Communicator) Sync() {
+	if err := c.sync(); err != nil {
 		return
 	}
 
-	if bestBlock.Header().TotalScore() == st.TotalScore {
-		bestBlockID := bestBlock.Header().ID()
-		if bytes.Compare(bestBlockID[:], st.BestBlockID[:]) < 0 {
-			return
-		}
+	if atomic.LoadUint32(&c.synced) == 0 {
+		atomic.StoreUint32(&c.synced, 1)
 	}
-
-	ancestor, err := c.findAncestor(st.Session, 0, bestBlock.Header().Number(), 0)
-	if err != nil {
-		return
-	}
-
-	_ = ancestor
-}
-
-func (c *Communicator) findAncestor(s *p2psrv.Session, start uint32, end uint32, ancestor uint32) (uint32, error) {
-	if start == end {
-		localID, remoteID, err := c.getLocalAndRemoteIDByNumber(s, start)
-		if err != nil {
-			return 0, err
-		}
-
-		if bytes.Compare(localID[:], remoteID[:]) == 0 {
-			return start, nil
-		}
-	} else {
-		mid := (start + end) / 2
-		midID, remoteID, err := c.getLocalAndRemoteIDByNumber(s, mid)
-		if err != nil {
-			return 0, err
-		}
-
-		if bytes.Compare(midID[:], remoteID[:]) == 0 {
-			return c.findAncestor(s, mid+1, end, mid)
-		}
-
-		if bytes.Compare(midID[:], remoteID[:]) != 0 {
-			if mid > start {
-				return c.findAncestor(s, start, mid-1, ancestor)
-			}
-		}
-	}
-
-	return ancestor, nil
-}
-
-func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32) (thor.Hash, thor.Hash, error) {
-	blk, err := c.ch.GetBlockByNumber(num)
-	if err != nil {
-		log.Fatalf("[findAncestor]: %v\n", err)
-	}
-	remoteID, err := proto.ReqGetBlockIDByNumber(num).Do(context.Background(), s)
-	if err != nil {
-		return thor.Hash{}, thor.Hash{}, err
-	}
-
-	return blk.Header().ID(), thor.Hash(*remoteID), nil
 }
 
 // BroadcastTx 广播新插入池的交易
