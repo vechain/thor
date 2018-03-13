@@ -107,7 +107,9 @@ func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target 
 		syned += len(blks)
 		ancestor += uint32(syned)
 		for _, blk := range blks {
-			c.BlockCh <- blk
+			go func(blk *block.Block) {
+				c.BlockCh <- blk
+			}(blk)
 		}
 	}
 	return nil

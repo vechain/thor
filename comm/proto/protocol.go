@@ -23,6 +23,7 @@ const (
 	MsgNewBlockID
 	MsgNewBlock
 	MsgNewTx
+	MsgGetBlockByID
 	MsgGetBlockIDByNumber
 	MsgGetBlocksByNumber // 获取某个 Num 之后的部分块 (不包含 num 所在的块)
 )
@@ -97,3 +98,20 @@ func (req ReqGetBlocksByNumber) Do(ctx context.Context, session *p2psrv.Session)
 
 // RespGetBlocksByNumber response payload of MsgGetBlocksByNumber.
 type RespGetBlocksByNumber []*block.Block
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// ReqGetBlockByID request payload of MsgGetBlockByID.
+type ReqGetBlockByID thor.Hash
+
+// Do make request to session.
+func (req ReqGetBlockByID) Do(ctx context.Context, session *p2psrv.Session) (*RespGetBlockByID, error) {
+	var resp RespGetBlockByID
+	if err := session.Request(ctx, MsgGetBlockByID, &req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// RespGetBlockByID response payload of MsgGetBlockByID.
+type RespGetBlockByID block.Block
