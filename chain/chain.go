@@ -20,6 +20,7 @@ const (
 )
 
 var errNotFound = errors.New("not found")
+var errBlockExist = errors.New("block already exists")
 
 // Chain describes a persistent block chain.
 // It's thread-safe.
@@ -90,9 +91,9 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 }
 
 // AddBlock add a new block into block chain.
-// The method will return nil immediately if the block already in the chain.
-// Once reorg occurred, diff transactions are returned.
-func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, error) {
+// Once reorg happened, Fork.Branch will be the chain transitted from trunk to branch.
+// Reorg happens when isTrunk is true.
+func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
@@ -102,7 +103,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, 
 		}
 	} else {
 		// block already there
-		return nil, nil
+		return nil, errBlockExist
 	}
 
 	if _, err := c.getBlock(newBlock.Header().ParentID()); err != nil {
@@ -116,44 +117,36 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, 
 	if err := persist.SaveBlock(batch, newBlock); err != nil {
 		return nil, err
 	}
-
-	diffTxsMap := make(map[thor.Hash]*tx.Transaction)
+	var fork *Fork
 	if isTrunk {
 		best, err := c.getBestBlock()
 		if err != nil {
 			return nil, err
 		}
-
-		_, oldBlocks, newBlocks, err := c.traceBackToCommonAncestor(best, newBlock)
-		if err != nil {
+		if fork, err = c.buildFork(newBlock, best); err != nil {
 			return nil, err
 		}
-		for _, ob := range oldBlocks {
-			txs := ob.Transactions()
-			if err := persist.EraseTrunkBlockID(batch, ob.Header().ID()); err != nil {
+
+		for _, bb := range fork.Branch {
+			if err := persist.EraseTrunkBlockID(batch, bb.Header().ID()); err != nil {
 				return nil, err
 			}
-			if err := persist.EraseTxLocations(batch, txs); err != nil {
+			if err := persist.EraseTxLocations(batch, bb.Transactions()); err != nil {
 				return nil, err
-			}
-			for _, tx := range txs {
-				diffTxsMap[tx.ID()] = tx
 			}
 		}
 
-		for _, nb := range newBlocks {
-			txs := nb.Transactions()
-			if err := persist.SaveTrunkBlockID(batch, nb.Header().ID()); err != nil {
+		for _, tb := range fork.Trunk {
+			if err := persist.SaveTrunkBlockID(batch, tb.Header().ID()); err != nil {
 				return nil, err
 			}
-			if err := persist.SaveTxLocations(batch, txs, nb.Header().ID()); err != nil {
+			if err := persist.SaveTxLocations(batch, tb.Transactions(), tb.Header().ID()); err != nil {
 				return nil, err
-			}
-			for _, tx := range txs {
-				delete(diffTxsMap, tx.ID())
 			}
 		}
 		persist.SaveBestBlockID(batch, newBlock.Header().ID())
+	} else {
+		fork = &Fork{Ancestor: newBlock}
 	}
 
 	if err := batch.Write(); err != nil {
@@ -166,15 +159,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, 
 	if isTrunk {
 		c.bestBlock = newBlock
 	}
-
-	var diffTxs tx.Transactions
-	if len(diffTxsMap) > 0 {
-		diffTxs = make(tx.Transactions, 0, len(diffTxsMap))
-		for _, tx := range diffTxsMap {
-			diffTxs = append(diffTxs, tx)
-		}
-	}
-	return diffTxs, nil
+	return fork, nil
 }
 
 // Think about the example below:
@@ -184,42 +169,44 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, 
 //              \
 //               b4--b5
 //
-// When call traceBackToCommonAncestor(B6, b5), the return values will be:
-// ([B5, B6, B4], [b5, b4], B3, nil)
-func (c *Chain) traceBackToCommonAncestor(b1 *block.Block, b2 *block.Block) (*block.Block, []*block.Block, []*block.Block, error) {
+// When call buildFork(B6, b5), the return values will be:
+// ((B3, [B6, B5, B4], [b5, b4]), nil)
+func (c *Chain) buildFork(trunkHead *block.Block, branchHead *block.Block) (*Fork, error) {
 	var (
-		c1, c2 []*block.Block
-		err    error
+		trunk, branch []*block.Block
+		err           error
+		b1            = trunkHead
+		b2            = branchHead
 	)
 
 	for {
 		if b1.Header().Number() > b2.Header().Number() {
-			c1 = append(c1, b1)
+			trunk = append(trunk, b1)
 			if b1, err = c.getBlock(b1.Header().ParentID()); err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			continue
 		}
 		if b1.Header().Number() < b2.Header().Number() {
-			c2 = append(c2, b2)
+			branch = append(branch, b2)
 			if b2, err = c.getBlock(b2.Header().ParentID()); err != nil {
-				return nil, nil, nil, err
+				return nil, err
 			}
 			continue
 		}
 		if b1.Header().ID() == b2.Header().ID() {
-			return b1, c1, c2, nil
+			return &Fork{b1, trunk, branch}, nil
 		}
 
-		c1 = append(c1, b1)
-		c2 = append(c2, b2)
+		trunk = append(trunk, b1)
+		branch = append(branch, b2)
 
 		if b1, err = c.getBlock(b1.Header().ParentID()); err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 
 		if b2, err = c.getBlock(b2.Header().ParentID()); err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 	}
 }
@@ -384,11 +371,11 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 	if err != nil {
 		return nil, err
 	}
-	ancestor, branch, _, err := c.traceBackToCommonAncestor(from, best)
+	fork, err := c.buildFork(best, from)
 	if err != nil {
 		return nil, err
 	}
-	for _, b := range branch {
+	for _, b := range fork.Branch {
 		ids, err := c.getTransactionIDs(b.Header().ID())
 		if err != nil {
 			return nil, err
@@ -404,7 +391,7 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 	if err != nil {
 		return nil, err
 	}
-	if block.Number(loc.BlockID) <= ancestor.Header().Number() {
+	if block.Number(loc.BlockID) <= fork.Ancestor.Header().Number() {
 		return loc, nil
 	}
 	return nil, errNotFound
@@ -461,6 +448,11 @@ func (c *Chain) getTransactionReceipt(txID thor.Hash) (*tx.Receipt, error) {
 // IsNotFound returns if an error means not found.
 func (c *Chain) IsNotFound(err error) bool {
 	return err == errNotFound || c.kv.IsNotFound(err)
+}
+
+// IsBlockExist returns if the error means block was already in the chain.
+func (c *Chain) IsBlockExist(err error) bool {
+	return err == errBlockExist
 }
 
 // NewTraverser create a block traverser to access blocks on the chain defined by headID.
