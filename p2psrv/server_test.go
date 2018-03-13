@@ -68,10 +68,10 @@ func TestServer(t *testing.T) {
 
 	go func() {
 		for {
-			all := srv1.SessionSet().All()
-			if len(all) > 0 {
+			ss := srv1.Sessions()
+			if len(ss) > 0 {
 				var resp string
-				if err := all[0].Request(context.Background(), 0, "foo", &resp); err != nil {
+				if err := ss[0].Request(context.Background(), 0, "foo", &resp); err != nil {
 					panic(err)
 				}
 				fmt.Println("resp:", resp)
