@@ -121,10 +121,10 @@ func LoadTrunkBlockID(r kv.Getter, num uint32) (thor.Hash, error) {
 }
 
 // SaveTxLocations save locations of all txs in a block.
-func SaveTxLocations(w kv.Putter, block *block.Block) error {
-	for i, tx := range block.Transactions() {
+func SaveTxLocations(w kv.Putter, txs tx.Transactions, blockID thor.Hash) error {
+	for i, tx := range txs {
 		loc := TxLocation{
-			block.Header().ID(),
+			blockID,
 			uint64(i),
 		}
 		if err := saveRLP(w, append(txLocationPrefix, tx.ID().Bytes()...), &loc); err != nil {
@@ -149,8 +149,8 @@ func LoadBlockReceipts(r kv.Getter, blockID thor.Hash) (tx.Receipts, error) {
 }
 
 // EraseTxLocations delete locations of all txs in a block.
-func EraseTxLocations(w kv.Putter, block *block.Block) error {
-	for _, tx := range block.Transactions() {
+func EraseTxLocations(w kv.Putter, txs tx.Transactions) error {
+	for _, tx := range txs {
 		if err := w.Delete(append(txLocationPrefix, tx.ID().Bytes()...)); err != nil {
 			return err
 		}

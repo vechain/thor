@@ -68,7 +68,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		if err := persist.SaveBlock(batch, genesis); err != nil {
 			return err
 		}
-		if err := persist.SaveTxLocations(batch, genesis); err != nil {
+		if err := persist.SaveTxLocations(batch, genesis.Transactions(), genesis.Header().ID()); err != nil {
 			return err
 		}
 		if err := persist.SaveTrunkBlockID(batch, genesis.Header().ID()); err != nil {
@@ -91,63 +91,73 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 
 // AddBlock add a new block into block chain.
 // The method will return nil immediately if the block already in the chain.
-func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
+// Once reorg occurred, diff transactions are returned.
+func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (tx.Transactions, error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
 	if _, err := c.getBlock(newBlock.Header().ID()); err != nil {
 		if !c.IsNotFound(err) {
-			return err
+			return nil, err
 		}
 	} else {
 		// block already there
-		return nil
+		return nil, nil
 	}
 
 	if _, err := c.getBlock(newBlock.Header().ParentID()); err != nil {
 		if c.IsNotFound(err) {
-			return errors.New("parent missing")
+			return nil, errors.New("parent missing")
 		}
-		return err
+		return nil, err
 	}
 
 	batch := c.kv.NewBatch()
 	if err := persist.SaveBlock(batch, newBlock); err != nil {
-		return err
+		return nil, err
 	}
 
+	diffTxsMap := make(map[thor.Hash]*tx.Transaction)
 	if isTrunk {
 		best, err := c.getBestBlock()
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		_, oldBlocks, newBlocks, err := c.traceBackToCommonAncestor(best, newBlock)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, ob := range oldBlocks {
+			txs := ob.Transactions()
 			if err := persist.EraseTrunkBlockID(batch, ob.Header().ID()); err != nil {
-				return err
+				return nil, err
 			}
-			if err := persist.EraseTxLocations(batch, ob); err != nil {
-				return err
+			if err := persist.EraseTxLocations(batch, txs); err != nil {
+				return nil, err
+			}
+			for _, tx := range txs {
+				diffTxsMap[tx.ID()] = tx
 			}
 		}
 
 		for _, nb := range newBlocks {
+			txs := nb.Transactions()
 			if err := persist.SaveTrunkBlockID(batch, nb.Header().ID()); err != nil {
-				return err
+				return nil, err
 			}
-			if err := persist.SaveTxLocations(batch, nb); err != nil {
-				return err
+			if err := persist.SaveTxLocations(batch, txs, nb.Header().ID()); err != nil {
+				return nil, err
+			}
+			for _, tx := range txs {
+				delete(diffTxsMap, tx.ID())
 			}
 		}
 		persist.SaveBestBlockID(batch, newBlock.Header().ID())
 	}
 
 	if err := batch.Write(); err != nil {
-		return err
+		return nil, err
 	}
 
 	c.cached.header.Add(newBlock.Header().ID(), newBlock.Header())
@@ -156,7 +166,15 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) error {
 	if isTrunk {
 		c.bestBlock = newBlock
 	}
-	return nil
+
+	var diffTxs tx.Transactions
+	if len(diffTxsMap) > 0 {
+		diffTxs = make(tx.Transactions, 0, len(diffTxsMap))
+		for _, tx := range diffTxsMap {
+			diffTxs = append(diffTxs, tx)
+		}
+	}
+	return diffTxs, nil
 }
 
 // Think about the example below:
