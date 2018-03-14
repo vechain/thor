@@ -26,7 +26,7 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus 
 		done <- 1
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.ctx)
 	defer cancel()
 
 	for _, session := range ss {
@@ -104,7 +104,7 @@ func (c *Communicator) sync() error {
 
 func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target uint32) error {
 	for syned := 0; uint32(syned) < target; {
-		blks, err := proto.ReqGetBlocksByNumber{Num: ancestor}.Do(context.Background(), remote)
+		blks, err := proto.ReqGetBlocksByNumber{Num: ancestor}.Do(c.ctx, remote)
 		if err != nil {
 			return err
 		}
@@ -173,7 +173,7 @@ func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, fmt.Errorf("[findAncestor]: %v", err)
 	}
-	respID, err := proto.ReqGetBlockIDByNumber{Num: num}.Do(context.Background(), s)
+	respID, err := proto.ReqGetBlockIDByNumber{Num: num}.Do(c.ctx, s)
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, err
 	}

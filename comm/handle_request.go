@@ -58,6 +58,7 @@ func handleNewBlockID(msg *p2p.Msg, c *Communicator, session *p2psrv.Session) (*
 				case <-c.ctx.Done():
 				}
 			}()
+			return &struct{}{}, nil
 		}
 		return nil, err
 	}
