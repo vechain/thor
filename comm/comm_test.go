@@ -56,11 +56,11 @@ func TestComm(t *testing.T) {
 		return
 	}
 	ch1 := chain.New(lv1)
-	genesisBlk, err := genesis.Dev.Build(state.NewCreator(lv1))
+	genesisBlk1, err := genesis.Dev.Build(state.NewCreator(lv1))
 	if err != nil {
 		return
 	}
-	ch1.WriteGenesis(genesisBlk)
+	ch1.WriteGenesis(genesisBlk1)
 	cm1 := comm.New(ch1, txpool.New())
 	cm1.Start(srv1, "thor@111111")
 	defer cm1.Stop()
@@ -70,6 +70,11 @@ func TestComm(t *testing.T) {
 		return
 	}
 	ch2 := chain.New(lv2)
+	genesisBlk2, err := genesis.Dev.Build(state.NewCreator(lv2))
+	if err != nil {
+		return
+	}
+	ch2.WriteGenesis(genesisBlk2)
 	cm2 := comm.New(ch2, txpool.New())
 	cm2.Start(srv2, "thor@111111")
 	defer cm2.Stop()
@@ -83,9 +88,9 @@ func TestComm(t *testing.T) {
 			select {
 			case <-ctx.Done():
 			case <-ticker.C:
-				blk := new(block.Builder).ParentID(genesisBlk.Header().ID()).Build()
+				blk := new(block.Builder).TotalScore(10).ParentID(genesisBlk1.Header().ID()).Build()
 				ch1.AddBlock(blk, true)
-				cm1.BroadcastBlock(blk)
+				//cm1.BroadcastBlock(blk)
 				fmt.Printf("[cm1] %v\n", srv1.Sessions())
 			}
 		}
@@ -101,6 +106,6 @@ func TestComm(t *testing.T) {
 		}
 	}()
 
-	<-time.After(time.Second * 10)
+	<-time.After(time.Second * 17)
 	cancel()
 }

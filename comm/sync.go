@@ -81,7 +81,7 @@ func (c *Communicator) bestSession() *proto.RespStatus {
 
 func (c *Communicator) sync() error {
 	st := c.bestSession()
-	if st == nil {
+	if st == nil || (st.BestBlockID == thor.Hash{}) {
 		return errors.New("don't have remote peer")
 	}
 
@@ -173,6 +173,7 @@ func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, fmt.Errorf("[findAncestor]: %v", err)
 	}
+
 	respID, err := proto.ReqGetBlockIDByNumber{Num: num}.Do(c.ctx, s)
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, err
