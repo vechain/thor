@@ -111,7 +111,7 @@ type ReqGetBlocksByNumber struct {
 // Do make request to session.
 func (req ReqGetBlocksByNumber) Do(ctx context.Context, session *p2psrv.Session) (RespGetBlocksByNumber, error) {
 	var resp RespGetBlocksByNumber
-	if err := session.Request(ctx, MsgGetBlockIDByNumber, &req, &resp); err != nil {
+	if err := session.Request(ctx, MsgGetBlocksByNumber, &req, &resp); err != nil {
 		return nil, err
 	}
 	return resp, nil

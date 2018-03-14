@@ -100,8 +100,9 @@ func handleGetBlocksByNumber(msg *p2p.Msg, ch *chain.Chain) (proto.RespGetBlocks
 			return nil, err
 		}
 
-		blks[i] = blk
+		blks = append(blks, blk)
 	}
+
 	return blks, nil
 }
 
