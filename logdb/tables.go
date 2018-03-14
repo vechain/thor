@@ -5,6 +5,7 @@ const LogSQL = `
 create table if not exists log (
 	blockID	char(66),
 	blockNumber decimal(32,0),
+	logIndex integer,
 	txID char(66),
 	txOrigin char(42),
 	address char(42),

@@ -54,9 +54,10 @@ func (db *LDB) Insert(logs []*Log) error {
 
 	stmt := ""
 	for _, log := range logs {
-		stmt += "insert into log(blockID ,blockNumber ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values " + fmt.Sprintf(" ('%v',%v,'%v','%v','%v','%s','%v','%v','%v','%v','%v'); ",
+		stmt += "insert into log(blockID ,blockNumber ,logIndex ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values " + fmt.Sprintf(" ('%v',%v, %v,'%v','%v','%v','%s','%v','%v','%v','%v','%v'); ",
 			log.BlockID,
 			log.BlockNumber,
+			log.LogIndex,
 			log.TxID,
 			log.TxOrigin,
 			log.Address,
@@ -147,6 +148,7 @@ func (db *LDB) Query(stmt string) ([]*Log, error) {
 		err = rows.Scan(
 			&dbLog.blockID,
 			&dbLog.blockNumber,
+			&dbLog.logIndex,
 			&dbLog.txID,
 			&dbLog.txOrigin,
 			&dbLog.address,

@@ -10,6 +10,7 @@ import (
 type DBLog struct {
 	blockID     string
 	blockNumber uint32
+	logIndex    uint32
 	txID        string
 	txOrigin    string
 	address     string
@@ -25,6 +26,7 @@ type DBLog struct {
 type Log struct {
 	BlockID     thor.Hash
 	BlockNumber uint32
+	LogIndex    uint32
 	TxID        thor.Hash
 	TxOrigin    thor.Address //contract caller
 	Address     thor.Address // always a contract address
@@ -33,10 +35,11 @@ type Log struct {
 }
 
 //NewLog return a format log
-func NewLog(blockID thor.Hash, blockNumber uint32, txID thor.Hash, txOrigin thor.Address, txLog *tx.Log) *Log {
+func NewLog(blockID thor.Hash, blockNumber uint32, logIndex uint32, txID thor.Hash, txOrigin thor.Address, txLog *tx.Log) *Log {
 	l := &Log{
 		BlockID:     blockID,
 		BlockNumber: blockNumber,
+		LogIndex:    logIndex,
 		TxID:        txID,
 		TxOrigin:    txOrigin,
 		Address:     txLog.Address, // always a contract address
@@ -68,6 +71,7 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 	l := &Log{
 		BlockID:     bid,
 		BlockNumber: dbLog.blockNumber,
+		LogIndex:    dbLog.logIndex,
 		TxID:        txid,
 		TxOrigin:    txori,
 		Address:     addr, // always a contract address

@@ -26,8 +26,8 @@ func TestLogDB(t *testing.T) {
 	}
 
 	var logs []*logdb.Log
-	for i := 0; i < 2; i++ {
-		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+	for i := 0; i < 10; i++ {
+		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 	}
 	err = db.Insert(logs)
@@ -75,4 +75,33 @@ func home() (string, error) {
 	}
 
 	return os.Getwd()
+}
+
+func BenchmarkLog(b *testing.B) {
+	path, err := home()
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	db, err := logdb.New(path + "/log.db")
+	if err != nil {
+		b.Fatal(err)
+	}
+	l := &tx.Log{
+		Address: thor.BytesToAddress([]byte("addr")),
+		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
+		Data:    []byte("data"),
+	}
+	var logs []*logdb.Log
+	for i := 0; i < 100; i++ {
+		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		logs = append(logs, log)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := db.Insert(logs)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
 }
