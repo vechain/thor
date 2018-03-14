@@ -32,7 +32,6 @@ const (
 
 // RespStatus response payload of MsgStatus.
 type RespStatus struct {
-	Session     *p2psrv.Session
 	BestBlockID thor.Hash
 	TotalScore  uint64
 }

@@ -14,9 +14,9 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus {
+func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
 	ss := c.ps.Sessions()
-	cn := make(chan *proto.RespStatus, len(ss))
+	cn := make(chan *status, len(ss))
 
 	var wg sync.WaitGroup
 	wg.Add(len(ss))
@@ -36,8 +36,7 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus 
 			if err != nil {
 				return
 			}
-			respSt.Session = s
-			cn <- respSt
+			cn <- &status{session: s, st: respSt}
 		}(session)
 	}
 
@@ -50,7 +49,12 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus 
 	return cn
 }
 
-func (c *Communicator) bestSession() *proto.RespStatus {
+type status struct {
+	session *p2psrv.Session
+	st      *proto.RespStatus
+}
+
+func (c *Communicator) bestSession() *status {
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	cn := c.getAllStatus(timer)
@@ -58,15 +62,15 @@ func (c *Communicator) bestSession() *proto.RespStatus {
 		return nil
 	}
 
-	bestSt := &proto.RespStatus{}
+	bestSt := &status{st: &proto.RespStatus{}}
 	for {
 		select {
 		case st, ok := <-cn:
 			if ok {
-				if st.TotalScore > bestSt.TotalScore {
+				if st.st.TotalScore > bestSt.st.TotalScore {
 					bestSt = st
-				} else if st.TotalScore == bestSt.TotalScore {
-					if bytes.Compare(st.BestBlockID[:], bestSt.BestBlockID[:]) < 0 {
+				} else if st.st.TotalScore == bestSt.st.TotalScore {
+					if bytes.Compare(st.st.BestBlockID[:], bestSt.st.BestBlockID[:]) < 0 {
 						bestSt = st
 					}
 				}
@@ -81,7 +85,7 @@ func (c *Communicator) bestSession() *proto.RespStatus {
 
 func (c *Communicator) sync() error {
 	st := c.bestSession()
-	if st == nil || (st.BestBlockID == thor.Hash{}) {
+	if st == nil || (st.st.BestBlockID == thor.Hash{}) {
 		return errors.New("don't have remote peer")
 	}
 
@@ -90,16 +94,16 @@ func (c *Communicator) sync() error {
 		return fmt.Errorf("[sync]: %v", err)
 	}
 
-	if !c.isBetterThanLocal(localBestBlock, st) {
+	if !c.isBetterThanLocal(localBestBlock, st.st) {
 		return nil
 	}
 
-	ancestor, err := c.findAncestor(st.Session, 0, localBestBlock.Header().Number(), 0)
+	ancestor, err := c.findAncestor(st.session, 0, localBestBlock.Header().Number(), 0)
 	if err != nil {
 		return err
 	}
 
-	return c.download(st.Session, ancestor, block.Number(st.BestBlockID)-ancestor)
+	return c.download(st.session, ancestor, block.Number(st.st.BestBlockID)-ancestor)
 }
 
 func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target uint32) error {
