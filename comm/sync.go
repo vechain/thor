@@ -16,7 +16,6 @@ import (
 
 func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus {
 	ss := c.ps.Sessions()
-	ctx, cancel := context.WithCancel(context.Background())
 	cn := make(chan *proto.RespStatus, len(ss))
 
 	var wg sync.WaitGroup
@@ -26,6 +25,9 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus 
 		wg.Wait()
 		done <- 1
 	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	for _, session := range ss {
 		go func(s *p2psrv.Session) {
@@ -42,8 +44,8 @@ func (c *Communicator) getAllStatus(timeout *time.Timer) chan *proto.RespStatus 
 	select {
 	case <-done:
 	case <-timeout.C:
+	case <-c.ctx.Done():
 	}
-	cancel()
 
 	return cn
 }
@@ -69,6 +71,8 @@ func (c *Communicator) bestSession() *proto.RespStatus {
 					}
 				}
 			}
+		case <-c.ctx.Done():
+			return nil
 		default:
 			return bestSt
 		}
@@ -100,7 +104,7 @@ func (c *Communicator) sync() error {
 
 func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target uint32) error {
 	for syned := 0; uint32(syned) < target; {
-		blks, err := proto.ReqGetBlocksByNumber(ancestor).Do(context.Background(), remote)
+		blks, err := proto.ReqGetBlocksByNumber{Num: ancestor}.Do(context.Background(), remote)
 		if err != nil {
 			return err
 		}
@@ -108,7 +112,10 @@ func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target 
 		ancestor += uint32(syned)
 		for _, blk := range blks {
 			go func(blk *block.Block) {
-				c.BlockCh <- blk
+				select {
+				case c.BlockCh <- blk:
+				case <-c.ctx.Done():
+				}
 			}(blk)
 		}
 	}
@@ -166,10 +173,10 @@ func (c *Communicator) getLocalAndRemoteIDByNumber(s *p2psrv.Session, num uint32
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, fmt.Errorf("[findAncestor]: %v", err)
 	}
-	remoteID, err := proto.ReqGetBlockIDByNumber(num).Do(context.Background(), s)
+	respID, err := proto.ReqGetBlockIDByNumber{Num: num}.Do(context.Background(), s)
 	if err != nil {
 		return thor.Hash{}, thor.Hash{}, err
 	}
 
-	return blk.Header().ID(), thor.Hash(*remoteID), nil
+	return blk.Header().ID(), respID.ID, nil
 }

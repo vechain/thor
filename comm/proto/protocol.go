@@ -3,6 +3,8 @@ package proto
 import (
 	"context"
 
+	"github.com/vechain/thor/tx"
+
 	"github.com/vechain/thor/block"
 
 	"github.com/vechain/thor/p2psrv"
@@ -48,12 +50,25 @@ func (req ReqStatus) Do(ctx context.Context, session *p2psrv.Session) (*RespStat
 }
 
 // ReqNewBlockID request payload of MsgNewBlockID.
-type ReqNewBlockID thor.Hash
+type ReqNewBlockID struct {
+	ID thor.Hash
+}
 
 // Do make request to session.
 func (req ReqNewBlockID) Do(ctx context.Context, session *p2psrv.Session) error {
 	var resp struct{}
 	return session.Request(ctx, MsgNewBlockID, &req, &resp)
+}
+
+// ReqMsgNewTx request payload of MsgNewTx.
+type ReqMsgNewTx struct {
+	Tx *tx.Transaction
+}
+
+// Do make request to session.
+func (req ReqMsgNewTx) Do(ctx context.Context, session *p2psrv.Session) error {
+	var resp struct{}
+	return session.Request(ctx, MsgNewTx, &req, &resp)
 }
 
 // ReqNewBlock request payload of MsgNewBlock.
@@ -68,7 +83,9 @@ func (req ReqNewBlock) Do(ctx context.Context, session *p2psrv.Session) error {
 }
 
 // ReqGetBlockIDByNumber request payload of MsgGetBlockIDByNumber.
-type ReqGetBlockIDByNumber uint32
+type ReqGetBlockIDByNumber struct {
+	Num uint32
+}
 
 // Do make request to session.
 func (req ReqGetBlockIDByNumber) Do(ctx context.Context, session *p2psrv.Session) (*RespGetBlockIDByNumber, error) {
@@ -80,12 +97,16 @@ func (req ReqGetBlockIDByNumber) Do(ctx context.Context, session *p2psrv.Session
 }
 
 // RespGetBlockIDByNumber response payload of MsgGetBlockIDByNumber.
-type RespGetBlockIDByNumber thor.Hash
+type RespGetBlockIDByNumber struct {
+	ID thor.Hash
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ReqGetBlocksByNumber request payload of MsgGetBlocksByNumber.
-type ReqGetBlocksByNumber uint32
+type ReqGetBlocksByNumber struct {
+	Num uint32
+}
 
 // Do make request to session.
 func (req ReqGetBlocksByNumber) Do(ctx context.Context, session *p2psrv.Session) (RespGetBlocksByNumber, error) {
@@ -102,7 +123,9 @@ type RespGetBlocksByNumber []*block.Block
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // ReqGetBlockByID request payload of MsgGetBlockByID.
-type ReqGetBlockByID thor.Hash
+type ReqGetBlockByID struct {
+	ID thor.Hash
+}
 
 // Do make request to session.
 func (req ReqGetBlockByID) Do(ctx context.Context, session *p2psrv.Session) (*RespGetBlockByID, error) {
@@ -114,4 +137,6 @@ func (req ReqGetBlockByID) Do(ctx context.Context, session *p2psrv.Session) (*Re
 }
 
 // RespGetBlockByID response payload of MsgGetBlockByID.
-type RespGetBlockByID block.Block
+type RespGetBlockByID struct {
+	Block *block.Block
+}
