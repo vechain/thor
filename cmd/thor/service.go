@@ -1,4 +1,4 @@
-package node
+package main
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/node/blockpool"
-	"github.com/vechain/thor/node/network"
+	"github.com/vechain/thor/cmd/thor/blockpool"
+	"github.com/vechain/thor/cmd/thor/network"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"

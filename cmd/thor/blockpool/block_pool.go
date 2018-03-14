@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/vechain/thor/node/network"
+	"github.com/vechain/thor/cmd/thor/network"
 )
 
 var errPoolClosed = errors.New("block pool closed")

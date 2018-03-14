@@ -70,7 +70,7 @@ func (c *Communicator) Start(ps *p2psrv.Server, discoTopic string) error {
 		for {
 			select {
 			case unKnown := <-c.unKnownBlockCh:
-				respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(context.Background(), unKnown.session)
+				respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session)
 				if err == nil {
 					go func() {
 						select {
@@ -168,15 +168,22 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 		c.knownBlocks.Lock()
 		defer c.knownBlocks.Unlock()
 
-		_, ok := c.knownBlocks.m[s.Peer().ID()].Get(txID)
+		lru, ok := c.knownBlocks.m[s.Peer().ID()]
+		if !ok {
+			return true
+		}
+
+		_, ok = lru.Get(txID)
 		return !ok
 	}
 
 	ss := c.ps.Sessions().Filter(cond)
 	for _, s := range ss {
-		if err := (proto.ReqMsgNewTx{Tx: tx}.Do(context.Background(), s)); err == nil {
-			c.markTransaction(s.Peer().ID(), txID)
-		}
+		go func(s *p2psrv.Session) {
+			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s)); err == nil {
+				c.markTransaction(s.Peer().ID(), txID)
+			}
+		}(s)
 	}
 }
 
@@ -187,14 +194,21 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		c.knownTxs.Lock()
 		defer c.knownTxs.Unlock()
 
-		_, ok := c.knownTxs.m[s.Peer().ID()].Get(blkID)
+		lru, ok := c.knownTxs.m[s.Peer().ID()]
+		if !ok {
+			return true
+		}
+
+		_, ok = lru.Get(blkID)
 		return !ok
 	}
 
 	ss := c.ps.Sessions().Filter(cond)
 	for _, s := range ss {
-		if err := (proto.ReqNewBlockID{ID: blkID}.Do(context.Background(), s)); err == nil {
-			c.markTransaction(s.Peer().ID(), blkID)
-		}
+		go func(s *p2psrv.Session) {
+			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s)); err == nil {
+				c.markTransaction(s.Peer().ID(), blkID)
+			}
+		}(s)
 	}
 }
