@@ -9,6 +9,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/bluele/gcache"
+  packages = ["."]
+  revision = "472614239ac7e5bc6461e237c798a6ebd5aff8c1"
+
+[[projects]]
+  branch = "master"
   name = "github.com/btcsuite/btcd"
   packages = ["btcec"]
   revision = "2e60448ffcc6bf78332d1fe590260095f554dd78"
@@ -154,6 +160,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "239fcbc4341561ec1251af631826f1905e9f2f2b0e0bc5333c76619c66bc079d"
+  inputs-digest = "3fbd1697f81b37baafe74507cd9edeb603acfeba6a912005aa22fcd415e12a93"
   solver-name = "gps-cdcl"
   solver-version = 1

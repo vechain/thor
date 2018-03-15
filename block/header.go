@@ -6,16 +6,16 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/bluele/gcache"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/thor"
 )
 
 const signerCacheSize = 1024
 
-var signerCache = cache.NewLRU(signerCacheSize)
+var signerCache = gcache.New(signerCacheSize).LRU().Build()
 
 // Header contains almost all information about a block, except block body.
 // It's immutable.
@@ -201,13 +201,12 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 	var hash thor.Hash
 	hw.Sum(hash[:0])
 
-	if v, ok := signerCache.Get(hash); ok {
-		signer = v.(thor.Address)
-		return
+	if v, err := signerCache.Get(hash); err == nil {
+		return v.(thor.Address), nil
 	}
 	defer func() {
 		if err == nil {
-			signerCache.Add(hash, signer)
+			signerCache.Set(hash, signer)
 		}
 	}()
 	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), h.body.Signature)
