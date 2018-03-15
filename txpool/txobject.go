@@ -12,6 +12,9 @@ type TxObject struct {
 	creationTime int64
 }
 
+//TxObjects array of TxObject
+type TxObjects []*TxObject
+
 //NewTxObject NewTxObject
 func NewTxObject(transaction *tx.Transaction, creationTime int64) *TxObject {
 	return &TxObject{

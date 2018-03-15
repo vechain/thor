@@ -3,6 +3,7 @@ package txpool
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
@@ -17,6 +18,9 @@ var (
 	// ErrIntrinsicGas intrinsic gas too low
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 )
+
+//TxAddedEvent TxAddedEvent
+type TxAddedEvent struct{ Tx *tx.Transaction }
 
 //PoolConfig PoolConfig
 type PoolConfig struct {
@@ -38,6 +42,8 @@ type TxPool struct {
 	iterator *Iterator
 	all      map[thor.Hash]*TxObject
 	m        sync.RWMutex
+	txFeed   event.Feed
+	scope    event.SubscriptionScope
 }
 
 //New construct a new txpool
@@ -64,7 +70,13 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 	pool.all[txID] = NewTxObject(tx, time.Now().Unix())
+	go pool.txFeed.Send(TxAddedEvent{tx})
 	return nil
+}
+
+//SubscribeNewTransaction receivers will receive a tx
+func (pool *TxPool) SubscribeNewTransaction(ch chan<- TxAddedEvent) event.Subscription {
+	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
 //NewIterator Create Iterator for pool
@@ -104,7 +116,10 @@ func (pool *TxPool) NewIterator(chain *chain.Chain, stateC *state.Creator) (*Ite
 			break
 		}
 	}
-	sort.Sort(objs)
+
+	sort.Slice(objs, func(i, j int) bool {
+		return objs[i].OverallGP().Cmp(objs[j].OverallGP()) > 0
+	})
 
 	return newIterator(objs, pool), nil
 }

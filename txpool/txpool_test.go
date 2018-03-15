@@ -1,6 +1,7 @@
 package txpool_test
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -12,6 +13,7 @@ import (
 	"github.com/vechain/thor/txpool"
 	"math/big"
 	"testing"
+	"time"
 )
 
 const (
@@ -20,13 +22,13 @@ const (
 	testPrivHex   = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
 )
 
-func BenchmarkAddTx(b *testing.B) {
+func TestTxPool(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
 	c := state.NewCreator(db)
 	bl, err := genesis.Mainnet.Build(c)
 	if err != nil {
-		b.Fatal(err)
+		t.Fatal(err)
 	}
 	chain.WriteGenesis(bl)
 	best, _ := chain.GetBestBlock()
@@ -34,28 +36,43 @@ func BenchmarkAddTx(b *testing.B) {
 		ParentID(best.Header().ID()).
 		StateRoot(best.Header().StateRoot()).
 		Build()
-	if err := chain.AddBlock(blk, true); err != nil {
-		b.Fatal(err)
+	if _, err := chain.AddBlock(blk, true); err != nil {
+		t.Fatal(err)
 	}
 	address, _ := thor.ParseAddress(testAddress)
 	pool := txpool.New()
-	for i := 0; i < 2000; i++ {
+	count := 10
+	ch := make(chan txpool.TxAddedEvent, count)
+	sub := pool.SubscribeNewTransaction(ch)
+	defer sub.Unsubscribe()
+	for i := 0; i < count; i++ {
 		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(i))).WithData(nil)
 		tx := new(tx.Builder).
 			GasPriceCoef(1).
-			Gas(1000 + uint64(i)).
+			Gas(1000000).
 			Clause(cla).
 			Nonce(1).
 			Build()
 		key, err := crypto.HexToECDSA(testPrivHex)
 		if err != nil {
-			b.Fatal(err)
+			t.Fatal(err)
 		}
 		sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
 		if err != nil {
-			b.Errorf("Sign error: %s", err)
+			t.Errorf("Sign error: %s", err)
 		}
 		tx = tx.WithSignature(sig)
-		pool.Add(tx)
+		if err := pool.Add(tx); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < count; i++ {
+		select {
+		case t1 := <-ch:
+			fmt.Println(i, t1)
+		case <-time.After(time.Second):
+			fmt.Println("event not fired", i)
+		}
 	}
 }

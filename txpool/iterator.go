@@ -23,7 +23,7 @@ func newIterator(objs TxObjects, pool *TxPool) *Iterator {
 
 //HasNext HasNext
 func (i *Iterator) HasNext() bool {
-	return i.index < i.objs.Len()
+	return i.index < len(i.objs)
 }
 
 //Next Next
