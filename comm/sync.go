@@ -54,7 +54,7 @@ type status struct {
 	st      *proto.RespStatus
 }
 
-func (c *Communicator) bestSession() *status {
+func (c *Communicator) bestSession(genesisBlock *block.Block) *status {
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	cn := c.getAllStatus(timer)
@@ -67,11 +67,13 @@ func (c *Communicator) bestSession() *status {
 		select {
 		case st, ok := <-cn:
 			if ok {
-				if st.st.TotalScore > bestSt.st.TotalScore {
-					bestSt = st
-				} else if st.st.TotalScore == bestSt.st.TotalScore {
-					if bytes.Compare(st.st.BestBlockID[:], bestSt.st.BestBlockID[:]) < 0 {
+				if st.st.GenesisBlockID == genesisBlock.Header().ID() {
+					if st.st.TotalScore > bestSt.st.TotalScore {
 						bestSt = st
+					} else if st.st.TotalScore == bestSt.st.TotalScore {
+						if bytes.Compare(st.st.BestBlockID[:], bestSt.st.BestBlockID[:]) < 0 {
+							bestSt = st
+						}
 					}
 				}
 			}
@@ -84,7 +86,12 @@ func (c *Communicator) bestSession() *status {
 }
 
 func (c *Communicator) sync() error {
-	st := c.bestSession()
+	genesisBlock, err := c.ch.GetBlockByNumber(0)
+	if err != nil {
+		return fmt.Errorf("[sync]: %v", err)
+	}
+
+	st := c.bestSession(genesisBlock)
 	if st == nil || (st.st.BestBlockID == thor.Hash{}) {
 		return errors.New("don't have remote peer")
 	}
