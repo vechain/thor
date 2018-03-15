@@ -6,12 +6,10 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"sync"
 
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/cmd/thor/network"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -62,37 +60,23 @@ func (n *Node) Run(ctx context.Context, nw *network.Network) error {
 	bestBlockUpdate := make(chan bool, 2)
 	defer close(bestBlockUpdate)
 
-	wg, svr, routine := n.routineService(chain, stateC, nw, bestBlockUpdate)
-	defer wg.Wait()
+	svr = newService(chain, stateC, nw, n.op.IP, bestBlockUpdate)
+	var runner Runner
+	defer runner.Wait()
 
-	routine(func() {
+	runner.Go(func() {
 		svr.restful(&http.Server{Handler: api.NewHTTPHandler(chain, stateC)}, lsr).run(ctx)
 	})
-	routine(func() {
+
+	runner.Go(func() {
 		svr.consensus(consensus.New(chain, stateC)).run(ctx)
 	})
-	routine(func() {
+
+	runner.Go(func() {
 		svr.packer(packer.New(n.op.Proposer, n.op.Beneficiary, chain, stateC), n.op.PrivateKey).run(ctx)
 	})
 
 	return nil
-}
-
-func (n *Node) routineService(
-	chain *chain.Chain,
-	stateC *state.Creator,
-	nw *network.Network,
-	bestBlockUpdate chan bool) (wg *sync.WaitGroup, svr *service, routine func(func())) {
-	wg = &sync.WaitGroup{}
-	svr = newService(chain, stateC, nw, n.op.IP, bestBlockUpdate)
-	routine = func(f func()) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			f()
-		}()
-	}
-	return
 }
 
 func (n *Node) prepare() (*state.Creator, *chain.Chain, *lvldb.LevelDB, net.Listener, error) {
