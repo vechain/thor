@@ -72,11 +72,11 @@ func (s *Session) serve(rw p2p.MsgReadWriter, handleRequest HandleRequest) error
 		s.stats.duration = time.Duration((mclock.Now() - startTime))
 	}()
 
-	var runner co.Runner
-	defer runner.Wait()
+	var goes co.Goes
+	defer goes.Wait()
 	defer close(s.doneCh)
 
-	runner.Go(func() { s.opLoop(rw, handleRequest) })
+	goes.Go(func() { s.opLoop(rw, handleRequest) })
 
 	// msg read loop
 	for {
