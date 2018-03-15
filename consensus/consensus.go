@@ -31,17 +31,17 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	preHeader, err := newValidator(blk, c.chain).validate(nowTime)
+	parentHeader, err := c.validate(blk, nowTime)
 	if err != nil {
 		return false, err
 	}
 
-	state, err := c.stateC.NewState(preHeader.StateRoot())
+	state, err := c.stateC.NewState(parentHeader.StateRoot())
 	if err != nil {
 		return false, err
 	}
 
-	if err = c.verify(blk, preHeader, state); err != nil {
+	if err = c.verify(blk, parentHeader, state); err != nil {
 		return false, err
 	}
 
@@ -56,14 +56,14 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 	return isTrunk, nil
 }
 
-func (c *Consensus) verify(blk *block.Block, preHeader *block.Header, state *state.State) error {
+func (c *Consensus) verify(blk *block.Block, parentHeader *block.Header, state *state.State) error {
 	header := blk.Header()
 
-	if err := newProposerHandler(c.chain, state, header, preHeader).handle(); err != nil {
+	if err := newProposerHandler(c.chain, state, header, parentHeader).handle(); err != nil {
 		return err
 	}
 
-	traverser := c.chain.NewTraverser(preHeader.ID())
+	traverser := c.chain.NewTraverser(parentHeader.ID())
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
@@ -73,7 +73,7 @@ func (c *Consensus) verify(blk *block.Block, preHeader *block.Header, state *sta
 			return traverser.Get(num).ID()
 		})
 
-	if err := newBlockProcessor(rt, c.chain).process(blk, preHeader); err != nil {
+	if err := newBlockProcessor(rt, c.chain).process(blk, parentHeader); err != nil {
 		return err
 	}
 	if err := traverser.Error(); err != nil {

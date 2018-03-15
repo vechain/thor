@@ -19,7 +19,7 @@ func newBlockProcessor(rt *runtime.Runtime, chain *chain.Chain) *blockProcessor 
 }
 
 // ProcessBlock can execute all transactions in a block.
-func (bp *blockProcessor) process(blk *block.Block, preHeader *block.Header) error {
+func (bp *blockProcessor) process(blk *block.Block, parentHeader *block.Header) error {
 
 	receipts, totalGasUsed, err := bp.processTransactions(blk.Transactions(), nil, 0)
 	if err != nil {
