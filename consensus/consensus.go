@@ -6,9 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 )
 
 // Consensus check whether the block is verified,
@@ -31,13 +29,17 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 		return false, errors.New("parameter is nil, must be *block.Block")
 	}
 
-	parentHeader, err := c.validate(blk, nowTime)
+	parentHeader, err := c.validateBlock(blk, nowTime)
 	if err != nil {
 		return false, err
 	}
 
 	state, err := c.stateC.NewState(parentHeader.StateRoot())
 	if err != nil {
+		return false, err
+	}
+
+	if err := c.validateProposer(blk.Header(), parentHeader, state); err != nil {
 		return false, err
 	}
 
@@ -54,32 +56,6 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 	}
 
 	return isTrunk, nil
-}
-
-func (c *Consensus) verify(blk *block.Block, parentHeader *block.Header, state *state.State) error {
-	header := blk.Header()
-
-	if err := newProposerHandler(c.chain, state, header, parentHeader).handle(); err != nil {
-		return err
-	}
-
-	traverser := c.chain.NewTraverser(parentHeader.ID())
-	rt := runtime.New(state,
-		header.Beneficiary(),
-		header.Number(),
-		header.Timestamp(),
-		header.GasLimit(),
-		func(num uint32) thor.Hash {
-			return traverser.Get(num).ID()
-		})
-
-	if err := newBlockProcessor(rt, c.chain).process(blk, parentHeader); err != nil {
-		return err
-	}
-	if err := traverser.Error(); err != nil {
-		return err
-	}
-	return checkState(state, header)
 }
 
 func (c *Consensus) isTrunk(block *block.Block) (bool, error) {

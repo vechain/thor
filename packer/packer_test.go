@@ -84,11 +84,11 @@ func TestP(t *testing.T) {
 		}
 
 		blk, _, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
+		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
+
 		if _, err := c.AddBlock(blk, true); err != nil {
 			t.Fatal(err)
 		}
-
-		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
 
 		if time.Now().UnixNano() > start+1000*1000*1000*1 {
 			break
