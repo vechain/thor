@@ -2,11 +2,14 @@ package consensus
 
 import (
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/poa"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 )
 
-func (c *Consensus) validate(blk *block.Block, nowTime uint64) (*block.Header, error) {
+func (c *Consensus) validateBlock(blk *block.Block, nowTime uint64) (*block.Header, error) {
 	header := blk.Header()
 	parentHeader, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
@@ -85,4 +88,32 @@ func (c *Consensus) isTxDependFound(validTx map[thor.Hash]bool, header *block.He
 
 	_, err := c.chain.LookupTransaction(header.ParentID(), *dependID)
 	return err != nil // 在 chain 中找到依赖
+}
+
+func (c *Consensus) validateProposer(header *block.Header, parentHeader *block.Header, st *state.State) error {
+	signer, err := header.Signer()
+	if err != nil {
+		return err
+	}
+
+	sched, err := poa.NewScheduler(signer, builtin.Authority.All(st), parentHeader.Number(), parentHeader.Timestamp())
+	if err != nil {
+		return err
+	}
+
+	targetTime := sched.Schedule(header.Timestamp())
+	if !sched.IsTheTime(targetTime) {
+		return errSchedule
+	}
+
+	updates, score := sched.Updates(targetTime)
+	if parentHeader.TotalScore()+score != header.TotalScore() {
+		return errTotalScore
+	}
+
+	for _, proposer := range updates {
+		builtin.Authority.Update(st, proposer.Address, proposer.Status)
+	}
+
+	return nil
 }
