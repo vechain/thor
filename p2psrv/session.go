@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/co"
@@ -30,15 +31,17 @@ type Session struct {
 	opCh    chan interface{}
 	opAckCh chan struct{}
 	doneCh  chan struct{}
+
+	stats sessionStats
 }
 
 func newSession(peer *p2p.Peer, proto *Protocol) *Session {
 	return &Session{
-		peer,
-		proto,
-		make(chan interface{}),
-		make(chan struct{}),
-		make(chan struct{}),
+		peer:    peer,
+		proto:   proto,
+		opCh:    make(chan interface{}),
+		opAckCh: make(chan struct{}),
+		doneCh:  make(chan struct{}),
 	}
 }
 
@@ -64,6 +67,10 @@ func (s *Session) Alive() bool {
 
 // serve handles p2p message.
 func (s *Session) serve(rw p2p.MsgReadWriter, handleRequest HandleRequest) error {
+	startTime := mclock.Now()
+	defer func() {
+		s.stats.duration = time.Duration((mclock.Now() - startTime))
+	}()
 
 	var runner co.Runner
 	defer runner.Wait()
@@ -140,8 +147,10 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 		case *endRequest:
 			delete(pendingReqs, val.id)
 		case *remoteRequest:
+			s.stats.nRequest++
 			resp, err := handleRequest(s, val.msg)
 			if err != nil {
+				s.stats.nBadRequest++
 				// TODO log
 				break
 			}
@@ -150,12 +159,19 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 				break
 			}
 		case *remoteResponse:
+			s.stats.nResponse++
 			req, ok := pendingReqs[val.id]
-			if !ok || val.msg.Code != req.msgCode {
+			if !ok {
+				break
+			}
+			if val.msg.Code != req.msgCode {
+				s.stats.nBadResponse++
 				break
 			}
 			delete(pendingReqs, val.id)
-			req.handleResponse(val.msg)
+			if req.handleResponse(val.msg) != nil {
+				s.stats.nBadResponse++
+			}
 		}
 	}
 
@@ -182,9 +198,11 @@ func (s *Session) Request(ctx context.Context, msgCode uint64, reqPayload interf
 	req := localRequest{
 		msgCode: msgCode,
 		payload: reqPayload,
-		handleResponse: func(msg *p2p.Msg) {
+		handleResponse: func(msg *p2p.Msg) error {
 			// should consume msg here, or msg will be discarded
-			respCh <- msg.Decode(respPayload)
+			err := msg.Decode(respPayload)
+			respCh <- err
+			return err
 		},
 	}
 	var reqID uint32
@@ -231,7 +249,7 @@ type msgData struct {
 type localRequest struct {
 	msgCode        uint64
 	payload        interface{}
-	handleResponse func(*p2p.Msg)
+	handleResponse func(*p2p.Msg) error
 
 	id  uint32
 	err error
@@ -245,3 +263,16 @@ type remoteResponse struct {
 type remoteRequest remoteResponse
 
 type endRequest struct{ id uint32 }
+
+type sessionStats struct {
+	nRequest     int
+	nBadRequest  int
+	nResponse    int
+	nBadResponse int
+	duration     time.Duration
+}
+
+func (ss *sessionStats) weight() float64 {
+	n := ss.nRequest - ss.nBadRequest + ss.nResponse - ss.nBadResponse
+	return float64(ss.duration/time.Minute) + float64(n)
+}

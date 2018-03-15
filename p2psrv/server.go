@@ -1,6 +1,7 @@
 package p2psrv
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/vechain/thor/co"
+	"github.com/vechain/thor/w8cache"
 )
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
@@ -18,6 +20,12 @@ type Server struct {
 	done       chan struct{}
 	sessions   Sessions
 	sessionsMu sync.Mutex
+
+	scoredNodes     *w8cache.W8Cache
+	discoveredNodes *w8cache.W8Cache
+	dialingNodes    map[discover.NodeID]*discover.Node
+	dialingNodesMu  sync.Mutex
+	dialCh          chan *discover.Node
 }
 
 // New create a p2p server.
@@ -28,25 +36,36 @@ func New(opts *Options) *Server {
 		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
 	}
 
+	dialCh := make(chan *discover.Node, 8)
+	scoredNodes := w8cache.New(16, nil)
+	for _, node := range opts.KnownNodes {
+		select {
+		case dialCh <- node:
+		default:
+		}
+		scoredNodes.Set(node.ID, node, 0)
+	}
+
 	return &Server{
 		srv: &p2p.Server{
 			Config: p2p.Config{
 				Name:             opts.Name,
 				PrivateKey:       opts.PrivateKey,
-				MaxPeers:         opts.MaxPeers,
-				MaxPendingPeers:  opts.MaxPendingPeers,
+				MaxPeers:         opts.MaxSessions,
 				NoDiscovery:      true,
 				DiscoveryV5:      !opts.NoDiscovery,
 				ListenAddr:       opts.ListenAddr,
 				BootstrapNodesV5: v5nodes,
-				StaticNodes:      opts.StaticNodes,
-				TrustedNodes:     opts.TrustedNodes,
 				NetRestrict:      opts.NetRestrict,
 				NAT:              opts.NAT,
 				NoDial:           opts.NoDial,
 			},
 		},
-		done: make(chan struct{}),
+		done:            make(chan struct{}),
+		discoveredNodes: w8cache.New(32, nil),
+		scoredNodes:     scoredNodes,
+		dialingNodes:    make(map[discover.NodeID]*discover.Node),
+		dialCh:          dialCh,
 	}
 }
 
@@ -60,19 +79,19 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 		session := newSession(peer, proto)
 
-		s.sessionsMu.Lock()
-		s.sessions = append(s.sessions, session)
-		s.sessionsMu.Unlock()
+		s.addSession(session)
+		defer s.removeSession(session)
+
 		defer func() {
-			s.sessionsMu.Lock()
-			defer s.sessionsMu.Unlock()
-			for i, ss := range s.sessions {
-				if ss == session {
-					s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
-					break
-				}
+			s.dialingNodesMu.Lock()
+			node, ok := s.dialingNodes[peer.ID()]
+			delete(s.dialingNodes, peer.ID())
+			s.dialingNodesMu.Unlock()
+			if ok {
+				s.scoredNodes.Set(peer.ID(), node, session.stats.weight())
 			}
 		}()
+
 		return session.serve(rw, proto.HandleRequest)
 	}
 }
@@ -92,7 +111,8 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	s.startDiscoverLoop(discv5.Topic(discoTopic))
+	s.runner.Go(func() { s.discoverLoop(discv5.Topic(discoTopic)) })
+	s.runner.Go(s.dialLoop)
 	return nil
 }
 
@@ -127,7 +147,24 @@ func (s *Server) Sessions() Sessions {
 	return append(Sessions(nil), s.sessions...)
 }
 
-func (s *Server) startDiscoverLoop(topic discv5.Topic) {
+func (s *Server) addSession(session *Session) {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	s.sessions = append(s.sessions, session)
+}
+
+func (s *Server) removeSession(session *Session) {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	for i, ss := range s.sessions {
+		if ss == session {
+			s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
+			break
+		}
+	}
+}
+
+func (s *Server) discoverLoop(topic discv5.Topic) {
 	if s.srv.DiscV5 == nil {
 		return
 	}
@@ -144,33 +181,79 @@ func (s *Server) startDiscoverLoop(topic discv5.Topic) {
 		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
 	})
 
-	s.runner.Go(func() {
-		setPeriod <- time.Millisecond * 100
-		var (
-			lookupCount  = 0
-			fastDiscover = true
-			convTime     mclock.AbsTime
-		)
-		// see go-ethereum serverpool.go
-		for {
-			select {
-			case conv := <-discLookups:
-				if conv {
-					if lookupCount == 0 {
-						convTime = mclock.Now()
-					}
-					lookupCount++
-					if fastDiscover && (lookupCount == 50 || time.Duration(mclock.Now()-convTime) > time.Minute) {
-						fastDiscover = false
-						setPeriod <- time.Minute
-					}
+	setPeriod <- time.Millisecond * 100
+	var (
+		lookupCount  = 0
+		fastDiscover = true
+		convTime     mclock.AbsTime
+	)
+	// see go-ethereum serverpool.go
+	for {
+		select {
+		case conv := <-discLookups:
+			if conv {
+				if lookupCount == 0 {
+					convTime = mclock.Now()
 				}
-			case node := <-discNodes:
-				s.srv.AddPeer(discover.NewNode(discover.NodeID(node.ID), node.IP, node.UDP, node.TCP))
-			case <-s.done:
-				close(setPeriod)
-				return
+				lookupCount++
+				if fastDiscover && (lookupCount == 50 || time.Duration(mclock.Now()-convTime) > time.Minute) {
+					fastDiscover = false
+					setPeriod <- time.Minute
+				}
 			}
+		case v5node := <-discNodes:
+			newNode := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
+			s.discoveredNodes.Set(newNode.ID, newNode, rand.Float64())
+			if entry := s.discoveredNodes.PopWorst(); entry != nil {
+				s.discoveredNodes.Set(entry.Key, entry.Value, rand.Float64())
+				select {
+				case s.dialCh <- newNode:
+				default:
+				}
+			}
+		case <-s.done:
+			close(setPeriod)
+			return
 		}
-	})
+	}
+}
+
+func (s *Server) dialLoop() {
+	for {
+		select {
+		case node := <-s.dialCh:
+			s.sessionsMu.Lock()
+			sessionCnt := len(s.sessions)
+			s.sessionsMu.Unlock()
+			if sessionCnt >= s.srv.MaxPeers {
+				continue
+			}
+
+			s.dialingNodesMu.Lock()
+			_, isDialing := s.dialingNodes[node.ID]
+			s.dialingNodesMu.Unlock()
+
+			if isDialing {
+				continue
+			}
+
+			conn, err := s.srv.Dialer.Dial(node)
+			if err != nil {
+				// TODO log
+				continue
+			}
+
+			s.dialingNodesMu.Lock()
+			s.dialingNodes[node.ID] = node
+			s.dialingNodesMu.Unlock()
+
+			if err := s.srv.SetupConn(conn, 1, node); err != nil {
+				s.dialingNodesMu.Lock()
+				delete(s.dialingNodes, node.ID)
+				s.dialingNodesMu.Unlock()
+			}
+		case <-s.done:
+			return
+		}
+	}
 }
