@@ -37,19 +37,19 @@ func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err
 }
 
 func TestServer(t *testing.T) {
+
 	srv1 := p2psrv.New(
 		&p2psrv.Options{
-			PrivateKey: mustHexToECDSA(k1),
-			MaxPeers:   25,
-			ListenAddr: ":40001",
-
+			PrivateKey:     mustHexToECDSA(k1),
+			MaxSessions:    25,
+			ListenAddr:     ":40001",
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
 
 	srv2 := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(k2),
-			MaxPeers:       25,
+			MaxSessions:    25,
 			ListenAddr:     ":50001",
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})

@@ -18,14 +18,9 @@ type Options struct {
 	// This field must be set to a valid secp256k1 private key.
 	PrivateKey *ecdsa.PrivateKey
 
-	// MaxPeers is the maximum number of peers that can be
+	// MaxSessions is the maximum number of sessions that can be
 	// connected. It must be greater than zero.
-	MaxPeers int
-
-	// MaxPendingPeers is the maximum number of peers that can be pending in the
-	// handshake phase, counted separately for inbound and outbound connections.
-	// Zero defaults to preset values.
-	MaxPendingPeers int
+	MaxSessions int
 
 	// NoDiscovery can be used to disable the peer discovery mechanism.
 	// Disabling is useful for protocol debugging (manual topology).
@@ -39,18 +34,11 @@ type Options struct {
 	// the server is started.
 	ListenAddr string
 
+	KnownNodes []*discover.Node
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
 	BootstrapNodes []*discover.Node
-
-	// Static nodes are used as pre-configured connections which are always
-	// maintained and re-connected on disconnects.
-	StaticNodes []*discover.Node
-
-	// Trusted nodes are used as pre-configured connections which are always
-	// allowed to connect, even above the peer limit.
-	TrustedNodes []*discover.Node
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
