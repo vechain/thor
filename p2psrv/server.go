@@ -16,7 +16,7 @@ import (
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
 	srv        *p2p.Server
-	runner     co.Runner
+	goes       co.Goes
 	done       chan struct{}
 	sessions   Sessions
 	sessionsMu sync.Mutex
@@ -111,8 +111,8 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	s.runner.Go(func() { s.discoverLoop(discv5.Topic(discoTopic)) })
-	s.runner.Go(s.dialLoop)
+	s.goes.Go(func() { s.discoverLoop(discv5.Topic(discoTopic)) })
+	s.goes.Go(s.dialLoop)
 	return nil
 }
 
@@ -120,7 +120,7 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 func (s *Server) Stop() {
 	s.srv.Stop()
 	close(s.done)
-	s.runner.Wait()
+	s.goes.Wait()
 }
 
 // GoodNodes returns good nodes.
@@ -182,11 +182,11 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 	discNodes := make(chan *discv5.Node, 100)
 	discLookups := make(chan bool, 100)
 
-	s.runner.Go(func() {
+	s.goes.Go(func() {
 		s.srv.DiscV5.RegisterTopic(topic, s.done)
 	})
 
-	s.runner.Go(func() {
+	s.goes.Go(func() {
 		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
 	})
 
