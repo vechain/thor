@@ -38,7 +38,7 @@ func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *ch
 	srv := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(key),
-			MaxPeers:       25,
+			MaxSessions:    25,
 			ListenAddr:     port,
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})

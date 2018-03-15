@@ -12,8 +12,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/cmd/thor/blockpool"
-	"github.com/vechain/thor/cmd/thor/network"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
@@ -22,7 +20,7 @@ import (
 type runner struct {
 	destructor func()
 	runner     func()
-}
+} 
 
 func (rur *runner) run(ctx context.Context) {
 	go func() {
