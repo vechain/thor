@@ -208,10 +208,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
-	start := time.Now()
-
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
+		start := time.Now()
 		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 
 		defer func() { // Lazy evaluation of the parameters
