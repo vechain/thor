@@ -1,4 +1,4 @@
-package node
+package main
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/node/blockpool"
-	"github.com/vechain/thor/node/network"
+	"github.com/vechain/thor/cmd/thor/blockpool"
+	"github.com/vechain/thor/cmd/thor/network"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
@@ -159,9 +159,9 @@ func (svr *service) packer(pk *packer.Packer, privateKey *ecdsa.PrivateKey) *run
 }
 
 func (svr *service) updateChain(block *block.Block, isTrunk bool, ttl int, tag string) {
-	if err := svr.chain.AddBlock(block, true); err != nil {
+	if err := consensus.AddBlock(nil, svr.chain, isTrunk) err != nil {
 		log.Fatalf("[%v %v]: %v\n", svr.ip, tag, err)
-	}
+	} 
 
 	log.Printf("[%v %v]: a block has add to chain, %v\n", svr.ip, tag, isTrunk)
 	svr.BePacked(network.Block{

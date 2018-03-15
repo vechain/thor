@@ -1,6 +1,7 @@
 package p2psrv_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"testing"
@@ -26,82 +27,61 @@ func mustHexToECDSA(k string) *ecdsa.PrivateKey {
 	return pk
 }
 
-const messageId = 0
-
-func msgHandler(peer *p2p.Peer, ws p2p.MsgReadWriter) error {
-	fmt.Println("connected to peer^^^^^^^^^^^^^^^^^^^^^^", peer)
-	for {
-
-		// if err := p2p.SendItems(ws, messageId, "hello world"); err != nil {
-		// 	fmt.Println("send", err)
-		// }
-		msg, err := ws.ReadMsg()
-		if err != nil {
-			return err
-		}
-
-		var myMessage []string
-		err = msg.Decode(&myMessage)
-		if err != nil {
-			// handle decode error
-			fmt.Println("dec", err)
-			continue
-		}
-
-		switch myMessage[0] {
-		case "foo":
-			err := p2p.SendItems(ws, messageId, "bar")
-			if err != nil {
-				return err
-			}
-		default:
-			fmt.Println("recv:", myMessage)
-		}
+func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
+	var req string
+	if err := msg.Decode(&req); err != nil {
+		panic(err)
 	}
-
-	return nil
+	fmt.Println("req: ", req)
+	return "bar", nil
 }
 
 func TestServer(t *testing.T) {
-	srv1 := p2psrv.New(
-		p2psrv.Options{
-			PrivateKey: mustHexToECDSA(k1),
-			MaxPeers:   25,
-			ListenAddr: ":40001",
 
+	srv1 := p2psrv.New(
+		&p2psrv.Options{
+			PrivateKey:     mustHexToECDSA(k1),
+			MaxSessions:    25,
+			ListenAddr:     ":40001",
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
-			Protocols: []p2p.Protocol{p2p.Protocol{
-				Name:    "MyProtocol", // 2.
-				Version: 1,            // 3.
-				Length:  1,            // 4.
-				Run:     msgHandler,   // 5.
-			}},
-			//NAT:   nat.ExtIP(net.ParseIP("11.2.3.4")),
-			Topic: "thor@111111",
 		})
 
-	srv2 := p2psrv.New(p2psrv.Options{
-		PrivateKey:     mustHexToECDSA(k2),
-		MaxPeers:       25,
-		ListenAddr:     ":50001",
-		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
-		Protocols: []p2p.Protocol{p2p.Protocol{
-			Name:    "MyProtocol", // 2.
-			Version: 1,            // 3.
-			Length:  1,            // 4.
-			Run:     msgHandler,   // 5.
-		}},
-		//NAT:   nat.ExtIP(net.ParseIP("21.2.3.5")),
-		Topic: "thor@111111",
-	})
+	srv2 := p2psrv.New(
+		&p2psrv.Options{
+			PrivateKey:     mustHexToECDSA(k2),
+			MaxSessions:    25,
+			ListenAddr:     ":50001",
+			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
+		})
+	proto := &p2psrv.Protocol{
+		Name:          "MyProtocol",
+		Version:       1,
+		Length:        1,
+		MaxMsgSize:    1024,
+		HandleRequest: handleRequest,
+	}
 
-	srv1.Start()
+	srv1.Start("thor@111111", []*p2psrv.Protocol{proto})
 	defer srv1.Stop()
-	srv2.Start()
+	srv2.Start("thor@111111", []*p2psrv.Protocol{proto})
 	defer srv2.Stop()
+
+	go func() {
+		for {
+			ss := srv1.Sessions()
+			if len(ss) > 0 {
+				var resp string
+				if err := ss[0].Request(context.Background(), 0, "foo", &resp); err != nil {
+					panic(err)
+				}
+				fmt.Println("resp:", resp)
+				break
+			}
+			<-time.After(time.Millisecond * 100)
+		}
+	}()
 
 	fmt.Println(srv1.Self())
 	fmt.Println(srv2.Self())
 	<-time.After(time.Second * 4)
-
 }

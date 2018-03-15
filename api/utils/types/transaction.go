@@ -1,6 +1,8 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )

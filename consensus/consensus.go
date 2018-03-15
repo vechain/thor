@@ -93,7 +93,7 @@ func (c *Consensus) isTrunk(block *block.Block) (bool, error) {
 	case block.Header().TotalScore() == bestBlock.Header().TotalScore():
 		blockID := block.Header().ID()
 		bestID := bestBlock.Header().ID()
-		if bytes.Compare(blockID[:], bestID[:]) > 0 {
+		if bytes.Compare(blockID[:], bestID[:]) < 0 { // id 越小, Num 越小, 那么平均 score 越大
 			return true, nil
 		}
 		return false, nil
