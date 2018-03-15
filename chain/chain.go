@@ -4,8 +4,8 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/bluele/gcache"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain/persist"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
@@ -27,26 +27,65 @@ var errBlockExist = errors.New("block already exists")
 type Chain struct {
 	kv        kv.GetPutter
 	bestBlock *block.Block
-	cached    cached
+	caches    caches
 	rw        sync.RWMutex
 }
 
-type cached struct {
-	header     *cache.LRU
-	body       *cache.LRU
-	blockTxIDs *cache.LRU
-	receipts   *cache.LRU
+type caches struct {
+	header   gcache.Cache
+	body     gcache.Cache
+	txIDs    gcache.Cache
+	receipts gcache.Cache
 }
 
 // New create an instance of Chain.
 func New(kv kv.GetPutter) *Chain {
+
+	headerCache := gcache.
+		New(headerCacheLimit).
+		ARC().
+		LoaderFunc(func(key interface{}) (interface{}, error) {
+			return persist.LoadBlockHeader(kv, key.(thor.Hash))
+		}).
+		Build()
+	bodyCache := gcache.
+		New(bodyCacheLimit).
+		ARC().
+		LoaderFunc(func(key interface{}) (interface{}, error) {
+			return persist.LoadBlockBody(kv, key.(thor.Hash))
+		}).
+		Build()
+
+	txIDsCache := gcache.
+		New(blockTxIDsLimit).
+		ARC().
+		LoaderFunc(func(key interface{}) (interface{}, error) {
+			body, err := bodyCache.Get(key)
+			if err != nil {
+				return nil, err
+			}
+			ids := make(map[thor.Hash]int)
+			for i, tx := range body.(*block.Body).Txs {
+				ids[tx.ID()] = i
+			}
+			return ids, nil
+		}).
+		Build()
+
+	receiptsCache := gcache.
+		New(receiptsCacheLimit).
+		ARC().
+		LoaderFunc(func(key interface{}) (interface{}, error) {
+			return persist.LoadBlockReceipts(kv, key.(thor.Hash))
+		}).
+		Build()
 	return &Chain{
 		kv: kv,
-		cached: cached{
-			cache.NewLRU(headerCacheLimit),
-			cache.NewLRU(bodyCacheLimit),
-			cache.NewLRU(blockTxIDsLimit),
-			cache.NewLRU(receiptsCacheLimit),
+		caches: caches{
+			header:   headerCache,
+			body:     bodyCache,
+			txIDs:    txIDsCache,
+			receipts: receiptsCache,
 		},
 	}
 }
@@ -153,8 +192,8 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 		return nil, err
 	}
 
-	c.cached.header.Add(newBlock.Header().ID(), newBlock.Header())
-	c.cached.body.Add(newBlock.Header().ID(), newBlock.Body())
+	c.caches.header.Set(newBlock.Header().ID(), newBlock.Header())
+	c.caches.body.Set(newBlock.Header().ID(), newBlock.Body())
 
 	if isTrunk {
 		c.bestBlock = newBlock
@@ -219,9 +258,7 @@ func (c *Chain) GetBlockHeader(id thor.Hash) (*block.Header, error) {
 }
 
 func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
-	header, err := c.cached.header.GetOrLoad(id, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockHeader(c.kv, id)
-	})
+	header, err := c.caches.header.Get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -236,9 +273,7 @@ func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
 }
 
 func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
-	body, err := c.cached.body.GetOrLoad(id, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockBody(c.kv, id)
-	})
+	body, err := c.caches.body.Get(id)
 	if err != nil {
 		return nil, err
 	}
@@ -341,17 +376,7 @@ func (c *Chain) getTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLoca
 }
 
 func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {
-	ids, err := c.cached.blockTxIDs.GetOrLoad(blockID, func(interface{}) (interface{}, error) {
-		body, err := c.getBlockBody(blockID)
-		if err != nil {
-			return nil, err
-		}
-		ids := make(map[thor.Hash]int)
-		for i, tx := range body.Txs {
-			ids[tx.ID()] = i
-		}
-		return ids, nil
-	})
+	ids, err := c.caches.txIDs.Get(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +430,7 @@ func (c *Chain) SetBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error 
 }
 
 func (c *Chain) setBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
-	c.cached.receipts.Add(blockID, receipts)
+	c.caches.receipts.Set(blockID, receipts)
 	return persist.SaveBlockReceipts(c.kv, blockID, receipts)
 }
 
@@ -417,9 +442,7 @@ func (c *Chain) GetBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
 }
 
 func (c *Chain) getBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
-	receipts, err := c.cached.receipts.GetOrLoad(blockID, func(interface{}) (interface{}, error) {
-		return persist.LoadBlockReceipts(c.kv, blockID)
-	})
+	receipts, err := c.caches.receipts.Get(blockID)
 	if err != nil {
 		return nil, err
 	}

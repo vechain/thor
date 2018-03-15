@@ -84,7 +84,7 @@ func TestP(t *testing.T) {
 		}
 
 		blk, _, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
-		if err := c.AddBlock(blk, true); err != nil {
+		if _, err := c.AddBlock(blk, true); err != nil {
 			t.Fatal(err)
 		}
 

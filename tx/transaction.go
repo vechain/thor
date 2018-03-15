@@ -8,12 +8,12 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/bluele/gcache"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm/evm"
@@ -22,7 +22,7 @@ import (
 const signerCacheSize = 1024
 
 var (
-	signerCache = cache.NewLRU(signerCacheSize)
+	signerCache = gcache.New(signerCacheSize).LRU().Build()
 	invalidTxID = thor.BytesToHash(math.MaxBig256.Bytes())
 )
 
@@ -174,13 +174,12 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 	var hash thor.Hash
 	hw.Sum(hash[:0])
 
-	if v, ok := signerCache.Get(hash); ok {
-		signer = v.(thor.Address)
-		return
+	if v, err := signerCache.Get(hash); err == nil {
+		return v.(thor.Address), nil
 	}
 	defer func() {
 		if err == nil {
-			signerCache.Add(hash, signer)
+			signerCache.Set(hash, signer)
 		}
 	}()
 	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature)
