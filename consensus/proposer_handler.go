@@ -11,16 +11,16 @@ import (
 )
 
 type proposerHandler struct {
-	rt        *runtime.Runtime
-	header    *block.Header
-	preHeader *block.Header
+	rt           *runtime.Runtime
+	header       *block.Header
+	parentHeader *block.Header
 }
 
 func newProposerHandler(
 	chain *Chain.Chain,
 	state *state.State,
 	header *block.Header,
-	preHeader *block.Header,
+	parentHeader *block.Header,
 ) *proposerHandler {
 
 	rt := runtime.New(state,
@@ -32,9 +32,9 @@ func newProposerHandler(
 	)
 
 	return &proposerHandler{
-		rt:        rt,
-		header:    header,
-		preHeader: preHeader}
+		rt:           rt,
+		header:       header,
+		parentHeader: parentHeader}
 }
 
 func (ph *proposerHandler) handle() error {
@@ -56,7 +56,7 @@ func (ph *proposerHandler) handle() error {
 }
 
 func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []poa.Proposer) ([]poa.Proposer, error) {
-	sched, err := poa.NewScheduler(addr, proposers, ph.preHeader.Number(), ph.preHeader.Timestamp())
+	sched, err := poa.NewScheduler(addr, proposers, ph.parentHeader.Number(), ph.parentHeader.Timestamp())
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (ph *proposerHandler) validateProposers(addr thor.Address, proposers []poa.
 	}
 
 	updates, score := sched.Updates(targetTime)
-	if ph.preHeader.TotalScore()+score != ph.header.TotalScore() {
+	if ph.parentHeader.TotalScore()+score != ph.header.TotalScore() {
 		return nil, errTotalScore
 	}
 
