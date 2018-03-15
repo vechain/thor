@@ -21,7 +21,7 @@ type Server struct {
 	sessions   Sessions
 	sessionsMu sync.Mutex
 
-	scoredNodes     *w8cache.W8Cache
+	goodNodes       *w8cache.W8Cache
 	discoveredNodes *w8cache.W8Cache
 	dialingNodes    map[discover.NodeID]*discover.Node
 	dialingNodesMu  sync.Mutex
@@ -37,13 +37,13 @@ func New(opts *Options) *Server {
 	}
 
 	dialCh := make(chan *discover.Node, 8)
-	scoredNodes := w8cache.New(16, nil)
-	for _, node := range opts.KnownNodes {
+	goodNodes := w8cache.New(16, nil)
+	for _, node := range opts.GoodNodes {
 		select {
 		case dialCh <- node:
 		default:
 		}
-		scoredNodes.Set(node.ID, node, 0)
+		goodNodes.Set(node.ID, node, 0)
 	}
 
 	return &Server{
@@ -63,7 +63,7 @@ func New(opts *Options) *Server {
 		},
 		done:            make(chan struct{}),
 		discoveredNodes: w8cache.New(32, nil),
-		scoredNodes:     scoredNodes,
+		goodNodes:       goodNodes,
 		dialingNodes:    make(map[discover.NodeID]*discover.Node),
 		dialCh:          dialCh,
 	}
@@ -88,7 +88,7 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 			delete(s.dialingNodes, peer.ID())
 			s.dialingNodesMu.Unlock()
 			if ok {
-				s.scoredNodes.Set(peer.ID(), node, session.stats.weight())
+				s.goodNodes.Set(peer.ID(), node, session.stats.weight())
 			}
 		}()
 
@@ -123,15 +123,24 @@ func (s *Server) Stop() {
 	s.runner.Wait()
 }
 
-// AddPeer connects to the given node and maintains the connection until the
+// GoodNodes returns good nodes.
+func (s *Server) GoodNodes() []*discover.Node {
+	gns := make([]*discover.Node, 0, s.goodNodes.Count())
+	for _, entry := range s.goodNodes.All() {
+		gns = append(gns, entry.Value.(*discover.Node))
+	}
+	return gns
+}
+
+// AddStatic connects to the given node and maintains the connection until the
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
-func (s *Server) AddPeer(node *discover.Node) {
+func (s *Server) AddStatic(node *discover.Node) {
 	s.srv.AddPeer(node)
 }
 
-// RemovePeer disconnects from the given node
-func (s *Server) RemovePeer(node *discover.Node) {
+// RemoveStatic disconnects from the given node
+func (s *Server) RemoveStatic(node *discover.Node) {
 	s.srv.RemovePeer(node)
 }
 
@@ -255,5 +264,37 @@ func (s *Server) dialLoop() {
 		case <-s.done:
 			return
 		}
+	}
+}
+
+func (s *Server) tryDial(node *discover.Node) {
+	s.sessionsMu.Lock()
+	scnt := len(s.sessions)
+	s.sessionsMu.Unlock()
+	if scnt >= s.srv.MaxPeers {
+		return
+	}
+
+	s.dialingNodesMu.Lock()
+	_, isDialing := s.dialingNodes[node.ID]
+	s.dialingNodesMu.Unlock()
+	if isDialing {
+		return
+	}
+
+	conn, err := s.srv.Dialer.Dial(node)
+	if err != nil {
+		// TODO log
+		return
+	}
+
+	s.dialingNodesMu.Lock()
+	s.dialingNodes[node.ID] = node
+	s.dialingNodesMu.Unlock()
+
+	if err := s.srv.SetupConn(conn, 1, node); err != nil {
+		s.dialingNodesMu.Lock()
+		delete(s.dialingNodes, node.ID)
+		s.dialingNodesMu.Unlock()
 	}
 }

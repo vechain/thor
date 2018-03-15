@@ -84,4 +84,5 @@ func TestServer(t *testing.T) {
 	fmt.Println(srv1.Self())
 	fmt.Println(srv2.Self())
 	<-time.After(time.Second * 4)
+
 }
