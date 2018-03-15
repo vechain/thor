@@ -34,52 +34,34 @@ func mustHexToECDSA(k string) *ecdsa.PrivateKey {
 	return pk
 }
 
-func TestComm(t *testing.T) {
-	srv1 := p2psrv.New(
+func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *chain.Chain) {
+	srv := p2psrv.New(
 		&p2psrv.Options{
-			PrivateKey:     mustHexToECDSA(k1),
+			PrivateKey:     mustHexToECDSA(key),
 			MaxPeers:       25,
-			ListenAddr:     ":40001",
+			ListenAddr:     port,
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
 
-	srv2 := p2psrv.New(
-		&p2psrv.Options{
-			PrivateKey:     mustHexToECDSA(k2),
-			MaxPeers:       25,
-			ListenAddr:     ":50001",
-			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
-		})
+	lv, err := lvldb.NewMem()
+	if err != nil {
+		return nil, nil, nil
+	}
+	ch := chain.New(lv)
+	genesisBlk, err := genesis.Dev.Build(state.NewCreator(lv))
+	if err != nil {
+		return nil, nil, nil
+	}
+	ch.WriteGenesis(genesisBlk)
+	return comm.New(ch, txpool.New()), srv, ch
+}
 
-	lv1, err := lvldb.NewMem()
-	if err != nil {
-		return
-	}
-	ch1 := chain.New(lv1)
-	genesisBlk1, err := genesis.Dev.Build(state.NewCreator(lv1))
-	if err != nil {
-		return
-	}
-	ch1.WriteGenesis(genesisBlk1)
-	cm1 := comm.New(ch1, txpool.New())
+func TestSync(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	cm1, srv1, ch1 := makeAComm(k1, ":40001")
 	cm1.Start(srv1, "thor@111111")
 	defer cm1.Stop()
-
-	lv2, err := lvldb.NewMem()
-	if err != nil {
-		return
-	}
-	ch2 := chain.New(lv2)
-	genesisBlk2, err := genesis.Dev.Build(state.NewCreator(lv2))
-	if err != nil {
-		return
-	}
-	ch2.WriteGenesis(genesisBlk2)
-	cm2 := comm.New(ch2, txpool.New())
-	cm2.Start(srv2, "thor@111111")
-	defer cm2.Stop()
-
-	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
@@ -88,13 +70,18 @@ func TestComm(t *testing.T) {
 			select {
 			case <-ctx.Done():
 			case <-ticker.C:
-				blk := new(block.Builder).TotalScore(10).ParentID(genesisBlk1.Header().ID()).Build()
-				ch1.AddBlock(blk, true)
-				//cm1.BroadcastBlock(blk)
 				fmt.Printf("[cm1] %v\n", srv1.Sessions())
 			}
 		}
 	}()
+
+	genesisBlk, _ := ch1.GetBestBlock()
+	blk := new(block.Builder).TotalScore(10).ParentID(genesisBlk.Header().ID()).Build()
+	ch1.AddBlock(blk, true)
+
+	cm2, srv2, _ := makeAComm(k2, ":50001")
+	cm2.Start(srv2, "thor@111111")
+	defer cm2.Stop()
 
 	go func() {
 		for {
