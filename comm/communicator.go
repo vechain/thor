@@ -163,8 +163,21 @@ func (c *Communicator) Sync() {
 
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 	txID := tx.ID()
+	genesisBlock, err := c.ch.GetBlockByNumber(0)
+	if err != nil {
+		return
+	}
 
 	cond := func(s *p2psrv.Session) bool {
+		respSt, err := proto.ReqStatus{}.Do(c.ctx, s)
+		if err != nil {
+			return false
+		}
+
+		if respSt.GenesisBlockID != genesisBlock.Header().ID() {
+			return false
+		}
+
 		c.knownBlocks.Lock()
 		defer c.knownBlocks.Unlock()
 
@@ -189,8 +202,21 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	blkID := blk.Header().ID()
+	genesisBlock, err := c.ch.GetBlockByNumber(0)
+	if err != nil {
+		return
+	}
 
 	cond := func(s *p2psrv.Session) bool {
+		respSt, err := proto.ReqStatus{}.Do(c.ctx, s)
+		if err != nil {
+			return false
+		}
+
+		if respSt.GenesisBlockID != genesisBlock.Header().ID() {
+			return false
+		}
+
 		c.knownTxs.Lock()
 		defer c.knownTxs.Unlock()
 

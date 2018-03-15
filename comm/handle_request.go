@@ -13,10 +13,17 @@ func handleStatus(ch *chain.Chain) (*proto.RespStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	genesisBlock, err := ch.GetBlockByNumber(0)
+	if err != nil {
+		return nil, err
+	}
+
 	header := bestBlock.Header()
 	return &proto.RespStatus{
-		TotalScore:  header.TotalScore(),
-		BestBlockID: header.ID(),
+		GenesisBlockID: genesisBlock.Header().ID(),
+		TotalScore:     header.TotalScore(),
+		BestBlockID:    header.ID(),
 	}, nil
 }
 

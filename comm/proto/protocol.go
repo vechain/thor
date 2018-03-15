@@ -30,12 +30,6 @@ const (
 	MsgGetBlocksByNumber // 获取某个 Num 之后的部分块 (不包含 num 所在的块)
 )
 
-// RespStatus response payload of MsgStatus.
-type RespStatus struct {
-	BestBlockID thor.Hash
-	TotalScore  uint64
-}
-
 // ReqStatus request payload of MsgStatus.
 type ReqStatus struct{}
 
@@ -46,6 +40,13 @@ func (req ReqStatus) Do(ctx context.Context, session *p2psrv.Session) (*RespStat
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// RespStatus response payload of MsgStatus.
+type RespStatus struct {
+	GenesisBlockID thor.Hash
+	BestBlockID    thor.Hash
+	TotalScore     uint64
 }
 
 // ReqNewBlockID request payload of MsgNewBlockID.
