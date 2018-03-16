@@ -44,6 +44,24 @@ func New(path string) (*LDB, error) {
 	return ldb, nil
 }
 
+//NewMem create a memory sqlite db
+func NewMem() (*LDB, error) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		return nil, err
+	}
+	s, _, _ := sqlite3.Version()
+	ldb := &LDB{
+		db:            db,
+		sqliteVersion: s,
+	}
+	err = ldb.execInTransaction(LogSQL)
+	if err != nil {
+		return nil, err
+	}
+	return ldb, nil
+}
+
 //Insert insert logs into db
 func (db *LDB) Insert(logs []*Log) error {
 	if len(logs) == 0 {
