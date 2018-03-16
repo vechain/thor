@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -15,17 +16,17 @@ import (
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	srv        *p2p.Server
-	goes       co.Goes
-	done       chan struct{}
-	sessions   Sessions
-	sessionsMu sync.Mutex
+	srv  *p2p.Server
+	goes co.Goes
+	done chan struct{}
 
 	goodNodes       *w8cache.W8Cache
 	discoveredNodes *w8cache.W8Cache
-	dialingNodes    map[discover.NodeID]*discover.Node
-	dialingNodesMu  sync.Mutex
+	busyNodes       busyNodes
 	dialCh          chan *discover.Node
+
+	sessionFeed event.Feed
+	feedScope   event.SubscriptionScope
 }
 
 // New create a p2p server.
@@ -62,9 +63,8 @@ func New(opts *Options) *Server {
 			},
 		},
 		done:            make(chan struct{}),
-		discoveredNodes: w8cache.New(32, nil),
 		goodNodes:       goodNodes,
-		dialingNodes:    make(map[discover.NodeID]*discover.Node),
+		discoveredNodes: w8cache.New(32, nil),
 		dialCh:          dialCh,
 	}
 }
@@ -75,21 +75,23 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
+// SubscribeSession subscribe session event.
+// Call Session.Alive to check which envent is (join or leave).
+func (s *Server) SubscribeSession(ch chan *Session) event.Subscription {
+	return s.feedScope.Track(s.sessionFeed.Subscribe(ch))
+}
+
 func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 		session := newSession(peer, proto)
-
-		s.addSession(session)
-		defer s.removeSession(session)
+		s.goes.Go(func() { s.sessionFeed.Send(session) })
 
 		defer func() {
-			s.dialingNodesMu.Lock()
-			node, ok := s.dialingNodes[peer.ID()]
-			delete(s.dialingNodes, peer.ID())
-			s.dialingNodesMu.Unlock()
-			if ok {
+			if node := s.busyNodes.remove(peer.ID()); node != nil {
 				s.goodNodes.Set(peer.ID(), node, session.stats.weight())
 			}
+			s.goes.Go(func() { s.sessionFeed.Send(session) })
+
 		}()
 
 		return session.serve(rw, proto.HandleRequest)
@@ -120,6 +122,7 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 func (s *Server) Stop() {
 	s.srv.Stop()
 	close(s.done)
+	s.feedScope.Close()
 	s.goes.Wait()
 }
 
@@ -149,36 +152,13 @@ func (s *Server) NodeInfo() *p2p.NodeInfo {
 	return s.srv.NodeInfo()
 }
 
-// Sessions returns slice of alive sessions.
-func (s *Server) Sessions() Sessions {
-	s.sessionsMu.Lock()
-	defer s.sessionsMu.Unlock()
-	return append(Sessions(nil), s.sessions...)
-}
-
-func (s *Server) addSession(session *Session) {
-	s.sessionsMu.Lock()
-	defer s.sessionsMu.Unlock()
-	s.sessions = append(s.sessions, session)
-}
-
-func (s *Server) removeSession(session *Session) {
-	s.sessionsMu.Lock()
-	defer s.sessionsMu.Unlock()
-	for i, ss := range s.sessions {
-		if ss == session {
-			s.sessions = append(s.sessions[:i], s.sessions[i+1:]...)
-			break
-		}
-	}
-}
-
 func (s *Server) discoverLoop(topic discv5.Topic) {
 	if s.srv.DiscV5 == nil {
 		return
 	}
 
 	setPeriod := make(chan time.Duration, 1)
+	setPeriod <- time.Millisecond * 100
 	discNodes := make(chan *discv5.Node, 100)
 	discLookups := make(chan bool, 100)
 
@@ -190,7 +170,6 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
 	})
 
-	setPeriod <- time.Millisecond * 100
 	var (
 		lookupCount  = 0
 		fastDiscover = true
@@ -215,10 +194,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			s.discoveredNodes.Set(newNode.ID, newNode, rand.Float64())
 			if entry := s.discoveredNodes.PopWorst(); entry != nil {
 				s.discoveredNodes.Set(entry.Key, entry.Value, rand.Float64())
-				select {
-				case s.dialCh <- newNode:
-				default:
-				}
+				s.goes.Go(func() { s.dialCh <- newNode })
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -231,35 +207,8 @@ func (s *Server) dialLoop() {
 	for {
 		select {
 		case node := <-s.dialCh:
-			s.sessionsMu.Lock()
-			sessionCnt := len(s.sessions)
-			s.sessionsMu.Unlock()
-			if sessionCnt >= s.srv.MaxPeers {
-				continue
-			}
-
-			s.dialingNodesMu.Lock()
-			_, isDialing := s.dialingNodes[node.ID]
-			s.dialingNodesMu.Unlock()
-
-			if isDialing {
-				continue
-			}
-
-			conn, err := s.srv.Dialer.Dial(node)
-			if err != nil {
+			if err := s.tryDial(node); err != nil {
 				// TODO log
-				continue
-			}
-
-			s.dialingNodesMu.Lock()
-			s.dialingNodes[node.ID] = node
-			s.dialingNodesMu.Unlock()
-
-			if err := s.srv.SetupConn(conn, 1, node); err != nil {
-				s.dialingNodesMu.Lock()
-				delete(s.dialingNodes, node.ID)
-				s.dialingNodesMu.Unlock()
 			}
 		case <-s.done:
 			return
@@ -267,34 +216,62 @@ func (s *Server) dialLoop() {
 	}
 }
 
-func (s *Server) tryDial(node *discover.Node) {
-	s.sessionsMu.Lock()
-	scnt := len(s.sessions)
-	s.sessionsMu.Unlock()
-	if scnt >= s.srv.MaxPeers {
+func (s *Server) tryDial(node *discover.Node) (err error) {
+	if s.srv.PeerCount() >= s.srv.MaxPeers {
+		return
+	}
+	if s.busyNodes.contains(node.ID) {
 		return
 	}
 
-	s.dialingNodesMu.Lock()
-	_, isDialing := s.dialingNodes[node.ID]
-	s.dialingNodesMu.Unlock()
-	if isDialing {
-		return
-	}
+	s.busyNodes.add(node)
+	defer func() {
+		if err != nil {
+			s.busyNodes.remove(node.ID)
+		}
+	}()
 
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		// TODO log
-		return
+		return err
 	}
+	return s.srv.SetupConn(conn, 1, node)
+}
 
-	s.dialingNodesMu.Lock()
-	s.dialingNodes[node.ID] = node
-	s.dialingNodesMu.Unlock()
+type busyNodes struct {
+	once  sync.Once
+	nodes map[discover.NodeID]*discover.Node
+	lock  sync.Mutex
+}
 
-	if err := s.srv.SetupConn(conn, 1, node); err != nil {
-		s.dialingNodesMu.Lock()
-		delete(s.dialingNodes, node.ID)
-		s.dialingNodesMu.Unlock()
+func (bn *busyNodes) init() {
+	bn.once.Do(func() {
+		bn.nodes = make(map[discover.NodeID]*discover.Node)
+	})
+}
+
+func (bn *busyNodes) add(node *discover.Node) {
+	bn.init()
+	bn.lock.Lock()
+	defer bn.lock.Unlock()
+	bn.nodes[node.ID] = node
+}
+
+func (bn *busyNodes) remove(id discover.NodeID) *discover.Node {
+	bn.init()
+	bn.lock.Lock()
+	defer bn.lock.Unlock()
+	if node, ok := bn.nodes[id]; ok {
+		delete(bn.nodes, id)
+		return node
 	}
+	return nil
+}
+
+func (bn *busyNodes) contains(id discover.NodeID) bool {
+	bn.init()
+	bn.lock.Lock()
+	defer bn.lock.Unlock()
+	return bn.nodes[id] != nil
 }
