@@ -29,14 +29,14 @@ func TestStackedMap(t *testing.T) {
 		getKey    string
 		getReturn []interface{}
 	}{
-		{func() {}, 0, "", "", "foo", []interface{}{"bar", true}},
-		{func() { sm.Push() }, 1, "foo", "baz", "foo", []interface{}{"baz", true}},
-		{func() {}, 1, "foo", "baz1", "foo", []interface{}{"baz1", true}},
-		{func() { sm.Push() }, 2, "foo", "qux", "foo", []interface{}{"qux", true}},
-		{func() { sm.Pop() }, 1, "", "", "foo", []interface{}{"baz1", true}},
-		{func() { sm.Pop() }, 0, "", "", "foo", []interface{}{"bar", true}},
+		{func() {}, 1, "", "", "foo", []interface{}{"bar", true}},
+		{func() { sm.Push() }, 2, "foo", "baz", "foo", []interface{}{"baz", true}},
+		{func() {}, 2, "foo", "baz1", "foo", []interface{}{"baz1", true}},
+		{func() { sm.Push() }, 3, "foo", "qux", "foo", []interface{}{"qux", true}},
+		{func() { sm.Pop() }, 2, "", "", "foo", []interface{}{"baz1", true}},
+		{func() { sm.Pop() }, 1, "", "", "foo", []interface{}{"bar", true}},
 
-		{func() { sm.Push(); sm.Push() }, 2, "", "", "", nil},
+		{func() { sm.Push(); sm.Push() }, 3, "", "", "", nil},
 		{func() { sm.PopTo(0) }, 0, "", "", "", nil},
 	}
 

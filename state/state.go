@@ -51,9 +51,6 @@ func New(root thor.Hash, kv kv.GetPutter) (*State, error) {
 	state.sm = stackedmap.New(func(key interface{}) (value interface{}, exist bool) {
 		return state.cacheGetter(key)
 	})
-
-	// initially has 1 stack depth
-	state.sm.Push()
 	return &state, nil
 }
 
@@ -304,22 +301,9 @@ func (s *State) NewCheckpoint() int {
 	return s.sm.Push()
 }
 
-// Revert revert to last checkpoint and drop all subsequent changes.
-func (s *State) Revert() {
-	s.sm.Pop()
-	// ensure depth 1
-	if s.sm.Depth() == 0 {
-		s.sm.Push()
-	}
-}
-
 // RevertTo revert to checkpoint specified by revision.
 func (s *State) RevertTo(revision int) {
 	s.sm.PopTo(revision)
-	// ensure depth 1
-	if s.sm.Depth() == 0 {
-		s.sm.Push()
-	}
 }
 
 // Stage makes a stage object to compute hash of trie or commit all changes.

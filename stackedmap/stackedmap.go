@@ -32,7 +32,7 @@ type MapGetter func(key interface{}) (value interface{}, exist bool)
 func New(src MapGetter) *StackedMap {
 	return &StackedMap{
 		src,
-		stack{},
+		stack{newLevel()},
 		make(map[interface{}]*stack),
 	}
 }

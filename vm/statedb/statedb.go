@@ -189,18 +189,11 @@ func (s *StateDB) AddLog(vmlog *types.Log) {
 // Snapshot stub.
 func (s *StateDB) Snapshot() int {
 	s.state.NewCheckpoint()
-	rev := s.repo.Push()
-	return rev
+	return s.repo.Push()
 }
 
 // RevertToSnapshot stub.
 func (s *StateDB) RevertToSnapshot(rev int) {
-	if rev < 0 || rev > s.repo.Depth() {
-		panic(fmt.Sprintf("invalid snapshot revision %d (depth:%d)", rev, s.repo.Depth()))
-	}
-	revertCount := s.repo.Depth() - rev
-	for i := 0; i < revertCount; i++ {
-		s.state.Revert()
-	}
+	s.state.RevertTo(rev)
 	s.repo.PopTo(rev)
 }

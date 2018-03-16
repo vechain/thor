@@ -21,5 +21,5 @@ type State interface {
 	Delete(thor.Address)
 
 	NewCheckpoint() int
-	Revert()
+	RevertTo(int)
 }
