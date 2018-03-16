@@ -215,7 +215,7 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 		return err != nil
 	}
 
-	ss := c.sessions.getSessions().filter(cond)
+	ss := c.sessions.slice().filter(cond)
 	for _, s := range ss {
 		go func(s *p2psrv.Session) {
 			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s)); err == nil {
@@ -240,7 +240,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		return err != nil
 	}
 
-	ss := c.sessions.getSessions().filter(cond)
+	ss := c.sessions.slice().filter(cond)
 	for _, s := range ss {
 		go func(s *p2psrv.Session) {
 			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s)); err == nil {

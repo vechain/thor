@@ -21,30 +21,30 @@ func (ss sessions) filter(cond func(s *p2psrv.Session) bool) sessions {
 }
 
 type sessionSet struct {
-	sync.Mutex
-	m map[discover.NodeID]*p2psrv.Session
+	lock sync.Mutex
+	m    map[discover.NodeID]*p2psrv.Session
 }
 
-func (sset sessionSet) remove(key discover.NodeID) {
-	sset.Lock()
-	defer sset.Unlock()
+func (ss *sessionSet) remove(key discover.NodeID) {
+	ss.lock.Lock()
+	defer ss.lock.Unlock()
 
-	delete(sset.m, key)
+	delete(ss.m, key)
 }
 
-func (sset sessionSet) add(key discover.NodeID, session *p2psrv.Session) {
-	sset.Lock()
-	defer sset.Unlock()
+func (ss *sessionSet) add(key discover.NodeID, session *p2psrv.Session) {
+	ss.lock.Lock()
+	defer ss.lock.Unlock()
 
-	sset.m[key] = session
+	ss.m[key] = session
 }
 
-func (sset sessionSet) getSessions() sessions {
-	sset.Lock()
-	defer sset.Unlock()
+func (ss *sessionSet) slice() sessions {
+	ss.lock.Lock()
+	defer ss.lock.Unlock()
 
-	ret := make(sessions, 0, len(sset.m))
-	for _, s := range sset.m {
+	ret := make(sessions, 0, len(ss.m))
+	for _, s := range ss.m {
 		ret = append(ret, s)
 	}
 
