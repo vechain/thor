@@ -24,7 +24,6 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 
 // Consent is Consensus's main func.
 func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err error) {
-
 	parentHeader, err := c.validateBlock(blk, nowTime)
 	if err != nil {
 		return false, err
