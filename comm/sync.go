@@ -15,7 +15,7 @@ import (
 )
 
 func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
-	ss := c.sessions.getSessions()
+	ss := c.sessions.slice()
 	cn := make(chan *status, len(ss))
 
 	var wg sync.WaitGroup
