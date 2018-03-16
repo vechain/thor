@@ -196,3 +196,8 @@ func (db *LogDB) Query(stmt string) ([]*Log, error) {
 func (db *LogDB) Path() string {
 	return db.path
 }
+
+//Close close sqlite
+func (db *LogDB) Close() {
+	db.Close()
+}
