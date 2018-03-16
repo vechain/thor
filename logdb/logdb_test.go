@@ -2,12 +2,13 @@ package logdb_test
 
 import (
 	"fmt"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"os"
 	"os/user"
 	"testing"
+
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 func TestLogDB(t *testing.T) {

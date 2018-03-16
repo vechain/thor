@@ -2,6 +2,7 @@ package logdb
 
 import (
 	"fmt"
+
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
