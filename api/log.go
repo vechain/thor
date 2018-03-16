@@ -6,11 +6,11 @@ import (
 
 //LogInterface for query logs
 type LogInterface struct {
-	ldb *logdb.LDB
+	ldb *logdb.LogDB
 }
 
 //NewLogInterface new LogInterface
-func NewLogInterface(ldb *logdb.LDB) *LogInterface {
+func NewLogInterface(ldb *logdb.LogDB) *LogInterface {
 	return &LogInterface{
 		ldb,
 	}

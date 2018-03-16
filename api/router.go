@@ -9,7 +9,7 @@ import (
 )
 
 //NewHTTPHandler return api router
-func NewHTTPHandler(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, ldb *logdb.LDB) *mux.Router {
+func NewHTTPHandler(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, ldb *logdb.LogDB) *mux.Router {
 	router := mux.NewRouter()
 	NewAccountHTTPRouter(router, NewAccountInterface(chain, stateCreator))
 	NewTransactionHTTPRouter(router, NewTransactionInterface(chain, txPool))

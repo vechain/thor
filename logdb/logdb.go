@@ -3,10 +3,10 @@ package logdb
 import (
 	"database/sql"
 	"fmt"
+	"sync"
 
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
-	"sync"
 )
 
 //FilterOption option filter
@@ -17,8 +17,8 @@ type FilterOption struct {
 	TopicSet  [][5]*thor.Hash
 }
 
-//LDB manages all logs
-type LDB struct {
+//LogDB manages all logs
+type LogDB struct {
 	path          string
 	db            *sql.DB
 	sqliteVersion string
@@ -26,44 +26,43 @@ type LDB struct {
 }
 
 //New open a logdb
-func New(path string) (*LDB, error) {
+func New(path string) (*LogDB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
 	s, _, _ := sqlite3.Version()
-	ldb := &LDB{
+	logDB := &LogDB{
 		path:          path,
 		db:            db,
 		sqliteVersion: s,
 	}
-	err = ldb.execInTransaction(LogSQL)
+	err = logDB.execInTransaction(logTableSchema)
 	if err != nil {
 		return nil, err
 	}
-	return ldb, nil
+	return logDB, nil
 }
 
 //NewMem create a memory sqlite db
-func NewMem() (*LDB, error) {
+func NewMem() (*LogDB, error) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		return nil, err
 	}
 	s, _, _ := sqlite3.Version()
-	ldb := &LDB{
+	ldb := &LogDB{
 		db:            db,
 		sqliteVersion: s,
 	}
-	err = ldb.execInTransaction(LogSQL)
-	if err != nil {
+	if err = ldb.execInTransaction(logTableSchema); err != nil {
 		return nil, err
 	}
 	return ldb, nil
 }
 
 //Insert insert logs into db
-func (db *LDB) Insert(logs []*Log) error {
+func (db *LogDB) Insert(logs []*Log) error {
 	if len(logs) == 0 {
 		return nil
 	}
@@ -90,7 +89,7 @@ func (db *LDB) Insert(logs []*Log) error {
 }
 
 //Filter return logs with options
-func (db *LDB) Filter(option *FilterOption) ([]*Log, error) {
+func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 	if option == nil {
 		return db.Query("select * from log")
 	}
@@ -137,7 +136,7 @@ func (db *LDB) Filter(option *FilterOption) ([]*Log, error) {
 }
 
 //execInTransaction execute sql in a transaction
-func (db *LDB) execInTransaction(sqlStmt string, args ...interface{}) error {
+func (db *LogDB) execInTransaction(sqlStmt string, args ...interface{}) error {
 	tx, err := db.db.Begin()
 	if err != nil {
 		return err
@@ -151,7 +150,7 @@ func (db *LDB) execInTransaction(sqlStmt string, args ...interface{}) error {
 }
 
 //Query query logs
-func (db *LDB) Query(stmt string) ([]*Log, error) {
+func (db *LogDB) Query(stmt string) ([]*Log, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
 	rows, err := db.db.Query(stmt)
@@ -194,6 +193,6 @@ func (db *LDB) Query(stmt string) ([]*Log, error) {
 }
 
 //Path return db's directory
-func (db *LDB) Path() string {
+func (db *LogDB) Path() string {
 	return db.path
 }

@@ -1,7 +1,7 @@
 package logdb
 
-//LogSQL create a table for log
-const LogSQL = `
+// create a table for log
+const logTableSchema = `
 create table if not exists log (
 	blockID	char(66),
 	blockNumber decimal(32,0),
