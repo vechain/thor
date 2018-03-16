@@ -11,11 +11,12 @@ import (
 )
 
 func TestLogDB(t *testing.T) {
-	path, err := home()
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := logdb.New(path + "/log.db")
+	// path, err := home()
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// db, err := logdb.New(path + "/log.db")
+	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
