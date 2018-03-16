@@ -37,7 +37,6 @@ func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err
 }
 
 func TestServer(t *testing.T) {
-
 	srv1 := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(k1),
@@ -60,6 +59,8 @@ func TestServer(t *testing.T) {
 		MaxMsgSize:    1024,
 		HandleRequest: handleRequest,
 	}
+	sch := make(chan *p2psrv.Session)
+	srv1.SubscribeSession(sch)
 
 	srv1.Start("thor@111111", []*p2psrv.Protocol{proto})
 	defer srv1.Stop()
@@ -68,10 +69,10 @@ func TestServer(t *testing.T) {
 
 	go func() {
 		for {
-			ss := srv1.Sessions()
-			if len(ss) > 0 {
+			ss := <-sch
+			if ss.Alive() {
 				var resp string
-				if err := ss[0].Request(context.Background(), 0, "foo", &resp); err != nil {
+				if err := ss.Request(context.Background(), 0, "foo", &resp); err != nil {
 					panic(err)
 				}
 				fmt.Println("resp:", resp)

@@ -19,6 +19,7 @@ func init() {
 
 var (
 	errSessionClosed = errors.New("session closed")
+	errMsgTooLarge   = errors.New("msg too large")
 )
 
 // HandleRequest handles incoming request message, acts like a server.
@@ -95,7 +96,7 @@ func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
 	defer msg.Discard()
 
 	if msg.Size > s.proto.MaxMsgSize {
-		return errors.New("msg too large")
+		return errMsgTooLarge
 	}
 
 	// parse firt two elements, which are reqID and isResponse
