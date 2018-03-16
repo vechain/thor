@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
@@ -12,29 +11,26 @@ import (
 // Consensus check whether the block is verified,
 // and predicate which trunk it belong to.
 type Consensus struct {
-	chain  *chain.Chain
-	stateC *state.Creator
+	chain        *chain.Chain
+	stateCreator *state.Creator
 }
 
 // New is Consensus factory.
-func New(chain *chain.Chain, stateC *state.Creator) *Consensus {
+func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 	return &Consensus{
-		chain:  chain,
-		stateC: stateC}
+		chain:        chain,
+		stateCreator: stateCreator}
 }
 
 // Consent is Consensus's main func.
 func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err error) {
-	if blk == nil {
-		return false, errors.New("parameter is nil, must be *block.Block")
-	}
 
 	parentHeader, err := c.validateBlock(blk, nowTime)
 	if err != nil {
 		return false, err
 	}
 
-	state, err := c.stateC.NewState(parentHeader.StateRoot())
+	state, err := c.stateCreator.NewState(parentHeader.StateRoot())
 	if err != nil {
 		return false, err
 	}
@@ -43,7 +39,8 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 		return false, err
 	}
 
-	if err = c.verify(blk, parentHeader, state); err != nil {
+	stage, err := c.verify(blk, parentHeader, state)
+	if err != nil {
 		return false, err
 	}
 
@@ -51,7 +48,7 @@ func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err
 		return false, err
 	}
 
-	if _, err = state.Stage().Commit(); err != nil {
+	if _, err = stage.Commit(); err != nil {
 		return false, err
 	}
 

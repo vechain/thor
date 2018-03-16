@@ -1,12 +1,12 @@
 package consensus
 
 import (
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	Tx "github.com/vechain/thor/tx"
 )
 
 func (c *Consensus) validateBlock(blk *block.Block, nowTime uint64) (*block.Header, error) {
@@ -33,61 +33,66 @@ func (c *Consensus) validateBlock(blk *block.Block, nowTime uint64) (*block.Head
 		return nil, errGasUsed
 	case header.TxsRoot() != blk.Transactions().RootHash():
 		return nil, errTxsRoot
-	case !c.validateTransactions(blk):
-		return nil, errTransaction
-	default:
-		return parentHeader, nil
 	}
+
+	if err := c.validateTransactions(blk); err != nil {
+		return nil, errors.Wrap(err, "bad tx")
+	}
+	return parentHeader, nil
 }
 
-func (c *Consensus) validateTransactions(blk *block.Block) bool {
+func (c *Consensus) validateTransactions(blk *block.Block) error {
 	transactions := blk.Transactions()
 	header := blk.Header()
 
 	if len(transactions) == 0 {
-		return true
+		return nil
 	}
 
-	validTx := make(map[thor.Hash]bool)
+	passed := make(map[thor.Hash]struct{})
+
+	findTx := func(txID thor.Hash) (bool, error) {
+		if _, ok := passed[txID]; ok {
+			return true, nil
+		}
+		_, err := c.chain.LookupTransaction(blk.Header().ParentID(), txID)
+		if err != nil {
+			if c.chain.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}
 
 	for _, tx := range transactions {
 		switch {
 		case tx.BlockRef().Number() >= header.Number():
-			return false
+			return errors.New("invalid block ref")
 		case tx.ChainTag() != header.ChainTag():
-			return false
-		case !c.isTxDependFound(validTx, header, tx):
-			return false
-		case !c.isTxNotFound(validTx, header, tx):
-			return false
+			return errors.New("chain tag mismatch")
+		case tx.HasReservedFields():
+			return errors.New("reserved fields not empty")
 		}
-		validTx[tx.ID()] = true
+
+		// check if tx already appeared in old blocks, or passed map
+		if found, err := findTx(tx.ID()); err != nil {
+			return err
+		} else if found {
+			return errors.New("duplicated tx")
+		}
+
+		// check depended tx
+		if dep := tx.DependsOn(); dep != nil {
+			if found, err := findTx(*dep); err != nil {
+				return err
+			} else if !found {
+				return errors.New("tx dep not found")
+			}
+		}
+		passed[tx.ID()] = struct{}{}
 	}
-
-	return true
-}
-
-func (c *Consensus) isTxNotFound(validTx map[thor.Hash]bool, header *block.Header, tx *Tx.Transaction) bool {
-	if _, ok := validTx[tx.ID()]; ok { // 在当前块中找到相同交易
-		return false
-	}
-
-	_, err := c.chain.LookupTransaction(header.ParentID(), tx.ID())
-	return c.chain.IsNotFound(err)
-}
-
-func (c *Consensus) isTxDependFound(validTx map[thor.Hash]bool, header *block.Header, tx *Tx.Transaction) bool {
-	dependID := tx.DependsOn()
-	if dependID == nil { // 不依赖其它交易
-		return true
-	}
-
-	if _, ok := validTx[*dependID]; ok { // 在当前块中找到依赖
-		return true
-	}
-
-	_, err := c.chain.LookupTransaction(header.ParentID(), *dependID)
-	return err != nil // 在 chain 中找到依赖
+	return nil
 }
 
 func (c *Consensus) validateProposer(header *block.Header, parentHeader *block.Header, st *state.State) error {
@@ -101,12 +106,11 @@ func (c *Consensus) validateProposer(header *block.Header, parentHeader *block.H
 		return err
 	}
 
-	targetTime := sched.Schedule(header.Timestamp())
-	if !sched.IsTheTime(targetTime) {
+	if !sched.IsTheTime(header.Timestamp()) {
 		return errSchedule
 	}
 
-	updates, score := sched.Updates(targetTime)
+	updates, score := sched.Updates(header.Timestamp())
 	if parentHeader.TotalScore()+score != header.TotalScore() {
 		return errTotalScore
 	}

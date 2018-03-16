@@ -2,37 +2,33 @@ package consensus
 
 import (
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 )
 
-func (c *Consensus) verify(blk *block.Block, parentHeader *block.Header, st *state.State) error {
-	traverser := c.chain.NewTraverser(parentHeader.ID())
-
-	if err := c.processBlock(blk, traverser, st); err != nil {
-		return err
+func (c *Consensus) verify(blk *block.Block, parentHeader *block.Header, state *state.State) (*state.Stage, error) {
+	if err := c.processBlock(blk, state); err != nil {
+		return nil, err
 	}
 
-	if err := traverser.Error(); err != nil {
-		return err
-	}
-
-	stateRoot, err := st.Stage().Hash()
+	stage := state.Stage()
+	root, err := stage.Hash()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if blk.Header().StateRoot() != stateRoot {
-		return errStateRoot
+	if blk.Header().StateRoot() != root {
+		return nil, errStateRoot
 	}
 
-	return nil
+	return stage, nil
 }
 
-func (c *Consensus) processBlock(blk *block.Block, traverser *chain.Traverser, state *state.State) error {
+func (c *Consensus) processBlock(blk *block.Block, state *state.State) error {
+	traverser := c.chain.NewTraverser(blk.Header().ParentID())
+
 	header := blk.Header()
 	rt := runtime.New(state,
 		header.Beneficiary(),
@@ -56,12 +52,12 @@ func (c *Consensus) processBlock(blk *block.Block, traverser *chain.Traverser, s
 		receipts = append(receipts, receipt)
 	}
 
-	switch {
-	case header.ReceiptsRoot() != receipts.RootHash():
-		return errReceiptsRoot
-	case header.GasUsed() != totalGasUsed:
+	if header.GasUsed() != totalGasUsed {
 		return errGasUsed
-	default:
-		return nil
 	}
+	if header.ReceiptsRoot() != receipts.RootHash() {
+		return errReceiptsRoot
+	}
+
+	return traverser.Error()
 }
