@@ -44,7 +44,7 @@ func handleNewBlock(msg *p2p.Msg, c *Communicator) (*struct{}, error) {
 	}
 	go func() {
 		select {
-		case c.BlockCh <- reqBlk.Block:
+		case c.blockCh <- reqBlk.Block:
 		case <-c.ctx.Done():
 		}
 	}()

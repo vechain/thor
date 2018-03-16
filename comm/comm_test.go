@@ -34,7 +34,7 @@ func mustHexToECDSA(k string) *ecdsa.PrivateKey {
 	return pk
 }
 
-func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *chain.Chain) {
+func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *chain.Chain, *block.Block) {
 	srv := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(key),
@@ -45,49 +45,43 @@ func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *ch
 
 	lv, err := lvldb.NewMem()
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	ch := chain.New(lv)
 	genesisBlk, err := genesis.Dev.Build(state.NewCreator(lv))
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	ch.WriteGenesis(genesisBlk)
-	return comm.New(ch, txpool.New()), srv, ch
+	return comm.New(ch, txpool.New()), srv, ch, genesisBlk
 }
 
 func TestSync(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cm1, srv1, ch1 := makeAComm(k1, ":40001")
-	cm1.Start(srv1, "thor@111111")
-	defer cm1.Stop()
+	cm1, srv1, ch1, genesisBlk := makeAComm(k1, ":40001")
+	sessionCh1 := make(chan *p2psrv.Session)
+	srv1.SubscribeSession(sessionCh1)
+	srv1.Start("thor@111111", cm1.Protocols())
+	stop1 := cm1.Start(genesisBlk, sessionCh1)
+	defer stop1()
 
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-
-		for {
-			select {
-			case <-ctx.Done():
-			case <-ticker.C:
-				fmt.Printf("[cm1] %v\n", srv1.Sessions())
-			}
-		}
-	}()
-
-	genesisBlk, _ := ch1.GetBestBlock()
 	blk := new(block.Builder).TotalScore(10).ParentID(genesisBlk.Header().ID()).Build()
 	ch1.AddBlock(blk, true)
 
-	cm2, srv2, _ := makeAComm(k2, ":50001")
-	cm2.Start(srv2, "thor@111111")
-	defer cm2.Stop()
+	cm2, srv2, _, genesisBlk := makeAComm(k2, ":50001")
+	sessionCh2 := make(chan *p2psrv.Session)
+	srv2.SubscribeSession(sessionCh2)
+	srv2.Start("thor@111111", cm2.Protocols())
+	stop2 := cm2.Start(genesisBlk, sessionCh2)
+	defer stop2()
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-			case blk := <-cm2.BlockCh:
+				return
+			case blk := <-cm2.BlockCh():
 				fmt.Printf("[cm2] %v\n", blk)
 			}
 		}

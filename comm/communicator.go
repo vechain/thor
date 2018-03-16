@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
@@ -23,7 +24,7 @@ const (
 )
 
 type known struct {
-	sync.RWMutex
+	sync.Mutex
 	m map[discover.NodeID]gcache.Cache
 }
 
@@ -33,25 +34,24 @@ type unKnown struct {
 }
 
 type Communicator struct {
-	BlockCh chan *block.Block // 100 缓冲区
-
+	blockCh        chan *block.Block
 	synced         bool // Flag whether we're synchronised
+	sessions       sessionSet
 	unKnownBlockCh chan *unKnown
-
-	ps          *p2psrv.Server
-	knownBlocks known
-	knownTxs    known
-	ch          *chain.Chain
-	txpl        *txpool.TxPool
-	cancel      context.CancelFunc
-	ctx         context.Context
+	knownBlocks    known
+	knownTxs       known
+	ch             *chain.Chain
+	txpl           *txpool.TxPool
+	cancel         context.CancelFunc
+	ctx            context.Context
 }
 
 func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
 	c := &Communicator{
-		synced:         false,
-		BlockCh:        make(chan *block.Block),
+		blockCh:        make(chan *block.Block),
 		unKnownBlockCh: make(chan *unKnown),
+		synced:         false,
+		sessions:       sessionSet{m: make(map[discover.NodeID]*p2psrv.Session)},
 		knownBlocks:    known{m: make(map[discover.NodeID]gcache.Cache)},
 		knownTxs:       known{m: make(map[discover.NodeID]gcache.Cache)},
 		ch:             ch,
@@ -61,12 +61,59 @@ func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
 	return c
 }
 
+func (c *Communicator) BlockCh() chan *block.Block {
+	return c.blockCh
+}
+
 func (c *Communicator) IsSynced() bool {
 	return c.synced == true
 }
 
-func (c *Communicator) Start(ps *p2psrv.Server, discoTopic string) error {
-	go func() {
+func (c *Communicator) Protocols() []*p2psrv.Protocol {
+	return []*p2psrv.Protocol{
+		&p2psrv.Protocol{
+			Name:          proto.Name,
+			Version:       proto.Version,
+			Length:        proto.Length,
+			MaxMsgSize:    proto.MaxMsgSize,
+			HandleRequest: c.handleRequest,
+		}}
+}
+
+type Stop func()
+
+func (c *Communicator) Start(genesisBlock *block.Block, sessionCh chan *p2psrv.Session) Stop {
+	var goes co.Goes
+
+	goes.Go(func() {
+		for {
+			select {
+			case session := <-sessionCh:
+				peer := session.Peer()
+				if !session.Alive() {
+					c.sessions.remove(peer.ID())
+					break
+				}
+
+				respSt, err := proto.ReqStatus{}.Do(c.ctx, session)
+				if err != nil {
+					peer.Disconnect(p2p.DiscNetworkError)
+					break
+				}
+
+				if respSt.GenesisBlockID != genesisBlock.Header().ID() {
+					peer.Disconnect(p2p.DiscUnexpectedIdentity)
+					break
+				}
+
+				c.sessions.add(peer.ID(), session)
+			case <-c.ctx.Done():
+				return
+			}
+		}
+	})
+
+	goes.Go(func() {
 		for {
 			select {
 			case unKnown := <-c.unKnownBlockCh:
@@ -74,43 +121,35 @@ func (c *Communicator) Start(ps *p2psrv.Server, discoTopic string) error {
 				if err == nil {
 					go func() {
 						select {
-						case c.BlockCh <- respBlk.Block:
+						case c.blockCh <- respBlk.Block:
 						case <-c.ctx.Done():
+							return
 						}
 					}()
 				}
 			case <-c.ctx.Done():
+				return
 			}
 		}
-	}()
+	})
 
-	ticker := time.NewTicker(10 * time.Second)
-	go func() {
+	goes.Go(func() {
+		ticker := time.NewTicker(10 * time.Second)
 		for {
 			select {
 			case <-ticker.C:
 				c.Sync()
 			case <-c.ctx.Done():
 				ticker.Stop()
+				return
 			}
 		}
-	}()
-
-	c.ps = ps
-	return ps.Start(discoTopic, []*p2psrv.Protocol{
-		&p2psrv.Protocol{
-			Name:          proto.Name,
-			Version:       proto.Version,
-			Length:        proto.Length,
-			MaxMsgSize:    proto.MaxMsgSize,
-			HandleRequest: c.handleRequest,
-		},
 	})
-}
 
-func (c *Communicator) Stop() {
-	c.ps.Stop()
-	c.cancel()
+	return func() {
+		c.cancel()
+		goes.Wait()
+	}
 }
 
 func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
@@ -163,21 +202,7 @@ func (c *Communicator) Sync() {
 
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 	txID := tx.ID()
-	genesisBlock, err := c.ch.GetBlockByNumber(0)
-	if err != nil {
-		return
-	}
-
 	cond := func(s *p2psrv.Session) bool {
-		respSt, err := proto.ReqStatus{}.Do(c.ctx, s)
-		if err != nil {
-			return false
-		}
-
-		if respSt.GenesisBlockID != genesisBlock.Header().ID() {
-			return false
-		}
-
 		c.knownBlocks.Lock()
 		defer c.knownBlocks.Unlock()
 
@@ -186,11 +211,11 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 			return true
 		}
 
-		_, err = lru.Get(txID)
+		_, err := lru.Get(txID)
 		return err != nil
 	}
 
-	ss := c.ps.Sessions().Filter(cond)
+	ss := c.sessions.getSessions().filter(cond)
 	for _, s := range ss {
 		go func(s *p2psrv.Session) {
 			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s)); err == nil {
@@ -202,21 +227,7 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	blkID := blk.Header().ID()
-	genesisBlock, err := c.ch.GetBlockByNumber(0)
-	if err != nil {
-		return
-	}
-
 	cond := func(s *p2psrv.Session) bool {
-		respSt, err := proto.ReqStatus{}.Do(c.ctx, s)
-		if err != nil {
-			return false
-		}
-
-		if respSt.GenesisBlockID != genesisBlock.Header().ID() {
-			return false
-		}
-
 		c.knownTxs.Lock()
 		defer c.knownTxs.Unlock()
 
@@ -225,11 +236,11 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 			return true
 		}
 
-		_, err = lru.Get(blkID)
+		_, err := lru.Get(blkID)
 		return err != nil
 	}
 
-	ss := c.ps.Sessions().Filter(cond)
+	ss := c.sessions.getSessions().filter(cond)
 	for _, s := range ss {
 		go func(s *p2psrv.Session) {
 			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s)); err == nil {

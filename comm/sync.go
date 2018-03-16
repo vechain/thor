@@ -15,7 +15,7 @@ import (
 )
 
 func (c *Communicator) getAllStatus(timeout *time.Timer) chan *status {
-	ss := c.ps.Sessions()
+	ss := c.sessions.getSessions()
 	cn := make(chan *status, len(ss))
 
 	var wg sync.WaitGroup
@@ -124,7 +124,7 @@ func (c *Communicator) download(remote *p2psrv.Session, ancestor uint32, target 
 		for _, blk := range blks {
 			go func(blk *block.Block) {
 				select {
-				case c.BlockCh <- blk:
+				case c.blockCh <- blk:
 				case <-c.ctx.Done():
 				}
 			}(blk)
