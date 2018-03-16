@@ -9,7 +9,6 @@ var (
 	errReceiptsRoot = errors.New("receipts root in header !equal execute block")
 	errGasLimit     = errors.New("current gas limit -- parent")
 	errTimestamp    = errors.New("current timestamp -- parent")
-	errTransaction  = errors.New("transaction in block body is bad")
 	errSchedule     = errors.New("schedule err")
 	errTotalScore   = errors.New("total score err")
 	errPrice        = errors.New("price ineffective range")
