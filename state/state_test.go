@@ -65,8 +65,9 @@ func TestStateRevert(t *testing.T) {
 		{big.NewInt(3), []byte("code3"), thor.BytesToHash([]byte("v3"))},
 	}
 
+	var chk int
 	for _, v := range values {
-		state.NewCheckpoint()
+		chk = state.NewCheckpoint()
 		state.SetBalance(addr, v.balance)
 		state.SetCode(addr, v.code)
 		state.SetStorage(addr, storageKey, v.storage)
@@ -78,7 +79,8 @@ func TestStateRevert(t *testing.T) {
 		assert.Equal(t, state.GetCode(addr), v.code)
 		assert.Equal(t, state.GetCodeHash(addr), thor.Hash(crypto.Keccak256Hash(v.code)))
 		assert.Equal(t, state.GetStorage(addr, storageKey), v.storage)
-		state.Revert()
+		state.RevertTo(chk)
+		chk--
 	}
 	assert.False(t, state.Exists(addr))
 	assert.Nil(t, state.Error(), "error is not expected")
@@ -87,8 +89,6 @@ func TestStateRevert(t *testing.T) {
 	state, _ = New(thor.Hash{}, kv)
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
-	assert.Equal(t, state.NewCheckpoint(), 1)
-	state.Revert()
-	assert.Equal(t, state.NewCheckpoint(), 1)
+	assert.Equal(t, state.NewCheckpoint(), 0)
 
 }

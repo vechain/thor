@@ -24,7 +24,7 @@ func TestStateSnapshot(t *testing.T) {
 
 	////
 	ver := statedb.Snapshot()
-	assert.Equal(ver, 0)
+	assert.Equal(ver, 1)
 
 	statedb.AddBalance(addrOne, big.NewInt(10))
 	statedb.AddBalance(addrTwo, big.NewInt(20))
@@ -32,7 +32,7 @@ func TestStateSnapshot(t *testing.T) {
 
 	////
 	ver = statedb.Snapshot()
-	assert.Equal(ver, 1)
+	assert.Equal(ver, 2)
 
 	statedb.AddBalance(addrOne, big.NewInt(20))
 	statedb.AddBalance(addrTwo, big.NewInt(30))
@@ -51,6 +51,6 @@ func TestStateSnapshot(t *testing.T) {
 
 	////
 	ver = statedb.Snapshot()
-	assert.Equal(ver, 1)
+	assert.Equal(2, ver)
 
 }
