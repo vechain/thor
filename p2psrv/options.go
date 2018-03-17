@@ -3,7 +3,6 @@ package p2psrv
 import (
 	"crypto/ecdsa"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
@@ -34,11 +33,11 @@ type Options struct {
 	// the server is started.
 	ListenAddr string
 
-	GoodNodes []*discover.Node
+	GoodNodes Nodes
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodes []*discover.Node
+	BootstrapNodes Nodes
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
