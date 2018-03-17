@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -83,7 +84,8 @@ func (s *Server) SubscribeSession(ch chan *Session) event.Subscription {
 }
 
 func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+		log.Debug("p2p session established", "peer", peer.String())
 		session := newSession(peer, proto)
 		s.goes.Go(func() { s.sessionFeed.Send(session) })
 
@@ -92,7 +94,7 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 				s.goodNodes.Set(peer.ID(), node, session.stats.weight())
 			}
 			s.goes.Go(func() { s.sessionFeed.Send(session) })
-
+			log.Debug("p2p session disconnected", "peer", peer.String(), "err", err)
 		}()
 
 		return session.serve(rw, proto.HandleRequest)
@@ -192,6 +194,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			}
 		case v5node := <-discNodes:
 			newNode := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
+			log.Trace("p2p discovered", "peer", newNode)
 			s.discoveredNodes.Set(newNode.ID, newNode, rand.Float64())
 			if entry := s.discoveredNodes.PopWorst(); entry != nil {
 				s.discoveredNodes.Set(entry.Key, entry.Value, rand.Float64())
@@ -208,6 +211,7 @@ func (s *Server) dialLoop() {
 	for {
 		select {
 		case node := <-s.dialCh:
+
 			if err := s.tryDial(node); err != nil {
 				// TODO log
 			}
@@ -225,16 +229,17 @@ func (s *Server) tryDial(node *discover.Node) (err error) {
 		return
 	}
 
+	log.Trace("p2p try to dial", "peer", node)
 	s.busyNodes.add(node)
 	defer func() {
 		if err != nil {
+			log.Trace("p2p failed to dial", "peer", node, "err", err)
 			s.busyNodes.remove(node.ID)
 		}
 	}()
 
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
-		// TODO log
 		return err
 	}
 	return s.srv.SetupConn(conn, 1, node)
