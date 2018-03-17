@@ -72,8 +72,9 @@ func TestP(t *testing.T) {
 	// pprof.StartCPUProfile(f)
 	// defer pprof.StopCPUProfile()
 	for {
+		best, _ := c.GetBestBlock()
 		p := packer.New(c, stateCreator, a1.Address, a1.Address)
-		_, adopt, commit, err := p.Prepare(uint64(time.Now().Unix()))
+		_, adopt, commit, err := p.Prepare(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -47,17 +47,12 @@ type Adopt func(tx *tx.Transaction) error
 type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
-func (p *Packer) Prepare(now uint64) (
+func (p *Packer) Prepare(parent *block.Header, now uint64) (
 	uint64, // target time
 	Adopt,
 	Commit,
 	error) {
 
-	bestBlock, err := p.chain.GetBestBlock()
-	if err != nil {
-		return 0, nil, nil, errors.Wrap(err, "chain")
-	}
-	parent := bestBlock.Header()
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return 0, nil, nil, errors.Wrap(err, "state")
