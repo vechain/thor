@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/w8cache"
 )
@@ -127,7 +128,7 @@ func (s *Server) Stop() {
 }
 
 // GoodNodes returns good nodes.
-func (s *Server) GoodNodes() []*discover.Node {
+func (s *Server) GoodNodes() Nodes {
 	gns := make([]*discover.Node, 0, s.goodNodes.Count())
 	for _, entry := range s.goodNodes.All() {
 		gns = append(gns, entry.Value.(*discover.Node))
@@ -274,4 +275,27 @@ func (bn *busyNodes) contains(id discover.NodeID) bool {
 	bn.lock.Lock()
 	defer bn.lock.Unlock()
 	return bn.nodes[id] != nil
+}
+
+// Nodes slice of discovered nodes.
+// It's rlp encode/decodable
+type Nodes []*discover.Node
+
+// DecodeRLP implements rlp.Decoder.
+func (ns *Nodes) DecodeRLP(s *rlp.Stream) error {
+	_, err := s.List()
+	if err != nil {
+		return err
+	}
+	*ns = nil
+	for {
+		var n discover.Node
+		if err := s.Decode(&n); err != nil {
+			if err != rlp.EOL {
+				return err
+			}
+			return nil
+		}
+		*ns = append(*ns, discover.NewNode(n.ID, n.IP, n.UDP, n.TCP))
+	}
 }
