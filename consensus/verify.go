@@ -1,63 +1,59 @@
 package consensus
 
 import (
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	Tx "github.com/vechain/thor/tx"
+	"github.com/vechain/thor/tx"
 )
 
-func (c *Consensus) verify(blk *block.Block, parentHeader *block.Header, state *state.State) (*state.Stage, error) {
-	if err := c.processBlock(blk, state); err != nil {
-		return nil, err
-	}
-
-	stage := state.Stage()
-	root, err := stage.Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	if blk.Header().StateRoot() != root {
-		return nil, errStateRoot
-	}
-
-	return stage, nil
-}
-
-func (c *Consensus) processBlock(blk *block.Block, state *state.State) error {
-	traverser := c.chain.NewTraverser(blk.Header().ParentID())
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, error) {
 
 	header := blk.Header()
+	traverser := c.chain.NewTraverser(blk.Header().ParentID())
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		func(num uint32) thor.Hash {
-			return traverser.Get(num).ID()
-		})
+		func(num uint32) thor.Hash { return traverser.Get(num).ID() })
 	var (
+		txs          = blk.Transactions()
 		totalGasUsed uint64
-		receipts     Tx.Receipts
+		receipts     = make(tx.Receipts, 0, len(txs))
 	)
 
-	for _, tx := range blk.Transactions() {
+	for _, tx := range txs {
 		receipt, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
 	}
 
 	if header.GasUsed() != totalGasUsed {
-		return errGasUsed
+		return nil, nil, errors.New("incorrect block gas used")
 	}
 	if header.ReceiptsRoot() != receipts.RootHash() {
-		return errReceiptsRoot
+		return nil, nil, errors.New("incorrect block receipts root")
 	}
 
-	return traverser.Error()
+	if err := traverser.Error(); err != nil {
+		return nil, nil, err
+	}
+
+	stage := state.Stage()
+	root, err := stage.Hash()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if blk.Header().StateRoot() != root {
+		return nil, nil, errors.New("incorrect block state root")
+	}
+
+	return stage, receipts, nil
 }

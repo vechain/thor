@@ -6,6 +6,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/tx"
 )
 
 // Consensus check whether the block is verified,
@@ -15,7 +16,7 @@ type Consensus struct {
 	stateCreator *state.Creator
 }
 
-// New is Consensus factory.
+// New create a Consensus instance.
 func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 	return &Consensus{
 		chain:        chain,
@@ -23,53 +24,76 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 }
 
 // Consent is Consensus's main func.
-func (c *Consensus) Consent(blk *block.Block, nowTime uint64) (isTrunk bool, err error) {
-	parentHeader, err := c.validateBlock(blk, nowTime)
+func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool, receipts tx.Receipts, err error) {
+	header := blk.Header()
+	parent, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
-		return false, err
+		if !c.chain.IsNotFound(err) {
+			return false, nil, err
+		}
+		return false, nil, errParentNotFound
 	}
 
-	state, err := c.stateCreator.NewState(parentHeader.StateRoot())
+	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
+		if !c.chain.IsNotFound(err) {
+			return false, nil, err
+		}
+	} else {
+		return false, nil, errKnownBlock
+	}
+
+	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
+		return false, nil, err
+	}
+
+	state, err := c.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	if err := c.validateProposer(blk.Header(), parentHeader, state); err != nil {
-		return false, err
+	if err := c.validateProposer(header, parent, state); err != nil {
+		return false, nil, err
 	}
 
-	stage, err := c.verify(blk, parentHeader, state)
+	if err := c.validateBlockBody(blk); err != nil {
+		return false, nil, err
+	}
+
+	stage, receipts, err := c.verifyBlock(blk, state)
 	if err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	if isTrunk, err = c.isTrunk(blk); err != nil {
-		return false, err
+	if isTrunk, err = c.isTrunk(header); err != nil {
+		return false, nil, err
 	}
 
 	if _, err = stage.Commit(); err != nil {
-		return false, err
+		return false, nil, err
 	}
 
-	return isTrunk, nil
+	return isTrunk, receipts, nil
 }
 
-func (c *Consensus) isTrunk(block *block.Block) (bool, error) {
+func (c *Consensus) isTrunk(header *block.Header) (bool, error) {
 	bestBlock, err := c.chain.GetBestBlock()
-
-	switch {
-	case err != nil:
+	if err != nil {
 		return false, err
-	case block.Header().TotalScore() < bestBlock.Header().TotalScore():
+	}
+
+	if header.TotalScore() < bestBlock.Header().TotalScore() {
 		return false, nil
-	case block.Header().TotalScore() == bestBlock.Header().TotalScore():
-		blockID := block.Header().ID()
-		bestID := bestBlock.Header().ID()
-		if bytes.Compare(blockID[:], bestID[:]) < 0 { // id 越小, Num 越小, 那么平均 score 越大
-			return true, nil
-		}
-		return false, nil
-	default:
+	}
+
+	if header.TotalScore() > bestBlock.Header().TotalScore() {
 		return true, nil
 	}
+
+	// total scores are equal
+	if bytes.Compare(header.ID().Bytes(), bestBlock.Header().ID().Bytes()) < 0 {
+		// smaller ID is preferred, since block with smaller ID usually has larger average socre.
+		// also, it's a deterministic decision.
+		return true, nil
+	}
+	return false, nil
 }
