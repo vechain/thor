@@ -3,21 +3,18 @@ package consensus
 import "errors"
 
 var (
-	errTxsRoot      = errors.New("txs root in header !equal in block body")
-	errGasUsed      = errors.New("gas used in header !equal execute block")
-	errStateRoot    = errors.New("state root in header !equal execute block")
-	errReceiptsRoot = errors.New("receipts root in header !equal execute block")
-	errGasLimit     = errors.New("current gas limit -- parent")
-	errTimestamp    = errors.New("current timestamp -- parent")
-	errSchedule     = errors.New("schedule err")
-	errTotalScore   = errors.New("total score err")
-	errPrice        = errors.New("price ineffective range")
-
-	errDelay          = errors.New("timestamp > (current time + thor.BlockInterval)")
-	errParentNotFound = errors.New("parent not found in current chain")
+	errFutureBlock    = errors.New("block in the future")
+	errParentNotFound = errors.New("parent block not found")
+	errKnownBlock     = errors.New("block already in the chain")
 )
 
-// IsDelayBlock judge whether block is delay.
-func IsDelayBlock(err error) bool {
-	return err == errParentNotFound || err == errDelay
+// IsFutureBlock returns if the error indicates that the block should be
+// processed later.
+func IsFutureBlock(err error) bool {
+	return err == errParentNotFound || err == errFutureBlock
+}
+
+// IsKnownBlock returns if the error means the block was already in the chain.
+func IsKnownBlock(err error) bool {
+	return err == errKnownBlock
 }

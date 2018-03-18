@@ -9,53 +9,76 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func (c *Consensus) validateBlock(blk *block.Block, nowTime uint64) (*block.Header, error) {
-	header := blk.Header()
-	parentHeader, err := c.chain.GetBlockHeader(header.ParentID())
-	if err != nil {
-		if c.chain.IsNotFound(err) {
-			return nil, errParentNotFound
-		}
-		return nil, err
+func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+
+	if header.Timestamp() <= parent.Timestamp() {
+		return errors.New("block timestamp too small")
+	}
+	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
+		return errors.New("invalid block interval")
 	}
 
-	gasLimit := header.GasLimit()
-
-	// Signer and IntrinsicGas will be validate in runtime.
-	switch {
-	case parentHeader.Timestamp() >= header.Timestamp():
-		return nil, errTimestamp
-	case header.Timestamp() > nowTime+thor.BlockInterval:
-		return nil, errDelay
-	case !block.GasLimit(gasLimit).IsValid(parentHeader.GasLimit()):
-		return nil, errGasLimit
-	case header.GasUsed() > gasLimit:
-		return nil, errGasUsed
-	case header.TxsRoot() != blk.Transactions().RootHash():
-		return nil, errTxsRoot
+	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+		return errFutureBlock
 	}
 
-	if err := c.validateTransactions(blk); err != nil {
-		return nil, errors.Wrap(err, "bad tx")
+	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+		return errors.New("invalid block gas limit")
 	}
-	return parentHeader, nil
+
+	if header.GasUsed() > header.GasLimit() {
+		return errors.New("block gas used exceeds limit")
+	}
+
+	if header.TotalScore() <= parent.TotalScore() {
+		return errors.New("block total score too small")
+	}
+	return nil
 }
 
-func (c *Consensus) validateTransactions(blk *block.Block) error {
-	transactions := blk.Transactions()
-	header := blk.Header()
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) error {
+	signer, err := header.Signer()
+	if err != nil {
+		return errors.Wrap(err, "invalid block signer")
+	}
 
-	if len(transactions) == 0 {
+	sched, err := poa.NewScheduler(signer, builtin.Authority.All(st), parent.Number(), parent.Timestamp())
+	if err != nil {
+		return err
+	}
+
+	if !sched.IsTheTime(header.Timestamp()) {
+		return errors.New("block timestamp not scheduled")
+	}
+
+	updates, score := sched.Updates(header.Timestamp())
+	if parent.TotalScore()+score != header.TotalScore() {
+		return errors.New("incorrect block total score")
+	}
+
+	for _, proposer := range updates {
+		builtin.Authority.Update(st, proposer.Address, proposer.Status)
+	}
+	return nil
+}
+
+func (c *Consensus) validateBlockBody(blk *block.Block) error {
+	header := blk.Header()
+	txs := blk.Transactions()
+	if header.TxsRoot() != txs.RootHash() {
+		return errors.New("incorrect block txs root")
+	}
+
+	if len(txs) == 0 {
 		return nil
 	}
 
-	passed := make(map[thor.Hash]struct{})
-
-	findTx := func(txID thor.Hash) (bool, error) {
-		if _, ok := passed[txID]; ok {
+	passedTxs := make(map[thor.Hash]struct{})
+	hasTx := func(txID thor.Hash) (bool, error) {
+		if _, ok := passedTxs[txID]; ok {
 			return true, nil
 		}
-		_, err := c.chain.LookupTransaction(blk.Header().ParentID(), txID)
+		_, err := c.chain.LookupTransaction(header.ParentID(), txID)
 		if err != nil {
 			if c.chain.IsNotFound(err) {
 				return false, nil
@@ -65,59 +88,31 @@ func (c *Consensus) validateTransactions(blk *block.Block) error {
 		return true, nil
 	}
 
-	for _, tx := range transactions {
+	for _, tx := range txs {
 		switch {
-		case tx.BlockRef().Number() >= header.Number():
-			return errors.New("invalid block ref")
 		case tx.ChainTag() != header.ChainTag():
-			return errors.New("chain tag mismatch")
+			return errors.New("bad tx: chain tag mismatch")
+		case tx.BlockRef().Number() >= header.Number():
+			return errors.New("bad tx: invalid block ref")
 		case tx.HasReservedFields():
-			return errors.New("reserved fields not empty")
+			return errors.New("bad tx: reserved fields not empty")
 		}
-
 		// check if tx already appeared in old blocks, or passed map
-		if found, err := findTx(tx.ID()); err != nil {
+		if found, err := hasTx(tx.ID()); err != nil {
 			return err
 		} else if found {
-			return errors.New("duplicated tx")
+			return errors.New("bad tx: duplicated tx")
 		}
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			if found, err := findTx(*dep); err != nil {
+			if found, err := hasTx(*dep); err != nil {
 				return err
 			} else if !found {
-				return errors.New("tx dep not found")
+				return errors.New("bad tx: dep not found")
 			}
 		}
-		passed[tx.ID()] = struct{}{}
+		passedTxs[tx.ID()] = struct{}{}
 	}
-	return nil
-}
-
-func (c *Consensus) validateProposer(header *block.Header, parentHeader *block.Header, st *state.State) error {
-	signer, err := header.Signer()
-	if err != nil {
-		return err
-	}
-
-	sched, err := poa.NewScheduler(signer, builtin.Authority.All(st), parentHeader.Number(), parentHeader.Timestamp())
-	if err != nil {
-		return err
-	}
-
-	if !sched.IsTheTime(header.Timestamp()) {
-		return errSchedule
-	}
-
-	updates, score := sched.Updates(header.Timestamp())
-	if parentHeader.TotalScore()+score != header.TotalScore() {
-		return errTotalScore
-	}
-
-	for _, proposer := range updates {
-		builtin.Authority.Update(st, proposer.Address, proposer.Status)
-	}
-
 	return nil
 }
