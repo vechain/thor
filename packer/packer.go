@@ -47,7 +47,7 @@ type Adopt func(tx *tx.Transaction) error
 type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
-func (p *Packer) Prepare(parent *block.Header, now uint64) (
+func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	uint64, // target time
 	Adopt,
 	Commit,
@@ -58,7 +58,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (
 		return 0, nil, nil, errors.Wrap(err, "state")
 	}
 
-	targetTime, score, err := p.schedule(state, parent, now)
+	targetTime, score, err := p.schedule(state, parent, nowTimestamp)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -159,7 +159,7 @@ func (p *Packer) Prepare(parent *block.Header, now uint64) (
 		}, nil
 }
 
-func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) (
+func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp uint64) (
 	uint64, // when
 	uint64, // score
 	error,
@@ -172,7 +172,7 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, now uint64) 
 		return 0, 0, err
 	}
 
-	newBlockTime := sched.Schedule(now)
+	newBlockTime := sched.Schedule(nowTimestamp)
 	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
