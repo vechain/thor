@@ -64,7 +64,7 @@ func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool
 		return false, nil, err
 	}
 
-	if isTrunk, err = c.isTrunk(header); err != nil {
+	if isTrunk, err = c.IsTrunk(header); err != nil {
 		return false, nil, err
 	}
 
@@ -75,7 +75,8 @@ func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool
 	return isTrunk, receipts, nil
 }
 
-func (c *Consensus) isTrunk(header *block.Header) (bool, error) {
+// IsTrunk to determine if the block can be head of trunk.
+func (c *Consensus) IsTrunk(header *block.Header) (bool, error) {
 	bestBlock, err := c.chain.GetBestBlock()
 	if err != nil {
 		return false, err
