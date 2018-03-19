@@ -27,7 +27,7 @@ func mustHexToECDSA(k string) *ecdsa.PrivateKey {
 	return pk
 }
 
-func handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
+func handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (resp interface{}, err error) {
 	var req string
 	if err := msg.Decode(&req); err != nil {
 		panic(err)
@@ -40,7 +40,7 @@ func TestServer(t *testing.T) {
 	srv1 := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(k1),
-			MaxSessions:    25,
+			MaxPeers:       25,
 			ListenAddr:     ":40001",
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
@@ -48,7 +48,7 @@ func TestServer(t *testing.T) {
 	srv2 := p2psrv.New(
 		&p2psrv.Options{
 			PrivateKey:     mustHexToECDSA(k2),
-			MaxSessions:    25,
+			MaxPeers:       25,
 			ListenAddr:     ":50001",
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
@@ -59,8 +59,8 @@ func TestServer(t *testing.T) {
 		MaxMsgSize:    1024,
 		HandleRequest: handleRequest,
 	}
-	sch := make(chan *p2psrv.Session)
-	srv1.SubscribeSession(sch)
+	pch := make(chan *p2psrv.Peer)
+	srv1.SubscribePeer(pch)
 
 	srv1.Start("thor@111111", []*p2psrv.Protocol{proto})
 	defer srv1.Stop()
@@ -69,10 +69,10 @@ func TestServer(t *testing.T) {
 
 	go func() {
 		for {
-			ss := <-sch
-			if ss.Alive() {
+			p := <-pch
+			if p.Alive() {
 				var resp string
-				if err := ss.Request(context.Background(), 0, "foo", &resp); err != nil {
+				if err := p.Request(context.Background(), 0, "foo", &resp); err != nil {
 					panic(err)
 				}
 				fmt.Println("resp:", resp)
