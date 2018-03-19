@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/bluele/gcache"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain/persist"
 	"github.com/vechain/thor/kv"
@@ -13,10 +12,11 @@ import (
 )
 
 const (
-	headerCacheLimit   = 512
-	bodyCacheLimit     = 512
-	blockTxIDsLimit    = 1024
-	receiptsCacheLimit = 512
+	headerCacheLimit       = 512
+	bodyCacheLimit         = 512
+	blockTxIDsLimit        = 1024
+	receiptsCacheLimit     = 512
+	trunkBlockIDCacheLimit = 2048
 )
 
 var errNotFound = errors.New("not found")
@@ -32,60 +32,51 @@ type Chain struct {
 }
 
 type caches struct {
-	header   gcache.Cache
-	body     gcache.Cache
-	txIDs    gcache.Cache
-	receipts gcache.Cache
+	header       *lru
+	body         *lru
+	txIDs        *lru
+	receipts     *lru
+	trunkBlockID *lru
 }
 
 // New create an instance of Chain.
 func New(kv kv.GetPutter) *Chain {
 
-	headerCache := gcache.
-		New(headerCacheLimit).
-		ARC().
-		LoaderFunc(func(key interface{}) (interface{}, error) {
-			return persist.LoadBlockHeader(kv, key.(thor.Hash))
-		}).
-		Build()
-	bodyCache := gcache.
-		New(bodyCacheLimit).
-		ARC().
-		LoaderFunc(func(key interface{}) (interface{}, error) {
-			return persist.LoadBlockBody(kv, key.(thor.Hash))
-		}).
-		Build()
+	headerCache := newLRU(headerCacheLimit, func(key interface{}) (interface{}, error) {
+		return persist.LoadBlockHeader(kv, key.(thor.Hash))
+	})
+	bodyCache := newLRU(bodyCacheLimit, func(key interface{}) (interface{}, error) {
+		return persist.LoadBlockBody(kv, key.(thor.Hash))
+	})
 
-	txIDsCache := gcache.
-		New(blockTxIDsLimit).
-		ARC().
-		LoaderFunc(func(key interface{}) (interface{}, error) {
-			body, err := bodyCache.Get(key)
-			if err != nil {
-				return nil, err
-			}
-			ids := make(map[thor.Hash]int)
-			for i, tx := range body.(*block.Body).Txs {
-				ids[tx.ID()] = i
-			}
-			return ids, nil
-		}).
-		Build()
+	txIDsCache := newLRU(blockTxIDsLimit, func(key interface{}) (interface{}, error) {
+		body, err := bodyCache.GetOrLoad(key)
+		if err != nil {
+			return nil, err
+		}
+		ids := make(map[thor.Hash]int)
+		for i, tx := range body.(*block.Body).Txs {
+			ids[tx.ID()] = i
+		}
+		return ids, nil
+	})
 
-	receiptsCache := gcache.
-		New(receiptsCacheLimit).
-		ARC().
-		LoaderFunc(func(key interface{}) (interface{}, error) {
-			return persist.LoadBlockReceipts(kv, key.(thor.Hash))
-		}).
-		Build()
+	receiptsCache := newLRU(receiptsCacheLimit, func(key interface{}) (interface{}, error) {
+		return persist.LoadBlockReceipts(kv, key.(thor.Hash))
+	})
+
+	trunkBlockIDCache := newLRU(trunkBlockIDCacheLimit, func(key interface{}) (interface{}, error) {
+		return persist.LoadTrunkBlockID(kv, key.(uint32))
+	})
+
 	return &Chain{
 		kv: kv,
 		caches: caches{
-			header:   headerCache,
-			body:     bodyCache,
-			txIDs:    txIDsCache,
-			receipts: receiptsCache,
+			header:       headerCache,
+			body:         bodyCache,
+			txIDs:        txIDsCache,
+			receipts:     receiptsCache,
+			trunkBlockID: trunkBlockIDCache,
 		},
 	}
 }
@@ -96,7 +87,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
-	b, err := c.getBlockByNumber(0)
+	b0, err := c.getBlockByNumber(0)
 	if err != nil {
 		if !c.IsNotFound(err) {
 			// errors occurred
@@ -123,7 +114,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		c.bestBlock = genesis
 		return nil
 	}
-	if b.Header().ID() != genesis.Header().ID() {
+	if b0.Header().ID() != genesis.Header().ID() {
 		return errors.New("genesis mismatch")
 	}
 	return nil
@@ -157,7 +148,9 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 		return nil, err
 	}
 	var fork *Fork
+	var trunkUpdates map[thor.Hash]bool
 	if isTrunk {
+		trunkUpdates = make(map[thor.Hash]bool)
 		best, err := c.getBestBlock()
 		if err != nil {
 			return nil, err
@@ -173,6 +166,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 			if err := persist.EraseTxLocations(batch, bb.Transactions()); err != nil {
 				return nil, err
 			}
+			trunkUpdates[bb.Header().ID()] = false
 		}
 
 		for _, tb := range fork.Trunk {
@@ -182,6 +176,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 			if err := persist.SaveTxLocations(batch, tb.Transactions(), tb.Header().ID()); err != nil {
 				return nil, err
 			}
+			trunkUpdates[tb.Header().ID()] = true
 		}
 		persist.SaveBestBlockID(batch, newBlock.Header().ID())
 	} else {
@@ -192,8 +187,21 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 		return nil, err
 	}
 
-	c.caches.header.Set(newBlock.Header().ID(), newBlock.Header())
-	c.caches.body.Set(newBlock.Header().ID(), newBlock.Body())
+	c.caches.header.Add(newBlock.Header().ID(), newBlock.Header())
+	c.caches.body.Add(newBlock.Header().ID(), newBlock.Body())
+
+	if trunkUpdates != nil {
+		for id, f := range trunkUpdates {
+			if !f {
+				c.caches.trunkBlockID.Remove(block.Number(id))
+			}
+		}
+		for id, f := range trunkUpdates {
+			if f {
+				c.caches.trunkBlockID.Add(block.Number(id), id)
+			}
+		}
+	}
 
 	if isTrunk {
 		c.bestBlock = newBlock
@@ -258,7 +266,7 @@ func (c *Chain) GetBlockHeader(id thor.Hash) (*block.Header, error) {
 }
 
 func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
-	header, err := c.caches.header.Get(id)
+	header, err := c.caches.header.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +281,7 @@ func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
 }
 
 func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
-	body, err := c.caches.body.Get(id)
+	body, err := c.caches.body.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
@@ -308,11 +316,11 @@ func (c *Chain) GetBlockIDByNumber(num uint32) (thor.Hash, error) {
 }
 
 func (c *Chain) getBlockIDByNumber(num uint32) (thor.Hash, error) {
-	id, err := persist.LoadTrunkBlockID(c.kv, num)
+	id, err := c.caches.trunkBlockID.GetOrLoad(num)
 	if err != nil {
 		return thor.Hash{}, err
 	}
-	return id, nil
+	return id.(thor.Hash), nil
 }
 
 // GetBlockByNumber get block on trunk by its number.
@@ -376,7 +384,7 @@ func (c *Chain) getTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLoca
 }
 
 func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {
-	ids, err := c.caches.txIDs.Get(blockID)
+	ids, err := c.caches.txIDs.GetOrLoad(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +438,7 @@ func (c *Chain) SetBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error 
 }
 
 func (c *Chain) setBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
-	c.caches.receipts.Set(blockID, receipts)
+	c.caches.receipts.Add(blockID, receipts)
 	return persist.SaveBlockReceipts(c.kv, blockID, receipts)
 }
 
@@ -442,7 +450,7 @@ func (c *Chain) GetBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
 }
 
 func (c *Chain) getBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
-	receipts, err := c.caches.receipts.Get(blockID)
+	receipts, err := c.caches.receipts.GetOrLoad(blockID)
 	if err != nil {
 		return nil, err
 	}

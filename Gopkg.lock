@@ -9,12 +9,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/bluele/gcache"
-  packages = ["."]
-  revision = "472614239ac7e5bc6461e237c798a6ebd5aff8c1"
-
-[[projects]]
-  branch = "master"
   name = "github.com/btcsuite/btcd"
   packages = ["btcec"]
   revision = "2e60448ffcc6bf78332d1fe590260095f554dd78"
@@ -27,7 +21,7 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","consensus","consensus/misc","core","core/state","core/types","core/vm","crypto","crypto/bn256","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","rpc","trie"]
+  packages = ["accounts/abi","common","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
   revision = "1e67410e88d2685bc54611a7c9f75c327b553ccc"
   version = "v1.8.1"
 
@@ -98,12 +92,6 @@
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
-  name = "github.com/rs/cors"
-  packages = ["."]
-  revision = "feef513b9575b32f84bafa580aad89b011259019"
-  version = "v1.3.0"
-
-[[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert"]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
@@ -124,7 +112,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["html","html/atom","html/charset","websocket"]
+  packages = ["html","html/atom","html/charset"]
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
@@ -134,22 +122,10 @@
   version = "v0.3.0"
 
 [[projects]]
-  name = "gopkg.in/fatih/set.v0"
-  packages = ["."]
-  revision = "57907de300222151a123d29255ed17f5ed43fad3"
-  version = "v0.1.0"
-
-[[projects]]
   branch = "v2"
   name = "gopkg.in/karalabe/cookiejar.v2"
   packages = ["collections/prque"]
   revision = "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
-
-[[projects]]
-  branch = "v2"
-  name = "gopkg.in/natefinch/npipe.v2"
-  packages = ["."]
-  revision = "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6"
 
 [[projects]]
   name = "gopkg.in/urfave/cli.v1"
@@ -160,6 +136,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3fbd1697f81b37baafe74507cd9edeb603acfeba6a912005aa22fcd415e12a93"
+  inputs-digest = "e052486b509530be973a977cfd4eb86b7c571c5662a8d58a8b937c0eb7045778"
   solver-name = "gps-cdcl"
   solver-version = 1
