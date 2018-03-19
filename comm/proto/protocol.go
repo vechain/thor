@@ -3,12 +3,10 @@ package proto
 import (
 	"context"
 
-	"github.com/vechain/thor/tx"
-
 	"github.com/vechain/thor/block"
-
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 // Constants
@@ -33,10 +31,10 @@ const (
 // ReqStatus request payload of MsgStatus.
 type ReqStatus struct{}
 
-// Do make request to session.
-func (req ReqStatus) Do(ctx context.Context, session *p2psrv.Session) (*RespStatus, error) {
+// Do make request to peer.
+func (req ReqStatus) Do(ctx context.Context, peer *p2psrv.Peer) (*RespStatus, error) {
 	var resp RespStatus
-	if err := session.Request(ctx, MsgStatus, &req, &resp); err != nil {
+	if err := peer.Request(ctx, MsgStatus, &req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -54,10 +52,10 @@ type ReqNewBlockID struct {
 	ID thor.Hash
 }
 
-// Do make request to session.
-func (req ReqNewBlockID) Do(ctx context.Context, session *p2psrv.Session) error {
+// Do make request to peer.
+func (req ReqNewBlockID) Do(ctx context.Context, peer *p2psrv.Peer) error {
 	var resp struct{}
-	return session.Request(ctx, MsgNewBlockID, &req, &resp)
+	return peer.Request(ctx, MsgNewBlockID, &req, &resp)
 }
 
 // ReqMsgNewTx request payload of MsgNewTx.
@@ -65,10 +63,10 @@ type ReqMsgNewTx struct {
 	Tx *tx.Transaction
 }
 
-// Do make request to session.
-func (req ReqMsgNewTx) Do(ctx context.Context, session *p2psrv.Session) error {
+// Do make request to peer.
+func (req ReqMsgNewTx) Do(ctx context.Context, peer *p2psrv.Peer) error {
 	var resp struct{}
-	return session.Request(ctx, MsgNewTx, &req, &resp)
+	return peer.Request(ctx, MsgNewTx, &req, &resp)
 }
 
 // ReqNewBlock request payload of MsgNewBlock.
@@ -77,9 +75,9 @@ type ReqNewBlock struct {
 }
 
 // Do make request.
-func (req ReqNewBlock) Do(ctx context.Context, session *p2psrv.Session) error {
+func (req ReqNewBlock) Do(ctx context.Context, peer *p2psrv.Peer) error {
 	var resp struct{}
-	return session.Request(ctx, MsgNewBlock, &req, &resp)
+	return peer.Request(ctx, MsgNewBlock, &req, &resp)
 }
 
 // ReqGetBlockIDByNumber request payload of MsgGetBlockIDByNumber.
@@ -87,10 +85,10 @@ type ReqGetBlockIDByNumber struct {
 	Num uint32
 }
 
-// Do make request to session.
-func (req ReqGetBlockIDByNumber) Do(ctx context.Context, session *p2psrv.Session) (*RespGetBlockIDByNumber, error) {
+// Do make request to peer.
+func (req ReqGetBlockIDByNumber) Do(ctx context.Context, peer *p2psrv.Peer) (*RespGetBlockIDByNumber, error) {
 	var resp RespGetBlockIDByNumber
-	if err := session.Request(ctx, MsgGetBlockIDByNumber, &req, &resp); err != nil {
+	if err := peer.Request(ctx, MsgGetBlockIDByNumber, &req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -108,10 +106,10 @@ type ReqGetBlocksByNumber struct {
 	Num uint32
 }
 
-// Do make request to session.
-func (req ReqGetBlocksByNumber) Do(ctx context.Context, session *p2psrv.Session) (RespGetBlocksByNumber, error) {
+// Do make request to peer.
+func (req ReqGetBlocksByNumber) Do(ctx context.Context, peer *p2psrv.Peer) (RespGetBlocksByNumber, error) {
 	var resp RespGetBlocksByNumber
-	if err := session.Request(ctx, MsgGetBlocksByNumber, &req, &resp); err != nil {
+	if err := peer.Request(ctx, MsgGetBlocksByNumber, &req, &resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
@@ -127,10 +125,10 @@ type ReqGetBlockByID struct {
 	ID thor.Hash
 }
 
-// Do make request to session.
-func (req ReqGetBlockByID) Do(ctx context.Context, session *p2psrv.Session) (*RespGetBlockByID, error) {
+// Do make request to peer.
+func (req ReqGetBlockByID) Do(ctx context.Context, peer *p2psrv.Peer) (*RespGetBlockByID, error) {
 	var resp RespGetBlockByID
-	if err := session.Request(ctx, MsgGetBlockByID, &req, &resp); err != nil {
+	if err := peer.Request(ctx, MsgGetBlockByID, &req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
