@@ -154,36 +154,33 @@ paths:
             schema:
               type: object
               properties: 
-                rawTransaction:
-                  type: object
-                  properties: 
-                    Nonce:
-                      type: integer
-                      example: 1
-                    GasPriceCoef:
-                      type: integer
-                      example: 1
-                    Gas:
-                      type: integer
-                      example: 30000
-                    DependsOn:
-                      type: string
-                      example: ""
-                    Sig: 
-                      type: array
-                      example: [0x11, 0x12]
-                    BlockRef:
-                      type: array
-                      example: [0,0,0,0,0,0,0,0]
-                    Clauses:
-                      type: array
-                      example: [
-                                {
-                                  "To":    addressTo,
-                                  "Value": 10000,
-                                  "Data":  [0x00, 0x00],
-                                }
-                                ]
+                Nonce:
+                  type: integer
+                  example: 1
+                GasPriceCoef:
+                  type: integer
+                  example: 1
+                Gas:
+                  type: integer
+                  example: 30000
+                DependsOn:
+                  type: string
+                  example: ""
+                Sig: 
+                  type: array
+                  example: [0x11, 0x12]
+                BlockRef:
+                  type: array
+                  example: [0,0,0,0,0,0,0,0]
+                Clauses:
+                  type: array
+                  example: [
+                            {
+                              "To":    addressTo,
+                              "Value": 10000,
+                              "Data":  [0x00, 0x00],
+                            }
+                            ]
       responses:
         200:
           description: OK
