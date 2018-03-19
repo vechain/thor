@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bluele/gcache"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -25,7 +25,7 @@ const (
 
 type known struct {
 	sync.Mutex
-	m map[discover.NodeID]gcache.Cache
+	m map[discover.NodeID]*lru.Cache
 }
 
 type unKnown struct {
@@ -52,8 +52,8 @@ func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
 		unKnownBlockCh: make(chan *unKnown),
 		synced:         false,
 		sessions:       sessionSet{m: make(map[discover.NodeID]*p2psrv.Session)},
-		knownBlocks:    known{m: make(map[discover.NodeID]gcache.Cache)},
-		knownTxs:       known{m: make(map[discover.NodeID]gcache.Cache)},
+		knownBlocks:    known{m: make(map[discover.NodeID]*lru.Cache)},
+		knownTxs:       known{m: make(map[discover.NodeID]*lru.Cache)},
 		ch:             ch,
 		txpl:           txpl,
 	}
@@ -177,9 +177,9 @@ func (c *Communicator) markTransaction(peer discover.NodeID, id thor.Hash) {
 	defer c.knownBlocks.Unlock()
 
 	if _, ok := c.knownBlocks.m[peer]; !ok {
-		c.knownBlocks.m[peer] = gcache.New(maxKnownBlocks).Build()
+		c.knownBlocks.m[peer], _ = lru.New(maxKnownBlocks)
 	}
-	c.knownBlocks.m[peer].Set(id, struct{}{})
+	c.knownBlocks.m[peer].Add(id, struct{}{})
 }
 
 func (c *Communicator) markBlock(peer discover.NodeID, id thor.Hash) {
@@ -187,9 +187,9 @@ func (c *Communicator) markBlock(peer discover.NodeID, id thor.Hash) {
 	defer c.knownTxs.Unlock()
 
 	if _, ok := c.knownTxs.m[peer]; !ok {
-		c.knownTxs.m[peer] = gcache.New(maxKnownTxs).Build()
+		c.knownTxs.m[peer], _ = lru.New(maxKnownTxs)
 	}
-	c.knownTxs.m[peer].Set(id, struct{}{})
+	c.knownTxs.m[peer].Add(id, struct{}{})
 }
 
 func (c *Communicator) Sync() {
@@ -211,8 +211,8 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 			return true
 		}
 
-		_, err := lru.Get(txID)
-		return err != nil
+		_, found := lru.Get(txID)
+		return !found
 	}
 
 	ss := c.sessions.slice().filter(cond)
@@ -236,8 +236,8 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 			return true
 		}
 
-		_, err := lru.Get(blkID)
-		return err != nil
+		_, found := lru.Get(blkID)
+		return !found
 	}
 
 	ss := c.sessions.slice().filter(cond)

@@ -56,4 +56,4 @@ ignored = []
 
 [[constraint]]
   branch = "master"
-  name = "github.com/bluele/gcache"
+  name = "github.com/hashicorp/golang-lru"

@@ -7,17 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/txpool"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/txpool"
 )
 
 var boot1 = "enode://ec0ccfaeefa53c6a7ec73ca36940c911902d1f6f9da7567d05c44d1aa841b309260f7b228008331b61c8890ece0297eb0c3541af1a51fd5fcc749bee9104e64a@192.168.31.182:55555"
