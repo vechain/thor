@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/vechain/thor/api/utils/types"
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
@@ -76,12 +75,9 @@ func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*
 		return nil, err
 	}
 	transaction := builder.Build().WithSignature(raw.Sig)
-	from, _ := transaction.Signer()
-	fmt.Println("signer", from)
 	if err := ti.txPool.Add(transaction); err != nil {
 		return nil, err
 	}
-
 	txID := transaction.ID()
 	return &txID, nil
 }

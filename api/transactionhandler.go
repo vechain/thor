@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/api/utils/types"
@@ -85,10 +84,8 @@ func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req
 	}
 	txID, err := ti.SendRawTransaction(rawTransaction)
 	if err != nil {
-		fmt.Println("err send", err)
 		return err
 	}
-	fmt.Println("txID", txID)
 	w.Write(txID[:])
 	return nil
 }

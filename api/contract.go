@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -11,12 +12,12 @@ import (
 
 //ContractInterfaceOptions contract calling options
 type ContractInterfaceOptions struct {
-	Index    uint32       `json:"index"`
-	Gas      uint64       `json:"gas,string"`
-	From     thor.Address `json:"from,string"`
-	GasPrice *big.Int     `json:"gasPrice,string"`
-	TxID     thor.Hash    `json:"txID,string"`
-	Value    *big.Int     `json:"value,string"`
+	Index    uint32                `json:"index"`
+	Gas      uint64                `json:"gas,string"`
+	From     thor.Address          `json:"from,string"`
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice,string"`
+	TxID     thor.Hash             `json:"txID,string"`
+	Value    *math.HexOrDecimal256 `json:"value,string"`
 }
 
 //ContractInterface most for call a contract
@@ -35,13 +36,17 @@ func NewContractInterface(bestBlkGetter bestBlockGetter, stateCreator *state.Cre
 
 //DefaultContractInterfaceOptions a default contract options
 func (ci *ContractInterface) DefaultContractInterfaceOptions() *ContractInterfaceOptions {
+	gp := big.NewInt(40)
+	gph := math.HexOrDecimal256(*gp)
+	v := big.NewInt(0)
+	vh := math.HexOrDecimal256(*v)
 	return &ContractInterfaceOptions{
 		Index:    1,
-		Gas:      100000,
+		Gas:      10000,
 		From:     thor.Address{},
-		GasPrice: big.NewInt(40),
+		GasPrice: &gph,
 		TxID:     thor.Hash{},
-		Value:    big.NewInt(0),
+		Value:    &vh,
 	}
 }
 
@@ -53,7 +58,9 @@ func (ci *ContractInterface) santinizeOptions(options *ContractInterfaceOptions)
 	if options.Gas < ops.Gas {
 		options.Gas = ops.Gas
 	}
-	if options.GasPrice.Cmp(ops.GasPrice) < 0 {
+	gp := big.Int(*options.GasPrice)
+	gp1 := big.Int(*ops.GasPrice)
+	if (&gp).Cmp(&gp1) < 0 {
 		options.GasPrice = ops.GasPrice
 	}
 	if options.Value == nil {
@@ -75,9 +82,11 @@ func (ci *ContractInterface) Call(to *thor.Address, input []byte, options *Contr
 		return nil, err
 	}
 	rt := runtime.New(st, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
-	clause := tx.NewClause(to).WithData(input).WithValue(options.Value)
+	v := big.Int(*options.Value)
+	clause := tx.NewClause(to).WithData(input).WithValue(&v)
 	var vmout *vm.Output
-	vmout = rt.Call(clause, options.Index, options.Gas, options.From, options.GasPrice, options.TxID)
+	gp := big.Int(*options.GasPrice)
+	vmout = rt.Call(clause, options.Index, options.Gas, options.From, &gp, options.TxID)
 	if vmout.VMErr != nil {
 		return nil, vmout.VMErr
 	}

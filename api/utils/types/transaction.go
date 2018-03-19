@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"math/big"
 )
 
 //RawTransaction a raw transaction
@@ -74,7 +75,8 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Builder, error) {
 	}
 	builder.DependsOn(rawTransaction.DependsOn).BlockRef(rawTransaction.BlockRef).Nonce(rawTransaction.Nonce)
 	for _, clause := range rawTransaction.Clauses {
-		c := tx.NewClause(clause.To).WithData(clause.Data).WithValue(clause.Value)
+		v := big.Int(*clause.Value)
+		c := tx.NewClause(clause.To).WithData(clause.Data).WithValue(&v)
 		builder.Clause(c)
 	}
 	return builder, nil
