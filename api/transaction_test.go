@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
@@ -27,6 +29,54 @@ import (
 
 var testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 
+func TestTr(t *testing.T) {
+	blockref := tx.NewBlockRef(0)
+	// de, _ := thor.ParseHash("0xb92cf0a7426075119664357deac0ef21dfed57292b72799d02f7b30ba82a5e0f")
+	tx := new(tx.Builder).
+		ChainTag(0).
+		Nonce(0).
+		GasPriceCoef(128).
+		Gas(100000).
+		BlockRef(blockref).
+		// DependsOn(&de).
+		Build()
+	key, err := crypto.HexToECDSA(testPrivHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+	fmt.Println("sig:", sig, "sigLength:", len(sig), "sigHash:", tx.SigningHash(), "length", len(tx.SigningHash().Bytes()))
+	tx = tx.WithSignature(sig)
+	from, err := tx.Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("from:", from)
+	fmt.Println("txID:", tx.ID())
+	fmt.Println("rlpData", rlpData([]interface{}{
+		big.NewInt(0),
+		big.NewInt(0),
+		blockref[:],
+		nil,
+		big.NewInt(1),
+		big.NewInt(1000),
+		nil,
+		// sig,
+	}))
+}
+
+func rlpHash(x interface{}) (hash thor.Hash) {
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, x)
+	hw.Sum(hash[:0])
+	return
+}
+func rlpData(x interface{}) []byte {
+	b, err := rlp.EncodeToBytes(x)
+	fmt.Println("err", err)
+	return b
+}
 func TestTransaction(t *testing.T) {
 
 	ntx, ts := initTransactionServer(t)
@@ -134,11 +184,14 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Fatal(err)
 	}
 	chain.WriteGenesis(b)
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(1000))
 	tx := new(tx.Builder).
 		ChainTag(0).
 		GasPriceCoef(1).
 		Gas(1000).
 		Nonce(1).
+		Clause(cla).
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 	key, err := crypto.HexToECDSA(testPrivHex)

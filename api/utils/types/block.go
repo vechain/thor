@@ -7,19 +7,19 @@ import (
 
 //Block block
 type Block struct {
-	Number      uint32
-	ID          thor.Hash
-	ParentID    thor.Hash
-	Timestamp   uint64
-	TotalScore  uint64
-	GasLimit    uint64
-	GasUsed     uint64
-	Beneficiary thor.Address
+	Number      uint32       `json:"number"`
+	ID          thor.Hash    `json:"id,string"`
+	ParentID    thor.Hash    `json:"parentID,string"`
+	Timestamp   uint64       `json:"timestamp,string"`
+	TotalScore  uint64       `json:"totalScore,string"`
+	GasLimit    uint64       `json:"gasLimit,string"`
+	GasUsed     uint64       `json:"gasUsed,string"`
+	Beneficiary thor.Address `json:"beneficiary,string"`
 
-	TxsRoot      thor.Hash
-	StateRoot    thor.Hash
-	ReceiptsRoot thor.Hash
-	Txs          []thor.Hash
+	TxsRoot      thor.Hash   `json:"txsRoot,string"`
+	StateRoot    thor.Hash   `json:"stateRoot,string"`
+	ReceiptsRoot thor.Hash   `json:"receiptsRoot,string"`
+	Txs          []thor.Hash `json:"txs,string"`
 }
 
 //ConvertBlock convert a raw block into a json format block
