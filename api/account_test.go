@@ -110,7 +110,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		ParentID(best.Header().ID()).
 		StateRoot(stateRoot).
 		Build()
-	if err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
 	ai := api.NewAccountInterface(chain, stateC)

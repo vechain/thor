@@ -46,6 +46,15 @@ func TestBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkBlock(t, raw, rb)
+	r, err = httpGet(ts, ts.URL+"/blocks/best")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb = new(types.Block)
+	if err := json.Unmarshal(r, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkBlock(t, raw, rb)
 
 }
 
@@ -89,7 +98,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 		ParentID(best.Header().ID()).
 		Transaction(tx).
 		Build()
-	if err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
 

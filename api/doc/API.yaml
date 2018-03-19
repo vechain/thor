@@ -39,7 +39,7 @@ paths:
         200:
           description: OK
           content:
-            application/octet-stream:
+            text/plain:
               schema:
                 type: integer
                 description: balance of account
@@ -63,7 +63,7 @@ paths:
         200:
           description: OK
           content:
-            application/octet-stream:
+            text/plain:
               schema:
                 type: array
                 description: code of account
@@ -127,7 +127,7 @@ paths:
                         "Index":0,
                         "BlockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
                         "BlockNumber":1,
-                        "GasPrice":1000,
+                        "GasPriceCoef":1,
                         "Gas":1000,
                         "From":"0x970e8128ab834e8eac17ab8e3812f010678cf791",
                         "Clauses":[
@@ -160,9 +160,9 @@ paths:
                     Nonce:
                       type: integer
                       example: 1
-                    GasPrice:
+                    GasPriceCoef:
                       type: integer
-                      example: 10000
+                      example: 1
                     Gas:
                       type: integer
                       example: 30000
@@ -186,7 +186,12 @@ paths:
                                 ]
       responses:
         200:
-          description: "successful operation"
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: transaction id
         400:
           description: "Invalid params"
   /blocks/{id}:
@@ -332,7 +337,7 @@ paths:
       responses:
         200:
           content:
-            application/octet-stream:
+            text/plain:
               schema:
                 type: array
                 description: an output binary 

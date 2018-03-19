@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
@@ -14,21 +15,24 @@ type blockGetter interface {
 
 //BlockInterface for manage block with chain
 type BlockInterface struct {
-	blkGetter blockGetter
+	chain *chain.Chain
 }
 
 //NewBlockInterface return a BlockMananger by chain
-func NewBlockInterface(blkGetter blockGetter) *BlockInterface {
+func NewBlockInterface(chain *chain.Chain) *BlockInterface {
 	return &BlockInterface{
-		blkGetter: blkGetter,
+		chain: chain,
 	}
 
 }
 
 //GetBlockByID return block by address
 func (bi *BlockInterface) GetBlockByID(blockID thor.Hash) (*types.Block, error) {
-	b, err := bi.blkGetter.GetBlock(blockID)
+	b, err := bi.chain.GetBlock(blockID)
 	if err != nil {
+		if bi.chain.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -37,8 +41,11 @@ func (bi *BlockInterface) GetBlockByID(blockID thor.Hash) (*types.Block, error) 
 
 //GetBlockByNumber return block by address
 func (bi *BlockInterface) GetBlockByNumber(blockNumber uint32) (*types.Block, error) {
-	b, err := bi.blkGetter.GetBlockByNumber(blockNumber)
+	b, err := bi.chain.GetBlockByNumber(blockNumber)
 	if err != nil {
+		if bi.chain.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -47,7 +54,7 @@ func (bi *BlockInterface) GetBlockByNumber(blockNumber uint32) (*types.Block, er
 
 //GetBestBlock returns latest block
 func (bi *BlockInterface) GetBestBlock() (*types.Block, error) {
-	b, err := bi.blkGetter.GetBestBlock()
+	b, err := bi.chain.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
