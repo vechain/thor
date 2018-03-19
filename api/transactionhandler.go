@@ -7,6 +7,7 @@ import (
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/thor"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -65,7 +66,6 @@ func (ti *TransactionInterface) handleGetTransactionReceiptByID(w http.ResponseW
 	}
 	receipt, err := ti.GetTransactionReceiptByID(txID)
 	if err != nil {
-		fmt.Println(err)
 		return httpx.Error("Get transaction receipt failed!", 400)
 	}
 	receiptData, err := json.Marshal(receipt)
@@ -77,22 +77,19 @@ func (ti *TransactionInterface) handleGetTransactionReceiptByID(w http.ResponseW
 }
 
 func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	raw := []byte(req.FormValue("rawTransaction"))
+	r, err := ioutil.ReadAll(req.Body)
+	req.Body.Close()
+	fmt.Println("r", string(r))
 	rawTransaction := new(types.RawTransaction)
-	if err := json.Unmarshal(raw, &rawTransaction); err != nil {
+	if err := json.Unmarshal(r, &rawTransaction); err != nil {
+		fmt.Println("err", err)
 		return err
 	}
 	txID, err := ti.SendRawTransaction(rawTransaction)
 	if err != nil {
+		fmt.Println("err send", err)
 		return err
 	}
-	txIDMap := map[string]string{
-		"txID": txID.String(),
-	}
-	data, err := json.Marshal(txIDMap)
-	if err != nil {
-		return httpx.Error(" System Error! ", 400)
-	}
-	w.Write(data)
+	w.Write(txID[:])
 	return nil
 }

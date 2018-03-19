@@ -40,7 +40,7 @@ func TestLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := httpPost(ts, ts.URL+"/logs", url.Values{"options": {string(ops)}})
+	r, err := httpPostForm(ts, ts.URL+"/logs", url.Values{"options": {string(ops)}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func initLogServer(t *testing.T) *httptest.Server {
 
 	var logs []*logdb.Log
 	for i := 0; i < 2; i++ {
-		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 	}
 	err = db.Insert(logs)

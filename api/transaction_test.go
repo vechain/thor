@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -24,7 +25,7 @@ import (
 	"testing"
 )
 
-var testPrivHex = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
+var testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 
 func TestTransaction(t *testing.T) {
 
@@ -39,6 +40,7 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println("tx", string(r))
 	rtx := new(types.Transaction)
 	if err := json.Unmarshal(r, &rtx); err != nil {
 		t.Fatal(err)
@@ -49,7 +51,7 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(string(r))
+	fmt.Println("receipts", string(r))
 	// receipt := new(tx.Receipt)
 	// if err := json.Unmarshal(r, &receipt); err != nil {
 	// 	t.Fatal(err)
@@ -60,6 +62,7 @@ func TestTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	sig, err := crypto.Sign(ntx.SigningHash().Bytes(), key)
+
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
@@ -85,15 +88,25 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	r, err = httpPost(ts, ts.URL+"/transactions", url.Values{"rawTransaction": {string(txData)}})
+	r, err = httpPost(ts, ts.URL+"/transactions", txData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 }
-
-func httpPost(ts *httptest.Server, url string, body url.Values) ([]byte, error) {
+func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+func httpPostForm(ts *httptest.Server, url string, body url.Values) ([]byte, error) {
 	res, err := http.PostForm(url, body)
 	if err != nil {
 		return nil, err
@@ -121,19 +134,17 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Fatal(err)
 	}
 	chain.WriteGenesis(b)
-	// address, _ := thor.ParseAddress(testAddress)
-	// cla := tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)
 	tx := new(tx.Builder).
+		ChainTag(0).
 		GasPriceCoef(1).
 		Gas(1000).
 		Nonce(1).
+		BlockRef(tx.NewBlockRef(0)).
 		Build()
-
 	key, err := crypto.HexToECDSA(testPrivHex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(tx.SigningHash())
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
@@ -150,7 +161,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	}
 	stat.SetBalance(thor.BytesToAddress([]byte("acc1")), big.NewInt(10000000000000))
 	stat.Stage().Commit()
-	if err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
 

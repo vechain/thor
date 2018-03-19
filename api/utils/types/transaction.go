@@ -1,21 +1,20 @@
 package types
 
 import (
-	"math/big"
-
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
 //RawTransaction a raw transaction
 type RawTransaction struct {
+	ChainTag     byte
 	Nonce        uint64
+	BlockRef     [8]byte
+	Clauses      Clauses
 	GasPriceCoef uint8
 	Gas          uint64
 	DependsOn    *thor.Hash
 	Sig          []byte
-	BlockRef     [8]byte
-	Clauses      Clauses
 }
 
 //Transaction transaction

@@ -60,6 +60,9 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 func (ti *TransactionInterface) GetTransactionReceiptByID(txID thor.Hash) (*tx.Receipt, error) {
 	receipt, err := ti.chain.GetTransactionReceipt(txID)
 	if err != nil {
+		if ti.chain.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return receipt, nil

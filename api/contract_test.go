@@ -78,7 +78,7 @@ func initServer(t *testing.T) (*httptest.Server, *api.ContractInterface) {
 	st.SetCode(contractAddr, code)
 	hash, _ := st.Stage().Commit()
 	blk := new(block.Builder).ParentID(b.Header().ID()).StateRoot(hash).Build()
-	err = chain.AddBlock(blk, true)
+	_, err = chain.AddBlock(blk, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, 
 		t.Fatal(err)
 	}
 
-	r, err := httpPost(ts, ts.URL+"/contracts/"+contractAddr.String(), url.Values{"input": {string(input)}, "options": {string(optionsData)}})
+	r, err := httpPostForm(ts, ts.URL+"/contracts/"+contractAddr.String(), url.Values{"input": {string(input)}, "options": {string(optionsData)}})
 	if err != nil {
 		t.Fatal(err)
 	}
