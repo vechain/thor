@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/vechain/thor/api/utils/types"
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
@@ -50,7 +51,7 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 		return nil, err
 	}
 
-	t.BlockID = location.BlockID.String()
+	t.BlockID = location.BlockID
 	t.BlockNumber = block.Header().Number()
 	t.Index = location.Index
 	return t, nil
@@ -70,19 +71,17 @@ func (ti *TransactionInterface) GetTransactionReceiptByID(txID thor.Hash) (*tx.R
 
 //SendRawTransaction send a raw transactoion
 func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*thor.Hash, error) {
-	bestblk, err := ti.chain.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
 	builder, err := types.BuildRawTransaction(raw)
 	if err != nil {
 		return nil, err
 	}
-	builder.ChainTag(bestblk.Header().ChainTag())
 	transaction := builder.Build().WithSignature(raw.Sig)
+	from, _ := transaction.Signer()
+	fmt.Println("signer", from)
 	if err := ti.txPool.Add(transaction); err != nil {
 		return nil, err
 	}
+
 	txID := transaction.ID()
 	return &txID, nil
 }

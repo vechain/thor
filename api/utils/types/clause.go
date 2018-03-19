@@ -8,9 +8,9 @@ import (
 
 // Clause for json marshal
 type Clause struct {
-	To    *thor.Address `rlp:"nil"`
-	Value *big.Int
-	Data  []byte
+	To    *thor.Address `json:"to,string"`
+	Value *big.Int      `json:"value,string"`
+	Data  []byte        `json:"data,string"`
 }
 
 //Clauses array of clauses.

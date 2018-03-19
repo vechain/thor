@@ -79,17 +79,16 @@ func (ti *TransactionInterface) handleGetTransactionReceiptByID(w http.ResponseW
 func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	r, err := ioutil.ReadAll(req.Body)
 	req.Body.Close()
-	fmt.Println("r", string(r))
 	rawTransaction := new(types.RawTransaction)
 	if err := json.Unmarshal(r, &rawTransaction); err != nil {
-		fmt.Println("err", err)
-		return err
+		return httpx.Error("Invalid Params!", 400)
 	}
 	txID, err := ti.SendRawTransaction(rawTransaction)
 	if err != nil {
 		fmt.Println("err send", err)
 		return err
 	}
+	fmt.Println("txID", txID)
 	w.Write(txID[:])
 	return nil
 }

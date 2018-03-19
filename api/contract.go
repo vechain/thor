@@ -11,12 +11,12 @@ import (
 
 //ContractInterfaceOptions contract calling options
 type ContractInterfaceOptions struct {
-	Index    uint32
-	Gas      uint64
-	From     thor.Address
-	GasPrice *big.Int
-	TxID     thor.Hash
-	Value    *big.Int
+	Index    uint32       `json:"index"`
+	Gas      uint64       `json:"gas,string"`
+	From     thor.Address `json:"from,string"`
+	GasPrice *big.Int     `json:"gasPrice,string"`
+	TxID     thor.Hash    `json:"txID,string"`
+	Value    *big.Int     `json:"value,string"`
 }
 
 //ContractInterface most for call a contract

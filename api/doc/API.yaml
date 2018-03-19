@@ -41,7 +41,7 @@ paths:
           content:
             text/plain:
               schema:
-                type: integer
+                type: string
                 description: balance of account
         400:
           description: "Invalid address"
@@ -154,31 +154,34 @@ paths:
             schema:
               type: object
               properties: 
-                Nonce:
+                chainTag:
                   type: integer
                   example: 1
-                GasPriceCoef:
+                nonce:
+                  type: string
+                  example: "1"
+                gasPriceCoef:
                   type: integer
                   example: 1
-                Gas:
-                  type: integer
-                  example: 30000
-                DependsOn:
+                gas:
+                  type: string
+                  example: "30000"
+                dependsOn:
                   type: string
                   example: ""
-                Sig: 
+                sig: 
                   type: array
                   example: [0x11, 0x12]
-                BlockRef:
+                blockRef:
                   type: array
                   example: [0,0,0,0,0,0,0,0]
-                Clauses:
+                clauses:
                   type: array
                   example: [
                             {
-                              "To":    addressTo,
-                              "Value": 10000,
-                              "Data":  [0x00, 0x00],
+                              "to":    addressTo,
+                              "value": "10000",
+                              "data":  [0x00, 0x00],
                             }
                             ]
       responses:
@@ -212,14 +215,14 @@ paths:
               schema:
                 type: object
                 example: {
-                        "Number":1,
-                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "Timestamp":0,
-                        "TotalScore":0,
-                        "GasLimit":0,
-                        "GasUsed":0,
-                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "Txs":[
+                        "number":1,
+                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "timestamp":0,
+                        "totalScore":"0",
+                        "gasLimit":"0",
+                        "gasUsed":"0",
+                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "txs":[
                                 "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
                               ]
                       }
@@ -246,14 +249,14 @@ paths:
               schema:
                 type: object
                 example: {
-                        "Number":1,
-                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "Timestamp":0,
-                        "TotalScore":0,
-                        "GasLimit":0,
-                        "GasUsed":0,
-                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "Txs":[
+                        "number":1,
+                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "timestamp":0,
+                        "totalScore":"0",
+                        "gasLimit":"0",
+                        "gasUsed":"0",
+                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "txs":[
                                 "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
                               ]
                       }
@@ -273,14 +276,14 @@ paths:
               schema:
                 type: object
                 example:  {
-                        "Number":0,
-                        "ID":"0x0000000100000000000000000000000000000000000000000000000000000002","ParentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "Timestamp":0,
-                        "TotalScore":0,
-                        "GasLimit":0,
-                        "GasUsed":0,
-                        "Beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","StateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","ReceiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "Txs":[
+                        "number":1,
+                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
+                        "timestamp":0,
+                        "totalScore":"0",
+                        "gasLimit":"0",
+                        "gasUsed":"0",
+                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "txs":[
                                 "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
                               ]
                       }
@@ -313,24 +316,24 @@ paths:
                 options: 
                   type: object
                   properties: 
-                    Index:
+                    index:
                       type: integer
                       example: 1
-                    Gas:
-                      type: integer
-                      example: 100000
-                    From:
+                    gas:
+                      type: string
+                      example: "100000"
+                    from:
                       type: string
                       example: 0x000000000000000000000000636f6e7472616374
-                    GasPrice:
-                      type: integer
-                      example: 10000
-                    TxID: 
+                    gasPrice:
+                      type: string
+                      example: "10000"
+                    txID: 
                       type: string
                       example: 0x000000000000000000000000636f6e74
-                    Value:
-                      type: integer
-                      example: 0
+                    value:
+                      type: string
+                      example: "0"
       responses:
         200:
           content:
@@ -358,16 +361,16 @@ paths:
                 options:
                   type: object
                   properties: 
-                    FromBlock:
+                    fromBlock:
                       type: integer
                       example: 0
-                    ToBlock:
+                    toBlock:
                       type: integer
                       example: 1
-                    Address:
+                    address:
                       type: string
                       example: 0x000000000000000000000000636f6e7472616374
-                    TopicSet:
+                    topicSet:
                       type: array
                       example: [[topic0,topic1,topic2,topic3,topic4],[topic0,topic1,topic2,topic3,topic4]]
       responses:
@@ -378,13 +381,13 @@ paths:
               schema:
                 type: object
                 example: {
-                        "BlockID":"0x00000000000000000000000000000000000000000000000000626c6f636b4944",
-			                  "BlockNumber":1,
-			                  "TxID":"0x0000000000000000000000000000000000000000000000000000000074784944",
-			                  "TxOrigin":"0x00000000000000000000000074784f726967696e",
-			                  "Address":"0x0000000000000000000000000000000061646472",
-			                  "Data":[0x00,0x00],
-			                  "Topics":["0x0000000000000000000000000000000000000000000000000000746f70696330",
+                        "blockID":"0x00000000000000000000000000000000000000000000000000626c6f636b4944",
+                        "blockNumber":1,
+                        "txID":"0x0000000000000000000000000000000000000000000000000000000074784944",
+                        "txOrigin":"0x00000000000000000000000074784f726967696e",
+                        "address":"0x0000000000000000000000000000000061646472",
+                        "data":[0x00,0x00],
+                        "topics":["0x0000000000000000000000000000000000000000000000000000746f70696330",
                                   "0x0000000000000000000000000000000000000000000000000000746f70696331",
                                   nil,
                                   nil,
