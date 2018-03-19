@@ -2,6 +2,7 @@ package genesis
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -9,6 +10,7 @@ import (
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 var Dev = &dev{
@@ -55,7 +57,7 @@ func (d *dev) Accounts() []testAccount {
 	return accs
 }
 
-func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
+func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
 	builder := new(Builder).
 		ChainTag(2).
 		GasLimit(thor.InitialGasLimit).
@@ -65,18 +67,35 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, error) {
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Params.Set(state, thor.KeyRewardRatio, thor.InitialRewardRatio)
-			builtin.Params.Set(state, thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
-			builtin.Energy.AdjustGrowthRate(state, d.launchTime, thor.InitialEnergyGrowthRate)
-
+			tokenSupply := &big.Int{}
 			for _, a := range d.Accounts() {
 				b, _ := new(big.Int).SetString("10000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
-				builtin.Authority.Add(state, a.Address, thor.BytesToHash([]byte("a1")))
+				tokenSupply.Add(tokenSupply, b)
 				builtin.Energy.AddBalance(state, d.launchTime, a.Address, b)
 			}
+			builtin.Energy.SetTokenSupply(state, tokenSupply)
 			return nil
-		})
+		}).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Energy.Address).
+				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+			builtin.Executor.Address)
+
+	for i, a := range d.Accounts() {
+		builder.Call(
+			tx.NewClause(&builtin.Authority.Address).
+				WithData(builtin.Authority.ABI.MustForMethod("authorize").MustEncodeInput(a.Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", i))))),
+			builtin.Executor.Address)
+	}
 
 	return builder.Build(stateCreator)
 }

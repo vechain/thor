@@ -7,6 +7,7 @@ import (
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 var Mainnet = &mainnet{
@@ -19,7 +20,7 @@ type mainnet struct {
 	tokenSupply *big.Int
 }
 
-func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
+func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
 	return new(Builder).
 		ChainTag(1).
 		Timestamp(m.launchTime).
@@ -29,11 +30,20 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, error) {
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Params.Set(state, thor.KeyRewardRatio, thor.InitialRewardRatio)
-			builtin.Params.Set(state, thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
-			builtin.Energy.AdjustGrowthRate(state, m.launchTime, thor.InitialEnergyGrowthRate)
 			builtin.Energy.SetTokenSupply(state, m.tokenSupply)
 			return nil
 		}).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Energy.Address).
+				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+			builtin.Executor.Address).
 		Build(stateCreator)
 }

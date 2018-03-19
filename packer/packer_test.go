@@ -57,7 +57,7 @@ func TestP(t *testing.T) {
 	kv, _ := lvldb.New("/tmp/thor", lvldb.Options{})
 	defer kv.Close()
 
-	b0, _ := genesis.Dev.Build(state.NewCreator(kv))
+	b0, _, _ := genesis.Dev.Build(state.NewCreator(kv))
 
 	c := chain.New(kv)
 	c.WriteGenesis(b0)

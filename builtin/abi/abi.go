@@ -132,6 +132,15 @@ func (mc *MethodCodec) EncodeInput(args ...interface{}) ([]byte, error) {
 	return mc.forward.Pack(mc.name, args...)
 }
 
+// MustEncodeInput encodes input args into input data.
+func (mc *MethodCodec) MustEncodeInput(args ...interface{}) []byte {
+	data, err := mc.EncodeInput(args...)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
 // DecodeOutput decodes output data.
 func (mc *MethodCodec) DecodeOutput(output []byte, v interface{}) error {
 	return mc.forward.Unpack(v, mc.name, output)
@@ -147,6 +156,15 @@ func (mc *MethodCodec) EncodeOutput(args ...interface{}) ([]byte, error) {
 		return nil, err
 	}
 	return out[4:], nil
+}
+
+// MustEncodeOutput encodes outputs into output data.
+func (mc *MethodCodec) MustEncodeOutput(args ...interface{}) []byte {
+	data, err := mc.EncodeOutput(args...)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
 
 // DecodeInput decodes input data into args.
