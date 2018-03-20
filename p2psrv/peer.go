@@ -3,7 +3,9 @@ package p2psrv
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
+	"net"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -49,6 +51,16 @@ func newPeer(peer *p2p.Peer, proto *Protocol) *Peer {
 // Protocol returns protocol.
 func (p *Peer) Protocol() *Protocol {
 	return p.proto
+}
+
+func (p *Peer) String() string {
+	id := p.peer.ID()
+	return fmt.Sprintf("%x %v", id[:8], p.peer.RemoteAddr())
+}
+
+// RemoteAddr returns the remote address of the network connection.
+func (p *Peer) RemoteAddr() net.Addr {
+	return p.peer.RemoteAddr()
 }
 
 // ID returns peer node id.
