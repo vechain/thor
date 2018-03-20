@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
@@ -71,18 +72,19 @@ func TestTransaction(t *testing.T) {
 	hash := thor.BytesToHash([]byte("DependsOn"))
 	v := big.NewInt(10000)
 	m := math.HexOrDecimal256(*v)
+	blockRef := tx.NewBlockRef(20)
 	rawTransaction := &types.RawTransaction{
 		Nonce:        1,
 		GasPriceCoef: 1,
 		Gas:          30000,
-		DependsOn:    &hash,
-		Sig:          sig,
-		BlockRef:     [8]byte(tx.NewBlockRef(20)),
+		DependsOn:    hash.String(),
+		Sig:          hexutil.Encode(sig),
+		BlockRef:     hexutil.Encode(blockRef[:]),
 		Clauses: types.Clauses{
 			types.Clause{
-				To:    &to,
+				To:    to.String(),
 				Value: &m,
-				Data:  []byte{0x11, 0x12},
+				Data:  hexutil.Encode([]byte{0x00, 0x00}),
 			},
 		},
 	}
@@ -181,7 +183,7 @@ func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transa
 	for i, c := range expectedTx.Clauses {
 		assert.Equal(t, string(c.Data), string(actualTx.Clauses[i].Data))
 		assert.Equal(t, c.Value, actualTx.Clauses[i].Value)
-		assert.Equal(t, c.To.String(), actualTx.Clauses[i].To.String())
+		assert.Equal(t, c.To, actualTx.Clauses[i].To)
 	}
 
 }

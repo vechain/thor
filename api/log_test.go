@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -20,20 +21,20 @@ func TestLog(t *testing.T) {
 	t0 := thor.BytesToHash([]byte("topic0"))
 	t1 := thor.BytesToHash([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
-	op := &logdb.FilterOption{
+	op := &types.FilterOption{
 		FromBlock: 0,
 		ToBlock:   1,
-		Address:   &addr,
-		TopicSet: [][5]*thor.Hash{{&t0,
-			nil,
-			nil,
-			nil,
-			nil},
-			{nil,
-				&t1,
-				nil,
-				nil,
-				nil}},
+		Address:   addr.String(),
+		TopicSet: [][5]string{{t0.String(),
+			"",
+			"",
+			"",
+			""},
+			{"",
+				t1.String(),
+				"",
+				"",
+				""}},
 	}
 	ops, err := json.Marshal(op)
 	if err != nil {
@@ -44,7 +45,7 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var logs []*logdb.Log
+	var logs []*types.Log
 	if err := json.Unmarshal(r, &logs); err != nil {
 		t.Fatal(err)
 	}
@@ -52,11 +53,7 @@ func TestLog(t *testing.T) {
 }
 
 func initLogServer(t *testing.T) *httptest.Server {
-	path, err := home()
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := logdb.New(path + "/log.db")
+	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}

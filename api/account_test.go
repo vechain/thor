@@ -3,12 +3,7 @@ package api_test
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
@@ -18,6 +13,11 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 )
 
 const (
@@ -60,13 +60,21 @@ func TestAccount(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, v.want.balance, new(big.Int).SetBytes(r), "balance should be equal")
+		bal := make(map[string]*big.Int)
+		if err := json.Unmarshal(r, &bal); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, v.want.balance, bal["result"], "balance should be equal")
 
 		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/code", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, v.want.code, r, "code should be equal")
+		c := make(map[string]string)
+		if err := json.Unmarshal(r, &c); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, hexutil.Encode(v.want.code), c["result"], "code should be equal")
 
 		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
 		if err != nil {
@@ -77,7 +85,7 @@ func TestAccount(t *testing.T) {
 		if err := json.Unmarshal(r, &value); err != nil {
 			t.Fatal(err)
 		}
-		h, err := thor.ParseHash(value[storageKey.String()])
+		h, err := thor.ParseHash(value["result"])
 		if err != nil {
 			t.Fatal(err)
 		}

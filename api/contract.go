@@ -14,9 +14,9 @@ import (
 type ContractInterfaceOptions struct {
 	Index    uint32                `json:"index"`
 	Gas      uint64                `json:"gas,string"`
-	From     thor.Address          `json:"from,string"`
+	From     string                `json:"from,string"`
 	GasPrice *math.HexOrDecimal256 `json:"gasPrice,string"`
-	TxID     thor.Hash             `json:"txID,string"`
+	TxID     string                `json:"txID,string"`
 	Value    *math.HexOrDecimal256 `json:"value,string"`
 }
 
@@ -43,9 +43,9 @@ func (ci *ContractInterface) DefaultContractInterfaceOptions() *ContractInterfac
 	return &ContractInterfaceOptions{
 		Index:    1,
 		Gas:      10000,
-		From:     thor.Address{},
+		From:     thor.Address{}.String(),
 		GasPrice: &gph,
-		TxID:     thor.Hash{},
+		TxID:     thor.Hash{}.String(),
 		Value:    &vh,
 	}
 }
@@ -86,7 +86,15 @@ func (ci *ContractInterface) Call(to *thor.Address, input []byte, options *Contr
 	clause := tx.NewClause(to).WithData(input).WithValue(&v)
 	var vmout *vm.Output
 	gp := big.Int(*options.GasPrice)
-	vmout = rt.Call(clause, options.Index, options.Gas, options.From, &gp, options.TxID)
+	from, err := thor.ParseAddress(options.From)
+	if err != nil {
+		return nil, err
+	}
+	txID, err := thor.ParseHash(options.TxID)
+	if err != nil {
+		return nil, err
+	}
+	vmout = rt.Call(clause, options.Index, options.Gas, from, &gp, txID)
 	if vmout.VMErr != nil {
 		return nil, vmout.VMErr
 	}

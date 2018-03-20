@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
@@ -34,7 +35,13 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 	}
 
 	balance := ai.GetBalance(address)
-	w.Write(balance.Bytes())
+	dataMap := make(map[string]interface{})
+	dataMap["result"] = balance
+	data, err := json.Marshal(dataMap)
+	if err != nil {
+		return httpx.Error("System Error!", 500)
+	}
+	w.Write(data)
 	return nil
 }
 func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Request) error {
@@ -52,7 +59,13 @@ func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Reque
 	}
 
 	code := ai.GetCode(address)
-	w.Write(code)
+	dataMap := make(map[string]interface{})
+	dataMap["result"] = hexutil.Encode(code)
+	data, err := json.Marshal(dataMap)
+	if err != nil {
+		return httpx.Error("System Error!", 500)
+	}
+	w.Write(data)
 	return nil
 }
 
@@ -80,7 +93,7 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 
 	value := ai.GetStorage(address, keyhash)
 	storage := map[string]string{
-		key: value.String(),
+		"result": value.String(),
 	}
 	data, err := json.Marshal(storage)
 	if err != nil {
