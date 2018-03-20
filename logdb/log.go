@@ -24,14 +24,14 @@ type DBLog struct {
 
 //Log format tx.Log to store in db
 type Log struct {
-	BlockID     thor.Hash     `json:"blockID,string"`
-	BlockNumber uint32        `json:"fromBlock"`
-	LogIndex    uint32        `json:"logIndex"`
-	TxID        thor.Hash     `json:"txID,string"`
-	TxOrigin    thor.Address  `json:"txOrigin,string"` //contract caller
-	Address     thor.Address  `json:"address,string"`  // always a contract address
-	Data        []byte        `json:"data,string"`
-	Topics      [5]*thor.Hash `json:"topics,string"`
+	BlockID     thor.Hash
+	BlockNumber uint32
+	LogIndex    uint32
+	TxID        thor.Hash
+	TxOrigin    thor.Address //contract caller
+	Address     thor.Address // always a contract address
+	Data        []byte
+	Topics      [5]*thor.Hash
 }
 
 //NewLog return a format log
@@ -110,7 +110,7 @@ func (log *Log) String() string {
 		log.TxID.String(),
 		log.TxOrigin.String(),
 		log.Address.String(),
-		[]byte(log.Data),
+		log.Data,
 		log.Topics[0],
 		log.Topics[1],
 		log.Topics[2],
