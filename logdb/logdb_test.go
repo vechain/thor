@@ -12,19 +12,19 @@ import (
 )
 
 func TestLogDB(t *testing.T) {
-	// path, err := home()
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// db, err := logdb.New(path + "/log.db")
-	db, err := logdb.NewMem()
+	path, err := home()
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := logdb.New(path + "/log.db")
+	// db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
 		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
-		Data:    []byte("data"),
+		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 48},
 	}
 
 	var logs []*logdb.Log

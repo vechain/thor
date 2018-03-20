@@ -1,7 +1,6 @@
 package logdb
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -15,7 +14,7 @@ type DBLog struct {
 	txID        string
 	txOrigin    string
 	address     string
-	data        string
+	data        []byte
 	topic0      string
 	topic1      string
 	topic2      string
@@ -69,10 +68,6 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := hex.DecodeString(dbLog.data)
-	if err != nil {
-		return nil, err
-	}
 	l := &Log{
 		BlockID:     bid,
 		BlockNumber: dbLog.blockNumber,
@@ -80,7 +75,7 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 		TxID:        txid,
 		TxOrigin:    txori,
 		Address:     addr, // always a contract address
-		Data:        data,
+		Data:        dbLog.data,
 	}
 	if dbLog.topic0 != "NULL" {
 		t0, err := thor.ParseHash(dbLog.topic0)
@@ -125,7 +120,7 @@ func formatHash(value *thor.Hash) interface{} {
 	if value == nil {
 		return "NULL"
 	}
-	return value
+	return value.String()
 }
 
 func (log *Log) String() string {

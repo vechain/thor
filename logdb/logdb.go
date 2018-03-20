@@ -2,7 +2,6 @@ package logdb
 
 import (
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
@@ -68,24 +67,30 @@ func (db *LogDB) Insert(logs []*Log) error {
 	}
 	db.m.Lock()
 	defer db.m.Unlock()
-
-	stmt := ""
+	tx, err := db.db.Begin()
+	if err != nil {
+		return err
+	}
 	for _, log := range logs {
-		stmt += "insert into log(blockID ,blockNumber ,logIndex ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values " + fmt.Sprintf(" ('%v',%v, %v,'%v','%v','%v','%s','%v','%v','%v','%v','%v'); ",
-			log.BlockID,
+		if _, err = tx.Exec("insert into log(blockID ,blockNumber ,logIndex ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); ",
+			log.BlockID.String(),
 			log.BlockNumber,
 			log.LogIndex,
-			log.TxID,
-			log.TxOrigin,
-			log.Address,
-			hex.EncodeToString(log.Data),
+			log.TxID.String(),
+			log.TxOrigin.String(),
+			log.Address.String(),
+			log.Data,
 			formatHash(log.Topics[0]),
 			formatHash(log.Topics[1]),
 			formatHash(log.Topics[2]),
 			formatHash(log.Topics[3]),
-			formatHash(log.Topics[4]))
+			formatHash(log.Topics[4])); err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
-	return db.execInTransaction(stmt)
+	tx.Commit()
+	return nil
 }
 
 //Filter return logs with options
