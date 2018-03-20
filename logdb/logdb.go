@@ -9,10 +9,10 @@ import (
 
 //FilterOption option filter
 type FilterOption struct {
-	FromBlock uint32          `json:"fromBlock"`
-	ToBlock   uint32          `json:"toBlock"`
-	Address   *thor.Address   `json:"address,string"` // always a contract address
-	TopicSet  [][5]*thor.Hash `json:"topicSet,string"`
+	FromBlock uint32
+	ToBlock   uint32
+	Address   *thor.Address // always a contract address
+	TopicSet  [][5]*thor.Hash
 }
 
 //LogDB manages all logs
