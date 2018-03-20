@@ -17,6 +17,7 @@ func TestLogDB(t *testing.T) {
 	// }
 	// db, err := logdb.New(path + "/log.db")
 	db, err := logdb.NewMem()
+	defer db.Close()
 	if err != nil {
 		t.Fatal(err)
 	}

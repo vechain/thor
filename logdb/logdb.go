@@ -212,5 +212,5 @@ func (db *LogDB) Path() string {
 
 //Close close sqlite
 func (db *LogDB) Close() {
-	db.Close()
+	db.db.Close()
 }
