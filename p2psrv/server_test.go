@@ -70,15 +70,12 @@ func TestServer(t *testing.T) {
 	go func() {
 		for {
 			p := <-pch
-			if p.Alive() {
-				var resp string
-				if err := p.Request(context.Background(), 0, "foo", &resp); err != nil {
-					panic(err)
-				}
-				fmt.Println("resp:", resp)
-				break
+
+			var resp string
+			if err := p.Request(context.Background(), 0, "foo", &resp); err != nil {
+				panic(err)
 			}
-			<-time.After(time.Millisecond * 100)
+			fmt.Println("resp:", resp)
 		}
 	}()
 

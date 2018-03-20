@@ -80,14 +80,9 @@ func (p *Peer) Disconnect(markAsBadPeer bool) {
 
 }
 
-// Alive returns whether peer is alive.
-func (p *Peer) Alive() bool {
-	select {
-	case <-p.doneCh:
-		return false
-	default:
-		return true
-	}
+// Done returns the done channel that indicates disconnection.
+func (p *Peer) Done() <-chan struct{} {
+	return p.doneCh
 }
 
 // serve handles p2p message.
