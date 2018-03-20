@@ -39,10 +39,12 @@ paths:
         200:
           description: OK
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                description: balance of account
+                type: object
+                example: {
+                            "result":1000 
+                          }
         400:
           description: "Invalid address"
   /accounts/{address}/code:
@@ -63,10 +65,12 @@ paths:
         200:
           description: OK
           content:
-            text/plain:
+            application/json:
               schema:
-                type: array
-                description: code of account
+                type: object
+                example: {
+                            "result":"0x00" 
+                          }
         400:
           description: "Invalid address"
   /accounts/{address}/storage:
@@ -123,21 +127,23 @@ paths:
               schema:
                 type: object
                 example: {
-                        "ID":"0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd",
-                        "Index":0,
-                        "BlockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
-                        "BlockNumber":1,
-                        "GasPriceCoef":1,
-                        "Gas":1000,
-                        "From":"0x970e8128ab834e8eac17ab8e3812f010678cf791",
-                        "Clauses":[
-                                    {
-                                      "To":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01a",
-                                      "Value":10,
-                                      "Data":null
-                                    }
-                                  ]
-                      }
+                          "chainTag":0,
+                          "id":"0x27d96e21d27a651ea1dcdd6426f4abc408d715fa14d537cb2daa9de7222dc260",
+                          "gasPriceCoef":1,
+                          "gas":"1000",
+                          "from":"0xb5c964bb668ef14420321c34a661698487132a5a",
+                          "dependsOn":"",
+                          "clauses":[{
+                                      "to":"0x000000000000000000000000000000000000746f",
+                                      "value":"0x3e8",
+                                      "data":"0x"
+                            
+                                    }],
+                          "index":"0",
+                          "blockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
+                          "blockNumber":1
+                    
+                          }
         400:
           description: "Invalid params"
   /transactions:
@@ -170,18 +176,18 @@ paths:
                   type: string
                   example: ""
                 sig: 
-                  type: array
-                  example: [0x11, 0x12]
+                  type: string
+                  example: 0x00
                 blockRef:
-                  type: array
-                  example: [0,0,0,0,0,0,0,0]
+                  type: string
+                  example: 0x0000000000000000
                 clauses:
                   type: array
                   example: [
                             {
-                              "to":    addressTo,
+                              "to":    "addressTo",
                               "value": "10000",
-                              "data":  [0x00, 0x00],
+                              "data":  "0x00",
                             }
                             ]
       responses:
@@ -215,17 +221,17 @@ paths:
               schema:
                 type: object
                 example: {
-                        "number":1,
-                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "timestamp":0,
-                        "totalScore":"0",
-                        "gasLimit":"0",
-                        "gasUsed":"0",
-                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "txs":[
-                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
-                              ]
-                      }
+                            "number":1,
+                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
+                            "timestamp":"0",
+                            "totalScore":"0",
+                            "gasLimit":"0",
+                            "gasUsed":"0",
+                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                            "txs":[
+                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
+                                    ]
+                            }
         400:
           description: "Invalid params"
   /blocks:
@@ -249,17 +255,17 @@ paths:
               schema:
                 type: object
                 example: {
-                        "number":1,
-                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "timestamp":0,
-                        "totalScore":"0",
-                        "gasLimit":"0",
-                        "gasUsed":"0",
-                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "txs":[
-                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
-                              ]
-                      }
+                            "number":1,
+                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
+                            "timestamp":"0",
+                            "totalScore":"0",
+                            "gasLimit":"0",
+                            "gasUsed":"0",
+                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                            "txs":[
+                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
+                                    ]
+                            }
         400:
           description: "Invalid params"
   /blocks/best:
@@ -276,17 +282,17 @@ paths:
               schema:
                 type: object
                 example:  {
-                        "number":1,
-                        "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x00000000639b504a24cc0511372aab1bf99f6b762f74aa9f12047aaba4685602",
-                        "timestamp":0,
-                        "totalScore":"0",
-                        "gasLimit":"0",
-                        "gasUsed":"0",
-                        "beneficiary":"0x0000000000000000000000000000000000000000","TxsRoot":"0x47e42056b1fc34ef9cb8bdd8a5ee029a27a1d20aef9e2a7ddabba96d9249dc85","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                        "txs":[
-                                "0x0ec1aa6cc85b8d1dcb47e016cef88c6bf9c4d54aa828ad773d0cb7aca52417cd"
-                              ]
-                      }
+                            "number":1,
+                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
+                            "timestamp":"0",
+                            "totalScore":"0",
+                            "gasLimit":"0",
+                            "gasUsed":"0",
+                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
+                            "txs":[
+                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
+                                    ]
+                            }
         400:
           description: "Invalid params"
   /contracts/{contractAddr}:
@@ -386,12 +392,12 @@ paths:
                         "txID":"0x0000000000000000000000000000000000000000000000000000000074784944",
                         "txOrigin":"0x00000000000000000000000074784f726967696e",
                         "address":"0x0000000000000000000000000000000061646472",
-                        "data":[0x00,0x00],
+                        "data":"0x",
                         "topics":["0x0000000000000000000000000000000000000000000000000000746f70696330",
                                   "0x0000000000000000000000000000000000000000000000000000746f70696331",
-                                  nil,
-                                  nil,
-                                  nil]
+                                  "",
+                                  "",
+                                  ""]
                       }
         400:
           description: "unhandled error"

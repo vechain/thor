@@ -62,5 +62,4 @@ func (ai *AccountInterface) GetCode(address thor.Address) []byte {
 		return nil
 	}
 	return state.GetCode(address)
-
 }

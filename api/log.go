@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/vechain/thor/api/utils/types"
 	"github.com/vechain/thor/logdb"
 )
 
@@ -17,10 +18,18 @@ func NewLogInterface(ldb *logdb.LogDB) *LogInterface {
 }
 
 //Filter query logs with option
-func (li *LogInterface) Filter(option *logdb.FilterOption) ([]*logdb.Log, error) {
-	logs, err := li.ldb.Filter(option)
+func (li *LogInterface) Filter(option types.FilterOption) ([]types.Log, error) {
+	op, err := option.ToLogFilter()
 	if err != nil {
 		return nil, err
 	}
-	return logs, nil
+	logs, err := li.ldb.Filter(op)
+	if err != nil {
+		return nil, err
+	}
+	lgs := make([]types.Log, len(logs))
+	for i, log := range logs {
+		lgs[i] = types.ConvertLog(log)
+	}
+	return lgs, nil
 }

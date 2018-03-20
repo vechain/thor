@@ -30,6 +30,7 @@ func TestBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(string(r))
 	rb := new(types.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)

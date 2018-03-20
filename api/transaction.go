@@ -50,31 +50,31 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 		return nil, err
 	}
 
-	t.BlockID = location.BlockID
+	t.BlockID = location.BlockID.String()
 	t.BlockNumber = block.Header().Number()
 	t.Index = location.Index
 	return t, nil
 }
 
 //GetTransactionReceiptByID get tx's receipt
-func (ti *TransactionInterface) GetTransactionReceiptByID(txID thor.Hash) (*tx.Receipt, error) {
-	receipt, err := ti.chain.GetTransactionReceipt(txID)
+func (ti *TransactionInterface) GetTransactionReceiptByID(txID thor.Hash) (*types.Receipt, error) {
+	rece, err := ti.chain.GetTransactionReceipt(txID)
 	if err != nil {
 		if ti.chain.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	receipt := types.ConvertReceipt(rece)
 	return receipt, nil
 }
 
 //SendRawTransaction send a raw transactoion
 func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*thor.Hash, error) {
-	builder, err := types.BuildRawTransaction(raw)
+	transaction, err := types.BuildRawTransaction(raw)
 	if err != nil {
 		return nil, err
 	}
-	transaction := builder.Build().WithSignature(raw.Sig)
 	if err := ti.txPool.Add(transaction); err != nil {
 		return nil, err
 	}
