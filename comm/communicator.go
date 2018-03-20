@@ -2,48 +2,34 @@ package comm
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
+	"github.com/vechain/thor/comm/session"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
-const (
-	maxKnownTxs    = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
-)
-
-type known struct {
-	sync.Mutex
-	m map[discover.NodeID]*lru.Cache
-}
-
 type unKnown struct {
-	session *p2psrv.Session
+	session *session.Session
 	id      thor.Hash
 }
 
 type Communicator struct {
 	blockCh        chan *block.Block
 	synced         bool // Flag whether we're synchronised
-	sessions       sessionSet
 	unKnownBlockCh chan *unKnown
-	knownBlocks    known
-	knownTxs       known
 	ch             *chain.Chain
 	txpl           *txpool.TxPool
 	cancel         context.CancelFunc
 	ctx            context.Context
+	sessionSet     *session.Set
 }
 
 func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
@@ -51,11 +37,9 @@ func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
 		blockCh:        make(chan *block.Block),
 		unKnownBlockCh: make(chan *unKnown),
 		synced:         false,
-		sessions:       sessionSet{m: make(map[discover.NodeID]*p2psrv.Session)},
-		knownBlocks:    known{m: make(map[discover.NodeID]*lru.Cache)},
-		knownTxs:       known{m: make(map[discover.NodeID]*lru.Cache)},
 		ch:             ch,
 		txpl:           txpl,
+		sessionSet:     session.NewSet(),
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	return c
@@ -82,31 +66,30 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 
 type Stop func()
 
-func (c *Communicator) Start(genesisBlock *block.Block, sessionCh chan *p2psrv.Session) Stop {
+func (c *Communicator) Start(genesisBlock *block.Block, peerCh chan *p2psrv.Peer) Stop {
 	var goes co.Goes
 
 	goes.Go(func() {
 		for {
 			select {
-			case session := <-sessionCh:
-				peer := session.Peer()
-				if !session.Alive() {
-					c.sessions.remove(peer.ID())
+			case peer := <-peerCh:
+				if !peer.Alive() {
+					c.sessionSet.Remove(peer.ID())
 					break
 				}
 
-				respSt, err := proto.ReqStatus{}.Do(c.ctx, session)
+				respSt, err := proto.ReqStatus{}.Do(c.ctx, peer)
 				if err != nil {
-					peer.Disconnect(p2p.DiscNetworkError)
+					peer.Disconnect(true)
 					break
 				}
 
 				if respSt.GenesisBlockID != genesisBlock.Header().ID() {
-					peer.Disconnect(p2p.DiscUnexpectedIdentity)
+					peer.Disconnect(true)
 					break
 				}
 
-				c.sessions.add(peer.ID(), session)
+				c.sessionSet.Add(session.New(peer))
 			case <-c.ctx.Done():
 				return
 			}
@@ -117,7 +100,7 @@ func (c *Communicator) Start(genesisBlock *block.Block, sessionCh chan *p2psrv.S
 		for {
 			select {
 			case unKnown := <-c.unKnownBlockCh:
-				respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session)
+				respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session.Peer())
 				if err == nil {
 					go func() {
 						select {
@@ -152,44 +135,24 @@ func (c *Communicator) Start(genesisBlock *block.Block, sessionCh chan *p2psrv.S
 	}
 }
 
-func (c *Communicator) handleRequest(session *p2psrv.Session, msg *p2p.Msg) (resp interface{}, err error) {
-	switch {
-	case msg.Code == proto.MsgStatus:
+func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (resp interface{}, err error) {
+	switch msg.Code {
+	case proto.MsgStatus:
 		return handleStatus(c.ch)
-	case msg.Code == proto.MsgNewTx:
-		return handleNewTx(msg, c, session.Peer().ID())
-	case msg.Code == proto.MsgNewBlock:
+	case proto.MsgNewTx:
+		return handleNewTx(msg, c, peer.ID())
+	case proto.MsgNewBlock:
 		return handleNewBlock(msg, c)
-	case msg.Code == proto.MsgNewBlockID:
-		return handleNewBlockID(msg, c, session)
-	case msg.Code == proto.MsgGetBlockByID:
+	case proto.MsgNewBlockID:
+		return handleNewBlockID(msg, c, peer)
+	case proto.MsgGetBlockByID:
 		return handleGetBlockByID(msg, c.ch)
-	case msg.Code == proto.MsgGetBlockIDByNumber:
+	case proto.MsgGetBlockIDByNumber:
 		return handleGetBlockIDByNumber(msg, c.ch)
-	case msg.Code == proto.MsgGetBlocksByNumber:
+	case proto.MsgGetBlocksByNumber:
 		return handleGetBlocksByNumber(msg, c.ch)
 	}
 	return nil, nil
-}
-
-func (c *Communicator) markTransaction(peer discover.NodeID, id thor.Hash) {
-	c.knownBlocks.Lock()
-	defer c.knownBlocks.Unlock()
-
-	if _, ok := c.knownBlocks.m[peer]; !ok {
-		c.knownBlocks.m[peer], _ = lru.New(maxKnownBlocks)
-	}
-	c.knownBlocks.m[peer].Add(id, struct{}{})
-}
-
-func (c *Communicator) markBlock(peer discover.NodeID, id thor.Hash) {
-	c.knownTxs.Lock()
-	defer c.knownTxs.Unlock()
-
-	if _, ok := c.knownTxs.m[peer]; !ok {
-		c.knownTxs.m[peer], _ = lru.New(maxKnownTxs)
-	}
-	c.knownTxs.m[peer].Add(id, struct{}{})
 }
 
 func (c *Communicator) Sync() {
@@ -202,24 +165,14 @@ func (c *Communicator) Sync() {
 
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 	txID := tx.ID()
-	cond := func(s *p2psrv.Session) bool {
-		c.knownBlocks.Lock()
-		defer c.knownBlocks.Unlock()
 
-		lru, ok := c.knownBlocks.m[s.Peer().ID()]
-		if !ok {
-			return true
-		}
-
-		_, found := lru.Get(txID)
-		return !found
-	}
-
-	ss := c.sessions.slice().filter(cond)
-	for _, s := range ss {
-		go func(s *p2psrv.Session) {
-			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s)); err == nil {
-				c.markTransaction(s.Peer().ID(), txID)
+	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
+		return !s.IsBlockKnown(txID)
+	})
+	for _, s := range slice {
+		go func(s *session.Session) {
+			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s.Peer())); err == nil {
+				s.MarkTransaction(txID)
 			}
 		}(s)
 	}
@@ -227,24 +180,13 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	blkID := blk.Header().ID()
-	cond := func(s *p2psrv.Session) bool {
-		c.knownTxs.Lock()
-		defer c.knownTxs.Unlock()
-
-		lru, ok := c.knownTxs.m[s.Peer().ID()]
-		if !ok {
-			return true
-		}
-
-		_, found := lru.Get(blkID)
-		return !found
-	}
-
-	ss := c.sessions.slice().filter(cond)
-	for _, s := range ss {
-		go func(s *p2psrv.Session) {
-			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s)); err == nil {
-				c.markTransaction(s.Peer().ID(), blkID)
+	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
+		return !s.IsBlockKnown(blkID)
+	})
+	for _, s := range slice {
+		go func(s *session.Session) {
+			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s.Peer())); err == nil {
+				s.MarkBlock(blkID)
 			}
 		}(s)
 	}

@@ -32,7 +32,9 @@ func handleNewTx(msg *p2p.Msg, c *Communicator, peerID discover.NodeID) (*struct
 	if err := msg.Decode(&reqTx); err != nil {
 		return nil, err
 	}
-	c.markTransaction(peerID, reqTx.Tx.ID())
+	if s := c.sessionSet.Find(peerID); s != nil {
+		s.MarkTransaction(reqTx.Tx.ID())
+	}
 	c.txpl.Add(reqTx.Tx)
 	return &struct{}{}, nil
 }
@@ -51,23 +53,25 @@ func handleNewBlock(msg *p2p.Msg, c *Communicator) (*struct{}, error) {
 	return &struct{}{}, nil
 }
 
-func handleNewBlockID(msg *p2p.Msg, c *Communicator, session *p2psrv.Session) (*struct{}, error) {
+func handleNewBlockID(msg *p2p.Msg, c *Communicator, peer *p2psrv.Peer) (*struct{}, error) {
 	var reqID proto.ReqNewBlockID
 	if err := msg.Decode(&reqID); err != nil {
 		return nil, err
 	}
-	c.markBlock(session.Peer().ID(), reqID.ID)
-	if _, err := c.ch.GetBlock(reqID.ID); err != nil {
-		if c.ch.IsNotFound(err) {
-			go func() {
-				select {
-				case c.unKnownBlockCh <- &unKnown{session: session, id: reqID.ID}:
-				case <-c.ctx.Done():
-				}
-			}()
-			return &struct{}{}, nil
+	if s := c.sessionSet.Find(peer.ID()); s != nil {
+		s.MarkBlock(reqID.ID)
+		if _, err := c.ch.GetBlock(reqID.ID); err != nil {
+			if c.ch.IsNotFound(err) {
+				go func() {
+					select {
+					case c.unKnownBlockCh <- &unKnown{session: s, id: reqID.ID}:
+					case <-c.ctx.Done():
+					}
+				}()
+				return &struct{}{}, nil
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 	return &struct{}{}, nil
 }
