@@ -1,8 +1,8 @@
 package logdb
 
 import (
+	"encoding/hex"
 	"fmt"
-
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -25,14 +25,14 @@ type DBLog struct {
 
 //Log format tx.Log to store in db
 type Log struct {
-	BlockID     thor.Hash
-	BlockNumber uint32
-	LogIndex    uint32
-	TxID        thor.Hash
-	TxOrigin    thor.Address //contract caller
-	Address     thor.Address // always a contract address
-	Data        []byte
-	Topics      [5]*thor.Hash
+	BlockID     thor.Hash     `json:"blockID,string"`
+	BlockNumber uint32        `json:"fromBlock"`
+	LogIndex    uint32        `json:"logIndex"`
+	TxID        thor.Hash     `json:"txID,string"`
+	TxOrigin    thor.Address  `json:"txOrigin,string"` //contract caller
+	Address     thor.Address  `json:"address,string"`  // always a contract address
+	Data        []byte        `json:"data,string"`
+	Topics      [5]*thor.Hash `json:"topics,string"`
 }
 
 //NewLog return a format log
@@ -69,6 +69,10 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 	if err != nil {
 		return nil, err
 	}
+	data, err := hex.DecodeString(dbLog.data)
+	if err != nil {
+		return nil, err
+	}
 	l := &Log{
 		BlockID:     bid,
 		BlockNumber: dbLog.blockNumber,
@@ -76,7 +80,7 @@ func (dbLog *DBLog) toLog() (*Log, error) {
 		TxID:        txid,
 		TxOrigin:    txori,
 		Address:     addr, // always a contract address
-		Data:        []byte(dbLog.data),
+		Data:        data,
 	}
 	if dbLog.topic0 != "NULL" {
 		t0, err := thor.ParseHash(dbLog.topic0)

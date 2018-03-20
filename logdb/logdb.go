@@ -2,19 +2,19 @@ package logdb
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
-	"sync"
-
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
+	"sync"
 )
 
 //FilterOption option filter
 type FilterOption struct {
-	FromBlock uint32
-	ToBlock   uint32
-	Address   *thor.Address // always a contract address
-	TopicSet  [][5]*thor.Hash
+	FromBlock uint32          `json:"fromBlock"`
+	ToBlock   uint32          `json:"toBlock"`
+	Address   *thor.Address   `json:"address,string"` // always a contract address
+	TopicSet  [][5]*thor.Hash `json:"topicSet,string"`
 }
 
 //LogDB manages all logs
@@ -78,7 +78,7 @@ func (db *LogDB) Insert(logs []*Log) error {
 			log.TxID,
 			log.TxOrigin,
 			log.Address,
-			string(log.Data),
+			hex.EncodeToString(log.Data),
 			formatHash(log.Topics[0]),
 			formatHash(log.Topics[1]),
 			formatHash(log.Topics[2]),
