@@ -77,8 +77,7 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
-// SubscribePeer subscribe peer event.
-// Call Peer.Alive to check which envent is (join or leave).
+// SubscribePeer subscribe new peer event.
 func (s *Server) SubscribePeer(ch chan *Peer) event.Subscription {
 	return s.feedScope.Track(s.peerFeed.Subscribe(ch))
 }
@@ -93,7 +92,6 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 			if node := s.busyNodes.remove(peer.ID()); node != nil {
 				s.goodNodes.Set(peer.ID(), node, p.stats.weight())
 			}
-			s.goes.Go(func() { s.peerFeed.Send(p) })
 			log.Debug("p2p peer disconnected", "peer", peer.String(), "err", err)
 		}()
 
