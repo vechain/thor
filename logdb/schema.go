@@ -3,18 +3,18 @@ package logdb
 // create a table for log
 const logTableSchema = `
 create table if not exists log (
-	blockID	char(66),
+	blockID	blob(32),
 	blockNumber decimal(32,0),
 	logIndex integer,
-	txID char(66),
-	txOrigin char(42),
-	address char(42),
+	txID blob(32),
+	txOrigin blob(20),
+	address blob(20),
 	data blob,
-	topic0 char(66),
-	topic1 char(66),
-	topic2 char(66),
-	topic3 char(66),
-	topic4 char(66)
+	topic0 blob(32),
+	topic1 blob(32),
+	topic2 blob(32),
+	topic3 blob(32),
+	topic4 blob(32)
 );
 
 CREATE INDEX if not exists blockNumberIndex on log(blockNumber);
