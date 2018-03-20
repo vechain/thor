@@ -1,6 +1,7 @@
 package session
 
 import (
+	"math/rand"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -59,13 +60,18 @@ func (ss *Set) Remove(nodeID discover.NodeID) *Session {
 }
 
 // Slice dumps all sessions into a slice.
+// The dumped slice is a random permutation.
 func (ss *Set) Slice() Slice {
 	ss.lock.Lock()
 	defer ss.lock.Unlock()
 
-	ret := make(Slice, 0, len(ss.m))
+	ret := make(Slice, len(ss.m))
+	perm := rand.Perm(len(ss.m))
+	i := 0
 	for _, s := range ss.m {
-		ret = append(ret, s)
+		// randomly
+		ret[perm[i]] = s
+		i++
 	}
 	return ret
 }
