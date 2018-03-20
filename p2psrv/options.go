@@ -17,9 +17,9 @@ type Options struct {
 	// This field must be set to a valid secp256k1 private key.
 	PrivateKey *ecdsa.PrivateKey
 
-	// MaxSessions is the maximum number of sessions that can be
+	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
-	MaxSessions int
+	MaxPeers int
 
 	// NoDiscovery can be used to disable the peer discovery mechanism.
 	// Disabling is useful for protocol debugging (manual topology).

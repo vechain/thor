@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/co"
 )
@@ -18,26 +19,25 @@ func init() {
 }
 
 var (
-	errSessionClosed = errors.New("session closed")
-	errMsgTooLarge   = errors.New("msg too large")
+	errPeerDisconnected = errors.New("peer disconnected")
+	errMsgTooLarge      = errors.New("msg too large")
 )
 
 // HandleRequest handles incoming request message, acts like a server.
-type HandleRequest func(session *Session, msg *p2p.Msg) (resp interface{}, err error)
+type HandleRequest func(peer *Peer, msg *p2p.Msg) (resp interface{}, err error)
 
-// Session p2p session which conforms request-response manner.
-type Session struct {
+// Peer p2p peer which conforms request-response manner.
+type Peer struct {
 	peer    *p2p.Peer
 	proto   *Protocol
 	opCh    chan interface{}
 	opAckCh chan struct{}
 	doneCh  chan struct{}
-
-	stats sessionStats
+	stats   peerStats
 }
 
-func newSession(peer *p2p.Peer, proto *Protocol) *Session {
-	return &Session{
+func newPeer(peer *p2p.Peer, proto *Protocol) *Peer {
+	return &Peer{
 		peer:    peer,
 		proto:   proto,
 		opCh:    make(chan interface{}),
@@ -47,19 +47,31 @@ func newSession(peer *p2p.Peer, proto *Protocol) *Session {
 }
 
 // Protocol returns protocol.
-func (s *Session) Protocol() *Protocol {
-	return s.proto
+func (p *Peer) Protocol() *Protocol {
+	return p.proto
 }
 
-// Peer returns remote peer of this session.
-func (s *Session) Peer() *p2p.Peer {
-	return s.peer
+// ID returns peer node id.
+func (p *Peer) ID() discover.NodeID {
+	return p.peer.ID()
 }
 
-// Alive returns whether session is alive.
-func (s *Session) Alive() bool {
+// Inbound returns if the peer is incoming connection.
+func (p *Peer) Inbound() bool {
+	return p.peer.Inbound()
+}
+
+// Disconnect disconnect from remote peer.
+func (p *Peer) Disconnect(markAsBadPeer bool) {
+	p.stats.badPeer = markAsBadPeer
+	p.peer.Disconnect(p2p.DiscSelf)
+
+}
+
+// Alive returns whether peer is alive.
+func (p *Peer) Alive() bool {
 	select {
-	case <-s.doneCh:
+	case <-p.doneCh:
 		return false
 	default:
 		return true
@@ -67,27 +79,27 @@ func (s *Session) Alive() bool {
 }
 
 // serve handles p2p message.
-func (s *Session) serve(rw p2p.MsgReadWriter, handleRequest HandleRequest) error {
+func (p *Peer) serve(rw p2p.MsgReadWriter, handleRequest HandleRequest) error {
 	startTime := mclock.Now()
 	defer func() {
-		s.stats.duration = time.Duration((mclock.Now() - startTime))
+		p.stats.duration = time.Duration((mclock.Now() - startTime))
 	}()
 
 	var goes co.Goes
 	defer goes.Wait()
-	defer close(s.doneCh)
+	defer close(p.doneCh)
 
-	goes.Go(func() { s.opLoop(rw, handleRequest) })
+	goes.Go(func() { p.opLoop(rw, handleRequest) })
 
 	// msg read loop
 	for {
-		if err := s.handleMsg(rw); err != nil {
+		if err := p.handleMsg(rw); err != nil {
 			return err
 		}
 	}
 }
 
-func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
+func (p *Peer) handleMsg(rw p2p.MsgReadWriter) error {
 	msg, err := rw.ReadMsg()
 	if err != nil {
 		return err
@@ -95,7 +107,7 @@ func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
 	// ensure msg.Payload consumed
 	defer msg.Discard()
 
-	if msg.Size > s.proto.MaxMsgSize {
+	if msg.Size > p.proto.MaxMsgSize {
 		return errMsgTooLarge
 	}
 
@@ -115,15 +127,15 @@ func (s *Session) handleMsg(rw p2p.MsgReadWriter) error {
 		return err
 	}
 	if isResponse {
-		s.opCh <- &remoteResponse{reqID, &msg}
+		p.opCh <- &remoteResponse{reqID, &msg}
 	} else {
-		s.opCh <- &remoteRequest{reqID, &msg}
+		p.opCh <- &remoteRequest{reqID, &msg}
 	}
-	<-s.opAckCh
+	<-p.opAckCh
 	return nil
 }
 
-func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
+func (p *Peer) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 	pendingReqs := make(map[uint32]*localRequest)
 
 	genID := func() uint32 {
@@ -148,10 +160,10 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 		case *endRequest:
 			delete(pendingReqs, val.id)
 		case *remoteRequest:
-			s.stats.nRequest++
-			resp, err := handleRequest(s, val.msg)
+			p.stats.nRequest++
+			resp, err := handleRequest(p, val.msg)
 			if err != nil {
-				s.stats.nBadRequest++
+				p.stats.nBadRequest++
 				// TODO log
 				break
 			}
@@ -160,18 +172,18 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 				break
 			}
 		case *remoteResponse:
-			s.stats.nResponse++
+			p.stats.nResponse++
 			req, ok := pendingReqs[val.id]
 			if !ok {
 				break
 			}
 			if val.msg.Code != req.msgCode {
-				s.stats.nBadResponse++
+				p.stats.nBadResponse++
 				break
 			}
 			delete(pendingReqs, val.id)
 			if req.handleResponse(val.msg) != nil {
-				s.stats.nBadResponse++
+				p.stats.nBadResponse++
 			}
 		}
 	}
@@ -179,11 +191,11 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 	// op loop
 	for {
 		select {
-		case <-s.doneCh:
+		case <-p.doneCh:
 			return
-		case val := <-s.opCh:
+		case val := <-p.opCh:
 			process(val)
-			s.opAckCh <- struct{}{}
+			p.opAckCh <- struct{}{}
 		}
 	}
 }
@@ -191,7 +203,7 @@ func (s *Session) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 // Request send request to remote peer and wait for response.
 // reqPayload must be rlp encodable
 // respPayload must be rlp decodable
-func (s *Session) Request(ctx context.Context, msgCode uint64, reqPayload interface{}, respPayload interface{}) error {
+func (p *Peer) Request(ctx context.Context, msgCode uint64, reqPayload interface{}, respPayload interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Second*30)
 	defer cancel()
 
@@ -209,12 +221,12 @@ func (s *Session) Request(ctx context.Context, msgCode uint64, reqPayload interf
 	var reqID uint32
 	// send request
 	select {
-	case <-s.doneCh:
-		return errSessionClosed
+	case <-p.doneCh:
+		return errPeerDisconnected
 	case <-ctx.Done():
 		return ctx.Err()
-	case s.opCh <- &req:
-		<-s.opAckCh
+	case p.opCh <- &req:
+		<-p.opAckCh
 		if req.err != nil {
 			return req.err
 		}
@@ -224,16 +236,16 @@ func (s *Session) Request(ctx context.Context, msgCode uint64, reqPayload interf
 	//
 	defer func() {
 		select {
-		case <-s.doneCh:
-		case s.opCh <- &endRequest{reqID}:
-			<-s.opAckCh
+		case <-p.doneCh:
+		case p.opCh <- &endRequest{reqID}:
+			<-p.opAckCh
 		}
 	}()
 
 	// wait for response
 	select {
-	case <-s.doneCh:
-		return errSessionClosed
+	case <-p.doneCh:
+		return errPeerDisconnected
 	case <-ctx.Done():
 		return ctx.Err()
 	case err := <-respCh:
@@ -265,15 +277,19 @@ type remoteRequest remoteResponse
 
 type endRequest struct{ id uint32 }
 
-type sessionStats struct {
+type peerStats struct {
 	nRequest     int
 	nBadRequest  int
 	nResponse    int
 	nBadResponse int
 	duration     time.Duration
+	badPeer      bool
 }
 
-func (ss *sessionStats) weight() float64 {
-	n := ss.nRequest - ss.nBadRequest + ss.nResponse - ss.nBadResponse
-	return float64(ss.duration/time.Minute) + float64(n)
+func (ps *peerStats) weight() float64 {
+	if ps.badPeer {
+		return -1
+	}
+	n := ps.nRequest - ps.nBadRequest + ps.nResponse - ps.nBadResponse
+	return float64(ps.duration/time.Minute) + float64(n)
 }

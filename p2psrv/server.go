@@ -27,8 +27,8 @@ type Server struct {
 	busyNodes       busyNodes
 	dialCh          chan *discover.Node
 
-	sessionFeed event.Feed
-	feedScope   event.SubscriptionScope
+	peerFeed  event.Feed
+	feedScope event.SubscriptionScope
 }
 
 // New create a p2p server.
@@ -54,7 +54,7 @@ func New(opts *Options) *Server {
 			Config: p2p.Config{
 				Name:             opts.Name,
 				PrivateKey:       opts.PrivateKey,
-				MaxPeers:         opts.MaxSessions,
+				MaxPeers:         opts.MaxPeers,
 				NoDiscovery:      true,
 				DiscoveryV5:      !opts.NoDiscovery,
 				ListenAddr:       opts.ListenAddr,
@@ -77,27 +77,27 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
-// SubscribeSession subscribe session event.
-// Call Session.Alive to check which envent is (join or leave).
-func (s *Server) SubscribeSession(ch chan *Session) event.Subscription {
-	return s.feedScope.Track(s.sessionFeed.Subscribe(ch))
+// SubscribePeer subscribe peer event.
+// Call Peer.Alive to check which envent is (join or leave).
+func (s *Server) SubscribePeer(ch chan *Peer) event.Subscription {
+	return s.feedScope.Track(s.peerFeed.Subscribe(ch))
 }
 
 func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-		log.Debug("p2p session established", "peer", peer.String())
-		session := newSession(peer, proto)
-		s.goes.Go(func() { s.sessionFeed.Send(session) })
+		log.Debug("p2p peer connection established", "peer", peer.String())
+		p := newPeer(peer, proto)
+		s.goes.Go(func() { s.peerFeed.Send(p) })
 
 		defer func() {
 			if node := s.busyNodes.remove(peer.ID()); node != nil {
-				s.goodNodes.Set(peer.ID(), node, session.stats.weight())
+				s.goodNodes.Set(peer.ID(), node, p.stats.weight())
 			}
-			s.goes.Go(func() { s.sessionFeed.Send(session) })
-			log.Debug("p2p session disconnected", "peer", peer.String(), "err", err)
+			s.goes.Go(func() { s.peerFeed.Send(p) })
+			log.Debug("p2p peer disconnected", "peer", peer.String(), "err", err)
 		}()
 
-		return session.serve(rw, proto.HandleRequest)
+		return p.serve(rw, proto.HandleRequest)
 	}
 }
 
