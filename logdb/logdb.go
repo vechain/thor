@@ -2,7 +2,6 @@ package logdb
 
 import (
 	"database/sql"
-	"fmt"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
 	"sync"
@@ -73,12 +72,12 @@ func (db *LogDB) Insert(logs []*Log) error {
 	}
 	for _, log := range logs {
 		if _, err = tx.Exec("insert into log(blockID ,blockNumber ,logIndex ,txID ,txOrigin ,address ,data ,topic0 ,topic1 ,topic2 ,topic3 ,topic4) values ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); ",
-			log.BlockID.String(),
+			log.BlockID.Bytes(),
 			log.BlockNumber,
 			log.LogIndex,
-			log.TxID.String(),
-			log.TxOrigin.String(),
-			log.Address.String(),
+			log.TxID.Bytes(),
+			log.TxOrigin.Bytes(),
+			log.Address.Bytes(),
 			log.Data,
 			formatHash(log.Topics[0]),
 			formatHash(log.Topics[1]),
@@ -98,13 +97,17 @@ func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 	if option == nil {
 		return db.Query("select * from log")
 	}
+	var args []interface{}
 	stmt := "select * from log where ( 1"
-	stmt += fmt.Sprintf(" and blockNumber >= %v ", option.FromBlock)
+	args = append(args, option.FromBlock)
+	stmt += " and blockNumber >= ? "
 	if option.ToBlock >= option.FromBlock {
-		stmt += fmt.Sprintf(" and blockNumber <= %v ", option.ToBlock)
+		args = append(args, option.ToBlock)
+		stmt += " and blockNumber <= ? "
 	}
 	if option.Address != nil {
-		stmt += fmt.Sprintf(" and address = '%v' ", option.Address)
+		args = append(args, option.Address.Bytes())
+		stmt += " and address = ? "
 	}
 	stmt += " ) "
 	length := len(option.TopicSet)
@@ -116,19 +119,24 @@ func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 				stmt += " or ( 1 "
 			}
 			if topics[0] != nil {
-				stmt += fmt.Sprintf(" and topic0 = '%v' ", topics[0])
+				args = append(args, topics[0].Bytes())
+				stmt += " and topic0 = ? "
 			}
 			if topics[1] != nil {
-				stmt += fmt.Sprintf(" and topic1 = '%v' ", topics[1])
+				args = append(args, topics[1].Bytes())
+				stmt += " and topic1 = ? "
 			}
 			if topics[2] != nil {
-				stmt += fmt.Sprintf(" and topic2 = '%v' ", topics[2])
+				args = append(args, topics[2].Bytes())
+				stmt += " and topic2 = ? "
 			}
 			if topics[3] != nil {
-				stmt += fmt.Sprintf(" and topic3 = '%v' ", topics[3])
+				args = append(args, topics[3].Bytes())
+				stmt += " and topic3 = ? "
 			}
 			if topics[4] != nil {
-				stmt += fmt.Sprintf(" and topic4 = '%v' ", topics[4])
+				args = append(args, topics[4].Bytes())
+				stmt += " and topic4 = ? "
 			}
 			if i == length-1 {
 				stmt += " )) "
@@ -137,7 +145,7 @@ func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 			}
 		}
 	}
-	return db.Query(stmt)
+	return db.Query(stmt, args...)
 }
 
 //execInTransaction execute sql in a transaction
@@ -146,7 +154,7 @@ func (db *LogDB) execInTransaction(sqlStmt string, args ...interface{}) error {
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Exec(sqlStmt, args...); err != nil {
+	if _, err := tx.Exec(sqlStmt, args...); err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -155,14 +163,14 @@ func (db *LogDB) execInTransaction(sqlStmt string, args ...interface{}) error {
 }
 
 //Query query logs
-func (db *LogDB) Query(stmt string) ([]*Log, error) {
+func (db *LogDB) Query(stmt string, args ...interface{}) ([]*Log, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
-	rows, err := db.db.Query(stmt)
+	rows, err := db.db.Query(stmt, args...)
+	defer rows.Close()
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	var logs []*Log
 	for rows.Next() {
@@ -183,11 +191,11 @@ func (db *LogDB) Query(stmt string) ([]*Log, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		log, err := dbLog.toLog()
 		if err != nil {
 			return nil, err
 		}
+
 		logs = append(logs, log)
 	}
 	err = rows.Err()

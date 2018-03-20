@@ -2,25 +2,25 @@ package logdb_test
 
 import (
 	"fmt"
-	"os"
-	"os/user"
-	"testing"
-
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"os"
+	"os/user"
+	"testing"
 )
 
 func TestLogDB(t *testing.T) {
-	path, err := home()
+	// path, err := home()
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// db, err := logdb.New(path + "/log.db")
+	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := logdb.New(path + "/log.db")
-	// db, err := logdb.NewMem()
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
 		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
@@ -28,7 +28,7 @@ func TestLogDB(t *testing.T) {
 	}
 
 	var logs []*logdb.Log
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 	}
