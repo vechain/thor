@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -74,15 +75,18 @@ func (p *Peer) Inbound() bool {
 }
 
 // Disconnect disconnect from remote peer.
-func (p *Peer) Disconnect(markAsBadPeer bool) {
-	p.stats.badPeer = markAsBadPeer
+func (p *Peer) Disconnect() {
 	p.peer.Disconnect(p2p.DiscSelf)
-
 }
 
 // Done returns the done channel that indicates disconnection.
 func (p *Peer) Done() <-chan struct{} {
 	return p.doneCh
+}
+
+// Demote demote the peer.
+func (p *Peer) Demote() {
+	p.stats.demote()
 }
 
 // serve handles p2p message.
@@ -167,10 +171,9 @@ func (p *Peer) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 		case *endRequest:
 			delete(pendingReqs, val.id)
 		case *remoteRequest:
-			p.stats.nRequest++
 			resp, err := handleRequest(p, val.msg)
 			if err != nil {
-				p.stats.nBadRequest++
+				p.stats.demote()
 				// TODO log
 				break
 			}
@@ -179,18 +182,18 @@ func (p *Peer) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 				break
 			}
 		case *remoteResponse:
-			p.stats.nResponse++
 			req, ok := pendingReqs[val.id]
 			if !ok {
 				break
 			}
 			if val.msg.Code != req.msgCode {
-				p.stats.nBadResponse++
+				p.stats.demote()
 				break
 			}
 			delete(pendingReqs, val.id)
 			if req.handleResponse(val.msg) != nil {
-				p.stats.nBadResponse++
+				p.stats.demote()
+				break
 			}
 		}
 	}
@@ -285,18 +288,19 @@ type remoteRequest remoteResponse
 type endRequest struct{ id uint32 }
 
 type peerStats struct {
-	nRequest     int
-	nBadRequest  int
-	nResponse    int
-	nBadResponse int
-	duration     time.Duration
-	badPeer      bool
+	sync.Mutex
+	grade    int
+	duration time.Duration
 }
 
 func (ps *peerStats) weight() float64 {
-	if ps.badPeer {
-		return -1
-	}
-	n := ps.nRequest - ps.nBadRequest + ps.nResponse - ps.nBadResponse
-	return float64(ps.duration/time.Minute) + float64(n)
+	ps.Lock()
+	defer ps.Unlock()
+	return float64(ps.duration/time.Minute) + float64(ps.grade)
+}
+
+func (ps *peerStats) demote() {
+	ps.Lock()
+	defer ps.Unlock()
+	ps.grade--
 }

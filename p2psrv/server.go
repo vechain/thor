@@ -66,7 +66,7 @@ func New(opts *Options) *Server {
 		},
 		done:            make(chan struct{}),
 		goodNodes:       goodNodes,
-		discoveredNodes: w8cache.New(32, nil),
+		discoveredNodes: w8cache.New(8, nil),
 		dialCh:          dialCh,
 	}
 }
