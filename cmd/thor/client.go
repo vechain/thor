@@ -171,7 +171,7 @@ func prepare(op Options, p2pSrv *p2psrv.Server) (*state.Creator, *chain.Chain, *
 		return nil, nil, nil, nil, nil, nil, nil, err
 	}
 
-	cm := comm.New(ch, txpl)
+	cm := comm.New(ch)
 	peerCh := make(chan *p2psrv.Peer)
 	p2pSrv.SubscribePeer(peerCh)
 	p2pSrv.Start("thor@111111", cm.Protocols())
