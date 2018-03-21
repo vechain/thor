@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
@@ -42,6 +43,8 @@ func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http
 	if err != nil {
 		return httpx.Error("Call contract failed!", 400)
 	}
-	w.Write(output)
-	return nil
+	dataMap := map[string]string{
+		"result": hexutil.Encode(output),
+	}
+	return httpx.ResponseJSON(w, dataMap)
 }

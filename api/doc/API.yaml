@@ -343,10 +343,13 @@ paths:
       responses:
         200:
           content:
-            text/plain:
+            application/json:
               schema:
-                type: array
+                type: object
                 description: an output binary 
+                example: {
+                  "result":"output"
+                }
           description: "successful operation"
         400:
           description: "Invalid params"

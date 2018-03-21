@@ -1,8 +1,6 @@
 package api
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
@@ -40,12 +38,7 @@ func (bi *BlockInterface) handleGetBlockByID(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return httpx.Error("Block not found!", 400)
 	}
-	data, err := json.Marshal(block)
-	if err != nil {
-		return httpx.Error("System Error!", 400)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, block)
 }
 
 func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *http.Request) error {
@@ -59,15 +52,9 @@ func (bi *BlockInterface) handleGetBlockByNumber(w http.ResponseWriter, req *htt
 	}
 	block, err := bi.GetBlockByNumber(uint32(number.Int64()))
 	if err != nil {
-		fmt.Println(err)
 		return httpx.Error("Get block failed!", 400)
 	}
-	data, err := json.Marshal(block)
-	if err != nil {
-		return httpx.Error("System Error!", 400)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, block)
 }
 
 func (bi *BlockInterface) handleGetBestBlock(w http.ResponseWriter, req *http.Request) error {
@@ -75,10 +62,5 @@ func (bi *BlockInterface) handleGetBestBlock(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return httpx.Error("Block not found!", 400)
 	}
-	data, err := json.Marshal(block)
-	if err != nil {
-		return httpx.Error("System Error!", 400)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, block)
 }
