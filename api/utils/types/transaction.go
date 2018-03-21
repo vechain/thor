@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -78,13 +79,13 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 	if rawTransaction.DependsOn != "" {
 		depTxID, err := thor.ParseHash(rawTransaction.DependsOn)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid dependsOn %v", err)
 		}
 		dependsOn = &depTxID
 	}
 	blockref, err := hexutil.Decode(rawTransaction.BlockRef)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid blockref %v", err)
 	}
 	var blkRef tx.BlockRef
 	copy(blkRef[:], blockref[:])
@@ -93,18 +94,41 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 		v := big.Int(*clause.Value)
 		to, err := thor.ParseAddress(clause.To)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid To address %v", err)
 		}
-		data, err := hexutil.Decode(clause.Data)
-		if err != nil {
-			return nil, err
+		c := tx.NewClause(&to).WithValue(&v)
+		if clause.Data != "" {
+			data, err := hexutil.Decode(clause.Data)
+			if err != nil {
+				return nil, fmt.Errorf("invalid data %v", err)
+			}
+			c.WithData(data)
 		}
-		c := tx.NewClause(&to).WithData(data).WithValue(&v)
 		builder.Clause(c)
 	}
 	sig, err := hexutil.Decode(rawTransaction.Sig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid sig %v", err)
 	}
 	return builder.Build().WithSignature(sig), nil
+}
+
+func (raw *RawTransaction) String() string {
+	return fmt.Sprintf(`Clause(
+		ChainTag    	 		%v
+		Nonce      				%v
+		BlockRef					%v
+		Clauses      			%v
+		GasPriceCoef 			%v
+		Gas          			%v
+		DependsOn    			%v
+		Sig          			%v
+		)`, raw.ChainTag,
+		raw.Nonce,
+		raw.BlockRef,
+		raw.Clauses,
+		raw.GasPriceCoef,
+		raw.Gas,
+		raw.DependsOn,
+		raw.Sig)
 }

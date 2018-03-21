@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/tx"
@@ -33,4 +34,14 @@ func (cs Clauses) Do(fn func(c Clause) bool) {
 			break
 		}
 	}
+}
+
+func (c *Clause) String() string {
+	return fmt.Sprintf(`Clause(
+		To    %v
+		Value %v
+		Data  %v
+		)`, c.To,
+		c.Value,
+		c.Data)
 }
