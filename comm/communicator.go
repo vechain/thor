@@ -106,6 +106,7 @@ func (c *Communicator) Start(peerCh chan *p2psrv.Peer) {
 
 func (c *Communicator) Stop() {
 	c.cancel()
+	c.feedScope.Close()
 	c.goes.Wait()
 }
 
