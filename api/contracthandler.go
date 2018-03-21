@@ -33,13 +33,13 @@ func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http
 	if err != nil {
 		return httpx.Error("Invalid contract address!", 400)
 	}
+
 	optionData := []byte(req.FormValue("options"))
 	options := new(ContractInterfaceOptions)
 	if err := json.Unmarshal(optionData, &options); err != nil {
 		return err
 	}
-	input := []byte(req.FormValue("input"))
-	output, err := ci.Call(&addr, input, options)
+	output, err := ci.Call(&addr, req.FormValue("input"), options)
 	if err != nil {
 		return httpx.Error("Call contract failed!", 400)
 	}

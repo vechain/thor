@@ -75,7 +75,7 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	address, err := thor.ParseAddress(addr)
 	if err != nil {
 		return httpx.Error("Invalid address!", 400)
-	}
+	} 
 	keyhash, err := thor.ParseHash(key)
 	if err != nil {
 		return httpx.Error("Invalid key!", 400)

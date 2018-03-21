@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/api/utils/types"
@@ -70,6 +71,7 @@ func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req
 	req.Body.Close()
 	rawTransaction := new(types.RawTransaction)
 	if err := json.Unmarshal(r, &rawTransaction); err != nil {
+		fmt.Println("parse", err)
 		return httpx.Error("Invalid Params!", 400)
 	}
 	txID, err := ti.SendRawTransaction(rawTransaction)

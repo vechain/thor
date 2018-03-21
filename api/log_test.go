@@ -21,20 +21,20 @@ func TestLog(t *testing.T) {
 	t0 := thor.BytesToHash([]byte("topic0"))
 	t1 := thor.BytesToHash([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
-	op := &types.FilterOption{
+	op := &logdb.FilterOption{
 		FromBlock: 0,
 		ToBlock:   1,
-		Address:   addr.String(),
-		TopicSet: [][5]string{{t0.String(),
-			"",
-			"",
-			"",
-			""},
-			{"",
-				t1.String(),
-				"",
-				"",
-				""}},
+		Address:   &addr,
+		TopicSet: [][5]*thor.Hash{{&t0,
+			nil,
+			nil,
+			nil,
+			nil},
+			{nil,
+				&t1,
+				nil,
+				nil,
+				nil}},
 	}
 	ops, err := json.Marshal(op)
 	if err != nil {
