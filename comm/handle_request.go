@@ -1,132 +1,127 @@
 package comm
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/comm/proto"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 )
 
-func handleStatus(ch *chain.Chain) (*proto.RespStatus, error) {
-	bestBlock, err := ch.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	genesisBlock, err := ch.GetBlockByNumber(0)
-	if err != nil {
-		return nil, err
-	}
-
-	header := bestBlock.Header()
-	return &proto.RespStatus{
-		GenesisBlockID: genesisBlock.Header().ID(),
-		TotalScore:     header.TotalScore(),
-		BestBlockID:    header.ID(),
-	}, nil
-}
-
-func handleNewTx(msg *p2p.Msg, c *Communicator, peerID discover.NodeID) (*struct{}, error) {
-	var reqTx proto.ReqMsgNewTx
-	if err := msg.Decode(&reqTx); err != nil {
-		return nil, err
-	}
-	if s := c.sessionSet.Find(peerID); s != nil {
-		s.MarkTransaction(reqTx.Tx.ID())
-	}
-	c.txpl.Add(reqTx.Tx)
-	return &struct{}{}, nil
-}
-
-func handleNewBlock(msg *p2p.Msg, c *Communicator) (*struct{}, error) {
-	var reqBlk proto.ReqNewBlock
-	if err := msg.Decode(&reqBlk); err != nil {
-		return nil, err
-	}
-	go func() {
-		select {
-		case c.blockCh <- reqBlk.Block:
-		case <-c.ctx.Done():
-		}
-	}()
-	return &struct{}{}, nil
-}
-
-func handleNewBlockID(msg *p2p.Msg, c *Communicator, peer *p2psrv.Peer) (*struct{}, error) {
-	var reqID proto.ReqNewBlockID
-	if err := msg.Decode(&reqID); err != nil {
-		return nil, err
-	}
-	if s := c.sessionSet.Find(peer.ID()); s != nil {
-		s.MarkBlock(reqID.ID)
-		if _, err := c.ch.GetBlock(reqID.ID); err != nil {
-			if c.ch.IsNotFound(err) {
-				go func() {
-					select {
-					case c.unKnownBlockCh <- &unKnown{session: s, id: reqID.ID}:
-					case <-c.ctx.Done():
-					}
-				}()
-				return &struct{}{}, nil
-			}
-			return nil, err
-		}
-	}
-	return &struct{}{}, nil
-}
-
-func handleGetBlockIDByNumber(msg *p2p.Msg, ch *chain.Chain) (*proto.RespGetBlockIDByNumber, error) {
-	var reqNum proto.ReqGetBlockIDByNumber
-	if err := msg.Decode(&reqNum); err != nil {
-		return nil, err
-	}
-	id, err := ch.GetBlockIDByNumber(reqNum.Num)
-	if err != nil {
-		return nil, err
-	}
-	return &proto.RespGetBlockIDByNumber{ID: id}, nil
-}
-
-func handleGetBlocksByNumber(msg *p2p.Msg, ch *chain.Chain) (proto.RespGetBlocksByNumber, error) {
-	var reqNum proto.ReqGetBlocksByNumber
-	if err := msg.Decode(&reqNum); err != nil {
-		return nil, err
-	}
-
-	bestBlk, err := ch.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
-
-	blks := make(proto.RespGetBlocksByNumber, 0, 10)
-	for i := 0; i < 10; i++ {
-		reqNum.Num++
-		if uint32(reqNum.Num) > bestBlk.Header().Number() {
-			break
-		}
-
-		blk, err := ch.GetBlockByNumber(reqNum.Num)
+func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface{}, error) {
+	switch msg.Code {
+	case proto.MsgStatus:
+		bestBlock, err := c.chain.GetBestBlock()
 		if err != nil {
 			return nil, err
 		}
+		return &proto.RespStatus{
+			GenesisBlockID: c.genesisID,
+			TotalScore:     bestBlock.Header().TotalScore(),
+			BestBlockID:    bestBlock.Header().ID(),
+		}, nil
+	case proto.MsgNewTx:
+		var req proto.ReqMsgNewTx
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
+		if req.Tx == nil {
+			return nil, badRequest{errors.New("nil tx")}
+		}
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			s.MarkTransaction(req.Tx.ID())
+		}
+		c.txPool.Add(req.Tx)
+		return &struct{}{}, nil
+	case proto.MsgNewBlock:
+		var req proto.ReqNewBlock
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
+		if req.Block == nil {
+			return nil, badRequest{errors.New("nil block")}
+		}
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			s.MarkBlock(req.Block.Header().ID())
+			s.UpdateTrunkHead(req.Block.Header().ID(), req.Block.Header().TotalScore())
+		}
+		c.goes.Go(func() { c.blockFeed.Send(req.Block) })
+		return &struct{}{}, nil
+	case proto.MsgNewBlockID:
+		var req proto.ReqNewBlockID
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
 
-		blks = append(blks, blk)
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			s.MarkBlock(req.ID)
+			// if _, err := c.ch.GetBlock(reqID.ID); err != nil {
+			// 	if c.ch.IsNotFound(err) {
+			// 		go func() {
+			// 			select {
+			// 			case c.unKnownBlockCh <- &unKnown{session: s, id: reqID.ID}:
+			// 			case <-c.ctx.Done():
+			// 			}
+			// 		}()
+			// 		return &struct{}{}, nil
+			// 	}
+			// 	return nil, err
+			// }
+		}
+		return &struct{}{}, nil
+	case proto.MsgGetBlockByID:
+		var req proto.ReqGetBlockByID
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
+		blk, err := c.chain.GetBlock(req.ID)
+		if err != nil {
+			return nil, err
+		}
+		return &proto.RespGetBlockByID{Block: blk}, nil
+	case proto.MsgGetBlockIDByNumber:
+		var req proto.ReqGetBlockIDByNumber
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
+		id, err := c.chain.GetBlockIDByNumber(req.Num)
+		if err != nil {
+			return nil, err
+		}
+		return &proto.RespGetBlockIDByNumber{ID: id}, nil
+	case proto.MsgGetBlocksFromNumber:
+		var req proto.ReqGetBlocksFromNumber
+		if err := msg.Decode(&req); err != nil {
+			return nil, badRequest{err}
+		}
+
+		const maxRespSize = 2 * 1024 * 1024
+		const maxBlocks = 256
+		resp := make(proto.RespGetBlocksFromNumber, 0, 100)
+		num := req.Num
+		var size metric.StorageSize
+		for size < maxRespSize && len(resp) < maxBlocks {
+			blk, err := c.chain.GetBlockByNumber(num)
+			if err != nil {
+				if c.chain.IsNotFound(err) {
+					break
+				}
+				return nil, err
+			}
+			resp = append(resp, blk)
+			num++
+			size += blk.Size()
+		}
+		return resp, nil
 	}
-
-	return blks, nil
+	return nil, errors.New("unexpected message")
 }
 
-func handleGetBlockByID(msg *p2p.Msg, ch *chain.Chain) (*proto.RespGetBlockByID, error) {
-	var reqID proto.ReqGetBlockByID
-	if err := msg.Decode(&reqID); err != nil {
-		return nil, err
-	}
+type badRequest struct {
+	err error
+}
 
-	blk, err := ch.GetBlock(reqID.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &proto.RespGetBlockByID{Block: blk}, nil
+func (b badRequest) Error() string {
+	return "bad request: " + b.err.Error()
 }

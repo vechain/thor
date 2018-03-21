@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -16,37 +16,45 @@ import (
 	"github.com/vechain/thor/txpool"
 )
 
-type unKnown struct {
-	session *session.Session
-	id      thor.Hash
-}
+// type unKnown struct {
+// 	session *session.Session
+// 	id      thor.Hash
+// }
 
 type Communicator struct {
-	blockCh        chan *block.Block
-	synced         bool // Flag whether we're synchronised
-	unKnownBlockCh chan *unKnown
-	ch             *chain.Chain
-	txpl           *txpool.TxPool
-	cancel         context.CancelFunc
-	ctx            context.Context
-	sessionSet     *session.Set
+	genesisID  thor.Hash
+	chain      *chain.Chain
+	txPool     *txpool.TxPool
+	synced     bool
+	ctx        context.Context
+	cancel     context.CancelFunc
+	sessionSet *session.Set
+	syncCh     chan struct{}
+	blockFeed  event.Feed
+	txFeed     event.Feed
+	feedScope  event.SubscriptionScope
+	goes       co.Goes
 }
 
-func New(ch *chain.Chain, txpl *txpool.TxPool) *Communicator {
-	c := &Communicator{
-		blockCh:        make(chan *block.Block),
-		unKnownBlockCh: make(chan *unKnown),
-		synced:         false,
-		ch:             ch,
-		txpl:           txpl,
-		sessionSet:     session.NewSet(),
+func mustGetGenesisID(chain *chain.Chain) thor.Hash {
+	id, err := chain.GetBlockIDByNumber(0)
+	if err != nil {
+		panic(err)
 	}
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	return c
+	return id
 }
 
-func (c *Communicator) BlockCh() chan *block.Block {
-	return c.blockCh
+func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Communicator{
+		genesisID:  mustGetGenesisID(chain),
+		chain:      chain,
+		txPool:     txPool,
+		ctx:        ctx,
+		cancel:     cancel,
+		sessionSet: session.NewSet(),
+		syncCh:     make(chan struct{}),
+	}
 }
 
 func (c *Communicator) IsSynced() bool {
@@ -64,130 +72,137 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 		}}
 }
 
-type Stop func()
+func (c *Communicator) SubscribeBlock(ch chan *block.Block) event.Subscription {
+	return c.feedScope.Track(c.blockFeed.Subscribe(ch))
+}
 
-func (c *Communicator) Start(genesisBlock *block.Block, peerCh chan *p2psrv.Peer) Stop {
-	var goes co.Goes
+func (c *Communicator) SubscribeTx(ch chan *tx.Transaction) event.Subscription {
+	return c.feedScope.Track(c.txFeed.Subscribe(ch))
+}
 
-	goes.Go(func() {
-		for {
-			select {
-			case peer := <-peerCh:
-				if !peer.Alive() {
-					c.sessionSet.Remove(peer.ID())
-					break
-				}
+func (c *Communicator) Start(peerCh chan *p2psrv.Peer) {
+	c.goes.Go(func() { c.sessionLoop(peerCh) })
+	c.goes.Go(c.syncLoop)
+	// c.goes.Go(func() {
+	// 	for {
+	// 		select {
+	// 		case unKnown := <-c.unKnownBlockCh:
+	// 			respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session.Peer())
+	// 			if err == nil {
+	// 				go func() {
+	// 					select {
+	// 					case c.blockCh <- respBlk.Block:
+	// 					case <-c.ctx.Done():
+	// 						return
+	// 					}
+	// 				}()
+	// 			}
+	// 		case <-c.ctx.Done():
+	// 			return
+	// 		}
+	// 	}
+	// })
+}
 
-				respSt, err := proto.ReqStatus{}.Do(c.ctx, peer)
-				if err != nil {
-					peer.Disconnect(true)
-					break
-				}
+func (c *Communicator) Stop() {
+	c.cancel()
+	c.goes.Wait()
+}
 
-				if respSt.GenesisBlockID != genesisBlock.Header().ID() {
-					peer.Disconnect(true)
-					break
-				}
+func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
+	// controls session lifecycle
+	lifecycle := func(peer *p2psrv.Peer) {
+		defer peer.Disconnect()
 
-				c.sessionSet.Add(session.New(peer))
-			case <-c.ctx.Done():
-				return
-			}
+		// 5sec timeout for handshake
+		ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
+		defer cancel()
+		resp, err := proto.ReqStatus{}.Do(ctx, peer)
+		if err != nil {
+			return
 		}
-	})
-
-	goes.Go(func() {
-		for {
-			select {
-			case unKnown := <-c.unKnownBlockCh:
-				respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session.Peer())
-				if err == nil {
-					go func() {
-						select {
-						case c.blockCh <- respBlk.Block:
-						case <-c.ctx.Done():
-							return
-						}
-					}()
-				}
-			case <-c.ctx.Done():
-				return
-			}
+		if resp.GenesisBlockID != c.genesisID {
+			return
 		}
-	})
 
-	goes.Go(func() {
-		ticker := time.NewTicker(10 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				c.Sync()
-			case <-c.ctx.Done():
-				ticker.Stop()
-				return
-			}
+		session := session.New(peer)
+		session.UpdateTrunkHead(resp.BestBlockID, resp.TotalScore)
+
+		c.sessionSet.Add(session)
+		defer c.sessionSet.Remove(peer.ID())
+
+		select {
+		case <-peer.Done():
+		case <-c.ctx.Done():
 		}
-	})
+	}
 
-	return func() {
-		c.cancel()
-		goes.Wait()
+	for {
+		select {
+		case peer := <-peerCh:
+			c.goes.Go(func() { lifecycle(peer) })
+		case <-c.ctx.Done():
+			return
+		}
 	}
 }
 
-func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (resp interface{}, err error) {
-	switch msg.Code {
-	case proto.MsgStatus:
-		return handleStatus(c.ch)
-	case proto.MsgNewTx:
-		return handleNewTx(msg, c, peer.ID())
-	case proto.MsgNewBlock:
-		return handleNewBlock(msg, c)
-	case proto.MsgNewBlockID:
-		return handleNewBlockID(msg, c, peer)
-	case proto.MsgGetBlockByID:
-		return handleGetBlockByID(msg, c.ch)
-	case proto.MsgGetBlockIDByNumber:
-		return handleGetBlockIDByNumber(msg, c.ch)
-	case proto.MsgGetBlocksByNumber:
-		return handleGetBlocksByNumber(msg, c.ch)
+func (c *Communicator) syncLoop() {
+	wait := 10 * time.Second
+
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+
+	for {
+		timer.Reset(wait)
+		select {
+		case <-timer.C:
+			c.sync()
+		case <-c.syncCh:
+			c.sync()
+		case <-c.ctx.Done():
+			return
+		}
 	}
-	return nil, nil
 }
 
-func (c *Communicator) Sync() {
-	if err := c.sync(); err != nil {
-		return
+// RequestSync request sync operation.
+func (c *Communicator) RequestSync() bool {
+	select {
+	case c.syncCh <- struct{}{}:
+		return true
+	default:
+		return false
 	}
-
-	c.synced = true
 }
 
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
-	txID := tx.ID()
-
 	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
-		return !s.IsBlockKnown(txID)
+		return !s.IsTransactionKnown(tx.ID())
 	})
+
 	for _, s := range slice {
-		go func(s *session.Session) {
-			if err := (proto.ReqMsgNewTx{Tx: tx}.Do(c.ctx, s.Peer())); err == nil {
-				s.MarkTransaction(txID)
+		s.MarkTransaction(tx.ID())
+		peer := s.Peer()
+		c.goes.Go(func() {
+			req := proto.ReqMsgNewTx{Tx: tx}
+			if err := req.Do(c.ctx, peer); err != nil {
 			}
-		}(s)
+		})
 	}
 }
 
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
-	blkID := blk.Header().ID()
 	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
-		return !s.IsBlockKnown(blkID)
+		return !s.IsBlockKnown(blk.Header().ID())
 	})
 	for _, s := range slice {
-		go func(s *session.Session) {
-			if err := (proto.ReqNewBlockID{ID: blkID}.Do(c.ctx, s.Peer())); err == nil {
-				s.MarkBlock(blkID)
+		s.MarkBlock(blk.Header().ID())
+		peer := s.Peer()
+		c.goes.Go(func() {
+			req := proto.ReqNewBlock{Block: blk}
+			if err := req.Do(c.ctx, peer); err != nil {
 			}
-		}(s)
+		})
 	}
 }

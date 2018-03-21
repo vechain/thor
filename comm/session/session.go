@@ -52,7 +52,9 @@ func (s *Session) TrunkHead() (bestBlockID thor.Hash, totalScore uint64) {
 func (s *Session) UpdateTrunkHead(bestBlockID thor.Hash, totalScore uint64) {
 	s.trunkHead.Lock()
 	defer s.trunkHead.Unlock()
-	s.trunkHead.bestBlockID, s.trunkHead.totalScore = bestBlockID, totalScore
+	if totalScore > s.trunkHead.totalScore {
+		s.trunkHead.bestBlockID, s.trunkHead.totalScore = bestBlockID, totalScore
+	}
 }
 
 // MarkTransaction marks a transaction to known.
