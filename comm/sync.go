@@ -1,7 +1,8 @@
 package comm
 
 import (
-	"github.com/ethereum/go-ethereum/log"
+	"errors"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
@@ -28,8 +29,7 @@ func (c *Communicator) sync() error {
 
 	s := c.chooseSessionToSync(best)
 	if s == nil {
-		log.Trace("no session to sync")
-		return nil
+		return errors.New("not suitable session")
 	}
 
 	ancestor, err := c.findCommonAncestor(s.Peer(), best.Header().Number())
@@ -51,6 +51,9 @@ func (c *Communicator) download(peer *p2psrv.Peer, fromNum uint32) error {
 			return nil
 		}
 		for _, blk := range resp {
+			if blk == nil {
+				return errors.New("nil block")
+			}
 			c.blockFeed.Send(blk)
 			fromNum++
 		}

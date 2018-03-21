@@ -7,7 +7,13 @@ import (
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/thor"
 )
+
+type announce struct {
+	blockID thor.Hash
+	peer    *p2psrv.Peer
+}
 
 func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface{}, error) {
 	switch msg.Code {
@@ -56,19 +62,8 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 
 		if s := c.sessionSet.Find(peer.ID()); s != nil {
 			s.MarkBlock(req.ID)
-			// if _, err := c.ch.GetBlock(reqID.ID); err != nil {
-			// 	if c.ch.IsNotFound(err) {
-			// 		go func() {
-			// 			select {
-			// 			case c.unKnownBlockCh <- &unKnown{session: s, id: reqID.ID}:
-			// 			case <-c.ctx.Done():
-			// 			}
-			// 		}()
-			// 		return &struct{}{}, nil
-			// 	}
-			// 	return nil, err
-			// }
 		}
+		c.goes.Go(func() { c.announceCh <- &announce{req.ID, peer} })
 		return &struct{}{}, nil
 	case proto.MsgGetBlockByID:
 		var req proto.ReqGetBlockByID
@@ -79,6 +74,9 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		if err != nil {
 			return nil, err
 		}
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			s.MarkBlock(req.ID)
+		}
 		return &proto.RespGetBlockByID{Block: blk}, nil
 	case proto.MsgGetBlockIDByNumber:
 		var req proto.ReqGetBlockIDByNumber
@@ -88,6 +86,9 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		id, err := c.chain.GetBlockIDByNumber(req.Num)
 		if err != nil {
 			return nil, err
+		}
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			s.MarkBlock(id)
 		}
 		return &proto.RespGetBlockIDByNumber{ID: id}, nil
 	case proto.MsgGetBlocksFromNumber:
@@ -113,6 +114,11 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			num++
 			size += blk.Size()
 		}
+		if s := c.sessionSet.Find(peer.ID()); s != nil {
+			for _, blk := range resp {
+				s.MarkBlock(blk.Header().ID())
+			}
+		}
 		return resp, nil
 	}
 	return nil, errors.New("unexpected message")
@@ -124,4 +130,13 @@ type badRequest struct {
 
 func (b badRequest) Error() string {
 	return "bad request: " + b.err.Error()
+}
+
+func isPeerAlive(peer *p2psrv.Peer) bool {
+	select {
+	case <-peer.Done():
+		return false
+	default:
+		return true
+	}
 }

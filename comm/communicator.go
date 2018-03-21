@@ -1,7 +1,10 @@
 package comm
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -16,11 +19,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-// type unKnown struct {
-// 	session *session.Session
-// 	id      thor.Hash
-// }
-
+// Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
 	genesisID  thor.Hash
 	chain      *chain.Chain
@@ -29,20 +28,14 @@ type Communicator struct {
 	cancel     context.CancelFunc
 	sessionSet *session.Set
 	syncCh     chan struct{}
+	announceCh chan *announce
 	blockFeed  event.Feed
 	txFeed     event.Feed
 	feedScope  event.SubscriptionScope
 	goes       co.Goes
 }
 
-func mustGetGenesisID(chain *chain.Chain) thor.Hash {
-	id, err := chain.GetBlockIDByNumber(0)
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
+// New create a new Communicator instance.
 func New(chain *chain.Chain) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
@@ -52,13 +45,16 @@ func New(chain *chain.Chain) *Communicator {
 		cancel:     cancel,
 		sessionSet: session.NewSet(),
 		syncCh:     make(chan struct{}),
+		announceCh: make(chan *announce),
 	}
 }
 
+// IsSynced returns if the synchronization process ever passed.
 func (c *Communicator) IsSynced() bool {
 	return c.synced
 }
 
+// Protocols returns all supported protocols.
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
@@ -70,38 +66,24 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 		}}
 }
 
+// SubscribeBlock subscribe the event that new blocks received.
 func (c *Communicator) SubscribeBlock(ch chan *block.Block) event.Subscription {
 	return c.feedScope.Track(c.blockFeed.Subscribe(ch))
 }
 
+// SubscribeTx subscribe the event that new tx received.
 func (c *Communicator) SubscribeTx(ch chan *tx.Transaction) event.Subscription {
 	return c.feedScope.Track(c.txFeed.Subscribe(ch))
 }
 
+// Start start the communicator.
 func (c *Communicator) Start(peerCh chan *p2psrv.Peer) {
 	c.goes.Go(func() { c.sessionLoop(peerCh) })
 	c.goes.Go(c.syncLoop)
-	// c.goes.Go(func() {
-	// 	for {
-	// 		select {
-	// 		case unKnown := <-c.unKnownBlockCh:
-	// 			respBlk, err := proto.ReqGetBlockByID{ID: unKnown.id}.Do(c.ctx, unKnown.session.Peer())
-	// 			if err == nil {
-	// 				go func() {
-	// 					select {
-	// 					case c.blockCh <- respBlk.Block:
-	// 					case <-c.ctx.Done():
-	// 						return
-	// 					}
-	// 				}()
-	// 			}
-	// 		case <-c.ctx.Done():
-	// 			return
-	// 		}
-	// 	}
-	// })
+	c.goes.Go(c.announceLoop)
 }
 
+// Stop stop the communicator.
 func (c *Communicator) Stop() {
 	c.cancel()
 	c.feedScope.Close()
@@ -175,6 +157,55 @@ func (c *Communicator) syncLoop() {
 	}
 }
 
+func (c *Communicator) announceLoop() {
+	fetch := func(blockID thor.Hash, peer *p2psrv.Peer) error {
+		if _, err := c.chain.GetBlockHeader(blockID); err != nil {
+			if !c.chain.IsNotFound(err) {
+				return err
+			}
+		} else {
+			// already in chain
+			return nil
+		}
+
+		if !isPeerAlive(peer) {
+			slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
+				id, _ := s.TrunkHead()
+				return bytes.Compare(id[:], blockID[:]) >= 0
+			})
+			if len(slice) > 0 {
+				peer = slice[0].Peer()
+			}
+		}
+		if peer == nil {
+			return errors.New("no peer to fetch block by id")
+		}
+
+		req := proto.ReqGetBlockByID{ID: blockID}
+		resp, err := req.Do(c.ctx, peer)
+		if err != nil {
+			return err
+		}
+		if resp.Block == nil {
+			return errors.New("nil block")
+		}
+
+		c.blockFeed.Send(resp.Block)
+		return nil
+	}
+
+	for {
+		select {
+		case ann := <-c.announceCh:
+			if err := fetch(ann.blockID, ann.peer); err != nil {
+				log.Trace("fetch block by ID failed", "err", err)
+			}
+		case <-c.ctx.Done():
+			return
+		}
+	}
+}
+
 // RequestSync request sync operation.
 func (c *Communicator) RequestSync() bool {
 	select {
@@ -185,6 +216,7 @@ func (c *Communicator) RequestSync() bool {
 	}
 }
 
+// BroadcastTx broadcast new tx to remote peers.
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
 		return !s.IsTransactionKnown(tx.ID())
@@ -201,12 +233,17 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 	}
 }
 
+// BroadcastBlock broadcast a block to remote peers.
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
 		return !s.IsBlockKnown(blk.Header().ID())
 	})
 
-	for _, s := range slice {
+	p := int(math.Sqrt(float64(len(slice))))
+	toPropagate := slice[:p]
+	toAnnounce := slice[p:]
+
+	for _, s := range toPropagate {
 		s.MarkBlock(blk.Header().ID())
 		peer := s.Peer()
 		c.goes.Go(func() {
@@ -215,4 +252,22 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 			}
 		})
 	}
+
+	for _, s := range toAnnounce {
+		s.MarkBlock(blk.Header().ID())
+		peer := s.Peer()
+		c.goes.Go(func() {
+			req := proto.ReqNewBlockID{ID: blk.Header().ID()}
+			if err := req.Do(c.ctx, peer); err != nil {
+			}
+		})
+	}
+}
+
+func mustGetGenesisID(chain *chain.Chain) thor.Hash {
+	id, err := chain.GetBlockIDByNumber(0)
+	if err != nil {
+		panic(err)
+	}
+	return id
 }
