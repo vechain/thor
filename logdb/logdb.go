@@ -2,9 +2,10 @@ package logdb
 
 import (
 	"database/sql"
+	"sync"
+
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
-	"sync"
 )
 
 //FilterOption option filter

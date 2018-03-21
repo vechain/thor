@@ -52,7 +52,7 @@ func makeAComm(key string, port string) (*comm.Communicator, *p2psrv.Server, *ch
 		return nil, nil, nil, nil
 	}
 	ch.WriteGenesis(genesisBlk)
-	return comm.New(ch, txpool.New()), srv, ch, genesisBlk
+	return comm.New(ch, txpool.New(), genesisBlk.Header().ID()), srv, ch, genesisBlk
 }
 
 func TestSync(t *testing.T) {
@@ -62,7 +62,7 @@ func TestSync(t *testing.T) {
 	sessionCh1 := make(chan *p2psrv.Session)
 	srv1.SubscribeSession(sessionCh1)
 	srv1.Start("thor@111111", cm1.Protocols())
-	stop1 := cm1.Start(genesisBlk, sessionCh1)
+	stop1 := cm1.Start(sessionCh1)
 	defer stop1()
 
 	blk := new(block.Builder).TotalScore(10).ParentID(genesisBlk.Header().ID()).Build()
@@ -72,7 +72,7 @@ func TestSync(t *testing.T) {
 	sessionCh2 := make(chan *p2psrv.Session)
 	srv2.SubscribeSession(sessionCh2)
 	srv2.Start("thor@111111", cm2.Protocols())
-	stop2 := cm2.Start(genesisBlk, sessionCh2)
+	stop2 := cm2.Start(sessionCh2)
 	defer stop2()
 
 	go func() {
