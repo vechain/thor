@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
 )
 
 // type unKnown struct {
@@ -25,7 +24,6 @@ import (
 type Communicator struct {
 	genesisID  thor.Hash
 	chain      *chain.Chain
-	txPool     *txpool.TxPool
 	synced     bool
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -45,12 +43,11 @@ func mustGetGenesisID(chain *chain.Chain) thor.Hash {
 	return id
 }
 
-func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
+func New(chain *chain.Chain) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		genesisID:  mustGetGenesisID(chain),
 		chain:      chain,
-		txPool:     txPool,
 		ctx:        ctx,
 		cancel:     cancel,
 		sessionSet: session.NewSet(),
