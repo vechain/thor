@@ -1,9 +1,11 @@
 package comm
 
 import (
-	"github.com/vechain/thor/comm/session"
-
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/comm/proto"
+	"github.com/vechain/thor/comm/session"
+	"github.com/vechain/thor/p2psrv"
 )
 
 func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) *session.Session {
@@ -19,129 +21,110 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) *session.Sess
 }
 
 func (c *Communicator) sync() error {
+	best, err := c.chain.GetBestBlock()
+	if err != nil {
+		return err
+	}
 
-	// best, err := c.chain.GetBestBlock()
-	// if err != nil {
-	// 	return err
-	// }
+	s := c.chooseSessionToSync(best)
+	if s == nil {
+		log.Trace("no session to sync")
+		return nil
+	}
 
-	// s := c.chooseSessionToSync(best)
-	// if s == nil {
-	// 	return nil
-	// }
+	ancestor, err := c.findCommonAncestor(s.Peer(), best.Header().Number())
+	if err != nil {
+		return err
+	}
 
-	// ancestor, err := c.findCommonAncestor(s.Peer(), best.Header().Number())
-	// if err != nil {
-	// 	return err
-	// }
-
-	// return c.download(st.peer, ancestor, block.Number(st.st.BestBlockID)-ancestor)
-	return nil
+	return c.download(s.Peer(), ancestor+1)
 }
 
-// func (c *Communicator) download(peer *p2psrv.Peer, ancestor uint32, target uint32) error {
-// 	for syned := 0; uint32(syned) < target; {
-// 		blks, err := proto.ReqGetBlocksByNumber{Num: ancestor}.Do(c.ctx, peer)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		syned += len(blks)
-// 		ancestor += uint32(syned)
-// 		for _, blk := range blks {
-// 			go func(blk *block.Block) {
-// 				select {
-// 				case c.blockCh <- blk:
-// 				case <-c.ctx.Done():
-// 				}
-// 			}(blk)
-// 		}
-// 	}
-// 	return nil
-// }
+func (c *Communicator) download(peer *p2psrv.Peer, fromNum uint32) error {
+	for {
+		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
+		resp, err := req.Do(c.ctx, peer)
+		if err != nil {
+			return err
+		}
+		if len(resp) == 0 {
+			return nil
+		}
+		for _, blk := range resp {
+			c.blockFeed.Send(blk)
+			fromNum++
+		}
+	}
+}
 
-// func (c *Communicator) findCommonAncestor(peer *p2psrv.Peer, fromNum uint32) (uint32, error) {
-// 	isOverlap := func(num uint32) (bool, error) {
-// 		req := proto.ReqGetBlockIDByNumber{Num: fromNum}
-// 		resp, err := req.Do(c.ctx, peer)
-// 		if err != nil {
-// 			return false, err
-// 		}
-// 		id, err := c.chain.GetBlockIDByNumber(fromNum)
-// 		if err != nil {
-// 			return false, err
-// 		}
-// 		return id == resp.ID, nil
-// 	}
+func (c *Communicator) findCommonAncestor(peer *p2psrv.Peer, headNum uint32) (uint32, error) {
+	if headNum == 0 {
+		return headNum, nil
+	}
 
-// 	for {
-// 		for i := uint32(0); i < 10; i++ {
-// 			overlapped, err := isOverlap(fromNum)
-// 			if err != nil {
-// 				return 0, err
-// 			}
-// 			if overlapped {
-// 				if i == 0 {
-// 					return fromNum, nil
-// 				}
-// 				break
-// 			}
+	isOverlapped := func(num uint32) (bool, error) {
+		req := proto.ReqGetBlockIDByNumber{Num: num}
+		resp, err := req.Do(c.ctx, peer)
+		if err != nil {
+			return false, err
+		}
+		id, err := c.chain.GetBlockIDByNumber(num)
+		if err != nil {
+			return false, err
+		}
+		return id == resp.ID, nil
+	}
 
-// 			step := uint32(1) << i
-// 			if step < fromNum {
-// 				fromNum -= step
-// 			} else {
-// 				fromNum = 0
-// 				break
-// 			}
-// 		}
+	var find func(start uint32, end uint32, ancestor uint32) (uint32, error)
+	find = func(start uint32, end uint32, ancestor uint32) (uint32, error) {
+		if start == end {
+			overlapped, err := isOverlapped(start)
+			if err != nil {
+				return 0, err
+			}
+			if overlapped {
+				return start, nil
+			}
+		} else {
+			mid := (start + end) / 2
+			overlapped, err := isOverlapped(mid)
+			if err != nil {
+				return 0, err
+			}
+			if overlapped {
+				return find(mid+1, end, mid)
+			}
 
-// 		for {
+			if mid > start {
+				return find(start, mid-1, ancestor)
+			}
+		}
+		return ancestor, nil
+	}
 
-// 		}
-// 	}
-// }
+	fastSeek := func() (uint32, error) {
+		i := uint32(0)
+		for {
+			backward := uint32(4) << i
+			i++
+			if backward >= headNum {
+				return 0, nil
+			}
 
-// func (c *Communicator) findAncestor(peer *p2psrv.Peer, start uint32, end uint32, ancestor uint32) (uint32, error) {
-// 	if start == end {
-// 		localID, remoteID, err := c.getLocalAndRemoteIDByNumber(peer, start)
-// 		if err != nil {
-// 			return 0, err
-// 		}
+			overlapped, err := isOverlapped(headNum - backward)
+			if err != nil {
+				return 0, err
+			}
+			if overlapped {
+				return headNum - backward, nil
+			}
+		}
+	}
 
-// 		if bytes.Compare(localID[:], remoteID[:]) == 0 {
-// 			return start, nil
-// 		}
-// 	} else {
-// 		mid := (start + end) / 2
-// 		midID, remoteID, err := c.getLocalAndRemoteIDByNumber(peer, mid)
-// 		if err != nil {
-// 			return 0, err
-// 		}
+	seekedNum, err := fastSeek()
+	if err != nil {
+		return 0, err
+	}
 
-// 		if bytes.Compare(midID[:], remoteID[:]) == 0 {
-// 			return c.findAncestor(peer, mid+1, end, mid)
-// 		}
-
-// 		if bytes.Compare(midID[:], remoteID[:]) != 0 {
-// 			if mid > start {
-// 				return c.findAncestor(peer, start, mid-1, ancestor)
-// 			}
-// 		}
-// 	}
-
-// 	return ancestor, nil
-// }
-
-// func (c *Communicator) getLocalAndRemoteIDByNumber(peer *p2psrv.Peer, num uint32) (thor.Hash, thor.Hash, error) {
-// 	blk, err := c.ch.GetBlockByNumber(num)
-// 	if err != nil {
-// 		return thor.Hash{}, thor.Hash{}, fmt.Errorf("[findAncestor]: %v", err)
-// 	}
-
-// 	respID, err := proto.ReqGetBlockIDByNumber{Num: num}.Do(c.ctx, peer)
-// 	if err != nil {
-// 		return thor.Hash{}, thor.Hash{}, err
-// 	}
-
-// 	return blk.Header().ID(), respID.ID, nil
-// }
+	return find(seekedNum, headNum, 0)
+}

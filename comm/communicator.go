@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -58,7 +59,7 @@ func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
 }
 
 func (c *Communicator) IsSynced() bool {
-	return c.synced == true
+	return c.synced
 }
 
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
@@ -154,13 +155,23 @@ func (c *Communicator) syncLoop() {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
 
+	sync := func() {
+		log.Trace("synchronization start")
+		if err := c.sync(); err != nil {
+			log.Trace("synchronization failed", "err", err)
+		} else {
+			c.synced = true
+			log.Trace("synchronization done")
+		}
+	}
+
 	for {
 		timer.Reset(wait)
 		select {
 		case <-timer.C:
-			c.sync()
+			sync()
 		case <-c.syncCh:
-			c.sync()
+			sync()
 		case <-c.ctx.Done():
 			return
 		}
@@ -197,6 +208,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
 		return !s.IsBlockKnown(blk.Header().ID())
 	})
+
 	for _, s := range slice {
 		s.MarkBlock(blk.Header().ID())
 		peer := s.Peer()
