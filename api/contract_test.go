@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
@@ -115,8 +116,16 @@ func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, 
 	if err != nil {
 		t.Fatal(err)
 	}
+	var res map[string]string
+	if err = json.Unmarshal(r, &res); err != nil {
+		t.Fatal(err)
+	}
+	output, err := hexutil.Decode(res["result"])
+	if err != nil {
+		t.Fatal(err)
+	}
 	var v uint8
-	err = codec.DecodeOutput(r, &v)
+	err = codec.DecodeOutput(output, &v)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
@@ -37,13 +36,9 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 	balance := ai.GetBalance(address)
 	dataMap := make(map[string]interface{})
 	dataMap["result"] = balance
-	data, err := json.Marshal(dataMap)
-	if err != nil {
-		return httpx.Error("System Error!", 500)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, dataMap)
 }
+
 func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
@@ -61,12 +56,7 @@ func (ai *AccountInterface) handleGetCode(w http.ResponseWriter, req *http.Reque
 	code := ai.GetCode(address)
 	dataMap := make(map[string]interface{})
 	dataMap["result"] = hexutil.Encode(code)
-	data, err := json.Marshal(dataMap)
-	if err != nil {
-		return httpx.Error("System Error!", 500)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, dataMap)
 }
 
 func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
@@ -76,11 +66,11 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	}
 	addr, ok := query["address"]
 	if !ok {
-		return httpx.Error("Invalid Params!", 400)
+		return httpx.Error("Invalid address!", 400)
 	}
 	key, ok := query["key"]
 	if !ok {
-		return httpx.Error("Invalid Params!", 400)
+		return httpx.Error("Invalid storage key!", 400)
 	}
 	address, err := thor.ParseAddress(addr)
 	if err != nil {
@@ -95,10 +85,5 @@ func (ai *AccountInterface) handleGetStorage(w http.ResponseWriter, req *http.Re
 	storage := map[string]string{
 		"result": value.String(),
 	}
-	data, err := json.Marshal(storage)
-	if err != nil {
-		return httpx.Error("System Error!", 500)
-	}
-	w.Write(data)
-	return nil
+	return httpx.ResponseJSON(w, storage)
 }

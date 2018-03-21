@@ -41,12 +41,7 @@ func (ti *TransactionInterface) handleGetTransactionByID(w http.ResponseWriter, 
 	if err != nil {
 		return httpx.Error("Get transaction failed!", 400)
 	}
-	txData, err := json.Marshal(tx)
-	if err != nil {
-		return httpx.Error("System Error!", 400)
-	}
-	w.Write(txData)
-	return nil
+	return httpx.ResponseJSON(w, tx)
 }
 
 func (ti *TransactionInterface) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {
@@ -67,12 +62,7 @@ func (ti *TransactionInterface) handleGetTransactionReceiptByID(w http.ResponseW
 	if err != nil {
 		return httpx.Error("Get transaction receipt failed!", 400)
 	}
-	receiptData, err := json.Marshal(receipt)
-	if err != nil {
-		return httpx.Error("System Error!", 400)
-	}
-	w.Write(receiptData)
-	return nil
+	return httpx.ResponseJSON(w, receipt)
 }
 
 func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
@@ -86,6 +76,8 @@ func (ti *TransactionInterface) handleSendTransaction(w http.ResponseWriter, req
 	if err != nil {
 		return err
 	}
-	w.Write(txID[:])
-	return nil
+	dataMap := map[string]string{
+		"result": txID.String(),
+	}
+	return httpx.ResponseJSON(w, dataMap)
 }

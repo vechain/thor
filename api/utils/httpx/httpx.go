@@ -62,7 +62,7 @@ const (
 func ResponseJSON(w http.ResponseWriter, obj interface{}) error {
 	data, err := json.Marshal(obj)
 	if err != nil {
-		return err
+		return Error("System error", 500)
 	}
 	w.Header().Set("Content-Type", JSONContentType)
 	w.Write(data)
