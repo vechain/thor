@@ -2,6 +2,7 @@ package thor
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -18,6 +19,11 @@ const (
 // Address address of account.
 type Address common.Address
 
+var (
+	_ json.Marshaler   = (*Address)(nil)
+	_ json.Unmarshaler = (*Address)(nil)
+)
+
 // String implements the stringer interface
 func (a Address) String() string {
 	return "0x" + hex.EncodeToString(a[:])
@@ -31,6 +37,28 @@ func (a Address) Bytes() []byte {
 // IsZero returns if address is all zero bytes.
 func (a Address) IsZero() bool {
 	return a == Address{}
+}
+
+// MarshalJSON implements json.Marshaler.
+func (a *Address) MarshalJSON() ([]byte, error) {
+	if a == nil {
+		return json.Marshal(nil)
+	}
+	return json.Marshal(a.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (a *Address) UnmarshalJSON(data []byte) error {
+	var hex string
+	if err := json.Unmarshal(data, &hex); err != nil {
+		return err
+	}
+	parsed, err := ParseAddress(hex)
+	if err != nil {
+		return err
+	}
+	*a = parsed
+	return nil
 }
 
 // ParseAddress convert string presented address into Address type.
