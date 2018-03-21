@@ -108,7 +108,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 	}
 	stateRoot, _ := s.Stage().Commit()
 	chain := chain.New(db)
-	b, err := genesis.Dev.Build(stateC)
+	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}

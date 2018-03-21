@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
@@ -69,7 +70,7 @@ func initServer(t *testing.T) (*httptest.Server, *api.ContractInterface) {
 	}
 	chain := chain.New(db)
 	stateC := state.NewCreator(db)
-	b, err := genesis.Dev.Build(stateC)
+	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,16 +107,18 @@ func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, 
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println("input", input)
 	options := ci.DefaultContractInterfaceOptions()
 	optionsData, err := json.Marshal(options)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	r, err := httpPostForm(ts, ts.URL+"/contracts/"+contractAddr.String(), url.Values{"input": {string(input)}, "options": {string(optionsData)}})
+	r, err := httpPostForm(ts, ts.URL+"/contracts/"+contractAddr.String(), url.Values{"input": {hexutil.Encode(input)}, "options": {string(optionsData)}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println("r", string(r))
 	var res map[string]string
 	if err = json.Unmarshal(r, &res); err != nil {
 		t.Fatal(err)

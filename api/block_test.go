@@ -68,7 +68,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
-	b, err := genesis.Dev.Build(stateC)
+	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}

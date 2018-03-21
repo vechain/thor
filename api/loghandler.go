@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
-	"github.com/vechain/thor/api/utils/types"
+	"github.com/vechain/thor/logdb"
 	"net/http"
 )
 
@@ -21,7 +21,7 @@ func NewLogHTTPRouter(router *mux.Router, li *LogInterface) {
 
 func (li *LogInterface) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
 	optionData := []byte(req.FormValue("options"))
-	var options types.FilterOption
+	var options *logdb.FilterOption
 	if len(optionData) != 0 {
 		if err := json.Unmarshal(optionData, &options); err != nil {
 			return err

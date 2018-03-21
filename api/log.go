@@ -18,12 +18,8 @@ func NewLogInterface(ldb *logdb.LogDB) *LogInterface {
 }
 
 //Filter query logs with option
-func (li *LogInterface) Filter(option types.FilterOption) ([]types.Log, error) {
-	op, err := option.ToLogFilter()
-	if err != nil {
-		return nil, err
-	}
-	logs, err := li.ldb.Filter(op)
+func (li *LogInterface) Filter(option *logdb.FilterOption) ([]types.Log, error) {
+	logs, err := li.ldb.Filter(option)
 	if err != nil {
 		return nil, err
 	}

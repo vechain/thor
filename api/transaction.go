@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/api/utils/types"
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
@@ -50,9 +51,9 @@ func (ti *TransactionInterface) GetTransactionByID(txID thor.Hash) (*types.Trans
 		return nil, err
 	}
 
-	t.BlockID = location.BlockID.String()
+	t.BlockID = location.BlockID
 	t.BlockNumber = block.Header().Number()
-	t.Index = location.Index
+	t.Index = math.HexOrDecimal64(location.Index)
 	return t, nil
 }
 

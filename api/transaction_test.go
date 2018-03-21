@@ -77,12 +77,12 @@ func TestTransaction(t *testing.T) {
 		Nonce:        1,
 		GasPriceCoef: 1,
 		Gas:          30000,
-		DependsOn:    hash.String(),
+		DependsOn:    &hash,
 		Sig:          hexutil.Encode(sig),
 		BlockRef:     hexutil.Encode(blockRef[:]),
 		Clauses: types.Clauses{
 			types.Clause{
-				To:    to.String(),
+				To:    &to,
 				Value: &m,
 				Data:  hexutil.Encode([]byte{0x00, 0x00}),
 			},
@@ -133,7 +133,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 
 	stateC := state.NewCreator(db)
 
-	b, err := genesis.Dev.Build(stateC)
+	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}

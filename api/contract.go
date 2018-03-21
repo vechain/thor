@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -69,7 +70,7 @@ func (ci *ContractInterface) santinizeOptions(options *ContractInterfaceOptions)
 }
 
 //Call a contract with input
-func (ci *ContractInterface) Call(to *thor.Address, input []byte, options *ContractInterfaceOptions) (output []byte, err error) {
+func (ci *ContractInterface) Call(to *thor.Address, input string, options *ContractInterfaceOptions) (output []byte, err error) {
 	ci.santinizeOptions(options)
 	blk, err := ci.bestBlkGetter.GetBestBlock()
 	if err != nil {
@@ -83,7 +84,11 @@ func (ci *ContractInterface) Call(to *thor.Address, input []byte, options *Contr
 	}
 	rt := runtime.New(st, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
 	v := big.Int(*options.Value)
-	clause := tx.NewClause(to).WithData(input).WithValue(&v)
+	data, err := hexutil.Decode(input)
+	if err != nil {
+		return nil, err
+	}
+	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	var vmout *vm.Output
 	gp := big.Int(*options.GasPrice)
 	from, err := thor.ParseAddress(options.From)

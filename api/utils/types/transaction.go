@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"math/big"
@@ -10,29 +11,29 @@ import (
 
 //RawTransaction a raw transaction
 type RawTransaction struct {
-	ChainTag     byte    `json:"chainTag"`
-	Nonce        uint64  `json:"nonce,string"`
-	BlockRef     string  `json:"blockRef"`
-	Clauses      Clauses `json:"clauses,string"`
-	GasPriceCoef uint8   `json:"gasPriceCoef"`
-	Gas          uint64  `json:"gas,string"`
-	DependsOn    string  `json:"dependsOn"`
-	Sig          string  `json:"sig"`
+	ChainTag     byte                `json:"chainTag"`
+	Nonce        math.HexOrDecimal64 `json:"nonce"`
+	BlockRef     string              `json:"blockRef"`
+	Clauses      Clauses             `json:"clauses,string"`
+	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	Gas          math.HexOrDecimal64 `json:"gas"`
+	DependsOn    *thor.Hash          `json:"dependsOn,string"`
+	Sig          string              `json:"sig"`
 }
 
 //Transaction transaction
 type Transaction struct {
-	ChainTag     byte    `json:"chainTag"`
-	ID           string  `json:"id"`
-	GasPriceCoef uint8   `json:"gasPriceCoef"`
-	Gas          uint64  `json:"gas,string"`
-	From         string  `json:"from,"`
-	DependsOn    string  `json:"dependsOn,"`
-	Clauses      Clauses `json:"clauses"`
+	ChainTag     byte                `json:"chainTag"`
+	ID           thor.Hash           `json:"id,string"`
+	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	Gas          math.HexOrDecimal64 `json:"gas"`
+	From         thor.Address        `json:"from,string"`
+	DependsOn    *thor.Hash          `json:"dependsOn,string"`
+	Clauses      Clauses             `json:"clauses"`
 
-	Index       uint64 `json:"index,string"`
-	BlockID     string `json:"blockID"`
-	BlockNumber uint32 `json:"blockNumber"`
+	Index       math.HexOrDecimal64 `json:"index"`
+	BlockID     thor.Hash           `json:"blockID,string"`
+	BlockNumber uint32              `json:"blockNumber"`
 }
 
 //Transactions transactions
@@ -52,14 +53,14 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	}
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
-		ID:           tx.ID().String(),
-		From:         from.String(),
+		ID:           tx.ID(),
+		From:         from,
 		GasPriceCoef: tx.GasPriceCoef(),
-		Gas:          tx.Gas(),
+		Gas:          math.HexOrDecimal64(tx.Gas()),
 		Clauses:      cls,
 	}
 	if tx.DependsOn() != nil {
-		t.DependsOn = tx.DependsOn().String()
+		t.DependsOn = tx.DependsOn()
 	}
 	return t, nil
 
@@ -73,15 +74,7 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 		builder.GasPriceCoef(rawTransaction.GasPriceCoef)
 	}
 	if rawTransaction.Gas > 0 {
-		builder.Gas(rawTransaction.Gas)
-	}
-	var dependsOn *thor.Hash
-	if rawTransaction.DependsOn != "" {
-		depTxID, err := thor.ParseHash(rawTransaction.DependsOn)
-		if err != nil {
-			return nil, fmt.Errorf("invalid dependsOn %v", err)
-		}
-		dependsOn = &depTxID
+		builder.Gas(uint64(rawTransaction.Gas))
 	}
 	blockref, err := hexutil.Decode(rawTransaction.BlockRef)
 	if err != nil {
@@ -89,18 +82,14 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 	}
 	var blkRef tx.BlockRef
 	copy(blkRef[:], blockref[:])
-	builder.DependsOn(dependsOn).BlockRef(blkRef).Nonce(rawTransaction.Nonce)
+	builder.DependsOn(rawTransaction.DependsOn).BlockRef(blkRef).Nonce(uint64(rawTransaction.Nonce))
 	for _, clause := range rawTransaction.Clauses {
 		v := big.Int(*clause.Value)
-		to, err := thor.ParseAddress(clause.To)
-		if err != nil {
-			return nil, fmt.Errorf("invalid To address %v", err)
-		}
-		c := tx.NewClause(&to).WithValue(&v)
+		c := tx.NewClause(clause.To).WithValue(&v)
 		if clause.Data != "" {
 			data, err := hexutil.Decode(clause.Data)
 			if err != nil {
-				return nil, fmt.Errorf("invalid data %v", err)
+				return nil, err
 			}
 			c.WithData(data)
 		}
@@ -108,7 +97,7 @@ func BuildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 	}
 	sig, err := hexutil.Decode(rawTransaction.Sig)
 	if err != nil {
-		return nil, fmt.Errorf("invalid sig %v", err)
+		return nil, err
 	}
 	return builder.Build().WithSignature(sig), nil
 }
