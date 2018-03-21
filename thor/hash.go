@@ -2,6 +2,7 @@ package thor
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -16,6 +17,11 @@ const (
 // Hash main hash type
 type Hash common.Hash
 
+var (
+	_ json.Marshaler   = (*Hash)(nil)
+	_ json.Unmarshaler = (*Hash)(nil)
+)
+
 // String implements stringer
 func (h Hash) String() string {
 	return "0x" + hex.EncodeToString(h[:])
@@ -29,6 +35,28 @@ func (h Hash) Bytes() []byte {
 // IsZero returns if hash is all zero bytes.
 func (h Hash) IsZero() bool {
 	return h == Hash{}
+}
+
+// MarshalJSON implements json.Marshaler.
+func (h *Hash) MarshalJSON() ([]byte, error) {
+	if h == nil {
+		return json.Marshal(nil)
+	}
+	return json.Marshal(h.String())
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (h *Hash) UnmarshalJSON(data []byte) error {
+	var hex string
+	if err := json.Unmarshal(data, &hex); err != nil {
+		return err
+	}
+	parsed, err := ParseHash(hex)
+	if err != nil {
+		return err
+	}
+	*h = parsed
+	return nil
 }
 
 // ParseHash convert string presented hash into Hash type
