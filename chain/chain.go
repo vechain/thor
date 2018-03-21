@@ -32,11 +32,11 @@ type Chain struct {
 }
 
 type caches struct {
-	header       *lru
-	body         *lru
-	txIDs        *lru
-	receipts     *lru
-	trunkBlockID *lru
+	header       *cache
+	body         *cache
+	txIDs        *cache
+	receipts     *cache
+	trunkBlockID *cache
 }
 
 // New create an instance of Chain.
