@@ -346,9 +346,10 @@ func (t *Transaction) String() string {
 	BlockRef:		%v-%x
 	DependsOn:		%v
 	ReservedFields:	%v
+	Nonce:			%v
 	Signature:		0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.Reserved, t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.Reserved, t.body.Nonce, t.body.Signature)
 }
 
 // see core.IntrinsicGas

@@ -12,12 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vechain/thor/block"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
+	cli "gopkg.in/urfave/cli.v1"
+
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -27,8 +28,8 @@ import (
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 type account struct {
@@ -57,7 +58,7 @@ func newApp() *cli.App {
 			Usage: "listen address",
 		},
 		cli.BoolFlag{
-			Name:  "ondemand",
+			Name:  "on-demand",
 			Usage: "create new block when there is pending transaction",
 		},
 		cli.IntFlag{
@@ -116,7 +117,7 @@ func newApp() *cli.App {
 			_ = svr.Serve(listener)
 		})
 		goes.Go(func() {
-			packing(exit, pk, txpl, stateCreator, c, ctx.Bool("ondemand"))
+			packing(exit, pk, txpl, stateCreator, c, ldb, ctx.Bool("on-demand"))
 		})
 
 		select {
@@ -136,8 +137,8 @@ func main() {
 	}
 }
 
-func buildGenesis(stateCreator *state.Creator) (blk *block.Block, err error) {
-	launchTime := uint64(time.Now().UnixNano())
+func buildGenesis(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
+	launchTime := uint64(time.Now().Unix())
 
 	privKeys := []string{
 		"dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65",
@@ -154,7 +155,7 @@ func buildGenesis(stateCreator *state.Creator) (blk *block.Block, err error) {
 	for _, str := range privKeys {
 		pk, err := crypto.HexToECDSA(str)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
 		accounts = append(accounts, account{thor.Address(addr), pk, "10000000000000000000000"})
@@ -169,18 +170,33 @@ func buildGenesis(stateCreator *state.Creator) (blk *block.Block, err error) {
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Params.Set(state, thor.KeyRewardRatio, thor.InitialRewardRatio)
-			builtin.Params.Set(state, thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)
-			builtin.Energy.AdjustGrowthRate(state, launchTime, thor.InitialEnergyGrowthRate)
-			builtin.Authority.Add(state, accounts[0].Address, thor.Hash{})
-
+			tokenSupply := &big.Int{}
 			for _, a := range accounts {
 				b, _ := new(big.Int).SetString(a.Balance, 10)
 				state.SetBalance(a.Address, b)
 				builtin.Energy.AddBalance(state, launchTime, a.Address, b)
+				tokenSupply.Add(tokenSupply, b)
 			}
+
+			builtin.Energy.SetTokenSupply(state, tokenSupply)
 			return nil
-		})
+		}).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Energy.Address).
+				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Authority.Address).
+				WithData(builtin.Authority.ABI.MustForMethod("authorize").MustEncodeInput(accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
+			builtin.Executor.Address)
 
 	return builder.Build(stateCreator)
 }
@@ -194,12 +210,22 @@ func prepare() (kv *lvldb.LevelDB, stateCreator *state.Creator, c *chain.Chain, 
 	stateCreator = state.NewCreator(kv)
 	c = chain.New(kv)
 
-	b0, err := buildGenesis(stateCreator)
+	ldb, err = logdb.NewMem()
 	if err != nil {
 		return
 	}
 
-	ldb, err = logdb.NewMem()
+	b0, logs, err := buildGenesis(stateCreator)
+	if err != nil {
+		return
+	}
+
+	dblogs := []*logdb.Log{}
+	for index, l := range logs {
+		dblog := logdb.NewLog(b0.Header().ID(), uint32(0), uint32(index), thor.Hash{}, thor.Address{}, l)
+		dblogs = append(dblogs, dblog)
+	}
+	err = ldb.Insert(dblogs)
 	if err != nil {
 		return
 	}
@@ -221,14 +247,19 @@ func prepare() (kv *lvldb.LevelDB, stateCreator *state.Creator, c *chain.Chain, 
 	return
 }
 
-func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, stateCreator *state.Creator, c *chain.Chain, ondemand bool) {
+func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, stateCreator *state.Creator, c *chain.Chain, ldb *logdb.LogDB, ondemand bool) {
 	for {
-		arrive := time.After(10 * time.Second)
+		timeInterval := 10
+		if ondemand {
+			timeInterval = 1
+		}
+		arrive := time.After(time.Duration(timeInterval) * time.Second)
 		select {
 		case <-exit:
 			log.Info("Killing packer service......")
 			return
 		case <-arrive:
+			log.Trace("Try packing......")
 			iter, err := txpl.NewIterator(c, stateCreator)
 			if err != nil {
 				log.Error(fmt.Sprintf("%+v", err))
@@ -247,7 +278,8 @@ func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, st
 
 				for iter.HasNext() {
 					tx := iter.Next()
-					adopt(tx)
+					log.Trace(tx.String())
+					iter.OnProcessed(tx.ID(), adopt(tx))
 				}
 
 				b, receipts, err := commit(accounts[0].PrivateKey)
@@ -255,6 +287,12 @@ func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, st
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 				log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
+				log.Trace(b.String())
+
+				err = saveBlockLogs(b, receipts, ldb)
+				if err != nil {
+					log.Error(fmt.Sprintf("%+v", err))
+				}
 
 				// ignore fork when solo
 				_, err = c.AddBlock(b, true)
@@ -269,4 +307,21 @@ func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, st
 			}
 		}
 	}
+}
+
+func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (err error) {
+	logIndex := 0
+	dblogs := []*logdb.Log{}
+
+	for index, receipt := range receipts {
+		for _, output := range receipt.Outputs {
+			for _, l := range output.Logs {
+				dblog := logdb.NewLog(blk.Header().ID(), blk.Header().Number(), uint32(logIndex), blk.Transactions()[index].ID(), thor.Address{}, l)
+				dblogs = append(dblogs, dblog)
+				logIndex++
+			}
+		}
+	}
+
+	return ldb.Insert(dblogs)
 }
