@@ -19,9 +19,6 @@ var (
 	ErrIntrinsicGas = errors.New("intrinsic gas too low")
 )
 
-//TxAddedEvent TxAddedEvent
-type TxAddedEvent struct{ Tx *tx.Transaction }
-
 //PoolConfig PoolConfig
 type PoolConfig struct {
 	QueueLimit uint64
@@ -62,7 +59,7 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 
 	txID := tx.ID()
 	if _, ok := pool.all[txID]; ok {
-		return fmt.Errorf("known transaction: %x", txID)
+		return fmt.Errorf("known transaction: %v", txID)
 	}
 
 	// If the transaction fails basic validation, discard it
@@ -70,12 +67,12 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 	pool.all[txID] = NewTxObject(tx, time.Now().Unix())
-	go pool.txFeed.Send(TxAddedEvent{tx})
+	go pool.txFeed.Send(tx)
 	return nil
 }
 
 //SubscribeNewTransaction receivers will receive a tx
-func (pool *TxPool) SubscribeNewTransaction(ch chan<- TxAddedEvent) event.Subscription {
+func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
