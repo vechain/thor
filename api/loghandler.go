@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/logdb"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -20,10 +21,11 @@ func NewLogHTTPRouter(router *mux.Router, li *LogInterface) {
 }
 
 func (li *LogInterface) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
-	optionData := []byte(req.FormValue("options"))
+	r, err := ioutil.ReadAll(req.Body)
+	req.Body.Close()
 	var options *logdb.FilterOption
-	if len(optionData) != 0 {
-		if err := json.Unmarshal(optionData, &options); err != nil {
+	if len(r) != 0 {
+		if err := json.Unmarshal(r, &options); err != nil {
 			return err
 		}
 	}
