@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/vechain/thor/api/utils/types"
+	"github.com/vechain/thor/api/types"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
