@@ -202,6 +202,7 @@ func action(ctx *cli.Context) error {
 		cs := consensus.New(ch, stateCreator)
 		blockCh := make(chan *block.Block)
 		sub := cm.SubscribeBlock(blockCh)
+		heap := NewFutureBlock()
 
 		for {
 			select {
@@ -209,7 +210,7 @@ func action(ctx *cli.Context) error {
 				sub.Unsubscribe()
 				return
 			default:
-				es.consent(c, blockCh, cm, ch, cs)
+				es.consent(c, blockCh, cm, ch, cs, heap)
 			}
 		}
 	})
@@ -341,7 +342,7 @@ type events struct {
 	bestBlockUpdate chan struct{}
 }
 
-func (es *events) consent(ctx context.Context, blockCh chan *block.Block, cm *comm.Communicator, ch *chain.Chain, cs *consensus.Consensus) {
+func (es *events) consent(ctx context.Context, blockCh chan *block.Block, cm *comm.Communicator, ch *chain.Chain, cs *consensus.Consensus, fb *futureBlock) {
 	select {
 	case blk := <-blockCh:
 		if _, err := ch.GetBlockHeader(blk.Header().ID()); !ch.IsNotFound(err) {
@@ -362,6 +363,9 @@ func (es *events) consent(ctx context.Context, blockCh chan *block.Block, cm *co
 			}
 		} else {
 			log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "proposer", signer, "err", err.Error())
+			if consensus.IsFutureBlock(err) {
+				fb.Push(blk)
+			}
 		}
 	case blk := <-es.newBlockPacked:
 		if trunk, err := cs.IsTrunk(blk.Header()); err == nil {

@@ -11,7 +11,11 @@ var (
 // IsFutureBlock returns if the error indicates that the block should be
 // processed later.
 func IsFutureBlock(err error) bool {
-	return err == errParentNotFound || err == errFutureBlock
+	return err == errFutureBlock
+}
+
+func IsParentNotFound(err error) bool {
+	return err == errParentNotFound
 }
 
 // IsKnownBlock returns if the error means the block was already in the chain.
