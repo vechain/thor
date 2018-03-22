@@ -3,6 +3,7 @@ package proto
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
@@ -97,7 +98,7 @@ func (req ReqGetBlocksFromNumber) Do(ctx context.Context, peer *p2psrv.Peer) (Re
 }
 
 // RespGetBlocksFromNumber response payload of MsgGetBlocksByNumber.
-type RespGetBlocksFromNumber []*block.Block
+type RespGetBlocksFromNumber []rlp.RawValue
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
