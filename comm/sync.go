@@ -9,16 +9,17 @@ import (
 	"github.com/vechain/thor/p2psrv"
 )
 
-func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) *session.Session {
-	betters := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
+func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Session, int) {
+	slice := c.sessionSet.Slice()
+	betters := slice.Filter(func(s *session.Session) bool {
 		_, totalScore := s.TrunkHead()
-		return totalScore > bestBlock.Header().TotalScore()
+		return totalScore >= bestBlock.Header().TotalScore()
 	})
 
 	if len(betters) > 0 {
-		return betters[0]
+		return betters[0], len(slice)
 	}
-	return nil
+	return nil, len(slice)
 }
 
 func (c *Communicator) sync() error {
@@ -27,8 +28,11 @@ func (c *Communicator) sync() error {
 		return err
 	}
 
-	s := c.chooseSessionToSync(best)
+	s, nSessions := c.chooseSessionToSync(best)
 	if s == nil {
+		if nSessions >= 3 {
+			return nil
+		}
 		return errors.New("not suitable session")
 	}
 
