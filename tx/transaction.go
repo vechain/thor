@@ -56,6 +56,11 @@ func (t *Transaction) ChainTag() byte {
 	return t.body.ChainTag
 }
 
+// Nonce returns nonce value.
+func (t *Transaction) Nonce() uint64 {
+	return t.body.Nonce
+}
+
 // BlockRef returns block reference, which is first 8 bytes of block hash.
 func (t *Transaction) BlockRef() (br BlockRef) {
 	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
