@@ -13,8 +13,7 @@ import (
 var (
 	bestBlockKey = []byte("bestBlock")
 
-	headerPrefix        = []byte("h") // (prefix, block id) -> header
-	bodyPrefix          = []byte("b") // (prefix, block id) -> body
+	blockPrefix         = []byte("b") // (prefix, block id) -> block
 	trunkPrefix         = []byte("t") // (prefix, number) -> block id
 	txLocationPrefix    = []byte("l") // (prefix, tx id) -> tx location
 	blockReceiptsPrefix = []byte("r") // (prefix, block id) -> receipts
@@ -58,44 +57,21 @@ func SaveBestBlockID(w kv.Putter, id thor.Hash) error {
 	return w.Put(bestBlockKey, id[:])
 }
 
-// LoadRawBlockHeader load block header without being decoded.
-func LoadRawBlockHeader(r kv.Getter, id thor.Hash) (rlp.RawValue, error) {
-	return r.Get(append(headerPrefix, id[:]...))
+// LoadRawBlock load rlp encoded raw block.
+func LoadRawBlock(r kv.Getter, id thor.Hash) (block.Raw, error) {
+	return r.Get(append(blockPrefix, id[:]...))
 }
 
-// LoadBlockHeader load decoded block header.
-func LoadBlockHeader(r kv.Getter, id thor.Hash) (*block.Header, error) {
-	var header block.Header
-	if err := loadRLP(r, append(headerPrefix, id[:]...), &header); err != nil {
+// SaveBlock encode block and save in db.
+func SaveBlock(w kv.Putter, b *block.Block) (block.Raw, error) {
+	data, err := rlp.EncodeToBytes(b)
+	if err != nil {
 		return nil, err
 	}
-	return &header, nil
-}
-
-// LoadRawBlockBody load block body without being decoded.
-func LoadRawBlockBody(r kv.Getter, id thor.Hash) (rlp.RawValue, error) {
-	return r.Get(append(bodyPrefix, id[:]...))
-}
-
-// LoadBlockBody load decoded block body.
-func LoadBlockBody(r kv.Getter, id thor.Hash) (*block.Body, error) {
-	var body block.Body
-	if err := loadRLP(r, append(bodyPrefix, id[:]...), &body); err != nil {
+	if err := w.Put(append(blockPrefix, b.Header().ID().Bytes()...), data); err != nil {
 		return nil, err
 	}
-	return &body, nil
-}
-
-// SaveBlock save block header and body.
-func SaveBlock(w kv.Putter, b *block.Block) error {
-	id := b.Header().ID()
-	if err := saveRLP(w, append(headerPrefix, id[:]...), b.Header()); err != nil {
-		return err
-	}
-	if err := saveRLP(w, append(bodyPrefix, id[:]...), b.Body()); err != nil {
-		return err
-	}
-	return nil
+	return block.Raw(data), nil
 }
 
 // SaveTrunkBlockID save a block's ID on the trunk.

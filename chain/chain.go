@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	headerCacheLimit       = 512
-	bodyCacheLimit         = 512
+	blockCacheLimit        = 512
 	blockTxIDsLimit        = 1024
 	receiptsCacheLimit     = 512
 	trunkBlockIDCacheLimit = 2048
@@ -32,8 +31,7 @@ type Chain struct {
 }
 
 type caches struct {
-	header       *cache
-	body         *cache
+	block        *cache
 	txIDs        *cache
 	receipts     *cache
 	trunkBlockID *cache
@@ -42,20 +40,24 @@ type caches struct {
 // New create an instance of Chain.
 func New(kv kv.GetPutter) *Chain {
 
-	headerCache := newLRU(headerCacheLimit, func(key interface{}) (interface{}, error) {
-		return persist.LoadBlockHeader(kv, key.(thor.Hash))
+	blockCache := newLRU(blockCacheLimit, func(key interface{}) (interface{}, error) {
+		raw, err := persist.LoadRawBlock(kv, key.(thor.Hash))
+		if err != nil {
+			return nil, err
+		}
+		return &rawBlock{raw: raw}, nil
 	})
-	bodyCache := newLRU(bodyCacheLimit, func(key interface{}) (interface{}, error) {
-		return persist.LoadBlockBody(kv, key.(thor.Hash))
-	})
-
 	txIDsCache := newLRU(blockTxIDsLimit, func(key interface{}) (interface{}, error) {
-		body, err := bodyCache.GetOrLoad(key)
+		block, err := blockCache.GetOrLoad(key)
 		if err != nil {
 			return nil, err
 		}
 		ids := make(map[thor.Hash]int)
-		for i, tx := range body.(*block.Body).Txs {
+		body, err := block.(*rawBlock).Body()
+		if err != nil {
+			return nil, err
+		}
+		for i, tx := range body.Txs {
 			ids[tx.ID()] = i
 		}
 		return ids, nil
@@ -72,8 +74,7 @@ func New(kv kv.GetPutter) *Chain {
 	return &Chain{
 		kv: kv,
 		caches: caches{
-			header:       headerCache,
-			body:         bodyCache,
+			block:        blockCache,
 			txIDs:        txIDsCache,
 			receipts:     receiptsCache,
 			trunkBlockID: trunkBlockIDCache,
@@ -96,7 +97,8 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 		// no genesis yet
 		batch := c.kv.NewBatch()
 
-		if err := persist.SaveBlock(batch, genesis); err != nil {
+		raw, err := persist.SaveBlock(batch, genesis)
+		if err != nil {
 			return err
 		}
 		if err := persist.SaveTxLocations(batch, genesis.Transactions(), genesis.Header().ID()); err != nil {
@@ -112,6 +114,7 @@ func (c *Chain) WriteGenesis(genesis *block.Block) error {
 			return err
 		}
 		c.bestBlock = genesis
+		c.caches.block.Add(genesis.Header().ID(), newRawBlock(raw, genesis))
 		return nil
 	}
 	if b0.Header().ID() != genesis.Header().ID() {
@@ -144,7 +147,8 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 	}
 
 	batch := c.kv.NewBatch()
-	if err := persist.SaveBlock(batch, newBlock); err != nil {
+	raw, err := persist.SaveBlock(batch, newBlock)
+	if err != nil {
 		return nil, err
 	}
 	var fork *Fork
@@ -187,9 +191,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 		return nil, err
 	}
 
-	c.caches.header.Add(newBlock.Header().ID(), newBlock.Header())
-	c.caches.body.Add(newBlock.Header().ID(), newBlock.Body())
-
+	c.caches.block.Add(newBlock.Header().ID(), newRawBlock(raw, newBlock))
 	if trunkUpdates != nil {
 		for id, f := range trunkUpdates {
 			if !f {
@@ -266,11 +268,15 @@ func (c *Chain) GetBlockHeader(id thor.Hash) (*block.Header, error) {
 }
 
 func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
-	header, err := c.caches.header.GetOrLoad(id)
+	block, err := c.caches.block.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
-	return header.(*block.Header), nil
+	header, err := block.(*rawBlock).Header()
+	if err != nil {
+		return nil, err
+	}
+	return header, nil
 }
 
 // GetBlockBody get block body by block id.
@@ -281,11 +287,15 @@ func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
 }
 
 func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
-	body, err := c.caches.body.GetOrLoad(id)
+	block, err := c.caches.block.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
-	return body.(*block.Body), nil
+	body, err := block.(*rawBlock).Body()
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
 
 // GetBlock get block by id.
@@ -297,15 +307,24 @@ func (c *Chain) GetBlock(id thor.Hash) (*block.Block, error) {
 }
 
 func (c *Chain) getBlock(id thor.Hash) (*block.Block, error) {
-	header, err := c.getBlockHeader(id)
+	block, err := c.caches.block.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
-	body, err := c.getBlockBody(id)
+	return block.(*rawBlock).Block()
+}
+
+// GetRawBlock get raw block for given id.
+// Never modify the returned raw block.
+func (c *Chain) GetRawBlock(id thor.Hash) (block.Raw, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+
+	block, err := c.caches.block.GetOrLoad(id)
 	if err != nil {
 		return nil, err
 	}
-	return block.Compose(header, body.Txs), nil
+	return block.(*rawBlock).raw, nil
 }
 
 // GetBlockIDByNumber returns block id by block number on trunk.
