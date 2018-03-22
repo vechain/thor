@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/thor"
 	"net/http"
 )
@@ -16,22 +15,22 @@ const ContractHTTPPathPrefix = "/contracts"
 func NewContractHTTPRouter(router *mux.Router, ci *ContractInterface) {
 	sub := router.PathPrefix(ContractHTTPPathPrefix).Subrouter()
 
-	sub.Path("/{contractAddr}").Methods("POST").HandlerFunc(httpx.WrapHandlerFunc(ci.handleCallContract))
+	sub.Path("/{contractAddr}").Methods("POST").HandlerFunc(WrapHandlerFunc(ci.handleCallContract))
 
 }
 
 func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http.Request) error {
 	query := mux.Vars(req)
 	if len(query) == 0 {
-		return httpx.Error("No Params!", 400)
+		return Error("No Params!", 400)
 	}
 	contractAddr, ok := query["contractAddr"]
 	if !ok {
-		return httpx.Error("No contract address!", 400)
+		return Error("No contract address!", 400)
 	}
 	addr, err := thor.ParseAddress(contractAddr)
 	if err != nil {
-		return httpx.Error("Invalid contract address!", 400)
+		return Error("Invalid contract address!", 400)
 	}
 
 	optionData := []byte(req.FormValue("options"))
@@ -41,10 +40,10 @@ func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http
 	}
 	output, err := ci.Call(&addr, req.FormValue("input"), options)
 	if err != nil {
-		return httpx.Error("Call contract failed!", 400)
+		return Error("Call contract failed!", 400)
 	}
 	dataMap := map[string]string{
 		"result": hexutil.Encode(output),
 	}
-	return httpx.ResponseJSON(w, dataMap)
+	return ResponseJSON(w, dataMap)
 }

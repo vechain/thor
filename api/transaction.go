@@ -3,7 +3,7 @@ package api
 import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/api/utils/types"
+	"github.com/vechain/thor/api/types"
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"

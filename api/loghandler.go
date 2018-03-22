@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/api/utils/httpx"
 	"github.com/vechain/thor/logdb"
 	"io/ioutil"
 	"net/http"
@@ -16,7 +15,7 @@ const LogHTTPPathPrefix = "/logs"
 func NewLogHTTPRouter(router *mux.Router, li *LogInterface) {
 	sub := router.PathPrefix(LogHTTPPathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(httpx.WrapHandlerFunc(li.handleFilterLogs))
+	sub.Path("").Methods("POST").HandlerFunc(WrapHandlerFunc(li.handleFilterLogs))
 
 }
 
@@ -31,7 +30,7 @@ func (li *LogInterface) handleFilterLogs(w http.ResponseWriter, req *http.Reques
 	}
 	logs, err := li.Filter(options)
 	if err != nil {
-		return httpx.Error("Query logs failed!", 400)
+		return Error("Query logs failed!", 400)
 	}
-	return httpx.ResponseJSON(w, logs)
+	return ResponseJSON(w, logs)
 }

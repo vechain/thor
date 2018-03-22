@@ -1,5 +1,4 @@
-// Package httpx helper functions for http operations
-package httpx
+package api
 
 import (
 	"context"
