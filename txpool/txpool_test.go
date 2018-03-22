@@ -26,7 +26,7 @@ func TestTxPool(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
 	c := state.NewCreator(db)
-	bl, err := genesis.Mainnet.Build(c)
+	bl, _, err := genesis.Mainnet.Build(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestTxPool(t *testing.T) {
 	address, _ := thor.ParseAddress(testAddress)
 	pool := txpool.New()
 	count := 10
-	ch := make(chan txpool.TxAddedEvent, count)
+	ch := make(chan *tx.Transaction, count)
 	sub := pool.SubscribeNewTransaction(ch)
 	defer sub.Unsubscribe()
 	for i := 0; i < count; i++ {
