@@ -23,7 +23,8 @@ func TestBlock(t *testing.T) {
 	fmt.Println(h.ID())
 
 	data, _ := rlp.EncodeToBytes(block)
-	fmt.Println(data)
+	fmt.Println(Raw(data).DecodeHeader())
+	fmt.Println(Raw(data).DecodeBody())
 
 	b := Block{}
 	rlp.DecodeBytes(data, &b)
