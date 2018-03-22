@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -58,12 +59,12 @@ func newApp() *cli.App {
 		cli.StringFlag{
 			Name:  "port",
 			Value: ":55555",
-			Usage: "p2p listen address",
+			Usage: "p2p listen port",
 		},
 		cli.StringFlag{
 			Name:  "restfulport",
 			Value: ":8081",
-			Usage: "p2p listen address",
+			Usage: "restful port",
 		},
 		cli.StringFlag{
 			Name:  "nodekey",
@@ -172,6 +173,32 @@ func action(ctx *cli.Context) error {
 	}
 
 	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := txpl.SubscribeNewTransaction(txCh)
+
+		select {
+		case <-c.Done():
+			sub.Unsubscribe()
+			return
+		case tx := <-txCh:
+			cm.BroadcastTx(tx)
+		}
+	})
+
+	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := cm.SubscribeTx(txCh)
+
+		select {
+		case <-c.Done():
+			sub.Unsubscribe()
+			return
+		case tx := <-txCh:
+			txpl.Add(tx)
+		}
+	})
+
+	goes.Go(func() {
 		cs := consensus.New(ch, stateCreator)
 		blockCh := make(chan *block.Block)
 		sub := cm.SubscribeBlock(blockCh)
@@ -189,15 +216,25 @@ func action(ctx *cli.Context) error {
 
 	goes.Go(func() {
 		pk := packer.New(ch, stateCreator, proposer, proposer)
-		ticker := time.NewTicker(2 * time.Second)
+
 		for {
 			select {
 			case <-c.Done():
 				return
-			case <-ticker.C:
-				fmt.Println(cm.IsSynced())
+			default:
 				if cm.IsSynced() {
 					es.pack(c, ch, pk, txIter, privateKey)
+				} else {
+					log.Warn("has not synced")
+
+					ticker := time.NewTicker(2 * time.Second)
+					defer ticker.Stop()
+
+					select {
+					case <-c.Done():
+						return
+					case <-ticker.C:
+					}
 				}
 			}
 		}
