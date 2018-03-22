@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/user"
 	"testing"
@@ -40,8 +39,7 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	r, err := httpPostForm(ts, ts.URL+"/logs", url.Values{"options": {string(ops)}})
+	r, err := httpPost(ts, ts.URL+"/logs", ops)
 	if err != nil {
 		t.Fatal(err)
 	}

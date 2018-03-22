@@ -33,8 +33,8 @@ paths:
           name: address
           schema:
             type: string
-            format: address
-          description: account address
+            example: "0x0000000000000000000000000000000000000000"
+            description: address
       responses: 
         200:
           description: OK
@@ -42,9 +42,10 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                            "result":1000 
-                          }
+                properties:
+                  result:
+                    type: string
+                    example: "1000"
         400:
           description: "Invalid address"
   /accounts/{address}/code:
@@ -59,7 +60,8 @@ paths:
           name: address
           schema:
             type: string
-            format: address
+            example: "0x0000000000000000000000000000000000000000"
+            description: address
           description: account address
       responses: 
         200:
@@ -68,9 +70,10 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                            "result":"0x00" 
-                          }
+                properties:
+                  result:
+                    type: string
+                    example: "0x101010"
         400:
           description: "Invalid address"
   /accounts/{address}/storage:
@@ -85,15 +88,15 @@ paths:
           name: address
           schema:
             type: string
-            format: address
-          description: account address
+            example: "0x0000000000000000000000000000000000000000"
+            description: account address
         - in: query
           required: true
           name: key
           schema:
             type: string
-            format: hash
-          description: storage hash
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            description: storage hash
       responses:
         200:
           description: OK
@@ -101,9 +104,10 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                            "storagkey":"storagevalue" #both hash
-                          }
+                properties:
+                  result:
+                    type: string
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "Invalid params"
   /transactions/{id}:
@@ -118,7 +122,8 @@ paths:
           name: id
           schema:
             type: string
-          description: transaction id
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            description: transaction id
       responses:
         200:
           description: OK
@@ -126,24 +131,60 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                          "chainTag":0,
-                          "id":"0x27d96e21d27a651ea1dcdd6426f4abc408d715fa14d537cb2daa9de7222dc260",
-                          "gasPriceCoef":1,
-                          "gas":"1000",
-                          "from":"0xb5c964bb668ef14420321c34a661698487132a5a",
-                          "dependsOn":"",
-                          "clauses":[{
-                                      "to":"0x000000000000000000000000000000000000746f",
-                                      "value":"0x3e8",
-                                      "data":"0x"
-                            
-                                    }],
-                          "index":"0",
-                          "blockID":"0x0000000100000000000000000000000000000000000000000000000000000002",
-                          "blockNumber":1
-                    
-                          }
+                properties:
+                  chainTag:
+                    type: integer
+                    description: byte
+                    example: 0
+                  id:
+                    type: string
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  gasPriceCoef:
+                    type: integer
+                    description: uint8
+                    example: 128
+                  gas:
+                    type: string
+                    description: uint64
+                    example: "10000"
+                  from:
+                    type: string
+                    description: address
+                    example: "10000"
+                  dependsOn:
+                    type: string
+                    description: transaction id (can be null)
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  clauses:
+                    type: array
+                    description: transaction clause
+                    items:
+                      type: object
+                      properties:
+                        to:
+                          type: string
+                          description: to address
+                          example: "0x0000000000000000000000000000000000000000"
+                        value:
+                          type: string
+                          description: Transfer accounts
+                          example: "10000"
+                        data:
+                          type: string
+                          description: input data (can be null)
+                          example: "0x0000000" 
+                  index:
+                    type: string
+                    description: uint64
+                    example: "10000"
+                  blockID:
+                    type: string
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                    description: block id
+                  blockNumber:
+                    type: integer
+                    description: uint32
+                    example: 1
         400:
           description: "Invalid params"
   /transactions:
@@ -162,34 +203,49 @@ paths:
               properties: 
                 chainTag:
                   type: integer
+                  description: byte
                   example: 1
                 nonce:
                   type: string
+                  description: uint64
                   example: "1"
                 gasPriceCoef:
                   type: integer
+                  description: uint8
                   example: 1
                 gas:
                   type: string
+                  description: uint64
                   example: "30000"
                 dependsOn:
                   type: string
-                  example: ""
+                  description: transaction id (can be null)
+                  example: 
                 sig: 
                   type: string
+                  description: transaction signature
                   example: 0x00
                 blockRef:
                   type: string
+                  description: 8 bytes
                   example: 0x0000000000000000
                 clauses:
                   type: array
-                  example: [
-                            {
-                              "to":    "addressTo",
-                              "value": "10000",
-                              "data":  "0x00",
-                            }
-                            ]
+                  description: transaction clause
+                  items:
+                    properties:
+                        to:
+                          type: string
+                          description: to address
+                          example: "0x0000000000000000000000000000000000000000"
+                        value:
+                          type: string
+                          description: Transfer accounts
+                          example: "10000"
+                        data:
+                          type: string
+                          description: input data (can be null)
+                          example: "0x0000000" 
       responses:
         200:
           description: OK
@@ -220,18 +276,57 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                            "number":1,
-                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
-                            "timestamp":"0",
-                            "totalScore":"0",
-                            "gasLimit":"0",
-                            "gasUsed":"0",
-                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                            "txs":[
-                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
-                                    ]
-                            }
+                properties:
+                  number:
+                    type: integer
+                    description: uint32
+                    example: 0
+                  id:
+                    type: string
+                    description: block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  parentID:
+                    type: string
+                    description: parent block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  timestamp:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  totalScore:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  gasLimit:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  gasUsed:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  beneficiary:
+                    type: string
+                    description: beneficiary address
+                    example: "0x0000000000000000000000000000000000000000"
+                  txsRoot:
+                    type: string
+                    description: transactions root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  stateRoot:
+                    type: string
+                    description: state root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  receiptsRoot:
+                    type: string
+                    description: receipts root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  txs:
+                    type: array
+                    items:
+                      type: string
+                      description: transaction id
+                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "Invalid params"
   /blocks:
@@ -254,18 +349,57 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                            "number":1,
-                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
-                            "timestamp":"0",
-                            "totalScore":"0",
-                            "gasLimit":"0",
-                            "gasUsed":"0",
-                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                            "txs":[
-                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
-                                    ]
-                            }
+                properties:
+                  number:
+                    type: integer
+                    description: uint32
+                    example: 0
+                  id:
+                    type: string
+                    description: block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  parentID:
+                    type: string
+                    description: parent block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  timestamp:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  totalScore:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  gasLimit:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  gasUsed:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  beneficiary:
+                    type: string
+                    description: beneficiary address
+                    example: "0x0000000000000000000000000000000000000000"
+                  txsRoot:
+                    type: string
+                    description: transactions root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  stateRoot:
+                    type: string
+                    description: state root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  receiptsRoot:
+                    type: string
+                    description: receipts root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  txs:
+                    type: array
+                    items:
+                      type: string
+                      description: transaction id
+                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "Invalid params"
   /blocks/best:
@@ -281,18 +415,57 @@ paths:
             application/json:
               schema:
                 type: object
-                example:  {
-                            "number":1,
-                            "id":"0x0000000100000000000000000000000000000000000000000000000000000002","parentID":"0x000000002c6a54433f2a93a8eba3277534518a204b459ad46562ad9a5bcb5402",
-                            "timestamp":"0",
-                            "totalScore":"0",
-                            "gasLimit":"0",
-                            "gasUsed":"0",
-                            "beneficiary":"0x0000000000000000000000000000000000000000","txsRoot":"0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000",
-                            "txs":[
-                                    "0x0f8274ec06dd1256511d437127a5e4dcaed33d483b2dc6393f6fb3c805f8dfc7"
-                                    ]
-                            }
+                properties:
+                  number:
+                    type: integer
+                    description: uint32
+                    example: 0
+                  id:
+                    type: string
+                    description: block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  parentID:
+                    type: string
+                    description: parent block id
+                    example: "null"
+                  timestamp:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  totalScore:
+                    type: string
+                    description: uint64
+                    example: "0"
+                  gasLimit:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  gasUsed:
+                    type: string
+                    description: uint64
+                    example: "100000"
+                  beneficiary:
+                    type: string
+                    description: beneficiary address
+                    example: "0x0000000000000000000000000000000000000000"
+                  txsRoot:
+                    type: string
+                    description: transactions root
+                    example: "0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426"
+                  stateRoot:
+                    type: string
+                    description: state root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  receiptsRoot:
+                    type: string
+                    description: receipts root
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  txs:
+                    type: array
+                    items:
+                      type: string
+                      description: transaction id
+                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "Invalid params"
   /contracts/{contractAddr}:
@@ -307,7 +480,8 @@ paths:
           name: contractAddr
           schema:
             type: string
-          description: contract address
+            example: "0x0000000000000000000000000000000000000000"
+            description: contract address
       requestBody:
         description: contract calling params
         required: true
@@ -317,39 +491,47 @@ paths:
               type: object
               properties: 
                 input:
-                  type: array
-                  description: an input binary 
+                  type: string
+                  description: input data hex
+                  example: "0x0000000000000000000000000000000000000000000000000000000000000000"
                 options: 
                   type: object
                   properties: 
                     index:
                       type: integer
+                      description: uint32
                       example: 1
                     gas:
                       type: string
+                      description: uint64
                       example: "100000"
                     from:
                       type: string
-                      example: 0x000000000000000000000000636f6e7472616374
+                      description: address
+                      example: "0x0000000000000000000000000000000000000000"
                     gasPrice:
                       type: string
-                      example: "10000"
+                      description: uint64
+                      example: "100000"
                     txID: 
                       type: string
-                      example: 0x000000000000000000000000636f6e74
+                      description: transaction id
+                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
                     value:
                       type: string
-                      example: "0"
+                      description: transfer accounts
+                      example: "10000"
       responses:
         200:
           content:
             application/json:
               schema:
                 type: object
-                description: an output binary 
-                example: {
-                  "result":"output"
-                }
+                properties:
+                  result:
+                    type: string
+                    description: transaction ountput
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
           description: "successful operation"
         400:
           description: "Invalid params"
@@ -367,21 +549,39 @@ paths:
             schema:
               type: object
               properties: 
-                options:
-                  type: object
-                  properties: 
-                    fromBlock:
-                      type: integer
-                      example: 0
-                    toBlock:
-                      type: integer
-                      example: 1
-                    address:
-                      type: string
-                      example: 0x000000000000000000000000636f6e7472616374
-                    topicSet:
-                      type: array
-                      example: [[topic0,topic1,topic2,topic3,topic4],[topic0,topic1,topic2,topic3,topic4]]
+                fromBlock:
+                  type: integer
+                  description: from block
+                  example: 0
+                toBlock:
+                  type: integer
+                  description: to block
+                  example: 1
+                address:
+                  type: string
+                  description: contract address
+                  example: "0x0000000000000000000000000000000000000000"
+                topicSet:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: string
+                          description: topic0 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic1 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic2 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic3 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic4 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
       responses:
         200:
           description: OK
@@ -389,18 +589,44 @@ paths:
             application/json:
               schema:
                 type: object
-                example: {
-                        "blockID":"0x00000000000000000000000000000000000000000000000000626c6f636b4944",
-                        "blockNumber":1,
-                        "txID":"0x0000000000000000000000000000000000000000000000000000000074784944",
-                        "txOrigin":"0x00000000000000000000000074784f726967696e",
-                        "address":"0x0000000000000000000000000000000061646472",
-                        "data":"0x",
-                        "topics":["0x0000000000000000000000000000000000000000000000000000746f70696330",
-                                  "0x0000000000000000000000000000000000000000000000000000746f70696331",
-                                  "",
-                                  "",
-                                  ""]
-                      }
+                properties:
+                  blockID:
+                    type: string
+                    description: block id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  blockNumber:
+                    type: integer
+                    description: block number
+                    example: 1
+                  txID:
+                    type: string
+                    description: transaction id
+                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                  address:
+                    type: string
+                    description: contract address
+                    example: "0x0000000000000000000000000000000000000000"
+                  data:
+                    type: string
+                    description: data hex
+                    example: "0x"
+                  topics:
+                    items:
+                      oneOf:
+                        - type: string
+                          description: topic0 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic1 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic2 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic3 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic4 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "unhandled error"
