@@ -320,6 +320,10 @@ func (c *Chain) GetRawBlock(id thor.Hash) (block.Raw, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
+	return c.getRawBlock(id)
+}
+
+func (c *Chain) getRawBlock(id thor.Hash) (block.Raw, error) {
 	block, err := c.caches.block.GetOrLoad(id)
 	if err != nil {
 		return nil, err
@@ -355,6 +359,19 @@ func (c *Chain) getBlockByNumber(num uint32) (*block.Block, error) {
 		return nil, err
 	}
 	return c.getBlock(id)
+}
+
+// GetRawBlockByNumber get block on trunk by its number.
+// Never modify the returned raw block.
+func (c *Chain) GetRawBlockByNumber(num uint32) (block.Raw, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+
+	id, err := c.getBlockIDByNumber(num)
+	if err != nil {
+		return nil, err
+	}
+	return c.getRawBlock(id)
 }
 
 // GetBestBlock get the newest block on trunk.
