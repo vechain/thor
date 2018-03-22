@@ -1,8 +1,8 @@
 package comm
 
 import (
-	"errors"
-
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
@@ -54,11 +54,12 @@ func (c *Communicator) download(peer *p2psrv.Peer, fromNum uint32) error {
 		if len(resp) == 0 {
 			return nil
 		}
-		for _, blk := range resp {
-			if blk == nil {
-				return errors.New("nil block")
+		for _, raw := range resp {
+			var blk block.Block
+			if err := rlp.DecodeBytes(raw, &blk); err != nil {
+				return errors.Wrap(err, "invalid block")
 			}
-			c.blockFeed.Send(blk)
+			c.blockFeed.Send(&blk)
 			fromNum++
 		}
 	}

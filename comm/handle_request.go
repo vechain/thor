@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
@@ -103,21 +104,16 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		num := req.Num
 		var size metric.StorageSize
 		for size < maxRespSize && len(resp) < maxBlocks {
-			blk, err := c.chain.GetBlockByNumber(num)
+			raw, err := c.chain.GetRawBlockByNumber(num)
 			if err != nil {
 				if c.chain.IsNotFound(err) {
 					break
 				}
 				return nil, err
 			}
-			resp = append(resp, blk)
+			resp = append(resp, rlp.RawValue(raw))
 			num++
-			size += blk.Size()
-		}
-		if s := c.sessionSet.Find(peer.ID()); s != nil {
-			for _, blk := range resp {
-				s.MarkBlock(blk.Header().ID())
-			}
+			size += metric.StorageSize(len(raw))
 		}
 		return resp, nil
 	}
