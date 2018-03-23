@@ -6,20 +6,20 @@ import (
 	"github.com/vechain/thor/block"
 )
 
-type futureBlock struct {
+type futureBlocks struct {
 	f *future
 }
 
-func NewFutureBlock() *futureBlock {
+func newFutureBlocks() *futureBlocks {
 	f := make(future, 0)
 	heap.Init(&f)
 
-	return &futureBlock{
+	return &futureBlocks{
 		f: &f,
 	}
 }
 
-func (fb *futureBlock) Pop() *block.Block {
+func (fb *futureBlocks) Pop() *block.Block {
 	item := heap.Pop(fb.f)
 	if item == nil {
 		return nil
@@ -27,7 +27,7 @@ func (fb *futureBlock) Pop() *block.Block {
 	return item.(*block.Block)
 }
 
-func (fb *futureBlock) Push(blk *block.Block) {
+func (fb *futureBlocks) Push(blk *block.Block) {
 	heap.Push(fb.f, blk)
 }
 
