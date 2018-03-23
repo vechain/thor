@@ -2,11 +2,13 @@ package main_test
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -56,7 +58,7 @@ func TestNormalTransaction(t *testing.T) {
 	}
 
 	tx = tx.WithSignature(sig)
-	t.Log(tx.String(), " nonce:", nonce)
+	t.Log(tx.String())
 }
 
 func TestMultiClause(t *testing.T) {
@@ -74,5 +76,13 @@ func TestMultiClause(t *testing.T) {
 	}
 
 	tx = tx.WithSignature(sig)
-	t.Log(tx.String(), " nonce:", nonce)
+	t.Log(tx.String())
+}
+
+func TestGetThorBalance(t *testing.T) {
+	initAccounts(t)
+
+	txData := builtin.Energy.ABI.MustForMethod("balanceOf").MustEncodeInput(accounts[0].Address)
+	t.Log(builtin.Energy.Address)
+	t.Log(fmt.Sprintf("%x", txData))
 }

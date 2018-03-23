@@ -38,11 +38,21 @@ type account struct {
 	Balance    string
 }
 
+type cliContext struct {
+	accounts     []account
+	kv           *lvldb.LevelDB
+	stateCreator *state.Creator
+	c            *chain.Chain
+	txpl         *txpool.TxPool
+	pk           *packer.Packer
+	ldb          *logdb.LogDB
+	launchTime   uint64
+}
+
 var (
 	version   string
 	gitCommit string
 	release   = "dev"
-	accounts  []account
 )
 
 func newApp() *cli.App {
@@ -77,6 +87,9 @@ func newApp() *cli.App {
 		glogger.Vmodule(ctx.String("vmodule"))
 		log.Root().SetHandler(glogger)
 
+		solo := &cliContext{}
+		solo.launchTime = uint64(time.Now().Unix())
+
 		goes := &co.Goes{}
 		defer goes.Wait()
 
@@ -93,13 +106,14 @@ func newApp() *cli.App {
 
 		log.Debug("Got addr from context", "addr", addr)
 
-		kv, stateCreator, c, txpl, pk, ldb, err := prepare()
-		defer kv.Close()
+		// kv, stateCreator, c, txpl, pk, ldb, err := prepare()
+		err = solo.prepare()
 		if err != nil {
 			return errors.Wrap(err, "Preparation")
 		}
+		defer solo.kv.Close()
 
-		svr := &http.Server{Handler: api.NewHTTPHandler(c, stateCreator, txpl, ldb)}
+		svr := &http.Server{Handler: api.NewHTTPHandler(solo.c, solo.stateCreator, solo.txpl, solo.ldb)}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -117,7 +131,10 @@ func newApp() *cli.App {
 			_ = svr.Serve(listener)
 		})
 		goes.Go(func() {
-			packing(exit, pk, txpl, stateCreator, c, ldb, ctx.Bool("on-demand"))
+			solo.packing(exit, ctx.Bool("on-demand"))
+		})
+		goes.Go(func() {
+			solo.watcher(exit)
 		})
 
 		select {
@@ -137,9 +154,7 @@ func main() {
 	}
 }
 
-func buildGenesis(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
-	launchTime := uint64(time.Now().Unix())
-
+func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err error) {
 	privKeys := []string{
 		"dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65",
 		"321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51",
@@ -158,23 +173,23 @@ func buildGenesis(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log
 			return nil, nil, err
 		}
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
-		accounts = append(accounts, account{thor.Address(addr), pk, "10000000000000000000000"})
+		solo.accounts = append(solo.accounts, account{thor.Address(addr), pk, "10000000000000000000000"})
 	}
 
 	builder := new(genesis.Builder).
 		ChainTag(1).
 		GasLimit(thor.InitialGasLimit).
-		Timestamp(launchTime).
+		Timestamp(solo.launchTime).
 		State(func(state *state.State) error {
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
 			tokenSupply := &big.Int{}
-			for _, a := range accounts {
+			for _, a := range solo.accounts {
 				b, _ := new(big.Int).SetString(a.Balance, 10)
 				state.SetBalance(a.Address, b)
-				builtin.Energy.AddBalance(state, launchTime, a.Address, b)
+				builtin.Energy.AddBalance(state, solo.launchTime, a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
 			}
 
@@ -195,27 +210,27 @@ func buildGenesis(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Authority.Address).
-				WithData(builtin.Authority.ABI.MustForMethod("authorize").MustEncodeInput(accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
+				WithData(builtin.Authority.ABI.MustForMethod("authorize").MustEncodeInput(solo.accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
 			builtin.Executor.Address)
 
-	return builder.Build(stateCreator)
+	return builder.Build(solo.stateCreator)
 }
 
-func prepare() (kv *lvldb.LevelDB, stateCreator *state.Creator, c *chain.Chain, txpl *txpool.TxPool, pk *packer.Packer, ldb *logdb.LogDB, err error) {
-	kv, err = lvldb.NewMem()
+func (solo *cliContext) prepare() (err error) {
+	solo.kv, err = lvldb.NewMem()
 	if err != nil {
 		return
 	}
 
-	stateCreator = state.NewCreator(kv)
-	c = chain.New(kv)
+	solo.stateCreator = state.NewCreator(solo.kv)
+	solo.c = chain.New(solo.kv)
 
-	ldb, err = logdb.NewMem()
+	solo.ldb, err = logdb.NewMem()
 	if err != nil {
 		return
 	}
 
-	b0, logs, err := buildGenesis(stateCreator)
+	b0, logs, err := solo.buildGenesis()
 	if err != nil {
 		return
 	}
@@ -225,21 +240,21 @@ func prepare() (kv *lvldb.LevelDB, stateCreator *state.Creator, c *chain.Chain, 
 		dblog := logdb.NewLog(b0.Header().ID(), uint32(0), uint32(index), thor.Hash{}, thor.Address{}, l)
 		dblogs = append(dblogs, dblog)
 	}
-	err = ldb.Insert(dblogs)
+	err = solo.ldb.Insert(dblogs)
 	if err != nil {
 		return
 	}
 
-	err = c.WriteGenesis(b0)
+	err = solo.c.WriteGenesis(b0)
 	if err != nil {
 		return
 	}
 
-	txpl = txpool.New()
-	pk = packer.New(c, stateCreator, accounts[0].Address, accounts[0].Address)
+	solo.txpl = txpool.New()
+	solo.pk = packer.New(solo.c, solo.stateCreator, solo.accounts[0].Address, solo.accounts[0].Address)
 
 	log.Info("Solo has been setted up successfully", "genesis block id", b0.Header().ID())
-	for _, a := range accounts {
+	for _, a := range solo.accounts {
 		balance, _ := new(big.Int).SetString(a.Balance, 10)
 		balance = balance.Div(balance, big.NewInt(1000000000000000000))
 		log.Info("Builtin account info", "address", a.Address, "private key", thor.BytesToHash(crypto.FromECDSA(a.PrivateKey)), "vet balance", balance, "vethor balance", balance)
@@ -247,7 +262,7 @@ func prepare() (kv *lvldb.LevelDB, stateCreator *state.Creator, c *chain.Chain, 
 	return
 }
 
-func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, stateCreator *state.Creator, c *chain.Chain, ldb *logdb.LogDB, ondemand bool) {
+func (solo *cliContext) packing(exit <-chan interface{}, ondemand bool) {
 	for {
 		timeInterval := 10
 		if ondemand {
@@ -260,51 +275,74 @@ func packing(exit <-chan interface{}, pk *packer.Packer, txpl *txpool.TxPool, st
 			return
 		case <-arrive:
 			log.Trace("Try packing......")
-			iter, err := txpl.NewIterator(c, stateCreator)
+			iter, err := solo.txpl.NewIterator(solo.c, solo.stateCreator)
 			if err != nil {
 				log.Error(fmt.Sprintf("%+v", err))
 			}
 
 			if iter.HasNext() || !ondemand {
-				best, err := c.GetBestBlock()
+				best, err := solo.c.GetBestBlock()
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 
-				_, adopt, commit, err := pk.Prepare(best.Header(), uint64(time.Now().Unix()))
+				_, adopt, commit, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 
 				for iter.HasNext() {
 					tx := iter.Next()
-					log.Trace(tx.String())
-					iter.OnProcessed(tx.ID(), adopt(tx))
+					err := adopt(tx)
+					if err != nil {
+						log.Error(fmt.Sprintf("%+v", err))
+					}
+					iter.OnProcessed(tx.ID(), err)
 				}
 
-				b, receipts, err := commit(accounts[0].PrivateKey)
+				b, receipts, err := commit(solo.accounts[0].PrivateKey)
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 				log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
 				log.Trace(b.String())
 
-				err = saveBlockLogs(b, receipts, ldb)
+				err = saveBlockLogs(b, receipts, solo.ldb)
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 
 				// ignore fork when solo
-				_, err = c.AddBlock(b, true)
+				_, err = solo.c.AddBlock(b, true)
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 
-				err = c.SetBlockReceipts(b.Header().ID(), receipts)
+				err = solo.c.SetBlockReceipts(b.Header().ID(), receipts)
 				if err != nil {
 					log.Error(fmt.Sprintf("%+v", err))
 				}
 			}
+		}
+	}
+}
+
+func (solo *cliContext) watcher(exit <-chan interface{}) {
+	ch := make(chan *tx.Transaction, 10)
+	sub := solo.txpl.SubscribeNewTransaction(ch)
+	defer sub.Unsubscribe()
+	for {
+		select {
+		case tx := <-ch:
+			singer, err := tx.Signer()
+			if err != nil {
+				singer = thor.Address{}
+			}
+			log.Info("New Tx", "tx id", tx.ID(), "from", singer)
+			continue
+		case <-exit:
+			log.Info("Killing watcher service......")
+			return
 		}
 	}
 }
