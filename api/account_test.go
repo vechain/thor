@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api"
@@ -32,12 +33,13 @@ type account struct {
 	storage thor.Hash
 }
 
+var b, _ = new(big.Int).SetString("10000000000000000000000", 10)
 var accounts = []struct {
 	in, want account
 }{
 	{
-		account{thor.BytesToAddress([]byte("acc1")), big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
-		account{thor.BytesToAddress([]byte("acc1")), big.NewInt(10), []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
+		account{thor.BytesToAddress([]byte("acc1")), b, []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
+		account{thor.BytesToAddress([]byte("acc1")), b, []byte{0x11, 0x12}, thor.BytesToHash([]byte("v1"))},
 	},
 	{
 		account{thor.BytesToAddress([]byte("acc2")), big.NewInt(100), []byte{0x14, 0x15}, thor.BytesToHash([]byte("v2"))},
@@ -60,11 +62,11 @@ func TestAccount(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		bal := make(map[string]*big.Int)
+		bal := make(map[string]math.HexOrDecimal256)
 		if err := json.Unmarshal(r, &bal); err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, v.want.balance, bal["result"], "balance should be equal")
+		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), bal["result"], "balance should be equal")
 
 		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/code", address.String()))
 		if err != nil {

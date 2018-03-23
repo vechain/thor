@@ -34,7 +34,7 @@ func (ai *AccountInterface) handleGetBalance(w http.ResponseWriter, req *http.Re
 
 	balance := ai.GetBalance(address)
 	dataMap := make(map[string]interface{})
-	dataMap["result"] = balance.String()
+	dataMap["result"] = balance
 	return ResponseJSON(w, dataMap)
 }
 
