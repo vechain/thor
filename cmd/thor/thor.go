@@ -201,25 +201,22 @@ func action(ctx *cli.Context) error {
 
 	goes.Go(func() {
 		pk := packer.New(ch, stateCreator, proposer, proposer)
+		timer := time.NewTimer(1 * time.Second)
+		defer timer.Stop()
 
 		for {
+			timer.Reset(1 * time.Second)
+
 			select {
 			case <-c.Done():
 				return
-			default:
+			case <-bestBlockUpdate:
+				break
+			case <-timer.C:
 				if cm.IsSynced() {
-					goPack(c, ch, pk, txIter, privateKey, packedChan, bestBlockUpdate)
+					pack(c, ch, pk, txIter, privateKey, packedChan, bestBlockUpdate)
 				} else {
 					log.Warn("has not synced")
-
-					ticker := time.NewTicker(2 * time.Second)
-					defer ticker.Stop()
-
-					select {
-					case <-c.Done():
-						return
-					case <-ticker.C:
-					}
 				}
 			}
 		}
@@ -320,7 +317,7 @@ func homeDir() (string, error) {
 	return os.Getwd()
 }
 
-func goPack(
+func pack(
 	ctx context.Context,
 	ch *chain.Chain,
 	pk *packer.Packer,
