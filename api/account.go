@@ -1,33 +1,29 @@
 package api
 
 import (
-	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"math/big"
 )
 
-type bestBlockGetter interface {
-	GetBestBlock() (*block.Block, error)
-}
-
 //AccountInterface manage accounts
 type AccountInterface struct {
-	bestBlkGetter bestBlockGetter
-	stateCreator  *state.Creator
+	chain        *chain.Chain
+	stateCreator *state.Creator
 }
 
 //NewAccountInterface create new AccountManager
-func NewAccountInterface(bestBlkGetter bestBlockGetter, stateCreator *state.Creator) *AccountInterface {
+func NewAccountInterface(chain *chain.Chain, stateCreator *state.Creator) *AccountInterface {
 	return &AccountInterface{
-		bestBlkGetter,
+		chain,
 		stateCreator,
 	}
 }
 
 //GetStorage return storage value from key
 func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor.Hash {
-	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
+	bestBlk, err := ai.chain.GetBestBlock()
 	if err != nil {
 		return thor.Hash{}
 	}
@@ -40,7 +36,7 @@ func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor
 
 //GetBalance returns balance by address
 func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
-	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
+	bestBlk, err := ai.chain.GetBestBlock()
 	if err != nil {
 		return nil
 	}
@@ -53,7 +49,7 @@ func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 
 //GetCode returns code by address
 func (ai *AccountInterface) GetCode(address thor.Address) []byte {
-	bestBlk, err := ai.bestBlkGetter.GetBestBlock()
+	bestBlk, err := ai.chain.GetBestBlock()
 	if err != nil {
 		return nil
 	}

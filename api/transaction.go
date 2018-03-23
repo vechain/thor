@@ -7,14 +7,8 @@ import (
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
-
-type transactionPool interface {
-	Add(tx *tx.Transaction) error
-	GetTransaction(txID thor.Hash) *tx.Transaction
-}
 
 //TransactionInterface for manage block with chain
 type TransactionInterface struct {

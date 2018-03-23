@@ -497,10 +497,10 @@ paths:
                 options: 
                   type: object
                   properties: 
-                    index:
+                    clauseIndex:
                       type: integer
                       description: uint32
-                      example: 1
+                      example: 0
                     gas:
                       type: string
                       description: uint64

@@ -15,5 +15,6 @@ func NewHTTPHandler(chain *chain.Chain, stateCreator *state.Creator, txPool *txp
 	NewTransactionHTTPRouter(router, NewTransactionInterface(chain, txPool))
 	NewBlockHTTPRouter(router, NewBlockInterface(chain))
 	NewLogHTTPRouter(router, NewLogInterface(ldb))
+	NewContractHTTPRouter(router, NewContractInterface(chain, stateCreator))
 	return router
 }
