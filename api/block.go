@@ -2,16 +2,9 @@ package api
 
 import (
 	"github.com/vechain/thor/api/types"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
-
-type blockGetter interface {
-	GetBlockByNumber(uint32) (*block.Block, error)
-	GetBlock(thor.Hash) (*block.Block, error)
-	bestBlockGetter
-}
 
 //BlockInterface for manage block with chain
 type BlockInterface struct {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/api/utils/types"
+	"github.com/vechain/thor/api/types"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"

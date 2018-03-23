@@ -12,7 +12,7 @@ type Receipt struct {
 	// gas used by this tx
 	GasUsed math.HexOrDecimal64 `json:"gasUsed"`
 	// the one who payed for gas
-	GasPayer string `json:"gasPayer,string"`
+	GasPayer thor.Address `json:"gasPayer,string"`
 	// if the tx reverted
 	Reverted bool `json:"reverted"`
 	// outputs of clauses in tx
@@ -39,26 +39,24 @@ type ReceiptLog struct {
 func ConvertReceipt(rece *tx.Receipt) *Receipt {
 	receipt := &Receipt{
 		GasUsed:  math.HexOrDecimal64(rece.GasUsed),
-		GasPayer: rece.GasPayer.String(),
+		GasPayer: rece.GasPayer,
 		Reverted: rece.Reverted,
 	}
-	if len(rece.Outputs) > 0 {
-		receipt.Outputs = make([]*Output, len(rece.Outputs))
-		for _, output := range rece.Outputs {
-			logs := make([]*ReceiptLog, len(output.Logs))
-			for _, log := range output.Logs {
-				receiptLog := &ReceiptLog{
-					Address: log.Address,
-					Data:    hexutil.Encode(log.Data),
-				}
-				receiptLog.Topics = make([]thor.Hash, len(log.Topics))
-				for k, topic := range log.Topics {
-					receiptLog.Topics[k] = topic
-				}
-				logs = append(logs, receiptLog)
+	receipt.Outputs = make([]*Output, len(rece.Outputs))
+	for _, output := range rece.Outputs {
+		otp := &Output{make([]*ReceiptLog, len(output.Logs))}
+		for i, log := range output.Logs {
+			receiptLog := &ReceiptLog{
+				Address: log.Address,
+				Data:    hexutil.Encode(log.Data),
 			}
-			receipt.Outputs = append(receipt.Outputs, &Output{logs})
+			receiptLog.Topics = make([]thor.Hash, len(log.Topics))
+			for k, topic := range log.Topics {
+				receiptLog.Topics[k] = topic
+			}
+			otp.Logs[i] = receiptLog
 		}
+		receipt.Outputs = append(receipt.Outputs, otp)
 	}
 	return receipt
 }
