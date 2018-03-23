@@ -26,13 +26,6 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 // Consent is Consensus's main func.
 func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool, receipts tx.Receipts, err error) {
 	header := blk.Header()
-	parent, err := c.chain.GetBlockHeader(header.ParentID())
-	if err != nil {
-		if !c.chain.IsNotFound(err) {
-			return false, nil, err
-		}
-		return false, nil, errParentNotFound
-	}
 
 	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
 		if !c.chain.IsNotFound(err) {
@@ -40,6 +33,14 @@ func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool
 		}
 	} else {
 		return false, nil, errKnownBlock
+	}
+
+	parent, err := c.chain.GetBlockHeader(header.ParentID())
+	if err != nil {
+		if !c.chain.IsNotFound(err) {
+			return false, nil, err
+		}
+		return false, nil, errParentNotFound
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {

@@ -17,11 +17,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
@@ -166,12 +164,6 @@ func action(ctx *cli.Context) error {
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
-	es := &events{
-		newBlockPacked:  make(chan *block.Block),
-		newBlockAck:     make(chan struct{}),
-		bestBlockUpdate: make(chan struct{}),
-	}
-
 	goes.Go(func() {
 		txCh := make(chan *tx.Transaction)
 		sub := txpl.SubscribeNewTransaction(txCh)
@@ -198,21 +190,13 @@ func action(ctx *cli.Context) error {
 		}
 	})
 
-	goes.Go(func() {
-		cs := consensus.New(ch, stateCreator)
-		blockCh := make(chan *block.Block)
-		sub := cm.SubscribeBlock(blockCh)
-		heap := NewFutureBlock()
+	packedChan := make(chan packedEvent)
+	bestBlockUpdate := make(chan struct{})
 
-		for {
-			select {
-			case <-c.Done():
-				sub.Unsubscribe()
-				return
-			default:
-				es.consent(c, blockCh, cm, ch, cs, heap)
-			}
-		}
+	goes.Go(func() {
+		consent := newConsent(cm, ch, stateCreator)
+		consent.subscribeBestBlockUpdate(bestBlockUpdate)
+		consent.run(c, packedChan)
 	})
 
 	goes.Go(func() {
@@ -224,7 +208,7 @@ func action(ctx *cli.Context) error {
 				return
 			default:
 				if cm.IsSynced() {
-					es.pack(c, ch, pk, txIter, privateKey)
+					goPack(c, ch, pk, txIter, privateKey, packedChan, bestBlockUpdate)
 				} else {
 					log.Warn("has not synced")
 
@@ -336,56 +320,14 @@ func homeDir() (string, error) {
 	return os.Getwd()
 }
 
-type events struct {
-	newBlockPacked  chan *block.Block
-	newBlockAck     chan struct{}
-	bestBlockUpdate chan struct{}
-}
-
-func (es *events) consent(ctx context.Context, blockCh chan *block.Block, cm *comm.Communicator, ch *chain.Chain, cs *consensus.Consensus, fb *futureBlock) {
-	select {
-	case blk := <-blockCh:
-		if _, err := ch.GetBlockHeader(blk.Header().ID()); !ch.IsNotFound(err) {
-			return
-		}
-		signer, _ := blk.Header().Signer()
-		if trunk, _, err := cs.Consent(blk, uint64(time.Now().Unix())); err == nil {
-			ch.AddBlock(blk, trunk)
-			if trunk {
-				log.Info(fmt.Sprintf("received new block(#%v trunk)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "proposer", signer)
-				cm.BroadcastBlock(blk)
-				select {
-				case es.bestBlockUpdate <- struct{}{}:
-				default:
-				}
-			} else {
-				log.Info(fmt.Sprintf("received new block(#%v branch)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "proposer", signer)
-			}
-		} else {
-			log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "proposer", signer, "err", err.Error())
-			if consensus.IsFutureBlock(err) {
-				fb.Push(blk)
-			}
-		}
-	case blk := <-es.newBlockPacked:
-		if trunk, err := cs.IsTrunk(blk.Header()); err == nil {
-			ch.AddBlock(blk, trunk)
-			if trunk {
-				cm.BroadcastBlock(blk)
-			}
-			es.newBlockAck <- struct{}{}
-		}
-	case <-ctx.Done():
-		return
-	}
-}
-
-func (es *events) pack(
+func goPack(
 	ctx context.Context,
 	ch *chain.Chain,
 	pk *packer.Packer,
 	txIter *txpool.Iterator,
-	privateKey *ecdsa.PrivateKey) {
+	privateKey *ecdsa.PrivateKey,
+	packedChan chan packedEvent,
+	bestBlockUpdate chan struct{}) {
 
 	bestBlock, err := ch.GetBestBlock()
 	if err != nil {
@@ -411,10 +353,11 @@ func (es *events) pack(
 
 			if blk, _, err := commit(privateKey); err == nil {
 				log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
-				es.newBlockPacked <- blk
-				<-es.newBlockAck
+				pe := packedEvent{blk: blk, ack: make(chan struct{})}
+				packedChan <- pe
+				<-pe.ack
 			}
-		case <-es.bestBlockUpdate:
+		case <-bestBlockUpdate:
 			return
 		case <-ctx.Done():
 			return
