@@ -1,6 +1,8 @@
 package tx
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -13,4 +15,30 @@ type Log struct {
 	Topics []thor.Hash
 	// supplied by the contract, usually ABI-encoded
 	Data []byte
+}
+
+// Logs slice of logs.
+type Logs []*Log
+
+// RootHash computes merkle root hash of receipts.
+func (ls Logs) RootHash() thor.Hash {
+	if len(ls) == 0 {
+		// optimized
+		return emptyRoot
+	}
+	return thor.Hash(types.DeriveSha(derivableLogs(ls)))
+}
+
+// implements DerivableList
+type derivableLogs Logs
+
+func (ls derivableLogs) Len() int {
+	return len(ls)
+}
+func (ls derivableLogs) GetRlp(i int) []byte {
+	data, err := rlp.EncodeToBytes(ls[i])
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
