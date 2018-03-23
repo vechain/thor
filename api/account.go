@@ -1,10 +1,10 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"math/big"
 )
 
 //AccountInterface manage accounts
@@ -35,7 +35,7 @@ func (ai *AccountInterface) GetStorage(address thor.Address, key thor.Hash) thor
 }
 
 //GetBalance returns balance by address
-func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
+func (ai *AccountInterface) GetBalance(address thor.Address) *math.HexOrDecimal256 {
 	bestBlk, err := ai.chain.GetBestBlock()
 	if err != nil {
 		return nil
@@ -44,7 +44,9 @@ func (ai *AccountInterface) GetBalance(address thor.Address) *big.Int {
 	if err != nil {
 		return nil
 	}
-	return state.GetBalance(address)
+	b := state.GetBalance(address)
+	balance := math.HexOrDecimal256(*b)
+	return &balance
 }
 
 //GetCode returns code by address
