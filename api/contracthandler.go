@@ -2,10 +2,12 @@ package api
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/thor"
-	"net/http"
 )
 
 //ContractHTTPPathPrefix http path prefix
@@ -20,6 +22,9 @@ func NewContractHTTPRouter(router *mux.Router, ci *ContractInterface) {
 }
 
 func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http.Request) error {
+	body, _ := ioutil.ReadAll(req.Body)
+	req.Body.Close()
+
 	query := mux.Vars(req)
 	if len(query) == 0 {
 		return Error("No Params!", 400)
@@ -33,12 +38,12 @@ func (ci *ContractInterface) handleCallContract(w http.ResponseWriter, req *http
 		return Error("Invalid contract address!", 400)
 	}
 
-	optionData := []byte(req.FormValue("options"))
-	options := new(ContractInterfaceOptions)
-	if err := json.Unmarshal(optionData, &options); err != nil {
+	interfaceBody := &ContractCallBody{}
+	if err := json.Unmarshal(body, &interfaceBody); err != nil {
 		return err
 	}
-	output, err := ci.Call(&addr, req.FormValue("input"), options)
+
+	output, err := ci.Call(&addr, interfaceBody)
 	if err != nil {
 		return Error("Call contract failed!", 400)
 	}
