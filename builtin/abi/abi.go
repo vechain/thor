@@ -2,7 +2,6 @@ package abi
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"strings"
@@ -10,10 +9,13 @@ import (
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+// MethodID method id.
+type MethodID [4]byte
+
 // ABI holds information about methods and events of contract.
 type ABI struct {
 	abi            *ethabi.ABI
-	idToMethodName map[uint32]string // for fast name finding
+	idToMethodName map[MethodID]string // for fast name finding
 }
 
 // New create an ABI instance.
@@ -32,9 +34,10 @@ func New(reader io.Reader) (*ABI, error) {
 		removeUnderscore(e.Inputs)
 	}
 
-	idToMethodName := make(map[uint32]string, len(abi.Methods))
+	idToMethodName := make(map[MethodID]string, len(abi.Methods))
 	for n, m := range abi.Methods {
-		id := binary.BigEndian.Uint32(m.Id())
+		var id MethodID
+		copy(id[:], m.Id())
 		idToMethodName[id] = n
 	}
 	return &ABI{
@@ -48,7 +51,8 @@ func (a *ABI) MethodName(input []byte) (string, error) {
 	if len(input) < 4 {
 		return "", errors.New("input too short")
 	}
-	id := binary.BigEndian.Uint32(input)
+	var id MethodID
+	copy(id[:], input)
 	return a.idToMethodName[id], nil
 }
 
@@ -69,8 +73,10 @@ func (a *ABI) ForMethod(name string) (*MethodCodec, error) {
 	rmethod := method
 	rmethod.Inputs, rmethod.Outputs = rmethod.Outputs, rmethod.Inputs
 
+	var id MethodID
+	copy(id[:], method.Id())
 	return &MethodCodec{
-		method.Id(),
+		id,
 		name,
 		&ethabi.ABI{Methods: map[string]ethabi.Method{name: method}},
 		&ethabi.ABI{Methods: map[string]ethabi.Method{name: rmethod}},
@@ -116,7 +122,7 @@ func (a *ABI) MustForEvent(name string) func(output []byte, v interface{}) error
 
 // MethodCodec to encode/decode input/output.
 type MethodCodec struct {
-	id       []byte
+	id       MethodID
 	name     string
 	forward  *ethabi.ABI
 	reversed *ethabi.ABI
@@ -125,6 +131,11 @@ type MethodCodec struct {
 // Name returns method name.
 func (mc *MethodCodec) Name() string {
 	return mc.name
+}
+
+// ID returns method ID.
+func (mc *MethodCodec) ID() MethodID {
+	return mc.id
 }
 
 // EncodeInput encodes input args into input data.
@@ -172,7 +183,7 @@ func (mc *MethodCodec) DecodeInput(input []byte, v interface{}) error {
 	if mc.reversed == nil {
 		return errors.New("decode input unsupported")
 	}
-	if !bytes.HasPrefix(input, mc.id) {
+	if !bytes.HasPrefix(input, mc.id[:]) {
 		return errors.New("input mismatch")
 	}
 	return mc.reversed.Unpack(v, mc.name, input[4:])

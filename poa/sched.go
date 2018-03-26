@@ -11,7 +11,7 @@ import (
 // Scheduler to schedule the time when a proposer to produce a block.
 type Scheduler struct {
 	proposer          Proposer
-	onlines           []Proposer
+	actives           []Proposer
 	parentBlockNumber uint32
 	parentBlockTime   uint64
 }
@@ -25,18 +25,16 @@ func NewScheduler(
 	parentBlockNumber uint32,
 	parentBlockTime uint64) (*Scheduler, error) {
 
-	onlines := make([]Proposer, 0, len(proposers))
-	var proposer Proposer
+	actives := make([]Proposer, 0, len(proposers))
 	listed := false
+	var proposer Proposer
 	for _, p := range proposers {
 		if p.Address == addr {
 			proposer = p
-			onlines = append(onlines, p)
+			actives = append(actives, p)
 			listed = true
-		} else {
-			if p.IsOnline() {
-				onlines = append(onlines, p)
-			}
+		} else if p.Active {
+			actives = append(actives, p)
 		}
 	}
 
@@ -46,15 +44,15 @@ func NewScheduler(
 
 	return &Scheduler{
 		proposer,
-		onlines,
+		actives,
 		parentBlockNumber,
 		parentBlockTime,
 	}, nil
 }
 
 func (s *Scheduler) whoseTurn(t uint64) Proposer {
-	index := dprp(s.parentBlockNumber, t) % uint64(len(s.onlines))
-	return s.onlines[index]
+	index := dprp(s.parentBlockNumber, t) % uint64(len(s.actives))
+	return s.actives[index]
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
@@ -98,30 +96,30 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 // Updates returns proposers whose status are change, and the score when new block time is assumed to be newBlockTime.
 func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 
-	toBeOffline := make(map[thor.Address]Proposer)
+	toDeactive := make(map[thor.Address]Proposer)
 
 	t := newBlockTime - thor.BlockInterval
 	for i := uint64(0); i < thor.MaxBlockProposers && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
-			toBeOffline[p.Address] = p
+			toDeactive[p.Address] = p
 		}
 		t -= thor.BlockInterval
 	}
 
-	updates = make([]Proposer, 0, len(toBeOffline)+1)
-	for _, p := range toBeOffline {
-		p.SetOnline(false)
+	updates = make([]Proposer, 0, len(toDeactive)+1)
+	for _, p := range toDeactive {
+		p.Active = false
 		updates = append(updates, p)
 	}
 
-	if !s.proposer.IsOnline() {
+	if !s.proposer.Active {
 		cpy := s.proposer
-		cpy.SetOnline(true)
+		cpy.Active = true
 		updates = append(updates, cpy)
 	}
 
-	score = uint64(len(s.onlines)) - uint64(len(toBeOffline))
+	score = uint64(len(s.actives)) - uint64(len(toDeactive))
 	return
 }
 

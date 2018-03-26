@@ -164,7 +164,19 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	uint64, // score
 	error,
 ) {
-	proposers := builtin.Authority.All(state)
+	endorsement := builtin.Params.WithState(state).Get(thor.KeyProposerEndorsement)
+	authority := builtin.Authority.WithState(state)
+
+	candidates := authority.Candidates()
+	proposers := make([]poa.Proposer, 0, len(candidates))
+	for _, c := range candidates {
+		if state.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
+			proposers = append(proposers, poa.Proposer{
+				Address: c.Signer,
+				Active:  c.Active,
+			})
+		}
+	}
 
 	// calc the time when it's turn to produce block
 	sched, err := poa.NewScheduler(p.proposer, proposers, parent.Number(), parent.Timestamp())
@@ -176,7 +188,7 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
-		builtin.Authority.Update(state, u.Address, u.Status)
+		authority.Update(u.Address, u.Active)
 	}
 
 	return newBlockTime, score, nil

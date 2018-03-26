@@ -30,7 +30,7 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, e
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Energy.SetTokenSupply(state, m.tokenSupply)
+			builtin.Energy.WithState(state).SetTokenSupply(m.tokenSupply)
 			return nil
 		}).
 		Call(
@@ -40,6 +40,10 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, e
 		Call(
 			tx.NewClause(&builtin.Params.Address).
 				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			builtin.Executor.Address).
+		Call(
+			tx.NewClause(&builtin.Params.Address).
+				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Energy.Address).

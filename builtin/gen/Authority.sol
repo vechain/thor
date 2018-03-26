@@ -1,58 +1,58 @@
 pragma solidity ^0.4.18;
 
-/// @title Authority manages the whitelist of block proposers.
+/// @title Authority manages a candidates list of block proposers.
 contract Authority {
 
-    function n() internal view returns(AuthorityNative) {
-        return AuthorityNative(this);
-    }
-
     function executor() public view returns(address) {
-        return n().nativeGetExecutor();
+        return this.nativeGetExecutor();
     }
     
-    // @notice authorize someone to be a block proposer.
-    // It will be reverted if someone already listed, 
-    // @param _addr address of someone.
-    // @param _identity identity to identify someone. Must be non-empty. 
-    function authorize(address _addr, bytes32 _identity) public {
-        require(msg.sender == n().nativeGetExecutor());
-        require(_addr != 0 && _identity != 0);
+    // @notice add a candidate of block proposer.
+    // It will be reverted if it already listed, 
+    // @param _signer address of the signer.
+    // @param _endorsor address of endorsor that keeps certain amount of tokens. 
+    // @param _identity identity of the candidate. Must be non-empty. 
+    function add(address _signer, address _endorsor, bytes32 _identity) public {
+        require(msg.sender == this.nativeGetExecutor());
+        require(_signer != 0 && _endorsor != 0 && _identity != 0);
 
-        require(n().nativeAdd(_addr, _identity));
+        require(this.nativeAdd(_signer, _endorsor, _identity));
 
-        Authorize(_addr, _identity);
+        Add(_signer, _identity);
     }
 
-    // @notice deauthorize a block proposer by its address.
-    // @param _addr address of the proposer.
-    function deauthorize(address _addr) public {
-        require(msg.sender == n().nativeGetExecutor());
+    // @notice remove a candidate.
+    // @param _signer address of the signer.
+    function remove(address _signer) public {
+        require(msg.sender == this.nativeGetExecutor());
 
-        require(n().nativeRemove(_addr));
+        require(this.nativeRemove(_signer));
 
-        Deauthorize(_addr);
+        Remove(_signer);
     }
 
-    function status(address _addr) public view returns(bool listed, bytes32 identity, uint32) {
-        return n().nativeStatus(_addr);
+    function get(address _signer) public view returns(bool listed, address endorsor, bytes32 identity, bool active) {
+        return this.nativeGet(_signer);
     }
 
-    function count() public view returns(uint64) {
-        return n().nativeCount();
+    function first() public view returns(address) {
+        return this.nativeFirst();
+    }
+
+    function next(address _signer) public view returns(address) {
+        return this.nativeNext(_signer);
     }
 
     // fired when an address authorized to be a proposer.
-    event Authorize(address indexed addr, bytes32 identity);
+    event Add(address indexed signer, bytes32 identity);
     // fired when an address deauthorized.
-    event Deauthorize(address indexed addr);
-}
+    event Remove(address indexed signer);
 
-contract AuthorityNative {
-    function nativeGetExecutor() public view returns(address);
 
-    function nativeAdd(address addr, bytes32 identity) public returns(bool);
-    function nativeRemove(address addr) public returns(bool);
-    function nativeStatus(address addr) public view returns(bool, bytes32, uint32);
-    function nativeCount() public view returns(uint64);
+    function nativeGetExecutor() public view returns(address) {}
+    function nativeAdd(address signer, address endorsor, bytes32 identity) public returns(bool) {}
+    function nativeRemove(address signer) public returns(bool) {}
+    function nativeGet(address signer) public view returns(bool, address, bytes32, bool) {}
+    function nativeFirst() public view returns(address) {}
+    function nativeNext(address signer) public view returns(address) {}
 }

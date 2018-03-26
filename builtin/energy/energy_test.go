@@ -1,4 +1,4 @@
-package builtin
+package energy
 
 import (
 	"math"
@@ -12,25 +12,24 @@ import (
 )
 
 func TestEnergy(t *testing.T) {
-	assert.True(t, len(Energy.RuntimeBytecodes()) > 0)
-
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Hash{}, kv)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 	contractAddr := thor.BytesToAddress([]byte("c1"))
 
+	eng := New(thor.BytesToAddress([]byte("eng")), st)
 	tests := []struct {
 		ret      interface{}
 		expected interface{}
 	}{
-		{Energy.GetBalance(st, 0, acc), &big.Int{}},
-		{func() bool { Energy.AddBalance(st, 0, acc, big.NewInt(10)); return true }(), true},
-		{Energy.GetBalance(st, 0, acc), big.NewInt(10)},
-		{Energy.SubBalance(st, 0, acc, big.NewInt(5)), true},
-		{Energy.SubBalance(st, 0, acc, big.NewInt(6)), false},
-		{func() bool { Energy.SetContractMaster(st, contractAddr, acc); return true }(), true},
-		{Energy.GetContractMaster(st, contractAddr), acc},
+		{eng.GetBalance(0, acc), &big.Int{}},
+		{func() bool { eng.AddBalance(0, acc, big.NewInt(10)); return true }(), true},
+		{eng.GetBalance(0, acc), big.NewInt(10)},
+		{eng.SubBalance(0, acc, big.NewInt(5)), true},
+		{eng.SubBalance(0, acc, big.NewInt(6)), false},
+		{func() bool { eng.SetContractMaster(contractAddr, acc); return true }(), true},
+		{eng.GetContractMaster(contractAddr), acc},
 	}
 
 	for _, tt := range tests {
@@ -49,10 +48,12 @@ func TestEnergyGrowth(t *testing.T) {
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	Energy.AddBalance(st, 0, acc, &big.Int{})
-	Energy.AdjustGrowthRate(st, 0, thor.InitialEnergyGrowthRate)
+	eng := New(thor.BytesToAddress([]byte("eng")), st)
 
-	bal1 := Energy.GetBalance(st, blockTime1, acc)
+	eng.AddBalance(0, acc, &big.Int{})
+	eng.AdjustGrowthRate(0, thor.InitialEnergyGrowthRate)
+
+	bal1 := eng.GetBalance(blockTime1, acc)
 	x := new(big.Int).Mul(thor.InitialEnergyGrowthRate, vetBal)
 	x.Mul(x, new(big.Int).SetUint64(blockTime1))
 	x.Div(x, big.NewInt(1e18))
@@ -61,10 +62,10 @@ func TestEnergyGrowth(t *testing.T) {
 
 	blockTime2 := uint64(2000)
 	rate2 := new(big.Int).Mul(thor.InitialEnergyGrowthRate, big.NewInt(2))
-	Energy.AdjustGrowthRate(st, blockTime2, rate2)
+	eng.AdjustGrowthRate(blockTime2, rate2)
 
 	blockTime3 := uint64(3000)
-	bal2 := Energy.GetBalance(st, blockTime3, acc)
+	bal2 := eng.GetBalance(blockTime3, acc)
 
 	x.Mul(thor.InitialEnergyGrowthRate, vetBal)
 	x.Mul(x, new(big.Int).SetUint64(blockTime2))
@@ -90,28 +91,29 @@ func TestEnergyShare(t *testing.T) {
 	recRate := big.NewInt(100)
 	exp := uint64(2000)
 
-	Energy.AddBalance(st, blockTime1, contract, bal)
-	Energy.ApproveConsumption(st, blockTime1, contract, caller, credit, recRate, exp)
+	eng := New(thor.BytesToAddress([]byte("eng")), st)
+	eng.AddBalance(blockTime1, contract, bal)
+	eng.ApproveConsumption(blockTime1, contract, caller, credit, recRate, exp)
 
-	remained := Energy.GetConsumptionAllowance(st, blockTime1, contract, caller)
+	remained := eng.GetConsumptionAllowance(blockTime1, contract, caller)
 	assert.Equal(t, credit, remained)
 
 	consumed := big.NewInt(1e9)
-	payer, ok := Energy.Consume(st, blockTime1, contract, caller, consumed)
+	payer, ok := eng.Consume(blockTime1, contract, caller, consumed)
 	assert.Equal(t, contract, payer)
 	assert.True(t, ok)
 
-	remained = Energy.GetConsumptionAllowance(st, blockTime1, contract, caller)
+	remained = eng.GetConsumptionAllowance(blockTime1, contract, caller)
 	assert.Equal(t, new(big.Int).Sub(credit, consumed), remained)
 
 	blockTime2 := uint64(1500)
-	remained = Energy.GetConsumptionAllowance(st, blockTime2, contract, caller)
+	remained = eng.GetConsumptionAllowance(blockTime2, contract, caller)
 	x := new(big.Int).SetUint64(blockTime2 - blockTime1)
 	x.Mul(x, recRate)
 	x.Add(x, credit)
 	x.Sub(x, consumed)
 	assert.Equal(t, x, remained)
 
-	remained = Energy.GetConsumptionAllowance(st, math.MaxUint64, contract, caller)
+	remained = eng.GetConsumptionAllowance(math.MaxUint64, contract, caller)
 	assert.Equal(t, &big.Int{}, remained)
 }

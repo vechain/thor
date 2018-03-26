@@ -71,6 +71,7 @@ func TestP(t *testing.T) {
 	// }
 	// pprof.StartCPUProfile(f)
 	// defer pprof.StopCPUProfile()
+
 	for {
 		best, _ := c.GetBestBlock()
 		p := packer.New(c, stateCreator, a1.Address, a1.Address)

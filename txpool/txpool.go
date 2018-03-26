@@ -3,15 +3,16 @@ package txpool
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"sort"
-	"sync"
-	"time"
 )
 
 var (
@@ -90,7 +91,7 @@ func (pool *TxPool) NewIterator(chain *chain.Chain, stateC *state.Creator) (*Ite
 		return nil, err
 	}
 
-	baseGasPrice := builtin.Params.Get(st, thor.KeyBaseGasPrice)
+	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
 	traverser := chain.NewTraverser(bestBlock.Header().ID())
 	var objs TxObjects
 	l := uint64(len(pool.all))
