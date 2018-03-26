@@ -117,7 +117,7 @@ paths:
       summary: "Get transaction by transaction id"
       description: "returns transaction by transaction id"
       parameters:
-        - in: query
+        - in: path
           required: true
           name: id
           schema:
@@ -185,6 +185,72 @@ paths:
                     type: integer
                     description: uint32
                     example: 1
+        400:
+          description: "Invalid params"
+  /transactions/{id}/receipts:
+    get:
+      tags:
+      - "Transaction"
+      summary: "Get transaction by transaction id"
+      description: "returns transaction by transaction id"
+      parameters:
+        - in: path
+          required: true
+          name: id
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            description: transaction id
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gasUsed:
+                    type: string
+                    description: gasused
+                    example: "0x5208"
+                  gasPayer:
+                    type: string
+                    example: "0x0000000000000000000000000000000000000000"
+                    description: account address
+                  reverted:
+                    type: boolean
+                    description: is transaction reverted
+                    example: false
+                  outputs:
+                    type: array
+                    description: transaction outputs
+                    items:
+                      anyOf:
+                        - type: object
+                          description: output
+                          properties:
+                            outputs:
+                              type: array
+                              description: logs
+                              items:
+                                anyOf:
+                                  - type: object
+                                    description: output
+                                    properties:
+                                      address:
+                                        type: string
+                                        example: "0x0000000000000000000000000000000000000000"
+                                        description: account address
+                                      topics:
+                                        items:
+                                          anyOf:
+                                            - type: string
+                                              description: topic (can be null)
+                                              example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                                      data:
+                                        type: string
+                                        example: "0x00"
+                                        description: data
         400:
           description: "Invalid params"
   /transactions:
@@ -263,7 +329,7 @@ paths:
       summary: "Get block by block id"
       description: "returns block by block id"
       parameters:
-        - in: query
+        - in: path
           required: true
           name: id
           schema:

@@ -43,9 +43,9 @@ func ConvertReceipt(rece *tx.Receipt) *Receipt {
 		Reverted: rece.Reverted,
 	}
 	receipt.Outputs = make([]*Output, len(rece.Outputs))
-	for _, output := range rece.Outputs {
+	for i, output := range rece.Outputs {
 		otp := &Output{make([]*ReceiptLog, len(output.Logs))}
-		for i, log := range output.Logs {
+		for j, log := range output.Logs {
 			receiptLog := &ReceiptLog{
 				Address: log.Address,
 				Data:    hexutil.Encode(log.Data),
@@ -54,9 +54,9 @@ func ConvertReceipt(rece *tx.Receipt) *Receipt {
 			for k, topic := range log.Topics {
 				receiptLog.Topics[k] = topic
 			}
-			otp.Logs[i] = receiptLog
+			otp.Logs[j] = receiptLog
 		}
-		receipt.Outputs = append(receipt.Outputs, otp)
+		receipt.Outputs[i] = otp
 	}
 	return receipt
 }
