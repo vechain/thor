@@ -7,6 +7,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/vechain/thor/txpool"
+
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/block"
@@ -33,14 +35,16 @@ type Communicator struct {
 	txFeed     event.Feed
 	feedScope  event.SubscriptionScope
 	goes       co.Goes
+	txIter     *txpool.Iterator
 }
 
 // New create a new Communicator instance.
-func New(chain *chain.Chain) *Communicator {
+func New(chain *chain.Chain, txIter *txpool.Iterator) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		genesisID:  mustGetGenesisID(chain),
 		chain:      chain,
+		txIter:     txIter,
 		ctx:        ctx,
 		cancel:     cancel,
 		sessionSet: session.NewSet(),
@@ -111,6 +115,8 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 
 		c.sessionSet.Add(session)
 		defer c.sessionSet.Remove(peer.ID())
+
+		// 进行 TX 同步?
 
 		select {
 		case <-peer.Done():

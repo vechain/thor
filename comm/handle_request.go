@@ -17,6 +17,8 @@ type announce struct {
 }
 
 func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface{}, error) {
+	const maxRespSize = 2 * 1024 * 1024
+
 	switch msg.Code {
 	case proto.MsgStatus:
 		bestBlock, err := c.chain.GetBestBlock()
@@ -98,7 +100,6 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			return nil, badRequest{err}
 		}
 
-		const maxRespSize = 2 * 1024 * 1024
 		const maxBlocks = 256
 		resp := make(proto.RespGetBlocksFromNumber, 0, 100)
 		num := req.Num
@@ -114,6 +115,15 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			resp = append(resp, rlp.RawValue(raw))
 			num++
 			size += metric.StorageSize(len(raw))
+		}
+		return resp, nil
+	case proto.MsgGetTxs:
+		resp := make(proto.RespGetTxs, 0, 100)
+		var size metric.StorageSize
+		for size < maxRespSize && c.txIter.HasNext() {
+			tx := c.txIter.Next()
+			resp = append(resp, tx)
+			size += tx.Size()
 		}
 		return resp, nil
 	}

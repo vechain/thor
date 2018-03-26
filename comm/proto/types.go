@@ -120,3 +120,20 @@ func (req ReqGetBlockByID) Do(ctx context.Context, peer *p2psrv.Peer) (*RespGetB
 type RespGetBlockByID struct {
 	Block *block.Block
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// ReqGetTxs request payload of MsgGetTxs.
+type ReqGetTxs struct{}
+
+// Do make request to peer.
+func (req ReqGetTxs) Do(ctx context.Context, peer *p2psrv.Peer) (RespGetTxs, error) {
+	var resp RespGetTxs
+	if err := peer.Request(ctx, MsgGetTxs, &req, &resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// RespGetTxs response payload of MsgGetTxs.
+type RespGetTxs []*tx.Transaction
