@@ -56,7 +56,7 @@ func newApp() *cli.App {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "port",
-			Value: ":55555",
+			Value: ":56565",
 			Usage: "p2p listen port",
 		},
 		cli.StringFlag{
@@ -146,7 +146,9 @@ func action(ctx *cli.Context) error {
 
 	cm := comm.New(ch, txpool, stateCreator)
 
-	srv.Start("thor@111111", cm.Protocols())
+	if err := srv.Start("thor@111111", cm.Protocols()); err != nil {
+		return err
+	}
 	defer srv.Stop()
 
 	cm.Start(peerCh)
