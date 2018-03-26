@@ -1,6 +1,8 @@
 package api
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/chain"
@@ -9,11 +11,16 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-	"math/big"
 )
 
-//ContractInterfaceOptions contract calling options
-type ContractInterfaceOptions struct {
+//ContractCallBody represents contract-call body
+type ContractCallBody struct {
+	Input   string              `json:"input"`
+	Options ContractCallOptions `json:"options"`
+}
+
+// ContractCallOptions represents options in contract-call body
+type ContractCallOptions struct {
 	ClauseIndex uint32                `json:"clauseIndex"`
 	Gas         uint64                `json:"gas,string"`
 	From        string                `json:"from,string"`
@@ -36,14 +43,13 @@ func NewContractInterface(chain *chain.Chain, stateCreator *state.Creator) *Cont
 	}
 }
 
-//DefaultContractInterfaceOptions a default contract options
-func (ci *ContractInterface) DefaultContractInterfaceOptions() *ContractInterfaceOptions {
-	gp := big.NewInt(40)
+func (ci *ContractInterface) defaultContractCallOptions() *ContractCallOptions {
+	gp := big.NewInt(1)
 	gph := math.HexOrDecimal256(*gp)
 	v := big.NewInt(0)
 	vh := math.HexOrDecimal256(*v)
-	return &ContractInterfaceOptions{
-		ClauseIndex: 1,
+	return &ContractCallOptions{
+		ClauseIndex: 0,
 		Gas:         21000,
 		From:        thor.Address{}.String(),
 		GasPrice:    &gph,
@@ -52,27 +58,42 @@ func (ci *ContractInterface) DefaultContractInterfaceOptions() *ContractInterfac
 	}
 }
 
-func (ci *ContractInterface) santinizeOptions(options *ContractInterfaceOptions) {
-	ops := ci.DefaultContractInterfaceOptions()
-	if options.ClauseIndex < ops.ClauseIndex {
-		options.ClauseIndex = ops.ClauseIndex
+func (ci *ContractInterface) santinizeOptions(options *ContractCallOptions) {
+	defaultOptions := ci.defaultContractCallOptions()
+
+	if options.ClauseIndex < defaultOptions.ClauseIndex {
+		options.ClauseIndex = defaultOptions.ClauseIndex
 	}
-	if options.Gas < ops.Gas {
-		options.Gas = ops.Gas
+	if options.Gas < defaultOptions.Gas {
+		options.Gas = defaultOptions.Gas
 	}
-	gp := big.Int(*options.GasPrice)
-	gp1 := big.Int(*ops.GasPrice)
-	if (&gp).Cmp(&gp1) < 0 {
-		options.GasPrice = ops.GasPrice
+
+	if options.GasPrice == nil {
+		options.GasPrice = defaultOptions.GasPrice
+	} else {
+		gp := big.Int(*options.GasPrice)
+		gpDefault := big.Int(*defaultOptions.GasPrice)
+		if (&gp).Cmp(&gpDefault) < 0 {
+			options.GasPrice = defaultOptions.GasPrice
+		}
 	}
+
 	if options.Value == nil {
-		options.Value = ops.Value
+		options.Value = defaultOptions.Value
+	}
+
+	if len(options.From) == 0 {
+		options.From = defaultOptions.From
+	}
+
+	if len(options.TxID) == 0 {
+		options.TxID = defaultOptions.TxID
 	}
 }
 
 //Call a contract with input
-func (ci *ContractInterface) Call(to *thor.Address, input string, options *ContractInterfaceOptions) (output []byte, err error) {
-	ci.santinizeOptions(options)
+func (ci *ContractInterface) Call(to *thor.Address, body *ContractCallBody) (output []byte, err error) {
+	ci.santinizeOptions(&body.Options)
 	blk, err := ci.chain.GetBestBlock()
 	if err != nil {
 		return nil, err
@@ -84,23 +105,23 @@ func (ci *ContractInterface) Call(to *thor.Address, input string, options *Contr
 		return nil, err
 	}
 	rt := runtime.New(st, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
-	v := big.Int(*options.Value)
-	data, err := hexutil.Decode(input)
+	v := big.Int(*body.Options.Value)
+	data, err := hexutil.Decode(body.Input)
 	if err != nil {
 		return nil, err
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	var vmout *vm.Output
-	gp := big.Int(*options.GasPrice)
-	from, err := thor.ParseAddress(options.From)
+	gp := big.Int(*body.Options.GasPrice)
+	from, err := thor.ParseAddress(body.Options.From)
 	if err != nil {
 		return nil, err
 	}
-	txID, err := thor.ParseHash(options.TxID)
+	txID, err := thor.ParseHash(body.Options.TxID)
 	if err != nil {
 		return nil, err
 	}
-	vmout = rt.Call(clause, options.ClauseIndex, options.Gas, from, &gp, txID)
+	vmout = rt.Call(clause, body.Options.ClauseIndex, body.Options.Gas, from, &gp, txID)
 	if vmout.VMErr != nil {
 		return nil, vmout.VMErr
 	}
