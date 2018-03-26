@@ -141,7 +141,10 @@ func action(ctx *cli.Context) error {
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
 	srv.SubscribePeer(peerCh)
-	cm := comm.New(ch)
+
+	txpool := txpool.New()
+
+	cm := comm.New(ch, txpool, stateCreator)
 
 	srv.Start("thor@111111", cm.Protocols())
 	defer srv.Stop()
@@ -155,18 +158,12 @@ func action(ctx *cli.Context) error {
 	}
 	defer lsr.Close()
 
-	txpl := txpool.New()
-	txIter, err := txpl.NewIterator(ch, stateCreator)
-	if err != nil {
-		return err
-	}
-
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
 		txCh := make(chan *tx.Transaction)
-		sub := txpl.SubscribeNewTransaction(txCh)
+		sub := txpool.SubscribeNewTransaction(txCh)
 
 		select {
 		case <-c.Done():
@@ -186,7 +183,7 @@ func action(ctx *cli.Context) error {
 			sub.Unsubscribe()
 			return
 		case tx := <-txCh:
-			txpl.Add(tx)
+			txpool.Add(tx)
 		}
 	})
 
@@ -214,6 +211,11 @@ func action(ctx *cli.Context) error {
 				break
 			case <-timer.C:
 				if cm.IsSynced() {
+					txIter, err := txpool.NewIterator(ch, stateCreator)
+					if err != nil {
+						log.Warn(fmt.Sprintf("%v", err))
+						continue
+					}
 					pack(c, ch, pk, txIter, privateKey, packedChan, bestBlockUpdate)
 				} else {
 					log.Warn("has not synced")
@@ -223,7 +225,7 @@ func action(ctx *cli.Context) error {
 	})
 
 	goes.Go(func() {
-		restful := http.Server{Handler: api.NewHTTPHandler(ch, stateCreator, txpl, ldb)}
+		restful := http.Server{Handler: api.NewHTTPHandler(ch, stateCreator, txpool, ldb)}
 
 		go func() {
 			<-c.Done()
