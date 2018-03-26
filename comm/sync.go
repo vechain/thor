@@ -41,11 +41,12 @@ func (c *Communicator) sync() error {
 		return err
 	}
 
-	return c.download(s.Peer(), ancestor+1)
+	return c.download(s, ancestor+1)
 }
 
-func (c *Communicator) download(peer *p2psrv.Peer, fromNum uint32) error {
+func (c *Communicator) download(session *session.Session, fromNum uint32) error {
 	for {
+		peer := session.Peer()
 		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
 		resp, err := req.Do(c.ctx, peer)
 		if err != nil {
@@ -59,6 +60,7 @@ func (c *Communicator) download(peer *p2psrv.Peer, fromNum uint32) error {
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
+			session.MarkBlock(blk.Header().ID())
 			c.blockFeed.Send(&blk)
 			fromNum++
 		}
