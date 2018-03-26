@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -23,33 +25,35 @@ import (
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	genesisID  thor.Hash
-	chain      *chain.Chain
-	synced     bool
-	ctx        context.Context
-	cancel     context.CancelFunc
-	sessionSet *session.Set
-	syncCh     chan struct{}
-	announceCh chan *announce
-	blockFeed  event.Feed
-	txFeed     event.Feed
-	feedScope  event.SubscriptionScope
-	goes       co.Goes
-	txIter     *txpool.Iterator
+	genesisID    thor.Hash
+	chain        *chain.Chain
+	synced       bool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	sessionSet   *session.Set
+	syncCh       chan struct{}
+	announceCh   chan *announce
+	blockFeed    event.Feed
+	txFeed       event.Feed
+	feedScope    event.SubscriptionScope
+	goes         co.Goes
+	txpool       *txpool.TxPool
+	stateCreator *state.Creator
 }
 
 // New create a new Communicator instance.
-func New(chain *chain.Chain, txIter *txpool.Iterator) *Communicator {
+func New(chain *chain.Chain, txpool *txpool.TxPool, stateCreator *state.Creator) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		genesisID:  mustGetGenesisID(chain),
-		chain:      chain,
-		txIter:     txIter,
-		ctx:        ctx,
-		cancel:     cancel,
-		sessionSet: session.NewSet(),
-		syncCh:     make(chan struct{}),
-		announceCh: make(chan *announce),
+		genesisID:    mustGetGenesisID(chain),
+		chain:        chain,
+		txpool:       txpool,
+		stateCreator: stateCreator,
+		ctx:          ctx,
+		cancel:       cancel,
+		sessionSet:   session.NewSet(),
+		syncCh:       make(chan struct{}),
+		announceCh:   make(chan *announce),
 	}
 }
 
@@ -102,21 +106,28 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 		// 5sec timeout for handshake
 		ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
 		defer cancel()
-		resp, err := proto.ReqStatus{}.Do(ctx, peer)
+		respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
 		if err != nil {
 			return
 		}
-		if resp.GenesisBlockID != c.genesisID {
+		if respStatus.GenesisBlockID != c.genesisID {
 			return
 		}
 
+		respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
+		if err != nil {
+			log.Error(fmt.Sprintf("%v", err))
+			return
+		}
+		for _, raw := range respTxs {
+			c.txpool.Add(raw)
+		}
+
 		session := session.New(peer)
-		session.UpdateTrunkHead(resp.BestBlockID, resp.TotalScore)
+		session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
 
 		c.sessionSet.Add(session)
 		defer c.sessionSet.Remove(peer.ID())
-
-		// 进行 TX 同步?
 
 		select {
 		case <-peer.Done():

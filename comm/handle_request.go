@@ -118,10 +118,15 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return resp, nil
 	case proto.MsgGetTxs:
+		txIter, err := c.txpool.NewIterator(c.chain, c.stateCreator)
+		if err != nil {
+			return nil, err
+		}
 		resp := make(proto.RespGetTxs, 0, 100)
 		var size metric.StorageSize
-		for size < maxRespSize && c.txIter.HasNext() {
-			tx := c.txIter.Next()
+
+		for size < maxRespSize && txIter.HasNext() {
+			tx := txIter.Next()
 			resp = append(resp, tx)
 			size += tx.Size()
 		}
