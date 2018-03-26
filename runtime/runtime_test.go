@@ -19,7 +19,7 @@ import (
 func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	b0, err := genesis.Mainnet.Build(state.NewCreator(kv))
+	b0, _, err := genesis.Mainnet.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ type contract struct {
 	ABI     *abi.ABI
 }
 
-func loadContract(name string) *contract {
+func mustLoadContract(name string) *contract {
 	asset := "compiled/" + name + ".abi"
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(bytes.NewReader(data))
@@ -39,4 +39,13 @@ func (c *contract) RuntimeBytecodes() []byte {
 		panic(errors.Wrap(err, "load runtime byte code for '"+c.name+"'"))
 	}
 	return data
+}
+
+// to implement native method.
+func (c *contract) impl(name string, gas uint64, run func(env *env) ([]interface{}, error)) *nativeMethod {
+	return &nativeMethod{
+		c.Address,
+		c.ABI.MustForMethod(name),
+		gas,
+		run}
 }

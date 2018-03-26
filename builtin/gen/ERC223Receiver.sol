@@ -17,5 +17,5 @@ If sender == tx.origin, it is safe to trust it regardless of the token.
 */
 
 contract ERC223Receiver {
-  function tokenFallback(address _from, uint _value, bytes _data) public;
+    function tokenFallback(address _from, uint _value, bytes _data) public;
 }

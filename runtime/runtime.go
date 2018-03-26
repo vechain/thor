@@ -5,6 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/builtin/energy"
+	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
@@ -22,6 +24,9 @@ type Runtime struct {
 	blockNumber      uint32
 	blockTime        uint64
 	blockGasLimit    uint64
+
+	energy *energy.Energy
+	params *params.Params
 }
 
 // New create a Runtime object.
@@ -39,6 +44,8 @@ func New(
 		blockNumber:      blockNumber,
 		blockTime:        blockTime,
 		blockGasLimit:    blockGasLimit,
+		energy:           builtin.Energy.WithState(state),
+		params:           builtin.Params.WithState(state),
 	}
 }
 
@@ -88,15 +95,15 @@ func (rt *Runtime) execute(
 	})
 	env.SetOnContractCreated(func(contractAddr thor.Address) {
 		// set master for created contract
-		builtin.Energy.SetContractMaster(rt.state, contractAddr, txOrigin)
+		rt.energy.SetContractMaster(contractAddr, txOrigin)
 	})
 	env.SetOnTransfer(func(sender, recipient thor.Address, amount *big.Int) {
 		if amount.Sign() == 0 {
 			return
 		}
 		// touch energy accounts which token balance changed
-		builtin.Energy.AddBalance(rt.state, rt.blockTime, sender, &big.Int{})
-		builtin.Energy.AddBalance(rt.state, rt.blockTime, recipient, &big.Int{})
+		rt.energy.AddBalance(rt.blockTime, sender, &big.Int{})
+		rt.energy.AddBalance(rt.blockTime, recipient, &big.Int{})
 	})
 
 	if to == nil {
@@ -149,13 +156,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, errors.New("intrinsic gas exceeds provided gas")
 	}
 
-	baseGasPrice := builtin.Params.Get(rt.state, thor.KeyBaseGasPrice)
+	baseGasPrice := rt.params.Get(thor.KeyBaseGasPrice)
 	gasPrice := tx.GasPrice(baseGasPrice)
 
 	prepayedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice)
 
 	clauses := tx.Clauses()
-	energyPayer, ok := builtin.Energy.Consume(rt.state, rt.blockTime, commonTo(clauses), origin, prepayedEnergy)
+	energyPayer, ok := rt.energy.Consume(rt.blockTime, commonTo(clauses), origin, prepayedEnergy)
 	if !ok {
 		return nil, nil, errors.New("insufficient energy")
 	}
@@ -208,16 +215,16 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), gasPrice)
 
 	// return overpayed energy to payer
-	builtin.Energy.AddBalance(rt.state, rt.blockTime, energyPayer, energyToReturn)
+	rt.energy.AddBalance(rt.blockTime, energyPayer, energyToReturn)
 
 	// reward
-	rewardRatio := builtin.Params.Get(rt.state, thor.KeyRewardRatio)
+	rewardRatio := rt.params.Get(thor.KeyRewardRatio)
 	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.blockNumber-1, rt.getBlockID)
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	builtin.Energy.AddBalance(rt.state, rt.blockTime, rt.blockBeneficiary, reward)
+	rt.energy.AddBalance(rt.blockTime, rt.blockBeneficiary, reward)
 
 	return receipt, vmOutputs, nil
 }

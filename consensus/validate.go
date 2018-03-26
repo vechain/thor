@@ -42,7 +42,21 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return errors.Wrap(err, "invalid block signer")
 	}
 
-	sched, err := poa.NewScheduler(signer, builtin.Authority.All(st), parent.Number(), parent.Timestamp())
+	authority := builtin.Authority.WithState(st)
+	endorsement := builtin.Params.WithState(st).Get(thor.KeyProposerEndorsement)
+
+	candidates := authority.Candidates()
+	proposers := make([]poa.Proposer, 0, len(candidates))
+	for _, c := range candidates {
+		if st.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
+			proposers = append(proposers, poa.Proposer{
+				Address: c.Signer,
+				Active:  c.Active,
+			})
+		}
+	}
+
+	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
 		return err
 	}
@@ -57,7 +71,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	}
 
 	for _, proposer := range updates {
-		builtin.Authority.Update(st, proposer.Address, proposer.Status)
+		authority.Update(proposer.Address, proposer.Active)
 	}
 	return nil
 }
