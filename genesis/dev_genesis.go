@@ -59,7 +59,6 @@ func (d *dev) Accounts() []testAccount {
 
 func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
 	builder := new(Builder).
-		ChainTag(2).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(d.launchTime).
 		State(func(state *state.State) error {

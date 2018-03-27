@@ -14,7 +14,6 @@ import (
 
 // Builder helper to build genesis block.
 type Builder struct {
-	chainTag  byte
 	timestamp uint64
 	gasLimit  uint64
 
@@ -25,12 +24,6 @@ type Builder struct {
 type call struct {
 	clause *tx.Clause
 	caller thor.Address
-}
-
-// ChainTag set chain tag.
-func (b *Builder) ChainTag(tag byte) *Builder {
-	b.chainTag = tag
-	return b
 }
 
 // Timestamp set timestamp.
@@ -89,7 +82,6 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*
 	}
 
 	return new(block.Builder).
-		ParentID(thor.BytesToHash([]byte{b.chainTag})).
 		Timestamp(b.timestamp).
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).

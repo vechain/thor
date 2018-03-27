@@ -53,6 +53,11 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	Commit,
 	error) {
 
+	genesisID, err := p.chain.GetBlockIDByNumber(0)
+	if err != nil {
+		return 0, nil, nil, err
+	}
+
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return 0, nil, nil, errors.Wrap(err, "state")
@@ -90,7 +95,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	return targetTime,
 		func(tx *tx.Transaction) error {
 			switch {
-			case tx.ChainTag() != parent.ChainTag():
+			case tx.ChainTag() != genesisID[len(genesisID)-1]:
 				return badTxError{"chain tag mismatch"}
 			case tx.HasReservedFields():
 				return badTxError{"reserved fields not empty"}

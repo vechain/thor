@@ -53,26 +53,13 @@ func (h *Header) ParentID() thor.Hash {
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
-	parentNum := Number(h.body.ParentID)
-	if parentNum == 0 {
-		cpy := h.body.ParentID
-		// clear chain tag
-		cpy[len(cpy)-1] = 0
-		if cpy.IsZero() {
-			// genesis
-			return 0
-		}
-		return 1
+	if h.body.ParentID.IsZero() {
+		// genesis
+		return 0
 	}
-	// inferred from parent id
-	return parentNum + 1
-}
 
-// ChainTag returns chain tag.
-// It's the last byte of block ID.
-func (h *Header) ChainTag() byte {
-	// inherits parent's chain tag.
-	return h.body.ParentID[len(h.body.ParentID)-1]
+	// inferred from parent id
+	return Number(h.body.ParentID) + 1
 }
 
 // Timestamp returns timestamp of this block.
@@ -116,8 +103,7 @@ func (h *Header) ReceiptsRoot() thor.Hash {
 }
 
 // ID computes id of block.
-// The block ID is defined as: blockNumber + hash(signingHash, signer)[4:],
-// and the last byte is the chain tag.
+// The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
 func (h *Header) ID() (id thor.Hash) {
 	if cached := h.cache.id.Load(); cached != nil {
 		return cached.(thor.Hash)
@@ -125,7 +111,6 @@ func (h *Header) ID() (id thor.Hash) {
 	defer func() {
 		// overwrite first 4 bytes of block hash to block number.
 		binary.BigEndian.PutUint32(id[:], h.Number())
-		id[len(id)-1] = h.ChainTag()
 		h.cache.id.Store(id)
 	}()
 
