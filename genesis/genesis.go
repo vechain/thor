@@ -22,7 +22,6 @@ type mainnet struct {
 
 func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
 	return new(Builder).
-		ChainTag(1).
 		Timestamp(m.launchTime).
 		GasLimit(thor.InitialGasLimit).
 		State(func(state *state.State) error {
