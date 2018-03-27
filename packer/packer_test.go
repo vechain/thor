@@ -19,7 +19,8 @@ import (
 )
 
 type txIterator struct {
-	i int
+	chainTag byte
+	i        int
 }
 
 var nonce uint64 = uint64(time.Now().UnixNano())
@@ -39,7 +40,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 	data, _ := codec.EncodeInput(a1.Address, big.NewInt(1))
 
 	tx := new(tx.Builder).
-		ChainTag(2).
+		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
 	nonce++
@@ -79,7 +80,7 @@ func TestP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		iter := &txIterator{}
+		iter := &txIterator{chainTag: b0.Header().ID()[31]}
 		for iter.HasNext() {
 			tx := iter.Next()
 			adopt(tx)
