@@ -374,6 +374,17 @@ func (c *Chain) GetRawBlockByNumber(num uint32) (block.Raw, error) {
 	return c.getRawBlock(id)
 }
 
+// GetBlockHeaderByNumber get block header on trunk by its number.
+func (c *Chain) GetBlockHeaderByNumber(num uint32) (*block.Header, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	id, err := c.getBlockIDByNumber(num)
+	if err != nil {
+		return nil, err
+	}
+	return c.getBlockHeader(id)
+}
+
 // GetBestBlock get the newest block on trunk.
 func (c *Chain) GetBestBlock() (*block.Block, error) {
 	c.rw.RLock()
