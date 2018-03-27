@@ -103,7 +103,7 @@ func (c *consent) run(ctx context.Context, packedChan chan packedEvent) {
 			now := uint64(time.Now().Unix())
 			for id, orphan := range c.orphanMap {
 				if orphan.timestamp+300 >= now {
-					err := c.consent(blk)
+					err := c.consent(orphan.blk)
 					if err != nil && consensus.IsParentNotFound(err) {
 						continue
 					}
