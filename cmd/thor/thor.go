@@ -346,10 +346,12 @@ func pack(
 		select {
 		case <-waitTime.C:
 			for txIter.HasNext() {
-				err := adopt(txIter.Next())
+				tx := txIter.Next()
+				err := adopt(tx)
 				if packer.IsGasLimitReached(err) {
 					break
 				}
+				txIter.OnProcessed(tx.ID(), err)
 			}
 
 			if blk, _, err := commit(privateKey); err == nil {
