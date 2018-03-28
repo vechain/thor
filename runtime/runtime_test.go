@@ -29,8 +29,8 @@ func TestCall(t *testing.T) {
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
 
-	codec := builtin.Params.ABI.MustForMethod("executor")
-	data, err := codec.EncodeInput()
+	method := builtin.Params.ABI.MethodByName("executor")
+	data, err := method.EncodeInput()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestCall(t *testing.T) {
 	}
 
 	var addr common.Address
-	if err := codec.DecodeOutput(out.Value, &addr); err != nil {
+	if err := method.DecodeOutput(out.Value, &addr); err != nil {
 		t.Fatal(err)
 	}
 
