@@ -1,17 +1,17 @@
-package api_test
+package logs_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/api/types"
+	"github.com/vechain/thor/api/logs"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/user"
 	"testing"
 )
 
@@ -43,7 +43,7 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var logs []*types.Log
+	var logs []*logs.Log
 	if err := json.Unmarshal(r, &logs); err != nil {
 		t.Fatal(err)
 	}
@@ -61,35 +61,30 @@ func initLogServer(t *testing.T) *httptest.Server {
 		Data:    []byte("data"),
 	}
 
-	var logs []*logdb.Log
+	var lgs []*logdb.Log
 	for i := 0; i < 2; i++ {
 		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
-		logs = append(logs, log)
+		lgs = append(lgs, log)
 	}
-	err = db.Insert(logs)
+	err = db.Insert(lgs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	li := api.NewLogInterface(db)
 	router := mux.NewRouter()
-	api.NewLogHTTPRouter(router, li)
+	logs.New(db).Mount(router, "/logs")
 	ts := httptest.NewServer(router)
 	return ts
 }
-func home() (string, error) {
-	// try to get HOME env
-	if home := os.Getenv("HOME"); home != "" {
-		return home, nil
-	}
 
-	//
-	user, err := user.Current()
+func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if user.HomeDir != "" {
-		return user.HomeDir, nil
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
 	}
-
-	return os.Getwd()
+	return r, nil
 }

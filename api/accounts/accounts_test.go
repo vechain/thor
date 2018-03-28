@@ -1,4 +1,4 @@
-package api_test
+package accounts_test
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -34,7 +34,7 @@ type account struct {
 }
 
 var b, _ = new(big.Int).SetString("10000000000000000000000", 10)
-var accounts = []struct {
+var accs = []struct {
 	in, want account
 }{
 	{
@@ -56,38 +56,38 @@ func TestAccount(t *testing.T) {
 	ts := initAccountServer(t)
 	defer ts.Close()
 
-	for _, v := range accounts {
+	for _, v := range accs {
 		address := v.in.addr
 		r, err := httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/balance", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		bal := make(map[string]math.HexOrDecimal256)
+		var bal math.HexOrDecimal256
 		if err := json.Unmarshal(r, &bal); err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), bal["result"], "balance should be equal")
+		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), bal, "balance should be equal")
 
 		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/code", address.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := make(map[string]string)
+		var c string
 		if err := json.Unmarshal(r, &c); err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, hexutil.Encode(v.want.code), c["result"], "code should be equal")
+		assert.Equal(t, hexutil.Encode(v.want.code), c, "code should be equal")
 
 		r, err = httpGet(ts, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		value := make(map[string]string)
+		var value string
 		if err := json.Unmarshal(r, &value); err != nil {
 			t.Fatal(err)
 		}
-		h, err := thor.ParseHash(value["result"])
+		h, err := thor.ParseHash(value)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +102,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 	hash, _ := thor.ParseHash(emptyRootHash)
 	stateC := state.NewCreator(db)
 	s, _ := stateC.NewState(hash)
-	for _, v := range accounts {
+	for _, v := range accs {
 		address := v.in.addr
 		s.SetBalance(address, v.in.balance)
 		s.SetCode(address, v.in.code)
@@ -123,9 +123,8 @@ func initAccountServer(t *testing.T) *httptest.Server {
 	if _, err := chain.AddBlock(bl, true); err != nil {
 		t.Fatal(err)
 	}
-	ai := api.NewAccountInterface(chain, stateC)
 	router := mux.NewRouter()
-	api.NewAccountHTTPRouter(router, ai)
+	accounts.New(chain, stateC).Mount(router, "/accounts/")
 	ts := httptest.NewServer(router)
 	return ts
 }

@@ -1,13 +1,13 @@
-package api_test
+package contracts_test
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/api/contracts"
 	"github.com/vechain/thor/block"
 	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
@@ -15,8 +15,9 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,7 @@ func TestContract(t *testing.T) {
 	callContract(t, ts, ci, contractAddr)
 }
 
-func initServer(t *testing.T) (*httptest.Server, *api.ContractInterface) {
+func initServer(t *testing.T) (*httptest.Server, *contracts.Contracts) {
 	db, err := lvldb.NewMem()
 	if err != nil {
 		t.Fatal(err)
@@ -84,15 +85,15 @@ func initServer(t *testing.T) (*httptest.Server, *api.ContractInterface) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ci := api.NewContractInterface(chain, stateC)
 	router := mux.NewRouter()
-	api.NewContractHTTPRouter(router, ci)
+	c := contracts.New(chain, stateC)
+	c.Mount(router, "/contracts")
 	ts := httptest.NewServer(router)
 
-	return ts, ci
+	return ts, c
 }
 
-func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, contractAddr thor.Address) {
+func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, contractAddr thor.Address) {
 	a := uint8(1)
 	b := uint8(2)
 
@@ -107,23 +108,23 @@ func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("input", input)
-	options := ci.DefaultContractInterfaceOptions()
-	optionsData, err := json.Marshal(options)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	r, err := httpPostForm(ts, ts.URL+"/contracts/"+contractAddr.String(), url.Values{"input": {hexutil.Encode(input)}, "options": {string(optionsData)}})
+	callBody := &contracts.ContractCallBody{
+		Input: hexutil.Encode(input),
+	}
+	body, err := json.Marshal(callBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("r", string(r))
-	var res map[string]string
+	r, err := httpPost(ts, ts.URL+"/contracts/"+contractAddr.String(), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res string
 	if err = json.Unmarshal(r, &res); err != nil {
 		t.Fatal(err)
 	}
-	output, err := hexutil.Decode(res["result"])
+	output, err := hexutil.Decode(res)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,4 +135,17 @@ func callContract(t *testing.T, ts *httptest.Server, ci *api.ContractInterface, 
 	}
 	assert.Equal(t, a+b, v, "should be equal")
 
+}
+
+func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }

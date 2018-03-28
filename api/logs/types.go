@@ -1,4 +1,4 @@
-package types
+package logs
 
 import (
 	"fmt"
@@ -19,8 +19,8 @@ type Log struct {
 	Topics      [5]*thor.Hash `json:"topics"`
 }
 
-//ConvertLog convert a logdb.Log into a json format log
-func ConvertLog(log *logdb.Log) Log {
+//convert a logdb.Log into a json format log
+func convertLog(log *logdb.Log) Log {
 	l := Log{
 		BlockID:     log.BlockID,
 		BlockNumber: log.BlockNumber,
