@@ -7,8 +7,8 @@ info:
     email: "vechain@vechain.com"
   description: "Get block chain info through the API"
 servers:
-  - url: http://127.0.0.1:7585
-    description: Optional server description, local server
+  - url: http://localhost:7585
+    description: local server
 tags:
 - name: "Account"
   description: "Everything about account"
@@ -28,8 +28,20 @@ paths:
       summary: "Get balance by address"
       description: "return account balance"
       parameters:
-        - $ref: '#/components/parameters/Address'
-        - $ref: '#/components/parameters/BlockNumber'
+        - in: path
+          required: true
+          name: address
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000"
+            description: address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses: 
         200:
           description: OK
@@ -46,8 +58,20 @@ paths:
       summary: "Get code by address"
       description: "return account code"
       parameters:
-        - $ref: '#/components/parameters/Address'
-        - $ref: '#/components/parameters/BlockNumber'
+        - in: path
+          required: true
+          name: address
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000"
+            description: address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses: 
         200:
           description: OK
@@ -64,9 +88,27 @@ paths:
       summary: "Get storage by address"
       description: "returns storage value by address"
       parameters:
-        - $ref: '#/components/parameters/Address'
-        - $ref: '#/components/parameters/Key'
-        - $ref: '#/components/parameters/BlockNumber'
+        - in: path
+          required: true
+          name: address
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000"
+            description: account address
+        - in: query
+          required: true
+          name: key
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            description: storage hash
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses:
         200:
           description: OK
@@ -193,8 +235,20 @@ paths:
       summary: "call contract"
       description: "call contract"
       parameters:
-        - $ref: '#/components/parameters/ContractAddress'
-        - $ref: '#/components/parameters/BlockNumber'
+        - in: path
+          required: true
+          name: address
+          schema:
+            type: string
+            example: "0x0000000000000000000000000000000000000000"
+            description: contract address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       requestBody:
         description: contract calling params
         required: true
@@ -223,7 +277,41 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LogFilterReqBody'
+              type: object
+              properties: 
+                fromBlock:
+                  type: integer
+                  description: from block default 0
+                  example: 0
+                toBlock:
+                  type: integer
+                  description: to block default last block
+                  example: 1
+                address:
+                  type: string
+                  description: contract address
+                  example: "0x0000000000000000000000000000000000000000"
+                topicSet:
+                  type: array
+                  items:
+                    type: array
+                    items:
+                      oneOf:
+                        - type: string
+                          description: topic0 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic1 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic2 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic3 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                        - type: string
+                          description: topic4 (can be null)
+                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
       responses:
         200:
           description: OK

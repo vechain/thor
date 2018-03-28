@@ -3,6 +3,12 @@ package accounts_test
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
@@ -14,11 +20,6 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 const (

@@ -3,6 +3,12 @@ package blocks_test
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -14,11 +20,12 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"testing"
+)
+
+const (
+	emptyRootHash = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
+	testPrivHex   = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 )
 
 const (

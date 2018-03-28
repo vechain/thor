@@ -2,6 +2,9 @@ package transactions
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -9,8 +12,6 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
-	"io/ioutil"
-	"net/http"
 )
 
 type Transactions struct {

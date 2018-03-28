@@ -4,15 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/vechain/thor/api/logs"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/gorilla/mux"
+	"github.com/vechain/thor/api/logs"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 func TestLog(t *testing.T) {
@@ -61,12 +63,14 @@ func initLogServer(t *testing.T) *httptest.Server {
 		Data:    []byte("data"),
 	}
 
+	header := new(block.Builder).Build().Header()
 	var lgs []*logdb.Log
-	for i := 0; i < 2; i++ {
-		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+	for i := 0; i < 100; i++ {
+		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		lgs = append(lgs, log)
+		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = db.Insert(lgs)
+	err = db.Insert(lgs...)
 	if err != nil {
 		t.Fatal(err)
 	}
