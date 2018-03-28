@@ -3,8 +3,16 @@ package contracts_test
 import (
 	"bytes"
 	"encoding/json"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/contracts"
@@ -15,11 +23,6 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
-	"strings"
-	"testing"
 )
 
 var sol = `	pragma solidity ^0.4.18;
@@ -108,19 +111,39 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	callBody := &contracts.ContractCallBody{
+	gp := big.NewInt(1)
+	gph := math.HexOrDecimal256(*gp)
+	v := big.NewInt(0)
+	vh := math.HexOrDecimal256(*v)
+	reqBody := &api.ContractCallBody{
 		Input: hexutil.Encode(input),
+		Options: api.ContractCallOptions{
+			ClauseIndex: 0,
+			Gas:         21000,
+			From:        thor.Address{}.String(),
+			GasPrice:    &gph,
+			TxID:        thor.Hash{}.String(),
+			Value:       &vh,
+		},
 	}
-	body, err := json.Marshal(callBody)
+
+	reqBodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := httpPost(ts, ts.URL+"/contracts/"+contractAddr.String(), body)
+
+	response, err := http.Post(ts.URL+"/contracts/"+contractAddr.String(), "application/json", bytes.NewReader(reqBodyBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var res string
+
+	r, err := ioutil.ReadAll(response.Body)
+	response.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var res map[string]string
 	if err = json.Unmarshal(r, &res); err != nil {
 		t.Fatal(err)
 	}
@@ -128,13 +151,12 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 	if err != nil {
 		t.Fatal(err)
 	}
-	var v uint8
-	err = codec.DecodeOutput(output, &v)
+	var ret uint8
+	err = codec.DecodeOutput(output, &ret)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, a+b, v, "should be equal")
-
+	assert.Equal(t, a+b, ret, "should be equal")
 }
 
 func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
