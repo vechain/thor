@@ -37,7 +37,7 @@ func TestLogDB(t *testing.T) {
 		logs = append(logs, log)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = db.Insert(logs...)
+	err = db.Insert(logs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func BenchmarkLog(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.Insert(logs...)
+		err := db.Insert(logs, nil)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -45,9 +45,9 @@ func NewMem() (*LogDB, error) {
 	return New(":memory:")
 }
 
-//Insert insert logs into db
-func (db *LogDB) Insert(logs ...*Log) error {
-	if len(logs) == 0 {
+//Insert insert logs into db, and abandon logs which associated with given block ids.
+func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Hash) error {
+	if len(logs) == 0 && len(abandonedBlockIDs) == 0 {
 		return nil
 	}
 	tx, err := db.db.Begin()
@@ -69,6 +69,12 @@ func (db *LogDB) Insert(logs ...*Log) error {
 			topicValue(log.Topics[3]),
 			topicValue(log.Topics[4]),
 			log.Data); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	for _, id := range abandonedBlockIDs {
+		if _, err = tx.Exec("DELETE FROM log WHERE blockID = ?;", id.Bytes()); err != nil {
 			tx.Rollback()
 			return err
 		}
