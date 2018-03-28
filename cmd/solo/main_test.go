@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -82,7 +83,19 @@ func TestMultiClause(t *testing.T) {
 func TestGetThorBalance(t *testing.T) {
 	initAccounts(t)
 
-	txData := builtin.Energy.ABI.MustForMethod("balanceOf").MustEncodeInput(accounts[0].Address)
+	txData := mustEncodeInput(builtin.Energy.ABI, "balanceOf", accounts[0].Address)
 	t.Log(builtin.Energy.Address)
 	t.Log(fmt.Sprintf("%x", txData))
+}
+
+func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
+	m := abi.MethodByName(name)
+	if m == nil {
+		panic("no method '" + name + "'")
+	}
+	data, err := m.EncodeInput(args...)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
