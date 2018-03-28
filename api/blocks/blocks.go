@@ -1,14 +1,15 @@
 package blocks
 
 import (
+	"net/http"
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	"net/http"
-	"strconv"
 )
 
 type Blocks struct {

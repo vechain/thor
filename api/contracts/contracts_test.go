@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -111,6 +110,21 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 	if err != nil {
 		t.Fatal(err)
 	}
+<<<<<<< HEAD:api/contracts/contracts_test.go
+
+	callBody := &contracts.ContractCallBody{
+		Input: hexutil.Encode(input),
+	}
+	body, err := json.Marshal(callBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := httpPost(ts, ts.URL+"/contracts/"+contractAddr.String(), body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res string
+=======
 	gp := big.NewInt(1)
 	gph := math.HexOrDecimal256(*gp)
 	v := big.NewInt(0)
@@ -144,6 +158,7 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 	}
 
 	var res map[string]string
+>>>>>>> a730f307b1f5b327c1cad70dd85efc269368a393:api/contracts/contracts_test.go
 	if err = json.Unmarshal(r, &res); err != nil {
 		t.Fatal(err)
 	}
@@ -157,6 +172,19 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 		t.Fatal(err)
 	}
 	assert.Equal(t, a+b, ret, "should be equal")
+}
+
+func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {

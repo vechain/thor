@@ -2,6 +2,11 @@ package contracts
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"strconv"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
@@ -14,10 +19,6 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"strconv"
 )
 
 //ContractCallBody represents contract-call body

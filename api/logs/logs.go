@@ -2,11 +2,12 @@ package logs
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
-	"io/ioutil"
-	"net/http"
 )
 
 type Logs struct {
