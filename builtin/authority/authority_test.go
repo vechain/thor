@@ -29,17 +29,15 @@ func TestAuthority(t *testing.T) {
 		{aut.Add(p1, p1, thor.Hash{}), true},
 		{aut.Add(p2, p2, thor.Hash{}), true},
 		{aut.Add(p3, p3, thor.Hash{}), true},
-		{M(aut.Pick()), []interface{}{
-			[]*Proposer{{p1, thor.Hash{}, false, nil, &p2}, {p2, thor.Hash{}, false, &p1, &p3}, {p3, thor.Hash{}, false, &p2, nil}},
-			[]thor.Address{p1, p2, p3},
+		{M(aut.Candidates()), []interface{}{
+			[]*Candidate{{p1, p1, thor.Hash{}, false}, {p2, p2, thor.Hash{}, false}, {p3, p3, thor.Hash{}, false}},
 		}},
-		{aut.Get(p1), &Proposer{p1, thor.Hash{}, false, nil, &p2}},
+		{aut.Get(p1), &Entry{p1, thor.Hash{}, false, nil, &p2}},
 		{aut.Update(p1, true), true},
-		{aut.Get(p1), &Proposer{p1, thor.Hash{}, true, nil, &p2}},
+		{aut.Get(p1), &Entry{p1, thor.Hash{}, true, nil, &p2}},
 		{aut.Remove(p1), true},
-		{M(aut.Pick()), []interface{}{
-			[]*Proposer{{p2, thor.Hash{}, false, nil, &p3}, {p3, thor.Hash{}, false, &p2, nil}},
-			[]thor.Address{p2, p3},
+		{M(aut.Candidates()), []interface{}{
+			[]*Candidate{{p2, p2, thor.Hash{}, false}, {p3, p3, thor.Hash{}, false}},
 		}},
 	}
 
