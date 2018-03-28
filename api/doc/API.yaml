@@ -1,14 +1,14 @@
 openapi: 3.0.0
 info:
   version: "1.0.0"
-  title: "Thor API"
-  termsOfService: "https://www.vechain.com"
+  title: "VeChain Thor API"
+  termsOfService: "https://www.vechain.org"
   contact:
     email: "vechain@vechain.com"
   description: "Get block chain info through the API"
 servers:
-  - url: http://localhost:7585
-    description: local server
+  - url: http://127.0.0.1:7585
+    description: Optional server description, local server
 tags:
 - name: "Account"
   description: "Everything about account"
@@ -28,31 +28,15 @@ paths:
       summary: "Get balance by address"
       description: "return account balance"
       parameters:
-        - in: path
-          required: true
-          name: address
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000"
-            description: address
-        - in: query
-          required: false
-          name: blockNumber
-          schema:
-            type: integer
-            example: 0
-            description: default best block number
+        - $ref: '#/components/parameters/Address'
+        - $ref: '#/components/parameters/BlockNumber'
       responses: 
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  result:
-                    type: string
-                    example: "1000"
+               $ref: '#/components/schemas/HexStringReturn'
         400:
           description: "Invalid address"
   /accounts/{address}/code:
@@ -62,31 +46,15 @@ paths:
       summary: "Get code by address"
       description: "return account code"
       parameters:
-        - in: path
-          required: true
-          name: address
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000"
-            description: address
-        - in: query
-          required: false
-          name: blockNumber
-          schema:
-            type: integer
-            example: 0
-            description: default best block number
+        - $ref: '#/components/parameters/Address'
+        - $ref: '#/components/parameters/BlockNumber'
       responses: 
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  result:
-                    type: string
-                    example: "0x101010"
+                $ref: '#/components/schemas/HexStringReturn'
         400:
           description: "Invalid address"
   /accounts/{address}/storage:
@@ -96,38 +64,16 @@ paths:
       summary: "Get storage by address"
       description: "returns storage value by address"
       parameters:
-        - in: path
-          required: true
-          name: address
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000"
-            description: account address
-        - in: query
-          required: true
-          name: key
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-            description: storage hash
-        - in: query
-          required: false
-          name: blockNumber
-          schema:
-            type: integer
-            example: 0
-            description: default best block number
+        - $ref: '#/components/parameters/Address'
+        - $ref: '#/components/parameters/Key'
+        - $ref: '#/components/parameters/BlockNumber'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  result:
-                    type: string
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+               $ref: '#/components/schemas/HexStringReturn'
         400:
           description: "Invalid params"
   /transactions/{id}:
@@ -137,74 +83,14 @@ paths:
       summary: "Get transaction by transaction id"
       description: "returns transaction by transaction id"
       parameters:
-        - in: path
-          required: true
-          name: id
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-            description: transaction id
+        - $ref: '#/components/parameters/TransactionID'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  chainTag:
-                    type: integer
-                    description: byte
-                    example: 0
-                  id:
-                    type: string
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  gasPriceCoef:
-                    type: integer
-                    description: uint8
-                    example: 128
-                  gas:
-                    type: string
-                    description: uint64
-                    example: "10000"
-                  from:
-                    type: string
-                    description: address
-                    example: "10000"
-                  dependsOn:
-                    type: string
-                    description: transaction id (can be null)
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  clauses:
-                    type: array
-                    description: transaction clause
-                    items:
-                      type: object
-                      properties:
-                        to:
-                          type: string
-                          description: to address
-                          example: "0x0000000000000000000000000000000000000000"
-                        value:
-                          type: string
-                          description: Transfer accounts
-                          example: "10000"
-                        data:
-                          type: string
-                          description: input data (can be null)
-                          example: "0x0000000" 
-                  index:
-                    type: string
-                    description: uint64
-                    example: "10000"
-                  blockID:
-                    type: string
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                    description: block id
-                  blockNumber:
-                    type: integer
-                    description: uint32
-                    example: 1
+                $ref: '#/components/schemas/Transaction'
         400:
           description: "Invalid params"
   /transactions/{id}/receipts:
@@ -214,63 +100,14 @@ paths:
       summary: "Get transaction by transaction id"
       description: "returns transaction by transaction id"
       parameters:
-        - in: path
-          required: true
-          name: id
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-            description: transaction id
+        - $ref: '#/components/parameters/TransactionID'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  gasUsed:
-                    type: string
-                    description: gasused
-                    example: "0x5208"
-                  gasPayer:
-                    type: string
-                    example: "0x0000000000000000000000000000000000000000"
-                    description: account address
-                  reverted:
-                    type: boolean
-                    description: is transaction reverted
-                    example: false
-                  outputs:
-                    type: array
-                    description: transaction outputs
-                    items:
-                      anyOf:
-                        - type: object
-                          description: output
-                          properties:
-                            outputs:
-                              type: array
-                              description: logs
-                              items:
-                                anyOf:
-                                  - type: object
-                                    description: output
-                                    properties:
-                                      address:
-                                        type: string
-                                        example: "0x0000000000000000000000000000000000000000"
-                                        description: account address
-                                      topics:
-                                        items:
-                                          anyOf:
-                                            - type: string
-                                              description: topic (can be null)
-                                              example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                                      data:
-                                        type: string
-                                        example: "0x00"
-                                        description: data
+                $ref: '#/components/schemas/TransactionReceipt'
         400:
           description: "Invalid params"
   /transactions:
@@ -285,61 +122,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties: 
-                chainTag:
-                  type: integer
-                  description: byte
-                  example: 1
-                nonce:
-                  type: string
-                  description: uint64
-                  example: "1"
-                gasPriceCoef:
-                  type: integer
-                  description: uint8
-                  example: 1
-                gas:
-                  type: string
-                  description: uint64
-                  example: "30000"
-                dependsOn:
-                  type: string
-                  description: transaction id (can be null)
-                  example: 
-                sig: 
-                  type: string
-                  description: transaction signature
-                  example: 0x00
-                blockRef:
-                  type: string
-                  description: 8 bytes
-                  example: 0x0000000000000000
-                clauses:
-                  type: array
-                  description: transaction clause
-                  items:
-                    properties:
-                        to:
-                          type: string
-                          description: to address
-                          example: "0x0000000000000000000000000000000000000000"
-                        value:
-                          type: string
-                          description: Transfer accounts
-                          example: "10000"
-                        data:
-                          type: string
-                          description: input data (can be null)
-                          example: "0x0000000" 
+              $ref: '#/components/schemas/TransactionReqBody'
       responses:
         200:
-          description: OK
+          description: "OK(Transaction ID)"
           content:
-            text/plain:
+            application/json:
               schema:
-                type: string
-                description: transaction id
+                $ref: '#/components/schemas/HexStringReturn'
         400:
           description: "Invalid params"
   /blocks/{id}:
@@ -349,70 +139,14 @@ paths:
       summary: "Get block by block id"
       description: "returns block by block id"
       parameters:
-        - in: path
-          required: true
-          name: id
-          schema:
-            type: string
-          description: block id
+        - $ref: '#/components/parameters/BlockID'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  number:
-                    type: integer
-                    description: uint32
-                    example: 0
-                  id:
-                    type: string
-                    description: block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  parentID:
-                    type: string
-                    description: parent block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  timestamp:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  totalScore:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  gasLimit:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  gasUsed:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  beneficiary:
-                    type: string
-                    description: beneficiary address
-                    example: "0x0000000000000000000000000000000000000000"
-                  txsRoot:
-                    type: string
-                    description: transactions root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  stateRoot:
-                    type: string
-                    description: state root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  receiptsRoot:
-                    type: string
-                    description: receipts root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  txs:
-                    type: array
-                    items:
-                      type: string
-                      description: transaction id
-                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                $ref: '#/components/schemas/Block'
         400:
           description: "Invalid params"
   /blocks:
@@ -427,65 +161,14 @@ paths:
           name: number
           schema:
             type: integer
-          description: block number
+          description: "Block number"
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  number:
-                    type: integer
-                    description: uint32
-                    example: 0
-                  id:
-                    type: string
-                    description: block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  parentID:
-                    type: string
-                    description: parent block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  timestamp:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  totalScore:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  gasLimit:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  gasUsed:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  beneficiary:
-                    type: string
-                    description: beneficiary address
-                    example: "0x0000000000000000000000000000000000000000"
-                  txsRoot:
-                    type: string
-                    description: transactions root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  stateRoot:
-                    type: string
-                    description: state root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  receiptsRoot:
-                    type: string
-                    description: receipts root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  txs:
-                    type: array
-                    items:
-                      type: string
-                      description: transaction id
-                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                $ref: '#/components/schemas/Block'
         400:
           description: "Invalid params"
   /blocks/best:
@@ -500,58 +183,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  number:
-                    type: integer
-                    description: uint32
-                    example: 0
-                  id:
-                    type: string
-                    description: block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  parentID:
-                    type: string
-                    description: parent block id
-                    example: "null"
-                  timestamp:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  totalScore:
-                    type: string
-                    description: uint64
-                    example: "0"
-                  gasLimit:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  gasUsed:
-                    type: string
-                    description: uint64
-                    example: "100000"
-                  beneficiary:
-                    type: string
-                    description: beneficiary address
-                    example: "0x0000000000000000000000000000000000000000"
-                  txsRoot:
-                    type: string
-                    description: transactions root
-                    example: "0x21b3b7923ad7f56d63e0623146cdbb00840f89b8f9a9dbd7619dd76dc00f5426"
-                  stateRoot:
-                    type: string
-                    description: state root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  receiptsRoot:
-                    type: string
-                    description: receipts root
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  txs:
-                    type: array
-                    items:
-                      type: string
-                      description: transaction id
-                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                $ref: '#/components/schemas/Block'
         400:
           description: "Invalid params"
   /contracts/{address}:
@@ -561,70 +193,21 @@ paths:
       summary: "call contract"
       description: "call contract"
       parameters:
-        - in: path
-          required: true
-          name: address
-          schema:
-            type: string
-            example: "0x0000000000000000000000000000000000000000"
-            description: contract address
-        - in: query
-          required: false
-          name: blockNumber
-          schema:
-            type: integer
-            example: 0
-            description: default best block number
+        - $ref: '#/components/parameters/ContractAddress'
+        - $ref: '#/components/parameters/BlockNumber'
       requestBody:
         description: contract calling params
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties: 
-                input:
-                  type: string
-                  description: input data hex
-                  example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                options: 
-                  type: object
-                  properties: 
-                    clauseIndex:
-                      type: integer
-                      description: uint32
-                      example: 0
-                    gas:
-                      type: string
-                      description: uint64
-                      example: "100000"
-                    from:
-                      type: string
-                      description: address
-                      example: "0x0000000000000000000000000000000000000000"
-                    gasPrice:
-                      type: string
-                      description: uint64
-                      example: "100000"
-                    txID: 
-                      type: string
-                      description: transaction id
-                      example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                    value:
-                      type: string
-                      description: transfer accounts
-                      example: "10000"
+              $ref: '#/components/schemas/ContracCallReqBody'
       responses:
         200:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  result:
-                    type: string
-                    description: transaction ountput
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                $ref: '#/components/schemas/HexStringReturn'
           description: "successful operation"
         400:
           description: "Invalid params"
@@ -640,86 +223,360 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties: 
-                fromBlock:
-                  type: integer
-                  description: from block default 0
-                  example: 0
-                toBlock:
-                  type: integer
-                  description: to block default last block
-                  example: 1
-                address:
-                  type: string
-                  description: contract address
-                  example: "0x0000000000000000000000000000000000000000"
-                topicSet:
-                  type: array
-                  items:
-                    type: array
-                    items:
-                      oneOf:
-                        - type: string
-                          description: topic0 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic1 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic2 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic3 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic4 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+              $ref: '#/components/schemas/LogFilterReqBody'
       responses:
         200:
           description: OK
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  blockID:
-                    type: string
-                    description: block id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  blockNumber:
-                    type: integer
-                    description: block number
-                    example: 1
-                  txID:
-                    type: string
-                    description: transaction id
-                    example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                  address:
-                    type: string
-                    description: contract address
-                    example: "0x0000000000000000000000000000000000000000"
-                  data:
-                    type: string
-                    description: data hex
-                    example: "0x"
-                  topics:
-                    items:
-                      oneOf:
-                        - type: string
-                          description: topic0 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic1 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic2 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic3 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                        - type: string
-                          description: topic4 (can be null)
-                          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventLog'
         400:
           description: "unhandled error"
+components:
+  schemas:
+    Address:
+      type: string
+      example: "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"
+      description: "Account address(Hexadecimal string)"
+    TransactionID:
+      type: string
+      example: "0x44f1192e70a6b04e6cf4fc04600c777a407d431647572b2ef1b146c1cbf9f81b"
+      description: "Transaction ID(Hexadecimal string)"
+    TransactionClause:
+      type: object
+      properties:
+        to:
+          type: string
+          description: to address
+          example: "0xd3ae78222beadb038203be21ed5ce7c9b1bff602"
+        value:
+          type: string
+          description: "Transfer amount-uint256(Hexadecimal string)"
+          example: "100"
+        data:
+          type: string
+          description: "input data (can be null)"
+          example: "0x0000000" 
+    Transaction:
+      type: object
+      properties:
+        chainTag:
+          type: integer
+          description: "ChainTag"
+          example: 1
+        id:
+          $ref: "#/components/schemas/TransactionID"
+        gasPriceCoef:
+          type: integer
+          description: "Gas price coefficiency(0~255)"
+          example: 128
+        gas:
+          type: string
+          description: "Gas(Hexadecimal string)"
+          example: "0x493e0"
+        from:
+          $ref: "#/components/schemas/Address"
+        dependsOn:
+          $ref: "#/components/schemas/TransactionID"
+        clauses:
+          type: array
+          description: "Transaction Clauses"
+          items:
+            $ref: "#/components/schemas/TransactionClause"
+        index:
+          type: string
+          description: "Transaction index(Hexadecimal string)"
+          example: "0x0"
+        blockID:
+          $ref: "#/components/schemas/BlockID"
+        blockNumber:
+          type: integer
+          description: uint32
+          example: 1
+    TransactionReqBody:
+      type: object
+      required:
+        - chainTag
+        - nonce
+        - gasPriceCoef
+        - gas
+        - clauses
+        - sig
+      properties:
+        chainTag:
+          type: integer
+          description: "ChainTag-byte"
+          example: 1
+        nonce:
+          type: string
+          description: "Nonce-uint64(Hexadecimal string or Decimal string)"
+          example: "0x01"
+        gasPriceCoef:
+          type: integer
+          description: "Gas price coefficiency-uinit8(0~255)"
+          example: 128
+        gas:
+          type: string
+          description: "Gas-uint64(Hexadecimal string or Decimal string)"
+          example: "0x493e0"
+        dependsOn:
+          $ref: "#/components/schemas/TransactionID"
+        clauses:
+          type: array
+          description: "Transaction Clauses"
+          items:
+            $ref: "#/components/schemas/TransactionClause"
+        sig:
+          type: string
+          description: "Signature(Hexadecimal string)"
+          example: "0x00"
+        blockRef:
+          type: string
+          description: "Block reference(8-bytes Hexadecimal string)"
+          example: "0x0000000000000000"
+    TransactionLog:
+      type: object
+      description: "Transaction event log"
+      properties:
+        address:
+          $ref: "#/components/schemas/Address"
+        topics:
+          type: array
+          minItems: 0
+          maxItems: 4
+          items:
+            type: string
+            description: "Event log topic (can be null)"
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+        data:
+          type: string
+          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+          description: "Event log data"
+    TransactionReceipt:
+      type: object
+      properties:
+        gasUsed:
+          type: string
+          description: "Gas Used"
+          example: "0x5208"
+        gasPayer:
+          $ref: "#/components/schemas/Address"
+        reverted:
+          type: boolean
+          description: "is transaction reverted"
+          example: false
+        outputs:
+          type: array
+          description: "Transaction outputs"
+          items:
+            type: array
+            description: "Transaction logs"
+            items:
+              $ref: "#/components/schemas/TransactionLog"
+    BlockID:
+      type: string
+      example: "0x000001b3ab9097c638424f3ebc23f288260e32b25217e6dcb154ca6a5d30e401"
+      description: "Block ID(Hexadecimal string)"
+    Block:
+      type: object
+      properties:
+        number:
+          type: integer
+          description: uint32
+          example: 1
+        id:
+          $ref: "#/components/schemas/BlockID"
+        parentID:
+          $ref: "#/components/schemas/BlockID"
+        timestamp:
+          type: string
+          description: "Block timestamp(Hexadecimal string)"
+          example: "0x5ab9f9a5"
+        totalScore:
+          type: string
+          description: "Block timestamp(Hexadecimal string)"
+          example: "0x6c5"
+        gasLimit:
+          type: string
+          description: "Block gas limit(Hexadecimal string)"
+          example: "0x989680"
+        gasUsed:
+          type: string
+          description: "Block gas used(Hexadecimal string)"
+          example: "0x989680"
+        beneficiary:
+          $ref: "#/components/schemas/Address"
+        txsRoot:
+          type: string
+          description: "Block transactions root"
+          example: "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        stateRoot:
+          type: string
+          description: "Block state root"
+          example: "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        receiptsRoot:
+          type: string
+          description: "Block receipts root"
+          example: "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+        txs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionID"
+    ContracCallReqBody:
+      type: object
+      properties: 
+        input:
+          type: string
+          description: "Input data for contract call(Hexadecimal string)"
+          example: "0x70a082310000000000000000000000007567d83b7b8d80addcb281a71d54fc7b3364ffed"
+        options: 
+          type: object
+          properties: 
+            clauseIndex:
+              type: integer
+              description: "Clause index-uint32"
+              example: 0
+            gas:
+              type: string
+              description: "Gas-uint64(Hexadecimal string or Decimal string)"
+              example: "0x493e0"
+            from:
+              $ref: "#/components/schemas/Address"
+            gasPrice:
+              type: string
+              description: "Gas price-uint64(Hexadecimal string or Decimal string)"
+              example: "0x1000"
+            txID: 
+              $ref: "#/components/schemas/TransactionID"
+            value:
+              type: string
+              description: "Transfer amount-uint256(Hexadecimal string)"
+              example: "100"
+    LogFilterCondition:
+      oneOf:
+        - type: string
+          nullable: true
+          description: "Conditions need to be matched in the filter(can be 'null')" 
+          example: "0x00000000"
+        - type: array
+          description: "Relations between conditions is 'OR'" 
+          minItems: 2
+          example: 
+            - "0x00000000"
+            - "0x00000000"
+          items:
+            type: string
+            description: "Conditions need to be matched in the filter'" 
+            example: "0x00000000"
+    LogFilterReqBody:
+      type: object
+      required:
+        - fromBlock
+        - toBlock
+        - address
+        - topicSet
+      properties: 
+        fromBlock:
+          type: integer
+          description: "From block number-uint32 defaults to 0"
+          example: 0
+        toBlock:
+          type: integer
+          description: "To block number-uint32  defaults to bestblock"
+          example: 1
+        address:
+          type: string
+          example: "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"
+          description: "Contract address(Hexadecimal string)"
+        topicSet:
+          type: array
+          items:
+            $ref: '#/components/schemas/LogFilterCondition'
+    EventLog:
+      type: object
+      description: "Event log"
+      properties:
+        blockID:
+          $ref: "#/components/schemas/BlockID"
+        blockNumber:
+          type: integer
+          description: uint32
+          example: 1
+        logIndex:
+          type: integer
+          description: "Log index-uint32"
+          example: 0
+        txID: 
+          $ref: "#/components/schemas/TransactionID"
+        txOrigin:
+          $ref: "#/components/schemas/Address"
+        address:
+          $ref: "#/components/schemas/Address"
+        topics:
+          type: array
+          minItems: 0
+          maxItems: 4
+          items:
+            type: string
+            description: "Event log topic (can be null)"
+            example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+        data:
+          type: string
+          example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+          description: "Event log data"
+    HexStringReturn:
+      type: object
+      required:
+        - result
+      properties:
+        result:
+          type: string
+          example: "0x21e19e0c9bab2400000"
+  parameters:
+    Address:
+      in: path
+      required: true
+      name: address
+      description: "account address"
+      schema:
+        $ref: "#/components/schemas/Address"
+    Key:
+      in: query
+      required: true
+      name: key
+      description: "storage hash"
+      schema:
+        type: string
+        example: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    TransactionID:
+      in: path
+      required: true
+      name: id
+      description: "Transaction ID"
+      schema:
+        $ref: "#/components/schemas/TransactionID"
+    BlockID:
+      in: path
+      required: true
+      name: id
+      description: "Block ID"
+      schema:
+        $ref: "#/components/schemas/BlockID"
+    BlockNumber:
+      in: query
+      required: false
+      name: blockNumber
+      description: "Block number(defaults to best blocknumber)"
+      schema:
+        type: integer
+        example: 0
+    ContractAddress:
+      in: path
+      required: true
+      name: address
+      description: "contract address"
+      schema:
+        $ref: "#/components/schemas/Address"
