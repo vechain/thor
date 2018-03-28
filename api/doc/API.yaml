@@ -528,13 +528,8 @@ components:
           example: "0x0000000000000000000000000000000000000000000000000000000000000000"
           description: "Event log data"
     HexStringReturn:
-      type: object
-      required:
-        - result
-      properties:
-        result:
-          type: string
-          example: "0x21e19e0c9bab2400000"
+      type: string
+      example: "0x21e19e0c9bab2400000"
   parameters:
     Address:
       in: path

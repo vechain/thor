@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
@@ -113,7 +114,7 @@ func newApp() *cli.App {
 		}
 		defer solo.kv.Close()
 
-		svr := &http.Server{Handler: api.NewHTTPHandler(solo.c, solo.stateCreator, solo.txpl, solo.ldb)}
+		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb)}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -177,7 +178,6 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 	}
 
 	builder := new(genesis.Builder).
-		ChainTag(1).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(solo.launchTime).
 		State(func(state *state.State) error {
@@ -185,32 +185,33 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
+			energy := builtin.Energy.WithState(state)
 			tokenSupply := &big.Int{}
 			for _, a := range solo.accounts {
 				b, _ := new(big.Int).SetString(a.Balance, 10)
 				state.SetBalance(a.Address, b)
-				builtin.Energy.AddBalance(state, solo.launchTime, a.Address, b)
+				energy.AddBalance(solo.launchTime, a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
 			}
 
-			builtin.Energy.SetTokenSupply(state, tokenSupply)
+			energy.SetTokenSupply(tokenSupply)
 			return nil
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Energy.Address).
-				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+				WithData(mustEncodeInput(builtin.Energy.ABI, "adjustGrowthRate", thor.InitialEnergyGrowthRate)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Authority.Address).
-				WithData(builtin.Authority.ABI.MustForMethod("authorize").MustEncodeInput(solo.accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
+				WithData(mustEncodeInput(builtin.Authority.ABI, "add", solo.accounts[0].Address, solo.accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
 			builtin.Executor.Address)
 
 	return builder.Build(solo.stateCreator)
@@ -237,10 +238,10 @@ func (solo *cliContext) prepare() (err error) {
 
 	dblogs := []*logdb.Log{}
 	for index, l := range logs {
-		dblog := logdb.NewLog(b0.Header().ID(), uint32(0), uint32(index), thor.Hash{}, thor.Address{}, l)
+		dblog := logdb.NewLog(b0.Header(), uint32(index), thor.Hash{}, thor.Address{}, l)
 		dblogs = append(dblogs, dblog)
 	}
-	err = solo.ldb.Insert(dblogs)
+	err = solo.ldb.Insert(dblogs, nil)
 	if err != nil {
 		return
 	}
@@ -354,12 +355,24 @@ func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (er
 	for index, receipt := range receipts {
 		for _, output := range receipt.Outputs {
 			for _, l := range output.Logs {
-				dblog := logdb.NewLog(blk.Header().ID(), blk.Header().Number(), uint32(logIndex), blk.Transactions()[index].ID(), thor.Address{}, l)
+				dblog := logdb.NewLog(blk.Header(), uint32(logIndex), blk.Transactions()[index].ID(), thor.Address{}, l)
 				dblogs = append(dblogs, dblog)
 				logIndex++
 			}
 		}
 	}
 
-	return ldb.Insert(dblogs)
+	return ldb.Insert(dblogs, nil)
+}
+
+func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
+	m := abi.MethodByName(name)
+	if m == nil {
+		panic("no method '" + name + "'")
+	}
+	data, err := m.EncodeInput(args...)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }
