@@ -7,8 +7,8 @@ info:
     email: "vechain@vechain.com"
   description: "Get block chain info through the API"
 servers:
-  - url: http://localhost:3000/v1
-    description: Optional server description, local server
+  - url: http://localhost:7585
+    description: local server
 tags:
 - name: "Account"
   description: "Everything about account"
@@ -35,6 +35,13 @@ paths:
             type: string
             example: "0x0000000000000000000000000000000000000000"
             description: address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses: 
         200:
           description: OK
@@ -62,7 +69,13 @@ paths:
             type: string
             example: "0x0000000000000000000000000000000000000000"
             description: address
-          description: account address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses: 
         200:
           description: OK
@@ -97,6 +110,13 @@ paths:
             type: string
             example: "0x0000000000000000000000000000000000000000000000000000000000000000"
             description: storage hash
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       responses:
         200:
           description: OK
@@ -534,7 +554,7 @@ paths:
                       example: "0x0000000000000000000000000000000000000000000000000000000000000000"
         400:
           description: "Invalid params"
-  /contracts/{contractAddr}:
+  /contracts/{address}:
     post:
       tags:
       - "Contract"
@@ -543,11 +563,18 @@ paths:
       parameters:
         - in: path
           required: true
-          name: contractAddr
+          name: address
           schema:
             type: string
             example: "0x0000000000000000000000000000000000000000"
             description: contract address
+        - in: query
+          required: false
+          name: blockNumber
+          schema:
+            type: integer
+            example: 0
+            description: default best block number
       requestBody:
         description: contract calling params
         required: true
@@ -617,11 +644,11 @@ paths:
               properties: 
                 fromBlock:
                   type: integer
-                  description: from block
+                  description: from block default 0
                   example: 0
                 toBlock:
                   type: integer
-                  description: to block
+                  description: to block default last block
                   example: 1
                 address:
                   type: string

@@ -1,4 +1,4 @@
-package types
+package blocks
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"

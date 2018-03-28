@@ -1,4 +1,4 @@
-package api_test
+package blocks_test
 
 import (
 	"encoding/json"
@@ -6,8 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/api/types"
+	"github.com/vechain/thor/api/blocks"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -15,15 +14,23 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"io/ioutil"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+)
+
+const (
+	emptyRootHash = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
+	testPrivHex   = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 )
 
 func TestBlock(t *testing.T) {
 
 	block, ts := initBlockServer(t)
-	raw := types.ConvertBlock(block)
+	raw := blocks.ConvertBlock(block)
 	defer ts.Close()
 
 	r, err := httpGet(ts, ts.URL+fmt.Sprintf("/blocks/%v", block.Header().ID().String()))
@@ -31,7 +38,7 @@ func TestBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println(string(r))
-	rb := new(types.Block)
+	rb := new(blocks.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +49,7 @@ func TestBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rb = new(types.Block)
+	rb = new(blocks.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +58,7 @@ func TestBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rb = new(types.Block)
+	rb = new(blocks.Block)
 	if err := json.Unmarshal(r, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -62,9 +69,8 @@ func TestBlock(t *testing.T) {
 func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	bi := api.NewBlockInterface(chain)
 	router := mux.NewRouter()
-	api.NewBlockHTTPRouter(router, bi)
+	blocks.New(chain).Mount(router, "/blocks")
 	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
@@ -106,7 +112,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	return bl, ts
 }
 
-func checkBlock(t *testing.T, expBl *types.Block, actBl *types.Block) {
+func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {
 	assert.Equal(t, expBl.Number, actBl.Number, "Number should be equal")
 	assert.Equal(t, expBl.ID, actBl.ID, "Hash should be equal")
 	assert.Equal(t, expBl.ParentID, actBl.ParentID, "ParentID should be equal")
@@ -122,4 +128,17 @@ func checkBlock(t *testing.T, expBl *types.Block, actBl *types.Block) {
 		assert.Equal(t, txhash, actBl.Txs[i], "tx hash should be equal")
 	}
 
+}
+
+func httpGet(ts *httptest.Server, url string) ([]byte, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }

@@ -1,4 +1,4 @@
-package api_test
+package transactions_test
 
 import (
 	"bytes"
@@ -9,8 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/api/types"
+	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -23,7 +22,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
 
@@ -32,7 +30,7 @@ var testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5e
 func TestTransaction(t *testing.T) {
 
 	ntx, ts := initTransactionServer(t)
-	raw, err := types.ConvertTransaction(ntx)
+	raw, err := transactions.ConvertTransaction(ntx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,8 +40,7 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("tx", string(r))
-	rtx := new(types.Transaction)
+	var rtx *transactions.Transaction
 	if err := json.Unmarshal(r, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +50,10 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("receipts", string(r))
-	// receipt := new(tx.Receipt)
-	// if err := json.Unmarshal(r, &receipt); err != nil {
-	// 	t.Fatal(err)
-	// }
+	var receipt *transactions.Receipt
+	if err := json.Unmarshal(r, &receipt); err != nil {
+		t.Fatal(err)
+	}
 
 	key, err := crypto.HexToECDSA(testPrivHex)
 	if err != nil {
@@ -73,15 +69,15 @@ func TestTransaction(t *testing.T) {
 	v := big.NewInt(10000)
 	m := math.HexOrDecimal256(*v)
 	blockRef := tx.NewBlockRef(20)
-	rawTransaction := &types.RawTransaction{
+	rawTransaction := &transactions.RawTransaction{
 		Nonce:        1,
 		GasPriceCoef: 1,
 		Gas:          30000,
 		DependsOn:    &hash,
 		Sig:          hexutil.Encode(sig),
 		BlockRef:     hexutil.Encode(blockRef[:]),
-		Clauses: types.Clauses{
-			types.Clause{
+		Clauses: transactions.Clauses{
+			transactions.Clause{
 				To:    &to,
 				Value: &m,
 				Data:  hexutil.Encode([]byte{0x00, 0x00}),
@@ -98,20 +94,9 @@ func TestTransaction(t *testing.T) {
 	}
 
 }
+
 func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	r, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
-}
-func httpPostForm(ts *httptest.Server, url string, body url.Values) ([]byte, error) {
-	res, err := http.PostForm(url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -126,9 +111,8 @@ func httpPostForm(ts *httptest.Server, url string, body url.Values) ([]byte, err
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	ti := api.NewTransactionInterface(chain, txpool.New())
 	router := mux.NewRouter()
-	api.NewTransactionHTTPRouter(router, ti)
+	transactions.New(chain, txpool.New()).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
@@ -157,6 +141,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Errorf("Sign error: %s", err)
 	}
 	tx = tx.WithSignature(sig)
+
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
 		ParentID(best.Header().ID()).
@@ -174,10 +159,10 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	return tx, ts
 }
 
-func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transaction) {
+func checkTx(t *testing.T, expectedTx *transactions.Transaction, actualTx *transactions.Transaction) {
 	assert.Equal(t, expectedTx.From, actualTx.From)
 	assert.Equal(t, expectedTx.ID, actualTx.ID)
-	assert.Equal(t, expectedTx.Index, actualTx.Index)
+	assert.Equal(t, expectedTx.TxIndex, actualTx.TxIndex)
 	assert.Equal(t, expectedTx.GasPriceCoef, actualTx.GasPriceCoef)
 	assert.Equal(t, expectedTx.Gas, actualTx.Gas)
 	for i, c := range expectedTx.Clauses {
@@ -186,4 +171,17 @@ func checkTx(t *testing.T, expectedTx *types.Transaction, actualTx *types.Transa
 		assert.Equal(t, c.To, actualTx.Clauses[i].To)
 	}
 
+}
+
+func httpGet(ts *httptest.Server, url string) ([]byte, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	r, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
