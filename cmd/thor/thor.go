@@ -227,7 +227,7 @@ func action(ctx *cli.Context) error {
 	})
 
 	goes.Go(func() {
-		restful := http.Server{Handler: api.NewHTTPHandler(ch, stateCreator, txpool, ldb)}
+		restful := http.Server{Handler: api.New(ch, stateCreator, txpool, ldb)}
 
 		go func() {
 			<-c.Done()
