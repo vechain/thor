@@ -2,6 +2,10 @@ package txpool_test
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -11,9 +15,6 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
-	"math/big"
-	"testing"
-	"time"
 )
 
 const (
@@ -26,7 +27,7 @@ func TestTxPool(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
 	c := state.NewCreator(db)
-	bl, _, err := genesis.Mainnet.Build(c)
+	bl, _, err := genesis.Dev.Build(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,17 +41,19 @@ func TestTxPool(t *testing.T) {
 		t.Fatal(err)
 	}
 	address, _ := thor.ParseAddress(testAddress)
-	pool := txpool.New()
+	pool := txpool.New(chain, c)
 	count := 10
 	ch := make(chan *tx.Transaction, count)
 	sub := pool.SubscribeNewTransaction(ch)
 	defer sub.Unsubscribe()
+	dependsOn := thor.BytesToHash([]byte("depend"))
 	for i := 0; i < count; i++ {
 		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(i))).WithData(nil)
 		tx := new(tx.Builder).
 			GasPriceCoef(1).
 			Gas(1000000).
 			Clause(cla).
+			DependsOn(&dependsOn).
 			Nonce(1).
 			Build()
 		key, err := crypto.HexToECDSA(testPrivHex)
