@@ -1,11 +1,10 @@
 package builtin
 
 import (
-	"bytes"
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/thor"
 )
@@ -19,7 +18,7 @@ type contract struct {
 func mustLoadContract(name string) *contract {
 	asset := "compiled/" + name + ".abi"
 	data := gen.MustAsset(asset)
-	abi, err := abi.New(bytes.NewReader(data))
+	abi, err := abi.New(data)
 	if err != nil {
 		panic(errors.Wrap(err, "load ABI for '"+name+"'"))
 	}
@@ -43,9 +42,13 @@ func (c *contract) RuntimeBytecodes() []byte {
 
 // to implement native method.
 func (c *contract) impl(name string, gas uint64, run func(env *env) ([]interface{}, error)) *nativeMethod {
+	method := c.ABI.MethodByName(name)
+	if method == nil {
+		panic("no method '" + name + "'")
+	}
 	return &nativeMethod{
 		c.Address,
-		c.ABI.MustForMethod(name),
+		method,
 		gas,
 		run}
 }

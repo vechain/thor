@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
@@ -15,10 +15,10 @@ var errNativeNotPermitted = errors.New("native call: not permitted")
 
 // nativeMethod describes a native call.
 type nativeMethod struct {
-	addr        thor.Address
-	methodCodec *abi.MethodCodec
-	gas         uint64
-	run         func(env *env) ([]interface{}, error)
+	addr   thor.Address
+	method *abi.Method
+	gas    uint64
+	run    func(env *env) ([]interface{}, error)
 }
 
 // Call do native call.
@@ -48,12 +48,12 @@ func (n *nativeMethod) Call(
 		state,
 		vmCtx,
 		input,
-		n.methodCodec})
+		n.method})
 
 	if err != nil {
 		return nil, err
 	}
-	return n.methodCodec.EncodeOutput(out...)
+	return n.method.EncodeOutput(out...)
 }
 
 // env env of native call invocation.
@@ -61,13 +61,13 @@ type env struct {
 	State     *state.State
 	VMContext *vm.Context
 
-	input       []byte
-	methodCodec *abi.MethodCodec
+	input  []byte
+	method *abi.Method
 }
 
 // Args unpack input into args.
 func (e *env) Args(v interface{}) {
-	if err := e.methodCodec.DecodeInput(e.input, v); err != nil {
+	if err := e.method.DecodeInput(e.input, v); err != nil {
 		// Callable.Call will handle it
 		panic(err)
 	}

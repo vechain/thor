@@ -3,6 +3,7 @@ package genesis
 import (
 	"math/big"
 
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
@@ -34,19 +35,31 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, e
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Energy.Address).
-				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+				WithData(mustEncodeInput(builtin.Energy.ABI, "adjustGrowthRate", thor.InitialEnergyGrowthRate)),
 			builtin.Executor.Address).
 		Build(stateCreator)
+}
+
+func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
+	m := abi.MethodByName(name)
+	if m == nil {
+		panic("no method '" + name + "'")
+	}
+	data, err := m.EncodeInput(args...)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

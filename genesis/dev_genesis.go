@@ -79,25 +79,25 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyRewardRatio, thor.InitialRewardRatio)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Params.Address).
-				WithData(builtin.Params.ABI.MustForMethod("set").MustEncodeInput(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Energy.Address).
-				WithData(builtin.Energy.ABI.MustForMethod("adjustGrowthRate").MustEncodeInput(thor.InitialEnergyGrowthRate)),
+				WithData(mustEncodeInput(builtin.Energy.ABI, "adjustGrowthRate", thor.InitialEnergyGrowthRate)),
 			builtin.Executor.Address)
 
 	for i, a := range d.Accounts() {
 		builder.Call(
 			tx.NewClause(&builtin.Authority.Address).
-				WithData(builtin.Authority.ABI.MustForMethod("add").MustEncodeInput(a.Address, a.Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", i))))),
+				WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", i))))),
 			builtin.Executor.Address)
 	}
 

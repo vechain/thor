@@ -1,10 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/pkg/errors"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/api/types"
-	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
@@ -78,17 +78,17 @@ func (ti *TransactionInterface) SendRawTransaction(raw *types.RawTransaction) (*
 }
 
 //GetContractInputData get contract input with method and args
-func (ti *TransactionInterface) GetContractInputData(contractAddr thor.Address, abi string, methodName string, args ...interface{}) (input []byte, err error) {
-	a, err := ABI.New(bytes.NewReader([]byte(abi)))
+func (ti *TransactionInterface) GetContractInputData(contractAddr thor.Address, abiData string, methodName string, args ...interface{}) (input []byte, err error) {
+	abi, err := abi.New([]byte(abiData))
 	if err != nil {
 		return nil, err
 	}
 
-	codec, err := a.ForMethod(methodName)
-	if err != nil {
-		return nil, err
+	method := abi.MethodByName(methodName)
+	if method == nil {
+		return nil, errors.New("method not found")
 	}
-	data, err := codec.EncodeInput(args...)
+	data, err := method.EncodeInput(args...)
 	if err != nil {
 		return nil, err
 	}

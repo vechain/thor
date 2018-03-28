@@ -5,14 +5,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/builtin/abi"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
 )
 
 func init() {
-	methods := []*nativeMethod{
+	nativeMethods := []*nativeMethod{
 		Params.impl("nativeGetExecutor", ethparams.SloadGas, func(*env) ([]interface{}, error) {
 			return []interface{}{Executor.Address}, nil
 		}),
@@ -169,10 +169,10 @@ func init() {
 		}),
 	}
 
-	for _, method := range methods {
+	for _, nmethod := range nativeMethods {
 		methodMap[methodKey{
-			method.addr, method.methodCodec.ID(),
-		}] = method
+			nmethod.addr, nmethod.method.ID(),
+		}] = nmethod
 	}
 }
 
