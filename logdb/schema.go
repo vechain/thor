@@ -2,27 +2,30 @@ package logdb
 
 // create a table for log
 const logTableSchema = `
-create table if not exists log (
-	blockID	blob(32),
-	blockNumber decimal(32,0),
-	logIndex integer,
-	txID blob(32),
-	txOrigin blob(20),
-	address blob(20),
-	data blob,
-	topic0 blob(32),
-	topic1 blob(32),
-	topic2 blob(32),
-	topic3 blob(32),
-	topic4 blob(32)
+CREATE TABLE IF NOT EXISTS log (
+	blockID	BLOB(32),
+	logIndex INTEGER,
+	blockNumber INTEGER,
+	blockTime INTEGER,
+	txID BLOB(32),
+	txOrigin BLOB(20),
+	address BLOB(20),	
+	topic0 BLOB(32),
+	topic1 BLOB(32),
+	topic2 BLOB(32),
+	topic3 BLOB(32),
+	topic4 BLOB(32),
+	data BLOB
 );
 
-CREATE INDEX if not exists blockNumberIndex on log(blockNumber);
-CREATE INDEX if not exists addressIndex on log(address);
+CREATE UNIQUE INDEX IF NOT EXISTS prim ON log(blockID, logIndex);
 
-CREATE INDEX if not exists topicIndex0 on log(topic0);
-CREATE INDEX if not exists topicIndex1 on log(topic1);
-CREATE INDEX if not exists topicIndex2 on log(topic2);
-CREATE INDEX if not exists topicIndex3 on log(topic3);
-CREATE INDEX if not exists topicIndex4 on log(topic4);
+CREATE INDEX IF NOT EXISTS blockNumberIndex ON log(blockNumber);
+CREATE INDEX IF NOT EXISTS blockTimeIndex ON log(blockTime);
+CREATE INDEX IF NOT EXISTS addressIndex ON log(address);
+CREATE INDEX IF NOT EXISTS topicIndex0 ON log(topic0);
+CREATE INDEX IF NOT EXISTS topicIndex1 ON log(topic1);
+CREATE INDEX IF NOT EXISTS topicIndex2 ON log(topic2);
+CREATE INDEX IF NOT EXISTS topicIndex3 ON log(topic3);
+CREATE INDEX IF NOT EXISTS topicIndex4 ON log(topic4);
 `

@@ -2,12 +2,14 @@ package logdb_test
 
 import (
 	"fmt"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"os"
 	"os/user"
 	"testing"
+
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 func TestLogDB(t *testing.T) {
@@ -17,10 +19,10 @@ func TestLogDB(t *testing.T) {
 	// }
 	// db, err := logdb.New(path + "/log.db")
 	db, err := logdb.NewMem()
-	defer db.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer db.Close()
 
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
@@ -28,12 +30,14 @@ func TestLogDB(t *testing.T) {
 		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 48},
 	}
 
+	header := new(block.Builder).Build().Header()
 	var logs []*logdb.Log
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
+		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = db.Insert(logs)
+	err = db.Insert(logs...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,13 +100,15 @@ func BenchmarkLog(b *testing.B) {
 		Data:    []byte("data"),
 	}
 	var logs []*logdb.Log
+	header := new(block.Builder).Build().Header()
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(thor.BytesToHash([]byte("blockID")), 1, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
+		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.Insert(logs)
+		err := db.Insert(logs...)
 		if err != nil {
 			b.Fatal(err)
 		}
