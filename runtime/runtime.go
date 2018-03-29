@@ -231,24 +231,24 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 // returns common 'To' field of clauses if any.
 // Empty address returned if no common 'To'.
-func commonTo(clauses []*Tx.Clause) thor.Address {
+func commonTo(clauses []*Tx.Clause) *thor.Address {
 	if len(clauses) == 0 {
-		return thor.Address{}
+		return nil
 	}
 
 	firstTo := clauses[0].To()
 	if firstTo == nil {
-		return thor.Address{}
+		return nil
 	}
 
 	for _, clause := range clauses[1:] {
 		to := clause.To()
 		if to == nil {
-			return thor.Address{}
+			return nil
 		}
 		if *to != *firstTo {
-			return thor.Address{}
+			return nil
 		}
 	}
-	return *firstTo
+	return firstTo
 }
