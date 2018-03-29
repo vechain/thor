@@ -1,6 +1,8 @@
 package tx
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
@@ -12,6 +14,8 @@ type Receipt struct {
 	GasUsed uint64
 	// the one who payed for gas
 	GasPayer thor.Address
+	// energy reward given to block proposer
+	Reward *big.Int
 	// if the tx reverted
 	Reverted bool
 	// outputs of clauses in tx
