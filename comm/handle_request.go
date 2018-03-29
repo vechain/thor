@@ -3,6 +3,8 @@ package comm
 import (
 	"errors"
 
+	"github.com/vechain/thor/txpool"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/comm/proto"
@@ -118,17 +120,15 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return resp, nil
 	case proto.MsgGetTxs:
-		txIter, err := c.txpool.NewIterator(c.chain, c.stateCreator)
-		if err != nil {
-			return nil, err
-		}
+		pendings := c.txpool.Dump(txpool.Pending)
 		resp := make(proto.RespGetTxs, 0, 100)
 		var size metric.StorageSize
-
-		for size < maxRespSize && txIter.HasNext() {
-			tx := txIter.Next()
-			resp = append(resp, tx)
-			size += tx.Size()
+		for _, pending := range pendings {
+			size += pending.Size()
+			if size > maxRespSize {
+				break
+			}
+			resp = append(resp, pending)
 		}
 		return resp, nil
 	}
