@@ -107,7 +107,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		num := req.Num
 		var size metric.StorageSize
 		for size < maxRespSize && len(resp) < maxBlocks {
-			raw, err := c.chain.GetRawBlockByNumber(num)
+			raw, err := c.chain.GetBlockRawByNumber(num)
 			if err != nil {
 				if c.chain.IsNotFound(err) {
 					break
