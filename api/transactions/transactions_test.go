@@ -112,12 +112,12 @@ func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	chain := chain.New(db)
-	router := mux.NewRouter()
-	transactions.New(chain, txpool.New()).Mount(router, "/transactions")
-	ts := httptest.NewServer(router)
-
 	stateC := state.NewCreator(db)
-
+	router := mux.NewRouter()
+	pool := txpool.New(chain, stateC)
+	defer pool.Stop()
+	transactions.New(chain, pool).Mount(router, "/transactions")
+	ts := httptest.NewServer(router)
 	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)

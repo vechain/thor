@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	ABI "github.com/vechain/thor/abi"
 	"github.com/vechain/thor/api/contracts"
 	"github.com/vechain/thor/block"
-	ABI "github.com/vechain/thor/builtin/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -100,43 +100,24 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 	b := uint8(2)
 
 	method := "add"
-	abi, err := ABI.New(strings.NewReader(abiJSON))
-	codec, err := abi.ForMethod(method)
+	abi, err := ABI.New([]byte(abiJSON))
+	m := abi.MethodByName(method)
+	input, err := m.EncodeInput(a, b)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, method, codec.Name())
-	input, err := codec.EncodeInput(a, b)
-	if err != nil {
-		t.Fatal(err)
-	}
-<<<<<<< HEAD:api/contracts/contracts_test.go
-
-	callBody := &contracts.ContractCallBody{
-		Input: hexutil.Encode(input),
-	}
-	body, err := json.Marshal(callBody)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := httpPost(ts, ts.URL+"/contracts/"+contractAddr.String(), body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var res string
-=======
 	gp := big.NewInt(1)
 	gph := math.HexOrDecimal256(*gp)
 	v := big.NewInt(0)
 	vh := math.HexOrDecimal256(*v)
-	reqBody := &api.ContractCallBody{
+	reqBody := &contracts.ContractCallBody{
 		Input: hexutil.Encode(input),
-		Options: api.ContractCallOptions{
+		Options: contracts.ContractCallOptions{
 			ClauseIndex: 0,
 			Gas:         21000,
-			From:        thor.Address{}.String(),
+			From:        &thor.Address{},
 			GasPrice:    &gph,
-			TxID:        thor.Hash{}.String(),
+			TxID:        &thor.Hash{},
 			Value:       &vh,
 		},
 	}
@@ -157,8 +138,7 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 		t.Fatal(err)
 	}
 
-	var res map[string]string
->>>>>>> a730f307b1f5b327c1cad70dd85efc269368a393:api/contracts/contracts_test.go
+	var res string
 	if err = json.Unmarshal(r, &res); err != nil {
 		t.Fatal(err)
 	}
@@ -167,24 +147,11 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 		t.Fatal(err)
 	}
 	var ret uint8
-	err = codec.DecodeOutput(output, &ret)
+	err = m.DecodeOutput(output, &ret)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, a+b, ret, "should be equal")
-}
-
-func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	r, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
 }
 
 func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {

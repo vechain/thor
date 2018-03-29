@@ -28,12 +28,6 @@ const (
 	testPrivHex   = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 )
 
-const (
-	emptyRootHash = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
-	testPrivHex   = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
-)
-
 func TestBlock(t *testing.T) {
 
 	block, ts := initBlockServer(t)
