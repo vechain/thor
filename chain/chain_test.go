@@ -12,8 +12,7 @@ import (
 func TestChain(t *testing.T) {
 
 	s, _ := lvldb.NewMem()
-	chain := New(s)
-	chain.WriteGenesis(new(block.Builder).Build())
+	chain, _ := New(s, new(block.Builder).Build())
 
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
@@ -21,7 +20,7 @@ func TestChain(t *testing.T) {
 			ParentID(best.Header().ID()).
 			Build()
 		fmt.Println(b.Header().ID())
-		if _, err := chain.AddBlock(b, true); err != nil {
+		if _, err := chain.AddBlock(b, nil, true); err != nil {
 			fmt.Println(err)
 		}
 	}

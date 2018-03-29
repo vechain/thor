@@ -69,18 +69,17 @@ func TestBlock(t *testing.T) {
 
 func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	db, _ := lvldb.NewMem()
-	chain := chain.New(db)
-	router := mux.NewRouter()
-	blocks.New(chain).Mount(router, "/blocks")
-	ts := httptest.NewServer(router)
 
 	stateC := state.NewCreator(db)
 	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
+	chain, _ := chain.New(db, b)
+	router := mux.NewRouter()
+	blocks.New(chain).Mount(router, "/blocks")
+	ts := httptest.NewServer(router)
 
-	chain.WriteGenesis(b)
 	address, _ := thor.ParseAddress(testAddress)
 
 	cla := tx.NewClause(&address).WithData(nil).WithValue(big.NewInt(10))
@@ -106,7 +105,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 		ParentID(best.Header().ID()).
 		Transaction(tx).
 		Build()
-	if _, err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, nil, true); err != nil {
 		t.Fatal(err)
 	}
 

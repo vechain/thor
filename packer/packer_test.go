@@ -60,8 +60,8 @@ func TestP(t *testing.T) {
 
 	b0, _, _ := genesis.Dev.Build(state.NewCreator(kv))
 
-	c := chain.New(kv)
-	c.WriteGenesis(b0)
+	c, _ := chain.New(kv, b0)
+
 	a1 := genesis.Dev.Accounts()[0]
 
 	start := time.Now().UnixNano()
@@ -89,7 +89,7 @@ func TestP(t *testing.T) {
 		blk, _, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
 		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
 
-		if _, err := c.AddBlock(blk, true); err != nil {
+		if _, err := c.AddBlock(blk, nil, true); err != nil {
 			t.Fatal(err)
 		}
 
