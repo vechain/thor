@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vm/evm"
 )
 
 var Mainnet = &mainnet{
@@ -26,6 +27,10 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, e
 		Timestamp(m.launchTime).
 		GasLimit(thor.InitialGasLimit).
 		State(func(state *state.State) error {
+			// alloc precompiled contracts
+			for addr := range evm.PrecompiledContractsByzantium {
+				state.SetBalance(thor.Address(addr), big.NewInt(1))
+			}
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
