@@ -8,7 +8,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -25,35 +24,33 @@ import (
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	genesisID    thor.Hash
-	chain        *chain.Chain
-	synced       bool
-	ctx          context.Context
-	cancel       context.CancelFunc
-	sessionSet   *session.Set
-	syncCh       chan struct{}
-	announceCh   chan *announce
-	blockFeed    event.Feed
-	txFeed       event.Feed
-	feedScope    event.SubscriptionScope
-	goes         co.Goes
-	txpool       *txpool.TxPool
-	stateCreator *state.Creator
+	genesisID  thor.Hash
+	chain      *chain.Chain
+	synced     bool
+	ctx        context.Context
+	cancel     context.CancelFunc
+	sessionSet *session.Set
+	syncCh     chan struct{}
+	announceCh chan *announce
+	blockFeed  event.Feed
+	txFeed     event.Feed
+	feedScope  event.SubscriptionScope
+	goes       co.Goes
+	txpool     *txpool.TxPool
 }
 
 // New create a new Communicator instance.
-func New(chain *chain.Chain, txpool *txpool.TxPool, stateCreator *state.Creator) *Communicator {
+func New(chain *chain.Chain, txpool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		genesisID:    mustGetGenesisID(chain),
-		chain:        chain,
-		txpool:       txpool,
-		stateCreator: stateCreator,
-		ctx:          ctx,
-		cancel:       cancel,
-		sessionSet:   session.NewSet(),
-		syncCh:       make(chan struct{}),
-		announceCh:   make(chan *announce),
+		genesisID:  mustGetGenesisID(chain),
+		chain:      chain,
+		txpool:     txpool,
+		ctx:        ctx,
+		cancel:     cancel,
+		sessionSet: session.NewSet(),
+		syncCh:     make(chan struct{}),
+		announceCh: make(chan *announce),
 	}
 }
 
