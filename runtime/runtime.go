@@ -140,15 +140,15 @@ func (rt *Runtime) Call(
 
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, reward *big.Int, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	resolvedTx, err := ResolveTransaction(rt.state, tx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	payer, err := resolvedTx.BuyGas(rt.blockTime)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// checkpoint to be reverted when clause failure.
@@ -204,11 +204,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	// reward
 	rewardRatio := rt.params.Get(thor.KeyRewardRatio)
 	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.getBlockID)
-	reward = new(big.Int).SetUint64(receipt.GasUsed)
+	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
 	rt.energy.AddBalance(rt.blockTime, rt.blockBeneficiary, reward)
 
-	return receipt, vmOutputs, reward, nil
+	receipt.Reward = reward
+
+	return receipt, vmOutputs, nil
 }
