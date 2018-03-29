@@ -3,7 +3,6 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/energy"
 	"github.com/vechain/thor/builtin/params"
@@ -141,42 +140,27 @@ func (rt *Runtime) Call(
 
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
-	// precheck
-	origin, err := tx.Signer()
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, reward *big.Int, err error) {
+	resolvedTx, err := ResolveTransaction(rt.state, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	intrinsicGas, err := tx.IntrinsicGas()
+
+	payer, err := resolvedTx.BuyGas(rt.blockTime)
 	if err != nil {
-		return nil, nil, err
-	}
-	gas := tx.Gas()
-	if intrinsicGas > gas {
-		return nil, nil, errors.New("intrinsic gas exceeds provided gas")
-	}
-
-	baseGasPrice := rt.params.Get(thor.KeyBaseGasPrice)
-	gasPrice := tx.GasPrice(baseGasPrice)
-
-	prepayedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice)
-
-	clauses := tx.Clauses()
-	energyPayer, ok := rt.energy.Consume(rt.blockTime, commonTo(clauses), origin, prepayedEnergy)
-	if !ok {
-		return nil, nil, errors.New("insufficient energy")
+		return nil, nil, nil, err
 	}
 
 	// checkpoint to be reverted when clause failure.
 	clauseCheckpoint := rt.state.NewCheckpoint()
 
-	leftOverGas := gas - intrinsicGas
+	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
 
-	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(clauses))}
-	vmOutputs = make([]*vm.Output, 0, len(clauses))
+	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
+	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
 
-	for i, clause := range clauses {
-		vmOutput := rt.execute(clause, uint32(i), leftOverGas, origin, gasPrice, tx.ID(), false)
+	for i, clause := range resolvedTx.Clauses {
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -208,47 +192,23 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Logs: logs})
 	}
 
-	receipt.GasUsed = gas - leftOverGas
-	receipt.GasPayer = energyPayer
+	receipt.GasUsed = tx.Gas() - leftOverGas
+	receipt.GasPayer = payer
 
 	// entergy to return = leftover gas * gas price
-	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), gasPrice)
+	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), resolvedTx.GasPrice)
 
 	// return overpayed energy to payer
-	rt.energy.AddBalance(rt.blockTime, energyPayer, energyToReturn)
+	rt.energy.AddBalance(rt.blockTime, payer, energyToReturn)
 
 	// reward
 	rewardRatio := rt.params.Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.blockNumber-1, rt.getBlockID)
-	reward := new(big.Int).SetUint64(receipt.GasUsed)
+	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.getBlockID)
+	reward = new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
 	rt.energy.AddBalance(rt.blockTime, rt.blockBeneficiary, reward)
 
-	return receipt, vmOutputs, nil
-}
-
-// returns common 'To' field of clauses if any.
-// Empty address returned if no common 'To'.
-func commonTo(clauses []*Tx.Clause) *thor.Address {
-	if len(clauses) == 0 {
-		return nil
-	}
-
-	firstTo := clauses[0].To()
-	if firstTo == nil {
-		return nil
-	}
-
-	for _, clause := range clauses[1:] {
-		to := clause.To()
-		if to == nil {
-			return nil
-		}
-		if *to != *firstTo {
-			return nil
-		}
-	}
-	return firstTo
+	return receipt, vmOutputs, reward, nil
 }
