@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vechain/thor/block"
+
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -232,48 +234,65 @@ func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subsc
 //loop for dequeue transactions
 func (pool *TxPool) loop() {
 	ticker := time.NewTicker(1 * time.Second)
+	var bestBlock *block.Block
 	defer ticker.Stop()
 	for {
 		select {
 		case <-pool.done:
 			return
 		case <-ticker.C:
-			pool.rw.RLock()
-			bestBlock, err := pool.chain.GetBestBlock()
+			b, err := pool.chain.GetBestBlock()
 			if err != nil {
 				continue
 			}
-			st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
-			if err != nil {
-				continue
-			}
-			baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
-			traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
-			var txObjs txObjects
-			for id, obj := range pool.queued {
-				if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
-					pool.Remove(id)
+			if bestBlock == nil {
+				bestBlock = b
+			} else {
+				if b.Header().ID() == bestBlock.Header().ID() {
 					continue
 				}
-				overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
-					return traverser.Get(num).ID()
-				})
-				obj.SetOverallGP(overallGP)
-				txObjs = append(txObjs, obj)
+				bestBlock = b
 			}
-			pool.rw.RUnlock()
-			sort.Slice(txObjs, func(i, j int) bool {
-				return txObjs[i].OverallGP().Cmp(txObjs[j].OverallGP()) > 0
-			})
-			for _, obj := range txObjs {
-				tx := obj.Tx()
-				if err := pool.Add(tx); err != nil {
-					if !pool.IsKonwnTransactionError(err) {
-						pool.Remove(tx.ID())
-					}
-					continue
-				}
+			pool.update(bestBlock)
+		}
+	}
+}
+
+func (pool *TxPool) update(bestBlock *block.Block) {
+	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
+	if err != nil {
+		return
+	}
+
+	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
+	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
+
+	pool.rw.RLock()
+	defer pool.rw.RUnlock()
+
+	var txObjs txObjects
+	for id, obj := range pool.queued {
+		if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+			pool.Remove(id)
+			continue
+		}
+		overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
+			return traverser.Get(num).ID()
+		})
+		obj.SetOverallGP(overallGP)
+		txObjs = append(txObjs, obj)
+	}
+	pool.rw.RUnlock()
+	sort.Slice(txObjs, func(i, j int) bool {
+		return txObjs[i].OverallGP().Cmp(txObjs[j].OverallGP()) > 0
+	})
+	for _, obj := range txObjs {
+		tx := obj.Tx()
+		if err := pool.Add(tx); err != nil {
+			if !pool.IsKonwnTransactionError(err) {
+				pool.Remove(tx.ID())
 			}
+			continue
 		}
 	}
 }
