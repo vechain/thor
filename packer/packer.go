@@ -125,7 +125,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			}
 
 			chkpt := state.NewCheckpoint()
-			receipt, _, err := rt.ExecuteTransaction(tx)
+			receipt, _, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
 				state.RevertTo(chkpt)

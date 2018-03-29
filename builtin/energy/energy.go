@@ -227,9 +227,11 @@ func (e *Energy) consumeContract(
 	return thor.Address{}, false
 }
 
-func (e *Energy) Consume(blockTime uint64, contractAddr thor.Address, caller thor.Address, amount *big.Int) (thor.Address, bool) {
-	if payer, ok := e.consumeContract(blockTime, contractAddr, caller, amount); ok {
-		return payer, true
+func (e *Energy) Consume(blockTime uint64, contractAddr *thor.Address, caller thor.Address, amount *big.Int) (thor.Address, bool) {
+	if contractAddr != nil {
+		if payer, ok := e.consumeContract(blockTime, *contractAddr, caller, amount); ok {
+			return payer, true
+		}
 	}
 	if e.SubBalance(blockTime, caller, amount) {
 		return caller, true
