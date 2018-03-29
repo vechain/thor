@@ -204,8 +204,7 @@ func (p *Packer) newTxFinder(parentBlockID thor.Hash, processed map[thor.Hash]st
 		if _, ok := processed[txID]; ok {
 			return true, nil
 		}
-		_, err := p.chain.LookupTransaction(parentBlockID, txID)
-		if err != nil {
+		if _, err := p.chain.LookupTransaction(parentBlockID, txID); err != nil {
 			if p.chain.IsNotFound(err) {
 				return false, nil
 			}
