@@ -11,9 +11,9 @@ import (
 
 func TestTraverser(t *testing.T) {
 	s, _ := lvldb.NewMem()
-	c := chain.New(s)
 	b0 := new(block.Builder).Build()
-	c.WriteGenesis(b0)
+	c, err := chain.New(s, b0)
+	assert.Nil(t, err)
 
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).Build()
 	b2 := new(block.Builder).ParentID(b1.Header().ID()).Build()
@@ -21,11 +21,11 @@ func TestTraverser(t *testing.T) {
 	b2x := new(block.Builder).ParentID(b1.Header().ID()).Build()
 	b3x := new(block.Builder).ParentID(b2x.Header().ID()).Build()
 
-	c.AddBlock(b1, true)
-	c.AddBlock(b2, true)
-	c.AddBlock(b3, true)
-	c.AddBlock(b2x, false)
-	c.AddBlock(b3x, false)
+	c.AddBlock(b1, nil, true)
+	c.AddBlock(b2, nil, true)
+	c.AddBlock(b3, nil, true)
+	c.AddBlock(b2x, nil, false)
+	c.AddBlock(b3x, nil, false)
 
 	tr := c.NewTraverser(b3x.Header().ID())
 	assert.Equal(t, tr.Get(3).ID(), b3x.Header().ID())

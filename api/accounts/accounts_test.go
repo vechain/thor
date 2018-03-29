@@ -110,18 +110,17 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		s.SetStorage(address, storageKey, v.in.storage)
 	}
 	stateRoot, _ := s.Stage().Commit()
-	chain := chain.New(db)
 	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain.WriteGenesis(b)
+	chain, _ := chain.New(db, b)
 	best, _ := chain.GetBestBlock()
 	bl := new(block.Builder).
 		ParentID(best.Header().ID()).
 		StateRoot(stateRoot).
 		Build()
-	if _, err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()

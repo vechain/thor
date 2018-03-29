@@ -25,10 +25,12 @@ var errBlockExist = errors.New("block already exists")
 // Chain describes a persistent block chain.
 // It's thread-safe.
 type Chain struct {
-	kv        kv.GetPutter
-	bestBlock atomic.Value
-	caches    caches
-	rw        sync.RWMutex
+	kv           kv.GetPutter
+	genesisBlock *block.Block
+	tag          byte
+	bestBlock    atomic.Value
+	caches       caches
+	rw           sync.RWMutex
 }
 
 type caches struct {
@@ -39,7 +41,30 @@ type caches struct {
 }
 
 // New create an instance of Chain.
-func New(kv kv.GetPutter) *Chain {
+func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
+	if genesisID, err := persist.LoadTrunkBlockID(kv, 0); err != nil {
+		if !kv.IsNotFound(err) {
+			return nil, err
+		}
+		// no genesis yet
+		batch := kv.NewBatch()
+		if _, err := persist.SaveBlock(batch, genesisBlock); err != nil {
+			return nil, err
+		}
+		if err := persist.SaveTrunkBlockID(batch, genesisBlock.Header().ID()); err != nil {
+			return nil, err
+		}
+		if err := persist.SaveBestBlockID(batch, genesisBlock.Header().ID()); err != nil {
+			return nil, err
+		}
+		if err := batch.Write(); err != nil {
+			return nil, err
+		}
+	} else {
+		if genesisID != genesisBlock.Header().ID() {
+			return nil, errors.New("genesis mismatch")
+		}
+	}
 
 	blockCache := newLRU(blockCacheLimit, func(key interface{}) (interface{}, error) {
 		raw, err := persist.LoadRawBlock(kv, key.(thor.Hash))
@@ -73,65 +98,38 @@ func New(kv kv.GetPutter) *Chain {
 	})
 
 	return &Chain{
-		kv: kv,
+		kv:           kv,
+		genesisBlock: genesisBlock,
+		tag:          genesisBlock.Header().ID()[thor.HashLength-1],
 		caches: caches{
 			block:        blockCache,
 			txIDs:        txIDsCache,
 			receipts:     receiptsCache,
 			trunkBlockID: trunkBlockIDCache,
 		},
-	}
+	}, nil
 }
 
-// WriteGenesis writes in genesis block.
-// It will compare the given genesis block with the existed one. If not the same, an error returned.
-func (c *Chain) WriteGenesis(genesis *block.Block) error {
-	c.rw.Lock()
-	defer c.rw.Unlock()
+// Tag returns chain tag, which is the last byte of genesis id.
+func (c *Chain) Tag() byte {
+	return c.tag
+}
 
-	b0, err := c.getBlockByNumber(0)
-	if err != nil {
-		if !c.IsNotFound(err) {
-			// errors occurred
-			return err
-		}
-		// no genesis yet
-		batch := c.kv.NewBatch()
-
-		raw, err := persist.SaveBlock(batch, genesis)
-		if err != nil {
-			return err
-		}
-		if err := persist.SaveTxLocations(batch, genesis.Transactions(), genesis.Header().ID()); err != nil {
-			return err
-		}
-		if err := persist.SaveTrunkBlockID(batch, genesis.Header().ID()); err != nil {
-			return err
-		}
-		if err := persist.SaveBestBlockID(batch, genesis.Header().ID()); err != nil {
-			return err
-		}
-		if err := batch.Write(); err != nil {
-			return err
-		}
-		c.bestBlock.Store(genesis)
-		c.caches.block.Add(genesis.Header().ID(), newRawBlock(raw, genesis))
-		return nil
-	}
-	if b0.Header().ID() != genesis.Header().ID() {
-		return errors.New("genesis mismatch")
-	}
-	return nil
+// GenesisBlock returns genesis block.
+func (c *Chain) GenesisBlock() *block.Block {
+	return c.genesisBlock
 }
 
 // AddBlock add a new block into block chain.
 // Once reorg happened, Fork.Branch will be the chain transitted from trunk to branch.
 // Reorg happens when isTrunk is true.
-func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
+func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bool) (*Fork, error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
-	if _, err := c.getBlock(newBlock.Header().ID()); err != nil {
+	newBlockID := newBlock.Header().ID()
+
+	if _, err := c.getBlock(newBlockID); err != nil {
 		if !c.IsNotFound(err) {
 			return nil, err
 		}
@@ -150,6 +148,9 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 	batch := c.kv.NewBatch()
 	raw, err := persist.SaveBlock(batch, newBlock)
 	if err != nil {
+		return nil, err
+	}
+	if err := persist.SaveBlockReceipts(c.kv, newBlockID, receipts); err != nil {
 		return nil, err
 	}
 	var fork *Fork
@@ -183,7 +184,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 			}
 			trunkUpdates[tb.Header().ID()] = true
 		}
-		persist.SaveBestBlockID(batch, newBlock.Header().ID())
+		persist.SaveBestBlockID(batch, newBlockID)
 	} else {
 		fork = &Fork{Ancestor: newBlock}
 	}
@@ -192,7 +193,8 @@ func (c *Chain) AddBlock(newBlock *block.Block, isTrunk bool) (*Fork, error) {
 		return nil, err
 	}
 
-	c.caches.block.Add(newBlock.Header().ID(), newRawBlock(raw, newBlock))
+	c.caches.block.Add(newBlockID, newRawBlock(raw, newBlock))
+	c.caches.receipts.Add(newBlockID, receipts)
 	if trunkUpdates != nil {
 		for id, f := range trunkUpdates {
 			if !f {
@@ -480,18 +482,6 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 		return loc, nil
 	}
 	return nil, errNotFound
-}
-
-// SetBlockReceipts set tx receipts of a block.
-func (c *Chain) SetBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
-	c.rw.Lock()
-	defer c.rw.Unlock()
-	return c.setBlockReceipts(blockID, receipts)
-}
-
-func (c *Chain) setBlockReceipts(blockID thor.Hash, receipts tx.Receipts) error {
-	c.caches.receipts.Add(blockID, receipts)
-	return persist.SaveBlockReceipts(c.kv, blockID, receipts)
 }
 
 // GetBlockReceipts get tx receipts of a block.

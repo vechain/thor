@@ -71,19 +71,19 @@ func initServer(t *testing.T) (*httptest.Server, *contracts.Contracts) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain := chain.New(db)
 	stateC := state.NewCreator(db)
 	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain.WriteGenesis(b)
+	chain, _ := chain.New(db, b)
+
 	best, _ := chain.GetBestBlock()
 	st, _ := stateC.NewState(best.Header().StateRoot())
 	st.SetCode(contractAddr, code)
 	hash, _ := st.Stage().Commit()
 	blk := new(block.Builder).ParentID(b.Header().ID()).StateRoot(hash).Build()
-	_, err = chain.AddBlock(blk, true)
+	_, err = chain.AddBlock(blk, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -111,18 +111,19 @@ func httpPost(ts *httptest.Server, url string, data []byte) ([]byte, error) {
 
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
-	chain := chain.New(db)
 	stateC := state.NewCreator(db)
+	b, _, err := genesis.Dev.Build(stateC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, _ := chain.New(db, b)
+
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
 	defer pool.Stop()
 	transactions.New(chain, pool).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
-	b, _, err := genesis.Dev.Build(stateC)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chain.WriteGenesis(b)
+
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(1000))
 	tx := new(tx.Builder).
@@ -154,7 +155,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	}
 	stat.SetBalance(thor.BytesToAddress([]byte("acc1")), big.NewInt(10000000000000))
 	stat.Stage().Commit()
-	if _, err := chain.AddBlock(bl, true); err != nil {
+	if _, err := chain.AddBlock(bl, nil, true); err != nil {
 		t.Fatal(err)
 	}
 	return tx, ts
