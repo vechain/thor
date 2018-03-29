@@ -2,12 +2,13 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"math/big"
 )
 
 // Clause for json marshal
@@ -154,7 +155,8 @@ type Receipt struct {
 	// gas used by this tx
 	GasUsed math.HexOrDecimal64 `json:"gasUsed"`
 	// the one who payed for gas
-	GasPayer thor.Address `json:"gasPayer,string"`
+	GasPayer thor.Address          `json:"gasPayer,string"`
+	Reward   *math.HexOrDecimal256 `json:"reward,string"`
 	// if the tx reverted
 	Reverted bool `json:"reverted"`
 	// outputs of clauses in tx
@@ -179,9 +181,11 @@ type ReceiptLog struct {
 
 //ConvertReceipt convert a raw clause into a jason format clause
 func convertReceipt(rece *tx.Receipt) *Receipt {
+	reward := math.HexOrDecimal256(*rece.Reward)
 	receipt := &Receipt{
 		GasUsed:  math.HexOrDecimal64(rece.GasUsed),
 		GasPayer: rece.GasPayer,
+		Reward:   &reward,
 		Reverted: rece.Reverted,
 	}
 	receipt.Outputs = make([]*Output, len(rece.Outputs))

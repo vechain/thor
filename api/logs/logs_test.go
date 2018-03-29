@@ -70,7 +70,7 @@ func initLogServer(t *testing.T) *httptest.Server {
 		lgs = append(lgs, log)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = db.Insert(lgs...)
+	err = db.Insert(lgs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
