@@ -2,7 +2,6 @@ package txpool
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -169,33 +168,32 @@ func (pool *TxPool) Dump(txCate TransactionCategory) []*tx.Transaction {
 	return txs
 }
 
-//Sorted sort transactions by OverallGasprice with TransactionCategory
-func (pool *TxPool) Sorted(txCate TransactionCategory) ([]*tx.Transaction, error) {
-	pool.rw.RLock()
-	defer pool.rw.RUnlock()
-
-	objs := make(map[thor.Hash]*txObject)
-	switch txCate {
-	case Pending:
-		objs = pool.pending
-	case Queued:
-		objs = pool.queued
-	case All:
-		objs = pool.all
-	}
+//Pending return all pending txs
+func (pool *TxPool) Pending() []*tx.Transaction {
 
 	bestBlock, err := pool.chain.GetBestBlock()
 	if err != nil {
-		return nil, err
+		return nil
 	}
+	pendingObjs := pool.pendingObjs(bestBlock)
+	txs := make([]*tx.Transaction, len(pendingObjs))
+	for i, obj := range pendingObjs {
+		txs[i] = obj.Tx()
+	}
+	return txs
+}
+
+func (pool *TxPool) pendingObjs(bestBlock *block.Block) txObjects {
+	pool.rw.RLock()
+	defer pool.rw.RUnlock()
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
 	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
-	var txObjs txObjects
-	for id, obj := range objs {
+	var pendingObjs txObjects
+	for id, obj := range pool.pending {
 		if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
 			pool.Remove(id)
 			continue
@@ -204,18 +202,13 @@ func (pool *TxPool) Sorted(txCate TransactionCategory) ([]*tx.Transaction, error
 			return traverser.Get(num).ID()
 		})
 		obj.SetOverallGP(overallGP)
-		txObjs = append(txObjs, obj)
+		pendingObjs = append(pendingObjs, obj)
 	}
 
-	sort.Slice(txObjs, func(i, j int) bool {
-		return txObjs[i].OverallGP().Cmp(txObjs[j].OverallGP()) > 0
+	sort.Slice(pendingObjs, func(i, j int) bool {
+		return pendingObjs[i].OverallGP().Cmp(pendingObjs[j].OverallGP()) > 0
 	})
-
-	txs := make([]*tx.Transaction, len(objs))
-	for i, obj := range txObjs {
-		txs[i] = obj.Tx()
-	}
-	return txs, nil
+	return pendingObjs
 }
 
 //Remove remove transaction by txID with TransactionCategory
@@ -243,7 +236,7 @@ func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subsc
 
 //reload resort all txs
 func (pool *TxPool) reload() {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -282,7 +275,9 @@ func (pool *TxPool) allObjs(bestBlock *block.Block) txObjects {
 			return traverser.Get(num).ID()
 		})
 		obj.SetOverallGP(overallGP)
-		allObjs = append(allObjs, obj)
+		if len(allObjs) < pool.config.PoolSize*2 {
+			allObjs = append(allObjs, obj)
+		}
 	}
 
 	sort.Slice(allObjs, func(i, j int) bool {
@@ -293,13 +288,13 @@ func (pool *TxPool) allObjs(bestBlock *block.Block) txObjects {
 
 func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
 	allObjs := pool.allObjs(bestBlock)
-	fmt.Println("allObjs", len(allObjs))
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 	for i, obj := range allObjs {
+
 		tx := obj.Tx()
 		txID := tx.ID()
-		if i <= pool.config.PoolSize {
+		if i <= pool.config.PoolSize && len(pool.pending)+len(pool.queued) <= pool.config.PoolSize {
 			sp, err := pool.shouldPending(tx, bestBlock)
 			if err != nil {
 				return
@@ -333,6 +328,7 @@ func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
 				delete(pool.queued, txID)
 			}
 		}
+
 	}
 }
 
@@ -346,7 +342,6 @@ func (pool *TxPool) dequeue() {
 		case <-pool.done:
 			return
 		case <-ticker.C:
-
 			b, err := pool.chain.GetBestBlock()
 			if err != nil {
 				continue
@@ -405,11 +400,9 @@ func (pool *TxPool) queuedToPendingObjs(bestBlock *block.Block) txObjects {
 
 func (pool *TxPool) update(bestBlock *block.Block) {
 	pendingObjs := pool.queuedToPendingObjs(bestBlock)
-	fmt.Println("best", bestBlock)
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 	for _, obj := range pendingObjs {
-		fmt.Println("pending tx", obj.Tx())
 		if len(pool.pending)+len(pool.queued) <= pool.config.PoolSize {
 			txID := obj.Tx().ID()
 			delete(pool.queued, txID)
