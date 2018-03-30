@@ -8,8 +8,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/vechain/thor/txpool"
-
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/block"
@@ -20,11 +18,11 @@ import (
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	genesisID  thor.Hash
 	chain      *chain.Chain
 	synced     bool
 	ctx        context.Context
@@ -43,7 +41,6 @@ type Communicator struct {
 func New(chain *chain.Chain, txpool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		genesisID:  mustGetGenesisID(chain),
 		chain:      chain,
 		txpool:     txpool,
 		ctx:        ctx,
@@ -107,7 +104,7 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 		if err != nil {
 			return
 		}
-		if respStatus.GenesisBlockID != c.genesisID {
+		if respStatus.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
 			return
 		}
 
@@ -276,12 +273,4 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 			}
 		})
 	}
-}
-
-func mustGetGenesisID(chain *chain.Chain) thor.Hash {
-	id, err := chain.GetBlockIDByNumber(0)
-	if err != nil {
-		panic(err)
-	}
-	return id
 }
