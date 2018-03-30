@@ -25,19 +25,19 @@ const (
 
 func TestTxPool(t *testing.T) {
 	db, _ := lvldb.NewMem()
+	chain := chain.New(db)
 	c := state.NewCreator(db)
 	bl, _, err := genesis.Dev.Build(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, _ := chain.New(db, bl)
-
+	chain.WriteGenesis(bl)
 	best, _ := chain.GetBestBlock()
 	blk := new(block.Builder).
 		ParentID(best.Header().ID()).
 		StateRoot(best.Header().StateRoot()).
 		Build()
-	if _, err := chain.AddBlock(blk, nil, true); err != nil {
+	if _, err := chain.AddBlock(blk, true); err != nil {
 		t.Fatal(err)
 	}
 	address, _ := thor.ParseAddress(testAddress)
