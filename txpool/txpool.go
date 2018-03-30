@@ -2,6 +2,7 @@ package txpool
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -106,7 +107,7 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 	obj := newTxObject(tx, time.Now().Unix())
-	//pool overload,just set into `all` ,wait for sort all txs
+	//pool overed,just set into `all` ,wait for sort all txs
 	if len(pool.pending)+len(pool.queued) >= pool.config.PoolSize {
 		pool.all[txID] = obj
 		pool.overed[txID] = obj
@@ -242,7 +243,7 @@ func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subsc
 
 //reload resort all txs
 func (pool *TxPool) reload() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -256,23 +257,21 @@ func (pool *TxPool) reload() {
 			if err != nil {
 				continue
 			}
+
 			pool.resetAllTxs(b)
 		}
 	}
 }
 
-func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
-	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
-	if err != nil {
-		return
-	}
-
-	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
-	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
-
+func (pool *TxPool) allObjs(bestBlock *block.Block) txObjects {
 	pool.rw.RLock()
 	defer pool.rw.RUnlock()
-
+	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
+	if err != nil {
+		return nil
+	}
+	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
+	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 	var allObjs txObjects
 	for id, obj := range pool.all {
 		if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
@@ -289,7 +288,12 @@ func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
 	sort.Slice(allObjs, func(i, j int) bool {
 		return allObjs[i].OverallGP().Cmp(allObjs[j].OverallGP()) > 0
 	})
+	return allObjs
+}
 
+func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
+	allObjs := pool.allObjs(bestBlock)
+	fmt.Println("allObjs", len(allObjs))
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 	for i, obj := range allObjs {
@@ -320,7 +324,7 @@ func (pool *TxPool) resetAllTxs(bestBlock *block.Block) {
 				}
 			}
 		} else {
-			//objs should be overloaded
+			//objs should be overed
 			pool.overed[txID] = obj
 			if _, ok := pool.pending[txID]; ok {
 				delete(pool.pending, txID)
@@ -342,10 +346,12 @@ func (pool *TxPool) dequeue() {
 		case <-pool.done:
 			return
 		case <-ticker.C:
+
 			b, err := pool.chain.GetBestBlock()
 			if err != nil {
 				continue
 			}
+
 			if bestBlock == nil {
 				bestBlock = b
 			} else {
@@ -359,10 +365,11 @@ func (pool *TxPool) dequeue() {
 	}
 }
 
-func (pool *TxPool) update(bestBlock *block.Block) {
+//gather objs that need to be pending
+func (pool *TxPool) queuedToPendingObjs(bestBlock *block.Block) txObjects {
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
-		return
+		return nil
 	}
 
 	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
@@ -379,7 +386,7 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 		}
 		sp, err := pool.shouldPending(obj.Tx(), bestBlock)
 		if err != nil {
-			return
+			return nil
 		}
 		if sp {
 			overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
@@ -393,10 +400,16 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 	sort.Slice(pendingObjs, func(i, j int) bool {
 		return pendingObjs[i].OverallGP().Cmp(pendingObjs[j].OverallGP()) > 0
 	})
+	return pendingObjs
+}
 
+func (pool *TxPool) update(bestBlock *block.Block) {
+	pendingObjs := pool.queuedToPendingObjs(bestBlock)
+	fmt.Println("best", bestBlock)
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 	for _, obj := range pendingObjs {
+		fmt.Println("pending tx", obj.Tx())
 		if len(pool.pending)+len(pool.queued) <= pool.config.PoolSize {
 			txID := obj.Tx().ID()
 			delete(pool.queued, txID)
