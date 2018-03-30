@@ -26,11 +26,11 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
+	"github.com/vechain/thor/vm/evm"
 )
 
 type account struct {
@@ -45,9 +45,10 @@ type cliContext struct {
 	stateCreator *state.Creator
 	c            *chain.Chain
 	txpl         *txpool.TxPool
-	pk           *packer.Packer
+	pk           *SoloPacker
 	ldb          *logdb.LogDB
 	launchTime   uint64
+	onDemand     bool
 }
 
 var (
@@ -88,8 +89,10 @@ func newApp() *cli.App {
 		glogger.Vmodule(ctx.String("vmodule"))
 		log.Root().SetHandler(glogger)
 
-		solo := &cliContext{}
-		solo.launchTime = uint64(time.Now().Unix())
+		solo := &cliContext{
+			onDemand:   ctx.Bool("on-demand"),
+			launchTime: uint64(time.Now().Unix()),
+		}
 
 		goes := &co.Goes{}
 		defer goes.Wait()
@@ -124,7 +127,7 @@ func newApp() *cli.App {
 			syscall.SIGINT, syscall.SIGTERM,
 			syscall.SIGHUP, syscall.SIGKILL,
 			syscall.SIGUSR1, syscall.SIGUSR2)
-		exit := make(chan interface{})
+		done := make(chan interface{})
 
 		// run services
 		goes.Go(func() {
@@ -132,16 +135,16 @@ func newApp() *cli.App {
 			_ = svr.Serve(listener)
 		})
 		goes.Go(func() {
-			solo.packing(exit, ctx.Bool("on-demand"))
+			solo.interval(done)
 		})
 		goes.Go(func() {
-			solo.watcher(exit)
+			solo.watcher(done)
 		})
 
 		select {
 		case <-quit:
 			log.Info("Got interrupt, cleaning services......")
-			close(exit)
+			close(done)
 		}
 		return
 	}
@@ -181,6 +184,10 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(solo.launchTime).
 		State(func(state *state.State) error {
+			// alloc precompiled contracts
+			for addr := range evm.PrecompiledContractsByzantium {
+				state.SetBalance(thor.Address(addr), big.NewInt(1))
+			}
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
@@ -193,8 +200,7 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 				energy.AddBalance(solo.launchTime, a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
 			}
-
-			energy.SetTokenSupply(tokenSupply)
+			energy.InitializeTokenSupply(solo.launchTime, tokenSupply)
 			return nil
 		}).
 		Call(
@@ -204,10 +210,6 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 		Call(
 			tx.NewClause(&builtin.Params.Address).
 				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
-			builtin.Executor.Address).
-		Call(
-			tx.NewClause(&builtin.Energy.Address).
-				WithData(mustEncodeInput(builtin.Energy.ABI, "adjustGrowthRate", thor.InitialEnergyGrowthRate)),
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Authority.Address).
@@ -224,7 +226,6 @@ func (solo *cliContext) prepare() (err error) {
 	}
 
 	solo.stateCreator = state.NewCreator(solo.kv)
-	solo.c = chain.New(solo.kv)
 
 	solo.ldb, err = logdb.NewMem()
 	if err != nil {
@@ -246,13 +247,15 @@ func (solo *cliContext) prepare() (err error) {
 		return
 	}
 
-	err = solo.c.WriteGenesis(b0)
+	solo.c, err = chain.New(solo.kv, b0)
 	if err != nil {
 		return
 	}
 
-	solo.txpl = txpool.New()
-	solo.pk = packer.New(solo.c, solo.stateCreator, solo.accounts[0].Address, solo.accounts[0].Address)
+	solo.txpl = txpool.New(solo.c, solo.stateCreator)
+	defer solo.txpl.Stop()
+
+	solo.pk = NewSoloPacker(solo.c, solo.stateCreator, solo.accounts[0].Address, solo.accounts[0].Address)
 
 	log.Info("Solo has been setted up successfully", "genesis block id", b0.Header().ID())
 	for _, a := range solo.accounts {
@@ -263,72 +266,75 @@ func (solo *cliContext) prepare() (err error) {
 	return
 }
 
-func (solo *cliContext) packing(exit <-chan interface{}, ondemand bool) {
+func (solo *cliContext) interval(done <-chan interface{}) {
+	if solo.onDemand {
+		return
+	}
 	for {
 		timeInterval := 10
-		if ondemand {
-			timeInterval = 1
-		}
 		arrive := time.After(time.Duration(timeInterval) * time.Second)
 		select {
-		case <-exit:
-			log.Info("Killing packer service......")
+		case <-done:
+			log.Info("Killing interval packing service......")
 			return
 		case <-arrive:
-			log.Trace("Try packing......")
-			iter, err := solo.txpl.NewIterator(solo.c, solo.stateCreator)
-			if err != nil {
-				log.Error(fmt.Sprintf("%+v", err))
-			}
-
-			if iter.HasNext() || !ondemand {
-				best, err := solo.c.GetBestBlock()
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-
-				_, adopt, commit, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-
-				for iter.HasNext() {
-					tx := iter.Next()
-					err := adopt(tx)
-					if err != nil {
-						log.Error(fmt.Sprintf("%+v", err))
-					}
-					iter.OnProcessed(tx.ID(), err)
-				}
-
-				b, receipts, err := commit(solo.accounts[0].PrivateKey)
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-				log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
-				log.Trace(b.String())
-
-				err = saveBlockLogs(b, receipts, solo.ldb)
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-
-				// ignore fork when solo
-				_, err = solo.c.AddBlock(b, true)
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-
-				err = solo.c.SetBlockReceipts(b.Header().ID(), receipts)
-				if err != nil {
-					log.Error(fmt.Sprintf("%+v", err))
-				}
-			}
+			solo.packing()
 		}
 	}
 }
 
-func (solo *cliContext) watcher(exit <-chan interface{}) {
+func (solo *cliContext) packing() {
+	log.Trace("Try packing......")
+
+	pendingTxs, err := solo.txpl.Sorted(txpool.Pending)
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	best, err := solo.c.GetBestBlock()
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	adopt, commit, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	for _, tx := range pendingTxs {
+		err := adopt(tx)
+		if err != nil {
+			log.Error("Excuting transaction", "error", fmt.Sprintf("%+v", err))
+		}
+		solo.txpl.OnProcessed(tx.ID(), err)
+	}
+
+	b, receipts, err := commit(solo.accounts[0].PrivateKey)
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	// If there is no tx packed in the on-demand mode then skip
+	if solo.onDemand && len(b.Transactions()) == 0 {
+		return
+	}
+
+	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
+	log.Trace(b.String())
+
+	err = saveBlockLogs(b, receipts, solo.ldb)
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	// ignore fork when solo
+	_, err = solo.c.AddBlock(b, receipts, true)
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+}
+
+func (solo *cliContext) watcher(done <-chan interface{}) {
 	ch := make(chan *tx.Transaction, 10)
 	sub := solo.txpl.SubscribeNewTransaction(ch)
 	defer sub.Unsubscribe()
@@ -340,8 +346,11 @@ func (solo *cliContext) watcher(exit <-chan interface{}) {
 				singer = thor.Address{}
 			}
 			log.Info("New Tx", "tx id", tx.ID(), "from", singer)
+			if solo.onDemand {
+				solo.packing()
+			}
 			continue
-		case <-exit:
+		case <-done:
 			log.Info("Killing watcher service......")
 			return
 		}
