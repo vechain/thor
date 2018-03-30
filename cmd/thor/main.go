@@ -180,12 +180,18 @@ func action(ctx *cli.Context) error {
 		runRestful(c, rest, lsr)
 	})
 
-	interrupt := make(chan os.Signal, 1)
+	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
-	defer signal.Stop(interrupt)
 
 	select {
 	case <-interrupt:
+		go func() {
+			// force exit when rcvd 10 interrupts
+			for i := 0; i < 10; i++ {
+				<-interrupt
+			}
+			os.Exit(1)
+		}()
 		cancel()
 		goes.Wait()
 	}

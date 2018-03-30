@@ -138,10 +138,8 @@ func packLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain
 
 					select {
 					case <-waitTime.C:
-						pendings, err := txpool.Sorted(Txpool.Pending)
-						if err != nil {
-							break
-						}
+						pendings := txpool.Pending()
+
 						for _, tx := range pendings {
 							err := adopt(tx)
 							if Packer.IsGasLimitReached(err) {
