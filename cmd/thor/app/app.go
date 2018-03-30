@@ -71,13 +71,19 @@ func New(
 	port string,
 ) (*App, error) {
 	stateCreator := state.NewCreator(lv)
+	genesisBlock, _, err := genesis.Dev.Build(stateCreator)
+	if err != nil {
+		return nil, err
+	}
 
 	app := new(App)
 	app.event.bestBlockUpdated = make(chan struct{})
 	app.event.newBlockChan = make(chan *newBlockEvent)
 	app.event.packedChan = make(chan *packedEvent)
 	app.component.logdb = logdb
-	app.component.chain = chain.New(lv)
+	if app.component.chain, err = chain.New(lv, genesisBlock); err != nil {
+		return nil, err
+	}
 	app.component.txpool = txpool.New(app.component.chain, stateCreator)
 	app.component.communicator = comm.New(app.component.chain, app.component.txpool)
 	app.component.consensus = consensus.New(app.component.chain, stateCreator)
@@ -90,14 +96,6 @@ func New(
 			ListenAddr:     port,
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot1), discover.MustParseNode(boot2)},
 		})
-
-	genesisBlock, _, err := genesis.Dev.Build(stateCreator)
-	if err != nil {
-		return nil, err
-	}
-	if err := app.component.chain.WriteGenesis(genesisBlock); err != nil {
-		return nil, err
-	}
 
 	return app, nil
 }
@@ -315,7 +313,7 @@ func (a *App) packLoop(privateKey *ecdsa.PrivateKey) {
 }
 
 func (a *App) updateChain(newBlk *newBlockEvent) {
-	_, err := a.component.chain.AddBlock(newBlk.Blk, newBlk.Trunk)
+	_, err := a.component.chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
 		return
 	}
