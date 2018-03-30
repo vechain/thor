@@ -1,4 +1,4 @@
-package app
+package minheap
 
 import (
 	"container/heap"
@@ -6,20 +6,20 @@ import (
 	"github.com/vechain/thor/block"
 )
 
-type futureBlocks struct {
+type Blocks struct {
 	f *future
 }
 
-func newFutureBlocks() *futureBlocks {
+func NewBlockMinHeap() *Blocks {
 	f := make(future, 0)
 	heap.Init(&f)
 
-	return &futureBlocks{
+	return &Blocks{
 		f: &f,
 	}
 }
 
-func (fb *futureBlocks) Pop() *block.Block {
+func (fb *Blocks) Pop() *block.Block {
 	item := heap.Pop(fb.f)
 	if item == nil {
 		return nil
@@ -27,7 +27,7 @@ func (fb *futureBlocks) Pop() *block.Block {
 	return item.(*block.Block)
 }
 
-func (fb *futureBlocks) Push(blk *block.Block) {
+func (fb *Blocks) Push(blk *block.Block) {
 	heap.Push(fb.f, blk)
 }
 
