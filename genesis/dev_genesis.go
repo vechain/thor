@@ -79,7 +79,7 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error
 				tokenSupply.Add(tokenSupply, b)
 				energy.AddBalance(d.launchTime, a.Address, b)
 			}
-			energy.SetTokenSupply(tokenSupply)
+			energy.InitializeTokenSupply(d.launchTime, tokenSupply)
 			return nil
 		}).
 		Call(
@@ -93,10 +93,6 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error
 		Call(
 			tx.NewClause(&builtin.Params.Address).
 				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
-			builtin.Executor.Address).
-		Call(
-			tx.NewClause(&builtin.Energy.Address).
-				WithData(mustEncodeInput(builtin.Energy.ABI, "adjustGrowthRate", thor.InitialEnergyGrowthRate)),
 			builtin.Executor.Address)
 
 	for i, a := range d.Accounts() {

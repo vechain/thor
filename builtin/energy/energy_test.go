@@ -50,33 +50,15 @@ func TestEnergyGrowth(t *testing.T) {
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
 
-	eng.AddBalance(0, acc, &big.Int{})
-	eng.AdjustGrowthRate(0, thor.InitialEnergyGrowthRate)
+	eng.AddBalance(10, acc, &big.Int{})
 
 	bal1 := eng.GetBalance(blockTime1, acc)
-	x := new(big.Int).Mul(thor.InitialEnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(blockTime1))
+	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
+	x.Mul(x, new(big.Int).SetUint64(blockTime1-10))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
 
-	blockTime2 := uint64(2000)
-	rate2 := new(big.Int).Mul(thor.InitialEnergyGrowthRate, big.NewInt(2))
-	eng.AdjustGrowthRate(blockTime2, rate2)
-
-	blockTime3 := uint64(3000)
-	bal2 := eng.GetBalance(blockTime3, acc)
-
-	x.Mul(thor.InitialEnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(blockTime2))
-	x.Div(x, big.NewInt(1e18))
-
-	y := new(big.Int).Mul(rate2, vetBal)
-	y.Mul(y, new(big.Int).SetUint64(blockTime3-blockTime2))
-	y.Div(y, big.NewInt(1e18))
-
-	x.Add(x, y)
-	assert.Equal(t, x, bal2)
 }
 
 func TestEnergyShare(t *testing.T) {
@@ -99,7 +81,7 @@ func TestEnergyShare(t *testing.T) {
 	assert.Equal(t, credit, remained)
 
 	consumed := big.NewInt(1e9)
-	payer, ok := eng.Consume(blockTime1, contract, caller, consumed)
+	payer, ok := eng.Consume(blockTime1, &contract, caller, consumed)
 	assert.Equal(t, contract, payer)
 	assert.True(t, ok)
 

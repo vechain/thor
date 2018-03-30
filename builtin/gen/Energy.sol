@@ -134,13 +134,6 @@ contract Energy is Token {
         this.nativeSetContractMaster(_contractAddr, _newMaster);
         SetContractMaster(_contractAddr, oldMaster, _newMaster);
     }
-
-    function adjustGrowthRate(uint256 rate) public {
-        require(msg.sender == this.nativeGetExecutor());
-        this.nativeAdjustGrowthRate(rate);
-
-        AdjustGrowthRate(rate);
-    }
     
     /// @param _addr an address of a normal account or a contract
     /// 
@@ -157,7 +150,6 @@ contract Energy is Token {
     }
     
     
-    event AdjustGrowthRate(uint256 rate);
     event ApproveConsumption(address indexed contractAddr, address indexed caller, uint256 credit, uint256 recoveryRate, uint64 expiration);    
     event SetSupplier(address contractAddr, address supplier);
     event AgreeToBeSupplier(address contractAddr, address supplier, bool agreed);
@@ -171,8 +163,6 @@ contract Energy is Token {
     function nativeGetBalance(address addr) public view returns(uint256) {}
     function nativeAddBalance(address addr, uint256 amount) public {}
     function nativeSubBalance(address addr, uint256 amount) public returns(bool) {}
-
-    function nativeAdjustGrowthRate(uint256 rate) public {}
 
     function nativeApproveConsumption(address contractAddr, address caller, uint256 credit, uint256 recoveryRate, uint64 expiration) public {}
     function nativeGetConsumptionAllowance(address contractAddr, address caller) public view returns(uint256) {}
