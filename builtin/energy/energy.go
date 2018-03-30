@@ -11,7 +11,6 @@ import (
 var (
 	tokenSupplyKey     = thor.Hash(crypto.Keccak256Hash([]byte("token-supply")))
 	tokenSupplyTimeKey = thor.Hash(crypto.Keccak256Hash([]byte("token-supply-time")))
-	growthRatesKey     = thor.Hash(crypto.Keccak256Hash([]byte("growth-rates")))
 	totalAddKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-add")))
 	totalSubKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-sub")))
 )
