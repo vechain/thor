@@ -71,6 +71,13 @@ func init() {
 			}
 			return []interface{}{next}, nil
 		}),
+		Authority.impl("nativeIsEndorsed", ethparams.SloadGas*2, func(env *env) ([]interface{}, error) {
+			var signer common.Address
+			env.Args(&signer)
+			bal := env.State.GetBalance(thor.Address(signer))
+			endorsement := Params.WithState(env.State).Get(thor.KeyProposerEndorsement)
+			return []interface{}{bal.Cmp(endorsement) >= 0}, nil
+		}),
 
 		Energy.impl("nativeGetExecutor", ethparams.SloadGas, func(env *env) ([]interface{}, error) {
 			return []interface{}{Executor.Address}, nil

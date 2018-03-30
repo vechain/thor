@@ -24,7 +24,7 @@ contract Authority {
     // @notice remove a candidate.
     // @param _signer address of the signer.
     function remove(address _signer) public {
-        require(msg.sender == this.nativeGetExecutor());
+        require(msg.sender == this.nativeGetExecutor() || !this.nativeIsEndorsed(_signer));
 
         require(this.nativeRemove(_signer));
 
@@ -55,4 +55,5 @@ contract Authority {
     function nativeGet(address signer) public view returns(bool, address, bytes32, bool) {}
     function nativeFirst() public view returns(address) {}
     function nativeNext(address signer) public view returns(address) {}
+    function nativeIsEndorsed(address signer) public view returns(bool) {}
 }
