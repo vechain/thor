@@ -102,14 +102,9 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return true, nil
 	}
 
-	genesisID, err := c.chain.GetBlockIDByNumber(0)
-	if err != nil {
-		return err
-	}
-
 	for _, tx := range txs {
 		switch {
-		case tx.ChainTag() != genesisID[len(genesisID)-1]:
+		case tx.ChainTag() != c.chain.Tag():
 			return errors.New("bad tx: chain tag mismatch")
 		case tx.BlockRef().Number() >= header.Number():
 			return errors.New("bad tx: invalid block ref")

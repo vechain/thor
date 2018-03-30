@@ -28,7 +28,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			return nil, err
 		}
 		return &proto.RespStatus{
-			GenesisBlockID: c.genesisID,
+			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
 			TotalScore:     bestBlock.Header().TotalScore(),
 			BestBlockID:    bestBlock.Header().ID(),
 		}, nil
