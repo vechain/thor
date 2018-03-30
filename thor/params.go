@@ -32,5 +32,6 @@ var (
 	InitialRewardRatio         = big.NewInt(3e17)     // 30%
 	InitialBaseGasPrice        = big.NewInt(10000000) //TODO
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250000))
-	InitialEnergyGrowthRate    = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
+
+	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )

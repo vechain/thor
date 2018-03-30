@@ -45,7 +45,7 @@ type ContractHook evm.ContractHook
 // OnContractCreated ref evm.OnContractCreated
 type OnContractCreated evm.OnContractCreated
 
-// OnTransfer callback when transfer occur.
+// OnTransfer callback before transfer occur.
 type OnTransfer func(sender, recipient thor.Address, amount *big.Int)
 
 // VM is a facade for ethEvm.
@@ -101,10 +101,10 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
 		Transfer: func(db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
-			transfer(db, sender, recipient, amount)
 			if vm.onTransfer != nil {
 				vm.onTransfer(thor.Address(sender), thor.Address(recipient), amount)
 			}
+			transfer(db, sender, recipient, amount)
 		},
 		GetHash: func(n uint64) common.Hash {
 			return common.Hash(ctx.GetHash(uint32(n)))
@@ -135,6 +135,7 @@ func (vm *VM) SetOnContractCreated(cb OnContractCreated) {
 }
 
 // SetOnTransfer set callback to listen token transfer.
+// OnTransfer will be called before transfer occurred.
 func (vm *VM) SetOnTransfer(cb OnTransfer) {
 	vm.onTransfer = cb
 }

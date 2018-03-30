@@ -15,12 +15,6 @@ type (
 		Balance *big.Int
 
 		// snapshot
-		Timestamp    uint64
-		TokenBalance *big.Int
-	}
-
-	growthRate struct {
-		Rate      *big.Int
 		Timestamp uint64
 	}
 
@@ -42,9 +36,6 @@ var (
 	_ state.StorageEncoder = (*account)(nil)
 	_ state.StorageDecoder = (*account)(nil)
 
-	_ state.StorageEncoder = (growthRates)(nil)
-	_ state.StorageDecoder = (*growthRates)(nil)
-
 	_ state.StorageEncoder = (*consumptionApproval)(nil)
 	_ state.StorageDecoder = (*consumptionApproval)(nil)
 
@@ -54,8 +45,7 @@ var (
 
 func (a *account) Encode() ([]byte, error) {
 	if a.Balance.Sign() == 0 &&
-		a.Timestamp == 0 &&
-		a.TokenBalance.Sign() == 0 {
+		a.Timestamp == 0 {
 		return nil, nil
 	}
 	return rlp.EncodeToBytes(a)
@@ -63,76 +53,31 @@ func (a *account) Encode() ([]byte, error) {
 
 func (a *account) Decode(data []byte) error {
 	if len(data) == 0 {
-		*a = account{&big.Int{}, 0, &big.Int{}}
+		*a = account{&big.Int{}, 0}
 		return nil
 	}
 	return rlp.DecodeBytes(data, a)
 }
 
-func (a *account) CalcBalance(blockTime uint64, rates []*growthRate) *big.Int {
+func (a *account) CalcBalance(tokenBalance *big.Int, blockTime uint64) *big.Int {
 	if a.Timestamp >= blockTime {
 		// never occur in real env.
 		return a.Balance
 	}
 
-	if a.TokenBalance.Sign() == 0 {
+	if a.Timestamp == 0 {
 		return a.Balance
 	}
 
-	rateCount := len(rates)
-
-	t2 := blockTime
-	newBalance := new(big.Int).Set(a.Balance)
-
-	// reversedly iterates rates
-	for i := rateCount; i > 0; i-- {
-		rate := rates[i-1]
-
-		t1 := rate.Timestamp
-		if t1 < a.Timestamp {
-			t1 = a.Timestamp
-		}
-
-		if t1 > t2 {
-			// never occur in real env.
-			return a.Balance
-		}
-
-		if t1 != t2 && a.TokenBalance.Sign() != 0 && rate.Rate.Sign() != 0 {
-			// energy growth (token * rate * dt / 1e18)
-			x := new(big.Int).SetUint64(t2 - t1)
-			x.Mul(x, rate.Rate)
-			x.Mul(x, a.TokenBalance)
-			x.Div(x, bigE18)
-			newBalance.Add(newBalance, x)
-		}
-
-		t2 = rate.Timestamp
-
-		if a.Timestamp >= rate.Timestamp {
-			break
-		}
+	t := blockTime - a.Timestamp
+	if t == 0 {
+		return a.Balance
 	}
-	return newBalance
-}
-
-////
-
-type growthRates []*growthRate
-
-func (grs growthRates) Encode() ([]byte, error) {
-	if len(grs) == 0 {
-		return nil, nil
-	}
-	return rlp.EncodeToBytes(grs)
-}
-
-func (grs *growthRates) Decode(data []byte) error {
-	if len(data) == 0 {
-		*grs = nil
-		return nil
-	}
-	return rlp.DecodeBytes(data, grs)
+	x := new(big.Int).SetUint64(t)
+	x.Mul(x, tokenBalance)
+	x.Mul(x, thor.EnergyGrowthRate)
+	x.Div(x, bigE18)
+	return new(big.Int).Add(a.Balance, x)
 }
 
 ///

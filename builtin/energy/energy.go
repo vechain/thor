@@ -9,10 +9,11 @@ import (
 )
 
 var (
-	tokenSupplyKey = thor.Hash(crypto.Keccak256Hash([]byte("token-supply")))
-	growthRatesKey = thor.Hash(crypto.Keccak256Hash([]byte("growth-rates")))
-	totalAddKey    = thor.Hash(crypto.Keccak256Hash([]byte("total-add")))
-	totalSubKey    = thor.Hash(crypto.Keccak256Hash([]byte("total-sub")))
+	tokenSupplyKey     = thor.Hash(crypto.Keccak256Hash([]byte("token-supply")))
+	tokenSupplyTimeKey = thor.Hash(crypto.Keccak256Hash([]byte("token-supply-time")))
+	growthRatesKey     = thor.Hash(crypto.Keccak256Hash([]byte("growth-rates")))
+	totalAddKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-add")))
+	totalSubKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-sub")))
 )
 
 func accountKey(addr thor.Address) thor.Hash {
@@ -47,17 +48,21 @@ func (e *Energy) setStorage(key thor.Hash, val interface{}) {
 	e.state.SetStructedStorage(e.addr, key, val)
 }
 
-func (e *Energy) SetTokenSupply(supply *big.Int) {
+// InitializeTokenSupply initialize VET token supply info.
+func (e *Energy) InitializeTokenSupply(time uint64, supply *big.Int) {
 	e.setStorage(tokenSupplyKey, supply)
+	e.setStorage(tokenSupplyTimeKey, &time)
 }
 
 // GetTotalSupply returns total supply of energy.
 func (e *Energy) GetTotalSupply(blockTime uint64) *big.Int {
 	var tokenSupply big.Int
 	e.getStorage(tokenSupplyKey, &tokenSupply)
+	var tokenSupplyTime uint64
+	e.getStorage(tokenSupplyKey, &tokenSupplyTime)
 
 	// calc grown energy for total token supply
-	grown := (&account{&big.Int{}, 0, &tokenSupply}).CalcBalance(blockTime, e.getGrowthRates())
+	grown := (&account{&big.Int{}, tokenSupplyTime}).CalcBalance(&tokenSupply, blockTime)
 
 	var totalAdd, totalSub big.Int
 	e.getStorage(totalAddKey, &totalAdd)
@@ -79,7 +84,7 @@ func (e *Energy) getAccount(addr thor.Address) *account {
 	return &acc
 }
 
-func (e *Energy) getOrSetAccount(addr thor.Address, cb func(*account) bool) bool {
+func (e *Energy) getAndSetAccount(addr thor.Address, cb func(*account) bool) bool {
 	key := accountKey(addr)
 	var acc account
 
@@ -91,27 +96,14 @@ func (e *Energy) getOrSetAccount(addr thor.Address, cb func(*account) bool) bool
 	return true
 }
 
-func (e *Energy) AdjustGrowthRate(blockTime uint64, rate *big.Int) {
-	var rates growthRates
-	e.getStorage(growthRatesKey, &rates)
-	rates = append(rates, &growthRate{rate, blockTime})
-	e.setStorage(growthRatesKey, rates)
-}
-
-func (e *Energy) getGrowthRates() growthRates {
-	var rates growthRates
-	e.getStorage(growthRatesKey, &rates)
-	return rates
-}
-
 // GetBalance returns energy balance of an account at given block time.
 func (e *Energy) GetBalance(blockTime uint64, addr thor.Address) *big.Int {
-	return e.getAccount(addr).CalcBalance(blockTime, e.getGrowthRates())
+	return e.getAccount(addr).CalcBalance(e.state.GetBalance(addr), blockTime)
 }
 
 func (e *Energy) AddBalance(blockTime uint64, addr thor.Address, amount *big.Int) {
-	e.getOrSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(blockTime, e.getGrowthRates())
+	e.getAndSetAccount(addr, func(acc *account) bool {
+		bal := acc.CalcBalance(e.state.GetBalance(addr), blockTime)
 		if amount.Sign() != 0 {
 			bal.Add(bal, amount)
 
@@ -121,17 +113,16 @@ func (e *Energy) AddBalance(blockTime uint64, addr thor.Address, amount *big.Int
 			e.setStorage(totalAddKey, &totalAdd)
 		}
 		*acc = account{
-			Balance:      bal,
-			Timestamp:    blockTime,
-			TokenBalance: e.state.GetBalance(addr),
+			Balance:   bal,
+			Timestamp: blockTime,
 		}
 		return true
 	})
 }
 
 func (e *Energy) SubBalance(blockTime uint64, addr thor.Address, amount *big.Int) bool {
-	return e.getOrSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(blockTime, e.getGrowthRates())
+	return e.getAndSetAccount(addr, func(acc *account) bool {
+		bal := acc.CalcBalance(e.state.GetBalance(addr), blockTime)
 		if bal.Cmp(amount) < 0 {
 			return false
 		}
@@ -144,9 +135,8 @@ func (e *Energy) SubBalance(blockTime uint64, addr thor.Address, amount *big.Int
 			e.setStorage(totalSubKey, &totalSub)
 		}
 		*acc = account{
-			Balance:      bal,
-			Timestamp:    blockTime,
-			TokenBalance: e.state.GetBalance(addr),
+			Balance:   bal,
+			Timestamp: blockTime,
 		}
 		return true
 	})

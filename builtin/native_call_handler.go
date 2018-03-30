@@ -107,12 +107,6 @@ func init() {
 			ok := Energy.WithState(env.State).SubBalance(env.VMContext.Time, thor.Address(args.Addr), args.Amount)
 			return []interface{}{ok}, nil
 		}),
-		Energy.impl("nativeAdjustGrowthRate", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
-			var rate *big.Int
-			env.Args(&rate)
-			Energy.WithState(env.State).AdjustGrowthRate(env.VMContext.Time, rate)
-			return nil, nil
-		}),
 		Energy.impl("nativeApproveConsumption", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
 			var args struct {
 				ContractAddr common.Address
