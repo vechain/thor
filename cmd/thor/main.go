@@ -5,6 +5,8 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -12,12 +14,20 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/vechain/thor/cmd/thor/app"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
+	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -26,6 +36,8 @@ var (
 	gitCommit string
 	release   = "dev"
 )
+
+var boot = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 
 // Options for Client.
 type Options struct {
@@ -112,15 +124,60 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	app, err := app.New(lv, proposer, logdb, nodeKey, ctx.String("port"))
+	lsr, err := net.Listen("tcp", ctx.String("restfulport"))
+	if err != nil {
+		return err
+	}
+	defer lsr.Close()
+
+	//////////
+	stateCreator := state.NewCreator(lv)
+	genesisBlock, _, err := genesis.Dev.Build(stateCreator)
 	if err != nil {
 		return err
 	}
 
+	chain, err := chain.New(lv, genesisBlock)
+	if err != nil {
+		return err
+	}
+	txpool := txpool.New(chain, stateCreator)
+	communicator := comm.New(chain, txpool)
+	consensus := consensus.New(chain, stateCreator)
+	packer := packer.New(chain, stateCreator, proposer, proposer)
+	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb)}
+	p2pSrv := p2psrv.New(
+		&p2psrv.Options{
+			PrivateKey:     nodeKey,
+			MaxPeers:       25,
+			ListenAddr:     ctx.String("port"),
+			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
+		})
+
+	bestBlockUpdated := make(chan struct{})
+	packedChan := make(chan *packedEvent)
+	///////
+
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
+
 	goes.Go(func() {
-		app.Run(c, ctx.String("restfulport"), privateKey)
+		runCommunicator(c, communicator, p2pSrv)
+	})
+	goes.Go(func() {
+		broadcastTxLoop(c, communicator, txpool)
+	})
+	goes.Go(func() {
+		txPoolUpdateLoop(c, communicator, txpool)
+	})
+	goes.Go(func() {
+		consentLoop(c, communicator, chain, packedChan, bestBlockUpdated, consensus)
+	})
+	goes.Go(func() {
+		packLoop(c, communicator, chain, packedChan, bestBlockUpdated, packer, txpool, privateKey)
+	})
+	goes.Go(func() {
+		runRestful(c, rest, lsr)
 	})
 
 	interrupt := make(chan os.Signal, 1)
@@ -203,4 +260,31 @@ func homeDir() (string, error) {
 	}
 
 	return os.Getwd()
+}
+
+func runCommunicator(ctx context.Context, communicator *comm.Communicator, p2pSrv *p2psrv.Server) {
+	if err := p2pSrv.Start("thor@111111", communicator.Protocols()); err != nil {
+		log.Error("%v", err)
+		return
+	}
+	defer p2pSrv.Stop()
+
+	peerCh := make(chan *p2psrv.Peer)
+	p2pSrv.SubscribePeer(peerCh)
+
+	communicator.Start(peerCh)
+	defer communicator.Stop()
+
+	<-ctx.Done()
+}
+
+func runRestful(ctx context.Context, rest *http.Server, lsr net.Listener) {
+	go func() {
+		<-ctx.Done()
+		rest.Shutdown(context.TODO())
+	}()
+
+	if err := rest.Serve(lsr); err != http.ErrServerClosed {
+		log.Error(fmt.Sprintf("%v", err))
+	}
 }
