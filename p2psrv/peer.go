@@ -56,7 +56,13 @@ func (p *Peer) Protocol() *Protocol {
 
 func (p *Peer) String() string {
 	id := p.peer.ID()
-	return fmt.Sprintf("%x %v", id[:8], p.peer.RemoteAddr())
+	var dir string
+	if p.Inbound() {
+		dir = "inbound"
+	} else {
+		dir = "outbound"
+	}
+	return fmt.Sprintf("%v %x@%v", dir, id[:8], p.peer.RemoteAddr())
 }
 
 // RemoteAddr returns the remote address of the network connection.
@@ -157,12 +163,12 @@ func (p *Peer) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 			}
 		}
 	}
+	log := log.New("peer", p)
 	process := func(val interface{}) {
 		switch val := val.(type) {
 		case *localRequest:
 			id := genID()
 			if err := p2p.Send(rw, val.msgCode, &msgData{id, false, val.payload}); err != nil {
-				// TODO log
 				val.err = err
 				break
 			}
@@ -171,27 +177,32 @@ func (p *Peer) opLoop(rw p2p.MsgReadWriter, handleRequest HandleRequest) {
 		case *endRequest:
 			delete(pendingReqs, val.id)
 		case *remoteRequest:
+			log := log.New("msg", val.msg.Code, "reqid", val.id)
 			resp, err := handleRequest(p, val.msg)
 			if err != nil {
 				p.stats.demote()
-				// TODO log
+				log.Debug("failed to process remote request", "err", err)
 				break
 			}
 			if err := p2p.Send(rw, val.msg.Code, &msgData{val.id, true, resp}); err != nil {
-				// TODO log
+				log.Debug("failed to send response msg", "err", err)
 				break
 			}
 		case *remoteResponse:
+			log := log.New("msg", val.msg.Code, "reqid", val.id)
 			req, ok := pendingReqs[val.id]
 			if !ok {
+				log.Debug("unexpected remote response")
 				break
 			}
 			if val.msg.Code != req.msgCode {
+				log.Debug("remote response with incorrect msg code")
 				p.stats.demote()
 				break
 			}
 			delete(pendingReqs, val.id)
-			if req.handleResponse(val.msg) != nil {
+			if err := req.handleResponse(val.msg); err != nil {
+				log.Debug("failed to process remote response", "err", err)
 				p.stats.demote()
 				break
 			}
