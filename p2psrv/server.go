@@ -7,14 +7,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/w8cache"
 )
+
+var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
@@ -84,7 +86,8 @@ func (s *Server) SubscribePeer(ch chan *Peer) event.Subscription {
 
 func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-		log.Debug("p2p peer connection established", "peer", peer.String())
+		log := log.New("peer", peer)
+		log.Debug("peer connected")
 		p := newPeer(peer, proto)
 		s.goes.Go(func() { s.peerFeed.Send(p) })
 
@@ -92,7 +95,7 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 			if node := s.busyNodes.remove(peer.ID()); node != nil {
 				s.goodNodes.Set(peer.ID(), node, p.stats.weight())
 			}
-			log.Debug("p2p peer disconnected", "peer", peer.String(), "err", err)
+			log.Debug("peer disconnected", "reason", err)
 		}()
 
 		return p.serve(rw, proto.HandleRequest)
@@ -191,12 +194,15 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 				}
 			}
 		case v5node := <-discNodes:
-			newNode := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
-			log.Trace("p2p discovered", "peer", newNode)
-			s.discoveredNodes.Set(newNode.ID, newNode, rand.Float64())
+			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
+			if _, found := s.discoveredNodes.Get(node.ID); found {
+				continue
+			}
+			log.Debug("discovered node", "node", node)
+			s.discoveredNodes.Set(node.ID, node, rand.Float64())
 			if entry := s.discoveredNodes.PopWorst(); entry != nil {
 				s.discoveredNodes.Set(entry.Key, entry.Value, rand.Float64())
-				s.goes.Go(func() { s.dialCh <- newNode })
+				s.goes.Go(func() { s.dialCh <- node })
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -209,9 +215,18 @@ func (s *Server) dialLoop() {
 	for {
 		select {
 		case node := <-s.dialCh:
-
+			if s.srv.PeerCount() >= s.srv.MaxPeers {
+				continue
+			}
+			if s.busyNodes.contains(node.ID) {
+				continue
+			}
+			log := log.New("node", node)
+			log.Debug("try to dial node")
+			s.busyNodes.add(node)
 			if err := s.tryDial(node); err != nil {
-				// TODO log
+				s.busyNodes.remove(node.ID)
+				log.Debug("failed to dial node", "err", err)
 			}
 		case <-s.done:
 			return
@@ -219,23 +234,7 @@ func (s *Server) dialLoop() {
 	}
 }
 
-func (s *Server) tryDial(node *discover.Node) (err error) {
-	if s.srv.PeerCount() >= s.srv.MaxPeers {
-		return
-	}
-	if s.busyNodes.contains(node.ID) {
-		return
-	}
-
-	log.Trace("p2p try to dial", "peer", node)
-	s.busyNodes.add(node)
-	defer func() {
-		if err != nil {
-			log.Trace("p2p failed to dial", "peer", node, "err", err)
-			s.busyNodes.remove(node.ID)
-		}
-	}()
-
+func (s *Server) tryDial(node *discover.Node) error {
 	conn, err := s.srv.Dialer.Dial(node)
 	if err != nil {
 		return err

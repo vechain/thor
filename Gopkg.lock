@@ -62,10 +62,28 @@
   revision = "dceda08e705b2acee36aab47d765ed801f64cfc7"
 
 [[projects]]
+  name = "github.com/inconshreveable/log15"
+  packages = ["."]
+  revision = "0decfc6c20d9ca0ad143b0e89dcaa20f810b4fb3"
+  version = "v2.13"
+
+[[projects]]
   name = "github.com/jackpal/go-nat-pmp"
   packages = ["."]
   revision = "c9cfead9f2a36ddf3daa40ba269aa7f4bbba6b62"
   version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/mattn/go-colorable"
+  packages = ["."]
+  revision = "167de6bfdfba052fa6b2d3664c8f5272e23c9072"
+  version = "v0.0.9"
+
+[[projects]]
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  revision = "0360b2af4f38e8d38c7fce2a9f4e702702d73a39"
+  version = "v0.0.3"
 
 [[projects]]
   name = "github.com/mattn/go-sqlite3"
@@ -116,6 +134,12 @@
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "378d26f46672a356c46195c28f61bdb4c0a781dd"
+
+[[projects]]
   name = "golang.org/x/text"
   packages = ["encoding","encoding/charmap","encoding/htmlindex","encoding/internal","encoding/internal/identifier","encoding/japanese","encoding/korean","encoding/simplifiedchinese","encoding/traditionalchinese","encoding/unicode","internal/gen","internal/tag","internal/utf8internal","language","runes","transform","unicode/cldr"]
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
@@ -136,6 +160,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e052486b509530be973a977cfd4eb86b7c571c5662a8d58a8b937c0eb7045778"
+  inputs-digest = "3e4520d60caccc6a83c152abb9c7b80e543b206d9648b7f071cc46713017e523"
   solver-name = "gps-cdcl"
   solver-version = 1
