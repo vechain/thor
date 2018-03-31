@@ -57,3 +57,7 @@ ignored = []
 [[constraint]]
   branch = "master"
   name = "github.com/hashicorp/golang-lru"
+
+[[constraint]]
+  name = "github.com/inconshreveable/log15"
+  version = "2.13.0"
