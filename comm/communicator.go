@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -20,6 +19,8 @@ import (
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
+
+var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
@@ -97,20 +98,23 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 	lifecycle := func(peer *p2psrv.Peer) {
 		defer peer.Disconnect()
 
-		// 5sec timeout for handshake
-		ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
+		log := log.New("peer", peer)
+		// 20sec timeout for handshake and txs transfer
+		ctx, cancel := context.WithTimeout(c.ctx, time.Second*20)
 		defer cancel()
 		respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
 		if err != nil {
+			log.Debug("failed to request status", "err", err)
 			return
 		}
 		if respStatus.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
+			log.Debug("failed to handshake", "err", "genesis id mismatch")
 			return
 		}
 
 		respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
 		if err != nil {
-			log.Error(fmt.Sprintf("%v", err))
+			log.Debug("failed to request txs", "err", err)
 			return
 		}
 		for _, raw := range respTxs {
@@ -120,8 +124,12 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 		session := session.New(peer)
 		session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
 
+		log.Debug("session created")
 		c.sessionSet.Add(session)
-		defer c.sessionSet.Remove(peer.ID())
+		defer func() {
+			c.sessionSet.Remove(peer.ID())
+			log.Debug("session destroyed")
+		}()
 
 		select {
 		case <-peer.Done():
@@ -146,12 +154,12 @@ func (c *Communicator) syncLoop() {
 	defer timer.Stop()
 
 	sync := func() {
-		log.Trace("synchronization start")
+		log.Debug("synchronization start")
 		if err := c.sync(); err != nil {
-			log.Trace("synchronization failed", "err", err)
+			log.Debug("synchronization failed", "err", err)
 		} else {
 			c.synced = true
-			log.Trace("synchronization done")
+			log.Debug("synchronization done")
 		}
 	}
 
@@ -209,7 +217,7 @@ func (c *Communicator) announceLoop() {
 		select {
 		case ann := <-c.announceCh:
 			if err := fetch(ann.blockID, ann.peer); err != nil {
-				log.Trace("fetch block by ID failed", "err", err)
+				log.Debug("failed to fetch block by ID", "peer", ann.peer, "err", err)
 			}
 		case <-c.ctx.Done():
 			return
@@ -239,6 +247,7 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 		c.goes.Go(func() {
 			req := proto.ReqMsgNewTx{Tx: tx}
 			if err := req.Do(c.ctx, peer); err != nil {
+				log.Debug("failed to broadcast tx", "peer", peer, "err", err)
 			}
 		})
 	}
@@ -260,6 +269,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		c.goes.Go(func() {
 			req := proto.ReqNewBlock{Block: blk}
 			if err := req.Do(c.ctx, peer); err != nil {
+				log.Debug("failed to broadcast new block", "peer", peer, "err", err)
 			}
 		})
 	}
@@ -270,6 +280,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		c.goes.Go(func() {
 			req := proto.ReqNewBlockID{ID: blk.Header().ID()}
 			if err := req.Do(c.ctx, peer); err != nil {
+				log.Debug("failed to broadcast new block id", "peer", peer, "err", err)
 			}
 		})
 	}
