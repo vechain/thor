@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/block"
 	Chain "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/minheap"

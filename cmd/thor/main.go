@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -35,6 +35,8 @@ var (
 	version   = "1.0"
 	gitCommit string
 	release   = "dev"
+
+	log = log15.New()
 )
 
 var boot = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
@@ -80,12 +82,8 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:  "verbosity",
-			Value: int(log.LvlInfo),
+			Value: int(log15.LvlInfo),
 			Usage: "log verbosity (0-9)",
-		},
-		cli.StringFlag{
-			Name:  "vmodule",
-			Usage: "log verbosity pattern",
 		},
 	}
 	app.Action = action
@@ -97,10 +95,7 @@ func main() {
 }
 
 func action(ctx *cli.Context) error {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
-	glogger.Verbosity(log.Lvl(ctx.Int("verbosity")))
-	glogger.Vmodule(ctx.String("vmodule"))
-	log.Root().SetHandler(glogger)
+	initLog(log15.Lvl(ctx.Int("verbosity")))
 
 	lv, err := lvldb.New(ctx.String("datadir"), lvldb.Options{})
 	if err != nil {
