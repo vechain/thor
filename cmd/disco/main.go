@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/user"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -22,27 +20,21 @@ var (
 	version   string
 	gitCommit string
 	release   = "dev"
-)
 
-func newApp() *cli.App {
-	app := cli.NewApp()
-	app.Version = fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit)
-	app.Name = "Disco"
-	app.Usage = "VeChain Thor bootstrap node"
-	app.Copyright = "2018 VeChain Foundation <https://vechain.org/>"
-	app.Flags = []cli.Flag{
+	flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "addr",
 			Value: ":55555",
 			Usage: "listen address",
 		},
 		cli.StringFlag{
-			Name:  "key",
-			Usage: "private key file path (defaults to ~/.thor-disco.key if omitted)",
+			Name:  "keyfile",
+			Usage: "private key file path",
+			Value: defaultKeyFile(),
 		},
 		cli.StringFlag{
 			Name:  "keyhex",
-			Usage: "private key as hex (for testing)",
+			Usage: "private key as hex",
 		},
 		cli.StringFlag{
 			Name:  "nat",
@@ -58,129 +50,78 @@ func newApp() *cli.App {
 			Value: int(log.LvlWarn),
 			Usage: "log verbosity (0-9)",
 		},
-		cli.StringFlag{
-			Name:  "vmodule",
-			Usage: "log verbosity pattern",
-		},
 	}
-	app.Action = func(ctx *cli.Context) (err error) {
-		glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-		glogger.Verbosity(log.Lvl(ctx.Int("verbosity")))
-		glogger.Vmodule(ctx.String("vmodule"))
-		log.Root().SetHandler(glogger)
+)
 
-		natm, err := nat.Parse(ctx.String("nat"))
-		if err != nil {
-			return errors.Wrap(err, "-nat")
-		}
+func run(ctx *cli.Context) error {
+	logHandler := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	logHandler.Verbosity(log.Lvl(ctx.Int("verbosity")))
+	log.Root().SetHandler(logHandler)
 
-		key, err := loadKey(ctx)
-		if err != nil {
-			return err
-		}
-
-		netrestrict := ctx.String("netrestrict")
-		var restrictList *netutil.Netlist
-		if netrestrict != "" {
-			restrictList, err = netutil.ParseNetlist(netrestrict)
-			if err != nil {
-				return errors.Wrap(err, "-netrestrict")
-			}
-		}
-
-		addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
-		if err != nil {
-			return errors.Wrap(err, "-addr")
-		}
-		conn, err := net.ListenUDP("udp", addr)
-		if err != nil {
-			return err
-		}
-
-		realAddr := conn.LocalAddr().(*net.UDPAddr)
-		if natm != nil {
-			if !realAddr.IP.IsLoopback() {
-				go nat.Map(natm, nil, "udp", realAddr.Port, realAddr.Port, "ethereum discovery")
-			}
-			// TODO: react to external IP changes over time.
-			if ext, err := natm.ExternalIP(); err == nil {
-				realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
-			}
-		}
-		net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
-		if err != nil {
-			return err
-		}
-		fmt.Println(net.Self().String())
-
-		select {}
-	}
-	return app
-}
-
-func loadKey(ctx *cli.Context) (key *ecdsa.PrivateKey, err error) {
-	// use hex key if there
-	hexKey := ctx.String("keyhex")
-	if hexKey != "" {
-		return crypto.HexToECDSA(hexKey)
-	}
-
-	keyFile := ctx.String("key")
-	if keyFile == "" {
-		// no file specified, use default file path
-		home, err := homeDir()
-		if err != nil {
-			return nil, err
-		}
-		keyFile = filepath.Join(home, ".thor-disco.key")
-	} else if !filepath.IsAbs(keyFile) {
-		// resolve to absolute path
-		keyFile, err = filepath.Abs(keyFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// try to load from file
-	if key, err = crypto.LoadECDSA(keyFile); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-	} else {
-		return key, nil
-	}
-
-	// no such file, generate new key and write in
-	key, err = crypto.GenerateKey()
+	natm, err := nat.Parse(ctx.String("nat"))
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "-nat")
 	}
 
-	if err := crypto.SaveECDSA(keyFile, key); err != nil {
-		return nil, err
-	}
-	return key, nil
-}
+	var key *ecdsa.PrivateKey
 
-func homeDir() (string, error) {
-	// try to get HOME env
-	if home := os.Getenv("HOME"); home != "" {
-		return home, nil
+	if keyHex := ctx.String("keyhex"); keyHex != "" {
+		if key, err = crypto.HexToECDSA(keyHex); err != nil {
+			return errors.Wrap(err, "-keyhex")
+		}
 	}
 
-	user, err := user.Current()
+	if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
+		return errors.Wrap(err, "-keyfile")
+	}
+
+	netrestrict := ctx.String("netrestrict")
+	var restrictList *netutil.Netlist
+	if netrestrict != "" {
+		restrictList, err = netutil.ParseNetlist(netrestrict)
+		if err != nil {
+			return errors.Wrap(err, "-netrestrict")
+		}
+	}
+
+	addr, err := net.ResolveUDPAddr("udp", ctx.String("addr"))
 	if err != nil {
-		return "", err
+		return errors.Wrap(err, "-addr")
 	}
-	if user.HomeDir != "" {
-		return user.HomeDir, nil
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		return err
 	}
 
-	return os.Getwd()
+	realAddr := conn.LocalAddr().(*net.UDPAddr)
+	if natm != nil {
+		if !realAddr.IP.IsLoopback() {
+			go nat.Map(natm, nil, "udp", realAddr.Port, realAddr.Port, "ethereum discovery")
+		}
+		// TODO: react to external IP changes over time.
+		if ext, err := natm.ExternalIP(); err == nil {
+			realAddr = &net.UDPAddr{IP: ext, Port: realAddr.Port}
+		}
+	}
+	net, err := discv5.ListenUDP(key, conn, realAddr, "", restrictList)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Running", net.Self().String())
+
+	select {}
 }
 
 func main() {
-	if err := newApp().Run(os.Args); err != nil {
+	app := cli.App{
+		Version:   fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit),
+		Name:      "Disco",
+		Usage:     "VeChain Thor bootstrap node",
+		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Flags:     flags,
+		Action:    run,
+	}
+	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
