@@ -8,32 +8,38 @@ import (
 	Txpool "github.com/vechain/thor/txpool"
 )
 
-func broadcastTxLoop(ctx context.Context, communicator *comm.Communicator, txpool *Txpool.TxPool) {
+type txRoutineContext struct {
+	ctx          context.Context
+	communicator *comm.Communicator
+	txpool       *Txpool.TxPool
+}
+
+func txBroadcastLoop(context *txRoutineContext) {
 	txCh := make(chan *tx.Transaction)
-	sub := txpool.SubscribeNewTransaction(txCh)
+	sub := context.txpool.SubscribeNewTransaction(txCh)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-context.ctx.Done():
 			sub.Unsubscribe()
 			return
 		case tx := <-txCh:
-			communicator.BroadcastTx(tx)
+			context.communicator.BroadcastTx(tx)
 		}
 	}
 }
 
-func txPoolUpdateLoop(ctx context.Context, communicator *comm.Communicator, txpool *Txpool.TxPool) {
+func txPoolUpdateLoop(context *txRoutineContext) {
 	txCh := make(chan *tx.Transaction)
-	sub := communicator.SubscribeTx(txCh)
+	sub := context.communicator.SubscribeTx(txCh)
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-context.ctx.Done():
 			sub.Unsubscribe()
 			return
 		case tx := <-txCh:
-			txpool.Add(tx)
+			context.txpool.Add(tx)
 		}
 	}
 }
