@@ -2,10 +2,16 @@ package logs
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
+
+type Filters struct {
+	Address  *thor.Address   `json:"address"` // always a contract address
+	TopicSet [][5]*thor.Hash `json:"topicSet"`
+}
 
 // Log for json marshal
 type Log struct {

@@ -95,7 +95,7 @@ func (a *Accounts) handleGetBalance(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
 	}
-	blockNum, err := a.getBlockNumberByString(req.URL.Query().Get("blockNumber"))
+	blockNum, err := a.parseBlockNum(req.URL.Query().Get("blockNumber"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
 	}
@@ -112,7 +112,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
 	}
-	blockNum, err := a.getBlockNumberByString(req.URL.Query().Get("blockNumber"))
+	blockNum, err := a.parseBlockNum(req.URL.Query().Get("blockNumber"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
 	}
@@ -133,7 +133,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "key"), http.StatusBadRequest)
 	}
-	blockNum, err := a.getBlockNumberByString(req.URL.Query().Get("blockNumber"))
+	blockNum, err := a.parseBlockNum(req.URL.Query().Get("blockNumber"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
 	}
@@ -145,11 +145,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	return utils.WriteJSON(w, storage.String())
 }
 
-func (a *Accounts) getBlockNumberByString(blkNum string) (uint32, error) {
+func (a *Accounts) parseBlockNum(blkNum string) (uint32, error) {
 	if blkNum == "" {
 		return math.MaxUint32, nil
 	}
-	n, err := strconv.ParseInt(blkNum, 0, 0)
+	n, err := strconv.ParseUint(blkNum, 0, 0)
 	if err != nil {
 		return math.MaxUint32, err
 	}

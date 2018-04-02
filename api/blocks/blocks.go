@@ -66,7 +66,7 @@ func (b *Blocks) handleGetBlockByID(w http.ResponseWriter, req *http.Request) er
 }
 
 func (b *Blocks) handleGetBlockByNumber(w http.ResponseWriter, req *http.Request) error {
-	blockNum, err := b.getBlockNumberByString(req.URL.Query().Get("number"))
+	blockNum, err := b.parseBlockNum(req.URL.Query().Get("number"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
 	}
@@ -85,11 +85,11 @@ func (b *Blocks) handleGetBestBlock(w http.ResponseWriter, req *http.Request) er
 	return utils.WriteJSON(w, block)
 }
 
-func (b *Blocks) getBlockNumberByString(blkNum string) (uint32, error) {
+func (b *Blocks) parseBlockNum(blkNum string) (uint32, error) {
 	if blkNum == "" {
 		return math.MaxUint32, nil
 	}
-	n, err := strconv.ParseInt(blkNum, 0, 0)
+	n, err := strconv.ParseUint(blkNum, 0, 0)
 	if err != nil {
 		return math.MaxUint32, err
 	}

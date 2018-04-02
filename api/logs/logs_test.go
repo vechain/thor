@@ -22,10 +22,8 @@ func TestLog(t *testing.T) {
 	t0 := thor.BytesToHash([]byte("topic0"))
 	t1 := thor.BytesToHash([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
-	op := &logdb.FilterOption{
-		FromBlock: 0,
-		ToBlock:   1,
-		Address:   &addr,
+	op := &logs.Filters{
+		Address: &addr,
 		TopicSet: [][5]*thor.Hash{{&t0,
 			nil,
 			nil,
@@ -41,7 +39,7 @@ func TestLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := httpPost(ts, ts.URL+"/logs", ops)
+	r, err := httpPost(ts, ts.URL+"/logs?fromBlock=0&&toBlock=10&&offset=5&&limit=4", ops)
 	if err != nil {
 		t.Fatal(err)
 	}

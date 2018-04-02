@@ -179,7 +179,7 @@ func (c *Contracts) handleCallContract(w http.ResponseWriter, req *http.Request)
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 
-	blockNum, err := c.getBlockNumberByString(req.URL.Query().Get("blockNumber"))
+	blockNum, err := c.parseBlockNum(req.URL.Query().Get("blockNumber"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
 	}
@@ -191,11 +191,11 @@ func (c *Contracts) handleCallContract(w http.ResponseWriter, req *http.Request)
 	return utils.WriteJSON(w, hexutil.Encode(output))
 }
 
-func (c *Contracts) getBlockNumberByString(blkNum string) (uint32, error) {
+func (c *Contracts) parseBlockNum(blkNum string) (uint32, error) {
 	if blkNum == "" {
 		return math.MaxUint32, nil
 	}
-	n, err := strconv.ParseInt(blkNum, 0, 0)
+	n, err := strconv.ParseUint(blkNum, 0, 0)
 	if err != nil {
 		return math.MaxUint32, err
 	}

@@ -271,6 +271,31 @@ paths:
       - "Log"
       summary: "return logs by params"
       description: "get logs"
+      parameters:
+        - in: query
+          required: false
+          name: fromBlock
+          schema:
+            type: integer
+          description: "from block default 0"
+        - in: query
+          required: false
+          name: toBlock
+          schema:
+            type: integer
+          description: "to block default MaxUint32"
+        - in: query
+          required: false
+          name: offset
+          schema:
+            type: integer
+          description: "offset default MaxUint64"
+        - in: query
+          required: false
+          name: limit
+          schema:
+            type: integer
+          description: "limit default MaxUint32"
       requestBody:
         description: request params
         required: true
@@ -279,14 +304,6 @@ paths:
             schema:
               type: object
               properties: 
-                fromBlock:
-                  type: integer
-                  description: from block default 0
-                  example: 0
-                toBlock:
-                  type: integer
-                  description: to block default last block
-                  example: 1
                 address:
                   type: string
                   description: contract address
