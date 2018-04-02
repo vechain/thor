@@ -11,11 +11,20 @@ import (
 	"github.com/vechain/thor/cmd/thor/minheap"
 	"github.com/vechain/thor/comm"
 	Consensus "github.com/vechain/thor/consensus"
+	Logdb "github.com/vechain/thor/logdb"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	Txpool "github.com/vechain/thor/txpool"
 )
+
+type blockRoutineContext struct {
+	ctx              context.Context
+	communicator     *comm.Communicator
+	chain            *Chain.Chain
+	packedChan       chan *packedEvent
+	bestBlockUpdated chan struct{}
+}
 
 type newBlockEvent struct {
 	Blk      *block.Block
@@ -34,21 +43,41 @@ type orphan struct {
 	timestamp uint64 // 块成为 orpahn 的时间, 最多维持 5 分钟
 }
 
-func consentLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain.Chain, packedChan chan *packedEvent, bestBlockUpdated chan struct{}, consensus *Consensus.Consensus) {
+func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Hash]*orphan)
 	consent := func(blk *block.Block) error {
-		return consent(consensus, chain, communicator, futures, orphanMap, blk, bestBlockUpdated)
+		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
+		if err != nil {
+			log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
+			if Consensus.IsFutureBlock(err) {
+				futures.Push(blk)
+			} else if Consensus.IsParentNotFound(err) {
+				id := blk.Header().ID()
+				if _, ok := orphanMap[id]; !ok {
+					orphanMap[id] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
+				}
+			}
+			return err
+		}
+
+		updateChain(context.chain, context.communicator, &newBlockEvent{
+			Blk:      blk,
+			Trunk:    trunk,
+			Receipts: receipts,
+		}, context.bestBlockUpdated, logdb)
+
+		return nil
 	}
 
 	subChan := make(chan *block.Block, 100)
-	sub := communicator.SubscribeBlock(subChan)
+	sub := context.communicator.SubscribeBlock(subChan)
 	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-context.ctx.Done():
 			sub.Unsubscribe()
 			return
 		case <-ticker.C:
@@ -70,44 +99,20 @@ func consentLoop(ctx context.Context, communicator *comm.Communicator, chain *Ch
 				}
 				delete(orphanMap, id)
 			}
-		case packed := <-packedChan:
+		case packed := <-context.packedChan:
 			if trunk, err := consensus.IsTrunk(packed.blk.Header()); err == nil {
-				updateChain(chain, communicator, &newBlockEvent{
+				updateChain(context.chain, context.communicator, &newBlockEvent{
 					Blk:      packed.blk,
 					Trunk:    trunk,
 					Receipts: packed.receipts,
-				}, bestBlockUpdated)
+				}, context.bestBlockUpdated, logdb)
 				packed.ack <- struct{}{}
 			}
 		}
 	}
 }
 
-func consent(consensus *Consensus.Consensus, chain *Chain.Chain, communicator *comm.Communicator, futures *minheap.Blocks, orphanMap map[thor.Hash]*orphan, blk *block.Block, bestBlockUpdated chan struct{}) error {
-	trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
-	if err != nil {
-		log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
-		if Consensus.IsFutureBlock(err) {
-			futures.Push(blk)
-		} else if Consensus.IsParentNotFound(err) {
-			id := blk.Header().ID()
-			if _, ok := orphanMap[id]; !ok {
-				orphanMap[id] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
-			}
-		}
-		return err
-	}
-
-	updateChain(chain, communicator, &newBlockEvent{
-		Blk:      blk,
-		Trunk:    trunk,
-		Receipts: receipts,
-	}, bestBlockUpdated)
-
-	return nil
-}
-
-func packLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain.Chain, packedChan chan *packedEvent, bestBlockUpdated chan struct{}, packer *Packer.Packer, txpool *Txpool.TxPool, privateKey *ecdsa.PrivateKey) {
+func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpool.TxPool, privateKey *ecdsa.PrivateKey) {
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
 
@@ -115,13 +120,13 @@ func packLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain
 		timer.Reset(1 * time.Second)
 
 		select {
-		case <-ctx.Done():
+		case <-context.ctx.Done():
 			return
-		case <-bestBlockUpdated:
+		case <-context.bestBlockUpdated:
 			break
 		case <-timer.C:
-			if communicator.IsSynced() {
-				bestBlock, err := chain.GetBestBlock()
+			if context.communicator.IsSynced() {
+				bestBlock, err := context.chain.GetBestBlock()
 				if err != nil {
 					log.Error("%v", err)
 					return
@@ -158,11 +163,11 @@ func packLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain
 							receipts: receipts,
 							ack:      make(chan struct{}),
 						}
-						packedChan <- pe
+						context.packedChan <- pe
 						<-pe.ack
-					case <-bestBlockUpdated:
+					case <-context.bestBlockUpdated:
 						break
-					case <-ctx.Done():
+					case <-context.ctx.Done():
 						return
 					}
 				}
@@ -173,8 +178,8 @@ func packLoop(ctx context.Context, communicator *comm.Communicator, chain *Chain
 	}
 }
 
-func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *newBlockEvent, bestBlockUpdated chan struct{}) {
-	_, err := chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
+func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *newBlockEvent, bestBlockUpdated chan struct{}, logdb *Logdb.LogDB) {
+	fork, err := chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
 		return
 	}
@@ -191,7 +196,28 @@ func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *ne
 		default:
 		}
 		communicator.BroadcastBlock(newBlk.Blk)
-	}
 
-	// 日志待写
+		// 日志待写
+		logs := []*Logdb.Log{}
+		var index uint32
+		txs := newBlk.Blk.Transactions()
+		for i, receipt := range newBlk.Receipts {
+			for _, output := range receipt.Outputs {
+				tx := txs[i]
+				signer, err := tx.Signer()
+				if err != nil {
+					return
+				}
+				for _, log := range output.Logs {
+					logs = append(logs, Logdb.NewLog(newBlk.Blk.Header(), index, tx.ID(), signer, log))
+				}
+				index++
+			}
+		}
+		forkIDs := make([]thor.Hash, len(fork.Branch), len(fork.Branch))
+		for i, blk := range fork.Branch {
+			forkIDs[i] = blk.Header().ID()
+		}
+		logdb.Insert(logs, forkIDs)
+	}
 }

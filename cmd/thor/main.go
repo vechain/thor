@@ -149,8 +149,6 @@ func action(ctx *cli.Context) error {
 			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 		})
 
-	bestBlockUpdated := make(chan struct{})
-	packedChan := make(chan *packedEvent)
 	///////
 
 	var goes co.Goes
@@ -159,18 +157,33 @@ func action(ctx *cli.Context) error {
 	goes.Go(func() {
 		runCommunicator(c, communicator, p2pSrv)
 	})
+
+	txRoutineCtx := &txRoutineContext{
+		ctx:          c,
+		communicator: communicator,
+		txpool:       txpool,
+	}
 	goes.Go(func() {
-		broadcastTxLoop(c, communicator, txpool)
+		txBroadcastLoop(txRoutineCtx)
 	})
 	goes.Go(func() {
-		txPoolUpdateLoop(c, communicator, txpool)
+		txPoolUpdateLoop(txRoutineCtx)
+	})
+
+	blockRoutineCtx := &blockRoutineContext{
+		ctx:              c,
+		communicator:     communicator,
+		chain:            chain,
+		packedChan:       make(chan *packedEvent),
+		bestBlockUpdated: make(chan struct{}),
+	}
+	goes.Go(func() {
+		consentLoop(blockRoutineCtx, consensus, logdb)
 	})
 	goes.Go(func() {
-		consentLoop(c, communicator, chain, packedChan, bestBlockUpdated, consensus)
+		packLoop(blockRoutineCtx, packer, txpool, privateKey)
 	})
-	goes.Go(func() {
-		packLoop(c, communicator, chain, packedChan, bestBlockUpdated, packer, txpool, privateKey)
-	})
+
 	goes.Go(func() {
 		runRestful(c, rest, lsr)
 	})
