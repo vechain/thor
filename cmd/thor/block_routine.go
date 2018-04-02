@@ -154,6 +154,7 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 		case <-timer.C:
 			now := uint64(time.Now().Unix())
 			if now >= ts && now < ts+thor.BlockInterval {
+				ts = 0
 				pendings := txpool.Pending()
 
 				for _, tx := range pendings {
