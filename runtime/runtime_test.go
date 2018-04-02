@@ -35,7 +35,7 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := rt.StaticCall(
+	out := rt.Call(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
 		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
 
