@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +26,11 @@ var (
 // String implements stringer
 func (h Hash) String() string {
 	return "0x" + hex.EncodeToString(h[:])
+}
+
+// AbbrevString returns abbrev string presentation.
+func (h Hash) AbbrevString() string {
+	return fmt.Sprintf("0x%x…%x", h[:4], h[HashLength-4:])
 }
 
 // Bytes returns byte slice form of hash.
