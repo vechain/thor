@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
 )
@@ -14,6 +15,8 @@ type FilterOption struct {
 	ToBlock   uint32          `json:"toBlock"`
 	Address   *thor.Address   `json:"address"` // always a contract address
 	TopicSet  [][5]*thor.Hash `json:"topicSet"`
+	Offset    uint64          `json:"offset,string"`
+	Limit     uint32          `json:"limit"`
 }
 
 //LogDB manages all logs
@@ -120,6 +123,10 @@ func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 				stmt += " ) "
 			}
 		}
+	}
+	if option.Offset < math.MaxUint64 && option.Limit < math.MaxUint32 && option.Limit != 0 {
+		stmt += " limit ?, ? "
+		args = append(args, option.Offset, option.Limit)
 	}
 	return db.query(stmt, args...)
 }
