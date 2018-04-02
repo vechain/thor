@@ -53,9 +53,9 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			if Consensus.IsFutureBlock(err) {
 				futures.Push(blk)
 			} else if Consensus.IsParentNotFound(err) {
-				id := blk.Header().ID()
-				if _, ok := orphanMap[id]; !ok {
-					orphanMap[id] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
+				parentID := blk.Header().ParentID()
+				if _, ok := orphanMap[parentID]; !ok {
+					orphanMap[parentID] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
 				}
 			}
 			return err
@@ -65,7 +65,7 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			Blk:      blk,
 			Trunk:    trunk,
 			Receipts: receipts,
-		}, context.bestBlockUpdated, logdb)
+		}, logdb, context.bestBlockUpdated)
 
 		return nil
 	}
@@ -89,15 +89,14 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 				break
 			}
 
-			now := uint64(time.Now().Unix())
-			for id, orphan := range orphanMap {
-				if orphan.timestamp+300 >= now {
+			if orphan, ok := orphanMap[blk.Header().ID()]; ok {
+				if orphan.timestamp+300 >= uint64(time.Now().Unix()) {
 					err := consent(orphan.blk)
 					if err != nil && Consensus.IsParentNotFound(err) {
 						continue
 					}
 				}
-				delete(orphanMap, id)
+				delete(orphanMap, blk.Header().ID())
 			}
 		case packed := <-context.packedChan:
 			if trunk, err := consensus.IsTrunk(packed.blk.Header()); err == nil {
@@ -105,7 +104,7 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 					Blk:      packed.blk,
 					Trunk:    trunk,
 					Receipts: packed.receipts,
-				}, context.bestBlockUpdated, logdb)
+				}, logdb, context.bestBlockUpdated)
 				packed.ack <- struct{}{}
 			}
 		}
@@ -116,76 +115,88 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
 
+	for !context.communicator.IsSynced() {
+		select {
+		case <-context.ctx.Done():
+			return
+		default:
+			log.Warn("has not synced")
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	var (
+		ts        uint64
+		adopt     Packer.Adopt
+		commit    Packer.Commit
+		bestBlock *block.Block
+		err       error
+	)
+
 	for {
-		timer.Reset(1 * time.Second)
+		timer.Reset(2 * time.Second)
 
 		select {
 		case <-context.ctx.Done():
 			return
 		case <-context.bestBlockUpdated:
-			break
+			bestBlock, err = context.chain.GetBestBlock()
+			if err != nil {
+				log.Error(fmt.Sprintf("%v", err))
+				break
+			}
+
+			ts, adopt, commit, err = packer.Prepare(bestBlock.Header(), uint64(time.Now().Unix()))
+			if err != nil {
+				log.Error(fmt.Sprintf("%v", err))
+				break
+			}
 		case <-timer.C:
-			if context.communicator.IsSynced() {
-				bestBlock, err := context.chain.GetBestBlock()
-				if err != nil {
-					log.Error("%v", err)
-					return
-				}
+			now := uint64(time.Now().Unix())
+			if now >= ts && now < ts+thor.BlockInterval {
+				pendings := txpool.Pending()
 
-				now := uint64(time.Now().Unix())
-				if ts, adopt, commit, err := packer.Prepare(bestBlock.Header(), now); err == nil {
-					waitSec := ts - now
-					log.Info(fmt.Sprintf("waiting to propose new block(#%v)", bestBlock.Header().Number()+1), "after", fmt.Sprintf("%vs", waitSec))
-
-					waitTime := time.NewTimer(time.Duration(waitSec) * time.Second)
-					defer waitTime.Stop()
-
-					select {
-					case <-waitTime.C:
-						pendings := txpool.Pending()
-
-						for _, tx := range pendings {
-							err := adopt(tx)
-							if Packer.IsGasLimitReached(err) {
-								break
-							}
-							txpool.OnProcessed(tx.ID(), err)
-						}
-
-						blk, receipts, err := commit(privateKey)
-						if err != nil {
-							break
-						}
-
-						log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
-						pe := &packedEvent{
-							blk:      blk,
-							receipts: receipts,
-							ack:      make(chan struct{}),
-						}
-						context.packedChan <- pe
-						<-pe.ack
-					case <-context.bestBlockUpdated:
+				for _, tx := range pendings {
+					err := adopt(tx)
+					if Packer.IsGasLimitReached(err) {
 						break
-					case <-context.ctx.Done():
-						return
 					}
+					txpool.OnProcessed(tx.ID(), err)
 				}
-			} else {
-				log.Warn("has not synced")
+
+				blk, receipts, err := commit(privateKey)
+				if err != nil {
+					break
+				}
+
+				log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
+				pe := &packedEvent{
+					blk:      blk,
+					receipts: receipts,
+					ack:      make(chan struct{}),
+				}
+				context.packedChan <- pe
+				<-pe.ack
 			}
 		}
 	}
 }
 
-func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *newBlockEvent, bestBlockUpdated chan struct{}, logdb *Logdb.LogDB) {
+func updateChain(
+	chain *Chain.Chain,
+	communicator *comm.Communicator,
+	newBlk *newBlockEvent,
+	logdb *Logdb.LogDB,
+	bestBlockUpdated chan struct{},
+) {
 	fork, err := chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
 
 	log.Info(
-		fmt.Sprintf("received new block(#%v valid %v)", newBlk.Blk.Header().Number(), newBlk.Trunk),
+		fmt.Sprintf("add new block to chain(#%v %v)", newBlk.Blk.Header().Number(), newBlk.Trunk),
 		"id", newBlk.Blk.Header().ID(),
 		"size", newBlk.Blk.Size(),
 	)
@@ -197,7 +208,7 @@ func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *ne
 		}
 		communicator.BroadcastBlock(newBlk.Blk)
 
-		// 日志待写
+		// 日志
 		logs := []*Logdb.Log{}
 		var index uint32
 		txs := newBlk.Blk.Transactions()
@@ -206,6 +217,7 @@ func updateChain(chain *Chain.Chain, communicator *comm.Communicator, newBlk *ne
 				tx := txs[i]
 				signer, err := tx.Signer()
 				if err != nil {
+					log.Error(fmt.Sprintf("%v", err))
 					return
 				}
 				for _, log := range output.Logs {
