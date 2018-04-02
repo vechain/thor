@@ -166,7 +166,7 @@ type Receipt struct {
 // Output output of clause execution.
 type Output struct {
 	// logs produced by the clause
-	Logs []*ReceiptLog `json:"outputs,string"`
+	Logs []*ReceiptLog `json:"logs,string"`
 }
 
 // ReceiptLog ReceiptLog.
