@@ -2,6 +2,7 @@ package thor
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -21,6 +22,8 @@ const (
 	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exeeds this value, no energy can be exchanged.
 
 	MaxBlockProposers uint64 = 101
+
+	TolerableBlockPackingTime = 100 * time.Millisecond // the indicator to adjust target block gas limit
 )
 
 // Keys of governance params.

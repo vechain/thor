@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/vechain/thor/block"
 	Chain "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/minheap"
@@ -157,6 +158,7 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 				ts = 0
 				pendings := txpool.Pending()
 
+				startTime := mclock.Now()
 				for _, tx := range pendings {
 					err := adopt(tx)
 					if Packer.IsGasLimitReached(err) {
@@ -168,6 +170,15 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 				blk, receipts, err := commit(privateKey)
 				if err != nil {
 					break
+				}
+				elapsed := mclock.Now() - startTime
+				if elapsed > 0 {
+					gasUsed := blk.Header().GasUsed()
+					// calc target gas limit only if gas used above third of gas limit
+					if gasUsed > blk.Header().GasLimit()/3 {
+						targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
+						packer.SetTargetGasLimit(targetGasLimit)
+					}
 				}
 
 				log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
