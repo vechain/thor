@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/inconshreveable/log15"
+	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/w8cache"
 )
 
 var log = log15.New("pkg", "p2psrv")
@@ -21,8 +21,8 @@ type Server struct {
 	goes co.Goes
 	done chan struct{}
 
-	goodNodes       *w8cache.W8Cache
-	discoveredNodes *nodePool
+	goodNodes       *cache.PrioCache
+	discoveredNodes *cache.RandCache
 	busyNodes       *nodeMap
 	dialCh          chan *discover.Node
 
@@ -38,11 +38,11 @@ func New(opts *Options) *Server {
 		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
 	}
 
-	goodNodes := w8cache.New(16, nil)
-	discoveredNodes := newNodePool(128)
+	goodNodes := cache.NewPrioCache(16)
+	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.GoodNodes {
 		goodNodes.Set(node.ID, node, 0)
-		discoveredNodes.Add(node)
+		discoveredNodes.Set(node.ID, node)
 	}
 
 	return &Server{
@@ -127,10 +127,11 @@ func (s *Server) Stop() {
 
 // GoodNodes returns good nodes.
 func (s *Server) GoodNodes() Nodes {
-	gns := make([]*discover.Node, 0, s.goodNodes.Count())
-	for _, entry := range s.goodNodes.All() {
-		gns = append(gns, entry.Value.(*discover.Node))
-	}
+	gns := make([]*discover.Node, 0, s.goodNodes.Len())
+	s.goodNodes.ForEach(func(ent *cache.PrioEntry) bool {
+		gns = append(gns, ent.Value.(*discover.Node))
+		return true
+	})
 	return gns
 }
 
@@ -190,7 +191,8 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			}
 		case v5node := <-discNodes:
 			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
-			if s.discoveredNodes.Add(node) {
+			if _, found := s.discoveredNodes.Get(node.ID); !found {
+				s.discoveredNodes.Set(node.ID, node)
 				log.Debug("discovered node", "node", node)
 			}
 		case <-s.done:
@@ -211,10 +213,11 @@ func (s *Server) dialLoop() {
 	for {
 		select {
 		case <-ticker.C:
-			node := s.discoveredNodes.RandGet()
-			if node == nil {
+			entry := s.discoveredNodes.Pick()
+			if entry == nil {
 				continue
 			}
+			node := entry.Value.(*discover.Node)
 			if s.srv.PeerCount() >= s.srv.MaxPeers {
 				continue
 			}
