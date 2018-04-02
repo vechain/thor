@@ -114,18 +114,6 @@ func (rt *Runtime) execute(
 	return env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 }
 
-// StaticCall executes signle clause which ensure no modifications to state.
-func (rt *Runtime) StaticCall(
-	clause *Tx.Clause,
-	index uint32,
-	gas uint64,
-	txOrigin thor.Address,
-	txGasPrice *big.Int,
-	txID thor.Hash,
-) *vm.Output {
-	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, true)
-}
-
 // Call executes single clause.
 func (rt *Runtime) Call(
 	clause *Tx.Clause,
