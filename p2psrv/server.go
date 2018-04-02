@@ -63,6 +63,7 @@ func New(opts *Options) *Server {
 		done:            make(chan struct{}),
 		goodNodes:       goodNodes,
 		discoveredNodes: discoveredNodes,
+		busyNodes:       newNodeMap(),
 		dialCh:          make(chan *discover.Node),
 	}
 }
