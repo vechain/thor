@@ -53,11 +53,6 @@ func (h *Header) ParentID() thor.Hash {
 
 // Number returns sequential number of this block.
 func (h *Header) Number() uint32 {
-	if h.body.ParentID.IsZero() {
-		// genesis
-		return 0
-	}
-
 	// inferred from parent id
 	return Number(h.body.ParentID) + 1
 }
