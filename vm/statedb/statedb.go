@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/vm/evm"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vm/evm"
 )
 
 // StateDB implements evm.StateDB, only adapt to evm.
@@ -71,7 +70,7 @@ func (s *StateDB) GetOutputs(
 
 // ForEachStorage see state.State.ForEachStorage.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) {
-	s.state.ForEachStorage(thor.Address(addr), func(k thor.Hash, v []byte) bool {
+	s.state.ForEachStorage(thor.Address(addr), func(k thor.Bytes32, v []byte) bool {
 		// TODO should rlp decode v
 		return cb(common.Hash(k), common.BytesToHash(v))
 	})
@@ -151,12 +150,12 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // GetState stub.
 func (s *StateDB) GetState(addr common.Address, key common.Hash) common.Hash {
-	return common.Hash(s.state.GetStorage(thor.Address(addr), thor.Hash(key)))
+	return common.Hash(s.state.GetStorage(thor.Address(addr), thor.Bytes32(key)))
 }
 
 // SetState stub.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	s.state.SetStorage(thor.Address(addr), thor.Hash(key), thor.Hash(value))
+	s.state.SetStorage(thor.Address(addr), thor.Bytes32(key), thor.Bytes32(value))
 }
 
 // Exist stub.

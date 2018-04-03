@@ -9,25 +9,25 @@ import (
 )
 
 var (
-	tokenSupplyKey     = thor.Hash(crypto.Keccak256Hash([]byte("token-supply")))
-	tokenSupplyTimeKey = thor.Hash(crypto.Keccak256Hash([]byte("token-supply-time")))
-	totalAddKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-add")))
-	totalSubKey        = thor.Hash(crypto.Keccak256Hash([]byte("total-sub")))
+	tokenSupplyKey     = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply")))
+	tokenSupplyTimeKey = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply-time")))
+	totalAddKey        = thor.Bytes32(crypto.Keccak256Hash([]byte("total-add")))
+	totalSubKey        = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
 )
 
-func accountKey(addr thor.Address) thor.Hash {
-	return thor.BytesToHash(append([]byte("a"), addr.Bytes()...))
+func accountKey(addr thor.Address) thor.Bytes32 {
+	return thor.BytesToBytes32(append([]byte("a"), addr.Bytes()...))
 }
 
-func consumptionApprovalKey(contractAddr thor.Address, caller thor.Address) thor.Hash {
-	return thor.Hash(crypto.Keccak256Hash(contractAddr.Bytes(), caller.Bytes()))
+func consumptionApprovalKey(contractAddr thor.Address, caller thor.Address) thor.Bytes32 {
+	return thor.Bytes32(crypto.Keccak256Hash(contractAddr.Bytes(), caller.Bytes()))
 }
 
-func supplierKey(contractAddr thor.Address) thor.Hash {
-	return thor.BytesToHash(append([]byte("s"), contractAddr.Bytes()...))
+func supplierKey(contractAddr thor.Address) thor.Bytes32 {
+	return thor.BytesToBytes32(append([]byte("s"), contractAddr.Bytes()...))
 }
-func contractMasterKey(contractAddr thor.Address) thor.Hash {
-	return thor.BytesToHash(append([]byte("m"), contractAddr.Bytes()...))
+func contractMasterKey(contractAddr thor.Address) thor.Bytes32 {
+	return thor.BytesToBytes32(append([]byte("m"), contractAddr.Bytes()...))
 }
 
 type Energy struct {
@@ -39,11 +39,11 @@ func New(addr thor.Address, state *state.State) *Energy {
 	return &Energy{addr, state}
 }
 
-func (e *Energy) getStorage(key thor.Hash, val interface{}) {
+func (e *Energy) getStorage(key thor.Bytes32, val interface{}) {
 	e.state.GetStructedStorage(e.addr, key, val)
 }
 
-func (e *Energy) setStorage(key thor.Hash, val interface{}) {
+func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
 	e.state.SetStructedStorage(e.addr, key, val)
 }
 

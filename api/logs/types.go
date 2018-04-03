@@ -9,20 +9,20 @@ import (
 )
 
 type Filters struct {
-	Address  *thor.Address   `json:"address"` // always a contract address
-	TopicSet [][5]*thor.Hash `json:"topicSet"`
+	Address  *thor.Address      `json:"address"` // always a contract address
+	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
 }
 
 // Log for json marshal
 type Log struct {
-	BlockID     thor.Hash     `json:"blockID"`
-	BlockNumber uint32        `json:"fromBlock"`
-	LogIndex    uint32        `json:"logIndex"`
-	TxID        thor.Hash     `json:"txID"`
-	TxOrigin    thor.Address  `json:"txOrigin"` //contract caller
-	Address     thor.Address  `json:"address"`  // always a contract address
-	Data        string        `json:"data"`
-	Topics      [5]*thor.Hash `json:"topics"`
+	BlockID     thor.Bytes32     `json:"blockID"`
+	BlockNumber uint32           `json:"fromBlock"`
+	LogIndex    uint32           `json:"logIndex"`
+	TxID        thor.Bytes32     `json:"txID"`
+	TxOrigin    thor.Address     `json:"txOrigin"` //contract caller
+	Address     thor.Address     `json:"address"`  // always a contract address
+	Data        string           `json:"data"`
+	Topics      [5]*thor.Bytes32 `json:"topics"`
 }
 
 //convert a logdb.Log into a json format log

@@ -26,7 +26,7 @@ func New(chain *chain.Chain, txPool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Hash) (*Transaction, error) {
+func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
 	if pengdingTransaction := t.txPool.GetTransaction(txID); pengdingTransaction != nil {
 		return ConvertTransaction(pengdingTransaction)
 	}
@@ -49,7 +49,7 @@ func (t *Transactions) getTransactionByID(txID thor.Hash) (*Transaction, error) 
 }
 
 //GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Hash) (*Receipt, error) {
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, error) {
 	rece, err := t.chain.GetTransactionReceipt(txID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
@@ -62,7 +62,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Hash) (*Receipt, erro
 }
 
 //SendRawTransaction send a raw transactoion
-func (t *Transactions) sendRawTransaction(raw *RawTransaction) (*thor.Hash, error) {
+func (t *Transactions) sendRawTransaction(raw *RawTransaction) (*thor.Bytes32, error) {
 	tx, err := buildRawTransaction(raw)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
 	id := mux.Vars(req)["id"]
-	txID, err := thor.ParseHash(id)
+	txID, err := thor.ParseBytes32(id)
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
 	}
@@ -106,7 +106,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 
 func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {
 	id := mux.Vars(req)["id"]
-	txID, err := thor.ParseHash(id)
+	txID, err := thor.ParseBytes32(id)
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
 	}

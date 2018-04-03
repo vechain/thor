@@ -21,7 +21,7 @@ var (
 
 // TxLocation contains information about a tx is settled.
 type TxLocation struct {
-	BlockID thor.Hash
+	BlockID thor.Bytes32
 
 	// Index the position of the tx in block's txs.
 	Index uint64 // rlp require uint64.
@@ -44,21 +44,21 @@ func loadRLP(r kv.Getter, key []byte, val interface{}) error {
 }
 
 // LoadBestBlockID returns the best block ID on trunk.
-func LoadBestBlockID(r kv.Getter) (thor.Hash, error) {
+func LoadBestBlockID(r kv.Getter) (thor.Bytes32, error) {
 	data, err := r.Get(bestBlockKey)
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
-	return thor.BytesToHash(data), nil
+	return thor.BytesToBytes32(data), nil
 }
 
 // SaveBestBlockID save the best block ID on trunk.
-func SaveBestBlockID(w kv.Putter, id thor.Hash) error {
+func SaveBestBlockID(w kv.Putter, id thor.Bytes32) error {
 	return w.Put(bestBlockKey, id[:])
 }
 
 // LoadRawBlock load rlp encoded raw block.
-func LoadRawBlock(r kv.Getter, id thor.Hash) (block.Raw, error) {
+func LoadRawBlock(r kv.Getter, id thor.Bytes32) (block.Raw, error) {
 	return r.Get(append(blockPrefix, id[:]...))
 }
 
@@ -75,29 +75,29 @@ func SaveBlock(w kv.Putter, b *block.Block) (block.Raw, error) {
 }
 
 // SaveTrunkBlockID save a block's ID on the trunk.
-func SaveTrunkBlockID(w kv.Putter, id thor.Hash) error {
+func SaveTrunkBlockID(w kv.Putter, id thor.Bytes32) error {
 	// first 4 bytes of block hash present block number
 	return w.Put(append(trunkPrefix, id[:4]...), id[:])
 }
 
 // EraseTrunkBlockID erase block ID on the trunk.
-func EraseTrunkBlockID(w kv.Putter, id thor.Hash) error {
+func EraseTrunkBlockID(w kv.Putter, id thor.Bytes32) error {
 	return w.Delete(append(trunkPrefix, id[:4]...))
 }
 
 // LoadTrunkBlockID returns block's id with given block number.
-func LoadTrunkBlockID(r kv.Getter, num uint32) (thor.Hash, error) {
+func LoadTrunkBlockID(r kv.Getter, num uint32) (thor.Bytes32, error) {
 	var n [4]byte
 	binary.BigEndian.PutUint32(n[:], num)
 	data, err := r.Get(append(trunkPrefix, n[:]...))
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
-	return thor.BytesToHash(data), nil
+	return thor.BytesToBytes32(data), nil
 }
 
 // SaveTxLocations save locations of all txs in a block.
-func SaveTxLocations(w kv.Putter, txs tx.Transactions, blockID thor.Hash) error {
+func SaveTxLocations(w kv.Putter, txs tx.Transactions, blockID thor.Bytes32) error {
 	for i, tx := range txs {
 		loc := TxLocation{
 			blockID,
@@ -111,12 +111,12 @@ func SaveTxLocations(w kv.Putter, txs tx.Transactions, blockID thor.Hash) error 
 }
 
 // SaveBlockReceipts save tx receipts of a block.
-func SaveBlockReceipts(w kv.Putter, blockID thor.Hash, receipts tx.Receipts) error {
+func SaveBlockReceipts(w kv.Putter, blockID thor.Bytes32, receipts tx.Receipts) error {
 	return saveRLP(w, append(blockReceiptsPrefix, blockID[:]...), receipts)
 }
 
 // LoadBlockReceipts load tx receipts of a block.
-func LoadBlockReceipts(r kv.Getter, blockID thor.Hash) (tx.Receipts, error) {
+func LoadBlockReceipts(r kv.Getter, blockID thor.Bytes32) (tx.Receipts, error) {
 	var receipts tx.Receipts
 	if err := loadRLP(r, append(blockReceiptsPrefix, blockID[:]...), &receipts); err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func EraseTxLocations(w kv.Putter, txs tx.Transactions) error {
 }
 
 // LoadTxLocation load tx location info by tx id.
-func LoadTxLocation(r kv.Getter, txID thor.Hash) (*TxLocation, error) {
+func LoadTxLocation(r kv.Getter, txID thor.Bytes32) (*TxLocation, error) {
 	var loc TxLocation
 	if err := loadRLP(r, append(txLocationPrefix, txID[:]...), &loc); err != nil {
 		return nil, err

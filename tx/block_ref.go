@@ -21,7 +21,7 @@ func NewBlockRef(blockNum uint32) (br BlockRef) {
 }
 
 // NewBlockRefFromID create block reference from block id.
-func NewBlockRefFromID(blockID thor.Hash) (br BlockRef) {
+func NewBlockRefFromID(blockID thor.Bytes32) (br BlockRef) {
 	copy(br[:], blockID[:])
 	return
 }

@@ -14,7 +14,7 @@ import (
 
 // State manages the main accounts trie.
 type State struct {
-	root  thor.Hash // root of initial accounts trie
+	root  thor.Bytes32 // root of initial accounts trie
 	db    *trie.Database
 	trie  trieReader                     // the accounts trie reader
 	cache map[thor.Address]*cachedObject // cache of accounts trie
@@ -34,7 +34,7 @@ type trieWriter interface {
 }
 
 // New create an state object.
-func New(root thor.Hash, kv kv.GetPutter) (*State, error) {
+func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
 	db := newTrieDatabase(kv)
 	trie, err := trie.NewSecure(common.Hash(root), db, 0)
 	if err != nil {
@@ -106,7 +106,7 @@ func (s *State) changes() map[thor.Address]*changedObject {
 		case storageKey:
 			o := getObj(key.addr)
 			if o.storage == nil {
-				o.storage = make(map[thor.Hash][]byte)
+				o.storage = make(map[thor.Bytes32][]byte)
 			}
 			o.storage[key.key] = v.([]byte)
 		}
@@ -132,14 +132,14 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 
 // ForEachStorage iterates all storage key-value pairs for given address.
 // It's for debug purpose.
-func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Hash, value []byte) bool) {
+func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool) {
 	// skip if no code
-	if (s.GetCodeHash(addr) == thor.Hash{}) {
+	if (s.GetCodeHash(addr) == thor.Bytes32{}) {
 		return
 	}
 
 	// build ongoing key-value pairs
-	ongoing := make(map[thor.Hash][]byte)
+	ongoing := make(map[thor.Bytes32][]byte)
 	s.sm.Journal(func(k, v interface{}) bool {
 		if key, ok := k.(storageKey); ok {
 			if key.addr == addr {
@@ -168,7 +168,7 @@ func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Hash, value [
 			return
 		}
 		// skip cached values
-		key := thor.BytesToHash(strie.GetKey(iter.Key))
+		key := thor.BytesToBytes32(strie.GetKey(iter.Key))
 		if _, ok := ongoing[key]; !ok {
 			if !cb(key, iter.Value) {
 				return
@@ -199,26 +199,26 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 	s.sm.Put(addr, balance)
 }
 
-// GetStorage returns Hash type storage value for the given address and key.
-func (s *State) GetStorage(addr thor.Address, key thor.Hash) (value thor.Hash) {
+// GetStorage returns storage value for the given address and key.
+func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) (value thor.Bytes32) {
 	s.GetStructedStorage(addr, key, &value)
 	return
 }
 
-// SetStorage set Hash type storage value for the given address and key.
-func (s *State) SetStorage(addr thor.Address, key, value thor.Hash) {
+// SetStorage set storage value for the given address and key.
+func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
 	s.SetStructedStorage(addr, key, value)
 }
 
 // GetStructedStorage get and decode raw storage for given address and key.
 // 'val' should either implements StorageDecoder, or int type of
 // [
-//   *thor.Hash, *thor.Address,
+//   *thor.Bytes32, *thor.Address,
 //   *string
 //   *uintx
 //   *big.Int
 // ]
-func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
+func (s *State) GetStructedStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
 	data, _ := s.sm.Get(storageKey{addr, key})
 	if dec, ok := val.(StorageDecoder); ok {
 		s.setError(dec.Decode(data.([]byte)))
@@ -230,13 +230,13 @@ func (s *State) GetStructedStorage(addr thor.Address, key thor.Hash, val interfa
 // SetStructedStorage encode val and set as raw storage value for given address and key.
 // 'val' should ether implements StorageEncoder, or in type of
 // [
-//	  thor.Hash, thor.Address,
+//	  thor.Bytes32, thor.Address,
 //    string
 //    uintx
 //    *big.Int
 // ]
 // If 'val' is nil, the storage is cleared.
-func (s *State) SetStructedStorage(addr thor.Address, key thor.Hash, val interface{}) {
+func (s *State) SetStructedStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
 	if val == nil {
 		s.sm.Put(storageKey{addr, key}, []byte(nil))
 		return
@@ -266,9 +266,9 @@ func (s *State) GetCode(addr thor.Address) []byte {
 }
 
 // GetCodeHash returns code hash for the given address.
-func (s *State) GetCodeHash(addr thor.Address) thor.Hash {
+func (s *State) GetCodeHash(addr thor.Address) thor.Bytes32 {
 	v, _ := s.sm.Get(codeHashKey(addr))
-	return thor.BytesToHash(v.([]byte))
+	return thor.BytesToBytes32(v.([]byte))
 }
 
 // SetCode set code for the given address.
@@ -285,7 +285,7 @@ func (s *State) SetCode(addr thor.Address, code []byte) {
 // Exists returns whether an account exists at the given address.
 // See Account.IsEmpty()
 func (s *State) Exists(addr thor.Address) bool {
-	return s.GetBalance(addr).Sign() != 0 || (s.GetCodeHash(addr) != thor.Hash{})
+	return s.GetBalance(addr).Sign() != 0 || (s.GetCodeHash(addr) != thor.Bytes32{})
 }
 
 // Delete delete an account at the given address.
@@ -321,7 +321,7 @@ func (s *State) Stage() *Stage {
 type (
 	storageKey struct {
 		addr thor.Address
-		key  thor.Hash
+		key  thor.Bytes32
 	}
 
 	codeKey     thor.Address
@@ -329,7 +329,7 @@ type (
 
 	changedObject struct {
 		data    Account
-		storage map[thor.Hash][]byte
+		storage map[thor.Bytes32][]byte
 		code    []byte
 	}
 )

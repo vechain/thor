@@ -48,11 +48,11 @@ func (b *Builder) Nonce(nonce uint64) *Builder {
 }
 
 // DependsOn set depended tx.
-func (b *Builder) DependsOn(txHash *thor.Hash) *Builder {
-	if txHash == nil {
+func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
+	if txID == nil {
 		b.body.DependsOn = nil
 	} else {
-		cpy := *txHash
+		cpy := *txID
 		b.body.DependsOn = &cpy
 	}
 	return b

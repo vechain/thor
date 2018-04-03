@@ -3,8 +3,6 @@ package comm
 import (
 	"errors"
 
-	"github.com/vechain/thor/txpool"
-
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/comm/proto"
@@ -14,7 +12,7 @@ import (
 )
 
 type announce struct {
-	blockID thor.Hash
+	blockID thor.Bytes32
 	peer    *p2psrv.Peer
 }
 
@@ -120,7 +118,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return resp, nil
 	case proto.MsgGetTxs:
-		pendings := c.txpool.Dump(txpool.Pending)
+		pendings := c.txpool.Dump()
 		resp := make(proto.RespGetTxs, 0, 100)
 		var size metric.StorageSize
 		for _, pending := range pendings {

@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	headKey = thor.Hash(crypto.Keccak256Hash([]byte("head")))
-	tailKey = thor.Hash(crypto.Keccak256Hash([]byte("tail")))
+	headKey = thor.Bytes32(crypto.Keccak256Hash([]byte("head")))
+	tailKey = thor.Bytes32(crypto.Keccak256Hash([]byte("tail")))
 )
 
 // Authority implements native methods of `Authority` contract.
@@ -22,23 +22,23 @@ func New(addr thor.Address, state *state.State) *Authority {
 	return &Authority{addr, state}
 }
 
-func (a *Authority) getStorage(key thor.Hash, val interface{}) {
+func (a *Authority) getStorage(key thor.Bytes32, val interface{}) {
 	a.state.GetStructedStorage(a.addr, key, val)
 }
 
-func (a *Authority) setStorage(key thor.Hash, val interface{}) {
+func (a *Authority) setStorage(key thor.Bytes32, val interface{}) {
 	a.state.SetStructedStorage(a.addr, key, val)
 }
 
 // Get get entry by signer address.
 func (a *Authority) Get(signer thor.Address) *Entry {
 	var entry Entry
-	a.getStorage(thor.BytesToHash(signer.Bytes()), &entry)
+	a.getStorage(thor.BytesToBytes32(signer.Bytes()), &entry)
 	return &entry
 }
 
 func (a *Authority) getAndSet(signer thor.Address, cb func(*Entry) bool) bool {
-	key := thor.BytesToHash(signer.Bytes())
+	key := thor.BytesToBytes32(signer.Bytes())
 	var entry Entry
 	a.getStorage(key, &entry)
 	if !cb(&entry) {
@@ -50,7 +50,7 @@ func (a *Authority) getAndSet(signer thor.Address, cb func(*Entry) bool) bool {
 
 // Add add a new entry.
 // Returns false if already exists.
-func (a *Authority) Add(signer thor.Address, endorsor thor.Address, identity thor.Hash) bool {
+func (a *Authority) Add(signer thor.Address, endorsor thor.Address, identity thor.Bytes32) bool {
 	var tail addressPtr
 	a.getStorage(tailKey, &tail)
 

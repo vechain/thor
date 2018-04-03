@@ -18,13 +18,13 @@ func New(addr thor.Address, state *state.State) *Params {
 }
 
 // Get native way to get param.
-func (p *Params) Get(key thor.Hash) *big.Int {
+func (p *Params) Get(key thor.Bytes32) *big.Int {
 	var v big.Int
 	p.state.GetStructedStorage(p.addr, key, &v)
 	return &v
 }
 
 // Set native way to set param.
-func (p *Params) Set(key thor.Hash, value *big.Int) {
+func (p *Params) Set(key thor.Bytes32, value *big.Int) {
 	p.state.SetStructedStorage(p.addr, key, value)
 }

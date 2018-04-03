@@ -98,7 +98,7 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error
 	for i, a := range d.Accounts() {
 		builder.Call(
 			tx.NewClause(&builtin.Authority.Address).
-				WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", i))))),
+				WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", i))))),
 			builtin.Executor.Address)
 	}
 

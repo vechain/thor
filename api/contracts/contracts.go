@@ -33,7 +33,7 @@ type ContractCallOptions struct {
 	Gas         uint64                `json:"gas,string"`
 	From        *thor.Address         `json:"from"`
 	GasPrice    *math.HexOrDecimal256 `json:"gasPrice,string"`
-	TxID        *thor.Hash            `json:"txID"`
+	TxID        *thor.Bytes32         `json:"txID"`
 	Value       *math.HexOrDecimal256 `json:"value,string"`
 }
 
@@ -61,7 +61,7 @@ func (c *Contracts) defaultContractCallOptions() *ContractCallOptions {
 		Gas:         21000,
 		From:        &thor.Address{},
 		GasPrice:    &gph,
-		TxID:        &thor.Hash{},
+		TxID:        &thor.Bytes32{},
 		Value:       &vh,
 	}
 }
@@ -115,10 +115,10 @@ func (c *Contracts) getBlock(blockNum uint32) (*block.Block, error) {
 	return block, nil
 }
 
-func (c *Contracts) getStateRoot(blockNum uint32) (thor.Hash, error) {
+func (c *Contracts) getStateRoot(blockNum uint32) (thor.Bytes32, error) {
 	block, err := c.getBlock(blockNum)
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 	return block.Header().StateRoot(), nil
 }

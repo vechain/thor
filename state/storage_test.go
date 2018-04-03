@@ -10,9 +10,9 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func TestHashStorageCodec(t *testing.T) {
+func TestStorageCodec(t *testing.T) {
 	tests := []interface{}{
-		thor.BytesToHash([]byte("hash")),
+		thor.BytesToBytes32([]byte("Bytes32")),
 		thor.BytesToAddress([]byte("address")),
 		"foo",
 		uint(10),
@@ -76,22 +76,22 @@ func TestHashStorageCodec(t *testing.T) {
 
 func BenchmarkStorageSet(b *testing.B) {
 	kv, _ := lvldb.NewMem()
-	st, _ := New(thor.Hash{}, kv)
+	st, _ := New(thor.Bytes32{}, kv)
 
 	addr := thor.BytesToAddress([]byte("acc"))
-	key := thor.BytesToHash([]byte("key"))
+	key := thor.BytesToBytes32([]byte("key"))
 	for i := 0; i < b.N; i++ {
-		st.SetStorage(addr, key, thor.BytesToHash([]byte{1}))
+		st.SetStorage(addr, key, thor.BytesToBytes32([]byte{1}))
 	}
 }
 
 func BenchmarkStorageGet(b *testing.B) {
 	kv, _ := lvldb.NewMem()
-	st, _ := New(thor.Hash{}, kv)
+	st, _ := New(thor.Bytes32{}, kv)
 
 	addr := thor.BytesToAddress([]byte("acc"))
-	key := thor.BytesToHash([]byte("key"))
-	st.SetStructedStorage(addr, key, thor.Hash{1})
+	key := thor.BytesToBytes32([]byte("key"))
+	st.SetStructedStorage(addr, key, thor.Bytes32{1})
 	for i := 0; i < b.N; i++ {
 		st.GetStorage(addr, key)
 	}

@@ -16,6 +16,6 @@ func NewCreator(kv kv.GetPutter) *Creator {
 }
 
 // NewState create a new state object.
-func (c *Creator) NewState(root thor.Hash) (*State, error) {
+func (c *Creator) NewState(root thor.Bytes32) (*State, error) {
 	return New(root, c.kv)
 }

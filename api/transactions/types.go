@@ -49,22 +49,22 @@ type RawTransaction struct {
 	Clauses      Clauses             `json:"clauses,string"`
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
 	Gas          math.HexOrDecimal64 `json:"gas"`
-	DependsOn    *thor.Hash          `json:"dependsOn,string"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
 	Sig          string              `json:"sig"`
 }
 
 //Transaction transaction
 type Transaction struct {
-	BlockID     thor.Hash           `json:"blockID,string"`
+	BlockID     thor.Bytes32        `json:"blockID,string"`
 	BlockNumber uint32              `json:"blockNumber"`
 	TxIndex     math.HexOrDecimal64 `json:"txIndex"`
 
 	ChainTag     byte                `json:"chainTag"`
-	ID           thor.Hash           `json:"id,string"`
+	ID           thor.Bytes32        `json:"id,string"`
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
 	Gas          math.HexOrDecimal64 `json:"gas"`
 	From         thor.Address        `json:"from,string"`
-	DependsOn    *thor.Hash          `json:"dependsOn,string"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
 	Clauses      Clauses             `json:"clauses"`
 }
 
@@ -174,7 +174,7 @@ type ReceiptLog struct {
 	// address of the contract that generated the event
 	Address thor.Address `json:"address,string"`
 	// list of topics provided by the contract.
-	Topics []thor.Hash `json:"topics,string"`
+	Topics []thor.Bytes32 `json:"topics,string"`
 	// supplied by the contract, usually ABI-encoded
 	Data string `json:"data"`
 }
@@ -196,7 +196,7 @@ func convertReceipt(rece *tx.Receipt) *Receipt {
 				Address: log.Address,
 				Data:    hexutil.Encode(log.Data),
 			}
-			receiptLog.Topics = make([]thor.Hash, len(log.Topics))
+			receiptLog.Topics = make([]thor.Bytes32, len(log.Topics))
 			for k, topic := range log.Topics {
 				receiptLog.Topics[k] = topic
 			}

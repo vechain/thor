@@ -19,7 +19,7 @@ func init() {
 		Params.impl("nativeGet", ethparams.SloadGas, func(env *env) ([]interface{}, error) {
 			var key common.Hash
 			env.Args(&key)
-			v := Params.WithState(env.State).Get(thor.Hash(key))
+			v := Params.WithState(env.State).Get(thor.Bytes32(key))
 			return []interface{}{v}, nil
 		}),
 		Params.impl("nativeSet", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
@@ -28,7 +28,7 @@ func init() {
 				Value *big.Int
 			}
 			env.Args(&args)
-			Params.WithState(env.State).Set(thor.Hash(args.Key), args.Value)
+			Params.WithState(env.State).Set(thor.Bytes32(args.Key), args.Value)
 			return nil, nil
 		}),
 
@@ -42,7 +42,7 @@ func init() {
 				Identity common.Hash
 			}
 			env.Args(&args)
-			ok := Authority.WithState(env.State).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Hash(args.Identity))
+			ok := Authority.WithState(env.State).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
 			return []interface{}{ok}, nil
 		}),
 		Authority.impl("nativeRemove", ethparams.SstoreClearGas, func(env *env) ([]interface{}, error) {

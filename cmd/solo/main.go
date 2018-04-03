@@ -238,7 +238,7 @@ func (solo *cliContext) prepare() (err error) {
 
 	dblogs := []*logdb.Log{}
 	for index, l := range logs {
-		dblog := logdb.NewLog(b0.Header(), uint32(index), thor.Hash{}, thor.Address{}, l)
+		dblog := logdb.NewLog(b0.Header(), uint32(index), thor.Bytes32{}, thor.Address{}, l)
 		dblogs = append(dblogs, dblog)
 	}
 	err = solo.ldb.Insert(dblogs, nil)

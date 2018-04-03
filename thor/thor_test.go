@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHash(t *testing.T) {
-	hash := BytesToHash([]byte("hash"))
-	data, _ := json.Marshal(&hash)
-	assert.Equal(t, "\""+hash.String()+"\"", string(data))
+func TestBytes32(t *testing.T) {
+	bytes32 := BytesToBytes32([]byte("bytes32"))
+	data, _ := json.Marshal(&bytes32)
+	assert.Equal(t, "\""+bytes32.String()+"\"", string(data))
 
-	var dec Hash
+	var dec Bytes32
 	assert.Nil(t, json.Unmarshal(data, &dec))
-	assert.Equal(t, hash, dec)
+	assert.Equal(t, bytes32, dec)
 }
 
 func TestAddress(t *testing.T) {

@@ -11,12 +11,12 @@ import (
 
 //FilterOption option filter
 type FilterOption struct {
-	FromBlock uint32          `json:"fromBlock"`
-	ToBlock   uint32          `json:"toBlock"`
-	Address   *thor.Address   `json:"address"` // always a contract address
-	TopicSet  [][5]*thor.Hash `json:"topicSet"`
-	Offset    uint64          `json:"offset,string"`
-	Limit     uint32          `json:"limit"`
+	FromBlock uint32             `json:"fromBlock"`
+	ToBlock   uint32             `json:"toBlock"`
+	Address   *thor.Address      `json:"address"` // always a contract address
+	TopicSet  [][5]*thor.Bytes32 `json:"topicSet"`
+	Offset    uint64             `json:"offset,string"`
+	Limit     uint32             `json:"limit"`
 }
 
 //LogDB manages all logs
@@ -49,7 +49,7 @@ func NewMem() (*LogDB, error) {
 }
 
 //Insert insert logs into db, and abandon logs which associated with given block ids.
-func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Hash) error {
+func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Bytes32) error {
 	if len(logs) == 0 && len(abandonedBlockIDs) == 0 {
 		return nil
 	}
@@ -170,18 +170,18 @@ func (db *LogDB) query(stmt string, args ...interface{}) ([]*Log, error) {
 			return nil, err
 		}
 		log := &Log{
-			BlockID:     thor.BytesToHash(blockID),
+			BlockID:     thor.BytesToBytes32(blockID),
 			LogIndex:    logIndex,
 			BlockNumber: blockNumber,
 			BlockTime:   blockTime,
-			TxID:        thor.BytesToHash(txID),
+			TxID:        thor.BytesToBytes32(txID),
 			TxOrigin:    thor.BytesToAddress(txOrigin),
 			Address:     thor.BytesToAddress(address),
 			Data:        data,
 		}
 		for i, topic := range topics {
 			if len(topic) > 0 {
-				h := thor.BytesToHash(topic)
+				h := thor.BytesToBytes32(topic)
 				log.Topics[i] = &h
 			}
 		}
@@ -203,7 +203,7 @@ func (db *LogDB) Close() {
 	db.db.Close()
 }
 
-func topicValue(topic *thor.Hash) []byte {
+func topicValue(topic *thor.Bytes32) []byte {
 	if topic == nil {
 		return nil
 	}

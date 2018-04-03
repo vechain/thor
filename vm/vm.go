@@ -20,7 +20,7 @@ type Output struct {
 	Logs            []*Log
 	LeftOverGas     uint64
 	RefundGas       uint64
-	Preimages       map[thor.Hash][]byte
+	Preimages       map[thor.Bytes32][]byte
 	VMErr           error         // VMErr identify the execution result of the contract function, not evm function's err.
 	ContractAddress *thor.Address // if create a new contract, or is nil.
 }
@@ -31,7 +31,7 @@ type Log struct {
 	// address of the contract that generated the event
 	Address thor.Address
 	// list of topics provided by the contract.
-	Topics []thor.Hash
+	Topics []thor.Bytes32
 	// supplied by the contract, usually ABI-encoded
 	Data []byte
 }
@@ -77,9 +77,9 @@ type Context struct {
 	Time        uint64
 	GasLimit    uint64
 	GasPrice    *big.Int
-	TxID        thor.Hash
+	TxID        thor.Bytes32
 	ClauseIndex uint32
-	GetHash     func(uint32) thor.Hash
+	GetHash     func(uint32) thor.Bytes32
 }
 
 // The only purpose of this func separate definition is to be compatible with evm.context.
@@ -181,7 +181,7 @@ func (vm *VM) ChainConfig() *params.ChainConfig {
 
 func (vm *VM) extractStateDBOutputs() (
 	logs []*Log,
-	preimages map[thor.Hash][]byte,
+	preimages map[thor.Bytes32][]byte,
 ) {
 	vm.statedb.GetOutputs(
 		func(log *types.Log) bool {
@@ -191,9 +191,9 @@ func (vm *VM) extractStateDBOutputs() (
 		func(key common.Hash, value []byte) bool {
 			// create on-demand
 			if preimages == nil {
-				preimages = make(map[thor.Hash][]byte)
+				preimages = make(map[thor.Bytes32][]byte)
 			}
-			preimages[thor.Hash(key)] = value
+			preimages[thor.Bytes32(key)] = value
 			return true
 		},
 	)
@@ -201,11 +201,11 @@ func (vm *VM) extractStateDBOutputs() (
 }
 
 func ethlogToLog(ethlog *types.Log) *Log {
-	var topics []thor.Hash
+	var topics []thor.Bytes32
 	if len(ethlog.Topics) > 0 {
-		topics = make([]thor.Hash, 0, len(ethlog.Topics))
+		topics = make([]thor.Bytes32, 0, len(ethlog.Topics))
 		for _, t := range ethlog.Topics {
-			topics = append(topics, thor.Hash(t))
+			topics = append(topics, thor.Bytes32(t))
 		}
 	}
 	return &Log{

@@ -10,14 +10,14 @@ import (
 type State interface {
 	GetBalance(thor.Address) *big.Int
 	GetCode(thor.Address) []byte
-	GetCodeHash(thor.Address) thor.Hash
-	GetStorage(thor.Address, thor.Hash) thor.Hash
+	GetCodeHash(thor.Address) thor.Bytes32
+	GetStorage(thor.Address, thor.Bytes32) thor.Bytes32
 	Exists(thor.Address) bool
-	ForEachStorage(addr thor.Address, cb func(key thor.Hash, value []byte) bool)
+	ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool)
 
 	SetBalance(thor.Address, *big.Int)
 	SetCode(thor.Address, []byte)
-	SetStorage(thor.Address, thor.Hash, thor.Hash)
+	SetStorage(thor.Address, thor.Bytes32, thor.Bytes32)
 	Delete(thor.Address)
 
 	NewCheckpoint() int

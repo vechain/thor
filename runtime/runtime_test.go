@@ -27,7 +27,7 @@ func TestCall(t *testing.T) {
 	state, _ := state.New(b0.Header().StateRoot(), kv)
 
 	rt := runtime.New(state,
-		thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
+		thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
 	method := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
@@ -37,7 +37,7 @@ func TestCall(t *testing.T) {
 
 	out := rt.Call(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
-		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Hash{})
+		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Bytes32{})
 
 	if out.VMErr != nil {
 		t.Fatal(out.VMErr)
@@ -81,7 +81,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 	// state, _ := state.New(b0.Header().StateRoot(), kv)
 	// rt := runtime.New(state,
-	// 	thor.Address{}, 0, 0, 0, func(uint32) thor.Hash { return thor.Hash{} })
+	// 	thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 	// receipt, _, err := rt.ExecuteTransaction(tx)
 	// if err != nil {
 	// 	t.Fatal(err)

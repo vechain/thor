@@ -15,7 +15,7 @@ import (
 func TestStateSnapshot(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
-	state, _ := state.New(thor.Hash{}, kv)
+	state, _ := state.New(thor.Bytes32{}, kv)
 
 	statedb := New(state)
 

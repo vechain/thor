@@ -32,12 +32,12 @@ type Output struct {
 type Receipts []*Receipt
 
 // RootHash computes merkle root hash of receipts.
-func (rs Receipts) RootHash() thor.Hash {
+func (rs Receipts) RootHash() thor.Bytes32 {
 	if len(rs) == 0 {
 		// optimized
 		return emptyRoot
 	}
-	return thor.Hash(types.DeriveSha(derivableReceipts(rs)))
+	return thor.Bytes32(types.DeriveSha(derivableReceipts(rs)))
 }
 
 // implements DerivableList

@@ -23,7 +23,7 @@ const signerCacheSize = 1024
 
 var (
 	signerCache, _ = lru.New(signerCacheSize)
-	invalidTxID    = thor.BytesToHash(math.MaxBig256.Bytes())
+	invalidTxID    = thor.BytesToBytes32(math.MaxBig256.Bytes())
 )
 
 // Transaction is an immutable tx type.
@@ -46,7 +46,7 @@ type body struct {
 	Clauses      []*Clause
 	GasPriceCoef uint8
 	Gas          uint64
-	DependsOn    *thor.Hash `rlp:"nil"`
+	DependsOn    *thor.Bytes32 `rlp:"nil"`
 	Reserved     []interface{}
 	Signature    []byte
 }
@@ -70,9 +70,9 @@ func (t *Transaction) BlockRef() (br BlockRef) {
 // ID returns id of tx.
 // ID = hash(signingHash, signer).
 // It returns invalidTxID if signer not available.
-func (t *Transaction) ID() (id thor.Hash) {
+func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
-		return cached.(thor.Hash)
+		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.id.Store(id) }()
 
@@ -83,7 +83,7 @@ func (t *Transaction) ID() (id thor.Hash) {
 	return t.makeID(signer)
 }
 
-func (t *Transaction) makeID(signer thor.Address) (id thor.Hash) {
+func (t *Transaction) makeID(signer thor.Address) (id thor.Bytes32) {
 	hw := sha3.NewKeccak256()
 	hw.Write(t.SigningHash().Bytes())
 	hw.Write(signer.Bytes())
@@ -91,7 +91,7 @@ func (t *Transaction) makeID(signer thor.Address) (id thor.Hash) {
 	return
 }
 
-func idToWork(id thor.Hash) *big.Int {
+func idToWork(id thor.Bytes32) *big.Int {
 	result := new(big.Int).SetBytes(id[:])
 	return result.Div(math.MaxBig256, result)
 }
@@ -112,9 +112,9 @@ func (t *Transaction) EvaluateWork(signer thor.Address) *big.Int {
 }
 
 // SigningHash returns hash of tx excludes signature.
-func (t *Transaction) SigningHash() (hash thor.Hash) {
+func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	if cached := t.cache.signingHash.Load(); cached != nil {
-		return cached.(thor.Hash)
+		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
@@ -150,7 +150,7 @@ func (t *Transaction) Clauses() []*Clause {
 }
 
 // DependsOn returns depended tx hash.
-func (t *Transaction) DependsOn() *thor.Hash {
+func (t *Transaction) DependsOn() *thor.Bytes32 {
 	if t.body.DependsOn == nil {
 		return nil
 	}
@@ -176,7 +176,7 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, &t)
-	var hash thor.Hash
+	var hash thor.Bytes32
 	hw.Sum(hash[:0])
 
 	if v, ok := signerCache.Get(hash); ok {
@@ -284,7 +284,7 @@ func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
 
 // OverallGasPrice calculate overall gas price.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
-func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Hash) *big.Int {
+func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
 	gasPrice := t.GasPrice(baseGasPrice)
 	if t.measureDelay(headBlockNum, getBlockID) > thor.MaxTxWorkDelay {
 		return gasPrice
@@ -303,7 +303,7 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 }
 
 // measureDelay measure tx delay count in blocks, according to head block number.
-func (t *Transaction) measureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Hash) uint32 {
+func (t *Transaction) measureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) uint32 {
 	ref := t.BlockRef()
 	refNum := ref.Number()
 	if refNum >= headBlockNum {

@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	maxKnownTxs    = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
+	maxKnownTxs    = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
+	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 )
 
 // Session abstraction of a p2p connection.
@@ -20,7 +20,7 @@ type Session struct {
 	knownBlocks *lru.Cache
 	trunkHead   struct {
 		sync.Mutex
-		bestBlockID thor.Hash
+		bestBlockID thor.Bytes32
 		totalScore  uint64
 	}
 }
@@ -42,14 +42,14 @@ func (s *Session) Peer() *p2psrv.Peer {
 }
 
 // TrunkHead returns trunk head of the remote chain.
-func (s *Session) TrunkHead() (bestBlockID thor.Hash, totalScore uint64) {
+func (s *Session) TrunkHead() (bestBlockID thor.Bytes32, totalScore uint64) {
 	s.trunkHead.Lock()
 	defer s.trunkHead.Unlock()
 	return s.trunkHead.bestBlockID, s.trunkHead.totalScore
 }
 
 // UpdateTrunkHead udpate trunk head of of the remote chain.
-func (s *Session) UpdateTrunkHead(bestBlockID thor.Hash, totalScore uint64) {
+func (s *Session) UpdateTrunkHead(bestBlockID thor.Bytes32, totalScore uint64) {
 	s.trunkHead.Lock()
 	defer s.trunkHead.Unlock()
 	if totalScore > s.trunkHead.totalScore {
@@ -58,21 +58,21 @@ func (s *Session) UpdateTrunkHead(bestBlockID thor.Hash, totalScore uint64) {
 }
 
 // MarkTransaction marks a transaction to known.
-func (s *Session) MarkTransaction(id thor.Hash) {
+func (s *Session) MarkTransaction(id thor.Bytes32) {
 	s.knownTxs.Add(id, struct{}{})
 }
 
 // MarkBlock marks a block to known.
-func (s *Session) MarkBlock(id thor.Hash) {
+func (s *Session) MarkBlock(id thor.Bytes32) {
 	s.knownBlocks.Add(id, struct{}{})
 }
 
 // IsTransactionKnown returns if the transaction is known.
-func (s *Session) IsTransactionKnown(id thor.Hash) bool {
+func (s *Session) IsTransactionKnown(id thor.Bytes32) bool {
 	return s.knownTxs.Contains(id)
 }
 
 // IsBlockKnown returns if the block is known.
-func (s *Session) IsBlockKnown(id thor.Hash) bool {
+func (s *Session) IsBlockKnown(id thor.Bytes32) bool {
 	return s.knownBlocks.Contains(id)
 }

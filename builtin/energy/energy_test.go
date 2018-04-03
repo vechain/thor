@@ -13,7 +13,7 @@ import (
 
 func TestEnergy(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
+	st, _ := state.New(thor.Bytes32{}, kv)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 	contractAddr := thor.BytesToAddress([]byte("c1"))
@@ -39,7 +39,7 @@ func TestEnergy(t *testing.T) {
 
 func TestEnergyGrowth(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
+	st, _ := state.New(thor.Bytes32{}, kv)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -63,7 +63,7 @@ func TestEnergyGrowth(t *testing.T) {
 
 func TestEnergyShare(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
+	st, _ := state.New(thor.Bytes32{}, kv)
 
 	caller := thor.BytesToAddress([]byte("caller"))
 	contract := thor.BytesToAddress([]byte("contract"))

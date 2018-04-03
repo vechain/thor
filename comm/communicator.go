@@ -177,7 +177,7 @@ func (c *Communicator) syncLoop() {
 }
 
 func (c *Communicator) announceLoop() {
-	fetch := func(blockID thor.Hash, peer *p2psrv.Peer) error {
+	fetch := func(blockID thor.Bytes32, peer *p2psrv.Peer) error {
 		if _, err := c.chain.GetBlockHeader(blockID); err != nil {
 			if !c.chain.IsNotFound(err) {
 				return err

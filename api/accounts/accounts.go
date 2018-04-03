@@ -28,7 +28,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Accounts {
 	}
 }
 
-func (a *Accounts) getStateRoot(blockNum uint32) (thor.Hash, error) {
+func (a *Accounts) getStateRoot(blockNum uint32) (thor.Bytes32, error) {
 	var (
 		block *block.Block
 		err   error
@@ -40,7 +40,7 @@ func (a *Accounts) getStateRoot(blockNum uint32) (thor.Hash, error) {
 		block, err = a.chain.GetBlockByNumber(blockNum)
 	}
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 	return block.Header().StateRoot(), nil
 }
@@ -77,14 +77,14 @@ func (a *Accounts) getCode(addr thor.Address, blockNum uint32) ([]byte, error) {
 	return code, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Hash, blockNum uint32) (thor.Hash, error) {
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, blockNum uint32) (thor.Bytes32, error) {
 	state, err := a.getState(blockNum)
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 	storage := state.GetStorage(addr, key)
 	if err := state.Error(); err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 	return storage, nil
 }
@@ -129,7 +129,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
 	}
-	key, err := thor.ParseHash(req.URL.Query().Get("key"))
+	key, err := thor.ParseBytes32(req.URL.Query().Get("key"))
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "key"), http.StatusBadRequest)
 	}

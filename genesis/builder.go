@@ -52,7 +52,7 @@ func (b *Builder) Call(clause *tx.Clause, caller thor.Address) *Builder {
 
 // Build build genesis block according to presets.
 func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
-	state, err := stateCreator.NewState(thor.Hash{})
+	state, err := stateCreator.NewState(thor.Bytes32{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -63,10 +63,10 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*
 		}
 	}
 
-	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit, func(uint32) thor.Hash { return thor.Hash{} })
+	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
 	for _, call := range b.calls {
-		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Hash{})
+		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{})
 		if out.VMErr != nil {
 			return nil, nil, errors.Wrap(out.VMErr, "vm")
 		}

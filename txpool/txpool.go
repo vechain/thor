@@ -128,7 +128,6 @@ func (pool *TxPool) shouldPending(tx *tx.Transaction, bestBlock *block.Block) (b
 func (pool *TxPool) Dump() []*tx.Transaction {
 	pool.rw.RLock()
 	defer pool.rw.RUnlock()
-
 	txs := make([]*tx.Transaction, 0)
 	pool.all.ForEach(func(entry *cache.Entry) bool {
 		if obj, ok := entry.Value.(*txObject); ok {
@@ -180,7 +179,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block) txObjects {
 				return true
 			}
 			if obj.Status() == Pending {
-				overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
+				overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
 					return traverser.Get(num).ID()
 				})
 				obj.SetOverallGP(overallGP)
@@ -197,7 +196,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block) txObjects {
 }
 
 //Remove remove transaction by txID with TransactionCategory
-func (pool *TxPool) Remove(txID thor.Hash) {
+func (pool *TxPool) Remove(txID thor.Bytes32) {
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 	pool.all.Remove(txID)
@@ -258,7 +257,7 @@ func (pool *TxPool) queuedToPendingObjs(bestBlock *block.Block) txObjects {
 					return false
 				}
 				if sp {
-					overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Hash {
+					overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
 						return traverser.Get(num).ID()
 					})
 					obj.SetOverallGP(overallGP)
@@ -293,7 +292,7 @@ func (pool *TxPool) Stop() {
 }
 
 //GetTransaction returns a transaction
-func (pool *TxPool) GetTransaction(txID thor.Hash) *tx.Transaction {
+func (pool *TxPool) GetTransaction(txID thor.Bytes32) *tx.Transaction {
 	pool.rw.RLock()
 	defer pool.rw.RUnlock()
 	if res, ok := pool.all.Get(txID); ok {
