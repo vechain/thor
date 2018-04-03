@@ -141,10 +141,8 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
-	select {
-	case context.bestBlockUpdated <- bestBlock:
-	default:
-	}
+
+	sendBestBlock(context.bestBlockUpdated, bestBlock)
 
 	for {
 		timer.Reset(2 * time.Second)
@@ -163,6 +161,8 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 			if now >= ts && now < ts+thor.BlockInterval {
 				ts = 0
 				pack(context.txpool, packer, adopt, commit, privateKey, context.packedChan)
+			} else if ts > now {
+				fmt.Printf("after %v seconds to pack.\r\n", ts-now)
 			}
 		}
 	}
@@ -235,10 +235,7 @@ func updateChain(
 	)
 
 	if newBlk.Trunk {
-		select {
-		case context.bestBlockUpdated <- newBlk.Blk:
-		default:
-		}
+		sendBestBlock(context.bestBlockUpdated, newBlk.Blk)
 		context.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
@@ -267,5 +264,15 @@ func updateChain(
 			}
 		}
 		logdb.Insert(logs, forkIDs)
+	}
+}
+
+func sendBestBlock(bestBlockUpdated chan *block.Block, blk *block.Block) {
+	for {
+		select {
+		case bestBlockUpdated <- blk:
+			return
+		case <-bestBlockUpdated:
+		}
 	}
 }
