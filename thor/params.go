@@ -33,7 +33,7 @@ var (
 	KeyProposerEndorsement = BytesToHash([]byte("proposer-endorsement"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(3902231853000)
+	InitialBaseGasPrice        = big.NewInt(2601487902000)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250000))
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
