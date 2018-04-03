@@ -207,7 +207,7 @@ func action(ctx *cli.Context) error {
 }
 
 func runCommunicator(ctx context.Context, communicator *comm.Communicator, p2pSrv *p2psrv.Server) {
-	if err := p2pSrv.Start("thor@111111", communicator.Protocols()); err != nil {
+	if err := p2pSrv.Start(communicator.Protocols()); err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}

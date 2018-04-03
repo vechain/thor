@@ -98,7 +98,7 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 }
 
 // Start start the server.
-func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
+func (s *Server) Start(protocols []*Protocol) error {
 	for _, proto := range protocols {
 		s.srv.Protocols = append(s.srv.Protocols, p2p.Protocol{
 			Name:    proto.Name,
@@ -109,11 +109,26 @@ func (s *Server) Start(discoTopic string, protocols []*Protocol) error {
 			Run: s.runProtocol(proto),
 		})
 	}
+
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	s.goes.Go(func() { s.discoverLoop(discv5.Topic(discoTopic)) })
-	s.goes.Go(s.dialLoop)
+	log.Debug("start up", "self", s.Self())
+
+	for _, proto := range protocols {
+		topicToRegister := discv5.Topic(proto.DiscTopic)
+		log.Debug("registering topic", "topic", topicToRegister)
+		s.goes.Go(func() {
+			s.srv.DiscV5.RegisterTopic(topicToRegister, s.done)
+		})
+	}
+
+	if len(protocols) > 0 {
+		topicToSearch := discv5.Topic(protocols[len(protocols)-1].DiscTopic)
+		log.Debug("searching topic", "topic", topicToSearch)
+		s.goes.Go(func() { s.discoverLoop(topicToSearch) })
+		s.goes.Go(s.dialLoop)
+	}
 	return nil
 }
 
@@ -161,10 +176,6 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 	setPeriod <- time.Millisecond * 100
 	discNodes := make(chan *discv5.Node, 100)
 	discLookups := make(chan bool, 100)
-
-	s.goes.Go(func() {
-		s.srv.DiscV5.RegisterTopic(topic, s.done)
-	})
 
 	s.goes.Go(func() {
 		s.srv.DiscV5.SearchTopic(topic, setPeriod, discNodes, discLookups)
