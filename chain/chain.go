@@ -42,7 +42,7 @@ type caches struct {
 
 // New create an instance of Chain.
 func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
-	if genesisID, err := persist.LoadTrunkBlockID(kv, 0); err != nil {
+	if genesisID, err := persist.LoadTrunkBlockID(kv, 1); err != nil {
 		if !kv.IsNotFound(err) {
 			return nil, err
 		}
