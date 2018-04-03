@@ -4,17 +4,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"os/user"
-	"path/filepath"
 
 	"github.com/vechain/thor/block"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
@@ -111,12 +107,12 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	nodeKey, err := loadNodeKey(ctx)
+	nodeKey, err := loadNodeKey(ctx.String("nodekey"))
 	if err != nil {
 		return err
 	}
 
-	proposer, privateKey, err := loadAccount(ctx)
+	proposer, privateKey, err := loadAccount(ctx.String("key"))
 	if err != nil {
 		return err
 	}
@@ -207,75 +203,6 @@ func action(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-func loadNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey, err error) {
-	keyFile := ctx.String("nodekey")
-	if keyFile == "" {
-		// no file specified, use default file path
-		home, err := homeDir()
-		if err != nil {
-			return nil, err
-		}
-		keyFile = filepath.Join(home, ".thor-node.key")
-	} else if !filepath.IsAbs(keyFile) {
-		// resolve to absolute path
-		keyFile, err = filepath.Abs(keyFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// try to load from file
-	if key, err = crypto.LoadECDSA(keyFile); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-	} else {
-		return key, nil
-	}
-
-	// no such file, generate new key and write in
-	key, err = crypto.GenerateKey()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := crypto.SaveECDSA(keyFile, key); err != nil {
-		return nil, err
-	}
-	return key, nil
-}
-
-func loadAccount(ctx *cli.Context) (thor.Address, *ecdsa.PrivateKey, error) {
-	keyString := ctx.String("key")
-	if keyString != "" {
-		key, err := crypto.HexToECDSA(keyString)
-		if err != nil {
-			return thor.Address{}, nil, err
-		}
-		return thor.Address(crypto.PubkeyToAddress(key.PublicKey)), key, nil
-	}
-
-	index := rand.Intn(len(genesis.Dev.Accounts()))
-	return genesis.Dev.Accounts()[index].Address, genesis.Dev.Accounts()[index].PrivateKey, nil
-}
-
-func homeDir() (string, error) {
-	// try to get HOME env
-	if home := os.Getenv("HOME"); home != "" {
-		return home, nil
-	}
-
-	user, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	if user.HomeDir != "" {
-		return user.HomeDir, nil
-	}
-
-	return os.Getwd()
 }
 
 func runCommunicator(ctx context.Context, communicator *comm.Communicator, p2pSrv *p2psrv.Server) {

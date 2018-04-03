@@ -27,6 +27,11 @@ type blockRoutineContext struct {
 	bestBlockUpdated chan *block.Block
 }
 
+type orphan struct {
+	blk       *block.Block
+	timestamp uint64 // 块成为 orpahn 的时间, 最多维持 5 分钟
+}
+
 type newBlockEvent struct {
 	Blk      *block.Block
 	Receipts tx.Receipts
@@ -37,11 +42,6 @@ type packedEvent struct {
 	blk      *block.Block
 	receipts tx.Receipts
 	ack      chan struct{}
-}
-
-type orphan struct {
-	blk       *block.Block
-	timestamp uint64 // 块成为 orpahn 的时间, 最多维持 5 分钟
 }
 
 func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
