@@ -49,7 +49,8 @@ func TestNormalTransaction(t *testing.T) {
 	initAccounts(t)
 
 	tx := new(tx.Builder).
-		ChainTag(0x51).
+		ChainTag(0xf1).
+		// BlockRef((tx.BlockRef)([8]byte{0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,})).
 		Clause(tx.NewClause(&accounts[1].Address).WithValue(big.NewInt(100))).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
 

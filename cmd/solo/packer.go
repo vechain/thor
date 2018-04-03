@@ -174,3 +174,24 @@ func (p *SoloPacker) newTxFinder(parentBlockID thor.Bytes32, processed map[thor.
 		return true, nil
 	}
 }
+
+// IsGasLimitReached block if full of txs.
+func IsGasLimitReached(err error) bool {
+	return errors.Cause(err) == errGasLimitReached
+}
+
+// IsTxNotAdoptableNow tx can not be adopted now.
+func IsTxNotAdoptableNow(err error) bool {
+	return errors.Cause(err) == errTxNotAdoptableNow
+}
+
+// IsBadTx not a valid tx.
+func IsBadTx(err error) bool {
+	_, ok := errors.Cause(err).(badTxError)
+	return ok
+}
+
+// IsKnownTx tx is already adopted, or in the chain.
+func IsKnownTx(err error) bool {
+	return errors.Cause(err) == errKnownTx
+}
