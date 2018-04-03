@@ -172,14 +172,15 @@ func action(ctx *cli.Context) error {
 		ctx:              c,
 		communicator:     communicator,
 		chain:            chain,
+		txpool:           txpool,
 		packedChan:       make(chan *packedEvent),
-		bestBlockUpdated: make(chan *block.Block),
+		bestBlockUpdated: make(chan *block.Block, 1),
 	}
 	goes.Go(func() {
 		consentLoop(blockRoutineCtx, consensus, logdb)
 	})
 	goes.Go(func() {
-		packLoop(blockRoutineCtx, packer, txpool, privateKey)
+		packLoop(blockRoutineCtx, packer, privateKey)
 	})
 
 	goes.Go(func() {

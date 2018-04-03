@@ -23,8 +23,9 @@ type blockRoutineContext struct {
 	ctx              context.Context
 	communicator     *comm.Communicator
 	chain            *Chain.Chain
+	txpool           *Txpool.TxPool
 	packedChan       chan *packedEvent
-	bestBlockUpdated chan *block.Block
+	bestBlockUpdated chan *block.Block // must be >=1 buffer chan
 }
 
 type orphan struct {
@@ -47,7 +48,10 @@ type packedEvent struct {
 func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
-	consent := func(blk *block.Block) error {
+	updateChainFn := func(newBlk *newBlockEvent) {
+		updateChain(context, logdb, newBlk)
+	}
+	consentFn := func(blk *block.Block) error {
 		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
@@ -62,11 +66,10 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			return err
 		}
 
-		updateChain(context.chain, context.communicator, &newBlockEvent{
+		updateChainFn(&newBlockEvent{
 			Blk:      blk,
 			Trunk:    trunk,
-			Receipts: receipts,
-		}, logdb, context.bestBlockUpdated)
+			Receipts: receipts})
 
 		return nil
 	}
@@ -83,16 +86,16 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			return
 		case <-ticker.C:
 			if blk := futures.Pop(); blk != nil {
-				consent(blk)
+				consentFn(blk)
 			}
 		case blk := <-subChan:
-			if err := consent(blk); err != nil {
+			if err := consentFn(blk); err != nil {
 				break
 			}
 
 			if orphan, ok := orphanMap[blk.Header().ID()]; ok {
 				if orphan.timestamp+300 >= uint64(time.Now().Unix()) {
-					err := consent(orphan.blk)
+					err := consentFn(orphan.blk)
 					if err != nil && Consensus.IsParentNotFound(err) {
 						continue
 					}
@@ -101,18 +104,17 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			}
 		case packed := <-context.packedChan:
 			if trunk, err := consensus.IsTrunk(packed.blk.Header()); err == nil {
-				updateChain(context.chain, context.communicator, &newBlockEvent{
+				updateChainFn(&newBlockEvent{
 					Blk:      packed.blk,
 					Trunk:    trunk,
-					Receipts: packed.receipts,
-				}, logdb, context.bestBlockUpdated)
+					Receipts: packed.receipts})
 				packed.ack <- struct{}{}
 			}
 		}
 	}
 }
 
-func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpool.TxPool, privateKey *ecdsa.PrivateKey) {
+func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *ecdsa.PrivateKey) {
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
 
@@ -160,57 +162,67 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 			now := uint64(time.Now().Unix())
 			if now >= ts && now < ts+thor.BlockInterval {
 				ts = 0
-				adoptTx := func() {
-					for _, tx := range txpool.Pending() {
-						err := adopt(tx)
-						switch {
-						case Packer.IsBadTx(err) || Packer.IsKnownTx(err):
-							txpool.Remove(tx.ID())
-						case Packer.IsGasLimitReached(err):
-							return
-						default:
-						}
-					}
-				}
-
-				startTime := mclock.Now()
-				adoptTx()
-				blk, receipts, err := commit(privateKey)
-				if err != nil {
-					break
-				}
-				elapsed := mclock.Now() - startTime
-
-				if elapsed > 0 {
-					gasUsed := blk.Header().GasUsed()
-					// calc target gas limit only if gas used above third of gas limit
-					if gasUsed > blk.Header().GasLimit()/3 {
-						targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
-						packer.SetTargetGasLimit(targetGasLimit)
-					}
-				}
-
-				log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
-				pe := &packedEvent{
-					blk:      blk,
-					receipts: receipts,
-					ack:      make(chan struct{}),
-				}
-				context.packedChan <- pe
-				<-pe.ack
+				pack(context.txpool, packer, adopt, commit, privateKey, context.packedChan)
 			}
 		}
 	}
 }
 
-func updateChain(
-	chain *Chain.Chain,
-	communicator *comm.Communicator,
-	newBlk *newBlockEvent,
-	logdb *Logdb.LogDB,
-	bestBlockUpdated chan *block.Block,
+func pack(
+	txpool *Txpool.TxPool,
+	packer *Packer.Packer,
+	adopt Packer.Adopt,
+	commit Packer.Commit,
+	privateKey *ecdsa.PrivateKey,
+	packedChan chan *packedEvent,
 ) {
-	fork, err := chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
+	adoptTx := func() {
+		for _, tx := range txpool.Pending() {
+			err := adopt(tx)
+			switch {
+			case Packer.IsBadTx(err) || Packer.IsKnownTx(err):
+				txpool.Remove(tx.ID())
+			case Packer.IsGasLimitReached(err):
+				return
+			default:
+			}
+		}
+	}
+
+	startTime := mclock.Now()
+	adoptTx()
+	blk, receipts, err := commit(privateKey)
+	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
+		return
+	}
+	elapsed := mclock.Now() - startTime
+
+	if elapsed > 0 {
+		gasUsed := blk.Header().GasUsed()
+		// calc target gas limit only if gas used above third of gas limit
+		if gasUsed > blk.Header().GasLimit()/3 {
+			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
+			packer.SetTargetGasLimit(targetGasLimit)
+		}
+	}
+
+	log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
+	pe := &packedEvent{
+		blk:      blk,
+		receipts: receipts,
+		ack:      make(chan struct{}),
+	}
+	packedChan <- pe
+	<-pe.ack
+}
+
+func updateChain(
+	context *blockRoutineContext,
+	logdb *Logdb.LogDB,
+	newBlk *newBlockEvent,
+) {
+	fork, err := context.chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
@@ -224,12 +236,12 @@ func updateChain(
 
 	if newBlk.Trunk {
 		select {
-		case bestBlockUpdated <- newBlk.Blk:
+		case context.bestBlockUpdated <- newBlk.Blk:
 		default:
 		}
-		communicator.BroadcastBlock(newBlk.Blk)
+		context.communicator.BroadcastBlock(newBlk.Blk)
 
-		// 日志
+		// fork
 		logs := []*Logdb.Log{}
 		var index uint32
 		txs := newBlk.Blk.Transactions()
@@ -250,6 +262,9 @@ func updateChain(
 		forkIDs := make([]thor.Bytes32, len(fork.Branch), len(fork.Branch))
 		for i, blk := range fork.Branch {
 			forkIDs[i] = blk.Header().ID()
+			for _, tx := range blk.Transactions() {
+				context.txpool.Add(tx)
+			}
 		}
 		logdb.Insert(logs, forkIDs)
 	}
