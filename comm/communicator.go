@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -59,12 +60,14 @@ func (c *Communicator) IsSynced() bool {
 
 // Protocols returns all supported protocols.
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
+	genesisID := c.chain.GenesisBlock().Header().ID()
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
 			Name:          proto.Name,
 			Version:       proto.Version,
 			Length:        proto.Length,
 			MaxMsgSize:    proto.MaxMsgSize,
+			DiscTopic:     fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
 			HandleRequest: c.handleRequest,
 		}}
 }

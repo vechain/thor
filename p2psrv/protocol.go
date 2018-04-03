@@ -15,5 +15,7 @@ type Protocol struct {
 
 	MaxMsgSize uint32
 
+	DiscTopic string
+
 	HandleRequest HandleRequest
 }
