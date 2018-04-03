@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	cli "gopkg.in/urfave/cli.v1"
 
@@ -55,6 +56,7 @@ var (
 	version   string
 	gitCommit string
 	release   = "dev"
+	log       = log15.New()
 )
 
 func newApp() *cli.App {
@@ -75,7 +77,7 @@ func newApp() *cli.App {
 		},
 		cli.IntFlag{
 			Name:  "verbosity",
-			Value: int(log.LvlInfo),
+			Value: int(log15.LvlInfo),
 			Usage: "log verbosity (0-9)",
 		},
 		cli.StringFlag{
@@ -84,10 +86,7 @@ func newApp() *cli.App {
 		},
 	}
 	app.Action = func(ctx *cli.Context) (err error) {
-		glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
-		glogger.Verbosity(log.Lvl(ctx.Int("verbosity")))
-		glogger.Vmodule(ctx.String("vmodule"))
-		log.Root().SetHandler(glogger)
+		initLog(log15.Lvl(ctx.Int("verbosity")))
 
 		solo := &cliContext{
 			onDemand:   ctx.Bool("on-demand"),
@@ -284,12 +283,7 @@ func (solo *cliContext) interval(done <-chan interface{}) {
 }
 
 func (solo *cliContext) packing() {
-	log.Trace("Try packing......")
-
-	pendingTxs, err := solo.txpl.Sorted(txpool.Pending)
-	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
-	}
+	log.Debug("Try packing......")
 
 	best, err := solo.c.GetBestBlock()
 	if err != nil {
@@ -301,6 +295,7 @@ func (solo *cliContext) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
+	pendingTxs := solo.txpl.Pending()
 	for _, tx := range pendingTxs {
 		err := adopt(tx)
 		if err != nil {
@@ -320,7 +315,7 @@ func (solo *cliContext) packing() {
 	}
 
 	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
-	log.Trace(b.String())
+	log.Debug(b.String())
 
 	err = saveBlockLogs(b, receipts, solo.ldb)
 	if err != nil {
@@ -384,4 +379,12 @@ func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func initLog(lvl log15.Lvl) {
+	log15.Root().SetHandler(log15.LvlFilterHandler(lvl, log15.StderrHandler))
+	// set go-ethereum log lvl to Warn
+	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
+	ethLogHandler.Verbosity(ethlog.LvlWarn)
+	ethlog.Root().SetHandler(ethLogHandler)
 }
