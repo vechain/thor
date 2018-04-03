@@ -68,7 +68,7 @@ func newApp() *cli.App {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "addr",
-			Value: ":7585",
+			Value: ":8669",
 			Usage: "listen address",
 		},
 		cli.BoolFlag{
@@ -212,7 +212,7 @@ func (solo *cliContext) buildGenesis() (blk *block.Block, logs []*tx.Log, err er
 			builtin.Executor.Address).
 		Call(
 			tx.NewClause(&builtin.Authority.Address).
-				WithData(mustEncodeInput(builtin.Authority.ABI, "add", solo.accounts[0].Address, solo.accounts[0].Address, thor.BytesToHash([]byte(fmt.Sprintf("a%v", 0))))),
+				WithData(mustEncodeInput(builtin.Authority.ABI, "add", solo.accounts[0].Address, solo.accounts[0].Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", 0))))),
 			builtin.Executor.Address)
 
 	return builder.Build(solo.stateCreator)
@@ -260,7 +260,7 @@ func (solo *cliContext) prepare() (err error) {
 	for _, a := range solo.accounts {
 		balance, _ := new(big.Int).SetString(a.Balance, 10)
 		balance = balance.Div(balance, big.NewInt(1000000000000000000))
-		log.Info("Builtin account info", "address", a.Address, "private key", thor.BytesToHash(crypto.FromECDSA(a.PrivateKey)), "vet balance", balance, "vethor balance", balance)
+		log.Info("Builtin account info", "address", a.Address, "private key", thor.BytesToBytes32(crypto.FromECDSA(a.PrivateKey)), "vet balance", balance, "vethor balance", balance)
 	}
 	return
 }
@@ -296,12 +296,22 @@ func (solo *cliContext) packing() {
 	}
 
 	pendingTxs := solo.txpl.Pending()
+
 	for _, tx := range pendingTxs {
 		err := adopt(tx)
 		if err != nil {
 			log.Error("Excuting transaction", "error", fmt.Sprintf("%+v", err))
 		}
-		solo.txpl.OnProcessed(tx.ID(), err)
+		switch {
+		case IsKnownTx(err) || IsBadTx(err):
+			solo.txpl.Remove(tx.ID())
+		case IsGasLimitReached(err):
+			break
+		case IsTxNotAdoptableNow(err):
+			continue
+		default:
+			solo.txpl.Remove(tx.ID())
+		}
 	}
 
 	b, receipts, err := commit(solo.accounts[0].PrivateKey)
