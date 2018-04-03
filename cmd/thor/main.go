@@ -57,12 +57,12 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "port",
-			Value: ":56565",
+			Value: ":11235",
 			Usage: "p2p listen port",
 		},
 		cli.StringFlag{
 			Name:  "restfulport",
-			Value: ":8081",
+			Value: ":8669",
 			Usage: "restful port",
 		},
 		cli.StringFlag{
