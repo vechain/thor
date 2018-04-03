@@ -6,9 +6,17 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+type ObjectStatus int
+
+const (
+	Pending ObjectStatus = iota
+	Queued
+)
+
 //txObject wrap transaction
 type txObject struct {
 	tx           *tx.Transaction
+	status       ObjectStatus
 	overallGP    *big.Int
 	creationTime int64
 }
@@ -17,9 +25,10 @@ type txObject struct {
 type txObjects []*txObject
 
 //newTxObject NewTxObject
-func newTxObject(tx *tx.Transaction, creationTime int64) *txObject {
+func newTxObject(tx *tx.Transaction, creationTime int64, status ObjectStatus) *txObject {
 	return &txObject{
 		tx:           tx,
+		status:       status,
 		overallGP:    new(big.Int),
 		creationTime: creationTime,
 	}
@@ -43,4 +52,12 @@ func (obj *txObject) OverallGP() *big.Int {
 //Tx returns obj's transaction
 func (obj *txObject) Tx() *tx.Transaction {
 	return obj.tx
+}
+
+func (obj *txObject) Status() ObjectStatus {
+	return obj.status
+}
+
+func (obj *txObject) SetStatus(status ObjectStatus) {
+	obj.status = status
 }
