@@ -82,6 +82,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*
 	}
 
 	return new(block.Builder).
+		ParentID(thor.Bytes32{0xff, 0xff, 0xff, 0xff}). //so, genesis number is 0
 		Timestamp(b.timestamp).
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).

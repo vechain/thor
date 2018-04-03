@@ -42,7 +42,10 @@ type caches struct {
 
 // New create an instance of Chain.
 func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
-	if genesisID, err := persist.LoadTrunkBlockID(kv, 1); err != nil {
+	if genesisBlock.Header().Number() != 0 {
+		return nil, errors.New("genesis number != 0")
+	}
+	if genesisID, err := persist.LoadTrunkBlockID(kv, 0); err != nil {
 		if !kv.IsNotFound(err) {
 			return nil, err
 		}
@@ -60,10 +63,8 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 		if err := batch.Write(); err != nil {
 			return nil, err
 		}
-	} else {
-		if genesisID != genesisBlock.Header().ID() {
-			return nil, errors.New("genesis mismatch")
-		}
+	} else if genesisID != genesisBlock.Header().ID() {
+		return nil, errors.New("genesis mismatch")
 	}
 
 	rawBlocksCache := newCache(blockCacheLimit, func(key interface{}) (interface{}, error) {
