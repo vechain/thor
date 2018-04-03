@@ -12,6 +12,8 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"github.com/vechain/thor/block"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
@@ -175,7 +177,7 @@ func action(ctx *cli.Context) error {
 		communicator:     communicator,
 		chain:            chain,
 		packedChan:       make(chan *packedEvent),
-		bestBlockUpdated: make(chan struct{}),
+		bestBlockUpdated: make(chan *block.Block),
 	}
 	goes.Go(func() {
 		consentLoop(blockRoutineCtx, consensus, logdb)

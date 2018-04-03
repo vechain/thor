@@ -24,7 +24,7 @@ type blockRoutineContext struct {
 	communicator     *comm.Communicator
 	chain            *Chain.Chain
 	packedChan       chan *packedEvent
-	bestBlockUpdated chan struct{}
+	bestBlockUpdated chan *block.Block
 }
 
 type newBlockEvent struct {
@@ -134,19 +134,23 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 		err       error
 	)
 
+	bestBlock, err = context.chain.GetBestBlock()
+	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
+		return
+	}
+	select {
+	case context.bestBlockUpdated <- bestBlock:
+	default:
+	}
+
 	for {
 		timer.Reset(2 * time.Second)
 
 		select {
 		case <-context.ctx.Done():
 			return
-		case <-context.bestBlockUpdated:
-			bestBlock, err = context.chain.GetBestBlock()
-			if err != nil {
-				log.Error(fmt.Sprintf("%v", err))
-				break
-			}
-
+		case bestBlock = <-context.bestBlockUpdated:
 			ts, adopt, commit, err = packer.Prepare(bestBlock.Header(), uint64(time.Now().Unix()))
 			if err != nil {
 				log.Error(fmt.Sprintf("%v", err))
@@ -199,7 +203,7 @@ func updateChain(
 	communicator *comm.Communicator,
 	newBlk *newBlockEvent,
 	logdb *Logdb.LogDB,
-	bestBlockUpdated chan struct{},
+	bestBlockUpdated chan *block.Block,
 ) {
 	fork, err := chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
@@ -215,7 +219,7 @@ func updateChain(
 
 	if newBlk.Trunk {
 		select {
-		case bestBlockUpdated <- struct{}{}:
+		case bestBlockUpdated <- newBlk.Blk:
 		default:
 		}
 		communicator.BroadcastBlock(newBlk.Blk)
