@@ -12,9 +12,9 @@ import (
 
 func TestParamsGetSet(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Hash{}, kv)
+	st, _ := state.New(thor.Bytes32{}, kv)
 	setv := big.NewInt(10)
-	key := thor.BytesToHash([]byte("key"))
+	key := thor.BytesToBytes32([]byte("key"))
 	p := New(thor.BytesToAddress([]byte("par")), st)
 	p.Set(key, setv)
 

@@ -57,7 +57,7 @@ func TestTrie(t *testing.T) {
 func TestStorageTrie(t *testing.T) {
 	trie := newTrie()
 
-	key := thor.BytesToHash([]byte("key"))
+	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
 		[]interface{}{[]byte(nil), nil})

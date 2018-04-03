@@ -67,7 +67,7 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 	}
 
 	rawBlocksCache := newCache(blockCacheLimit, func(key interface{}) (interface{}, error) {
-		raw, err := persist.LoadRawBlock(kv, key.(thor.Hash))
+		raw, err := persist.LoadRawBlock(kv, key.(thor.Bytes32))
 		if err != nil {
 			return nil, err
 		}
@@ -78,7 +78,7 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 		if err != nil {
 			return nil, err
 		}
-		ids := make(map[thor.Hash]int)
+		ids := make(map[thor.Bytes32]int)
 		body, err := block.(*rawBlock).Body()
 		if err != nil {
 			return nil, err
@@ -90,7 +90,7 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 	})
 
 	receiptsCache := newCache(receiptsCacheLimit, func(key interface{}) (interface{}, error) {
-		return persist.LoadBlockReceipts(kv, key.(thor.Hash))
+		return persist.LoadBlockReceipts(kv, key.(thor.Bytes32))
 	})
 
 	trunkBlockIDsCache := newCache(trunkBlockIDCacheLimit, func(key interface{}) (interface{}, error) {
@@ -100,7 +100,7 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 	return &Chain{
 		kv:           kv,
 		genesisBlock: genesisBlock,
-		tag:          genesisBlock.Header().ID()[thor.HashLength-1],
+		tag:          genesisBlock.Header().ID()[31],
 		caches: caches{
 			rawBlocks:     rawBlocksCache,
 			txIDs:         txIDsCache,
@@ -154,9 +154,9 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 		return nil, err
 	}
 	var fork *Fork
-	var trunkUpdates map[thor.Hash]bool
+	var trunkUpdates map[thor.Bytes32]bool
 	if isTrunk {
-		trunkUpdates = make(map[thor.Hash]bool)
+		trunkUpdates = make(map[thor.Bytes32]bool)
 		best, err := c.getBestBlock()
 		if err != nil {
 			return nil, err
@@ -263,7 +263,7 @@ func (c *Chain) buildFork(trunkHead *block.Block, branchHead *block.Block) (*For
 	}
 }
 
-func (c *Chain) getRawBlock(id thor.Hash) (*rawBlock, error) {
+func (c *Chain) getRawBlock(id thor.Bytes32) (*rawBlock, error) {
 	raw, err := c.caches.rawBlocks.GetOrLoad(id)
 	if err != nil {
 		return nil, err
@@ -272,13 +272,13 @@ func (c *Chain) getRawBlock(id thor.Hash) (*rawBlock, error) {
 }
 
 // GetBlockHeader get block header by block id.
-func (c *Chain) GetBlockHeader(id thor.Hash) (*block.Header, error) {
+func (c *Chain) GetBlockHeader(id thor.Bytes32) (*block.Header, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockHeader(id)
 }
 
-func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
+func (c *Chain) getBlockHeader(id thor.Bytes32) (*block.Header, error) {
 	raw, err := c.getRawBlock(id)
 	if err != nil {
 		return nil, err
@@ -287,13 +287,13 @@ func (c *Chain) getBlockHeader(id thor.Hash) (*block.Header, error) {
 }
 
 // GetBlockBody get block body by block id.
-func (c *Chain) GetBlockBody(id thor.Hash) (*block.Body, error) {
+func (c *Chain) GetBlockBody(id thor.Bytes32) (*block.Body, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockBody(id)
 }
 
-func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
+func (c *Chain) getBlockBody(id thor.Bytes32) (*block.Body, error) {
 	raw, err := c.getRawBlock(id)
 	if err != nil {
 		return nil, err
@@ -302,13 +302,13 @@ func (c *Chain) getBlockBody(id thor.Hash) (*block.Body, error) {
 }
 
 // GetBlock get block by id.
-func (c *Chain) GetBlock(id thor.Hash) (*block.Block, error) {
+func (c *Chain) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlock(id)
 }
 
-func (c *Chain) getBlock(id thor.Hash) (*block.Block, error) {
+func (c *Chain) getBlock(id thor.Bytes32) (*block.Block, error) {
 	raw, err := c.getRawBlock(id)
 	if err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func (c *Chain) getBlock(id thor.Hash) (*block.Block, error) {
 
 // GetBlockRaw get block rlp encoded bytes for given id.
 // Never modify the returned raw block.
-func (c *Chain) GetBlockRaw(id thor.Hash) (block.Raw, error) {
+func (c *Chain) GetBlockRaw(id thor.Bytes32) (block.Raw, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	raw, err := c.getRawBlock(id)
@@ -329,18 +329,18 @@ func (c *Chain) GetBlockRaw(id thor.Hash) (block.Raw, error) {
 }
 
 // GetBlockIDByNumber returns block id by block number on trunk.
-func (c *Chain) GetBlockIDByNumber(num uint32) (thor.Hash, error) {
+func (c *Chain) GetBlockIDByNumber(num uint32) (thor.Bytes32, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockIDByNumber(num)
 }
 
-func (c *Chain) getBlockIDByNumber(num uint32) (thor.Hash, error) {
+func (c *Chain) getBlockIDByNumber(num uint32) (thor.Bytes32, error) {
 	id, err := c.caches.trunkBlockIDs.GetOrLoad(num)
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
-	return id.(thor.Hash), nil
+	return id.(thor.Bytes32), nil
 }
 
 // GetBlockByNumber get block on trunk by its number.
@@ -412,14 +412,14 @@ func (c *Chain) getBestBlock() (*block.Block, error) {
 }
 
 // GetTransaction get transaction by id on trunk.
-func (c *Chain) GetTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
+func (c *Chain) GetTransaction(txID thor.Bytes32) (*tx.Transaction, *persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
 	return c.getTransaction(txID)
 }
 
-func (c *Chain) getTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLocation, error) {
+func (c *Chain) getTransaction(txID thor.Bytes32) (*tx.Transaction, *persist.TxLocation, error) {
 	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		return nil, nil, err
@@ -431,16 +431,16 @@ func (c *Chain) getTransaction(txID thor.Hash) (*tx.Transaction, *persist.TxLoca
 	return body.Txs[loc.Index], loc, nil
 }
 
-func (c *Chain) getTransactionIDs(blockID thor.Hash) (map[thor.Hash]int, error) {
+func (c *Chain) getTransactionIDs(blockID thor.Bytes32) (map[thor.Bytes32]int, error) {
 	ids, err := c.caches.txIDs.GetOrLoad(blockID)
 	if err != nil {
 		return nil, err
 	}
-	return ids.(map[thor.Hash]int), nil
+	return ids.(map[thor.Bytes32]int), nil
 }
 
 // LookupTransaction find out the location of a tx, on the chain which ends with blockID.
-func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.TxLocation, error) {
+func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (*persist.TxLocation, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
@@ -483,13 +483,13 @@ func (c *Chain) LookupTransaction(blockID thor.Hash, txID thor.Hash) (*persist.T
 }
 
 // GetBlockReceipts get tx receipts of a block.
-func (c *Chain) GetBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
+func (c *Chain) GetBlockReceipts(blockID thor.Bytes32) (tx.Receipts, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getBlockReceipts(blockID)
 }
 
-func (c *Chain) getBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
+func (c *Chain) getBlockReceipts(blockID thor.Bytes32) (tx.Receipts, error) {
 	receipts, err := c.caches.receipts.GetOrLoad(blockID)
 	if err != nil {
 		return nil, err
@@ -498,13 +498,13 @@ func (c *Chain) getBlockReceipts(blockID thor.Hash) (tx.Receipts, error) {
 }
 
 // GetTransactionReceipt get receipt for given tx ID.
-func (c *Chain) GetTransactionReceipt(txID thor.Hash) (*tx.Receipt, error) {
+func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 	return c.getTransactionReceipt(txID)
 }
 
-func (c *Chain) getTransactionReceipt(txID thor.Hash) (*tx.Receipt, error) {
+func (c *Chain) getTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	_, loc, err := c.getTransaction(txID)
 	if err != nil {
 		return nil, err
@@ -527,6 +527,6 @@ func (c *Chain) IsBlockExist(err error) bool {
 }
 
 // NewTraverser create a block traverser to access blocks on the chain defined by headID.
-func (c *Chain) NewTraverser(headID thor.Hash) *Traverser {
+func (c *Chain) NewTraverser(headID thor.Bytes32) *Traverser {
 	return &Traverser{headID, c, nil}
 }

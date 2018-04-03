@@ -14,7 +14,7 @@ type cachedObject struct {
 	cache struct {
 		code        []byte
 		storageTrie trieReader
-		storage     map[thor.Hash][]byte
+		storage     map[thor.Bytes32][]byte
 	}
 }
 
@@ -27,7 +27,7 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 		return co.cache.storageTrie, nil
 	}
 
-	root := thor.BytesToHash(co.data.StorageRoot)
+	root := thor.BytesToBytes32(co.data.StorageRoot)
 
 	trie, err := trie.NewSecure(common.Hash(root), co.db, 0)
 	if err != nil {
@@ -38,11 +38,11 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Hash) ([]byte, error) {
+func (co *cachedObject) GetStorage(key thor.Bytes32) ([]byte, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage == nil {
-		cache.storage = make(map[thor.Hash][]byte)
+		cache.storage = make(map[thor.Bytes32][]byte)
 	} else {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil

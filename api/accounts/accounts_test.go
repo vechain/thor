@@ -31,7 +31,7 @@ type account struct {
 	addr    thor.Address
 	balance *big.Int
 	code    []byte
-	storage thor.Hash
+	storage thor.Bytes32
 }
 
 var b, _ = new(big.Int).SetString("10000000000000000000000", 10)

@@ -87,8 +87,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return nil
 	}
 
-	passedTxs := make(map[thor.Hash]struct{})
-	hasTx := func(txID thor.Hash) (bool, error) {
+	passedTxs := make(map[thor.Bytes32]struct{})
+	hasTx := func(txID thor.Bytes32) (bool, error) {
 		if _, ok := passedTxs[txID]; ok {
 			return true, nil
 		}

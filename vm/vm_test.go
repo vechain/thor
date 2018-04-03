@@ -35,12 +35,12 @@ import (
 
 func newEnv() *VM {
 	db, _ := lvldb.NewMem()
-	statr, _ := dbstate.New(thor.Hash{}, db)
+	statr, _ := dbstate.New(thor.Bytes32{}, db)
 	ctx := Context{
-		TxID:        thor.Hash{1},
+		TxID:        thor.Bytes32{1},
 		ClauseIndex: 1,
-		GetHash: func(n uint32) thor.Hash {
-			return thor.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(uint64(n)).String())))
+		GetHash: func(n uint32) thor.Bytes32 {
+			return thor.BytesToBytes32(crypto.Keccak256([]byte(new(big.Int).SetUint64(uint64(n)).String())))
 		},
 		BlockNumber: 0,
 		GasPrice:    nil,

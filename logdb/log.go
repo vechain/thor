@@ -10,19 +10,19 @@ import (
 
 //Log format tx.Log to store in db
 type Log struct {
-	BlockID     thor.Hash
+	BlockID     thor.Bytes32
 	LogIndex    uint32
 	BlockNumber uint32
 	BlockTime   uint64
-	TxID        thor.Hash
+	TxID        thor.Bytes32
 	TxOrigin    thor.Address //contract caller
 	Address     thor.Address // always a contract address
-	Topics      [5]*thor.Hash
+	Topics      [5]*thor.Bytes32
 	Data        []byte
 }
 
 //NewLog return a format log
-func NewLog(header *block.Header, logIndex uint32, txID thor.Hash, txOrigin thor.Address, txLog *tx.Log) *Log {
+func NewLog(header *block.Header, logIndex uint32, txID thor.Bytes32, txOrigin thor.Address, txLog *tx.Log) *Log {
 	l := &Log{
 		BlockID:     header.ID(),
 		LogIndex:    logIndex,

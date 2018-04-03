@@ -7,12 +7,12 @@ import (
 
 // Event see abi.Event in go-ethereum.
 type Event struct {
-	id    thor.Hash
+	id    thor.Bytes32
 	event *ethabi.Event
 }
 
 // ID returns event id.
-func (e *Event) ID() thor.Hash {
+func (e *Event) ID() thor.Bytes32 {
 	return e.id
 }
 

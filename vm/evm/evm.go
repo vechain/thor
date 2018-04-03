@@ -84,7 +84,7 @@ type Context struct {
 	/// The following two vars are required to generating contract address.
 
 	// The transaction where the message contained.
-	TxID thor.Hash
+	TxID thor.Bytes32
 	// The index of clause that generates this message.
 	ClauseIndex uint32
 }

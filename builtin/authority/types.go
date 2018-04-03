@@ -16,7 +16,7 @@ var (
 // Entry contains all data of an authority entry.
 type Entry struct {
 	Endorsor thor.Address
-	Identity thor.Hash
+	Identity thor.Bytes32
 	Active   bool
 	Prev     *thor.Address `rlp:"nil"`
 	Next     *thor.Address `rlp:"nil"`
@@ -71,6 +71,6 @@ func (ap *addressPtr) Decode(data []byte) error {
 type Candidate struct {
 	Signer   thor.Address
 	Endorsor thor.Address
-	Identity thor.Hash
+	Identity thor.Bytes32
 	Active   bool
 }

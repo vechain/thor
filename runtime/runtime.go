@@ -15,7 +15,7 @@ import (
 // Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig   vm.Config
-	getBlockID func(uint32) thor.Hash
+	getBlockID func(uint32) thor.Bytes32
 	state      *state.State
 
 	// block env
@@ -35,7 +35,7 @@ func New(
 	blockNumber uint32,
 	blockTime,
 	blockGasLimit uint64,
-	getBlockID func(uint32) thor.Hash) *Runtime {
+	getBlockID func(uint32) thor.Bytes32) *Runtime {
 	return &Runtime{
 		getBlockID:       getBlockID,
 		state:            state,
@@ -67,7 +67,7 @@ func (rt *Runtime) execute(
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
-	txID thor.Hash,
+	txID thor.Bytes32,
 	isStatic bool,
 ) *vm.Output {
 	to := clause.To()
@@ -121,7 +121,7 @@ func (rt *Runtime) Call(
 	gas uint64,
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
-	txID thor.Hash,
+	txID thor.Bytes32,
 ) *vm.Output {
 	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
 }

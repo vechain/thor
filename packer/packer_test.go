@@ -50,7 +50,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 	return tx
 }
 
-func (ti *txIterator) OnProcessed(txID thor.Hash, err error) {
+func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
 }
 
 func TestP(t *testing.T) {

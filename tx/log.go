@@ -12,7 +12,7 @@ type Log struct {
 	// address of the contract that generated the event
 	Address thor.Address
 	// list of topics provided by the contract.
-	Topics []thor.Hash
+	Topics []thor.Bytes32
 	// supplied by the contract, usually ABI-encoded
 	Data []byte
 }
@@ -21,12 +21,12 @@ type Log struct {
 type Logs []*Log
 
 // RootHash computes merkle root hash of receipts.
-func (ls Logs) RootHash() thor.Hash {
+func (ls Logs) RootHash() thor.Bytes32 {
 	if len(ls) == 0 {
 		// optimized
 		return emptyRoot
 	}
-	return thor.Hash(types.DeriveSha(derivableLogs(ls)))
+	return thor.Bytes32(types.DeriveSha(derivableLogs(ls)))
 }
 
 // implements DerivableList

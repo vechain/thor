@@ -19,13 +19,13 @@ func TestCachedObject(t *testing.T) {
 	db := newTrieDatabase(kv)
 	stgTrie, _ := trie.NewSecure(common.Hash{}, db, 0)
 	storages := []struct {
-		k thor.Hash
+		k thor.Bytes32
 		v []byte
 	}{
-		{thor.BytesToHash([]byte("key1")), []byte("value1")},
-		{thor.BytesToHash([]byte("key2")), []byte("value2")},
-		{thor.BytesToHash([]byte("key3")), []byte("value3")},
-		{thor.BytesToHash([]byte("key4")), []byte("value4")},
+		{thor.BytesToBytes32([]byte("key1")), []byte("value1")},
+		{thor.BytesToBytes32([]byte("key2")), []byte("value2")},
+		{thor.BytesToBytes32([]byte("key3")), []byte("value3")},
+		{thor.BytesToBytes32([]byte("key4")), []byte("value4")},
 	}
 
 	for _, s := range storages {

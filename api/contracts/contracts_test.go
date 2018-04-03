@@ -117,7 +117,7 @@ func callContract(t *testing.T, ts *httptest.Server, c *contracts.Contracts, con
 			Gas:         21000,
 			From:        &thor.Address{},
 			GasPrice:    &gph,
-			TxID:        &thor.Hash{},
+			TxID:        &thor.Bytes32{},
 			Value:       &vh,
 		},
 	}

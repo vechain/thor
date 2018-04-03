@@ -24,7 +24,7 @@ func TestLog(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("addr"))
 	op := &logs.Filters{
 		Address: &addr,
-		TopicSet: [][5]*thor.Hash{{&t0,
+		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
 			nil,
 			nil,
@@ -57,14 +57,14 @@ func initLogServer(t *testing.T) *httptest.Server {
 	}
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
-		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
+		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
 		Data:    []byte("data"),
 	}
 
 	header := new(block.Builder).Build().Header()
 	var lgs []*logdb.Log
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		lgs = append(lgs, log)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}

@@ -73,9 +73,9 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	var (
 		receipts     tx.Receipts
 		totalGasUsed uint64
-		processedTxs = make(map[thor.Hash]struct{})
+		processedTxs = make(map[thor.Bytes32]struct{})
 		traverser    = p.chain.NewTraverser(parent.ID())
-		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Hash {
+		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
 		findTx  = p.newTxFinder(parent.ID(), processedTxs)
@@ -194,8 +194,8 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	return newBlockTime, score, nil
 }
 
-func (p *Packer) newTxFinder(parentBlockID thor.Hash, processed map[thor.Hash]struct{}) func(txID thor.Hash) (bool, error) {
-	return func(txID thor.Hash) (bool, error) {
+func (p *Packer) newTxFinder(parentBlockID thor.Bytes32, processed map[thor.Bytes32]struct{}) func(txID thor.Bytes32) (bool, error) {
+	return func(txID thor.Bytes32) (bool, error) {
 		if _, ok := processed[txID]; ok {
 			return true, nil
 		}

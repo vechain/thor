@@ -7,19 +7,19 @@ import (
 )
 
 var (
-	emptyRoot = thor.Hash(types.DeriveSha(&derivableTxs{}))
+	emptyRoot = thor.Bytes32(types.DeriveSha(&derivableTxs{}))
 )
 
 // Transactions a slice of transactions.
 type Transactions []*Transaction
 
 // RootHash computes merkle root hash of transactions.
-func (txs Transactions) RootHash() thor.Hash {
+func (txs Transactions) RootHash() thor.Bytes32 {
 	if len(txs) == 0 {
 		// optimized
 		return emptyRoot
 	}
-	return thor.Hash(types.DeriveSha(derivableTxs(txs)))
+	return thor.Bytes32(types.DeriveSha(derivableTxs(txs)))
 }
 
 // implements types.DerivableList

@@ -18,7 +18,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		header.Number(),
 		header.Timestamp(),
 		header.GasLimit(),
-		func(num uint32) thor.Hash { return traverser.Get(num).ID() })
+		func(num uint32) thor.Bytes32 { return traverser.Get(num).ID() })
 	var (
 		txs          = blk.Transactions()
 		totalGasUsed uint64

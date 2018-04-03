@@ -24,14 +24,14 @@ func (req ReqStatus) Do(ctx context.Context, peer *p2psrv.Peer) (*RespStatus, er
 
 // RespStatus response payload of MsgStatus.
 type RespStatus struct {
-	GenesisBlockID thor.Hash
-	BestBlockID    thor.Hash
+	GenesisBlockID thor.Bytes32
+	BestBlockID    thor.Bytes32
 	TotalScore     uint64
 }
 
 // ReqNewBlockID request payload of MsgNewBlockID.
 type ReqNewBlockID struct {
-	ID thor.Hash
+	ID thor.Bytes32
 }
 
 // Do make request to peer.
@@ -78,7 +78,7 @@ func (req ReqGetBlockIDByNumber) Do(ctx context.Context, peer *p2psrv.Peer) (*Re
 
 // RespGetBlockIDByNumber response payload of MsgGetBlockIDByNumber.
 type RespGetBlockIDByNumber struct {
-	ID thor.Hash
+	ID thor.Bytes32
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ type RespGetBlocksFromNumber []rlp.RawValue
 
 // ReqGetBlockByID request payload of MsgGetBlockByID.
 type ReqGetBlockByID struct {
-	ID thor.Hash
+	ID thor.Bytes32
 }
 
 // Do make request to peer.

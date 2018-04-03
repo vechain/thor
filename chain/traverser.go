@@ -9,7 +9,7 @@ import (
 
 // Traverser help to access block header by number on the chain defined by head id.
 type Traverser struct {
-	headID thor.Hash
+	headID thor.Bytes32
 	chain  *Chain
 	err    error
 }
@@ -32,7 +32,7 @@ func (t *Traverser) Get(num uint32) *block.Header {
 		return &block.Header{}
 	}
 
-	var id thor.Hash
+	var id thor.Bytes32
 	for id = t.headID; block.Number(id) > num; {
 		header, err := t.chain.GetBlockHeader(id)
 		if err != nil {

@@ -13,7 +13,7 @@ type ABI struct {
 	nameToMethod map[string]*Method
 	nameToEvent  map[string]*Event
 	methods      map[MethodID]*Method
-	events       map[thor.Hash]*Event
+	events       map[thor.Bytes32]*Event
 }
 
 // New create an ABI instance.
@@ -35,7 +35,7 @@ func New(data []byte) (*ABI, error) {
 		nameToMethod: make(map[string]*Method),
 		nameToEvent:  make(map[string]*Event),
 		methods:      make(map[MethodID]*Method),
-		events:       make(map[thor.Hash]*Event),
+		events:       make(map[thor.Bytes32]*Event),
 	}
 
 	for _, field := range fields {
@@ -64,7 +64,7 @@ func New(data []byte) (*ABI, error) {
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
-			id := thor.Hash(ethEvent.Id())
+			id := thor.Bytes32(ethEvent.Id())
 			event := &Event{id, &ethEvent}
 			abi.events[id] = event
 			abi.nameToEvent[ethEvent.Name] = event
@@ -106,6 +106,6 @@ func (a *ABI) EventByName(name string) *Event {
 }
 
 // EventByID returns the event for the given event id.
-func (a *ABI) EventByID(id thor.Hash) *Event {
+func (a *ABI) EventByID(id thor.Bytes32) *Event {
 	return a.events[id]
 }

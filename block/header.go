@@ -31,7 +31,7 @@ type Header struct {
 
 // headerBody body of header
 type headerBody struct {
-	ParentID    thor.Hash
+	ParentID    thor.Bytes32
 	Timestamp   uint64
 	GasLimit    uint64
 	Beneficiary thor.Address
@@ -39,15 +39,15 @@ type headerBody struct {
 	GasUsed    uint64
 	TotalScore uint64
 
-	TxsRoot      thor.Hash
-	StateRoot    thor.Hash
-	ReceiptsRoot thor.Hash
+	TxsRoot      thor.Bytes32
+	StateRoot    thor.Bytes32
+	ReceiptsRoot thor.Bytes32
 
 	Signature []byte
 }
 
 // ParentID returns id of parent block.
-func (h *Header) ParentID() thor.Hash {
+func (h *Header) ParentID() thor.Bytes32 {
 	return h.body.ParentID
 }
 
@@ -83,25 +83,25 @@ func (h *Header) Beneficiary() thor.Address {
 }
 
 // TxsRoot returns merkle root of txs contained in this block.
-func (h *Header) TxsRoot() thor.Hash {
+func (h *Header) TxsRoot() thor.Bytes32 {
 	return h.body.TxsRoot
 }
 
 // StateRoot returns account state merkle root just afert this block being applied.
-func (h *Header) StateRoot() thor.Hash {
+func (h *Header) StateRoot() thor.Bytes32 {
 	return h.body.StateRoot
 }
 
 // ReceiptsRoot returns merkle root of tx receipts.
-func (h *Header) ReceiptsRoot() thor.Hash {
+func (h *Header) ReceiptsRoot() thor.Bytes32 {
 	return h.body.ReceiptsRoot
 }
 
 // ID computes id of block.
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
-func (h *Header) ID() (id thor.Hash) {
+func (h *Header) ID() (id thor.Bytes32) {
 	if cached := h.cache.id.Load(); cached != nil {
-		return cached.(thor.Hash)
+		return cached.(thor.Bytes32)
 	}
 	defer func() {
 		// overwrite first 4 bytes of block hash to block number.
@@ -129,9 +129,9 @@ func (h *Header) ID() (id thor.Hash) {
 }
 
 // SigningHash computes hash of all header fields excluding signature.
-func (h *Header) SigningHash() (hash thor.Hash) {
+func (h *Header) SigningHash() (hash thor.Bytes32) {
 	if cached := h.cache.signingHash.Load(); cached != nil {
-		return cached.(thor.Hash)
+		return cached.(thor.Bytes32)
 	}
 	defer func() { h.cache.signingHash.Store(hash) }()
 
@@ -178,7 +178,7 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, h)
-	var hash thor.Hash
+	var hash thor.Bytes32
 	hw.Sum(hash[:0])
 
 	if v, ok := signerCache.Get(hash); ok {
@@ -240,7 +240,7 @@ func (h *Header) String() string {
 }
 
 // Number extract block number from block id.
-func Number(blockID thor.Hash) uint32 {
+func Number(blockID thor.Bytes32) uint32 {
 	// first 4 bytes are over written by block number (big endian).
 	return binary.BigEndian.Uint32(blockID[:])
 }

@@ -12,7 +12,7 @@ type Builder struct {
 }
 
 // ParentID set parent id.
-func (b *Builder) ParentID(id thor.Hash) *Builder {
+func (b *Builder) ParentID(id thor.Bytes32) *Builder {
 	b.headerBody.ParentID = id
 	return b
 }
@@ -48,13 +48,13 @@ func (b *Builder) Beneficiary(addr thor.Address) *Builder {
 }
 
 // StateRoot set state root.
-func (b *Builder) StateRoot(hash thor.Hash) *Builder {
+func (b *Builder) StateRoot(hash thor.Bytes32) *Builder {
 	b.headerBody.StateRoot = hash
 	return b
 }
 
 // ReceiptsRoot set receipts root.
-func (b *Builder) ReceiptsRoot(hash thor.Hash) *Builder {
+func (b *Builder) ReceiptsRoot(hash thor.Bytes32) *Builder {
 	b.headerBody.ReceiptsRoot = hash
 	return b
 }

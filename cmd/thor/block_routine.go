@@ -46,7 +46,7 @@ type orphan struct {
 
 func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
 	futures := minheap.NewBlockMinHeap()
-	orphanMap := make(map[thor.Hash]*orphan)
+	orphanMap := make(map[thor.Bytes32]*orphan)
 	consent := func(blk *block.Block) error {
 		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
@@ -247,7 +247,7 @@ func updateChain(
 				index++
 			}
 		}
-		forkIDs := make([]thor.Hash, len(fork.Branch), len(fork.Branch))
+		forkIDs := make([]thor.Bytes32, len(fork.Branch), len(fork.Branch))
 		for i, blk := range fork.Branch {
 			forkIDs[i] = blk.Header().ID()
 		}

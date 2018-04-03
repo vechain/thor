@@ -28,9 +28,9 @@ const (
 
 // Keys of governance params.
 var (
-	KeyRewardRatio         = BytesToHash([]byte("reward-ratio"))
-	KeyBaseGasPrice        = BytesToHash([]byte("base-gas-price"))
-	KeyProposerEndorsement = BytesToHash([]byte("proposer-endorsement"))
+	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
+	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
+	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(2601487902000)

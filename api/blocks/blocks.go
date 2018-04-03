@@ -22,7 +22,7 @@ func New(chain *chain.Chain) *Blocks {
 	}
 }
 
-func (b *Blocks) getBlockByID(blockID thor.Hash) (*Block, error) {
+func (b *Blocks) getBlockByID(blockID thor.Bytes32) (*Block, error) {
 	blk, err := b.chain.GetBlock(blockID)
 	if err != nil {
 		if b.chain.IsNotFound(err) {
@@ -54,7 +54,7 @@ func (b *Blocks) getBestBlock() (*Block, error) {
 
 func (b *Blocks) handleGetBlockByID(w http.ResponseWriter, req *http.Request) error {
 	id := mux.Vars(req)["id"]
-	blkID, err := thor.ParseHash(id)
+	blkID, err := thor.ParseBytes32(id)
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
 	}

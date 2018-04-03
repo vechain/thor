@@ -49,9 +49,9 @@ func encodeString(str string) ([]byte, error) {
 
 func encodeStorage(val interface{}) ([]byte, error) {
 	switch v := val.(type) {
-	case thor.Hash:
+	case thor.Bytes32:
 		return encodeBytesTrimed(v[:])
-	case *thor.Hash:
+	case *thor.Bytes32:
 		return encodeBytesTrimed(v[:])
 	case thor.Address:
 		return encodeBytesTrimed(v[:])
@@ -92,9 +92,9 @@ func encodeStorage(val interface{}) ([]byte, error) {
 
 func decodeStorage(data []byte, val interface{}) error {
 	switch v := val.(type) {
-	case *thor.Hash:
+	case *thor.Bytes32:
 		if len(data) == 0 {
-			*v = thor.Hash{}
+			*v = thor.Bytes32{}
 			return nil
 		}
 		_, content, _, err := rlp.Split(data)

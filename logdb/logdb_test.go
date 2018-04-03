@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -23,14 +22,14 @@ func TestLogDB(t *testing.T) {
 
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
-		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
+		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
 		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 48},
 	}
 
 	header := new(block.Builder).Build().Header()
 	var logs []*logdb.Log
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
@@ -40,8 +39,8 @@ func TestLogDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	limit := 5
-	t0 := thor.BytesToHash([]byte("topic0"))
-	t1 := thor.BytesToHash([]byte("topic1"))
+	t0 := thor.BytesToBytes32([]byte("topic0"))
+	t1 := thor.BytesToBytes32([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
 	los, err := db.Filter(&logdb.FilterOption{
 		FromBlock: 0,
@@ -49,7 +48,7 @@ func TestLogDB(t *testing.T) {
 		Address:   &addr,
 		Offset:    0,
 		Limit:     uint32(limit),
-		TopicSet: [][5]*thor.Hash{{&t0,
+		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
 			nil,
 			nil,
@@ -97,13 +96,13 @@ func BenchmarkLog(b *testing.B) {
 	}
 	l := &tx.Log{
 		Address: thor.BytesToAddress([]byte("addr")),
-		Topics:  []thor.Hash{thor.BytesToHash([]byte("topic0")), thor.BytesToHash([]byte("topic1"))},
+		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
 		Data:    []byte("data"),
 	}
 	var logs []*logdb.Log
 	header := new(block.Builder).Build().Header()
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(header, uint32(i), thor.BytesToHash([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
+		log := logdb.NewLog(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
 		logs = append(logs, log)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}

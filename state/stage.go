@@ -21,7 +21,7 @@ type codeWithHash struct {
 	hash []byte
 }
 
-func newStage(root thor.Hash, db *trie.Database, changes map[thor.Address]*changedObject) *Stage {
+func newStage(root thor.Bytes32, db *trie.Database, changes map[thor.Address]*changedObject) *Stage {
 
 	accountTrie, err := trie.NewSecure(common.Hash(root), db, 0)
 	if err != nil {
@@ -70,23 +70,23 @@ func newStage(root thor.Hash, db *trie.Database, changes map[thor.Address]*chang
 }
 
 // Hash computes hash of the main accounts trie.
-func (s *Stage) Hash() (thor.Hash, error) {
+func (s *Stage) Hash() (thor.Bytes32, error) {
 	if s.err != nil {
-		return thor.Hash{}, s.err
+		return thor.Bytes32{}, s.err
 	}
-	return thor.Hash(s.accountTrie.Hash()), nil
+	return thor.Bytes32(s.accountTrie.Hash()), nil
 }
 
 // Commit commits all changes into main accounts trie and storage tries.
-func (s *Stage) Commit() (thor.Hash, error) {
+func (s *Stage) Commit() (thor.Bytes32, error) {
 	if s.err != nil {
-		return thor.Hash{}, s.err
+		return thor.Bytes32{}, s.err
 	}
 
 	// commit accounts trie
 	root, err := s.accountTrie.Commit(nil)
 	if err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 
 	// write codes
@@ -100,15 +100,15 @@ func (s *Stage) Commit() (thor.Hash, error) {
 	for _, strie := range s.storageTries {
 		shash, err := strie.Commit(nil)
 		if err != nil {
-			return thor.Hash{}, err
+			return thor.Bytes32{}, err
 		}
 		s.db.Reference(shash, root)
 	}
 
 	// flush to db
 	if err := s.db.Commit(root, false); err != nil {
-		return thor.Hash{}, err
+		return thor.Bytes32{}, err
 	}
 
-	return thor.Hash(root), nil
+	return thor.Bytes32(root), nil
 }

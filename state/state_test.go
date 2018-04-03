@@ -12,16 +12,16 @@ import (
 
 func TestStateReadWrite(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := New(thor.Hash{}, kv)
+	state, _ := New(thor.Bytes32{}, kv)
 
 	addr := thor.BytesToAddress([]byte("account1"))
-	storageKey := thor.BytesToHash([]byte("storageKey"))
+	storageKey := thor.BytesToBytes32([]byte("storageKey"))
 
 	assert.False(t, state.Exists(addr))
 	assert.Equal(t, state.GetBalance(addr), &big.Int{})
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Hash{})
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Hash{})
+	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Bytes32{})
 
 	// make account not empty
 	state.SetBalance(addr, big.NewInt(1))
@@ -29,11 +29,11 @@ func TestStateReadWrite(t *testing.T) {
 
 	state.SetCode(addr, []byte("code"))
 	assert.Equal(t, state.GetCode(addr), []byte("code"))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Hash(crypto.Keccak256Hash([]byte("code"))))
+	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32(crypto.Keccak256Hash([]byte("code"))))
 
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Hash{})
-	state.SetStorage(addr, storageKey, thor.BytesToHash([]byte("storageValue")))
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.BytesToHash([]byte("storageValue")))
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Bytes32{})
+	state.SetStorage(addr, storageKey, thor.BytesToBytes32([]byte("storageValue")))
+	assert.Equal(t, state.GetStorage(addr, storageKey), thor.BytesToBytes32([]byte("storageValue")))
 
 	assert.True(t, state.Exists(addr))
 
@@ -42,7 +42,7 @@ func TestStateReadWrite(t *testing.T) {
 	assert.False(t, state.Exists(addr))
 	assert.Equal(t, state.GetBalance(addr), &big.Int{})
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Hash{})
+	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
 
 	assert.Nil(t, state.Error(), "error is not expected")
 
@@ -50,19 +50,19 @@ func TestStateReadWrite(t *testing.T) {
 
 func TestStateRevert(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	state, _ := New(thor.Hash{}, kv)
+	state, _ := New(thor.Bytes32{}, kv)
 
 	addr := thor.BytesToAddress([]byte("account1"))
-	storageKey := thor.BytesToHash([]byte("storageKey"))
+	storageKey := thor.BytesToBytes32([]byte("storageKey"))
 
 	values := []struct {
 		balance *big.Int
 		code    []byte
-		storage thor.Hash
+		storage thor.Bytes32
 	}{
-		{big.NewInt(1), []byte("code1"), thor.BytesToHash([]byte("v1"))},
-		{big.NewInt(2), []byte("code2"), thor.BytesToHash([]byte("v2"))},
-		{big.NewInt(3), []byte("code3"), thor.BytesToHash([]byte("v3"))},
+		{big.NewInt(1), []byte("code1"), thor.BytesToBytes32([]byte("v1"))},
+		{big.NewInt(2), []byte("code2"), thor.BytesToBytes32([]byte("v2"))},
+		{big.NewInt(3), []byte("code3"), thor.BytesToBytes32([]byte("v3"))},
 	}
 
 	var chk int
@@ -77,7 +77,7 @@ func TestStateRevert(t *testing.T) {
 		v := values[len(values)-i-1]
 		assert.Equal(t, state.GetBalance(addr), v.balance)
 		assert.Equal(t, state.GetCode(addr), v.code)
-		assert.Equal(t, state.GetCodeHash(addr), thor.Hash(crypto.Keccak256Hash(v.code)))
+		assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32(crypto.Keccak256Hash(v.code)))
 		assert.Equal(t, state.GetStorage(addr, storageKey), v.storage)
 		state.RevertTo(chk)
 		chk--
@@ -86,7 +86,7 @@ func TestStateRevert(t *testing.T) {
 	assert.Nil(t, state.Error(), "error is not expected")
 
 	//
-	state, _ = New(thor.Hash{}, kv)
+	state, _ = New(thor.Bytes32{}, kv)
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 0)
