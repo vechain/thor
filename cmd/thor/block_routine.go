@@ -160,22 +160,27 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, txpool *Txpoo
 			now := uint64(time.Now().Unix())
 			if now >= ts && now < ts+thor.BlockInterval {
 				ts = 0
-				pendings := txpool.Pending()
-
-				startTime := mclock.Now()
-				for _, tx := range pendings {
-					err := adopt(tx)
-					if Packer.IsGasLimitReached(err) {
-						break
+				adoptTx := func() {
+					for _, tx := range txpool.Pending() {
+						err := adopt(tx)
+						switch {
+						case Packer.IsBadTx(err) || Packer.IsKnownTx(err):
+							txpool.Remove(tx.ID())
+						case Packer.IsGasLimitReached(err):
+							return
+						default:
+						}
 					}
-					txpool.OnProcessed(tx.ID(), err)
 				}
 
+				startTime := mclock.Now()
+				adoptTx()
 				blk, receipts, err := commit(privateKey)
 				if err != nil {
 					break
 				}
 				elapsed := mclock.Now() - startTime
+
 				if elapsed > 0 {
 					gasUsed := blk.Header().GasUsed()
 					// calc target gas limit only if gas used above third of gas limit
