@@ -4,23 +4,24 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 
-	"github.com/vechain/thor/block"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
+	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
@@ -95,13 +96,15 @@ func main() {
 func action(ctx *cli.Context) error {
 	initLog(log15.Lvl(ctx.Int("verbosity")))
 
-	lv, err := lvldb.New(ctx.String("datadir"), lvldb.Options{})
+	datadir := ctx.String("datadir")
+
+	lvldb, err := Lvldb.New(datadir, Lvldb.Options{})
 	if err != nil {
 		return err
 	}
-	defer lv.Close()
+	defer lvldb.Close()
 
-	logdb, err := logdb.New(ctx.String("datadir") + "/log.db")
+	logdb, err := logdb.New(datadir + "/log.db")
 	if err != nil {
 		return err
 	}
@@ -124,13 +127,13 @@ func action(ctx *cli.Context) error {
 	defer lsr.Close()
 
 	//////////
-	stateCreator := state.NewCreator(lv)
+	stateCreator := state.NewCreator(lvldb)
 	genesisBlock, _, err := genesis.Dev.Build(stateCreator)
 	if err != nil {
 		return err
 	}
 
-	chain, err := chain.New(lv, genesisBlock)
+	chain, err := chain.New(lvldb, genesisBlock)
 	if err != nil {
 		return err
 	}
@@ -139,21 +142,20 @@ func action(ctx *cli.Context) error {
 	consensus := consensus.New(chain, stateCreator)
 	packer := packer.New(chain, stateCreator, proposer, proposer)
 	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb)}
-	p2pSrv := p2psrv.New(
-		&p2psrv.Options{
-			PrivateKey:     nodeKey,
-			MaxPeers:       25,
-			ListenAddr:     ctx.String("port"),
-			BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
-		})
-
+	opt := &p2psrv.Options{
+		PrivateKey:     nodeKey,
+		MaxPeers:       25,
+		ListenAddr:     ctx.String("port"),
+		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
+	}
+	//
 	///////
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, p2pSrv)
+		runCommunicator(c, communicator, opt, datadir+"/good-nodes")
 	})
 
 	txRoutineCtx := &txRoutineContext{
@@ -206,12 +208,33 @@ func action(ctx *cli.Context) error {
 	return nil
 }
 
-func runCommunicator(ctx context.Context, communicator *comm.Communicator, p2pSrv *p2psrv.Server) {
+func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
+	var nodes p2psrv.Nodes
+	nodesByte, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
+	} else {
+		rlp.DecodeBytes(nodesByte, &nodes)
+		opt.GoodNodes = nodes
+	}
+
+	p2pSrv := p2psrv.New(opt)
 	if err := p2pSrv.Start(communicator.Protocols()); err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
-	defer p2pSrv.Stop()
+	defer func() {
+		p2pSrv.Stop()
+		nodes := p2pSrv.GoodNodes()
+		data, err := rlp.EncodeToBytes(nodes)
+		if err != nil {
+			log.Error(fmt.Sprintf("%v", err))
+			return
+		}
+		if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+			log.Error(fmt.Sprintf("%v", err))
+		}
+	}()
 
 	peerCh := make(chan *p2psrv.Peer)
 	p2pSrv.SubscribePeer(peerCh)
