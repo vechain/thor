@@ -7,7 +7,7 @@ info:
     email: "vechain@vechain.com"
   description: "Get block chain info through the API"
 servers:
-  - url: http://localhost:7585
+  - url: http://localhost:8669
     description: local server
 tags:
 - name: "Account"
@@ -16,17 +16,13 @@ tags:
   description: "Everything about transaction"
 - name: "Block"
   description: "Everything about block"
-- name: "Contract"
-  description: "Everything about contract"
-- name: "Log"
-  description: "Everything about log"
 paths:
-  /accounts/{address}/balance:
+  /accounts/{address}:
     get:
       tags:
       - "Account"
-      summary: "Get balance by address"
-      description: "return account balance"
+      summary: "Get account by address"
+      description: "return account"
       parameters:
         - in: path
           required: true
@@ -37,26 +33,25 @@ paths:
             description: address
         - in: query
           required: false
-          name: blockNumber
+          name: revision
           schema:
             type: integer
             example: 0
-            description: default best block number
+            description: can be block id or block number default "best"
       responses: 
         200:
           description: OK
           content:
             application/json:
               schema:
-               $ref: '#/components/schemas/HexStringReturn'
+               $ref: '#/components/schemas/Account'
         400:
           description: "Invalid address"
-  /accounts/{address}/code:
-    get:
+    post:
       tags:
       - "Account"
-      summary: "Get code by address"
-      description: "return account code"
+      summary: "call contract"
+      description: "call contract"
       parameters:
         - in: path
           required: true
@@ -64,23 +59,47 @@ paths:
           schema:
             type: string
             example: "0x0000000000000000000000000000000000000000"
-            description: address
+            description: contract address
         - in: query
           required: false
-          name: blockNumber
+          name: revision
           schema:
             type: integer
             example: 0
-            description: default best block number
-      responses: 
+            description: can be block id or block number default "best"
+      requestBody:
+        description: contract calling params
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContracCallReqBody'
+      responses:
         200:
-          description: OK
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HexStringReturn'
+          description: "successful operation"
         400:
-          description: "Invalid address"
+          description: "Invalid params"
+  /transactions/{id}:
+    get:
+      tags:
+      - "Transaction"
+      summary: "Get transaction by transaction id"
+      description: "returns transaction by transaction id"
+      parameters:
+        - $ref: '#/components/parameters/TransactionID'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        400:
+          description: "Invalid params"
   /accounts/{address}/storage:
     get:
       tags:
@@ -104,11 +123,11 @@ paths:
             description: storage hash
         - in: query
           required: false
-          name: blockNumber
+          name: revision
           schema:
             type: integer
             example: 0
-            description: default best block number
+            description: can be block id or block number default "best"
       responses:
         200:
           description: OK
@@ -118,160 +137,19 @@ paths:
                $ref: '#/components/schemas/HexStringReturn'
         400:
           description: "Invalid params"
-  /transactions/{id}:
-    get:
-      tags:
-      - "Transaction"
-      summary: "Get transaction by transaction id"
-      description: "returns transaction by transaction id"
-      parameters:
-        - $ref: '#/components/parameters/TransactionID'
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Transaction'
-        400:
-          description: "Invalid params"
-  /transactions/{id}/receipts:
-    get:
-      tags:
-      - "Transaction"
-      summary: "Get transaction by transaction id"
-      description: "returns transaction by transaction id"
-      parameters:
-        - $ref: '#/components/parameters/TransactionID'
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionReceipt'
-        400:
-          description: "Invalid params"
-  /transactions:
+  /accounts/{address}/logs:
     post:
       tags:
-      - "Transaction"
-      summary: "send rawtransaction"
-      description: "send rawtransaction"
-      requestBody:
-        description: a rawtransaction
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TransactionReqBody'
-      responses:
-        200:
-          description: "OK(Transaction ID)"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HexStringReturn'
-        400:
-          description: "Invalid params"
-  /blocks/{id}:
-    get:
-      tags:
-      - "Block"
-      summary: "Get block by block id"
-      description: "returns block by block id"
-      parameters:
-        - $ref: '#/components/parameters/BlockID'
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Block'
-        400:
-          description: "Invalid params"
-  /blocks:
-    get:
-      tags:
-      - "Block"
-      summary: "Get block by block number"
-      description: "returns block by block number"
-      parameters:
-        - in: query
-          required: true
-          name: number
-          schema:
-            type: integer
-          description: "Block number"
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Block'
-        400:
-          description: "Invalid params"
-  /blocks/best:
-    get:
-      tags:
-      - "Block"
-      summary: "Get best block"
-      description: "returns best block"
-      responses:
-        200:
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Block'
-        400:
-          description: "Invalid params"
-  /contracts/{address}:
-    post:
-      tags:
-      - "Contract"
-      summary: "call contract"
-      description: "call contract"
+      - "Account"
+      summary: "return logs by params"
+      description: "get logs"
       parameters:
         - in: path
           required: true
           name: address
           schema:
             type: string
-            example: "0x0000000000000000000000000000000000000000"
-            description: contract address
-        - in: query
-          required: false
-          name: blockNumber
-          schema:
-            type: integer
-            example: 0
-            description: default best block number
-      requestBody:
-        description: contract calling params
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ContracCallReqBody'
-      responses:
-        200:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HexStringReturn'
-          description: "successful operation"
-        400:
-          description: "Invalid params"
-  /logs:
-    post:
-      tags:
-      - "Log"
-      summary: "return logs by params"
-      description: "get logs"
-      parameters:
+          description: "contract address"
         - in: query
           required: false
           name: fromBlock
@@ -340,12 +218,85 @@ paths:
                   $ref: '#/components/schemas/EventLog'
         400:
           description: "unhandled error"
+  /transactions/{id}/receipts:
+    get:
+      tags:
+      - "Transaction"
+      summary: "Get transaction by transaction id"
+      description: "returns transaction by transaction id"
+      parameters:
+        - $ref: '#/components/parameters/TransactionID'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionReceipt'
+        400:
+          description: "Invalid params"
+  /transactions:
+    post:
+      tags:
+      - "Transaction"
+      summary: "send rawtransaction"
+      description: "send rawtransaction"
+      requestBody:
+        description: a rawtransaction
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionReqBody'
+      responses:
+        200:
+          description: "OK(Transaction ID)"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HexStringReturn'
+        400:
+          description: "Invalid params"
+  /blocks/{revision}:
+    get:
+      tags:
+      - "Block"
+      summary: "Get block by block id"
+      description: "returns block by block id"
+      parameters:
+        - in: path
+          required: true
+          name: revision
+          schema:
+            type: integer
+            example: 0
+            description: can be block id or block number default "best"
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+        400:
+          description: "Invalid params"
 components:
   schemas:
     Address:
       type: string
       example: "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"
       description: "Account address(Hexadecimal string)"
+    Account:
+      type: object
+      properties:
+        balance:
+          type: string
+          description: "amount-uint256(Hexadecimal string)"
+          example: "0x10"
+        code:
+          type: string
+          description: "code hex"
+          example: "0x" 
     TransactionID:
       type: string
       example: "0x44f1192e70a6b04e6cf4fc04600c777a407d431647572b2ef1b146c1cbf9f81b"

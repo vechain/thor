@@ -34,33 +34,21 @@ func TestBlock(t *testing.T) {
 	raw := blocks.ConvertBlock(block)
 	defer ts.Close()
 
-	r, err := httpGet(ts, ts.URL+fmt.Sprintf("/blocks/%v", block.Header().ID().String()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(string(r))
+	res := httpGet(t, ts.URL+fmt.Sprintf("/blocks/%v", block.Header().ID()))
 	rb := new(blocks.Block)
-	if err := json.Unmarshal(r, &rb); err != nil {
+	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
 	checkBlock(t, raw, rb)
-
 	// get block info with blocknumber
-	r, err = httpGet(ts, ts.URL+"/blocks?number=1")
-	if err != nil {
+	res = httpGet(t, ts.URL+"/blocks/1")
+	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
-	rb = new(blocks.Block)
-	if err := json.Unmarshal(r, &rb); err != nil {
-		t.Fatal(err)
-	}
+
 	checkBlock(t, raw, rb)
-	r, err = httpGet(ts, ts.URL+"/blocks/best")
-	if err != nil {
-		t.Fatal(err)
-	}
-	rb = new(blocks.Block)
-	if err := json.Unmarshal(r, &rb); err != nil {
+	res = httpGet(t, ts.URL+"/blocks/best")
+	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
 	checkBlock(t, raw, rb)
@@ -130,15 +118,15 @@ func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {
 
 }
 
-func httpGet(ts *httptest.Server, url string) ([]byte, error) {
+func httpGet(t *testing.T, url string) []byte {
 	res, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 	r, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
-	return r, nil
+	return r
 }

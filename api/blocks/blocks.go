@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
@@ -22,88 +23,35 @@ func New(chain *chain.Chain) *Blocks {
 	}
 }
 
-func (b *Blocks) getBlockByID(blockID thor.Bytes32) (*Block, error) {
-	blk, err := b.chain.GetBlock(blockID)
+func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
+	revision := mux.Vars(req)["revision"]
+	block, err := b.getBlock(revision)
 	if err != nil {
-		if b.chain.IsNotFound(err) {
-			return nil, nil
+		return utils.HTTPError(err, http.StatusBadRequest)
+	}
+	return utils.WriteJSON(w, ConvertBlock(block))
+}
+
+func (b *Blocks) getBlock(revision string) (*block.Block, error) {
+	if revision == "" || revision == "best" {
+		return b.chain.GetBestBlock()
+	}
+	blkID, err := thor.ParseBytes32(revision)
+	if err != nil {
+		n, err := strconv.ParseUint(revision, 0, 0)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
-	}
-	return ConvertBlock(blk), nil
-}
-
-func (b *Blocks) getBlockByNumber(blockNumber uint32) (*Block, error) {
-	blk, err := b.chain.GetBlockByNumber(blockNumber)
-	if err != nil {
-		if b.chain.IsNotFound(err) {
-			return nil, nil
+		if n > math.MaxUint32 {
+			return nil, errors.New("block number exceeded")
 		}
-		return nil, err
+		return b.chain.GetBlockByNumber(uint32(n))
 	}
-	return ConvertBlock(blk), nil
-}
-
-func (b *Blocks) getBestBlock() (*Block, error) {
-	blk, err := b.chain.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
-	return ConvertBlock(blk), nil
-}
-
-func (b *Blocks) handleGetBlockByID(w http.ResponseWriter, req *http.Request) error {
-	id := mux.Vars(req)["id"]
-	blkID, err := thor.ParseBytes32(id)
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
-	}
-	block, err := b.getBlockByID(blkID)
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	return utils.WriteJSON(w, block)
-}
-
-func (b *Blocks) handleGetBlockByNumber(w http.ResponseWriter, req *http.Request) error {
-	blockNum, err := b.parseBlockNum(req.URL.Query().Get("number"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "blockNumber"), http.StatusBadRequest)
-	}
-	block, err := b.getBlockByNumber(blockNum)
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	return utils.WriteJSON(w, block)
-}
-
-func (b *Blocks) handleGetBestBlock(w http.ResponseWriter, req *http.Request) error {
-	block, err := b.getBestBlock()
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	return utils.WriteJSON(w, block)
-}
-
-func (b *Blocks) parseBlockNum(blkNum string) (uint32, error) {
-	if blkNum == "" {
-		return math.MaxUint32, nil
-	}
-	n, err := strconv.ParseUint(blkNum, 0, 0)
-	if err != nil {
-		return math.MaxUint32, err
-	}
-	if n > math.MaxUint32 {
-		return math.MaxUint32, errors.New("block number exceeded")
-	}
-	return uint32(n), nil
+	return b.chain.GetBlock(blkID)
 }
 
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
-
-	sub.Path("/best").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBestBlock))
-	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlockByID))
-	sub.Path("").Queries("number", "{number:[0-9]+}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlockByNumber))
+	sub.Path("/{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
 
 }

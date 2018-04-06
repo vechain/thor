@@ -1,15 +1,37 @@
-package logs
+package accounts
 
 import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
 
-type Filters struct {
-	Address  *thor.Address      `json:"address"` // always a contract address
+//Account for marshal account
+type Account struct {
+	Balance math.HexOrDecimal256 `json:"balance,string"`
+	Code    string               `json:"code"`
+}
+
+//ContractCallBody represents contract-call body
+type ContractCallBody struct {
+	Input   string              `json:"input"`
+	Options ContractCallOptions `json:"options"`
+}
+
+// ContractCallOptions represents options in contract-call body
+type ContractCallOptions struct {
+	ClauseIndex uint32                `json:"clauseIndex"`
+	Gas         uint64                `json:"gas,string"`
+	From        *thor.Address         `json:"from"`
+	GasPrice    *math.HexOrDecimal256 `json:"gasPrice,string"`
+	TxID        *thor.Bytes32         `json:"txID"`
+	Value       *math.HexOrDecimal256 `json:"value,string"`
+}
+
+type FilterTopics struct {
 	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
 }
 
