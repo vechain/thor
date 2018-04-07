@@ -93,7 +93,7 @@ func (c *Consensus) IsTrunk(header *block.Header) (bool, error) {
 
 	// total scores are equal
 	if bytes.Compare(header.ID().Bytes(), bestBlock.Header().ID().Bytes()) < 0 {
-		// smaller ID is preferred, since block with smaller ID usually has larger average socre.
+		// smaller ID is preferred, since block with smaller ID usually has larger average score.
 		// also, it's a deterministic decision.
 		return true, nil
 	}
