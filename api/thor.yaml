@@ -1,0 +1,475 @@
+openapi: 3.0.1
+info:
+  version: 0.1.0
+  title: VeChain Thor API
+  license:
+    name: LGPL 3.0
+    url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
+  description: RESTful API to access VeChain Thor
+servers:
+  - url: 'http://localhost:8669'
+    description: local thor node
+tags:
+  - name: Account
+    description: Access to account objects
+  - name: Block
+    description: Access to blocks
+  - name: Transaction
+    description: Access to transactions
+paths:
+  '/accounts/{address}':
+    parameters:
+      - $ref: '#/components/parameters/AddressInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
+    get:
+      tags:
+        - Account
+      summary: get account object detail
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+    post:
+      tags:
+        - Account
+      summary: perform contract call on account object
+      requestBody:
+        description: arguments and environment
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractCall'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractCallResult'
+  '/accounts/{address}/code':
+    parameters:
+      - $ref: '#/components/parameters/AddressInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
+    get:
+      tags:
+        - Account
+      summary: retrieve code of account object
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
+  '/accounts/{address}/storage/{key}':
+    parameters:
+      - $ref: '#/components/parameters/AddressInPath'
+      - $ref: '#/components/parameters/StorageKeyInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
+    get:
+      tags:
+        - Account
+      summary: retrieve storage value of account object for given key
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
+  '/accounts/{address}/logs':
+    parameters:
+      - $ref: '#/components/parameters/AddressInPath'
+    post:
+      tags:
+        - Account
+      summary: filter event logs produced by the account object
+      parameters:
+        - $ref: '#/components/parameters/LogFilterOffsetInQuery'
+        - $ref: '#/components/parameters/LogFilterLimitInQuery'
+        - $ref: '#/components/parameters/LogFilterOrderInQuery'
+      requestBody:
+        description: log filter criteria
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FilteredLog'
+  '/blocks/{revision}':
+    parameters:
+      - $ref: '#/components/parameters/RevisionInPath'
+    get:
+      tags:
+        - Block
+      summary: 'retrieve block by ID, number, or ''best'' for the latest one'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Block'
+  '/transactions/{id}':
+    parameters:
+      - $ref: '#/components/parameters/TxIDInPath'
+    get:
+      tags:
+        - Transaction
+      summary: retrieve transaction by its id
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+  '/transactions/{id}/receipt':
+    parameters:
+      - $ref: '#/components/parameters/TxIDInPath'
+    get:
+      tags:
+        - Transaction
+      summary: retrieve transaction receipt by transaction ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receipt'
+  /transactions:
+    post:
+      tags:
+        - Transaction
+      summary: send raw transaction
+      requestBody:
+        description: hex form of encoded transaction
+        required: true
+        content:
+          application/json:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: string
+components:
+  schemas:
+    Account:
+      properties:
+        balance:
+          type: string
+          description: hex form of token balance
+        energy:
+          type: string
+          description: hex form of remained amount of energy
+        hasCode:
+          type: boolean
+    Block:
+      properties:
+        number:
+          type: integer
+          format: uint32
+          description: number(height) of the block
+        id:
+          type: string
+          description: identifier of the block (bytes32)
+        size:
+          type: integer
+          format: uint32
+          description: byte size of the block that is RLP encoded
+        parentID:
+          type: string
+          description: ID of parent block (bytes32)
+        timestamp:
+          type: integer
+          format: uint64
+          description: unix timestamp of the block
+        gasLimit:
+          type: integer
+          format: uint64
+          description: gas limit of the block
+        beneficiary:
+          type: string
+          description: address of account to receive block reward
+        gasUsed:
+          type: integer
+          format: uint64
+        totalScore:
+          type: integer
+          format: uint64
+        txsRoot:
+          type: string
+          description: root hash of transactions in the block (bytes32)
+        stateRoot:
+          type: string
+          description: root hash of accounts state (bytes32)
+        receiptsRoot:
+          type: string
+          description: root hash of transaction receipts (bytes32)
+        signer:
+          type: string
+          description: the one who signed this block (bytes20)
+        transactions:
+          type: array
+          description: IDs of transactions
+          items:
+            type: string
+            description: ID of transaction (bytes32)
+    Clause:
+      properties:
+        to:
+          type: string
+          description: 'recipient of clause, null for contract deployment (bytes32)'
+        value:
+          type: string
+          description: hex form of token to be transferred
+        data:
+          type: string
+          description: input data (bytes)
+    Transaction:
+      properties:
+        id:
+          type: string
+          description: identifier of the transaction
+        size:
+          type: integer
+          format: uint32
+          description: byte size of the transaction that is RLP encoded
+        chainTag:
+          type: integer
+          format: uint8
+          description: last byte of genesis block ID
+        nonce:
+          type: integer
+          format: uint64
+        blockRef:
+          type: string
+          description: 8 bytes prefix of some block ID
+        clauses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Clause'
+        gasPriceCoef:
+          type: integer
+          format: uint8
+          description: coefficient used to calculate the final gas price
+        gas:
+          type: integer
+          format: uint64
+          description: max amount of gas can be consumed to execute this transaction
+        dependsOn:
+          type: string
+          description: >-
+            ID of the transaction on which the current transaction depends
+            (bytes32)
+        signer:
+          type: string
+          description: 'the one who signed the transaction, aka. tx origin'
+        blockID:
+          type: string
+          description: ID of the block which contains this transaction
+        index:
+          type: integer
+          description: index of the transaction in the block containing it
+    Log:
+      properties:
+        address:
+          type: string
+          description: the address of contract which produces the log (bytes20)
+        topics:
+          type: array
+          items:
+            type: string
+        data:
+          type: string
+    Receipt:
+      properties:
+        gasUsed:
+          type: integer
+          format: uint64
+        gasPayer:
+          type: string
+          description: address of account who payed used gas
+        reward:
+          type: string
+          description: hex form of amount of reward
+        reverted:
+          type: boolean
+          description: true means the transaction was reverted
+        outputs:
+          type: array
+          items:
+            properties:
+              contractAddress:
+                type: string
+                description: >-
+                  deployed contract address, if the corresponding clause is a
+                  contract deployment clause
+              logs:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Log'
+    ContractCall:
+      properties:
+        value:
+          type: string
+          description: amount of token to be transferred
+        data:
+          type: string
+          description: input data for contract call
+        gas:
+          type: integer
+          format: uint64
+          description: 'optional, to specify max gas for execution'
+        gasPrice:
+          type: string
+          description: 'optional, absolute gas price'
+        caller:
+          type: string
+          description: 'optional, to specify the caller'
+      example:
+        value: '0x0'
+        data: '0x5665436861696e2054686f72'
+    ContractCallResult:
+      properties:
+        data:
+          type: string
+          description: the output data
+        gasUsed:
+          type: integer
+          format: uint64
+          description: gas used during execution
+        reverted:
+          type: boolean
+        vmError:
+          type: string
+    Range:
+      properties:
+        unit:
+          type: string
+          enum:
+            - block
+            - time
+        from:
+          type: integer
+          format: uint64
+        to:
+          type: integer
+          format: uint64
+    TopicSet:
+      properties:
+        topic0:
+          type: string
+        topic1:
+          type: string
+        topic2:
+          type: string
+        topic3:
+          type: string
+        topic4:
+          type: string
+    LogFilter:
+      properties:
+        range:
+          $ref: '#/components/schemas/Range'
+        topicSets:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicSet'
+    FilteredLog:
+      properties:
+        topics:
+          type: array
+          items:
+            type: string
+        data:
+          type: string
+        blockID:
+          type: string
+        blockNumber:
+          type: integer
+          format: uint32
+        blockTime:
+          type: integer
+          format: uint64
+        logIndex:
+          type: integer
+          format: uint32
+        txID:
+          type: string
+        txOrigin:
+          type: string
+  parameters:
+    AddressInPath:
+      name: address
+      in: path
+      description: address of account
+      required: true
+      schema:
+        type: string
+      example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+    RevisionInQuery:
+      name: revision
+      in: query
+      description: can be block number or ID. best block is assumed if omitted.
+      schema:
+        type: string
+    RevisionInPath:
+      name: revision
+      in: path
+      description: 'can be block number, ID or ''best'' for lastest block'
+      required: true
+      schema:
+        type: string
+      example: best
+    StorageKeyInPath:
+      in: path
+      description: the key(position) to access account storage
+      required: true
+      name: key
+      schema:
+        type: string
+      example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+    TxIDInPath:
+      in: path
+      description: ID of transaction
+      required: true
+      name: id
+      schema:
+        type: string
+      example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+    LogFilterOffsetInQuery:
+      name: offset
+      in: query
+      schema:
+        type: integer
+    LogFilterLimitInQuery:
+      name: limit
+      in: query
+      schema:
+        type: integer
+    LogFilterOrderInQuery:
+      name: order
+      in: query
+      schema:
+        type: string
+        enum:
+          - etl
+          - lte
