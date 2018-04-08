@@ -57,14 +57,14 @@ func main() {
 	app.Copyright = "2018 VeChain Foundation <https://vechain.org/>"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "port",
-			Value: ":11235",
-			Usage: "p2p listen port",
+			Name:  "addr",
+			Value: "127.0.0.1:11235",
+			Usage: "p2p listen addr",
 		},
 		cli.StringFlag{
-			Name:  "restfulport",
-			Value: ":8669",
-			Usage: "restful port",
+			Name:  "apiaddr",
+			Value: "127.0.0.1:8669",
+			Usage: "restful addr",
 		},
 		cli.StringFlag{
 			Name:  "nodekey",
@@ -120,7 +120,7 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	lsr, err := net.Listen("tcp", ctx.String("restfulport"))
+	lsr, err := net.Listen("tcp", ctx.String("apiaddr"))
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func action(ctx *cli.Context) error {
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
 		MaxPeers:       25,
-		ListenAddr:     ctx.String("port"),
+		ListenAddr:     ctx.String("addr"),
 		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 	}
 	//
