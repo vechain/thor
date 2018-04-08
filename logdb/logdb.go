@@ -9,14 +9,38 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-//FilterOption option filter
-type FilterOption struct {
-	FromBlock uint32             `json:"fromBlock"`
-	ToBlock   uint32             `json:"toBlock"`
-	Address   *thor.Address      `json:"address"` // always a contract address
-	TopicSet  [][5]*thor.Bytes32 `json:"topicSet"`
-	Offset    uint64             `json:"offset,string"`
-	Limit     uint32             `json:"limit"`
+type RangeType int
+
+const (
+	Block RangeType = iota
+	Time
+)
+
+type SortType int
+
+const (
+	Asc SortType = iota
+	Desc
+)
+
+type Range struct {
+	Unit RangeType `json:"unit"`
+	From uint64    `json:"from"`
+	To   uint64    `json:"to"`
+}
+
+type Options struct {
+	Offset uint64   `json:"offset,string"`
+	Limit  uint32   `json:"limit"`
+	Sort   SortType `json:"sort"` //default asc
+}
+
+//LogFilter filter
+type LogFilter struct {
+	Address  *thor.Address      `json:"address"` // always a contract address
+	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
+	Range    *Range
+	Options  *Options
 }
 
 //LogDB manages all logs
@@ -86,26 +110,31 @@ func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Bytes32) error {
 }
 
 //Filter return logs with options
-func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
-	if option == nil {
+func (db *LogDB) Filter(logFilter *LogFilter) ([]*Log, error) {
+	if logFilter == nil {
 		return db.query("SELECT * FROM log")
 	}
 	var args []interface{}
-	stmt := "SELECT * FROM log WHERE ( 1"
-	args = append(args, option.FromBlock)
-	stmt += " AND blockNumber >= ? "
-	if option.ToBlock >= option.FromBlock {
-		args = append(args, option.ToBlock)
-		stmt += " AND blockNumber <= ? "
+	stmt := "SELECT * FROM log WHERE 1"
+	if logFilter.Range != nil {
+		condition := "blockNumber"
+		if logFilter.Range.Unit == Time {
+			condition = "blockTime"
+		}
+		args = append(args, logFilter.Range.From)
+		stmt += " AND " + condition + " >= ? "
+		if logFilter.Range.To >= logFilter.Range.From {
+			args = append(args, logFilter.Range.To)
+			stmt += " AND " + condition + " <= ? "
+		}
 	}
-	if option.Address != nil {
-		args = append(args, option.Address.Bytes())
+	if logFilter.Address != nil {
+		args = append(args, logFilter.Address.Bytes())
 		stmt += " AND address = ? "
 	}
-	stmt += " ) "
-	length := len(option.TopicSet)
+	length := len(logFilter.TopicSet)
 	if length > 0 {
-		for i, topics := range option.TopicSet {
+		for i, topics := range logFilter.TopicSet {
 			if i == 0 {
 				stmt += " AND (( 1 "
 			} else {
@@ -124,9 +153,18 @@ func (db *LogDB) Filter(option *FilterOption) ([]*Log, error) {
 			}
 		}
 	}
-	if option.Offset < math.MaxUint64 && option.Limit < math.MaxUint32 && option.Limit != 0 {
-		stmt += " limit ?, ? "
-		args = append(args, option.Offset, option.Limit)
+
+	if logFilter.Options.Sort == Asc {
+		stmt += " ORDER BY blockNumber ASC "
+	} else {
+		stmt += " ORDER BY blockNumber DESC "
+	}
+
+	if logFilter.Options != nil {
+		if logFilter.Options.Offset < math.MaxUint64 && logFilter.Options.Limit < math.MaxUint32 && logFilter.Options.Limit != 0 {
+			stmt += " limit ?, ? "
+			args = append(args, logFilter.Options.Offset, logFilter.Options.Limit)
+		}
 	}
 	return db.query(stmt, args...)
 }

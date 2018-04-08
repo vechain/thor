@@ -42,12 +42,18 @@ func TestLogDB(t *testing.T) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
-	los, err := db.Filter(&logdb.FilterOption{
-		FromBlock: 0,
-		ToBlock:   10,
-		Address:   &addr,
-		Offset:    0,
-		Limit:     uint32(limit),
+	los, err := db.Filter(&logdb.LogFilter{
+		Range: &logdb.Range{
+			Unit: 0,
+			From: 0,
+			To:   10,
+		},
+		Options: &logdb.Options{
+			Sort:   0,
+			Offset: 0,
+			Limit:  uint32(limit),
+		},
+		Address: &addr,
 		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
 			nil,
