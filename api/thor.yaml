@@ -544,11 +544,13 @@ components:
       in: query
       schema:
         type: integer
+        format: uint64
     LogFilterLimitInQuery:
       name: limit
       in: query
       schema:
         type: integer
+        format: uint64
     LogFilterOrderInQuery:
       name: order
       in: query
