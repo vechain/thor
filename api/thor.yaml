@@ -64,7 +64,9 @@ paths:
           content:
             application/json:
               schema:
-                type: string
+                properties:
+                  code:
+                    type: string
   '/accounts/{address}/storage/{key}':
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -80,7 +82,9 @@ paths:
           content:
             application/json:
               schema:
-                type: string
+                properties:
+                  value:
+                    type: string
   '/accounts/{address}/logs':
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -168,7 +172,9 @@ paths:
           content:
             application/json:
               schema:
-                type: string
+                properties:
+                  id:
+                    type: string
 components:
   schemas:
     Account:
