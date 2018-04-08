@@ -105,48 +105,68 @@ func TestAccount(t *testing.T) {
 func getLogs(t *testing.T, ts *httptest.Server) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
-	op := &accounts.FilterTopics{
-		TopicSet: [][5]*thor.Bytes32{{&t0,
-			nil,
-			nil,
-			nil,
-			nil},
-			{nil,
-				&t1,
-				nil,
-				nil,
-				nil}},
+	limit := 5
+	logFilter := &accounts.LogFilter{
+		Range: &logdb.Range{
+			Unit: 0,
+			From: 0,
+			To:   10,
+		},
+		Options: &logdb.Options{
+			Sort:   0,
+			Offset: 0,
+			Limit:  uint32(limit),
+		},
+		Address: &contractAddr,
+		TopicSets: []*accounts.TopicSet{
+			&accounts.TopicSet{
+				Topic0: &t0,
+			},
+			&accounts.TopicSet{
+				Topic1: &t1,
+			},
+		},
 	}
-	ops, err := json.Marshal(op)
+	f, err := json.Marshal(logFilter)
 	if err != nil {
 		t.Fatal(err)
 	}
-	limit := 4
-	res := httpPost(t, ts.URL+fmt.Sprintf("/accounts/%v/logs?fromBlock=0&&toBlock=10&&offset=5&&limit=%v", contractAddr, limit), ops)
-	var logs []*accounts.Log
+	res := httpPost(t, ts.URL+fmt.Sprintf("/accounts/%v/logs", contractAddr), f)
+	var logs []*accounts.FilteredLog
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
 	}
+	fmt.Println(logs)
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
 func getAccount(t *testing.T, ts *httptest.Server) {
 	for _, v := range accs {
 		address := v.in.addr
-		a := httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v", address.String()))
+		res := httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v", address.String()))
 		var acc accounts.Account
-		if err := json.Unmarshal(a, &acc); err != nil {
+		if err := json.Unmarshal(res, &acc); err != nil {
 			t.Fatal(err)
 		}
 		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), acc.Balance, "balance should be equal")
-		assert.Equal(t, hexutil.Encode(v.want.code), acc.Code, "code should be equal")
 
-		storage := httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
-		var value string
-		if err := json.Unmarshal(storage, &value); err != nil {
+		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/code", address))
+		var code map[string]string
+		if err := json.Unmarshal(res, &code); err != nil {
 			t.Fatal(err)
 		}
-		h, err := thor.ParseBytes32(value)
+		c, err := hexutil.Decode(code["code"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, v.want.code, c, "code should be equal")
+
+		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
+		var value map[string]string
+		if err := json.Unmarshal(res, &value); err != nil {
+			t.Fatal(err)
+		}
+		h, err := thor.ParseBytes32(value["value"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -220,20 +240,8 @@ func callContract(t *testing.T, ts *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	gp := big.NewInt(1)
-	gph := math.HexOrDecimal256(*gp)
-	v := big.NewInt(0)
-	vh := math.HexOrDecimal256(*v)
-	reqBody := &accounts.ContractCallBody{
-		Input: hexutil.Encode(input),
-		Options: accounts.ContractCallOptions{
-			ClauseIndex: 0,
-			Gas:         21000,
-			From:        &thor.Address{},
-			GasPrice:    &gph,
-			TxID:        &thor.Bytes32{},
-			Value:       &vh,
-		},
+	reqBody := &accounts.ContractCall{
+		Data: hexutil.Encode(input),
 	}
 
 	reqBodyBytes, err := json.Marshal(reqBody)
@@ -242,16 +250,16 @@ func callContract(t *testing.T, ts *httptest.Server) {
 	}
 
 	response := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBodyBytes)
-	var res string
-	if err = json.Unmarshal(response, &res); err != nil {
+	var output *accounts.VMOutput
+	if err = json.Unmarshal(response, &output); err != nil {
 		t.Fatal(err)
 	}
-	output, err := hexutil.Decode(res)
+	data, err := hexutil.Decode(output.Data)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var ret uint8
-	err = m.DecodeOutput(output, &ret)
+	err = m.DecodeOutput(data, &ret)
 	if err != nil {
 		t.Fatal(err)
 	}

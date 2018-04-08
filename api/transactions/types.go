@@ -47,30 +47,30 @@ type RawTransaction struct {
 	BlockRef     string              `json:"blockRef"`
 	Clauses      Clauses             `json:"clauses,string"`
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          math.HexOrDecimal64 `json:"gas"`
+	Gas          uint64              `json:"gas"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
 	Sig          string              `json:"sig"`
 }
 
 //Transaction transaction
 type Transaction struct {
-	BlockID     thor.Bytes32        `json:"blockID,string"`
-	BlockNumber uint32              `json:"blockNumber"`
-	TxIndex     math.HexOrDecimal64 `json:"txIndex"`
-
-	ChainTag     byte                `json:"chainTag"`
-	ID           thor.Bytes32        `json:"id,string"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          math.HexOrDecimal64 `json:"gas"`
-	From         thor.Address        `json:"from,string"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
-	Clauses      Clauses             `json:"clauses"`
+	BlockID      thor.Bytes32  `json:"blockID,string"`
+	BlockNumber  uint32        `json:"blockNumber"`
+	TxIndex      uint64        `json:"txIndex"`
+	Size         uint32        `json:"size"`
+	ChainTag     byte          `json:"chainTag"`
+	ID           thor.Bytes32  `json:"id,string"`
+	GasPriceCoef uint8         `json:"gasPriceCoef"`
+	Gas          uint64        `json:"gas"`
+	Signer       thor.Address  `json:"signer,string"`
+	DependsOn    *thor.Bytes32 `json:"dependsOn,string"`
+	Clauses      Clauses       `json:"clauses"`
 }
 
 //ConvertTransaction convert a raw transaction into a json format transaction
 func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	//tx signer
-	from, err := tx.Signer()
+	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +82,10 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
-		From:         from,
+		Signer:       signer,
+		Size:         uint32(tx.Size()),
 		GasPriceCoef: tx.GasPriceCoef(),
-		Gas:          math.HexOrDecimal64(tx.Gas()),
+		Gas:          tx.Gas(),
 		Clauses:      cls,
 	}
 	if tx.DependsOn() != nil {

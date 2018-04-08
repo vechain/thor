@@ -7,87 +7,132 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vm"
 )
 
 //Account for marshal account
 type Account struct {
 	Balance math.HexOrDecimal256 `json:"balance,string"`
-	Code    string               `json:"code"`
+	Energy  math.HexOrDecimal256 `json:"energy,string"`
+	HasCode bool                 `json:"hasCode"`
 }
 
-//ContractCallBody represents contract-call body
-type ContractCallBody struct {
-	Input   string              `json:"input"`
-	Options ContractCallOptions `json:"options"`
+//ContractCall represents contract-call body
+type ContractCall struct {
+	Value    *math.HexOrDecimal256 `json:"value,string"`
+	Data     string                `json:"data"`
+	Gas      uint64                `json:"gas"`
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice,string"`
+	Caller   thor.Address          `json:"caller"`
 }
 
-// ContractCallOptions represents options in contract-call body
-type ContractCallOptions struct {
-	ClauseIndex uint32                `json:"clauseIndex"`
-	Gas         uint64                `json:"gas,string"`
-	From        *thor.Address         `json:"from"`
-	GasPrice    *math.HexOrDecimal256 `json:"gasPrice,string"`
-	TxID        *thor.Bytes32         `json:"txID"`
-	Value       *math.HexOrDecimal256 `json:"value,string"`
+type VMOutput struct {
+	Data     string `json:"data,string"`
+	GasUsed  uint64 `json:"gas"`
+	Reverted bool   `json:"reverted"`
+	VMError  string `json:"vmError"`
 }
 
-type FilterTopics struct {
-	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
+func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
+	gasUsed := inputGas - vo.LeftOverGas
+	var (
+		vmError  string
+		reverted bool
+	)
+
+	if vo.VMErr != nil {
+		reverted = true
+		vmError = vo.VMErr.Error()
+	}
+
+	return &VMOutput{
+		Data:     hexutil.Encode(vo.Value),
+		GasUsed:  gasUsed,
+		Reverted: reverted,
+		VMError:  vmError,
+	}
 }
 
-// Log for json marshal
-type Log struct {
-	BlockID     thor.Bytes32     `json:"blockID"`
-	BlockNumber uint32           `json:"fromBlock"`
-	LogIndex    uint32           `json:"logIndex"`
-	TxID        thor.Bytes32     `json:"txID"`
-	TxOrigin    thor.Address     `json:"txOrigin"` //contract caller
-	Address     thor.Address     `json:"address"`  // always a contract address
-	Data        string           `json:"data"`
-	Topics      [5]*thor.Bytes32 `json:"topics"`
+type TopicSet struct {
+	Topic0 *thor.Bytes32 `json:"topic0"`
+	Topic1 *thor.Bytes32 `json:"topic1"`
+	Topic2 *thor.Bytes32 `json:"topic2"`
+	Topic3 *thor.Bytes32 `json:"topic3"`
+	Topic4 *thor.Bytes32 `json:"topic4"`
+}
+
+type LogFilter struct {
+	Address   *thor.Address `json:"address"` // always a contract address
+	TopicSets []*TopicSet   `json:"topicSets"`
+	Range     *logdb.Range
+	Options   *logdb.Options
+}
+
+func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
+	f := &logdb.LogFilter{
+		Address: logFilter.Address,
+		Range:   logFilter.Range,
+		Options: logFilter.Options,
+	}
+	if len(logFilter.TopicSets) > 0 {
+		var topicSets [][5]*thor.Bytes32
+		for _, topicSet := range logFilter.TopicSets {
+			var topics [5]*thor.Bytes32
+			topics[0] = topicSet.Topic0
+			topics[1] = topicSet.Topic1
+			topics[2] = topicSet.Topic2
+			topics[3] = topicSet.Topic3
+			topics[4] = topicSet.Topic4
+			topicSets = append(topicSets, topics)
+		}
+		f.TopicSet = topicSets
+	}
+	return f
+}
+
+// FilteredLog only comes from one contract
+type FilteredLog struct {
+	BlockID     thor.Bytes32    `json:"blockID"`
+	BlockNumber uint32          `json:"fromBlock"`
+	BlockTime   uint64          `json:"blockTime"`
+	LogIndex    uint32          `json:"logIndex"`
+	TxID        thor.Bytes32    `json:"txID"`
+	TxOrigin    thor.Address    `json:"txOrigin"` //contract caller
+	Data        string          `json:"data"`
+	Topics      []*thor.Bytes32 `json:"topics"`
 }
 
 //convert a logdb.Log into a json format log
-func convertLog(log *logdb.Log) Log {
-	l := Log{
+func convertLog(log *logdb.Log) FilteredLog {
+	l := FilteredLog{
 		BlockID:     log.BlockID,
 		BlockNumber: log.BlockNumber,
 		LogIndex:    log.LogIndex,
 		TxID:        log.TxID,
 		TxOrigin:    log.TxOrigin,
-		Address:     log.Address,
 		Data:        hexutil.Encode(log.Data),
 	}
+	l.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
 		if log.Topics[i] != nil {
-			l.Topics[i] = log.Topics[i]
+			l.Topics = append(l.Topics, log.Topics[i])
 		}
 	}
 	return l
 }
 
-func (log *Log) String() string {
+func (log *FilteredLog) String() string {
 	return fmt.Sprintf(`
 		Log(
 			blockID:     %v,
 			blockNumber: %v,
 			txID:        %v,
 			txOrigin:    %v,
-			address:     %v,
 			data:        %v,
-			topic0:      %v,
-			topic1:      %v,
-			topic2:      %v,
-			topic3:      %v,
-			topic4:      %v)`, log.BlockID,
+			topics:      %v)`, log.BlockID,
 		log.BlockNumber,
 		log.TxID,
 		log.TxOrigin,
-		log.Address,
 		log.Data,
-		log.Topics[0],
-		log.Topics[1],
-		log.Topics[2],
-		log.Topics[3],
-		log.Topics[4])
+		log.Topics)
 }

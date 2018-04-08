@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
@@ -44,7 +43,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 	}
 	tj.BlockID = location.BlockID
 	tj.BlockNumber = block.Header().Number()
-	tj.TxIndex = math.HexOrDecimal64(location.Index)
+	tj.TxIndex = location.Index
 	return tj, nil
 }
 
