@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/runtime"
@@ -36,8 +38,37 @@ func New(chain *chain.Chain, stateCreator *state.Creator, logDB *logdb.LogDB) *A
 	}
 }
 
-func (a *Accounts) getAccount(addr thor.Address, stateRoot thor.Bytes32) (*Account, error) {
+func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, error) {
 	state, err := a.stateCreator.NewState(stateRoot)
+	if err != nil {
+		return nil, err
+	}
+	code := state.GetCode(addr)
+	if err := state.Error(); err != nil {
+		return nil, err
+	}
+	return code, nil
+}
+
+func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error {
+	hexAddr := mux.Vars(req)["address"]
+	addr, err := thor.ParseAddress(hexAddr)
+	if err != nil {
+		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+	}
+	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	if err != nil {
+		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
+	}
+	code, err := a.getCode(addr, b.Header().StateRoot())
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
+}
+
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account, error) {
+	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
 		return nil, err
 	}
@@ -46,9 +77,15 @@ func (a *Accounts) getAccount(addr thor.Address, stateRoot thor.Bytes32) (*Accou
 	if err := state.Error(); err != nil {
 		return nil, err
 	}
+	hasCode := false
+	if code != nil {
+		hasCode = true
+	}
+	energy := builtin.Energy.WithState(state).GetBalance(header.Timestamp(), addr)
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
-		Code:    hexutil.Encode(code),
+		Energy:  math.HexOrDecimal256(*energy),
+		HasCode: hasCode,
 	}, nil
 }
 
@@ -64,79 +101,43 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 	return storage, nil
 }
 
-func (a *Accounts) defaultContractCallOptions() *ContractCallOptions {
-	gp := big.NewInt(2106)
-	gasPrice := math.HexOrDecimal256(*gp)
-	v := big.NewInt(0)
-	value := math.HexOrDecimal256(*v)
-	return &ContractCallOptions{
-		ClauseIndex: 0,
-		Gas:         21000,
-		From:        &thor.Address{},
-		GasPrice:    &gasPrice,
-		TxID:        &thor.Bytes32{},
-		Value:       &value,
+func (a *Accounts) santinizeOptions(options *ContractCall) {
+	if options.Gas == 0 {
+		options.Gas = math.MaxUint64
 	}
-}
-
-func (a *Accounts) santinizeOptions(options *ContractCallOptions) {
-	defaultOptions := a.defaultContractCallOptions()
-
-	if options.ClauseIndex < defaultOptions.ClauseIndex {
-		options.ClauseIndex = defaultOptions.ClauseIndex
-	}
-	if options.Gas < defaultOptions.Gas {
-		options.Gas = defaultOptions.Gas
-	}
-
 	if options.GasPrice == nil {
-		options.GasPrice = defaultOptions.GasPrice
-	} else {
-		gp := big.Int(*options.GasPrice)
-		gpDefault := big.Int(*defaultOptions.GasPrice)
-		if (&gp).Cmp(&gpDefault) < 0 {
-			options.GasPrice = defaultOptions.GasPrice
-		}
+		gp := new(big.Int)
+		dgp := math.HexOrDecimal256(*gp)
+		options.GasPrice = &dgp
 	}
-
 	if options.Value == nil {
-		options.Value = defaultOptions.Value
-	}
-
-	if options.From == nil {
-		options.From = defaultOptions.From
-	}
-
-	if options.TxID == nil {
-		options.TxID = defaultOptions.TxID
+		v := new(big.Int)
+		dv := math.HexOrDecimal256(*v)
+		options.Value = &dv
 	}
 }
 
 //Call a contract with input
-func (a *Accounts) Call(to *thor.Address, body *ContractCallBody, block *block.Block) (output []byte, err error) {
-	a.santinizeOptions(&body.Options)
-	state, err := a.stateCreator.NewState(block.Header().StateRoot())
+func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
+	a.santinizeOptions(body)
+	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
 		return nil, err
 	}
-	header := block.Header()
 	rt := runtime.New(state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
-	v := big.Int(*body.Options.Value)
-	data, err := hexutil.Decode(body.Input)
+	v := big.Int(*body.Value)
+	data, err := hexutil.Decode(body.Data)
 	if err != nil {
 		return nil, err
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	var vmout *vm.Output
-	gp := big.Int(*body.Options.GasPrice)
-	vmout = rt.Call(clause, body.Options.ClauseIndex, body.Options.Gas, *body.Options.From, &gp, *body.Options.TxID)
+	gp := big.Int(*body.GasPrice)
+	vmout = rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{})
 	if err := state.Error(); err != nil {
 		return nil, err
 	}
-	if vmout.VMErr != nil {
-		return nil, vmout.VMErr
-	}
-	return vmout.Value, nil
+	return convertVMOutputWithInputGas(vmout, body.Gas), nil
 
 }
 
@@ -151,7 +152,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 	req.Body.Close()
-	callBody := &ContractCallBody{}
+	callBody := &ContractCall{}
 	if err := json.Unmarshal(res, &callBody); err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
@@ -161,11 +162,11 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
 	}
 
-	output, err := a.Call(&addr, callBody, b)
+	output, err := a.Call(&addr, callBody, b.Header())
 	if err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
-	return utils.WriteJSON(w, hexutil.Encode(output))
+	return utils.WriteJSON(w, output)
 }
 
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
@@ -178,7 +179,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
 	}
-	acc, err := a.getAccount(addr, b.Header().StateRoot())
+	acc, err := a.getAccount(addr, b.Header())
 	if err != nil {
 		return err
 	}
@@ -204,7 +205,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, storage.String())
+	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
 }
 
 func (a *Accounts) parseBlockNum(blkNum string) (uint32, error) {
@@ -222,12 +223,14 @@ func (a *Accounts) parseBlockNum(blkNum string) (uint32, error) {
 }
 
 //Filter query logs with option
-func (a *Accounts) filter(option *logdb.FilterOption) ([]Log, error) {
-	logs, err := a.logDB.Filter(option)
+func (a *Accounts) filter(logFilter *LogFilter) ([]FilteredLog, error) {
+	lf := convertLogFilter(logFilter)
+	fmt.Println("lf", lf.TopicSet)
+	logs, err := a.logDB.Filter(lf)
 	if err != nil {
 		return nil, err
 	}
-	lgs := make([]Log, len(logs))
+	lgs := make([]FilteredLog, len(logs))
 	for i, log := range logs {
 		lgs[i] = convertLog(log)
 	}
@@ -240,9 +243,9 @@ func (a *Accounts) handleFilterLogs(w http.ResponseWriter, req *http.Request) er
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 	req.Body.Close()
-	var f *FilterTopics
+	logFilter := new(LogFilter)
 	if len(res) != 0 {
-		if err := json.Unmarshal(res, &f); err != nil {
+		if err := json.Unmarshal(res, &logFilter); err != nil {
 			return utils.HTTPError(err, http.StatusBadRequest)
 		}
 	}
@@ -251,88 +254,12 @@ func (a *Accounts) handleFilterLogs(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
 	}
-	fromBlock, err := a.parseFromBlock(req.URL.Query().Get("fromBlock"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "fromBlock"), http.StatusBadRequest)
-	}
-	toBlock, err := a.parseToBlock(req.URL.Query().Get("toBlock"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "toBlock"), http.StatusBadRequest)
-	}
-	offset, err := a.parseOffset(req.URL.Query().Get("offset"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "offset"), http.StatusBadRequest)
-	}
-	limit, err := a.parseLimit(req.URL.Query().Get("limit"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "limit"), http.StatusBadRequest)
-	}
-	options := &logdb.FilterOption{
-		FromBlock: fromBlock,
-		ToBlock:   toBlock,
-		Address:   &addr,
-		TopicSet:  f.TopicSet,
-		Offset:    offset,
-		Limit:     limit,
-	}
-	logs, err := a.filter(options)
+	logFilter.Address = &addr
+	logs, err := a.filter(logFilter)
 	if err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 	return utils.WriteJSON(w, logs)
-}
-
-func (a *Accounts) parseOffset(offset string) (uint64, error) {
-	if offset == "" {
-		return math.MaxUint64, nil
-	}
-	n, err := strconv.ParseUint(offset, 0, 0)
-	if err != nil {
-		return math.MaxUint64, err
-	}
-	return uint64(n), nil
-}
-
-func (a *Accounts) parseLimit(limit string) (uint32, error) {
-	if limit == "" {
-		return math.MaxUint32, nil
-	}
-	n, err := strconv.ParseUint(limit, 0, 0)
-	if err != nil {
-		return math.MaxUint32, err
-	}
-	if n > math.MaxUint32 {
-		return math.MaxUint32, errors.New("block number exceeded")
-	}
-	return uint32(n), nil
-}
-
-func (a *Accounts) parseFromBlock(blkNum string) (uint32, error) {
-	if blkNum == "" {
-		return 0, nil
-	}
-	n, err := strconv.ParseUint(blkNum, 0, 0)
-	if err != nil {
-		return math.MaxUint32, err
-	}
-	if n > math.MaxUint32 {
-		return math.MaxUint32, errors.New("block number exceeded")
-	}
-	return uint32(n), nil
-}
-
-func (a *Accounts) parseToBlock(blkNum string) (uint32, error) {
-	if blkNum == "" {
-		return math.MaxUint32, nil
-	}
-	n, err := strconv.ParseUint(blkNum, 0, 0)
-	if err != nil {
-		return math.MaxUint32, err
-	}
-	if n > math.MaxUint32 {
-		return math.MaxUint32, errors.New("block number exceeded")
-	}
-	return uint32(n), nil
 }
 
 func (a *Accounts) getBlock(revision string) (*block.Block, error) {
@@ -358,6 +285,8 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}").Queries("revision", "{revision}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
+
+	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 
 	sub.Path("/{address}/storage").Queries("key", "{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
 	sub.Path("/{address}/storage").Queries("key", "{key}", "revision", "{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))

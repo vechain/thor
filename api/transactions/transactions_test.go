@@ -32,29 +32,38 @@ func TestTransaction(t *testing.T) {
 
 	transaction, ts := initTransactionServer(t)
 	defer ts.Close()
-	raw, err := transactions.ConvertTransaction(transaction)
+	getTx(t, ts, transaction)
+	getTxReceipt(t, ts, transaction)
+	senTx(t, ts, transaction)
+}
+
+func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
+	raw, err := transactions.ConvertTransaction(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	res := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v", transaction.ID()))
+	res := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v", tx.ID()))
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
 	checkTx(t, raw, rtx)
+}
 
-	r := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v/receipts", transaction.ID().String()))
+func getTxReceipt(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
+	r := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v/receipts", tx.ID().String()))
 	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, uint64(receipt.GasUsed), transaction.Gas(), "gas should be equal")
+	assert.Equal(t, uint64(receipt.GasUsed), tx.Gas(), "gas should be equal")
+}
+
+func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
 	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.Dev.Accounts()[0].PrivateKey)
 	if err != nil {
-		t.Errorf("Sign error: %s", err)
+		t.Fatal(err)
 	}
-
 	to := thor.BytesToAddress([]byte("to"))
 	v := big.NewInt(10000)
 	blockRef := tx.NewBlockRef(0)
@@ -77,13 +86,12 @@ func TestTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res = httpPost(t, ts.URL+"/transactions", txData)
+	res := httpPost(t, ts.URL+"/transactions", txData)
 	var txID string
 	if err = json.Unmarshal(res, &txID); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, transaction.ID().String(), txID, "shoudl be the same transaction")
-
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {
@@ -120,7 +128,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.Dev.Accounts()[0].PrivateKey)
 	if err != nil {
-		t.Errorf("Sign error: %s", err)
+		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
 	pack := packer.New(chain, stateC, genesis.Dev.Accounts()[0].Address, genesis.Dev.Accounts()[0].Address)
@@ -133,7 +141,6 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := chain.AddBlock(b, receipts, true); err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +153,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 }
 
 func checkTx(t *testing.T, expectedTx *transactions.Transaction, actualTx *transactions.Transaction) {
-	assert.Equal(t, expectedTx.From, actualTx.From)
+	assert.Equal(t, expectedTx.Signer, actualTx.Signer)
 	assert.Equal(t, expectedTx.ID, actualTx.ID)
 	assert.Equal(t, expectedTx.TxIndex, actualTx.TxIndex)
 	assert.Equal(t, expectedTx.GasPriceCoef, actualTx.GasPriceCoef)

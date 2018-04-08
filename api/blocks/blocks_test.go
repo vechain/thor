@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
@@ -17,9 +18,11 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
 
 const (
@@ -57,47 +60,47 @@ func TestBlock(t *testing.T) {
 
 func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	db, _ := lvldb.NewMem()
-
 	stateC := state.NewCreator(db)
 	b, _, err := genesis.Dev.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	chain, _ := chain.New(db, b)
-	router := mux.NewRouter()
-	blocks.New(chain).Mount(router, "/blocks")
-	ts := httptest.NewServer(router)
-
-	address, _ := thor.ParseAddress(testAddress)
-
-	cla := tx.NewClause(&address).WithData(nil).WithValue(big.NewInt(10))
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	tx := new(tx.Builder).
+		ChainTag(chain.Tag()).
 		GasPriceCoef(1).
-		Gas(1000).
-		Clause(cla).
+		Gas(21000).
 		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	key, err := crypto.HexToECDSA(testPrivHex)
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.Dev.Accounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
-	}
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
-	if err != nil {
-		t.Errorf("Sign error: %s", err)
 	}
 	tx = tx.WithSignature(sig)
-
-	best, _ := chain.GetBestBlock()
-	bl := new(block.Builder).
-		ParentID(best.Header().ID()).
-		Transaction(tx).
-		Build()
-	if _, err := chain.AddBlock(bl, nil, true); err != nil {
+	pack := packer.New(chain, stateC, genesis.Dev.Accounts()[0].Address, genesis.Dev.Accounts()[0].Address)
+	_, adopt, commit, err := pack.Prepare(b.Header(), uint64(time.Now().Unix()))
+	err = adopt(tx)
+	if err != nil {
 		t.Fatal(err)
 	}
-
-	return bl, ts
+	b, receipts, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chain.AddBlock(b, receipts, true); err != nil {
+		t.Fatal(err)
+	}
+	router := mux.NewRouter()
+	pool := txpool.New(chain, stateC)
+	defer pool.Stop()
+	blocks.New(chain).Mount(router, "/blocks")
+	ts := httptest.NewServer(router)
+	return b, ts
 }
 
 func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {
