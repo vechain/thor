@@ -67,8 +67,8 @@ func newApp() *cli.App {
 	app.Copyright = "2017 VeChain Foundation <https://vechain.org/>"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "addr",
-			Value: ":8669",
+			Name:  "api-addr",
+			Value: "127.0.0.1:8669",
 			Usage: "listen address",
 		},
 		cli.BoolFlag{
@@ -97,7 +97,7 @@ func newApp() *cli.App {
 		defer goes.Wait()
 
 		// check addr and create tcp listener
-		addr, err := net.ResolveTCPAddr("tcp", ctx.String("addr"))
+		addr, err := net.ResolveTCPAddr("tcp", ctx.String("api-addr"))
 		if err != nil {
 			return errors.New("Bad argument: listen address")
 		}
