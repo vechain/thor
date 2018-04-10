@@ -388,12 +388,9 @@ components:
         gasPayer:
           type: string
           description: address of account who payed used gas
-        payed:
-          type: string
-          description: energy payed for used gas, hex form
         reward:
           type: string
-          description: amount of energy rewarding to block beneficiary, hex form
+          description: hex form of amount of reward
         reverted:
           type: boolean
           description: true means the transaction was reverted
@@ -466,6 +463,17 @@ components:
         gasUsed: 21000
         reverted: false
         vmError: ''
+    Options:
+      properties:
+        offset:
+          type: integer
+        limit: 
+          type: integer
+        sort:
+          type: string
+          enum:
+            - ASC
+            - DESC
     Range:
       properties:
         unit:
@@ -501,6 +509,8 @@ components:
       properties:
         range:
           $ref: '#/components/schemas/Range'
+        options:
+          $ref: '#/components/schemas/Options'
         topicSets:
           type: array
           items:
@@ -517,7 +527,7 @@ components:
           $ref: '#/components/schemas/BlockContext'
         tx:
           $ref: '#/components/schemas/TxContext'
-      exmaple:
+      example:
         topics:
           - '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
         data: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
@@ -567,23 +577,3 @@ components:
       schema:
         type: string
       example: '0x9bcc6526a76ae560244f698805cc001977246cb92c2b4f1e2b7a204e445409ea'
-    LogFilterOffsetInQuery:
-      name: offset
-      in: query
-      schema:
-        type: integer
-        format: uint64
-    LogFilterLimitInQuery:
-      name: limit
-      in: query
-      schema:
-        type: integer
-        format: uint64
-    LogFilterOrderInQuery:
-      name: order
-      in: query
-      schema:
-        type: string
-        enum:
-          - etl
-          - lte

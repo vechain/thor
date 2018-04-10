@@ -31,33 +31,54 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 	}
 	tx, location, err := t.chain.GetTransaction(txID)
 	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	tj, err := ConvertTransaction(tx)
-	if err != nil {
-		return nil, err
-	}
-	block, err := t.chain.GetBlock(location.BlockID)
-	if err != nil {
-		return nil, err
-	}
-	tj.BlockID = location.BlockID
-	tj.BlockNumber = block.Header().Number()
-	tj.TxIndex = location.Index
-	return tj, nil
-}
 
-//GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, error) {
-	rece, err := t.chain.GetTransactionReceipt(txID)
+	block, err := t.chain.GetBlock(location.BlockID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	receipt := convertReceipt(rece)
-	return receipt, nil
+	tc, err := ConvertTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+	tc.Block.ID = block.Header().ID()
+	tc.Block.Number = block.Header().Number()
+	tc.Block.Timestamp = block.Header().Timestamp()
+	return tc, nil
+}
+
+//GetTransactionReceiptByID get tx's receipt
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, error) {
+	tx, location, err := t.chain.GetTransaction(txID)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	block, err := t.chain.GetBlock(location.BlockID)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	receipts, err := t.chain.GetBlockReceipts(block.Header().ID())
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	rece := receipts[location.Index]
+	return convertReceipt(rece, block, tx)
 }
 
 //SendRawTransaction send a raw transactoion

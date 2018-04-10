@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -225,7 +224,6 @@ func (a *Accounts) parseBlockNum(blkNum string) (uint32, error) {
 //Filter query logs with option
 func (a *Accounts) filter(logFilter *LogFilter) ([]FilteredLog, error) {
 	lf := convertLogFilter(logFilter)
-	fmt.Println("lf", lf.TopicSet)
 	logs, err := a.logDB.Filter(lf)
 	if err != nil {
 		return nil, err

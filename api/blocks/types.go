@@ -9,18 +9,18 @@ import (
 type Block struct {
 	Number       uint32         `json:"number"`
 	ID           thor.Bytes32   `json:"id"`
+	Size         uint32         `json:"size"`
 	ParentID     thor.Bytes32   `json:"parentID"`
 	Timestamp    uint64         `json:"timestamp"`
-	TotalScore   uint64         `json:"totalScore"`
 	GasLimit     uint64         `json:"gasLimit"`
-	GasUsed      uint64         `json:"gasUsed"`
 	Beneficiary  thor.Address   `json:"beneficiary"`
-	Signer       thor.Address   `json:"signer"`
-	Size         uint32         `json:"size"`
+	GasUsed      uint64         `json:"gasUsed"`
+	TotalScore   uint64         `json:"totalScore"`
 	TxsRoot      thor.Bytes32   `json:"txsRoot"`
 	StateRoot    thor.Bytes32   `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
-	Txs          []thor.Bytes32 `json:"txs,string"`
+	Signer       thor.Address   `json:"signer"`
+	Transactions []thor.Bytes32 `json:"txs,string"`
 }
 
 //ConvertBlock convert a raw block into a json format block
@@ -51,6 +51,6 @@ func ConvertBlock(b *block.Block) *Block {
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
 
-		Txs: txIds,
+		Transactions: txIds,
 	}
 }

@@ -71,6 +71,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	tx := new(tx.Builder).
 		ChainTag(chain.Tag()).
 		GasPriceCoef(1).
+		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		Clause(cla).
@@ -115,8 +116,8 @@ func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {
 	assert.Equal(t, expBl.TxsRoot, actBl.TxsRoot, "TxsRoot should be equal")
 	assert.Equal(t, expBl.StateRoot, actBl.StateRoot, "StateRoot should be equal")
 	assert.Equal(t, expBl.ReceiptsRoot, actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
-	for i, txhash := range expBl.Txs {
-		assert.Equal(t, txhash, actBl.Txs[i], "tx hash should be equal")
+	for i, txhash := range expBl.Transactions {
+		assert.Equal(t, txhash, actBl.Transactions[i], "tx hash should be equal")
 	}
 
 }
