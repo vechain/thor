@@ -106,8 +106,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		switch {
 		case tx.ChainTag() != c.chain.Tag():
 			return errors.New("bad tx: chain tag mismatch")
-		case tx.BlockRef().Number() >= header.Number():
-			return errors.New("bad tx: invalid block ref")
+		case header.Number() < tx.BlockRef().Number():
+			return errors.New("bad tx: ref blcok too new")
+		case header.Number() > tx.BlockRef().Number()+tx.Expiration():
+			return errors.New("bad tx: expired")
 		case tx.HasReservedFields():
 			return errors.New("bad tx: reserved fields not empty")
 		}

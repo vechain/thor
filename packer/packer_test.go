@@ -2,6 +2,7 @@ package packer_test
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -42,7 +43,7 @@ func (ti *txIterator) Next() *tx.Transaction {
 	tx := new(tx.Builder).
 		ChainTag(ti.chainTag).
 		Clause(tx.NewClause(&builtin.Energy.Address).WithData(data)).
-		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
+		Gas(300000).GasPriceCoef(0).Nonce(nonce).Expiration(math.MaxUint32).Build()
 	nonce++
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), a0.PrivateKey)
 	tx = tx.WithSignature(sig)
