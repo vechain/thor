@@ -57,8 +57,8 @@ func main() {
 	app.Copyright = "2018 VeChain Foundation <https://vechain.org/>"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
-			Name:  "addr",
-			Value: "127.0.0.1:11235",
+			Name:  "p2paddr",
+			Value: ":11235",
 			Usage: "p2p listen addr",
 		},
 		cli.StringFlag{
@@ -211,7 +211,7 @@ func action(ctx *cli.Context) error {
 func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
 	var nodes p2psrv.Nodes
 	nodesByte, err := ioutil.ReadFile(filePath)
-	if err != nil {
+	if err != nil && err != os.ErrNotExist {
 		log.Error(fmt.Sprintf("%v", err))
 	} else {
 		rlp.DecodeBytes(nodesByte, &nodes)
