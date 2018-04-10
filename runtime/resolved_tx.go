@@ -51,13 +51,13 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(blockTime uint64) (payer thor.Address, err error) {
-	prepayedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
-	payer, ok := builtin.Energy.WithState(r.state).Consume(blockTime, r.CommonTo, r.Origin, prepayedEnergy)
+func (r *ResolvedTransaction) BuyGas(blockTime uint64) (payer thor.Address, prepayed *big.Int, err error) {
+	prepayed = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
+	payer, ok := builtin.Energy.WithState(r.state).Consume(blockTime, r.CommonTo, r.Origin, prepayed)
 	if !ok {
-		return thor.Address{}, errors.New("insufficient energy")
+		return thor.Address{}, nil, errors.New("insufficient energy")
 	}
-	return payer, nil
+	return payer, prepayed, nil
 }
 
 // returns common 'To' field of clauses if any.
