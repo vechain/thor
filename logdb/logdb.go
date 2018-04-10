@@ -9,18 +9,18 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type RangeType int
+type RangeType string
 
 const (
-	Block RangeType = iota
-	Time
+	Block RangeType = "Block"
+	Time            = "Time"
 )
 
-type SortType int
+type SortType string
 
 const (
-	Asc SortType = iota
-	Desc
+	Asc  SortType = "ASC"
+	Desc          = "DESC"
 )
 
 type Range struct {
@@ -30,7 +30,7 @@ type Range struct {
 }
 
 type Options struct {
-	Offset uint64   `json:"offset,string"`
+	Offset uint64   `json:"offset"`
 	Limit  uint32   `json:"limit"`
 	Sort   SortType `json:"sort"` //default asc
 }
