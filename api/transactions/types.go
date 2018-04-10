@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -48,21 +49,20 @@ type RawTransaction struct {
 	Clauses      Clauses             `json:"clauses,string"`
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
 	Gas          uint64              `json:"gas"`
+	Expiration   uint32              `json:"expiration"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
 	Sig          string              `json:"sig"`
 }
 
 //Transaction transaction
 type Transaction struct {
-	BlockID      thor.Bytes32  `json:"blockID,string"`
-	BlockNumber  uint32        `json:"blockNumber"`
-	TxIndex      uint64        `json:"txIndex"`
+	Block        blockContext  `json:"block"`
 	Size         uint32        `json:"size"`
 	ChainTag     byte          `json:"chainTag"`
 	ID           thor.Bytes32  `json:"id,string"`
 	GasPriceCoef uint8         `json:"gasPriceCoef"`
 	Gas          uint64        `json:"gas"`
-	Signer       thor.Address  `json:"signer,string"`
+	Origin       thor.Address  `json:"origin,string"`
 	DependsOn    *thor.Bytes32 `json:"dependsOn,string"`
 	Clauses      Clauses       `json:"clauses"`
 }
@@ -74,7 +74,6 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	if err != nil {
 		return nil, err
 	}
-	//copy tx hash
 	cls := make(Clauses, len(tx.Clauses()))
 	for i, c := range tx.Clauses() {
 		cls[i] = ConvertClause(c)
@@ -82,7 +81,7 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
-		Signer:       signer,
+		Origin:       signer,
 		Size:         uint32(tx.Size()),
 		GasPriceCoef: tx.GasPriceCoef(),
 		Gas:          tx.Gas(),
@@ -92,7 +91,6 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 		t.DependsOn = tx.DependsOn()
 	}
 	return t, nil
-
 }
 
 func buildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error) {
@@ -124,6 +122,7 @@ func buildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error
 		GasPriceCoef(rawTransaction.GasPriceCoef).
 		Gas(uint64(rawTransaction.Gas)).
 		DependsOn(rawTransaction.DependsOn).
+		Expiration(rawTransaction.Expiration).
 		BlockRef(blkRef).
 		Nonce(uint64(rawTransaction.Nonce)).
 		Build().
@@ -150,21 +149,31 @@ func (raw *RawTransaction) String() string {
 		raw.Sig)
 }
 
+type blockContext struct {
+	ID        thor.Bytes32 `json:"id"`
+	Number    uint32       `json:"number"`
+	Timestamp uint64       `json:"timestamp"`
+}
+
+type txContext struct {
+	ID     thor.Bytes32 `json:"id"`
+	Origin thor.Address `json:"origin"`
+}
+
 //Receipt for json marshal
 type Receipt struct {
-	// gas used by this tx
-	GasUsed math.HexOrDecimal64 `json:"gasUsed"`
-	// the one who payed for gas
+	Block    blockContext          `json:"block"`
+	Tx       txContext             `json:"tx"`
+	GasUsed  math.HexOrDecimal64   `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
-	// if the tx reverted
-	Reverted bool `json:"reverted"`
-	// outputs of clauses in tx
-	Outputs []*Output `json:"outputs,string"`
+	Reverted bool                  `json:"reverted"`
+	Outputs  []*Output             `json:"outputs,string"`
 }
 
 // Output output of clause execution.
 type Output struct {
+	ContractAddress *thor.Address `json:"contractAddress"`
 	// logs produced by the clause
 	Logs []*ReceiptLog `json:"logs,string"`
 }
@@ -180,17 +189,36 @@ type ReceiptLog struct {
 }
 
 //ConvertReceipt convert a raw clause into a jason format clause
-func convertReceipt(rece *tx.Receipt) *Receipt {
+func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*rece.Reward)
+	signer, err := tx.Signer()
+	if err != nil {
+		return nil, err
+	}
 	receipt := &Receipt{
 		GasUsed:  math.HexOrDecimal64(rece.GasUsed),
 		GasPayer: rece.GasPayer,
 		Reward:   &reward,
 		Reverted: rece.Reverted,
+		Tx: txContext{
+			tx.ID(),
+			signer,
+		},
+		Block: blockContext{
+			block.Header().ID(),
+			block.Header().Number(),
+			block.Header().Timestamp(),
+		},
 	}
 	receipt.Outputs = make([]*Output, len(rece.Outputs))
 	for i, output := range rece.Outputs {
-		otp := &Output{make([]*ReceiptLog, len(output.Logs))}
+		clause := tx.Clauses()[i]
+		var contractAddr *thor.Address
+		if clause.To() == nil {
+			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)
+			contractAddr = &cAddr
+		}
+		otp := &Output{contractAddr, make([]*ReceiptLog, len(output.Logs))}
 		for j, log := range output.Logs {
 			receiptLog := &ReceiptLog{
 				Address: log.Address,
@@ -204,5 +232,5 @@ func convertReceipt(rece *tx.Receipt) *Receipt {
 		}
 		receipt.Outputs[i] = otp
 	}
-	return receipt
+	return receipt, nil
 }

@@ -108,12 +108,12 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 	limit := 5
 	logFilter := &accounts.LogFilter{
 		Range: &logdb.Range{
-			Unit: 0,
+			Unit: "",
 			From: 0,
 			To:   10,
 		},
 		Options: &logdb.Options{
-			Sort:   0,
+			Sort:   "",
 			Offset: 0,
 			Limit:  uint32(limit),
 		},

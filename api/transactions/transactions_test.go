@@ -72,6 +72,7 @@ func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
 		ChainTag:     transaction.ChainTag(),
 		GasPriceCoef: 1,
 		Gas:          21000,
+		Expiration:   10,
 		Sig:          hexutil.Encode(sig),
 		BlockRef:     hexutil.Encode(blockRef[:]),
 		Clauses: transactions.Clauses{
@@ -120,6 +121,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	tx := new(tx.Builder).
 		ChainTag(chain.Tag()).
 		GasPriceCoef(1).
+		Expiration(10).
 		Gas(21000).
 		Nonce(1).
 		Clause(cla).
@@ -153,9 +155,8 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 }
 
 func checkTx(t *testing.T, expectedTx *transactions.Transaction, actualTx *transactions.Transaction) {
-	assert.Equal(t, expectedTx.Signer, actualTx.Signer)
+	assert.Equal(t, expectedTx.Origin, actualTx.Origin)
 	assert.Equal(t, expectedTx.ID, actualTx.ID)
-	assert.Equal(t, expectedTx.TxIndex, actualTx.TxIndex)
 	assert.Equal(t, expectedTx.GasPriceCoef, actualTx.GasPriceCoef)
 	assert.Equal(t, expectedTx.Gas, actualTx.Gas)
 	for i, c := range expectedTx.Clauses {
