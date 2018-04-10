@@ -14,6 +14,8 @@ type Receipt struct {
 	GasUsed uint64
 	// the one who payed for gas
 	GasPayer thor.Address
+	// energy payed for used gas
+	Payed *big.Int
 	// energy reward given to block proposer
 	Reward *big.Int
 	// if the tx reverted

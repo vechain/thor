@@ -134,7 +134,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, err := resolvedTx.BuyGas(rt.blockTime)
+	payer, prepayed, err := resolvedTx.BuyGas(rt.blockTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -185,6 +185,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	// entergy to return = leftover gas * gas price
 	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), resolvedTx.GasPrice)
+	receipt.Payed = new(big.Int).Sub(prepayed, energyToReturn)
 
 	// return overpayed energy to payer
 	rt.energy.AddBalance(rt.blockTime, payer, energyToReturn)

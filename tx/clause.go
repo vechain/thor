@@ -69,6 +69,11 @@ func (c *Clause) Data() []byte {
 	return append([]byte(nil), c.body.Data...)
 }
 
+// IsCreatingContract return if this clause is going to create a contract.
+func (c *Clause) IsCreatingContract() bool {
+	return c.body.To == nil
+}
+
 // EncodeRLP implements rlp.Encoder
 func (c *Clause) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &c.body)
