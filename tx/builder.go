@@ -41,6 +41,12 @@ func (b *Builder) BlockRef(br BlockRef) *Builder {
 	return b
 }
 
+// Expiration set expiration.
+func (b *Builder) Expiration(exp uint32) *Builder {
+	b.body.Expiration = exp
+	return b
+}
+
 // Nonce set nonce.
 func (b *Builder) Nonce(nonce uint64) *Builder {
 	b.body.Nonce = nonce
