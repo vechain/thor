@@ -174,7 +174,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block) txObjects {
 	pool.all.ForEach(func(entry *cache.Entry) bool {
 		if obj, ok := entry.Value.(*txObject); ok {
 			tx := obj.Tx()
-			if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+			if tx.Expiration()+tx.BlockRef().Number() > bestBlock.Header().Number() || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
 				pool.Remove(tx.ID())
 				return true
 			}
@@ -247,7 +247,7 @@ func (pool *TxPool) queuedToPendingObjs(bestBlock *block.Block) txObjects {
 	pool.all.ForEach(func(entry *cache.Entry) bool {
 		if obj, ok := entry.Value.(*txObject); ok {
 			tx := obj.Tx()
-			if time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+			if tx.Expiration()+tx.BlockRef().Number() > bestBlock.Header().Number() || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
 				pool.Remove(tx.ID())
 				return true
 			}
