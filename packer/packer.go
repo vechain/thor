@@ -94,8 +94,10 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				return badTxError{"chain tag mismatch"}
 			case tx.HasReservedFields():
 				return badTxError{"reserved fields not empty"}
-			case tx.BlockRef().Number() > parent.Number():
+			case parent.Number()+1 < tx.BlockRef().Number():
 				return errTxNotAdoptableNow
+			case parent.Number()+1 > tx.BlockRef().Number()+tx.Expiration():
+				return badTxError{"expired"}
 			case totalGasUsed+tx.Gas() > gasLimit:
 				// gasUsed < 90% gas limit
 				if float64(gasLimit-totalGasUsed)/float64(gasLimit) < 0.9 {
