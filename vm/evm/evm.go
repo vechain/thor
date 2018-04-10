@@ -372,8 +372,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	//contractAddr = crypto.CreateAddress(caller.Address(), nonce)
 
 	// differ with ethereum here!!!
-	evm.contractCreationCount++
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
+	evm.contractCreationCount++
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
