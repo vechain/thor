@@ -298,7 +298,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		}
 
 		var cgas uint64
-		if c.body.To == nil {
+		if c.IsCreatingContract() {
 			// contract creation
 			cgas = thor.ClauseGasContractCreation
 		} else {
