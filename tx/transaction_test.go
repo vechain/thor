@@ -31,18 +31,15 @@ func TestTx(t *testing.T) {
 }
 
 func BenchmarkTxMining(b *testing.B) {
-	builder := new(tx.Builder)
+	tx := new(tx.Builder).Build()
 	signer := thor.BytesToAddress([]byte("acc1"))
 	maxWork := &big.Int{}
 	for i := 0; i < b.N; i++ {
-		tx := builder.Nonce((uint64(i))).Build()
-		work := tx.EvaluateWork(signer)
+		work := tx.EvaluateWork(signer, uint64(i))
 		if work.Cmp(maxWork) > 0 {
 			maxWork = work
 		}
 	}
-
-	b.Log(maxWork)
 }
 
 func TestClause(t *testing.T) {

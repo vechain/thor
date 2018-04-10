@@ -23,7 +23,6 @@ const signerCacheSize = 1024
 
 var (
 	signerCache, _ = lru.New(signerCacheSize)
-	invalidTxID    = thor.BytesToBytes32(math.MaxBig256.Bytes())
 )
 
 // Transaction is an immutable tx type.
@@ -31,22 +30,25 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		signingHash atomic.Value
-		signer      atomic.Value
-		id          atomic.Value
-		size        atomic.Value
+		signingHash      atomic.Value
+		signer           atomic.Value
+		id               atomic.Value
+		hashWithoutNonce atomic.Value
+		provedWork       atomic.Value
+		size             atomic.Value
 	}
 }
 
 // body describes details of a tx.
 type body struct {
 	ChainTag     byte
-	Nonce        uint64
 	BlockRef     uint64
+	Expiration   uint32
 	Clauses      []*Clause
 	GasPriceCoef uint8
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`
+	Nonce        uint64
 	Reserved     []interface{}
 	Signature    []byte
 }
@@ -67,9 +69,16 @@ func (t *Transaction) BlockRef() (br BlockRef) {
 	return
 }
 
+// Expiration returns expiration in unit block.
+// A valid transaction requires:
+// blockNum in [blockRef.Num... blockRef.Num + Expiration]
+func (t *Transaction) Expiration() uint32 {
+	return t.body.Expiration
+}
+
 // ID returns id of tx.
 // ID = hash(signingHash, signer).
-// It returns invalidTxID if signer not available.
+// It returns zero Bytes32 if signer not available.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -78,12 +87,8 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 
 	signer, err := t.Signer()
 	if err != nil {
-		return invalidTxID
+		return
 	}
-	return t.makeID(signer)
-}
-
-func (t *Transaction) makeID(signer thor.Address) (id thor.Bytes32) {
 	hw := sha3.NewKeccak256()
 	hw.Write(t.SigningHash().Bytes())
 	hw.Write(signer.Bytes())
@@ -91,24 +96,60 @@ func (t *Transaction) makeID(signer thor.Address) (id thor.Bytes32) {
 	return
 }
 
-func idToWork(id thor.Bytes32) *big.Int {
-	result := new(big.Int).SetBytes(id[:])
-	return result.Div(math.MaxBig256, result)
-}
-
 // ProvedWork returns proved work of this tx.
 // It returns 0, if tx is not signed.
-func (t *Transaction) ProvedWork() *big.Int {
-	_, err := t.Signer()
+func (t *Transaction) ProvedWork() (w *big.Int) {
+	if cached := t.cache.provedWork.Load(); cached != nil {
+		return cached.(*big.Int)
+	}
+	defer func() {
+		t.cache.provedWork.Store(w)
+	}()
+
+	signer, err := t.Signer()
 	if err != nil {
 		return &big.Int{}
 	}
-	return idToWork(t.ID())
+	return t.EvaluateWork(signer, t.body.Nonce)
+}
+
+func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
+	if cached := t.cache.hashWithoutNonce.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() {
+		t.cache.hashWithoutNonce.Store(hash)
+	}()
+
+	hw := sha3.NewKeccak256()
+	rlp.Encode(hw, []interface{}{
+		t.body.ChainTag,
+		t.body.BlockRef,
+		t.body.Expiration,
+		t.body.Clauses,
+		t.body.GasPriceCoef,
+		t.body.Gas,
+		t.body.DependsOn,
+		t.body.Reserved,
+	})
+	hw.Sum(hash[:0])
+	return hash
 }
 
 // EvaluateWork try to compute work when tx signer assumed.
-func (t *Transaction) EvaluateWork(signer thor.Address) *big.Int {
-	return idToWork(t.makeID(signer))
+func (t *Transaction) EvaluateWork(signer thor.Address, nonce uint64) *big.Int {
+	hw := sha3.NewKeccak256()
+	hw.Write(t.hashWithoutNonce().Bytes())
+	hw.Write(signer.Bytes())
+	var nonceBytes [8]byte
+	binary.BigEndian.PutUint64(nonceBytes[:], nonce)
+	hw.Write(nonceBytes[:])
+
+	var hash thor.Bytes32
+	hw.Sum(hash[:0])
+
+	r := new(big.Int).SetBytes(hash[:])
+	return r.Div(math.MaxBig256, r)
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -121,12 +162,13 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
-		t.body.Nonce,
 		t.body.BlockRef,
+		t.body.Expiration,
 		t.body.Clauses,
 		t.body.GasPriceCoef,
 		t.body.Gas,
 		t.body.DependsOn,
+		t.body.Nonce,
 		t.body.Reserved,
 	})
 	hw.Sum(hash[:0])
@@ -222,9 +264,7 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
-	*t = Transaction{
-		body: body,
-	}
+	*t = Transaction{body: body}
 	return nil
 }
 
@@ -343,18 +383,19 @@ func (t *Transaction) String() string {
 
 	return fmt.Sprintf(`
 	Tx(%v, %v)
-	From:			%v
-	Clauses:		%v
-	GasPriceCoef:	%v
-	Gas:			%v
-	ChainTag:		%v
-	BlockRef:		%v-%x
-	DependsOn:		%v
-	ReservedFields:	%v
-	Nonce:			%v
-	Signature:		0x%x
+	From:           %v
+	Clauses:        %v
+	GasPriceCoef:   %v
+	Gas:            %v
+	ChainTag:       %v
+	BlockRef:       %v-%x
+	Expiration:     %v
+	DependsOn:      %v
+	ProvedWork:     %v
+	Nonce:          %v
+	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], dependsOn, t.body.Reserved, t.body.Nonce, t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.ProvedWork(), t.body.Nonce, t.body.Signature)
 }
 
 // see core.IntrinsicGas
