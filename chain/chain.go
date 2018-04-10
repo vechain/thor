@@ -498,25 +498,6 @@ func (c *Chain) getBlockReceipts(blockID thor.Bytes32) (tx.Receipts, error) {
 	return receipts.(tx.Receipts), nil
 }
 
-// GetTransactionReceipt get receipt for given tx ID.
-func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getTransactionReceipt(txID)
-}
-
-func (c *Chain) getTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
-	_, loc, err := c.getTransaction(txID)
-	if err != nil {
-		return nil, err
-	}
-	receipts, err := c.getBlockReceipts(loc.BlockID)
-	if err != nil {
-		return nil, err
-	}
-	return receipts[loc.Index], nil
-}
-
 // IsNotFound returns if an error means not found.
 func (c *Chain) IsNotFound(err error) bool {
 	return err == errNotFound || c.kv.IsNotFound(err)
