@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/vm/evm"
 )
 
+// NewMainnet create a mainnet genesis.
 func NewMainnet() (*Genesis, error) {
 	launchTime := uint64(1519356186)
 	tokenSupply := new(big.Int).Mul(big.NewInt(86716263344), big.NewInt(1e16)) // VET 867,162,633.44
