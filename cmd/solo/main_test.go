@@ -1,8 +1,11 @@
 package main_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -49,8 +52,9 @@ func TestNormalTransaction(t *testing.T) {
 	initAccounts(t)
 
 	tx := new(tx.Builder).
-		ChainTag(0xf1).
-		// BlockRef((tx.BlockRef)([8]byte{0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,})).
+		ChainTag(0xc9).
+		BlockRef(tx.NewBlockRef(0)).
+		Expiration(math.MaxUint32).
 		Clause(tx.NewClause(&accounts[1].Address).WithValue(big.NewInt(100))).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
 
@@ -60,7 +64,11 @@ func TestNormalTransaction(t *testing.T) {
 	}
 
 	tx = tx.WithSignature(sig)
-	t.Log(tx.String())
+
+	var txRLP bytes.Buffer
+	tx.EncodeRLP(&txRLP)
+
+	t.Log(hex.EncodeToString(txRLP.Bytes()))
 }
 
 func TestMultiClause(t *testing.T) {
