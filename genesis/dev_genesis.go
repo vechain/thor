@@ -77,9 +77,9 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) 
 				b, _ := new(big.Int).SetString("10000000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
-				energy.AddBalance(d.launchTime, a.Address, b)
+				energy.AddBalance(0, a.Address, b)
 			}
-			energy.InitializeTokenSupply(d.launchTime, tokenSupply)
+			energy.InitializeTokenSupply(tokenSupply)
 			return nil
 		}).
 		Call(

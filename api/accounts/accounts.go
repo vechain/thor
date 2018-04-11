@@ -80,7 +80,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	if code != nil {
 		hasCode = true
 	}
-	energy := builtin.Energy.WithState(state).GetBalance(header.Timestamp(), addr)
+	energy := builtin.Energy.WithState(state).GetBalance(header.Number(), addr)
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
 		Energy:  math.HexOrDecimal256(*energy),

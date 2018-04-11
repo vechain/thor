@@ -43,18 +43,18 @@ func TestEnergyGrowth(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	blockTime1 := uint64(1000)
-
-	vetBal := big.NewInt(1e18)
-	st.SetBalance(acc, vetBal)
+	blockNum1 := uint32(1000)
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
 
 	eng.AddBalance(10, acc, &big.Int{})
 
-	bal1 := eng.GetBalance(blockTime1, acc)
+	vetBal := big.NewInt(1e18)
+	st.SetBalance(acc, vetBal)
+
+	bal1 := eng.GetBalance(blockNum1, acc)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(blockTime1-10))
+	x.Mul(x, new(big.Int).SetUint64(uint64(blockNum1-10)))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
@@ -67,35 +67,35 @@ func TestEnergyShare(t *testing.T) {
 
 	caller := thor.BytesToAddress([]byte("caller"))
 	contract := thor.BytesToAddress([]byte("contract"))
-	blockTime1 := uint64(1000)
+	blockNum1 := uint32(1000)
 	bal := big.NewInt(1e18)
 	credit := big.NewInt(1e18)
 	recRate := big.NewInt(100)
-	exp := uint64(2000)
+	exp := uint32(2000)
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
-	eng.AddBalance(blockTime1, contract, bal)
-	eng.ApproveConsumption(blockTime1, contract, caller, credit, recRate, exp)
+	eng.AddBalance(blockNum1, contract, bal)
+	eng.ApproveConsumption(blockNum1, contract, caller, credit, recRate, exp)
 
-	remained := eng.GetConsumptionAllowance(blockTime1, contract, caller)
+	remained := eng.GetConsumptionAllowance(blockNum1, contract, caller)
 	assert.Equal(t, credit, remained)
 
 	consumed := big.NewInt(1e9)
-	payer, ok := eng.Consume(blockTime1, &contract, caller, consumed)
+	payer, ok := eng.Consume(blockNum1, &contract, caller, consumed)
 	assert.Equal(t, contract, payer)
 	assert.True(t, ok)
 
-	remained = eng.GetConsumptionAllowance(blockTime1, contract, caller)
+	remained = eng.GetConsumptionAllowance(blockNum1, contract, caller)
 	assert.Equal(t, new(big.Int).Sub(credit, consumed), remained)
 
-	blockTime2 := uint64(1500)
-	remained = eng.GetConsumptionAllowance(blockTime2, contract, caller)
-	x := new(big.Int).SetUint64(blockTime2 - blockTime1)
+	blockNum2 := uint32(1500)
+	remained = eng.GetConsumptionAllowance(blockNum2, contract, caller)
+	x := new(big.Int).SetUint64(uint64(blockNum2 - blockNum1))
 	x.Mul(x, recRate)
 	x.Add(x, credit)
 	x.Sub(x, consumed)
 	assert.Equal(t, x, remained)
 
-	remained = eng.GetConsumptionAllowance(math.MaxUint64, contract, caller)
+	remained = eng.GetConsumptionAllowance(math.MaxUint32, contract, caller)
 	assert.Equal(t, &big.Int{}, remained)
 }

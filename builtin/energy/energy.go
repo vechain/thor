@@ -9,10 +9,9 @@ import (
 )
 
 var (
-	tokenSupplyKey     = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply")))
-	tokenSupplyTimeKey = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply-time")))
-	totalAddKey        = thor.Bytes32(crypto.Keccak256Hash([]byte("total-add")))
-	totalSubKey        = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
+	tokenSupplyKey = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply")))
+	totalAddKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-add")))
+	totalSubKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
 )
 
 func accountKey(addr thor.Address) thor.Bytes32 {
@@ -48,20 +47,19 @@ func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
 }
 
 // InitializeTokenSupply initialize VET token supply info.
-func (e *Energy) InitializeTokenSupply(time uint64, supply *big.Int) {
+func (e *Energy) InitializeTokenSupply(supply *big.Int) {
 	e.setStorage(tokenSupplyKey, supply)
-	e.setStorage(tokenSupplyTimeKey, &time)
 }
 
 // GetTotalSupply returns total supply of energy.
-func (e *Energy) GetTotalSupply(blockTime uint64) *big.Int {
+func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
 	var tokenSupply big.Int
 	e.getStorage(tokenSupplyKey, &tokenSupply)
 	var tokenSupplyTime uint64
 	e.getStorage(tokenSupplyKey, &tokenSupplyTime)
 
 	// calc grown energy for total token supply
-	grown := (&account{&big.Int{}, tokenSupplyTime}).CalcBalance(&tokenSupply, blockTime)
+	grown := (&account{Balance: &big.Int{}}).CalcBalance(&tokenSupply, blockNum)
 
 	var totalAdd, totalSub big.Int
 	e.getStorage(totalAddKey, &totalAdd)
@@ -96,13 +94,13 @@ func (e *Energy) getAndSetAccount(addr thor.Address, cb func(*account) bool) boo
 }
 
 // GetBalance returns energy balance of an account at given block time.
-func (e *Energy) GetBalance(blockTime uint64, addr thor.Address) *big.Int {
-	return e.getAccount(addr).CalcBalance(e.state.GetBalance(addr), blockTime)
+func (e *Energy) GetBalance(blockNum uint32, addr thor.Address) *big.Int {
+	return e.getAccount(addr).CalcBalance(e.state.GetBalance(addr), blockNum)
 }
 
-func (e *Energy) AddBalance(blockTime uint64, addr thor.Address, amount *big.Int) {
+func (e *Energy) AddBalance(blockNum uint32, addr thor.Address, amount *big.Int) {
 	e.getAndSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(e.state.GetBalance(addr), blockTime)
+		bal := acc.CalcBalance(e.state.GetBalance(addr), blockNum)
 		if amount.Sign() != 0 {
 			bal.Add(bal, amount)
 
@@ -112,16 +110,16 @@ func (e *Energy) AddBalance(blockTime uint64, addr thor.Address, amount *big.Int
 			e.setStorage(totalAddKey, &totalAdd)
 		}
 		*acc = account{
-			Balance:   bal,
-			Timestamp: blockTime,
+			Balance:  bal,
+			BlockNum: blockNum,
 		}
 		return true
 	})
 }
 
-func (e *Energy) SubBalance(blockTime uint64, addr thor.Address, amount *big.Int) bool {
+func (e *Energy) SubBalance(blockNum uint32, addr thor.Address, amount *big.Int) bool {
 	return e.getAndSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(e.state.GetBalance(addr), blockTime)
+		bal := acc.CalcBalance(e.state.GetBalance(addr), blockNum)
 		if bal.Cmp(amount) < 0 {
 			return false
 		}
@@ -134,36 +132,36 @@ func (e *Energy) SubBalance(blockTime uint64, addr thor.Address, amount *big.Int
 			e.setStorage(totalSubKey, &totalSub)
 		}
 		*acc = account{
-			Balance:   bal,
-			Timestamp: blockTime,
+			Balance:  bal,
+			BlockNum: blockNum,
 		}
 		return true
 	})
 }
 
 func (e *Energy) ApproveConsumption(
-	blockTime uint64,
+	blockNum uint32,
 	contractAddr thor.Address,
 	caller thor.Address,
 	credit *big.Int,
 	recoveryRate *big.Int,
-	expiration uint64) {
+	expiration uint32) {
 	e.setStorage(consumptionApprovalKey(contractAddr, caller), &consumptionApproval{
 		Credit:       credit,
 		RecoveryRate: recoveryRate,
 		Expiration:   expiration,
-		Timestamp:    blockTime,
+		BlockNum:     blockNum,
 		Remained:     credit,
 	})
 }
 
 func (e *Energy) GetConsumptionAllowance(
-	blockTime uint64,
+	blockNum uint32,
 	contractAddr thor.Address,
 	caller thor.Address) *big.Int {
 	var ca consumptionApproval
 	e.getStorage(consumptionApprovalKey(contractAddr, caller), &ca)
-	return ca.RemainedAt(blockTime)
+	return ca.RemainedAt(blockNum)
 }
 
 func (e *Energy) SetSupplier(contractAddr thor.Address, supplierAddr thor.Address, agreed bool) {
@@ -180,7 +178,7 @@ func (e *Energy) GetSupplier(contractAddr thor.Address) (thor.Address, bool) {
 }
 
 func (e *Energy) consumeContract(
-	blockTime uint64,
+	blockNum uint32,
 	contractAddr thor.Address,
 	caller thor.Address,
 	amount *big.Int) (payer thor.Address, ok bool) {
@@ -189,7 +187,7 @@ func (e *Energy) consumeContract(
 	var ca consumptionApproval
 	e.getStorage(caKey, &ca)
 
-	remained := ca.RemainedAt(blockTime)
+	remained := ca.RemainedAt(blockNum)
 	if remained.Cmp(amount) < 0 {
 		return thor.Address{}, false
 	}
@@ -197,7 +195,7 @@ func (e *Energy) consumeContract(
 	defer func() {
 		if ok {
 			ca.Remained.Sub(remained, amount)
-			ca.Timestamp = blockTime
+			ca.BlockNum = blockNum
 			e.setStorage(caKey, &ca)
 		}
 	}()
@@ -205,24 +203,24 @@ func (e *Energy) consumeContract(
 	var s supplier
 	e.getStorage(supplierKey(contractAddr), &s)
 	if s.Agreed {
-		if e.SubBalance(blockTime, s.Address, amount) {
+		if e.SubBalance(blockNum, s.Address, amount) {
 			return s.Address, true
 		}
 	}
 
-	if e.SubBalance(blockTime, contractAddr, amount) {
+	if e.SubBalance(blockNum, contractAddr, amount) {
 		return contractAddr, true
 	}
 	return thor.Address{}, false
 }
 
-func (e *Energy) Consume(blockTime uint64, contractAddr *thor.Address, caller thor.Address, amount *big.Int) (thor.Address, bool) {
+func (e *Energy) Consume(blockNum uint32, contractAddr *thor.Address, caller thor.Address, amount *big.Int) (thor.Address, bool) {
 	if contractAddr != nil {
-		if payer, ok := e.consumeContract(blockTime, *contractAddr, caller, amount); ok {
+		if payer, ok := e.consumeContract(blockNum, *contractAddr, caller, amount); ok {
 			return payer, true
 		}
 	}
-	if e.SubBalance(blockTime, caller, amount) {
+	if e.SubBalance(blockNum, caller, amount) {
 		return caller, true
 	}
 	return thor.Address{}, false

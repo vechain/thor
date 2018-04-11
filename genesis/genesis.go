@@ -35,7 +35,7 @@ func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, err
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-			builtin.Energy.WithState(state).InitializeTokenSupply(m.launchTime, m.tokenSupply)
+			builtin.Energy.WithState(state).InitializeTokenSupply(m.tokenSupply)
 			return nil
 		}).
 		Call(
