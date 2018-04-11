@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/gorilla/mux"
@@ -85,9 +87,13 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, e
 }
 
 //SendRawTransaction send a raw transactoion
-func (t *Transactions) sendRawTransaction(raw []byte) (*thor.Bytes32, error) {
+func (t *Transactions) sendRawTransaction(rawTx *RawTx) (*thor.Bytes32, error) {
+	data, err := hexutil.Decode(rawTx.Raw)
+	if err != nil {
+		return nil, err
+	}
 	var tx *tx.Transaction
-	if err := rlp.DecodeBytes(raw, &tx); err != nil {
+	if err := rlp.DecodeBytes(data, &tx); err != nil {
 		return nil, err
 	}
 	if err := t.pool.Add(tx); err != nil {
@@ -103,7 +109,10 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 	req.Body.Close()
-	var raw []byte
+	if len(res) == 0 {
+		return utils.HTTPError(errors.New("transaction required"), http.StatusBadRequest)
+	}
+	var raw *RawTx
 	if err = json.Unmarshal(res, &raw); err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
