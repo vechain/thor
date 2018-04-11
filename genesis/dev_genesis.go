@@ -58,7 +58,7 @@ func (d *dev) Accounts() []testAccount {
 	return accs
 }
 
-func (d *dev) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
+func (d *dev) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) {
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(d.launchTime).
