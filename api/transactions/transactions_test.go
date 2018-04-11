@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/txpool"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transactions"
@@ -60,39 +60,20 @@ func getTxReceipt(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
 }
 
 func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.Dev.Accounts()[0].PrivateKey)
+	rlpTx, err := rlp.EncodeToBytes(transaction)
 	if err != nil {
 		t.Fatal(err)
 	}
-	to := thor.BytesToAddress([]byte("to"))
-	v := big.NewInt(10000)
-	blockRef := tx.NewBlockRef(0)
-	rawTransaction := &transactions.RawTransaction{
-		Nonce:        1,
-		ChainTag:     transaction.ChainTag(),
-		GasPriceCoef: 1,
-		Gas:          21000,
-		Expiration:   10,
-		Sig:          hexutil.Encode(sig),
-		BlockRef:     hexutil.Encode(blockRef[:]),
-		Clauses: transactions.Clauses{
-			transactions.Clause{
-				To:    &to,
-				Value: math.HexOrDecimal256(*v),
-				Data:  hexutil.Encode(nil),
-			},
-		},
-	}
-	txData, err := json.Marshal(rawTransaction)
+	raw, err := json.Marshal(rlpTx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := httpPost(t, ts.URL+"/transactions", txData)
-	var txID string
-	if err = json.Unmarshal(res, &txID); err != nil {
+	res := httpPost(t, ts.URL+"/transactions", raw)
+	var txObj map[string]string
+	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, transaction.ID().String(), txID, "shoudl be the same transaction")
+	assert.Equal(t, transaction.ID().String(), txObj["id"], "shoudl be the same transaction")
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {

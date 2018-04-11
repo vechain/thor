@@ -2,11 +2,9 @@ package transactions
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -39,19 +37,6 @@ func (c *Clause) String() string {
 		)`, c.To,
 		c.Value,
 		c.Data)
-}
-
-//RawTransaction a raw transaction
-type RawTransaction struct {
-	ChainTag     byte                `json:"chainTag"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	BlockRef     string              `json:"blockRef"`
-	Clauses      Clauses             `json:"clauses,string"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	Expiration   uint32              `json:"expiration"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
-	Sig          string              `json:"sig"`
 }
 
 //Transaction transaction
@@ -91,62 +76,6 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 		t.DependsOn = tx.DependsOn()
 	}
 	return t, nil
-}
-
-func buildRawTransaction(rawTransaction *RawTransaction) (*tx.Transaction, error) {
-	builder := new(tx.Builder)
-	for _, clause := range rawTransaction.Clauses {
-		v := big.Int(clause.Value)
-		c := tx.NewClause(clause.To).WithValue(&v)
-		if clause.Data != "" {
-			data, err := hexutil.Decode(clause.Data)
-			if err != nil {
-				return nil, errors.Wrap(err, "data")
-			}
-			c.WithData(data)
-		}
-		builder.Clause(c)
-	}
-	sig, err := hexutil.Decode(rawTransaction.Sig)
-	if err != nil {
-		return nil, errors.Wrap(err, "signature")
-	}
-
-	blockref, err := hexutil.Decode(rawTransaction.BlockRef)
-	if err != nil {
-		return nil, errors.Wrap(err, "blockRef")
-	}
-	var blkRef tx.BlockRef
-	copy(blkRef[:], blockref[:])
-	return builder.ChainTag(rawTransaction.ChainTag).
-		GasPriceCoef(rawTransaction.GasPriceCoef).
-		Gas(uint64(rawTransaction.Gas)).
-		DependsOn(rawTransaction.DependsOn).
-		Expiration(rawTransaction.Expiration).
-		BlockRef(blkRef).
-		Nonce(uint64(rawTransaction.Nonce)).
-		Build().
-		WithSignature(sig), nil
-}
-
-func (raw *RawTransaction) String() string {
-	return fmt.Sprintf(`Clause(
-		ChainTag    	 		%v
-		Nonce      				%v
-		BlockRef					%v
-		Clauses      			%v
-		GasPriceCoef 			%v
-		Gas          			%v
-		DependsOn    			%v
-		Sig          			%v
-		)`, raw.ChainTag,
-		raw.Nonce,
-		raw.BlockRef,
-		raw.Clauses,
-		raw.GasPriceCoef,
-		raw.Gas,
-		raw.DependsOn,
-		raw.Sig)
 }
 
 type blockContext struct {
