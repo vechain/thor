@@ -4,9 +4,9 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -14,26 +14,19 @@ import (
 	"github.com/vechain/thor/vm/evm"
 )
 
-var Dev = &dev{
-	launchTime: 1519356186,
-}
-
-type dev struct {
-	launchTime   uint64
-	testAccounts []testAccount
-}
-
-type testAccount struct {
+type account struct {
 	Address    thor.Address
 	PrivateKey *ecdsa.PrivateKey
 }
 
-func (d *dev) Accounts() []testAccount {
-	if tas := d.testAccounts; tas != nil {
-		return tas
+var devAccounts atomic.Value
+
+func DevAccounts() []account {
+	if accs := devAccounts.Load(); accs != nil {
+		return accs.([]account)
 	}
 
-	var accs []testAccount
+	var accs []account
 	privKeys := []string{
 		"dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65",
 		"321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51",
@@ -52,20 +45,22 @@ func (d *dev) Accounts() []testAccount {
 			panic(err)
 		}
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
-		accs = append(accs, testAccount{thor.Address(addr), pk})
+		accs = append(accs, account{thor.Address(addr), pk})
 	}
-	d.testAccounts = accs
+	devAccounts.Store(accs)
 	return accs
 }
 
-func (d *dev) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) {
+func NewDevnet() (*Genesis, error) {
+	launchTime := uint64(1519356186)
+
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
-		Timestamp(d.launchTime).
+		Timestamp(launchTime).
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
 			for addr := range evm.PrecompiledContractsByzantium {
-				state.SetBalance(thor.Address(addr), big.NewInt(1))
+				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
 			}
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
@@ -73,7 +68,7 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) 
 
 			energy := builtin.Energy.WithState(state)
 			tokenSupply := &big.Int{}
-			for _, a := range d.Accounts() {
+			for _, a := range DevAccounts() {
 				b, _ := new(big.Int).SetString("10000000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
@@ -95,12 +90,17 @@ func (d *dev) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) 
 				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
 			builtin.Executor.Address)
 
-	for i, a := range d.Accounts() {
+	for i, a := range DevAccounts() {
 		builder.Call(
 			tx.NewClause(&builtin.Authority.Address).
 				WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", i))))),
 			builtin.Executor.Address)
 	}
 
-	return builder.Build(stateCreator)
+	id, err := builder.ComputeID()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Genesis{builder, id}, nil
 }

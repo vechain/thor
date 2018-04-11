@@ -1,56 +1,26 @@
 package genesis
 
 import (
-	"math/big"
+	"encoding/hex"
 
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm/evm"
 )
 
-var Mainnet = &mainnet{
-	1519356186,
-	new(big.Int).Mul(big.NewInt(86716263344), big.NewInt(1e16)), // VET 867,162,633.44
+type Genesis struct {
+	builder *Builder
+	id      thor.Bytes32
 }
 
-type mainnet struct {
-	launchTime  uint64
-	tokenSupply *big.Int
+func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
+	return g.builder.Build(stateCreator)
 }
 
-func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) {
-	return new(Builder).
-		Timestamp(m.launchTime).
-		GasLimit(thor.InitialGasLimit).
-		State(func(state *state.State) error {
-			// alloc precompiled contracts
-			for addr := range evm.PrecompiledContractsByzantium {
-				state.SetBalance(thor.Address(addr), big.NewInt(1))
-			}
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-
-			builtin.Energy.WithState(state).InitializeTokenSupply(m.tokenSupply)
-			return nil
-		}).
-		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
-			builtin.Executor.Address).
-		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
-			builtin.Executor.Address).
-		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
-			builtin.Executor.Address).
-		Build(stateCreator)
+func (g *Genesis) ID() thor.Bytes32 {
+	return g.id
 }
 
 func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
@@ -64,3 +34,13 @@ func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
 	}
 	return data
 }
+
+func mustDecodeHex(str string) []byte {
+	data, err := hex.DecodeString(str)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+var emptyRuntimeBytecode = mustDecodeHex("6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029")
