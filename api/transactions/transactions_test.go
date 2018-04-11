@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/gorilla/mux"
@@ -64,7 +66,7 @@ func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := json.Marshal(rlpTx)
+	raw, err := json.Marshal(transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -99,8 +99,6 @@ paths:
         - Account
       summary: filter event logs produced by the account object
       parameters:
-        - $ref: '#/components/parameters/LogFilterOffsetInQuery'
-        - $ref: '#/components/parameters/LogFilterLimitInQuery'
         - $ref: '#/components/parameters/LogFilterOrderInQuery'
       requestBody:
         description: log filter criteria
@@ -166,13 +164,12 @@ paths:
         - Transaction
       summary: send raw transaction
       requestBody:
-        description: hex form of encoded transaction
+        description: arguments and environment
         required: true
         content:
           application/json:
             schema:
-              type: string
-              example: '0xaabbccddeeff'
+              $ref: '#/components/schemas/RawTx'
       responses:
         '200':
           description: OK
@@ -289,6 +286,13 @@ components:
         signer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         transactions:
           - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+    RawTx:
+      properties:
+        raw:
+          type: string
+          description: hex form of encoded transaction
+      example:
+        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'  
     Clause:
       properties:
         to:
@@ -477,11 +481,6 @@ components:
           type: integer
         limit: 
           type: integer
-        sort:
-          type: string
-          enum:
-            - ASC
-            - DESC
     Range:
       properties:
         unit:
@@ -577,6 +576,17 @@ components:
       schema:
         type: string
       example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+    LogFilterOrderInQuery:
+      name: order
+      in: query
+      description: order of filtered logs
+      required: false
+      schema:
+        type: string
+        enum:
+          - ASC
+          - DESC
+      example: 'ASC'
     TxIDInPath:
       in: path
       description: ID of transaction

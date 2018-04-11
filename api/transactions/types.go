@@ -39,6 +39,10 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
+type RawTx struct {
+	Raw string `json:"raw"`
+}
+
 //Transaction transaction
 type Transaction struct {
 	Block        blockContext  `json:"block"`
