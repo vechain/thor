@@ -5,28 +5,31 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
 type Transactions struct {
-	chain  *chain.Chain
-	txPool *txpool.TxPool
+	chain *chain.Chain
+	pool  *txpool.TxPool
 }
 
-func New(chain *chain.Chain, txPool *txpool.TxPool) *Transactions {
+func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		chain,
-		txPool,
+		pool,
 	}
 }
 
 func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
-	if pengdingTransaction := t.txPool.GetTransaction(txID); pengdingTransaction != nil {
+	if pengdingTransaction := t.pool.GetTransaction(txID); pengdingTransaction != nil {
 		return ConvertTransaction(pengdingTransaction)
 	}
 	tx, location, err := t.chain.GetTransaction(txID)
@@ -82,12 +85,12 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, e
 }
 
 //SendRawTransaction send a raw transactoion
-func (t *Transactions) sendRawTransaction(raw *RawTransaction) (*thor.Bytes32, error) {
-	tx, err := buildRawTransaction(raw)
-	if err != nil {
+func (t *Transactions) sendRawTransaction(raw []byte) (*thor.Bytes32, error) {
+	var tx *tx.Transaction
+	if err := rlp.DecodeBytes(raw, &tx); err != nil {
 		return nil, err
 	}
-	if err := t.txPool.Add(tx); err != nil {
+	if err := t.pool.Add(tx); err != nil {
 		return nil, err
 	}
 	txID := tx.ID()
@@ -100,15 +103,17 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
 	req.Body.Close()
-	var rt *RawTransaction
-	if err := json.Unmarshal(res, &rt); err != nil {
+	var raw []byte
+	if err = json.Unmarshal(res, &raw); err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
-	txID, err := t.sendRawTransaction(rt)
+	txID, err := t.sendRawTransaction(raw)
 	if err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
-	return utils.WriteJSON(w, txID.String())
+	return utils.WriteJSON(w, map[string]string{
+		"id": txID.String(),
+	})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
