@@ -19,14 +19,13 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/genesis"
+	Genesis "github.com/vechain/thor/genesis"
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -67,17 +66,17 @@ func main() {
 			Value: "127.0.0.1:8669",
 			Usage: "restful addr",
 		},
-		cli.StringFlag{
-			Name:  "nodekey",
-			Usage: "private key (for node) file path (defaults to ~/.thor-node.key if omitted)",
-		},
+		// cli.StringFlag{
+		// 	Name:  "nodekey",
+		// 	Usage: "private key (for node) file path (defaults to ~/.thor-node.key if omitted)",
+		// },
 		cli.StringFlag{
 			Name:  "key",
 			Usage: "private key (for pack) as hex (for testing)",
 		},
 		cli.StringFlag{
 			Name:  "datadir",
-			Value: "/tmp/thor_datadir_test",
+			Value: "/tmp/thor-data",
 			Usage: "chain data path",
 		},
 		cli.IntFlag{
@@ -86,8 +85,8 @@ func main() {
 			Usage: "log verbosity (0-9)",
 		},
 		cli.BoolFlag{
-			Name:  "testnet",
-			Usage: "test network",
+			Name:  "devnet",
+			Usage: "develop network",
 		},
 	}
 	app.Action = action
@@ -101,21 +100,56 @@ func main() {
 func action(ctx *cli.Context) error {
 	initLog(log15.Lvl(ctx.Int("verbosity")))
 
-	datadir := ctx.String("datadir")
+	var (
+		genesis *Genesis.Genesis
+		err     error
+	)
+	if ctx.Bool("devnet") {
+		genesis, err = Genesis.NewDevnet()
+	} else {
+		genesis, err = Genesis.NewMainnet()
+	}
+	if err != nil {
+		return err
+	}
+	dataDir := fmt.Sprintf("%v/chain-%x", ctx.String("datadir"), genesis.ID().Bytes()[24:])
+	if err = os.MkdirAll(dataDir, os.ModePerm); err != nil {
+		if !os.IsExist(err) {
+			return err
+		}
+	}
 
-	lvldb, err := Lvldb.New(datadir, Lvldb.Options{})
+	lvldb, err := Lvldb.New(dataDir+"/main.db", Lvldb.Options{})
 	if err != nil {
 		return err
 	}
 	defer lvldb.Close()
 
-	logdb, err := Logdb.New(datadir + "/log.db")
+	logdb, err := Logdb.New(dataDir + "/log.db")
 	if err != nil {
 		return err
 	}
 	defer logdb.Close()
 
-	nodeKey, err := loadNodeKey(ctx.String("nodekey"))
+	stateCreator := state.NewCreator(lvldb)
+
+	genesisBlock, txLogs, err := genesis.Build(stateCreator)
+	if err != nil {
+		return err
+	}
+
+	logs := []*Logdb.Log{}
+	for _, log := range txLogs {
+		logs = append(logs, Logdb.NewLog(genesisBlock.Header(), 0, thor.Bytes32{}, thor.Address{}, log))
+	}
+	logdb.Insert(logs, nil)
+
+	chain, err := chain.New(lvldb, genesisBlock)
+	if err != nil {
+		return err
+	}
+
+	nodeKey, err := loadNodeKey(dataDir + "/node-key")
 	if err != nil {
 		return err
 	}
@@ -131,17 +165,6 @@ func action(ctx *cli.Context) error {
 	}
 	defer lsr.Close()
 
-	stateCreator := state.NewCreator(lvldb)
-
-	genesisBlock, err := buildGenesis(ctx.Bool("testnet"), stateCreator, logdb)
-	if err != nil {
-		return err
-	}
-
-	chain, err := chain.New(lvldb, genesisBlock)
-	if err != nil {
-		return err
-	}
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 	consensus := consensus.New(chain, stateCreator)
@@ -150,7 +173,7 @@ func action(ctx *cli.Context) error {
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
 		MaxPeers:       25,
-		ListenAddr:     ctx.String("addr"),
+		ListenAddr:     ctx.String("p2paddr"),
 		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 	}
 
@@ -158,7 +181,8 @@ func action(ctx *cli.Context) error {
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, opt, datadir+"/good-nodes")
+		runCommunicator(c, communicator, opt, dataDir+"/good-nodes")
+		log.Info("communicator exit")
 	})
 
 	txRoutineCtx := &txRoutineContext{
@@ -168,9 +192,11 @@ func action(ctx *cli.Context) error {
 	}
 	goes.Go(func() {
 		txBroadcastLoop(txRoutineCtx)
+		log.Info("broadcast loop exit")
 	})
 	goes.Go(func() {
 		txPoolUpdateLoop(txRoutineCtx)
+		log.Info("tx pool update loop exit")
 	})
 
 	blockRoutineCtx := &blockRoutineContext{
@@ -183,13 +209,16 @@ func action(ctx *cli.Context) error {
 	}
 	goes.Go(func() {
 		consentLoop(blockRoutineCtx, consensus, logdb)
+		log.Info("consent loop exit")
 	})
 	goes.Go(func() {
 		packLoop(blockRoutineCtx, packer, privateKey)
+		log.Info("pack loop exit")
 	})
 
 	goes.Go(func() {
 		runRestful(c, rest, lsr)
+		log.Info("restful exit")
 	})
 
 	interrupt := make(chan os.Signal)
@@ -211,37 +240,13 @@ func action(ctx *cli.Context) error {
 	return nil
 }
 
-func buildGenesis(isTest bool, stateCreator *state.Creator, logdb *Logdb.LogDB) (*block.Block, error) {
-	var (
-		genesisBlock *block.Block
-		txLogs       tx.Logs
-		err          error
-	)
-
-	if isTest {
-		genesisBlock, txLogs, err = genesis.Dev.Build(stateCreator)
-	} else {
-		genesisBlock, txLogs, err = genesis.Mainnet.Build(stateCreator)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	logs := []*Logdb.Log{}
-	for _, log := range txLogs {
-		logs = append(logs, Logdb.NewLog(genesisBlock.Header(), 0, thor.Bytes32{}, thor.Address{}, log))
-	}
-	logdb.Insert(logs, nil)
-
-	return genesisBlock, err
-}
-
 func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
 	var nodes p2psrv.Nodes
 	nodesByte, err := ioutil.ReadFile(filePath)
-	if err != nil && err != os.ErrNotExist {
-		log.Error(fmt.Sprintf("%v", err))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error(fmt.Sprintf("%v", err))
+		}
 	} else {
 		rlp.DecodeBytes(nodesByte, &nodes)
 		opt.GoodNodes = nodes
