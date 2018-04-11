@@ -22,7 +22,7 @@ type mainnet struct {
 	tokenSupply *big.Int
 }
 
-func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, []*tx.Log, error) {
+func (m *mainnet) Build(stateCreator *state.Creator) (*block.Block, tx.Logs, error) {
 	return new(Builder).
 		Timestamp(m.launchTime).
 		GasLimit(thor.InitialGasLimit).

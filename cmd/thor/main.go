@@ -20,12 +20,13 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/logdb"
+	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -84,6 +85,10 @@ func main() {
 			Value: int(log15.LvlInfo),
 			Usage: "log verbosity (0-9)",
 		},
+		cli.BoolFlag{
+			Name:  "testnet",
+			Usage: "test network",
+		},
 	}
 	app.Action = action
 
@@ -104,7 +109,7 @@ func action(ctx *cli.Context) error {
 	}
 	defer lvldb.Close()
 
-	logdb, err := logdb.New(datadir + "/log.db")
+	logdb, err := Logdb.New(datadir + "/log.db")
 	if err != nil {
 		return err
 	}
@@ -126,9 +131,9 @@ func action(ctx *cli.Context) error {
 	}
 	defer lsr.Close()
 
-	//////////
 	stateCreator := state.NewCreator(lvldb)
-	genesisBlock, _, err := genesis.Dev.Build(stateCreator)
+
+	genesisBlock, err := buildGenesis(ctx.Bool("testnet"), stateCreator, logdb)
 	if err != nil {
 		return err
 	}
@@ -148,8 +153,6 @@ func action(ctx *cli.Context) error {
 		ListenAddr:     ctx.String("addr"),
 		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 	}
-	//
-	///////
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
@@ -206,6 +209,32 @@ func action(ctx *cli.Context) error {
 	}
 
 	return nil
+}
+
+func buildGenesis(isTest bool, stateCreator *state.Creator, logdb *Logdb.LogDB) (*block.Block, error) {
+	var (
+		genesisBlock *block.Block
+		txLogs       tx.Logs
+		err          error
+	)
+
+	if isTest {
+		genesisBlock, txLogs, err = genesis.Dev.Build(stateCreator)
+	} else {
+		genesisBlock, txLogs, err = genesis.Mainnet.Build(stateCreator)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	logs := []*Logdb.Log{}
+	for _, log := range txLogs {
+		logs = append(logs, Logdb.NewLog(genesisBlock.Header(), 0, thor.Bytes32{}, thor.Address{}, log))
+	}
+	logdb.Insert(logs, nil)
+
+	return genesisBlock, err
 }
 
 func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
