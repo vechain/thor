@@ -49,10 +49,10 @@ func TestLogDB(t *testing.T) {
 			To:   10,
 		},
 		Options: &logdb.Options{
-			Sort:   "ASC",
 			Offset: 0,
 			Limit:  uint32(limit),
 		},
+		Order:   "ASC",
 		Address: &addr,
 		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
