@@ -20,7 +20,7 @@ type Block struct {
 	StateRoot    thor.Bytes32   `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
 	Signer       thor.Address   `json:"signer"`
-	Transactions []thor.Bytes32 `json:"txs,string"`
+	Transactions []thor.Bytes32 `json:"transactions,string"`
 }
 
 //ConvertBlock convert a raw block into a json format block
