@@ -423,7 +423,15 @@ components:
         tx:
           id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        outputs: []
+        outputs: 
+          - {
+            'contractAddress':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
+            logs:[{
+                'address':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
+                'topics':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8',
+                'data':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+              }]
+          }
     ContractCall:
       properties:
         value:
