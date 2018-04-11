@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/vechain/thor/thor"
 )
@@ -16,11 +15,11 @@ const (
 	Time            = "Time"
 )
 
-type SortType string
+type OrderType string
 
 const (
-	Asc  SortType = "ASC"
-	Desc          = "DESC"
+	ASC  OrderType = "ASC"
+	DESC           = "DESC"
 )
 
 type Range struct {
@@ -30,15 +29,15 @@ type Range struct {
 }
 
 type Options struct {
-	Offset uint64   `json:"offset"`
-	Limit  uint32   `json:"limit"`
-	Sort   SortType `json:"sort"` //default asc
+	Offset uint64 `json:"offset"`
+	Limit  uint64 `json:"limit"`
 }
 
 //LogFilter filter
 type LogFilter struct {
 	Address  *thor.Address      `json:"address"` // always a contract address
 	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
+	Order    OrderType          `json:"order"` //default asc
 	Range    *Range
 	Options  *Options
 }
@@ -116,8 +115,8 @@ func (db *LogDB) Filter(logFilter *LogFilter) ([]*Log, error) {
 	}
 	var args []interface{}
 	stmt := "SELECT * FROM log WHERE 1"
+	condition := "blockNumber"
 	if logFilter.Range != nil {
-		condition := "blockNumber"
 		if logFilter.Range.Unit == Time {
 			condition = "blockTime"
 		}
@@ -154,17 +153,15 @@ func (db *LogDB) Filter(logFilter *LogFilter) ([]*Log, error) {
 		}
 	}
 
-	if logFilter.Options.Sort == Asc {
-		stmt += " ORDER BY blockNumber ASC "
+	if logFilter.Order == DESC {
+		stmt += " ORDER BY " + condition + " DESC "
 	} else {
-		stmt += " ORDER BY blockNumber DESC "
+		stmt += " ORDER BY " + condition + " ASC "
 	}
 
 	if logFilter.Options != nil {
-		if logFilter.Options.Offset < math.MaxUint64 && logFilter.Options.Limit < math.MaxUint32 && logFilter.Options.Limit != 0 {
-			stmt += " limit ?, ? "
-			args = append(args, logFilter.Options.Offset, logFilter.Options.Limit)
-		}
+		stmt += " limit ?, ? "
+		args = append(args, logFilter.Options.Offset, logFilter.Options.Limit)
 	}
 	return db.query(stmt, args...)
 }
