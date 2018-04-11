@@ -83,7 +83,7 @@ func init() {
 			return []interface{}{Executor.Address}, nil
 		}),
 		Energy.impl("nativeGetTotalSupply", 3000, func(env *env) ([]interface{}, error) {
-			supply := Energy.WithState(env.State).GetTotalSupply(env.VMContext.Time)
+			supply := Energy.WithState(env.State).GetTotalSupply(env.VMContext.BlockNumber)
 			return []interface{}{supply}, nil
 		}),
 		Energy.impl("nativeGetTotalBurned", ethparams.SloadGas*2, func(env *env) ([]interface{}, error) {
@@ -93,7 +93,7 @@ func init() {
 		Energy.impl("nativeGetBalance", 2000, func(env *env) ([]interface{}, error) {
 			var addr common.Address
 			env.Args(&addr)
-			bal := Energy.WithState(env.State).GetBalance(env.VMContext.Time, thor.Address(addr))
+			bal := Energy.WithState(env.State).GetBalance(env.VMContext.BlockNumber, thor.Address(addr))
 			return []interface{}{bal}, nil
 		}),
 		Energy.impl("nativeAddBalance", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
@@ -102,7 +102,7 @@ func init() {
 				Amount *big.Int
 			}
 			env.Args(&args)
-			Energy.WithState(env.State).AddBalance(env.VMContext.Time, thor.Address(args.Addr), args.Amount)
+			Energy.WithState(env.State).AddBalance(env.VMContext.BlockNumber, thor.Address(args.Addr), args.Amount)
 			return nil, nil
 		}),
 		Energy.impl("nativeSubBalance", ethparams.SstoreResetGas, func(env *env) ([]interface{}, error) {
@@ -111,7 +111,7 @@ func init() {
 				Amount *big.Int
 			}
 			env.Args(&args)
-			ok := Energy.WithState(env.State).SubBalance(env.VMContext.Time, thor.Address(args.Addr), args.Amount)
+			ok := Energy.WithState(env.State).SubBalance(env.VMContext.BlockNumber, thor.Address(args.Addr), args.Amount)
 			return []interface{}{ok}, nil
 		}),
 		Energy.impl("nativeApproveConsumption", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
@@ -120,10 +120,10 @@ func init() {
 				Caller       common.Address
 				Credit       *big.Int
 				RecoveryRate *big.Int
-				Expiration   uint64
+				Expiration   uint32
 			}
 			env.Args(&args)
-			Energy.WithState(env.State).ApproveConsumption(env.VMContext.Time,
+			Energy.WithState(env.State).ApproveConsumption(env.VMContext.BlockNumber,
 				thor.Address(args.ContractAddr), thor.Address(args.Caller), args.Credit, args.RecoveryRate, args.Expiration)
 			return nil, nil
 		}),
@@ -133,7 +133,7 @@ func init() {
 				Caller       common.Address
 			}
 			env.Args(&args)
-			remained := Energy.WithState(env.State).GetConsumptionAllowance(env.VMContext.Time,
+			remained := Energy.WithState(env.State).GetConsumptionAllowance(env.VMContext.BlockNumber,
 				thor.Address(args.ContractAddr), thor.Address(args.Caller))
 			return []interface{}{remained}, nil
 		}),

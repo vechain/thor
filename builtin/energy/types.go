@@ -15,15 +15,15 @@ type (
 		Balance *big.Int
 
 		// snapshot
-		Timestamp uint64
+		BlockNum uint32
 	}
 
 	consumptionApproval struct {
 		Credit       *big.Int
 		RecoveryRate *big.Int
-		Expiration   uint64
+		Expiration   uint32
 		Remained     *big.Int
-		Timestamp    uint64
+		BlockNum     uint32
 	}
 
 	supplier struct {
@@ -45,7 +45,7 @@ var (
 
 func (a *account) Encode() ([]byte, error) {
 	if a.Balance.Sign() == 0 &&
-		a.Timestamp == 0 {
+		a.BlockNum == 0 {
 		return nil, nil
 	}
 	return rlp.EncodeToBytes(a)
@@ -59,21 +59,21 @@ func (a *account) Decode(data []byte) error {
 	return rlp.DecodeBytes(data, a)
 }
 
-func (a *account) CalcBalance(tokenBalance *big.Int, blockTime uint64) *big.Int {
-	if a.Timestamp >= blockTime {
+func (a *account) CalcBalance(tokenBalance *big.Int, blockNum uint32) *big.Int {
+	if blockNum <= a.BlockNum {
 		// never occur in real env.
 		return a.Balance
 	}
 
-	if a.Timestamp == 0 {
+	if tokenBalance.Sign() == 0 {
 		return a.Balance
 	}
 
-	t := blockTime - a.Timestamp
+	t := blockNum - a.BlockNum
 	if t == 0 {
 		return a.Balance
 	}
-	x := new(big.Int).SetUint64(t)
+	x := new(big.Int).SetUint64(uint64(t))
 	x.Mul(x, tokenBalance)
 	x.Mul(x, thor.EnergyGrowthRate)
 	x.Div(x, bigE18)
@@ -97,12 +97,12 @@ func (ca *consumptionApproval) Decode(data []byte) error {
 	return rlp.DecodeBytes(data, ca)
 }
 
-func (ca *consumptionApproval) RemainedAt(blockTime uint64) *big.Int {
-	if blockTime >= ca.Expiration {
+func (ca *consumptionApproval) RemainedAt(blockNum uint32) *big.Int {
+	if blockNum >= ca.Expiration {
 		return &big.Int{}
 	}
 
-	x := new(big.Int).SetUint64(blockTime - ca.Timestamp)
+	x := new(big.Int).SetUint64(uint64(blockNum - ca.BlockNum))
 	x.Mul(x, ca.RecoveryRate)
 	x.Add(x, ca.Remained)
 	if x.Cmp(ca.Credit) < 0 {

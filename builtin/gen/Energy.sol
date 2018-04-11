@@ -85,9 +85,9 @@ contract Energy is Token {
         require(msg.sender == this.nativeGetContractMaster(_contractAddr));        
         _transfer(_contractAddr, _to, _amount);
         return true;
-    }  
+    } 
     
-    function approveConsumption(address _contractAddr, address _caller,uint256 _credit,uint256 _recoveryRate,uint64 _expiration) public {
+    function approveConsumption(address _contractAddr, address _caller,uint256 _credit,uint256 _recoveryRate,uint32 _expiration) public {
         // the origin can be contract itself or master
         require(msg.sender == _contractAddr || msg.sender == this.nativeGetContractMaster(_contractAddr));
 
@@ -150,7 +150,7 @@ contract Energy is Token {
     }
     
     
-    event ApproveConsumption(address indexed contractAddr, address indexed caller, uint256 credit, uint256 recoveryRate, uint64 expiration);    
+    event ApproveConsumption(address indexed contractAddr, address indexed caller, uint256 credit, uint256 recoveryRate, uint32 expiration);    
     event SetSupplier(address contractAddr, address supplier);
     event AgreeToBeSupplier(address contractAddr, address supplier, bool agreed);
     event SetContractMaster(address indexed contractAddr, address oldMaster, address newMaster);
@@ -164,7 +164,7 @@ contract Energy is Token {
     function nativeAddBalance(address addr, uint256 amount) public {}
     function nativeSubBalance(address addr, uint256 amount) public returns(bool) {}
 
-    function nativeApproveConsumption(address contractAddr, address caller, uint256 credit, uint256 recoveryRate, uint64 expiration) public {}
+    function nativeApproveConsumption(address contractAddr, address caller, uint256 credit, uint256 recoveryRate, uint32 expiration) public {}
     function nativeGetConsumptionAllowance(address contractAddr, address caller) public view returns(uint256) {}
 
     function nativeSetSupplier(address contractAddr, address supplier, bool agreed) public {}
