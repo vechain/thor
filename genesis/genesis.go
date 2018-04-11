@@ -10,15 +10,18 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+// Genesis to build genesis block.
 type Genesis struct {
 	builder *Builder
 	id      thor.Bytes32
 }
 
+// Build build the genesis block.
 func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
 	return g.builder.Build(stateCreator)
 }
 
+// ID returns genesis block ID.
 func (g *Genesis) ID() thor.Bytes32 {
 	return g.id
 }

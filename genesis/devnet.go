@@ -14,19 +14,21 @@ import (
 	"github.com/vechain/thor/vm/evm"
 )
 
-type account struct {
+// DevAccount account for development.
+type DevAccount struct {
 	Address    thor.Address
 	PrivateKey *ecdsa.PrivateKey
 }
 
 var devAccounts atomic.Value
 
-func DevAccounts() []account {
+// DevAccounts returns pre-alloced accounts on devnet.
+func DevAccounts() []DevAccount {
 	if accs := devAccounts.Load(); accs != nil {
-		return accs.([]account)
+		return accs.([]DevAccount)
 	}
 
-	var accs []account
+	var accs []DevAccount
 	privKeys := []string{
 		"dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65",
 		"321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51",
@@ -45,12 +47,13 @@ func DevAccounts() []account {
 			panic(err)
 		}
 		addr := crypto.PubkeyToAddress(pk.PublicKey)
-		accs = append(accs, account{thor.Address(addr), pk})
+		accs = append(accs, DevAccount{thor.Address(addr), pk})
 	}
 	devAccounts.Store(accs)
 	return accs
 }
 
+// NewDevnet create devnet genesis.
 func NewDevnet() (*Genesis, error) {
 	launchTime := uint64(1519356186)
 

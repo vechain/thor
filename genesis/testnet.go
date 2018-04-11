@@ -1,4 +1,4 @@
 package genesis
 
-func NewTestnet() {
-}
+// func NewTestnet() {
+// }
