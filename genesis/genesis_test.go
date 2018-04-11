@@ -15,7 +15,13 @@ func TestGenesis(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
-	b0, _, err := genesis.Mainnet.Build(state.NewCreator(kv))
+
+	g, err := genesis.NewMainnet()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b0, _, err := g.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,10 +33,11 @@ func TestDevGenesis(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
-	b0, logs, err := genesis.Dev.Build(state.NewCreator(kv))
+	g, err := genesis.NewDevnet()
 	if err != nil {
 		t.Fatal(err)
 	}
+	b0, logs, err := g.Build(state.NewCreator(kv))
 
 	st, _ := state.New(b0.Header().StateRoot(), kv)
 	assert.True(len(st.GetCode(builtin.Authority.Address)) > 0)

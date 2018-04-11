@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/vechain/thor/lvldb"
+
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/runtime"
@@ -48,6 +50,19 @@ func (b *Builder) State(proc func(state *state.State) error) *Builder {
 func (b *Builder) Call(clause *tx.Clause, caller thor.Address) *Builder {
 	b.calls = append(b.calls, call{clause, caller})
 	return b
+}
+
+// ComputeID compute genesis ID.
+func (b *Builder) ComputeID() (thor.Bytes32, error) {
+	kv, err := lvldb.NewMem()
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	blk, _, err := b.Build(state.NewCreator(kv))
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	return blk.Header().ID(), nil
 }
 
 // Build build genesis block according to presets.
