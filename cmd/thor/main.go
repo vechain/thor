@@ -145,12 +145,12 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	nodeKey, err := loadKey(dataDir + "/node-key")
+	nodeKey, err := loadKey(dataDir + "/node.key")
 	if err != nil {
 		return err
 	}
 
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/proposer-key")
+	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func action(ctx *cli.Context) error {
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, opt, dataDir+"/good-nodes")
+		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
 		log.Info("communicator exited")
 	})
 
