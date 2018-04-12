@@ -57,7 +57,7 @@ func newStage(root thor.Bytes32, db *trie.Database, changes map[thor.Address]*ch
 			}
 		}
 
-		if err := saveAccount(accountTrie, addr, dataCpy); err != nil {
+		if err := saveAccount(accountTrie, addr, &dataCpy); err != nil {
 			return &Stage{err: err}
 		}
 	}

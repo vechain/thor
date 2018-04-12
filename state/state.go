@@ -59,6 +59,9 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 	switch k := key.(type) {
 	case thor.Address: // get balance
 		return s.getCachedObject(k).data.Balance, true
+	case energyKey: // get energy
+		data := s.getCachedObject(thor.Address(k)).data
+		return energyState{data.Energy, data.BlockNum}, true
 	case codeKey: // get code
 		co := s.getCachedObject(thor.Address(k))
 		code, err := co.GetCode()
@@ -85,7 +88,7 @@ func (s *State) changes() map[thor.Address]*changedObject {
 	changes := make(map[thor.Address]*changedObject)
 
 	// get or create changedObject
-	getObj := func(addr thor.Address) *changedObject {
+	getOrNewObj := func(addr thor.Address) *changedObject {
 		if obj, ok := changes[addr]; ok {
 			return obj
 		}
@@ -98,13 +101,17 @@ func (s *State) changes() map[thor.Address]*changedObject {
 	s.sm.Journal(func(k, v interface{}) bool {
 		switch key := k.(type) {
 		case thor.Address:
-			getObj(key).data.Balance = v.(*big.Int)
+			getOrNewObj(key).data.Balance = v.(*big.Int)
+		case energyKey:
+			obj := getOrNewObj(thor.Address(key))
+			es := v.(energyState)
+			obj.data.Energy, obj.data.BlockNum = es.energy, es.blockNum
 		case codeKey:
-			getObj(thor.Address(key)).code = v.([]byte)
+			getOrNewObj(thor.Address(key)).code = v.([]byte)
 		case codeHashKey:
-			getObj(thor.Address(key)).data.CodeHash = v.([]byte)
+			getOrNewObj(thor.Address(key)).data.CodeHash = v.([]byte)
 		case storageKey:
-			o := getObj(key.addr)
+			o := getOrNewObj(key.addr)
 			if o.storage == nil {
 				o.storage = make(map[thor.Bytes32][]byte)
 			}
@@ -123,7 +130,7 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 	a, err := loadAccount(s.trie, addr)
 	if err != nil {
 		s.setError(err)
-		return newCachedObject(s.db, emptyAccount)
+		return newCachedObject(s.db, emptyAccount())
 	}
 	co := newCachedObject(s.db, a)
 	s.cache[addr] = co
@@ -197,6 +204,18 @@ func (s *State) GetBalance(addr thor.Address) *big.Int {
 // SetBalance set balance for the given address.
 func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 	s.sm.Put(addr, balance)
+}
+
+// GetEnergy get energy for the given address at block number specified.
+func (s *State) GetEnergy(addr thor.Address, blockNum uint32) *big.Int {
+	v, _ := s.sm.Get(energyKey(addr))
+	es := v.(energyState)
+	return es.CalcEnergy(s.GetBalance(addr), blockNum)
+}
+
+// SetEnergy set energy at block number for the given address.
+func (s *State) SetEnergy(addr thor.Address, blockNum uint32, energy *big.Int) {
+	s.sm.Put(energyKey(addr), energyState{energy, blockNum})
 }
 
 // GetStorage returns storage value for the given address and key.
@@ -319,6 +338,8 @@ func (s *State) Stage() *Stage {
 }
 
 type (
+	energyKey thor.Address
+
 	storageKey struct {
 		addr thor.Address
 		key  thor.Bytes32
