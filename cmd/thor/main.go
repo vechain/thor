@@ -84,6 +84,11 @@ func main() {
 			Name:  "beneficiary",
 			Usage: "address of beneficiary",
 		},
+		cli.IntFlag{
+			Name:  "maxpeers",
+			Usage: "maximum number of network peers (network disabled if set to 0)",
+			Value: 10,
+		},
 	}
 	app.Action = action
 
@@ -175,7 +180,7 @@ func action(ctx *cli.Context) error {
 	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb)}
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
-		MaxPeers:       25,
+		MaxPeers:       ctx.Int("maxpeers"),
 		ListenAddr:     ctx.String("p2paddr"),
 		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 	}
