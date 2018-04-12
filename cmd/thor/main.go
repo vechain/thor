@@ -66,14 +66,6 @@ func main() {
 			Value: "127.0.0.1:8669",
 			Usage: "restful addr",
 		},
-		// cli.StringFlag{
-		// 	Name:  "nodekey",
-		// 	Usage: "private key (for node) file path (defaults to ~/.thor-node.key if omitted)",
-		// },
-		cli.StringFlag{
-			Name:  "key",
-			Usage: "private key (for pack) as hex (for testing)",
-		},
 		cli.StringFlag{
 			Name:  "datadir",
 			Value: "/tmp/thor-data",
@@ -87,6 +79,10 @@ func main() {
 		cli.BoolFlag{
 			Name:  "devnet",
 			Usage: "develop network",
+		},
+		cli.StringFlag{
+			Name:  "beneficiary",
+			Usage: "address of beneficiary",
 		},
 	}
 	app.Action = action
@@ -149,12 +145,12 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	nodeKey, err := loadNodeKey(dataDir + "/node-key")
+	nodeKey, err := loadKey(dataDir + "/node-key")
 	if err != nil {
 		return err
 	}
 
-	proposer, privateKey, err := loadAccount(ctx.String("key"))
+	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/proposer-key")
 	if err != nil {
 		return err
 	}
@@ -165,10 +161,17 @@ func action(ctx *cli.Context) error {
 	}
 	defer lsr.Close()
 
+	beneficiary := proposer
+	if ctx.String("beneficiary") != "" {
+		if beneficiary, err = thor.ParseAddress(ctx.String("beneficiary")); err != nil {
+			return err
+		}
+	}
+
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 	consensus := consensus.New(chain, stateCreator)
-	packer := packer.New(chain, stateCreator, proposer, proposer)
+	packer := packer.New(chain, stateCreator, proposer, beneficiary)
 	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb)}
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
@@ -182,7 +185,7 @@ func action(ctx *cli.Context) error {
 
 	goes.Go(func() {
 		runCommunicator(c, communicator, opt, dataDir+"/good-nodes")
-		log.Info("communicator exit")
+		log.Info("communicator exited")
 	})
 
 	txRoutineCtx := &txRoutineContext{
@@ -192,11 +195,11 @@ func action(ctx *cli.Context) error {
 	}
 	goes.Go(func() {
 		txBroadcastLoop(txRoutineCtx)
-		log.Info("broadcast loop exit")
+		log.Info("broadcast loop exited")
 	})
 	goes.Go(func() {
 		txPoolUpdateLoop(txRoutineCtx)
-		log.Info("tx pool update loop exit")
+		log.Info("tx pool update loop exited")
 	})
 
 	blockRoutineCtx := &blockRoutineContext{
@@ -209,16 +212,16 @@ func action(ctx *cli.Context) error {
 	}
 	goes.Go(func() {
 		consentLoop(blockRoutineCtx, consensus, logdb)
-		log.Info("consent loop exit")
+		log.Info("consent loop exited")
 	})
 	goes.Go(func() {
 		packLoop(blockRoutineCtx, packer, privateKey)
-		log.Info("pack loop exit")
+		log.Info("pack loop exited")
 	})
 
 	goes.Go(func() {
 		runRestful(c, rest, lsr)
-		log.Info("restful exit")
+		log.Info("restful exited")
 	})
 
 	interrupt := make(chan os.Signal)
@@ -227,7 +230,7 @@ func action(ctx *cli.Context) error {
 	select {
 	case <-interrupt:
 		go func() {
-			// force exit when rcvd 10 interrupts
+			// force exited when rcvd 10 interrupts
 			for i := 0; i < 10; i++ {
 				<-interrupt
 			}
