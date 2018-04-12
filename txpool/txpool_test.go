@@ -45,7 +45,7 @@ func TestTxPool(t *testing.T) {
 	ch := make(chan *tx.Transaction, count)
 	sub := pool.SubscribeNewTransaction(ch)
 	defer sub.Unsubscribe()
-	dependsOn := thor.BytesToHash([]byte("depend"))
+	dependsOn := thor.BytesToBytes32([]byte("depend"))
 	for i := 0; i < count; i++ {
 		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(i))).WithData(nil)
 		tx := new(tx.Builder).
