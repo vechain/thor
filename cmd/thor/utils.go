@@ -20,7 +20,7 @@ func initLog(lvl log15.Lvl) {
 	ethlog.Root().SetHandler(ethLogHandler)
 }
 
-func loadNodeKey(keyFile string) (key *ecdsa.PrivateKey, err error) {
+func loadKey(keyFile string) (key *ecdsa.PrivateKey, err error) {
 	// try to load from file
 	if key, err = crypto.LoadECDSA(keyFile); err != nil {
 		if !os.IsNotExist(err) {
@@ -42,15 +42,15 @@ func loadNodeKey(keyFile string) (key *ecdsa.PrivateKey, err error) {
 	return key, nil
 }
 
-func loadAccount(keyString string) (thor.Address, *ecdsa.PrivateKey, error) {
-	if keyString != "" {
-		key, err := crypto.HexToECDSA(keyString)
-		if err != nil {
-			return thor.Address{}, nil, err
-		}
-		return thor.Address(crypto.PubkeyToAddress(key.PublicKey)), key, nil
+func loadProposer(isDev bool, keyFile string) (thor.Address, *ecdsa.PrivateKey, error) {
+	if isDev {
+		index := rand.Intn(len(genesis.DevAccounts()))
+		return genesis.DevAccounts()[index].Address, genesis.DevAccounts()[index].PrivateKey, nil
 	}
 
-	index := rand.Intn(len(genesis.DevAccounts()))
-	return genesis.DevAccounts()[index].Address, genesis.DevAccounts()[index].PrivateKey, nil
+	key, err := loadKey(keyFile)
+	if err != nil {
+		return thor.Address{}, nil, err
+	}
+	return thor.Address(crypto.PubkeyToAddress(key.PublicKey)), key, nil
 }
