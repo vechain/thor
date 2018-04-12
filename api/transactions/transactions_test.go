@@ -94,7 +94,11 @@ func httpPost(t *testing.T, url string, data []byte) []byte {
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
-	b, _, err := genesis.Dev.Build(stateC)
+	gene, err := genesis.NewDevnet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := gene.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,18 +115,18 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.Dev.Accounts()[0].PrivateKey)
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
-	pack := packer.New(chain, stateC, genesis.Dev.Accounts()[0].Address, genesis.Dev.Accounts()[0].Address)
+	pack := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
 	_, adopt, commit, err := pack.Prepare(b.Header(), uint64(time.Now().Unix()))
 	err = adopt(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, receipts, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
+	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}

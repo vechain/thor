@@ -99,7 +99,7 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 	return storage, nil
 }
 
-func (a *Accounts) santinizeOptions(options *ContractCall) {
+func (a *Accounts) sterilizeOptions(options *ContractCall) {
 	if options.Gas == 0 {
 		options.Gas = math.MaxUint64
 	}
@@ -117,7 +117,7 @@ func (a *Accounts) santinizeOptions(options *ContractCall) {
 
 //Call a contract with input
 func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
-	a.santinizeOptions(body)
+	a.sterilizeOptions(body)
 	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
 		return nil, err
@@ -206,20 +206,6 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
 }
 
-func (a *Accounts) parseBlockNum(blkNum string) (uint32, error) {
-	if blkNum == "" {
-		return math.MaxUint32, nil
-	}
-	n, err := strconv.ParseUint(blkNum, 0, 0)
-	if err != nil {
-		return math.MaxUint32, err
-	}
-	if n > math.MaxUint32 {
-		return math.MaxUint32, errors.New("block number exceeded")
-	}
-	return uint32(n), nil
-}
-
 //Filter query logs with option
 func (a *Accounts) filter(logFilter *LogFilter) ([]FilteredLog, error) {
 	lf := convertLogFilter(logFilter)
@@ -250,6 +236,13 @@ func (a *Accounts) handleFilterLogs(w http.ResponseWriter, req *http.Request) er
 	addr, err := thor.ParseAddress(params["address"])
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+	}
+
+	order := req.URL.Query().Get("order")
+	if order != string(logdb.DESC) {
+		logFilter.Order = logdb.ASC
+	} else {
+		logFilter.Order = logdb.DESC
 	}
 	logFilter.Address = &addr
 	logs, err := a.filter(logFilter)

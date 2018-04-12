@@ -62,10 +62,11 @@ type TopicSet struct {
 }
 
 type LogFilter struct {
-	Address   *thor.Address `json:"address"` // always a contract address
-	TopicSets []*TopicSet   `json:"topicSets"`
+	Address   *thor.Address
+	TopicSets []*TopicSet
 	Range     *logdb.Range
 	Options   *logdb.Options
+	Order     logdb.OrderType
 }
 
 func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
@@ -73,6 +74,7 @@ func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
 		Address: logFilter.Address,
 		Range:   logFilter.Range,
 		Options: logFilter.Options,
+		Order:   logFilter.Order,
 	}
 	if len(logFilter.TopicSets) > 0 {
 		var topicSets [][5]*thor.Bytes32

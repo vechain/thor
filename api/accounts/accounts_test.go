@@ -113,10 +113,10 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 			To:   10,
 		},
 		Options: &logdb.Options{
-			Sort:   "",
 			Offset: 0,
-			Limit:  uint32(limit),
+			Limit:  uint64(limit),
 		},
+		Order:   "",
 		Address: &contractAddr,
 		TopicSets: []*accounts.TopicSet{
 			&accounts.TopicSet{
@@ -210,7 +210,11 @@ func initAccountServer(t *testing.T) *httptest.Server {
 	}
 	st.SetCode(contractAddr, code)
 	stateRoot, _ := st.Stage().Commit()
-	b, _, err := genesis.Dev.Build(stateC)
+	gene, err := genesis.NewDevnet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := gene.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
 	}
