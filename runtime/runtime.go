@@ -101,8 +101,8 @@ func (rt *Runtime) execute(
 			return
 		}
 		// touch energy accounts which token balance changed
-		rt.energy.AddBalance(rt.blockNumber, sender, &big.Int{})
-		rt.energy.AddBalance(rt.blockNumber, recipient, &big.Int{})
+		rt.energy.AddBalance(sender, rt.blockNumber, &big.Int{})
+		rt.energy.AddBalance(recipient, rt.blockNumber, &big.Int{})
 	})
 
 	if to == nil {
@@ -188,7 +188,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	receipt.Payed = new(big.Int).Sub(prepayed, energyToReturn)
 
 	// return overpayed energy to payer
-	rt.energy.AddBalance(rt.blockNumber, payer, energyToReturn)
+	rt.energy.AddBalance(payer, rt.blockNumber, energyToReturn)
 
 	// reward
 	rewardRatio := rt.params.Get(thor.KeyRewardRatio)
@@ -197,7 +197,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	rt.energy.AddBalance(rt.blockNumber, rt.blockBeneficiary, reward)
+	rt.energy.AddBalance(rt.blockBeneficiary, rt.blockNumber, reward)
 
 	receipt.Reward = reward
 

@@ -14,10 +14,6 @@ var (
 	totalSubKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
 )
 
-func accountKey(addr thor.Address) thor.Bytes32 {
-	return thor.BytesToBytes32(append([]byte("a"), addr.Bytes()...))
-}
-
 func consumptionApprovalKey(contractAddr thor.Address, caller thor.Address) thor.Bytes32 {
 	return thor.Bytes32(crypto.Keccak256Hash(contractAddr.Bytes(), caller.Bytes()))
 }
@@ -75,68 +71,39 @@ func (e *Energy) GetTotalBurned() *big.Int {
 	return new(big.Int).Sub(&totalSub, &totalAdd)
 }
 
-func (e *Energy) getAccount(addr thor.Address) *account {
-	var acc account
-	e.getStorage(accountKey(addr), &acc)
-	return &acc
-}
-
-func (e *Energy) getAndSetAccount(addr thor.Address, cb func(*account) bool) bool {
-	key := accountKey(addr)
-	var acc account
-
-	e.getStorage(key, &acc)
-	if !cb(&acc) {
-		return false
-	}
-	e.setStorage(key, &acc)
-	return true
-}
-
 // GetBalance returns energy balance of an account at given block time.
-func (e *Energy) GetBalance(blockNum uint32, addr thor.Address) *big.Int {
-	return e.getAccount(addr).CalcBalance(e.state.GetBalance(addr), blockNum)
+func (e *Energy) GetBalance(addr thor.Address, blockNum uint32) *big.Int {
+	return e.state.GetEnergy(addr, blockNum)
 }
 
-func (e *Energy) AddBalance(blockNum uint32, addr thor.Address, amount *big.Int) {
-	e.getAndSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(e.state.GetBalance(addr), blockNum)
-		if amount.Sign() != 0 {
-			bal.Add(bal, amount)
+func (e *Energy) AddBalance(addr thor.Address, blockNum uint32, amount *big.Int) {
+	bal := e.state.GetEnergy(addr, blockNum)
+	if amount.Sign() != 0 {
+		var totalAdd big.Int
+		e.getStorage(totalAddKey, &totalAdd)
+		e.setStorage(totalAddKey, totalAdd.Add(&totalAdd, amount))
 
-			var totalAdd big.Int
-			e.getStorage(totalAddKey, &totalAdd)
-			totalAdd.Add(&totalAdd, amount)
-			e.setStorage(totalAddKey, &totalAdd)
-		}
-		*acc = account{
-			Balance:  bal,
-			BlockNum: blockNum,
-		}
-		return true
-	})
+		e.state.SetEnergy(addr, blockNum, new(big.Int).Add(bal, amount))
+	} else {
+		e.state.SetEnergy(addr, blockNum, bal)
+	}
 }
 
-func (e *Energy) SubBalance(blockNum uint32, addr thor.Address, amount *big.Int) bool {
-	return e.getAndSetAccount(addr, func(acc *account) bool {
-		bal := acc.CalcBalance(e.state.GetBalance(addr), blockNum)
+func (e *Energy) SubBalance(addr thor.Address, blockNum uint32, amount *big.Int) bool {
+	bal := e.state.GetEnergy(addr, blockNum)
+	if amount.Sign() != 0 {
 		if bal.Cmp(amount) < 0 {
 			return false
 		}
-		if amount.Sign() != 0 {
-			bal.Sub(bal, amount)
+		var totalSub big.Int
+		e.getStorage(totalSubKey, &totalSub)
+		e.setStorage(totalSubKey, totalSub.Add(&totalSub, amount))
 
-			var totalSub big.Int
-			e.getStorage(totalSubKey, &totalSub)
-			totalSub.Add(&totalSub, amount)
-			e.setStorage(totalSubKey, &totalSub)
-		}
-		*acc = account{
-			Balance:  bal,
-			BlockNum: blockNum,
-		}
-		return true
-	})
+		e.state.SetEnergy(addr, blockNum, new(big.Int).Sub(bal, amount))
+	} else {
+		e.state.SetEnergy(addr, blockNum, bal)
+	}
+	return true
 }
 
 func (e *Energy) ApproveConsumption(
@@ -203,12 +170,12 @@ func (e *Energy) consumeContract(
 	var s supplier
 	e.getStorage(supplierKey(contractAddr), &s)
 	if s.Agreed {
-		if e.SubBalance(blockNum, s.Address, amount) {
+		if e.SubBalance(s.Address, blockNum, amount) {
 			return s.Address, true
 		}
 	}
 
-	if e.SubBalance(blockNum, contractAddr, amount) {
+	if e.SubBalance(contractAddr, blockNum, amount) {
 		return contractAddr, true
 	}
 	return thor.Address{}, false
@@ -220,7 +187,7 @@ func (e *Energy) Consume(blockNum uint32, contractAddr *thor.Address, caller tho
 			return payer, true
 		}
 	}
-	if e.SubBalance(blockNum, caller, amount) {
+	if e.SubBalance(caller, blockNum, amount) {
 		return caller, true
 	}
 	return thor.Address{}, false

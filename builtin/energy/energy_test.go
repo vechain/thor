@@ -23,11 +23,11 @@ func TestEnergy(t *testing.T) {
 		ret      interface{}
 		expected interface{}
 	}{
-		{eng.GetBalance(0, acc), &big.Int{}},
-		{func() bool { eng.AddBalance(0, acc, big.NewInt(10)); return true }(), true},
-		{eng.GetBalance(0, acc), big.NewInt(10)},
-		{eng.SubBalance(0, acc, big.NewInt(5)), true},
-		{eng.SubBalance(0, acc, big.NewInt(6)), false},
+		{eng.GetBalance(acc, 0), &big.Int{}},
+		{func() bool { eng.AddBalance(acc, 0, big.NewInt(10)); return true }(), true},
+		{eng.GetBalance(acc, 0), big.NewInt(10)},
+		{eng.SubBalance(acc, 0, big.NewInt(5)), true},
+		{eng.SubBalance(acc, 0, big.NewInt(6)), false},
 		{func() bool { eng.SetContractMaster(contractAddr, acc); return true }(), true},
 		{eng.GetContractMaster(contractAddr), acc},
 	}
@@ -47,12 +47,12 @@ func TestEnergyGrowth(t *testing.T) {
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
 
-	eng.AddBalance(10, acc, &big.Int{})
+	eng.AddBalance(acc, 10, &big.Int{})
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1 := eng.GetBalance(blockNum1, acc)
+	bal1 := eng.GetBalance(acc, blockNum1)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
 	x.Mul(x, new(big.Int).SetUint64(uint64(blockNum1-10)))
 	x.Div(x, big.NewInt(1e18))
@@ -74,7 +74,7 @@ func TestEnergyShare(t *testing.T) {
 	exp := uint32(2000)
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
-	eng.AddBalance(blockNum1, contract, bal)
+	eng.AddBalance(contract, blockNum1, bal)
 	eng.ApproveConsumption(blockNum1, contract, caller, credit, recRate, exp)
 
 	remained := eng.GetConsumptionAllowance(blockNum1, contract, caller)
