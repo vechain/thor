@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -31,23 +30,12 @@ import (
 )
 
 var (
-	version   = "1.0"
 	gitCommit string
+	version   = "1.0"
 	release   = "dev"
-
-	log = log15.New()
+	log       = log15.New()
+	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 )
-
-var boot = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
-
-// Options for Client.
-type Options struct {
-	DataPath    string
-	Bind        string
-	Proposer    thor.Address
-	Beneficiary thor.Address
-	PrivateKey  *ecdsa.PrivateKey
-}
 
 func main() {
 	app := cli.NewApp()
@@ -55,41 +43,7 @@ func main() {
 	app.Name = "Thor"
 	app.Usage = "Core of VeChain"
 	app.Copyright = "2018 VeChain Foundation <https://vechain.org/>"
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:  "p2paddr",
-			Value: ":11235",
-			Usage: "p2p listen addr",
-		},
-		cli.StringFlag{
-			Name:  "apiaddr",
-			Value: "127.0.0.1:8669",
-			Usage: "restful addr",
-		},
-		cli.StringFlag{
-			Name:  "datadir",
-			Value: "/tmp/thor-data",
-			Usage: "chain data path",
-		},
-		cli.IntFlag{
-			Name:  "verbosity",
-			Value: int(log15.LvlInfo),
-			Usage: "log verbosity (0-9)",
-		},
-		cli.BoolFlag{
-			Name:  "devnet",
-			Usage: "develop network",
-		},
-		cli.StringFlag{
-			Name:  "beneficiary",
-			Usage: "address of beneficiary",
-		},
-		cli.IntFlag{
-			Name:  "maxpeers",
-			Usage: "maximum number of network peers (network disabled if set to 0)",
-			Value: 10,
-		},
-	}
+	app.Flags = appFlags
 	app.Action = action
 
 	if err := app.Run(os.Args); err != nil {
