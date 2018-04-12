@@ -93,7 +93,7 @@ func init() {
 		Energy.impl("nativeGetBalance", 2000, func(env *env) ([]interface{}, error) {
 			var addr common.Address
 			env.Args(&addr)
-			bal := Energy.WithState(env.State).GetBalance(env.VMContext.BlockNumber, thor.Address(addr))
+			bal := Energy.WithState(env.State).GetBalance(thor.Address(addr), env.VMContext.BlockNumber)
 			return []interface{}{bal}, nil
 		}),
 		Energy.impl("nativeAddBalance", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {
@@ -102,7 +102,7 @@ func init() {
 				Amount *big.Int
 			}
 			env.Args(&args)
-			Energy.WithState(env.State).AddBalance(env.VMContext.BlockNumber, thor.Address(args.Addr), args.Amount)
+			Energy.WithState(env.State).AddBalance(thor.Address(args.Addr), env.VMContext.BlockNumber, args.Amount)
 			return nil, nil
 		}),
 		Energy.impl("nativeSubBalance", ethparams.SstoreResetGas, func(env *env) ([]interface{}, error) {
@@ -111,7 +111,7 @@ func init() {
 				Amount *big.Int
 			}
 			env.Args(&args)
-			ok := Energy.WithState(env.State).SubBalance(env.VMContext.BlockNumber, thor.Address(args.Addr), args.Amount)
+			ok := Energy.WithState(env.State).SubBalance(thor.Address(args.Addr), env.VMContext.BlockNumber, args.Amount)
 			return []interface{}{ok}, nil
 		}),
 		Energy.impl("nativeApproveConsumption", ethparams.SstoreSetGas, func(env *env) ([]interface{}, error) {

@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/runtime"
@@ -80,7 +79,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	if code != nil {
 		hasCode = true
 	}
-	energy := builtin.Energy.WithState(state).GetBalance(header.Number(), addr)
+	energy := state.GetEnergy(addr, header.Number())
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
 		Energy:  math.HexOrDecimal256(*energy),

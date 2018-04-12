@@ -75,7 +75,7 @@ func NewDevnet() (*Genesis, error) {
 				b, _ := new(big.Int).SetString("10000000000000000000000000", 10)
 				state.SetBalance(a.Address, b)
 				tokenSupply.Add(tokenSupply, b)
-				energy.AddBalance(0, a.Address, b)
+				energy.AddBalance(a.Address, 0, b)
 			}
 			energy.InitializeTokenSupply(tokenSupply)
 			return nil
