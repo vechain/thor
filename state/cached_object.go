@@ -18,8 +18,8 @@ type cachedObject struct {
 	}
 }
 
-func newCachedObject(db *trie.Database, data Account) *cachedObject {
-	return &cachedObject{db: db, data: data}
+func newCachedObject(db *trie.Database, data *Account) *cachedObject {
+	return &cachedObject{db: db, data: *data}
 }
 
 func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {

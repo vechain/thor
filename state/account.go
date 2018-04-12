@@ -11,45 +11,78 @@ import (
 // RLP encoded objects are stored in main account trie.
 type Account struct {
 	Balance     *big.Int
+	Energy      *big.Int
+	BlockNum    uint32
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 }
 
 // IsEmpty returns if an account is empty.
 // An empty account has zero balance and zero length code hash.
-func (a Account) IsEmpty() bool {
-	return (a.Balance == nil || a.Balance.Sign() == 0) &&
+func (a *Account) IsEmpty() bool {
+	return a.Balance.Sign() == 0 &&
+		a.Energy.Sign() == 0 &&
 		len(a.CodeHash) == 0
 }
 
-var emptyAccount = Account{Balance: &big.Int{}}
+func emptyAccount() *Account {
+	return &Account{Balance: &big.Int{}, Energy: &big.Int{}}
+}
+
+var bigE18 = big.NewInt(1e18)
+
+type energyState struct {
+	energy   *big.Int
+	blockNum uint32
+}
+
+func (es *energyState) CalcEnergy(balance *big.Int, blockNum uint32) *big.Int {
+	if blockNum <= es.blockNum {
+		// never occur in real env.
+		return es.energy
+	}
+
+	if balance.Sign() == 0 {
+		return es.energy
+	}
+
+	diff := blockNum - es.blockNum
+	if diff == 0 {
+		return es.energy
+	}
+	x := new(big.Int).SetUint64(uint64(diff))
+	x.Mul(x, balance)
+	x.Mul(x, thor.EnergyGrowthRate)
+	x.Div(x, bigE18)
+	return new(big.Int).Add(es.energy, x)
+}
 
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie trieReader, addr thor.Address) (Account, error) {
+func loadAccount(trie trieReader, addr thor.Address) (*Account, error) {
 	data, err := trie.TryGet(addr[:])
 	if err != nil {
-		return emptyAccount, err
+		return nil, err
 	}
 	if len(data) == 0 {
-		return emptyAccount, nil
+		return emptyAccount(), nil
 	}
 	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
-		return emptyAccount, err
+		return nil, err
 	}
-	return a, nil
+	return &a, nil
 }
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie trieWriter, addr thor.Address, a Account) error {
+func saveAccount(trie trieWriter, addr thor.Address, a *Account) error {
 	if a.IsEmpty() {
 		// delete if account is empty
 		return trie.TryDelete(addr[:])
 	}
 
-	data, err := rlp.EncodeToBytes(&a)
+	data, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		return err
 	}

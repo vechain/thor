@@ -47,7 +47,7 @@ func TestCachedObject(t *testing.T) {
 		StorageRoot: storageRoot[:],
 	}
 	db = newTrieDatabase(kv)
-	obj := newCachedObject(db, account)
+	obj := newCachedObject(db, &account)
 
 	assert.Equal(t,
 		M(obj.GetCode()),
