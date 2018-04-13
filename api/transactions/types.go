@@ -45,15 +45,18 @@ type RawTx struct {
 
 //Transaction transaction
 type Transaction struct {
-	Block        blockContext  `json:"block"`
-	Size         uint32        `json:"size"`
-	ChainTag     byte          `json:"chainTag"`
-	ID           thor.Bytes32  `json:"id,string"`
-	GasPriceCoef uint8         `json:"gasPriceCoef"`
-	Gas          uint64        `json:"gas"`
-	Origin       thor.Address  `json:"origin,string"`
-	DependsOn    *thor.Bytes32 `json:"dependsOn,string"`
-	Clauses      Clauses       `json:"clauses"`
+	ID           thor.Bytes32        `json:"id,string"`
+	Size         uint32              `json:"size"`
+	ChainTag     byte                `json:"chainTag"`
+	BlockRef     string              `json:"blockRef"`
+	Expiration   uint32              `json:"expiration"`
+	Clauses      Clauses             `json:"clauses"`
+	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	Gas          uint64              `json:"gas"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
+	Nonce        math.HexOrDecimal64 `json:"nonce"`
+	Origin       thor.Address        `json:"origin,string"`
+	Block        blockContext        `json:"block"`
 }
 
 //ConvertTransaction convert a raw transaction into a json format transaction
@@ -67,17 +70,19 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	for i, c := range tx.Clauses() {
 		cls[i] = ConvertClause(c)
 	}
+	br := tx.BlockRef()
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
 		Origin:       signer,
+		BlockRef:     hexutil.Encode(br[:]),
+		Expiration:   tx.Expiration(),
+		Nonce:        math.HexOrDecimal64(tx.Nonce()),
 		Size:         uint32(tx.Size()),
 		GasPriceCoef: tx.GasPriceCoef(),
 		Gas:          tx.Gas(),
+		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
-	}
-	if tx.DependsOn() != nil {
-		t.DependsOn = tx.DependsOn()
 	}
 	return t, nil
 }
