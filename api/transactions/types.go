@@ -97,7 +97,7 @@ type txContext struct {
 type Receipt struct {
 	Block    blockContext          `json:"block"`
 	Tx       txContext             `json:"tx"`
-	GasUsed  math.HexOrDecimal64   `json:"gasUsed"`
+	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
 	Reverted bool                  `json:"reverted"`
@@ -129,7 +129,7 @@ func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*
 		return nil, err
 	}
 	receipt := &Receipt{
-		GasUsed:  math.HexOrDecimal64(rece.GasUsed),
+		GasUsed:  rece.GasUsed,
 		GasPayer: rece.GasPayer,
 		Reward:   &reward,
 		Reverted: rece.Reverted,

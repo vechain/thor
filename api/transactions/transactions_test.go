@@ -12,22 +12,19 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
-	"github.com/ethereum/go-ethereum/rlp"
-
-	"github.com/gorilla/mux"
-	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/txpool"
-
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
 
 func TestTransaction(t *testing.T) {
@@ -53,7 +50,7 @@ func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
 }
 
 func getTxReceipt(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
-	r := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v/receipts", tx.ID().String()))
+	r := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v/receipt", tx.ID().String()))
 	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
