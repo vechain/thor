@@ -27,8 +27,8 @@ type ContractCall struct {
 }
 
 type VMOutput struct {
-	Data     string `json:"data,string"`
-	GasUsed  uint64 `json:"gas"`
+	Data     string `json:"data"`
+	GasUsed  uint64 `json:"gasUsed"`
 	Reverted bool   `json:"reverted"`
 	VMError  string `json:"vmError"`
 }

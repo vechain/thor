@@ -149,7 +149,6 @@ func getAccount(t *testing.T, ts *httptest.Server) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), acc.Balance, "balance should be equal")
-
 		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/code", address))
 		var code map[string]string
 		if err := json.Unmarshal(res, &code); err != nil {

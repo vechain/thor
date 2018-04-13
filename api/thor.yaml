@@ -164,7 +164,6 @@ paths:
         - Transaction
       summary: send raw transaction
       requestBody:
-        description: arguments and environment
         required: true
         content:
           application/json:
@@ -361,7 +360,7 @@ components:
         clauses: []
         gasPriceCoef: 128
         gas: 21000
-        dependsOn: null
+        dependsOn: 'null'
         nonce: '0xd92966da424d9939'
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         block:
