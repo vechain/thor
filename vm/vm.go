@@ -42,8 +42,8 @@ type State statedb.State
 // ContractHook ref evm.ContractHook.
 type ContractHook evm.ContractHook
 
-// OnContractCreated ref evm.OnContractCreated
-type OnContractCreated evm.OnContractCreated
+// OnCreateContract ref evm.OnCreateContract
+type OnCreateContract evm.OnCreateContract
 
 // OnTransfer callback before transfer occur.
 type OnTransfer func(sender, recipient thor.Address, amount *big.Int)
@@ -129,9 +129,9 @@ func (vm *VM) SetContractHook(hook ContractHook) {
 	vm.evm.SetContractHook(evm.ContractHook(hook))
 }
 
-// SetOnContractCreated set callback to listen contract creation.
-func (vm *VM) SetOnContractCreated(cb OnContractCreated) {
-	vm.evm.SetOnContractCreated(evm.OnContractCreated(cb))
+// SetOnCreateContract set callback to listen contract creation.
+func (vm *VM) SetOnCreateContract(cb OnCreateContract) {
+	vm.evm.SetOnCreateContract(evm.OnCreateContract(cb))
 }
 
 // SetOnTransfer set callback to listen token transfer.

@@ -157,7 +157,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) txObjec
 	if err != nil {
 		return nil
 	}
-	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
+	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 	all := pool.allObjs()
 	var pendings txObjects
@@ -222,7 +222,8 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 	if err != nil {
 		return
 	}
-	baseGasPrice := builtin.Params.WithState(st).Get(thor.KeyBaseGasPrice)
+
+	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 
 	all := pool.allObjs()

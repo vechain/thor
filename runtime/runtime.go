@@ -3,9 +3,8 @@ package runtime
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/builtin/energy"
-	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
@@ -23,9 +22,6 @@ type Runtime struct {
 	blockNumber      uint32
 	blockTime        uint64
 	blockGasLimit    uint64
-
-	energy *energy.Energy
-	params *params.Params
 }
 
 // New create a Runtime object.
@@ -43,8 +39,6 @@ func New(
 		blockNumber:      blockNumber,
 		blockTime:        blockTime,
 		blockGasLimit:    blockGasLimit,
-		energy:           builtin.Energy.WithState(state),
-		params:           builtin.Params.WithState(state),
 	}
 }
 
@@ -89,20 +83,20 @@ func (rt *Runtime) execute(
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
-	env.SetContractHook(func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error) {
-		return builtin.HandleNativeCall(rt.state, &ctx, to, input)
+	env.SetContractHook(func(to thor.Address, input []byte, useGas func(gas uint64) bool, caller thor.Address, readonly bool, addLog func(vmlog *types.Log)) func() ([]byte, error) {
+		return builtin.HandleNativeCall(rt.state, &ctx, to, input, useGas, caller, readonly, addLog)
 	})
-	env.SetOnContractCreated(func(contractAddr thor.Address) {
+	env.SetOnCreateContract(func(contractAddr thor.Address) {
 		// set master for created contract
-		rt.energy.SetContractMaster(contractAddr, txOrigin)
+		builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(txOrigin)
 	})
 	env.SetOnTransfer(func(sender, recipient thor.Address, amount *big.Int) {
 		if amount.Sign() == 0 {
 			return
 		}
 		// touch energy accounts which token balance changed
-		rt.energy.AddBalance(sender, rt.blockNumber, &big.Int{})
-		rt.energy.AddBalance(recipient, rt.blockNumber, &big.Int{})
+		builtin.Energy.Native(rt.state).AddBalance(sender, &big.Int{}, rt.blockNumber)
+		builtin.Energy.Native(rt.state).AddBalance(recipient, &big.Int{}, rt.blockNumber)
 	})
 
 	if to == nil {
@@ -187,17 +181,18 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), resolvedTx.GasPrice)
 	receipt.Payed = new(big.Int).Sub(prepayed, energyToReturn)
 
+	energyNative := builtin.Energy.Native(rt.state)
 	// return overpayed energy to payer
-	rt.energy.AddBalance(payer, rt.blockNumber, energyToReturn)
+	energyNative.AddBalance(payer, energyToReturn, rt.blockNumber)
 
 	// reward
-	rewardRatio := rt.params.Get(thor.KeyRewardRatio)
+	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
 	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.getBlockID)
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	rt.energy.AddBalance(rt.blockBeneficiary, rt.blockNumber, reward)
+	energyNative.AddBalance(rt.blockBeneficiary, reward, rt.blockNumber)
 
 	receipt.Reward = reward
 

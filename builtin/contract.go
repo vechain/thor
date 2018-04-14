@@ -40,15 +40,12 @@ func (c *contract) RuntimeBytecodes() []byte {
 	return data
 }
 
-// to implement native method.
-func (c *contract) impl(name string, gas uint64, run func(env *env) ([]interface{}, error)) *nativeMethod {
-	method := c.ABI.MethodByName(name)
-	if method == nil {
-		panic("no method '" + name + "'")
+func (c *contract) NativeABI() *abi.ABI {
+	asset := "compiled/" + c.name + "Native.abi"
+	data := gen.MustAsset(asset)
+	abi, err := abi.New(data)
+	if err != nil {
+		panic(errors.Wrap(err, "load native ABI for '"+c.name+"'"))
 	}
-	return &nativeMethod{
-		c.Address,
-		method,
-		gas,
-		run}
+	return abi
 }

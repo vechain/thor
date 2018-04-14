@@ -4,3 +4,4 @@ import "./Authority.sol";
 import "./Energy.sol";
 import "./Executor.sol";
 import "./Params.sol";
+import "./Prototype.sol";

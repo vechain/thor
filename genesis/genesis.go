@@ -27,9 +27,9 @@ func (g *Genesis) ID() thor.Bytes32 {
 }
 
 func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
-	m := abi.MethodByName(name)
-	if m == nil {
-		panic("no method '" + name + "'")
+	m, found := abi.MethodByName(name)
+	if !found {
+		panic("method not found")
 	}
 	data, err := m.EncodeInput(args...)
 	if err != nil {

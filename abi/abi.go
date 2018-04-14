@@ -2,6 +2,7 @@ package abi
 
 import (
 	"encoding/json"
+	"errors"
 
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/vechain/thor/thor"
@@ -79,33 +80,39 @@ func (a *ABI) Constructor() *Method {
 }
 
 // MethodByInput find the method for given input.
-// If the input shorter than MethodID, an error returned.
-// Note that the returned Method may be nil even no error.
+// If the input shorter than MethodID, or method not found, an error returned.
 func (a *ABI) MethodByInput(input []byte) (*Method, error) {
 	id, err := ExtractMethodID(input)
 	if err != nil {
 		return nil, err
 	}
-
-	return a.MethodByID(id), nil
+	m, found := a.methods[id]
+	if !found {
+		return nil, errors.New("method not found")
+	}
+	return m, nil
 }
 
 // MethodByName find method for the given method name.
-func (a *ABI) MethodByName(name string) *Method {
-	return a.nameToMethod[name]
+func (a *ABI) MethodByName(name string) (*Method, bool) {
+	m, found := a.nameToMethod[name]
+	return m, found
 }
 
 // MethodByID returns method for given method id.
-func (a *ABI) MethodByID(id MethodID) *Method {
-	return a.methods[id]
+func (a *ABI) MethodByID(id MethodID) (*Method, bool) {
+	m, found := a.methods[id]
+	return m, found
 }
 
 // EventByName find event for the given event name.
-func (a *ABI) EventByName(name string) *Event {
-	return a.nameToEvent[name]
+func (a *ABI) EventByName(name string) (*Event, bool) {
+	e, found := a.nameToEvent[name]
+	return e, found
 }
 
 // EventByID returns the event for the given event id.
-func (a *ABI) EventByID(id thor.Bytes32) *Event {
-	return a.events[id]
+func (a *ABI) EventByID(id thor.Bytes32) (*Event, bool) {
+	e, found := a.events[id]
+	return e, found
 }
