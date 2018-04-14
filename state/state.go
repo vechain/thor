@@ -61,7 +61,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 		return s.getCachedObject(k).data.Balance, true
 	case energyKey: // get energy
 		data := s.getCachedObject(thor.Address(k)).data
-		return energyState{data.Energy, data.BlockNum}, true
+		return EnergyState{data.Energy, data.BlockNum}, true
 	case codeKey: // get code
 		co := s.getCachedObject(thor.Address(k))
 		code, err := co.GetCode()
@@ -104,8 +104,8 @@ func (s *State) changes() map[thor.Address]*changedObject {
 			getOrNewObj(key).data.Balance = v.(*big.Int)
 		case energyKey:
 			obj := getOrNewObj(thor.Address(key))
-			es := v.(energyState)
-			obj.data.Energy, obj.data.BlockNum = es.energy, es.blockNum
+			es := v.(EnergyState)
+			obj.data.Energy, obj.data.BlockNum = es.Energy, es.BlockNum
 		case codeKey:
 			getOrNewObj(thor.Address(key)).code = v.([]byte)
 		case codeHashKey:
@@ -209,13 +209,13 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 // GetEnergy get energy for the given address at block number specified.
 func (s *State) GetEnergy(addr thor.Address, blockNum uint32) *big.Int {
 	v, _ := s.sm.Get(energyKey(addr))
-	es := v.(energyState)
+	es := v.(EnergyState)
 	return es.CalcEnergy(s.GetBalance(addr), blockNum)
 }
 
 // SetEnergy set energy at block number for the given address.
-func (s *State) SetEnergy(addr thor.Address, blockNum uint32, energy *big.Int) {
-	s.sm.Put(energyKey(addr), energyState{energy, blockNum})
+func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockNum uint32) {
+	s.sm.Put(energyKey(addr), EnergyState{energy, blockNum})
 }
 
 // GetStorage returns storage value for the given address and key.
@@ -308,9 +308,10 @@ func (s *State) Exists(addr thor.Address) bool {
 }
 
 // Delete delete an account at the given address.
-// That's set both balance and code to zero value.
+// That's set balance, energy and code to zero value.
 func (s *State) Delete(addr thor.Address) {
 	s.SetBalance(addr, &big.Int{})
+	s.SetEnergy(addr, &big.Int{}, 0)
 	s.SetCode(addr, nil)
 }
 

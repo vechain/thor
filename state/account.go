@@ -31,30 +31,30 @@ func emptyAccount() *Account {
 
 var bigE18 = big.NewInt(1e18)
 
-type energyState struct {
-	energy   *big.Int
-	blockNum uint32
+type EnergyState struct {
+	Energy   *big.Int
+	BlockNum uint32
 }
 
-func (es *energyState) CalcEnergy(balance *big.Int, blockNum uint32) *big.Int {
-	if blockNum <= es.blockNum {
+func (es *EnergyState) CalcEnergy(balance *big.Int, blockNum uint32) *big.Int {
+	if blockNum <= es.BlockNum {
 		// never occur in real env.
-		return es.energy
+		return es.Energy
 	}
 
 	if balance.Sign() == 0 {
-		return es.energy
+		return es.Energy
 	}
 
-	diff := blockNum - es.blockNum
+	diff := blockNum - es.BlockNum
 	if diff == 0 {
-		return es.energy
+		return es.Energy
 	}
 	x := new(big.Int).SetUint64(uint64(diff))
 	x.Mul(x, balance)
 	x.Mul(x, thor.EnergyGrowthRate)
 	x.Div(x, bigE18)
-	return new(big.Int).Add(es.energy, x)
+	return new(big.Int).Add(es.Energy, x)
 }
 
 // loadAccount load an account object by address in trie.
