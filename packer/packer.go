@@ -166,8 +166,8 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	uint64, // score
 	error,
 ) {
-	endorsement := builtin.Params.WithState(state).Get(thor.KeyProposerEndorsement)
-	authority := builtin.Authority.WithState(state)
+	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	authority := builtin.Authority.Native(state)
 
 	candidates := authority.Candidates()
 	proposers := make([]poa.Proposer, 0, len(candidates))

@@ -42,8 +42,8 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return errors.Wrap(err, "invalid block signer")
 	}
 
-	authority := builtin.Authority.WithState(st)
-	endorsement := builtin.Params.WithState(st).Get(thor.KeyProposerEndorsement)
+	authority := builtin.Authority.Native(st)
+	endorsement := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
 
 	candidates := authority.Candidates()
 	proposers := make([]poa.Proposer, 0, len(candidates))

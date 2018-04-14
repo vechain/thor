@@ -35,7 +35,7 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 	if intrinsicGas > tx.Gas() {
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
-	baseGasPrice := builtin.Params.WithState(state).Get(thor.KeyBaseGasPrice)
+	baseGasPrice := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	gasPrice := tx.GasPrice(baseGasPrice)
 	clauses := tx.Clauses()
 	return &ResolvedTransaction{
@@ -53,11 +53,27 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 // BuyGas consumes energy to buy gas, to prepare for execution.
 func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, prepayed *big.Int, err error) {
 	prepayed = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
-	payer, ok := builtin.Energy.WithState(r.state).Consume(blockNum, r.CommonTo, r.Origin, prepayed)
-	if !ok {
-		return thor.Address{}, nil, errors.New("insufficient energy")
+	if r.CommonTo != nil {
+		// should check if CommonTo is a non-suicided contract
+		if !r.state.GetCodeHash(*r.CommonTo).IsZero() {
+			binding := builtin.Prototype.Native(r.state).Bind(*r.CommonTo)
+			credit := binding.UserCredit(r.Origin, blockNum)
+			if credit.Cmp(prepayed) >= 0 {
+				payer := binding.CurrentSponsor()
+				if payer.IsZero() {
+					payer = *r.CommonTo
+				}
+				if builtin.Energy.Native(r.state).SubBalance(payer, prepayed, blockNum) {
+					return payer, prepayed, nil
+				}
+			}
+		}
 	}
-	return payer, prepayed, nil
+
+	if builtin.Energy.Native(r.state).SubBalance(r.Origin, prepayed, blockNum) {
+		return r.Origin, prepayed, nil
+	}
+	return thor.Address{}, nil, errors.New("insufficient energy")
 }
 
 // returns common 'To' field of clauses if any.

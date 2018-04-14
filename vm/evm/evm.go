@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/thor"
@@ -51,8 +52,15 @@ func run(evm *EVM, contract *Contract, input []byte) ([]byte, error) {
 		}
 		// handle contract hook
 		if evm.contractHook != nil {
-			if proc := evm.contractHook(thor.Address(*contract.CodeAddr), input); proc != nil {
-				return proc(contract.UseGas, thor.Address(contract.CallerAddress))
+			if proc := evm.contractHook(
+				thor.Address(*contract.CodeAddr),
+				input,
+				contract.UseGas,
+				thor.Address(contract.CallerAddress),
+				evm.interpreter.readOnly,
+				evm.StateDB.AddLog,
+			); proc != nil {
+				return proc()
 			}
 		}
 	}
@@ -90,10 +98,10 @@ type Context struct {
 }
 
 // ContractHook hooks contract calls.
-type ContractHook func(to thor.Address, input []byte) func(useGas func(gas uint64) bool, caller thor.Address) ([]byte, error)
+type ContractHook func(to thor.Address, input []byte, useGas func(gas uint64) bool, caller thor.Address, readonly bool, addLog func(vmlog *types.Log)) func() ([]byte, error)
 
-// OnContractCreated callback when contract created.
-type OnContractCreated func(contractAddr thor.Address)
+// OnCreateContract callback when creating contract.
+type OnCreateContract func(contractAddr thor.Address)
 
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
@@ -134,8 +142,8 @@ type EVM struct {
 	// this value is important for generating contract address.
 	contractCreationCount uint32
 
-	contractHook      ContractHook
-	onContractCreated OnContractCreated
+	contractHook     ContractHook
+	onCreateContract OnCreateContract
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -158,9 +166,9 @@ func (evm *EVM) SetContractHook(hook ContractHook) {
 	evm.contractHook = hook
 }
 
-// SetOnContractCreated set callback to listen contract creation.
-func (evm *EVM) SetOnContractCreated(cb OnContractCreated) {
-	evm.onContractCreated = cb
+// SetOnCreateContract set callback to listen contract creation.
+func (evm *EVM) SetOnCreateContract(cb OnCreateContract) {
+	evm.onCreateContract = cb
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -350,12 +358,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	defer func() {
-		if err == nil && evm.onContractCreated != nil {
-			// callback contract creation
-			evm.onContractCreated(thor.Address(contractAddr))
-		}
-	}()
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -374,6 +376,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// differ with ethereum here!!!
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	evm.contractCreationCount++
+	evm.onCreateContract(thor.Address(contractAddr))
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {

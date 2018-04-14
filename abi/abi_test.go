@@ -19,7 +19,8 @@ func TestABI(t *testing.T) {
 	// pack/unpack input
 	{
 		name := "set"
-		method := abi.MethodByName(name)
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
 		assert.NotNil(t, method)
 		assert.Equal(t, name, method.Name())
 
@@ -45,7 +46,8 @@ func TestABI(t *testing.T) {
 	// pack/unpack output
 	{
 		name := "get"
-		method := abi.MethodByName(name)
+		method, found := abi.MethodByName(name)
+		assert.True(t, found)
 		assert.NotNil(t, method)
 
 		value := big.NewInt(1)

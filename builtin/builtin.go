@@ -3,8 +3,8 @@ package builtin
 import (
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/builtin/energy"
-	"github.com/vechain/thor/builtin/executor"
 	"github.com/vechain/thor/builtin/params"
+	"github.com/vechain/thor/builtin/prototype"
 	"github.com/vechain/thor/state"
 )
 
@@ -14,6 +14,7 @@ var (
 	Authority = &authorityContract{mustLoadContract("Authority")}
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
+	Prototype = &prototypeContract{mustLoadContract("Prototype")}
 )
 
 type (
@@ -21,20 +22,21 @@ type (
 	authorityContract struct{ *contract }
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
+	prototypeContract struct{ *contract }
 )
 
-func (p *paramsContract) WithState(state *state.State) *params.Params {
+func (p *paramsContract) Native(state *state.State) *params.Params {
 	return params.New(p.Address, state)
 }
 
-func (a *authorityContract) WithState(state *state.State) *authority.Authority {
+func (a *authorityContract) Native(state *state.State) *authority.Authority {
 	return authority.New(a.Address, state)
 }
 
-func (e *energyContract) WithState(state *state.State) *energy.Energy {
+func (e *energyContract) Native(state *state.State) *energy.Energy {
 	return energy.New(e.Address, state)
 }
 
-func (e *executorContract) WithState(state *state.State) *executor.Executor {
-	return executor.New(e.Address, state)
+func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
+	return prototype.New(p.Address, state)
 }

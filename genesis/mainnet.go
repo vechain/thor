@@ -26,8 +26,10 @@ func NewMainnet() (*Genesis, error) {
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 
-			builtin.Energy.WithState(state).InitializeTokenSupply(tokenSupply)
+			builtin.Energy.Native(state).InitializeTokenSupply(tokenSupply)
 			return nil
 		}).
 		Call(

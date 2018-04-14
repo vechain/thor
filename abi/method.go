@@ -23,6 +23,11 @@ func (m *Method) Name() string {
 	return m.method.Name
 }
 
+// Const returns if the method is const.
+func (m *Method) Const() bool {
+	return m.method.Const
+}
+
 // EncodeInput encode args to data, and the data is prefixed with method id.
 func (m *Method) EncodeInput(args ...interface{}) ([]byte, error) {
 	data, err := m.method.Inputs.Pack(args...)

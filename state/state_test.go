@@ -103,7 +103,7 @@ func TestEnergy(t *testing.T) {
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
-	st.SetEnergy(acc, 10, &big.Int{})
+	st.SetEnergy(acc, &big.Int{}, 10)
 
 	bal1 := st.GetEnergy(acc, blockNum1)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
