@@ -55,9 +55,9 @@ func run(evm *EVM, contract *Contract, input []byte) ([]byte, error) {
 			if proc := evm.contractHook(
 				thor.Address(*contract.CodeAddr),
 				input,
-				contract.UseGas,
 				thor.Address(contract.CallerAddress),
 				evm.interpreter.readOnly,
+				contract.UseGas,
 				evm.StateDB.AddLog,
 			); proc != nil {
 				return proc()
@@ -98,7 +98,13 @@ type Context struct {
 }
 
 // ContractHook hooks contract calls.
-type ContractHook func(to thor.Address, input []byte, useGas func(gas uint64) bool, caller thor.Address, readonly bool, addLog func(vmlog *types.Log)) func() ([]byte, error)
+type ContractHook func(
+	to thor.Address,
+	input []byte,
+	caller thor.Address,
+	readonly bool,
+	useGas func(gas uint64) bool,
+	addLog func(vmlog *types.Log)) func() ([]byte, error)
 
 // OnCreateContract callback when creating contract.
 type OnCreateContract func(contractAddr thor.Address)
