@@ -1,7 +1,6 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import "./ERC223Receiver.sol";
-import "./Prototype.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -35,10 +34,12 @@ contract Energy is Token {
         return EnergyNative(this).native_getBalance(_owner);
     }
 
-    function _transfer(address _from, address _to, uint256 _amount) internal {
+    // promise that it will not modify state when if returns false.
+    function _transfer(address _from, address _to, uint256 _amount) internal returns (bool) {
         if (_amount > 0) {
-            require(EnergyNative(this).native_subBalance(_from, _amount));
-
+            if (!EnergyNative(this).native_subBalance(_from, _amount)) {
+                return false;
+            }
             // believed that will never overflow
             EnergyNative(this).native_addBalance(_to, _amount);
         }
@@ -48,18 +49,19 @@ contract Energy is Token {
             ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
         }
         Transfer(_from, _to, _amount);
-    }
-
-    function transfer(address _to, uint256 _amount) public returns (bool success) {
-        _transfer(msg.sender, _to, _amount);
         return true;
     }
 
-    function transferFrom(address _from,address _to,uint256 _amount) public returns(bool success) {
+    function transfer(address _to, uint256 _amount) public returns (bool success) {
+        return _transfer(msg.sender, _to, _amount);
+    }
+
+    function transferFrom(address _from, address _to, uint256 _amount) public returns(bool success) {
+        if (!_transfer(_from, _to, _amount)) {
+            return false;
+        }
         require(allowed[_from][_to] >= _amount);
         allowed[_from][_to] -= _amount;
-
-        _transfer(_from, _to, _amount);        
         return true;
     }
 
@@ -72,17 +74,6 @@ contract Energy is Token {
         Approval(msg.sender, _reciever, _amount);
         return true;
     }
-
-    /// @notice the contract owner approves `_contractAddr` to transfer `_amount` tokens to `_to`
-    /// @param _contractAddr The address of the contract able to transfer the tokens
-    /// @param _to who receive the `_amount` tokens
-    /// @param _amount The amount of wei to be approved for transfer
-    /// @return Whether the approval was successful or not
-    function transferFromContract(address _contractAddr, address _to, uint256 _amount) public returns (bool success) {
-        require(msg.sender == PrototypeNative(_contractAddr).prototype_master());        
-        _transfer(_contractAddr, _to, _amount);
-        return true;
-    } 
     
     /// @param _addr an address of a normal account or a contract
     /// 

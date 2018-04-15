@@ -32,11 +32,11 @@ func (ti *txIterator) HasNext() bool {
 func (ti *txIterator) Next() *tx.Transaction {
 	ti.i++
 
-	accs := genesis.Dev.Accounts()
+	accs := genesis.DevAccounts()
 	a0 := accs[0]
 	a1 := accs[1]
 
-	method := builtin.Energy.ABI.MethodByName("transfer")
+	method, _ := builtin.Energy.ABI.MethodByName("transfer")
 
 	data, _ := method.EncodeInput(a1.Address, big.NewInt(1))
 
@@ -59,11 +59,12 @@ func TestP(t *testing.T) {
 	kv, _ := lvldb.New("/tmp/thor", lvldb.Options{})
 	defer kv.Close()
 
-	b0, _, _ := genesis.Dev.Build(state.NewCreator(kv))
+	g, _ := genesis.NewDevnet()
+	b0, _, _ := g.Build(state.NewCreator(kv))
 
 	c, _ := chain.New(kv, b0)
 
-	a1 := genesis.Dev.Accounts()[0]
+	a1 := genesis.DevAccounts()[0]
 
 	start := time.Now().UnixNano()
 	stateCreator := state.NewCreator(kv)
@@ -87,7 +88,7 @@ func TestP(t *testing.T) {
 			adopt(tx)
 		}
 
-		blk, _, err := commit(genesis.Dev.Accounts()[0].PrivateKey)
+		blk, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
 		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
 
 		if _, err := c.AddBlock(blk, nil, true); err != nil {

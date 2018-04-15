@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/thor"
@@ -49,19 +48,6 @@ func run(evm *EVM, contract *Contract, input []byte) ([]byte, error) {
 		}
 		if p := precompiles[*contract.CodeAddr]; p != nil {
 			return RunPrecompiledContract(p, input, contract)
-		}
-		// handle contract hook
-		if evm.contractHook != nil {
-			if proc := evm.contractHook(
-				thor.Address(*contract.CodeAddr),
-				input,
-				thor.Address(contract.CallerAddress),
-				evm.interpreter.readOnly,
-				contract.UseGas,
-				evm.StateDB.AddLog,
-			); proc != nil {
-				return proc()
-			}
 		}
 	}
 	return evm.interpreter.Run(contract, input)
@@ -99,12 +85,9 @@ type Context struct {
 
 // ContractHook hooks contract calls.
 type ContractHook func(
-	to thor.Address,
-	input []byte,
-	caller thor.Address,
-	readonly bool,
-	useGas func(gas uint64) bool,
-	addLog func(vmlog *types.Log)) func() ([]byte, error)
+	evm *EVM,
+	contract *Contract,
+	readonly bool) func() ([]byte, error)
 
 // OnCreateContract callback when creating contract.
 type OnCreateContract func(contractAddr thor.Address)

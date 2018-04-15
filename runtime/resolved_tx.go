@@ -54,18 +54,15 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, prepayed *big.Int, err error) {
 	prepayed = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
 	if r.CommonTo != nil {
-		// should check if CommonTo is a non-suicided contract
-		if !r.state.GetCodeHash(*r.CommonTo).IsZero() {
-			binding := builtin.Prototype.Native(r.state).Bind(*r.CommonTo)
-			credit := binding.UserCredit(r.Origin, blockNum)
-			if credit.Cmp(prepayed) >= 0 {
-				payer := binding.CurrentSponsor()
-				if payer.IsZero() {
-					payer = *r.CommonTo
-				}
-				if builtin.Energy.Native(r.state).SubBalance(payer, prepayed, blockNum) {
-					return payer, prepayed, nil
-				}
+		binding := builtin.Prototype.Native(r.state).Bind(*r.CommonTo)
+		credit := binding.UserCredit(r.Origin, blockNum)
+		if credit.Cmp(prepayed) >= 0 {
+			payer := binding.CurrentSponsor()
+			if payer.IsZero() {
+				payer = *r.CommonTo
+			}
+			if builtin.Energy.Native(r.state).SubBalance(payer, prepayed, blockNum) {
+				return payer, prepayed, nil
 			}
 		}
 	}
