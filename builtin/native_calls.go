@@ -383,11 +383,6 @@ func HandleNativeCall(
 		return nil
 	}
 
-	// ignore calling to non-contract
-	if state.GetCodeHash(to).IsZero() {
-		return nil
-	}
-
 	var method *nativeMethod
 	if to == caller {
 		// internal methods require caller == to
