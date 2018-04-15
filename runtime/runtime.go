@@ -3,12 +3,12 @@ package runtime
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/vm/evm"
 )
 
 // Runtime is to support transaction execution.
@@ -84,14 +84,10 @@ func (rt *Runtime) execute(
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
 	env.SetContractHook(func(
-		to thor.Address,
-		input []byte,
-		caller thor.Address,
-		readonly bool,
-		useGas func(gas uint64) bool,
-		addLog func(vmlog *types.Log)) func() ([]byte, error) {
-
-		return builtin.HandleNativeCall(rt.state, &ctx, to, input, caller, readonly, useGas, addLog)
+		evm *evm.EVM,
+		contract *evm.Contract,
+		readonly bool) func() ([]byte, error) {
+		return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
 	})
 	env.SetOnCreateContract(func(contractAddr thor.Address) {
 		// set master for created contract

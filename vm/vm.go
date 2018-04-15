@@ -95,9 +95,7 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 
 // New retutrns a new EVM . The returned EVM is not thread safe and should
 // only ever be used *once*.
-func New(ctx Context, state State, vmConfig Config) *VM {
-	statedb := statedb.New(state)
-	vm := &VM{statedb: statedb}
+func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
 		Transfer: func(db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
@@ -120,8 +118,12 @@ func New(ctx Context, state State, vmConfig Config) *VM {
 		TxID:        ctx.TxID,
 		ClauseIndex: ctx.ClauseIndex,
 	}
-	vm.evm = evm.NewEVM(evmCtx, statedb, chainConfig, evm.Config(vmConfig))
-	return vm
+	statedb := statedb.New(state)
+	return &VM{
+		evm.NewEVM(evmCtx, statedb, chainConfig, evm.Config(vmConfig)),
+		statedb,
+		nil,
+	}
 }
 
 // SetContractHook set the hook to hijack contract calls.
@@ -150,7 +152,7 @@ func (vm *VM) Cancel() {
 // It also handles any necessary value transfer required and takes the necessary steps to
 // create accounts and reverses the state in case of an execution error or failed value transfer.
 func (vm *VM) Call(caller thor.Address, addr thor.Address, input []byte, gas uint64, value *big.Int) *Output {
-	ret, leftOverGas, vmErr := vm.evm.Call(&vmContractRef{caller}, common.Address(addr), input, gas, value)
+	ret, leftOverGas, vmErr := vm.evm.Call(evm.AccountRef(caller), common.Address(addr), input, gas, value)
 	logs, preimages := vm.extractStateDBOutputs()
 	return &Output{ret, logs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
 }
@@ -161,14 +163,14 @@ func (vm *VM) Call(caller thor.Address, addr thor.Address, input []byte, gas uin
 // Opcodes that attempt to perform such modifications will result in exceptions instead of performing
 // the modifications.
 func (vm *VM) StaticCall(caller thor.Address, addr thor.Address, input []byte, gas uint64) *Output {
-	ret, leftOverGas, vmErr := vm.evm.StaticCall(&vmContractRef{caller}, common.Address(addr), input, gas)
+	ret, leftOverGas, vmErr := vm.evm.StaticCall(evm.AccountRef(caller), common.Address(addr), input, gas)
 	logs, preimages := vm.extractStateDBOutputs()
 	return &Output{ret, logs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, nil}
 }
 
 // Create creates a new contract using code as deployment code.
 func (vm *VM) Create(caller thor.Address, code []byte, gas uint64, value *big.Int) *Output {
-	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(&vmContractRef{caller}, code, gas, value)
+	ret, contractAddr, leftOverGas, vmErr := vm.evm.Create(evm.AccountRef(caller), code, gas, value)
 	contractAddress := thor.Address(contractAddr)
 	logs, preimages := vm.extractStateDBOutputs()
 	return &Output{ret, logs, leftOverGas, vm.statedb.GetRefund(), preimages, vmErr, &contractAddress}

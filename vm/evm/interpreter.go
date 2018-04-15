@@ -116,6 +116,21 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	// as every returning call will return new data anyway.
 	in.returnData = nil
 
+	// handle contract hook
+	if in.evm.contractHook != nil && contract.CodeAddr != nil {
+		// ignore callcode or delegatecall
+		if *contract.CodeAddr == contract.Address() {
+			contract.Input = input
+			if proc := in.evm.contractHook(
+				in.evm,
+				contract,
+				in.readOnly,
+			); proc != nil {
+				return proc()
+			}
+		}
+	}
+
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil

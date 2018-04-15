@@ -4,13 +4,11 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/prototype"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/evm"
 )
 
@@ -149,7 +147,7 @@ func initEnergyMethods() {
 	}{
 		{"native_getTotalSupply", func(env *bridge) []interface{} {
 			env.UseGas(ethparams.SloadGas * 4)
-			supply := Energy.Native(env.State).GetTotalSupply(env.VMCtx.BlockNumber)
+			supply := Energy.Native(env.State).GetTotalSupply(env.BlockNumber())
 			return []interface{}{supply}
 		}},
 		{"native_getTotalBurned", func(env *bridge) []interface{} {
@@ -160,8 +158,8 @@ func initEnergyMethods() {
 		{"native_getBalance", func(env *bridge) []interface{} {
 			var addr common.Address
 			env.ParseArgs(&addr)
-			env.UseGas(ethparams.SloadGas * 2)
-			bal := Energy.Native(env.State).GetBalance(thor.Address(addr), env.VMCtx.BlockNumber)
+			env.UseGas(ethparams.SloadGas)
+			bal := Energy.Native(env.State).GetBalance(thor.Address(addr), env.BlockNumber())
 			return []interface{}{bal}
 		}},
 		{"native_addBalance", func(env *bridge) []interface{} {
@@ -175,7 +173,7 @@ func initEnergyMethods() {
 			} else {
 				env.UseGas(ethparams.SstoreSetGas)
 			}
-			Energy.Native(env.State).AddBalance(thor.Address(args.Addr), args.Amount, env.VMCtx.BlockNumber)
+			Energy.Native(env.State).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockNumber())
 			return nil
 		}},
 		{"native_subBalance", func(env *bridge) []interface{} {
@@ -185,7 +183,7 @@ func initEnergyMethods() {
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Energy.Native(env.State).SubBalance(thor.Address(args.Addr), args.Amount, env.VMCtx.BlockNumber)
+			ok := Energy.Native(env.State).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockNumber())
 			if ok {
 				env.UseGas(ethparams.SstoreResetGas)
 			}
@@ -232,12 +230,52 @@ func initPrototypeMethods() {
 			var newMaster common.Address
 			env.ParseArgs(&newMaster)
 			env.UseGas(ethparams.SloadGas)
-			// master or contract itself is allowed
-			env.Require(binding.Master() == env.Caller || env.To == env.Caller)
+			// master or account itself is allowed
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 			env.UseGas(ethparams.SstoreResetGas)
 			binding.SetMaster(thor.Address(newMaster))
 			env.Log(setMasterEvent, []thor.Bytes32{thor.BytesToBytes32(newMaster[:])})
 			return nil
+		}},
+		{"prototype_energy", func(env *bridge, binding *prototype.Binding) []interface{} {
+			env.UseGas(ethparams.SloadGas)
+			bal := Energy.Native(env.State).GetBalance(env.To(), env.BlockNumber())
+			return []interface{}{bal}
+		}},
+		{"prototype_transferEnergy", func(env *bridge, binding *prototype.Binding) []interface{} {
+			var args struct {
+				To     common.Address
+				Amount *big.Int
+			}
+			env.ParseArgs(&args)
+			env.UseGas(ethparams.SloadGas)
+			// master or account itself is allowed
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
+
+			transferMethod, ok := Energy.ABI.MethodByName("transfer")
+			if !ok {
+				panic("transfer method not found")
+			}
+			transferData, err := transferMethod.EncodeInput(args.To, args.Amount)
+			if err != nil {
+				panic(err)
+			}
+			ret, leftOverGas, vmerr := env.VM.Call(
+				env.Contract,
+				common.Address(Energy.Address),
+				transferData,
+				env.Contract.Gas,
+				&big.Int{},
+			)
+			env.UseGas(env.Contract.Gas - leftOverGas)
+			if vmerr != nil {
+				env.Stop(vmerr)
+			}
+			var success bool
+			if err := transferMethod.DecodeOutput(ret, &success); err != nil {
+				panic(err)
+			}
+			return []interface{}{success}
 		}},
 		{"prototype_isUser", func(env *bridge, binding *prototype.Binding) []interface{} {
 			var addr common.Address
@@ -250,7 +288,7 @@ func initPrototypeMethods() {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			credit := binding.UserCredit(thor.Address(addr), env.VMCtx.BlockNumber)
+			credit := binding.UserCredit(thor.Address(addr), env.BlockNumber())
 			return []interface{}{credit}
 		}},
 		{"prototype_addUser", func(env *bridge, binding *prototype.Binding) []interface{} {
@@ -258,9 +296,9 @@ func initPrototypeMethods() {
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
 
-			env.Require(binding.Master() == env.Caller || env.To == env.Caller)
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 			env.UseGas(ethparams.SloadGas)
-			added := binding.AddUser(thor.Address(addr), env.VMCtx.BlockNumber)
+			added := binding.AddUser(thor.Address(addr), env.BlockNumber())
 			if added {
 				env.UseGas(ethparams.SloadGas)
 				env.UseGas(ethparams.SstoreSetGas)
@@ -273,7 +311,7 @@ func initPrototypeMethods() {
 			env.ParseArgs(&addr)
 
 			env.UseGas(ethparams.SloadGas)
-			env.Require(binding.Master() == env.Caller || env.To == env.Caller)
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 
 			env.UseGas(ethparams.SloadGas)
 			removed := binding.RemoveUser(thor.Address(addr))
@@ -296,7 +334,7 @@ func initPrototypeMethods() {
 			env.ParseArgs(&args)
 
 			env.UseGas(ethparams.SloadGas)
-			env.Require(binding.Master() == env.Caller || env.To == env.Caller)
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 
 			env.UseGas(ethparams.SstoreSetGas)
 			binding.SetUserPlan(args.Credit, args.RecoveryRate)
@@ -307,14 +345,14 @@ func initPrototypeMethods() {
 			var yesOrNo bool
 			env.ParseArgs(&yesOrNo)
 			env.UseGas(ethparams.SloadGas)
-			ok := binding.Sponsor(env.Caller, yesOrNo)
+			ok := binding.Sponsor(env.Caller(), yesOrNo)
 			if ok {
 				if yesOrNo {
 					env.UseGas(ethparams.SstoreSetGas)
 				} else {
 					env.UseGas(ethparams.SstoreClearGas)
 				}
-				env.Log(sponsorEvent, []thor.Bytes32{thor.BytesToBytes32(env.Caller[:])}, yesOrNo)
+				env.Log(sponsorEvent, []thor.Bytes32{thor.BytesToBytes32(env.Caller().Bytes())}, yesOrNo)
 			}
 			return []interface{}{ok}
 		}},
@@ -329,7 +367,7 @@ func initPrototypeMethods() {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			env.Require(binding.Master() == env.Caller || env.To == env.Caller)
+			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 			env.UseGas(ethparams.SloadGas)
 			ok := binding.SelectSponsor(thor.Address(addr))
 			if ok {
@@ -346,11 +384,12 @@ func initPrototypeMethods() {
 	}
 
 	for _, def := range defines {
+		def := def // make a copy since it's used in closure
 		if method, found := nativeABI.MethodByName(def.name); found {
 			prototypeMethods[method.ID()] = &nativeMethod{
 				ABI: method,
 				Run: func(env *bridge) []interface{} {
-					return def.run(env, Prototype.Native(env.State).Bind(env.To))
+					return def.run(env, Prototype.Native(env.State).Bind(env.To()))
 				},
 			}
 		} else {
@@ -369,24 +408,20 @@ func init() {
 // HandleNativeCall entry of native methods implementaion.
 func HandleNativeCall(
 	state *state.State,
-	vmCtx *vm.Context,
-	to thor.Address,
-	input []byte,
-	caller thor.Address,
+	vm *evm.EVM,
+	contract *evm.Contract,
 	readonly bool,
-	useGas func(gas uint64) bool,
-	addLog func(vmlog *types.Log),
 ) func() ([]byte, error) {
 
-	methodID, err := abi.ExtractMethodID(input)
+	methodID, err := abi.ExtractMethodID(contract.Input)
 	if err != nil {
 		return nil
 	}
 
 	var method *nativeMethod
-	if to == caller {
+	if contract.Address() == contract.Caller() {
 		// internal methods require caller == to
-		method = internalMethods[addressAndMethodID{to, methodID}]
+		method = internalMethods[addressAndMethodID{thor.Address(contract.Address()), methodID}]
 	}
 
 	if method == nil {
@@ -402,5 +437,5 @@ func HandleNativeCall(
 			return nil, evm.ErrWriteProtection()
 		}
 	}
-	return newBridge(method, state, vmCtx, to, input, caller, useGas, addLog).Call
+	return newBridge(method, state, vm, contract).Call
 }
