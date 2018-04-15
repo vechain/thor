@@ -83,8 +83,15 @@ func (rt *Runtime) execute(
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
-	env.SetContractHook(func(to thor.Address, input []byte, useGas func(gas uint64) bool, caller thor.Address, readonly bool, addLog func(vmlog *types.Log)) func() ([]byte, error) {
-		return builtin.HandleNativeCall(rt.state, &ctx, to, input, useGas, caller, readonly, addLog)
+	env.SetContractHook(func(
+		to thor.Address,
+		input []byte,
+		caller thor.Address,
+		readonly bool,
+		useGas func(gas uint64) bool,
+		addLog func(vmlog *types.Log)) func() ([]byte, error) {
+
+		return builtin.HandleNativeCall(rt.state, &ctx, to, input, caller, readonly, useGas, addLog)
 	})
 	env.SetOnCreateContract(func(contractAddr thor.Address) {
 		// set master for created contract
