@@ -243,6 +243,35 @@ func initPrototypeMethods() {
 			return []interface{}{bal}
 		}},
 		{"prototype_transferEnergy", func(env *bridge, binding *prototype.Binding) []interface{} {
+			var amount *big.Int
+			env.ParseArgs(&amount)
+
+			transferMethod, ok := Energy.ABI.MethodByName("transfer")
+			if !ok {
+				panic("transfer method not found")
+			}
+			transferData, err := transferMethod.EncodeInput(env.To(), amount)
+			if err != nil {
+				panic(err)
+			}
+			ret, leftOverGas, vmerr := env.VM.Call(
+				evm.AccountRef(env.Caller()),
+				common.Address(Energy.Address),
+				transferData,
+				env.Contract.Gas,
+				&big.Int{},
+			)
+			env.UseGas(env.Contract.Gas - leftOverGas)
+			if vmerr != nil {
+				env.Stop(vmerr)
+			}
+			var success bool
+			if err := transferMethod.DecodeOutput(ret, &success); err != nil {
+				panic(err)
+			}
+			return []interface{}{success}
+		}},
+		{"prototype_transferEnergyTo", func(env *bridge, binding *prototype.Binding) []interface{} {
 			var args struct {
 				To     common.Address
 				Amount *big.Int
