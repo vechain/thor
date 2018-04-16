@@ -109,13 +109,19 @@ func (rt *Runtime) execute(
 			builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
 		},
 		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
-			energy := builtin.Energy.Native(rt.state)
-			amount := energy.GetBalance(contractAddr, rt.blockNumber)
+			amount := rt.state.GetEnergy(contractAddr, rt.blockNumber)
 			if amount.Sign() == 0 {
 				return
 			}
-			builtin.Energy.Native(rt.state).AddBalance(tokenReceiver, amount, rt.blockNumber)
+			// add remained energy of suiciding contract to receiver.
+			// no need to clear contract's energy, vm will delete the whole contract later.
+			rt.state.SetEnergy(tokenReceiver,
+				new(big.Int).Add(
+					rt.state.GetEnergy(tokenReceiver, rt.blockNumber),
+					amount),
+				rt.blockNumber)
 
+			// see ERC20's Transfer event
 			topics := []common.Hash{
 				common.Hash(energyTransferEvent.ID()),
 				common.BytesToHash(contractAddr[:]),
