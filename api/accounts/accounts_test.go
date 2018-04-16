@@ -136,7 +136,6 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(logs)
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
@@ -238,7 +237,7 @@ func callContract(t *testing.T, ts *httptest.Server) {
 
 	method := "add"
 	abi, err := ABI.New([]byte(abiJSON))
-	m := abi.MethodByName(method)
+	m, _ := abi.MethodByName(method)
 	input, err := m.EncodeInput(a, b)
 	if err != nil {
 		t.Fatal(err)
