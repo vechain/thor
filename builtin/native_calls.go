@@ -217,6 +217,11 @@ func initPrototypeMethods() {
 	sponsorEvent := mustEventByName("prototype_Sponsor")
 	selectSponsorEvent := mustEventByName("prototype_SelectSponsor")
 
+	energyTransferMethod, ok := Energy.ABI.MethodByName("transfer")
+	if !ok {
+		panic("transfer method not found")
+	}
+
 	defines := []struct {
 		name string
 		run  func(env *bridge, binding *prototype.Binding) []interface{}
@@ -281,11 +286,7 @@ func initPrototypeMethods() {
 			// master or account itself is allowed
 			env.Require(binding.Master() == env.Caller() || env.Caller() == env.To())
 
-			transferMethod, ok := Energy.ABI.MethodByName("transfer")
-			if !ok {
-				panic("transfer method not found")
-			}
-			transferData, err := transferMethod.EncodeInput(args.To, args.Amount)
+			transferData, err := energyTransferMethod.EncodeInput(args.To, args.Amount)
 			if err != nil {
 				panic(err)
 			}
@@ -301,7 +302,7 @@ func initPrototypeMethods() {
 				env.Stop(vmerr)
 			}
 			var success bool
-			if err := transferMethod.DecodeOutput(ret, &success); err != nil {
+			if err := energyTransferMethod.DecodeOutput(ret, &success); err != nil {
 				panic(err)
 			}
 			return []interface{}{success}

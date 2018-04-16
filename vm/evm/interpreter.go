@@ -117,11 +117,11 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	in.returnData = nil
 
 	// handle contract hook
-	if in.evm.contractHook != nil && contract.CodeAddr != nil {
+	if contract.CodeAddr != nil {
 		// ignore callcode or delegatecall
 		if *contract.CodeAddr == contract.Address() {
 			contract.Input = input
-			if proc := in.evm.contractHook(
+			if proc := in.evm.ContractHook(
 				in.evm,
 				contract,
 				in.readOnly,
