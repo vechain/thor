@@ -193,20 +193,12 @@ func action(ctx *cli.Context) error {
 		log.Info("Communicator exited")
 	})
 
-	txRoutineCtx := &txRoutineContext{
-		ctx:          c,
-		communicator: communicator,
-		txpool:       txpool,
-	}
 	goes.Go(func() {
-		log.Info("Tx broadcast loop started")
-		txBroadcastLoop(txRoutineCtx)
-		log.Info("Tx broadcast loop exited")
-	})
-	goes.Go(func() {
-		log.Info("Tx pool update loop started")
-		txPoolUpdateLoop(txRoutineCtx)
-		log.Info("Tx pool update loop exited")
+		synchronizeTx(&txRoutineContext{
+			ctx:          c,
+			communicator: communicator,
+			txpool:       txpool,
+		})
 	})
 
 	blockRoutineCtx := &blockRoutineContext{
