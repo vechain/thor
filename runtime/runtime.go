@@ -89,9 +89,9 @@ func (rt *Runtime) execute(
 		readonly bool) func() ([]byte, error) {
 		return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
 	})
-	env.SetOnCreateContract(func(contractAddr thor.Address) {
+	env.SetOnCreateContract(func(contractAddr thor.Address, caller thor.Address) {
 		// set master for created contract
-		builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(txOrigin)
+		builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
 	})
 	env.SetOnTransfer(func(sender, recipient thor.Address, amount *big.Int) {
 		if amount.Sign() == 0 {
