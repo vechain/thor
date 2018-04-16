@@ -14,11 +14,13 @@ var (
 	totalSubKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
 )
 
+// Energy implements energy operations.
 type Energy struct {
 	addr  thor.Address
 	state *state.State
 }
 
+// New creates a new energy instance.
 func New(addr thor.Address, state *state.State) *Energy {
 	return &Energy{addr, state}
 }
@@ -31,17 +33,16 @@ func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
 	e.state.SetStructedStorage(e.addr, key, val)
 }
 
-// InitializeTokenSupply initialize VET token supply info.
+// InitializeTokenSupply initializes token supply, to help calculating total energy supply.
 func (e *Energy) InitializeTokenSupply(supply *big.Int) {
 	e.setStorage(tokenSupplyKey, supply)
 }
 
 // GetTotalSupply returns total supply of energy.
 func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
+	// that's totalGrown + totalAdd - totalSub
 	var tokenSupply big.Int
 	e.getStorage(tokenSupplyKey, &tokenSupply)
-	var tokenSupplyTime uint64
-	e.getStorage(tokenSupplyKey, &tokenSupplyTime)
 
 	// calc grown energy for total token supply
 	energyState := state.EnergyState{Energy: &big.Int{}}
@@ -54,6 +55,7 @@ func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
 	return grown.Sub(grown, &totalSub)
 }
 
+// GetTotalBurned returns energy totally burned.
 func (e *Energy) GetTotalBurned() *big.Int {
 	var totalAdd, totalSub big.Int
 	e.getStorage(totalAddKey, &totalAdd)
