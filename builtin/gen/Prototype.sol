@@ -8,7 +8,8 @@ contract PrototypeNative {
     function prototype_setMaster(address newMaster) public;
 
     function prototype_energy() public view returns(uint256);
-    function prototype_transferEnergy(address to, uint256 amount) public returns(bool);
+    function prototype_transferEnergy(uint256 amount) public returns(bool);
+    function prototype_transferEnergyTo(address to, uint256 amount) public returns(bool);
 
     function prototype_isUser(address user) public view returns(bool);
     function prototype_userCredit(address user) public view returns(uint256 remainedCredit);
