@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
@@ -54,6 +56,7 @@ func main() {
 
 func action(ctx *cli.Context) error {
 	initLog(log15.Lvl(ctx.Int("verbosity")))
+	log.Info("Welcome to thor network")
 
 	var (
 		genesis *Genesis.Genesis
@@ -61,8 +64,10 @@ func action(ctx *cli.Context) error {
 	)
 	if ctx.Bool("devnet") {
 		genesis, err = Genesis.NewDevnet()
+		log.Info("Using Devnet", "genesis", genesis.ID().AbbrevString())
 	} else {
 		genesis, err = Genesis.NewMainnet()
+		log.Info("Using Mainnet", "genesis", genesis.ID().AbbrevString())
 	}
 	if err != nil {
 		return err
@@ -73,6 +78,7 @@ func action(ctx *cli.Context) error {
 			return err
 		}
 	}
+	log.Info("Disk storage enabled for storing data", "path", dataDir)
 
 	lvldb, err := Lvldb.New(dataDir+"/main.db", Lvldb.Options{})
 	if err != nil {
@@ -108,17 +114,13 @@ func action(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
 
 	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
 	if err != nil {
 		return err
 	}
-
-	lsr, err := net.Listen("tcp", ctx.String("apiaddr"))
-	if err != nil {
-		return err
-	}
-	defer lsr.Close()
+	log.Info("Proposer key loaded", "address", proposer)
 
 	beneficiary := proposer
 	if ctx.String("beneficiary") != "" {
@@ -126,6 +128,14 @@ func action(ctx *cli.Context) error {
 			return err
 		}
 	}
+	log.Info("Beneficiary key loaded", "address", beneficiary)
+
+	restAddr := ctx.String("apiaddr")
+	lsr, err := net.Listen("tcp", restAddr)
+	if err != nil {
+		return err
+	}
+	defer lsr.Close()
 
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
@@ -143,22 +153,52 @@ func action(ctx *cli.Context) error {
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
-		log.Info("communicator exited")
+		timer := time.NewTimer(1 * time.Second)
+		defer timer.Stop()
+
+		for {
+			select {
+			case <-c.Done():
+				return
+			case <-timer.C:
+				best, err := chain.GetBestBlock()
+				if err != nil {
+					log.Error(fmt.Sprintf("%v", err))
+				} else {
+					header := best.Header()
+					signerStr := "N/A"
+					if signer, err := header.Signer(); err == nil {
+						signerStr = signer.String()
+					}
+
+					log.Info("Current best block",
+						"number", header.Number(),
+						"id", header.ID().AbbrevString(),
+						"total-score", header.TotalScore(),
+						"proposer", signerStr,
+					)
+				}
+
+				if !communicator.IsSynced() {
+					log.Warn("Chain data has not synced")
+				}
+
+				timer.Reset(15 * time.Second)
+			}
+		}
 	})
 
-	txRoutineCtx := &txRoutineContext{
-		ctx:          c,
-		communicator: communicator,
-		txpool:       txpool,
-	}
 	goes.Go(func() {
-		txBroadcastLoop(txRoutineCtx)
-		log.Info("broadcast loop exited")
+		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
+		log.Info("Communicator exited")
 	})
+
 	goes.Go(func() {
-		txPoolUpdateLoop(txRoutineCtx)
-		log.Info("tx pool update loop exited")
+		synchronizeTx(&txRoutineContext{
+			ctx:          c,
+			communicator: communicator,
+			txpool:       txpool,
+		})
 	})
 
 	blockRoutineCtx := &blockRoutineContext{
@@ -170,17 +210,20 @@ func action(ctx *cli.Context) error {
 		bestBlockUpdated: make(chan *block.Block, 1),
 	}
 	goes.Go(func() {
+		log.Info("Consent loop started")
 		consentLoop(blockRoutineCtx, consensus, logdb)
-		log.Info("consent loop exited")
+		log.Info("Consent loop exited")
 	})
 	goes.Go(func() {
+		log.Info("Pack loop started")
 		packLoop(blockRoutineCtx, packer, privateKey)
-		log.Info("pack loop exited")
+		log.Info("Pack loop exited")
 	})
 
 	goes.Go(func() {
+		log.Info("Rest service started", "listen-addr", restAddr)
 		runRestful(c, rest, lsr)
-		log.Info("restful exited")
+		log.Info("Restful exited")
 	})
 
 	interrupt := make(chan os.Signal)
@@ -188,6 +231,7 @@ func action(ctx *cli.Context) error {
 
 	select {
 	case <-interrupt:
+		log.Info("Got sigterm, shutting down...")
 		go func() {
 			// force exited when rcvd 10 interrupts
 			for i := 0; i < 10; i++ {
@@ -215,10 +259,16 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	}
 
 	p2pSrv := p2psrv.New(opt)
-	if err := p2pSrv.Start(communicator.Protocols()); err != nil {
+	protocols := communicator.Protocols()
+	if err := p2pSrv.Start(protocols); err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
+	for _, protocol := range protocols {
+		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+	}
+	log.Info("P2P network started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
+
 	defer func() {
 		p2pSrv.Stop()
 		nodes := p2pSrv.GoodNodes()
