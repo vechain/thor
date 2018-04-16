@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/vechain/thor/co"
+
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/vechain/thor/block"
 	Chain "github.com/vechain/thor/chain"
@@ -26,6 +28,29 @@ type blockRoutineContext struct {
 	txpool           *Txpool.TxPool
 	packedChan       chan *packedEvent
 	bestBlockUpdated chan *block.Block // must be >=1 buffer chan
+}
+
+func produceBlock(
+	context *blockRoutineContext,
+	consensus *Consensus.Consensus,
+	packer *Packer.Packer,
+	privateKey *ecdsa.PrivateKey,
+	logdb *Logdb.LogDB,
+) {
+	var goes co.Goes
+
+	goes.Go(func() {
+		consentLoop(context, consensus, logdb)
+	})
+	goes.Go(func() {
+		packLoop(context, packer, privateKey)
+	})
+
+	log.Info("Block consensus started")
+	log.Info("Block packer started")
+	goes.Wait()
+	log.Info("Block consensus stoped")
+	log.Info("Block packer stoped")
 }
 
 type orphan struct {
