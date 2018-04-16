@@ -54,7 +54,7 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 	consentFn := func(blk *block.Block) error {
 		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
-			log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
+			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
 			if Consensus.IsFutureBlock(err) {
 				futures.Push(blk)
 			} else if Consensus.IsParentNotFound(err) {
@@ -123,10 +123,10 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 		case <-context.ctx.Done():
 			return
 		default:
-			log.Warn("has not synced")
 			time.Sleep(1 * time.Second)
 		}
 	}
+	log.Info("Chain data has synced")
 
 	var (
 		ts        uint64
@@ -162,7 +162,7 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 				ts = 0
 				pack(context.txpool, packer, adopt, commit, privateKey, context.packedChan)
 			} else if ts > now {
-				fmt.Printf("after %v seconds to pack.\r\n", ts-now)
+				//fmt.Printf("after %v seconds to pack.\r\n", ts-now)
 			}
 		}
 	}
@@ -207,7 +207,7 @@ func pack(
 		}
 	}
 
-	log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
+	//log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
 	pe := &packedEvent{
 		blk:      blk,
 		receipts: receipts,
@@ -228,11 +228,11 @@ func updateChain(
 		return
 	}
 
-	log.Info(
-		fmt.Sprintf("add new block to chain(#%v %v)", newBlk.Blk.Header().Number(), newBlk.Trunk),
-		"id", newBlk.Blk.Header().ID(),
-		"size", newBlk.Blk.Size(),
-	)
+	// log.Info(
+	// 	fmt.Sprintf("add new block to chain(#%v %v)", newBlk.Blk.Header().Number(), newBlk.Trunk),
+	// 	"id", newBlk.Blk.Header().ID(),
+	// 	"size", newBlk.Blk.Size(),
+	// )
 
 	if newBlk.Trunk {
 		sendBestBlock(context.bestBlockUpdated, newBlk.Blk)
