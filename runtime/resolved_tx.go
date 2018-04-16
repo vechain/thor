@@ -57,16 +57,21 @@ func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, prepa
 		binding := builtin.Prototype.Native(r.state).Bind(*r.CommonTo)
 		credit := binding.UserCredit(r.Origin, blockNum)
 		if credit.Cmp(prepayed) >= 0 {
-			payer := binding.CurrentSponsor()
-			if payer.IsZero() {
-				payer = *r.CommonTo
+			// has enough credit
+			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
+				// deduct from sponsor, if any
+				if builtin.Energy.Native(r.state).SubBalance(sponsor, prepayed, blockNum) {
+					return sponsor, prepayed, nil
+				}
 			}
-			if builtin.Energy.Native(r.state).SubBalance(payer, prepayed, blockNum) {
-				return payer, prepayed, nil
+			// deduct from To
+			if builtin.Energy.Native(r.state).SubBalance(*r.CommonTo, prepayed, blockNum) {
+				return *r.CommonTo, prepayed, nil
 			}
 		}
 	}
 
+	// fallback to deduct from tx origin
 	if builtin.Energy.Native(r.state).SubBalance(r.Origin, prepayed, blockNum) {
 		return r.Origin, prepayed, nil
 	}
