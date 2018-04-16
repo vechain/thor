@@ -81,16 +81,20 @@ type Context struct {
 	TxID thor.Bytes32
 	// The index of clause that generates this message.
 	ClauseIndex uint32
+
+	ContractHook      ContractHook
+	OnCreateContract  OnCreateContract
+	OnSuicideContract OnSuicideContract
 }
 
 // ContractHook hooks contract calls.
-type ContractHook func(
-	evm *EVM,
-	contract *Contract,
-	readonly bool) func() ([]byte, error)
+type ContractHook func(evm *EVM, contract *Contract, readonly bool) func() ([]byte, error)
 
 // OnCreateContract callback when creating contract.
-type OnCreateContract func(contractAddr thor.Address, caller thor.Address)
+type OnCreateContract func(evm *EVM, contractAddr thor.Address, caller thor.Address)
+
+// OnSuicideContract callback when suicide contract.
+type OnSuicideContract func(evm *EVM, contractAddr thor.Address, tokenReceiver thor.Address)
 
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
@@ -130,9 +134,6 @@ type EVM struct {
 	// contract created during execution.
 	// this value is important for generating contract address.
 	contractCreationCount uint32
-
-	contractHook     ContractHook
-	onCreateContract OnCreateContract
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
@@ -148,16 +149,6 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 
 	evm.interpreter = NewInterpreter(evm, vmConfig)
 	return evm
-}
-
-// SetContractHook set the hook to hijack contract calls.
-func (evm *EVM) SetContractHook(hook ContractHook) {
-	evm.contractHook = hook
-}
-
-// SetOnCreateContract set callback to listen contract creation.
-func (evm *EVM) SetOnCreateContract(cb OnCreateContract) {
-	evm.onCreateContract = cb
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -365,7 +356,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// differ with ethereum here!!!
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	evm.contractCreationCount++
-	evm.onCreateContract(thor.Address(contractAddr), thor.Address(caller.Address()))
+
+	evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {

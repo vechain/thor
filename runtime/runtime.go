@@ -3,6 +3,9 @@ package runtime
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -10,6 +13,16 @@ import (
 	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/evm"
 )
+
+var energyTransferEvent *abi.Event
+
+func init() {
+	ev, found := builtin.Energy.ABI.EventByName("Transfer")
+	if !found {
+		panic("transfer event not found")
+	}
+	energyTransferEvent = ev
+}
 
 // Runtime is to support transaction execution.
 type Runtime struct {
@@ -80,28 +93,49 @@ func (rt *Runtime) execute(
 
 		GetHash:     rt.getBlockID,
 		ClauseIndex: index,
+		OnTransfer: func(sender, recipient thor.Address, amount *big.Int) {
+			if amount.Sign() == 0 {
+				return
+			}
+			// touch energy accounts which token balance changed
+			builtin.Energy.Native(rt.state).AddBalance(sender, &big.Int{}, rt.blockNumber)
+			builtin.Energy.Native(rt.state).AddBalance(recipient, &big.Int{}, rt.blockNumber)
+		},
+		ContractHook: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
+			return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
+		},
+		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
+			// set master for created contract
+			builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
+		},
+		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
+			energy := builtin.Energy.Native(rt.state)
+			amount := energy.GetBalance(contractAddr, rt.blockNumber)
+			if amount.Sign() == 0 {
+				return
+			}
+			builtin.Energy.Native(rt.state).AddBalance(tokenReceiver, amount, rt.blockNumber)
+
+			topics := []common.Hash{
+				common.Hash(energyTransferEvent.ID()),
+				common.BytesToHash(contractAddr[:]),
+				common.BytesToHash(tokenReceiver[:]),
+			}
+
+			data, err := energyTransferEvent.Encode(amount)
+			if err != nil {
+				panic(err)
+			}
+
+			evm.StateDB.AddLog(&types.Log{
+				Address: common.Address(builtin.Energy.Address),
+				Topics:  topics,
+				Data:    data,
+			})
+		},
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
-	env.SetContractHook(func(
-		evm *evm.EVM,
-		contract *evm.Contract,
-		readonly bool) func() ([]byte, error) {
-		return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
-	})
-	env.SetOnCreateContract(func(contractAddr thor.Address, caller thor.Address) {
-		// set master for created contract
-		builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
-	})
-	env.SetOnTransfer(func(sender, recipient thor.Address, amount *big.Int) {
-		if amount.Sign() == 0 {
-			return
-		}
-		// touch energy accounts which token balance changed
-		builtin.Energy.Native(rt.state).AddBalance(sender, &big.Int{}, rt.blockNumber)
-		builtin.Energy.Native(rt.state).AddBalance(recipient, &big.Int{}, rt.blockNumber)
-	})
-
 	if to == nil {
 		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
 	}

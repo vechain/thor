@@ -39,20 +39,13 @@ type Log struct {
 // State to decouple with state.State
 type State statedb.State
 
-// ContractHook ref evm.ContractHook.
-type ContractHook evm.ContractHook
-
-// OnCreateContract ref evm.OnCreateContract
-type OnCreateContract evm.OnCreateContract
-
 // OnTransfer callback before transfer occur.
 type OnTransfer func(sender, recipient thor.Address, amount *big.Int)
 
 // VM is a facade for ethEvm.
 type VM struct {
-	evm        *evm.EVM
-	statedb    *statedb.StateDB
-	onTransfer OnTransfer
+	evm     *evm.EVM
+	statedb *statedb.StateDB
 }
 
 var chainConfig = &params.ChainConfig{
@@ -80,6 +73,11 @@ type Context struct {
 	TxID        thor.Bytes32
 	ClauseIndex uint32
 	GetHash     func(uint32) thor.Bytes32
+
+	OnTransfer        OnTransfer
+	ContractHook      evm.ContractHook
+	OnCreateContract  evm.OnCreateContract
+	OnSuicideContract evm.OnSuicideContract
 }
 
 // The only purpose of this func separate definition is to be compatible with evm.context.
@@ -99,9 +97,7 @@ func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
 		Transfer: func(db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
-			if vm.onTransfer != nil {
-				vm.onTransfer(thor.Address(sender), thor.Address(recipient), amount)
-			}
+			ctx.OnTransfer(thor.Address(sender), thor.Address(recipient), amount)
 			transfer(db, sender, recipient, amount)
 		},
 		GetHash: func(n uint64) common.Hash {
@@ -117,29 +113,16 @@ func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 		GasPrice:    ctx.GasPrice,
 		TxID:        ctx.TxID,
 		ClauseIndex: ctx.ClauseIndex,
+
+		ContractHook:      ctx.ContractHook,
+		OnCreateContract:  ctx.OnCreateContract,
+		OnSuicideContract: ctx.OnSuicideContract,
 	}
 	statedb := statedb.New(state)
 	return &VM{
 		evm.NewEVM(evmCtx, statedb, chainConfig, evm.Config(vmConfig)),
 		statedb,
-		nil,
 	}
-}
-
-// SetContractHook set the hook to hijack contract calls.
-func (vm *VM) SetContractHook(hook ContractHook) {
-	vm.evm.SetContractHook(evm.ContractHook(hook))
-}
-
-// SetOnCreateContract set callback to listen contract creation.
-func (vm *VM) SetOnCreateContract(cb OnCreateContract) {
-	vm.evm.SetOnCreateContract(evm.OnCreateContract(cb))
-}
-
-// SetOnTransfer set callback to listen token transfer.
-// OnTransfer will be called before transfer occurred.
-func (vm *VM) SetOnTransfer(cb OnTransfer) {
-	vm.onTransfer = cb
 }
 
 // Cancel cancels any running EVM operation.
