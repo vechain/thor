@@ -190,40 +190,40 @@ func action(ctx *cli.Context) error {
 
 	goes.Go(func() {
 		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
-		log.Info("Communicator exited")
+		log.Info("Communicator stoped")
 	})
 
 	goes.Go(func() {
-		synchronizeTx(&txRoutineContext{
-			ctx:          c,
-			communicator: communicator,
-			txpool:       txpool,
-		})
+		synchronizeTx(
+			&txRoutineContext{
+				ctx:          c,
+				communicator: communicator,
+				txpool:       txpool,
+			},
+		)
 	})
 
-	blockRoutineCtx := &blockRoutineContext{
-		ctx:              c,
-		communicator:     communicator,
-		chain:            chain,
-		txpool:           txpool,
-		packedChan:       make(chan *packedEvent),
-		bestBlockUpdated: make(chan *block.Block, 1),
-	}
 	goes.Go(func() {
-		log.Info("Consent loop started")
-		consentLoop(blockRoutineCtx, consensus, logdb)
-		log.Info("Consent loop exited")
-	})
-	goes.Go(func() {
-		log.Info("Pack loop started")
-		packLoop(blockRoutineCtx, packer, privateKey)
-		log.Info("Pack loop exited")
+		produceBlock(
+			&blockRoutineContext{
+				ctx:              c,
+				communicator:     communicator,
+				chain:            chain,
+				txpool:           txpool,
+				packedChan:       make(chan *packedEvent),
+				bestBlockUpdated: make(chan *block.Block, 1),
+			},
+			consensus,
+			packer,
+			privateKey,
+			logdb,
+		)
 	})
 
 	goes.Go(func() {
 		log.Info("Rest service started", "listen-addr", restAddr)
 		runRestful(c, rest, lsr)
-		log.Info("Restful exited")
+		log.Info("Rest service stoped")
 	})
 
 	interrupt := make(chan os.Signal)
@@ -267,7 +267,6 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	for _, protocol := range protocols {
 		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
 	}
-	log.Info("P2P network started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
 
 	defer func() {
 		p2pSrv.Stop()
@@ -286,6 +285,7 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	p2pSrv.SubscribePeer(peerCh)
 
 	communicator.Start(peerCh)
+	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
 	defer communicator.Stop()
 
 	<-ctx.Done()

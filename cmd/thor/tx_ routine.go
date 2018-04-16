@@ -28,7 +28,6 @@ func synchronizeTx(context *txRoutineContext) {
 	log.Info("Transaction Synchronization started")
 	goes.Wait()
 	log.Info("Transaction Synchronization stoped")
-
 }
 
 func txBroadcastLoop(context *txRoutineContext) {
