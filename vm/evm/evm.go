@@ -90,7 +90,7 @@ type ContractHook func(
 	readonly bool) func() ([]byte, error)
 
 // OnCreateContract callback when creating contract.
-type OnCreateContract func(contractAddr thor.Address)
+type OnCreateContract func(contractAddr thor.Address, caller thor.Address)
 
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
@@ -365,7 +365,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// differ with ethereum here!!!
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	evm.contractCreationCount++
-	evm.onCreateContract(thor.Address(contractAddr))
+	evm.onCreateContract(thor.Address(contractAddr), thor.Address(caller.Address()))
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
