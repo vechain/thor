@@ -75,15 +75,11 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	if err := state.Error(); err != nil {
 		return nil, err
 	}
-	hasCode := false
-	if code != nil {
-		hasCode = true
-	}
 	energy := state.GetEnergy(addr, header.Number())
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
 		Energy:  math.HexOrDecimal256(*energy),
-		HasCode: hasCode,
+		HasCode: len(code) != 0,
 	}, nil
 }
 
