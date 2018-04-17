@@ -29,7 +29,11 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.HTTPError(err, http.StatusBadRequest)
 	}
-	return utils.WriteJSON(w, ConvertBlock(block))
+	blk, err := ConvertBlock(block)
+	if err != nil {
+		return utils.HTTPError(err, http.StatusBadRequest)
+	}
+	return utils.WriteJSON(w, blk)
 }
 
 func (b *Blocks) getBlock(revision string) (*block.Block, error) {
