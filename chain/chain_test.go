@@ -6,13 +6,17 @@ import (
 
 	"github.com/vechain/thor/block"
 	. "github.com/vechain/thor/chain"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/state"
 )
 
 func TestChain(t *testing.T) {
 
 	s, _ := lvldb.NewMem()
-	chain, _ := New(s, new(block.Builder).Build())
+	g, _ := genesis.NewDevnet()
+	blk, _, _ := g.Build(state.NewCreator(s))
+	chain, _ := New(s, blk)
 
 	for i := 0; i < 100; i++ {
 		best, _ := chain.GetBestBlock()
