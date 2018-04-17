@@ -19,7 +19,8 @@ import (
 func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	b0, _, err := genesis.Mainnet.Build(state.NewCreator(kv))
+	g, _ := genesis.NewDevnet()
+	b0, _, err := g.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,7 @@ func TestCall(t *testing.T) {
 	rt := runtime.New(state,
 		thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
-	method := builtin.Params.ABI.MethodByName("executor")
+	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
 	if err != nil {
 		t.Fatal(err)

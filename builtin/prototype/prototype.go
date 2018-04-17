@@ -111,14 +111,8 @@ func (b *Binding) UserCredit(user thor.Address, blockNum uint32) *big.Int {
 	return uo.Credit(&up, blockNum)
 }
 
-func (b *Binding) SubUserCredit(user thor.Address, amount *big.Int, blockNum uint32) bool {
-	remained := b.UserCredit(user, blockNum)
-	if remained.Cmp(amount) < 0 {
-		return false
-	}
-	remained = new(big.Int).Sub(remained, amount)
-	b.setStorage(b.userKey(user), &userObject{remained, blockNum})
-	return true
+func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockNum uint32) {
+	b.setStorage(b.userKey(user), &userObject{credit, blockNum})
 }
 
 func (b *Binding) UserPlan() (credit, recoveryRate *big.Int) {

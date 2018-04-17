@@ -51,31 +51,43 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, prepayed *big.Int, err error) {
+func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, prepayed *big.Int, returnGas func(uint64), err error) {
+	energy := builtin.Energy.Native(r.state)
+	doReturnGas := func(rgas uint64) *big.Int {
+		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
+		energy.AddBalance(payer, returnedEnergy, blockNum)
+		return returnedEnergy
+	}
+
 	prepayed = new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
 	if r.CommonTo != nil {
 		binding := builtin.Prototype.Native(r.state).Bind(*r.CommonTo)
 		credit := binding.UserCredit(r.Origin, blockNum)
 		if credit.Cmp(prepayed) >= 0 {
+			doReturnGasAndSetCredit := func(rgas uint64) {
+				returnedEnergy := doReturnGas(rgas)
+				usedEnergy := new(big.Int).Sub(prepayed, returnedEnergy)
+				binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockNum)
+			}
 			// has enough credit
 			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
 				// deduct from sponsor, if any
-				if builtin.Energy.Native(r.state).SubBalance(sponsor, prepayed, blockNum) {
-					return sponsor, prepayed, nil
+				if energy.SubBalance(sponsor, prepayed, blockNum) {
+					return sponsor, prepayed, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
-			if builtin.Energy.Native(r.state).SubBalance(*r.CommonTo, prepayed, blockNum) {
-				return *r.CommonTo, prepayed, nil
+			if energy.SubBalance(*r.CommonTo, prepayed, blockNum) {
+				return *r.CommonTo, prepayed, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
-	if builtin.Energy.Native(r.state).SubBalance(r.Origin, prepayed, blockNum) {
-		return r.Origin, prepayed, nil
+	if energy.SubBalance(r.Origin, prepayed, blockNum) {
+		return r.Origin, prepayed, func(rgas uint64) { doReturnGas(rgas) }, nil
 	}
-	return thor.Address{}, nil, errors.New("insufficient energy")
+	return thor.Address{}, nil, nil, errors.New("insufficient energy")
 }
 
 // returns common 'To' field of clauses if any.
