@@ -181,12 +181,11 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
-	hexAddr := mux.Vars(req)["address"]
-	addr, err := thor.ParseAddress(hexAddr)
+	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
 	}
-	key, err := thor.ParseBytes32(req.URL.Query().Get("key"))
+	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
 	if err != nil {
 		return utils.HTTPError(errors.Wrap(err, "key"), http.StatusBadRequest)
 	}
@@ -274,8 +273,8 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 
-	sub.Path("/{address}/storage").Queries("key", "{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
-	sub.Path("/{address}/storage").Queries("key", "{key}", "revision", "{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+	sub.Path("/{address}/storage/{key}").Queries("revision", "{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
 
 	sub.Path("/{address}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
 	sub.Path("/{address}").Queries("revision", "{revision}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
