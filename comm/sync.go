@@ -45,6 +45,11 @@ func (c *Communicator) sync() error {
 }
 
 func (c *Communicator) download(session *session.Session, fromNum uint32) error {
+	blocks := []*block.Block{}
+	defer func() {
+		c.syncFeed.Send(blocks)
+	}()
+
 	for {
 		peer := session.Peer()
 		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
@@ -61,7 +66,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32) error 
 				return errors.Wrap(err, "invalid block")
 			}
 			session.MarkBlock(blk.Header().ID())
-			c.blockFeed.Send(&blk)
+			blocks = append(blocks, &blk)
 			fromNum++
 		}
 	}

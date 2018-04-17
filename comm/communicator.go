@@ -33,6 +33,7 @@ type Communicator struct {
 	syncCh     chan struct{}
 	announceCh chan *announce
 	blockFeed  event.Feed
+	syncFeed   event.Feed
 	txFeed     event.Feed
 	feedScope  event.SubscriptionScope
 	goes       co.Goes
@@ -75,6 +76,11 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 // SubscribeBlock subscribe the event that new blocks received.
 func (c *Communicator) SubscribeBlock(ch chan *block.Block) event.Subscription {
 	return c.feedScope.Track(c.blockFeed.Subscribe(ch))
+}
+
+// SubscribeSync subscribe the event that blocks synchronized.
+func (c *Communicator) SubscribeSync(ch chan []*block.Block) event.Subscription {
+	return c.feedScope.Track(c.syncFeed.Subscribe(ch))
 }
 
 // SubscribeTx subscribe the event that new tx received.

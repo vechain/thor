@@ -73,10 +73,10 @@ type packedEvent struct {
 func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
-	updateChainFn := func(newBlk *newBlockEvent) {
-		updateChain(context, logdb, newBlk)
+	updateChainFn := func(newBlk *newBlockEvent) error {
+		return updateChain(context, logdb, newBlk)
 	}
-	consentFn := func(blk *block.Block) error {
+	consentFn := func(blk *block.Block) (bool, error) {
 		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
@@ -88,41 +88,92 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 					orphanMap[parentID] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
 				}
 			}
-			return err
+			return false, err
 		}
 
-		updateChainFn(&newBlockEvent{
+		return trunk, updateChainFn(&newBlockEvent{
 			Blk:      blk,
 			Trunk:    trunk,
 			Receipts: receipts})
-
-		return nil
 	}
 
-	subChan := make(chan *block.Block, 100)
-	sub := context.communicator.SubscribeBlock(subChan)
+	subBlockChan := make(chan *block.Block, 100)
+	subBlock := context.communicator.SubscribeBlock(subBlockChan)
+
+	subSyncChan := make(chan []*block.Block, 100)
+	subSync := context.communicator.SubscribeSync(subSyncChan)
+
 	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-context.ctx.Done():
-			sub.Unsubscribe()
+			subBlock.Unsubscribe()
+			subSync.Unsubscribe()
 			return
 		case <-ticker.C:
 			if blk := futures.Pop(); blk != nil {
 				consentFn(blk)
 			}
-		case blk := <-subChan:
-			if err := consentFn(blk); err != nil {
+		case blks := <-subSyncChan:
+			count := 0
+			start := time.Now()
+			for _, blk := range blks {
+				trunk, err := consentFn(blk)
+				if err != nil {
+					continue
+				}
+				if trunk {
+					count++
+					// header := blk.Header()
+					// if signer, err := header.Signer(); err == nil {
+					// 	log.Info("Block synchronized",
+					// 		"number", header.Number(),
+					// 		"id", header.ID().AbbrevString(),
+					// 		"total-score", header.TotalScore(),
+					// 		"proposer", signer.String(),
+					// 	)
+					// }
+				}
+			}
+			if count > 0 {
+				elapsed := time.Since(start)
+				log.Info("Block synchronized", "elapsed", elapsed.String(), "count", count)
+			}
+		case blk := <-subBlockChan:
+			trunk, err := consentFn(blk)
+			if err != nil {
 				break
+			}
+			if trunk {
+				header := blk.Header()
+				if signer, err := header.Signer(); err == nil {
+					log.Info("Best block updated",
+						"number", header.Number(),
+						"id", header.ID().AbbrevString(),
+						"total-score", header.TotalScore(),
+						"proposer", signer.String(),
+					)
+				}
 			}
 
 			if orphan, ok := orphanMap[blk.Header().ID()]; ok {
 				if orphan.timestamp+300 >= uint64(time.Now().Unix()) {
-					err := consentFn(orphan.blk)
+					trunk, err := consentFn(orphan.blk)
 					if err != nil && Consensus.IsParentNotFound(err) {
-						continue
+						break
+					}
+					if trunk {
+						header := blk.Header()
+						if signer, err := header.Signer(); err == nil {
+							log.Info("Best block updated",
+								"number", header.Number(),
+								"id", header.ID().AbbrevString(),
+								"total-score", header.TotalScore(),
+								"proposer", signer.String(),
+							)
+						}
 					}
 				}
 				delete(orphanMap, blk.Header().ID())
@@ -143,6 +194,9 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
 
+	if !context.communicator.IsSynced() {
+		log.Warn("Chain data has not synced")
+	}
 	for !context.communicator.IsSynced() {
 		select {
 		case <-context.ctx.Done():
@@ -166,7 +220,6 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
-
 	sendBestBlock(context.bestBlockUpdated, bestBlock)
 
 	for {
@@ -246,18 +299,12 @@ func updateChain(
 	context *blockRoutineContext,
 	logdb *Logdb.LogDB,
 	newBlk *newBlockEvent,
-) {
+) error {
 	fork, err := context.chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
-		return
+		return err
 	}
-
-	// log.Info(
-	// 	fmt.Sprintf("add new block to chain(#%v %v)", newBlk.Blk.Header().Number(), newBlk.Trunk),
-	// 	"id", newBlk.Blk.Header().ID(),
-	// 	"size", newBlk.Blk.Size(),
-	// )
 
 	if newBlk.Trunk {
 		sendBestBlock(context.bestBlockUpdated, newBlk.Blk)
@@ -273,10 +320,11 @@ func updateChain(
 				signer, err := tx.Signer()
 				if err != nil {
 					log.Error(fmt.Sprintf("%v", err))
-					return
+					return err
 				}
+				header := newBlk.Blk.Header()
 				for _, log := range output.Logs {
-					logs = append(logs, Logdb.NewLog(newBlk.Blk.Header(), index, tx.ID(), signer, log))
+					logs = append(logs, Logdb.NewLog(header, index, tx.ID(), signer, log))
 				}
 				index++
 			}
@@ -290,6 +338,8 @@ func updateChain(
 		}
 		logdb.Insert(logs, forkIDs)
 	}
+
+	return nil
 }
 
 func sendBestBlock(bestBlockUpdated chan *block.Block, blk *block.Block) {
