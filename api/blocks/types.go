@@ -24,10 +24,10 @@ type Block struct {
 }
 
 //ConvertBlock convert a raw block into a json format block
-func ConvertBlock(b *block.Block) *Block {
+func ConvertBlock(b *block.Block) (*Block, error) {
 	signer, err := b.Header().Signer()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	txs := b.Transactions()
 	txIds := make([]thor.Bytes32, len(txs))
@@ -52,5 +52,5 @@ func ConvertBlock(b *block.Block) *Block {
 		TxsRoot:      header.TxsRoot(),
 
 		Transactions: txIds,
-	}
+	}, nil
 }

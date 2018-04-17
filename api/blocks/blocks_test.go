@@ -2,7 +2,6 @@ package blocks_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -34,10 +33,10 @@ const (
 func TestBlock(t *testing.T) {
 
 	block, ts := initBlockServer(t)
-	raw := blocks.ConvertBlock(block)
+	raw, _ := blocks.ConvertBlock(block)
 	defer ts.Close()
 
-	res := httpGet(t, ts.URL+fmt.Sprintf("/blocks/%v", block.Header().ID()))
+	res := httpGet(t, ts.URL+"/blocks/"+block.Header().ID().String())
 	rb := new(blocks.Block)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
