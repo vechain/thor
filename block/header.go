@@ -109,12 +109,6 @@ func (h *Header) ID() (id thor.Bytes32) {
 		h.cache.id.Store(id)
 	}()
 
-	if h.Number() == 0 {
-		// genesis
-		id = h.SigningHash()
-		return
-	}
-
 	signer, err := h.Signer()
 	if err != nil {
 		return
@@ -167,6 +161,11 @@ func (h *Header) withSignature(sig []byte) *Header {
 
 // Signer extract signer of the block from signature.
 func (h *Header) Signer() (signer thor.Address, err error) {
+	if h.Number() == 0 {
+		// special case for genesis block
+		return thor.Address{}, nil
+	}
+
 	if cached := h.cache.signer.Load(); cached != nil {
 		return cached.(thor.Address), nil
 	}
