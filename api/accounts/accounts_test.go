@@ -159,7 +159,7 @@ func getAccount(t *testing.T, ts *httptest.Server) {
 		}
 		assert.Equal(t, v.want.code, c, "code should be equal")
 
-		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/storage?key=%v", address.String(), storageKey.String()))
+		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/storage/%v", address.String(), storageKey.String()))
 		var value map[string]string
 		if err := json.Unmarshal(res, &value); err != nil {
 			t.Fatal(err)
