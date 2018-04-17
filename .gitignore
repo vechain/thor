@@ -16,9 +16,6 @@
 # built binary dir
 /bin/
 
-# go vendor dir
-/vendor/
-
 # private gopath
 /.build/
 
