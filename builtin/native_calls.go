@@ -146,7 +146,7 @@ func initEnergyMethods() {
 		run  func(env *bridge) []interface{}
 	}{
 		{"native_getTotalSupply", func(env *bridge) []interface{} {
-			env.UseGas(ethparams.SloadGas * 4)
+			env.UseGas(ethparams.SloadGas * 3)
 			supply := Energy.Native(env.State).GetTotalSupply(env.BlockNumber())
 			return []interface{}{supply}
 		}},
