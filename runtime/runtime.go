@@ -171,7 +171,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, prepayed, err := resolvedTx.BuyGas(rt.blockNumber)
+	payer, _, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -219,14 +219,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
 	receipt.GasPayer = payer
+	receipt.Payed = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), resolvedTx.GasPrice)
 
-	// entergy to return = leftover gas * gas price
-	energyToReturn := new(big.Int).Mul(new(big.Int).SetUint64(leftOverGas), resolvedTx.GasPrice)
-	receipt.Payed = new(big.Int).Sub(prepayed, energyToReturn)
-
-	energyNative := builtin.Energy.Native(rt.state)
-	// return overpayed energy to payer
-	energyNative.AddBalance(payer, energyToReturn, rt.blockNumber)
+	returnGas(leftOverGas)
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
@@ -235,7 +230,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	energyNative.AddBalance(rt.blockBeneficiary, reward, rt.blockNumber)
+	builtin.Energy.Native(rt.state).AddBalance(rt.blockBeneficiary, reward, rt.blockNumber)
 
 	receipt.Reward = reward
 
