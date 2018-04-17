@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -100,8 +99,9 @@ func action(ctx *cli.Context) error {
 	}
 
 	logs := []*Logdb.Log{}
+	header := genesisBlock.Header()
 	for _, log := range txLogs {
-		logs = append(logs, Logdb.NewLog(genesisBlock.Header(), 0, thor.Bytes32{}, thor.Address{}, log))
+		logs = append(logs, Logdb.NewLog(header, 0, thor.Bytes32{}, thor.Address{}, log))
 	}
 	logdb.Insert(logs, nil)
 
@@ -151,42 +151,6 @@ func action(ctx *cli.Context) error {
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
-
-	goes.Go(func() {
-		timer := time.NewTimer(1 * time.Second)
-		defer timer.Stop()
-
-		for {
-			select {
-			case <-c.Done():
-				return
-			case <-timer.C:
-				best, err := chain.GetBestBlock()
-				if err != nil {
-					log.Error(fmt.Sprintf("%v", err))
-				} else {
-					header := best.Header()
-					signerStr := "N/A"
-					if signer, err := header.Signer(); err == nil {
-						signerStr = signer.String()
-					}
-
-					log.Info("Current best block",
-						"number", header.Number(),
-						"id", header.ID().AbbrevString(),
-						"total-score", header.TotalScore(),
-						"proposer", signerStr,
-					)
-				}
-
-				if !communicator.IsSynced() {
-					log.Warn("Chain data has not synced")
-				}
-
-				timer.Reset(15 * time.Second)
-			}
-		}
-	})
 
 	goes.Go(func() {
 		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
