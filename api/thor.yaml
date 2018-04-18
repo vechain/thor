@@ -18,6 +18,8 @@ tags:
     description: Access to blocks
   - name: Transaction
     description: Access to transactions
+  - name: Node
+    description: Access to node info
 paths:
   '/accounts/{address}':
     parameters:
@@ -159,7 +161,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Receipt'
-  /transactions:
+  '/transactions':
     post:
       tags:
         - Transaction
@@ -182,6 +184,18 @@ paths:
                 example:
                   id: >-
                     0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
+  '/node/network':
+    get:
+      tags:
+        - Node
+      summary: retrieve network status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeNetwork'
 components:
   schemas:
     Account:
@@ -545,6 +559,11 @@ components:
         tx:
           id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+    NodeNetwork:
+      properties:
+        peerCount:
+          type: integer
+          example: 0
   parameters:
     AddressInPath:
       name: address
