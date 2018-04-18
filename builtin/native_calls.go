@@ -122,7 +122,11 @@ func initAuthorityMethods() {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 2)
-			bal := env.State.GetBalance(thor.Address(signer))
+			p := Authority.Native(env.State).Get(thor.Address(signer))
+			if p.IsEmpty() {
+				return []interface{}{false}
+			}
+			bal := env.State.GetBalance(p.Endorsor)
 			endorsement := Params.Native(env.State).Get(thor.KeyProposerEndorsement)
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
