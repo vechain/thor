@@ -62,6 +62,7 @@ type newBlockEvent struct {
 	Blk      *block.Block
 	Receipts tx.Receipts
 	Trunk    bool
+	IsSynced bool
 }
 
 type packedEvent struct {
@@ -76,7 +77,7 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 	updateChainFn := func(newBlk *newBlockEvent) error {
 		return updateChain(context, logdb, newBlk)
 	}
-	consentFn := func(blk *block.Block) (bool, error) {
+	consentFn := func(blk *block.Block, isSynced bool) error {
 		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
@@ -88,13 +89,15 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 					orphanMap[parentID] = &orphan{blk: blk, timestamp: uint64(time.Now().Unix())}
 				}
 			}
-			return false, err
+			return err
 		}
 
-		return trunk, updateChainFn(&newBlockEvent{
+		return updateChainFn(&newBlockEvent{
 			Blk:      blk,
 			Trunk:    trunk,
-			Receipts: receipts})
+			Receipts: receipts,
+			IsSynced: isSynced,
+		})
 	}
 
 	subChan := make(chan *comm.NewBlockEvent, 100)
@@ -110,42 +113,17 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			return
 		case <-ticker.C:
 			if blk := futures.Pop(); blk != nil {
-				consentFn(blk)
+				consentFn(blk, false)
 			}
 		case ev := <-subChan:
-			trunk, err := consentFn(ev.Block)
-			if err != nil {
+			if err := consentFn(ev.Block, ev.IsSynced); err != nil {
 				break
-			}
-
-			if trunk && !ev.IsSynced {
-				header := ev.Block.Header()
-				if signer, err := header.Signer(); err == nil {
-					log.Info("Best block updated",
-						"number", header.Number(),
-						"id", header.ID().AbbrevString(),
-						"total-score", header.TotalScore(),
-						"proposer", signer.String(),
-					)
-				}
 			}
 
 			if orphan, ok := orphanMap[ev.Block.Header().ID()]; ok {
 				if orphan.timestamp+300 >= uint64(time.Now().Unix()) {
-					trunk, err := consentFn(orphan.blk)
-					if err != nil && Consensus.IsParentNotFound(err) {
+					if err := consentFn(orphan.blk, false); err != nil && Consensus.IsParentNotFound(err) {
 						break
-					}
-					if trunk {
-						header := orphan.blk.Header()
-						if signer, err := header.Signer(); err == nil {
-							log.Info("Best block updated",
-								"number", header.Number(),
-								"id", header.ID().AbbrevString(),
-								"total-score", header.TotalScore(),
-								"proposer", signer.String(),
-							)
-						}
 					}
 				}
 				delete(orphanMap, ev.Block.Header().ID())
@@ -155,7 +133,9 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 				updateChainFn(&newBlockEvent{
 					Blk:      packed.blk,
 					Trunk:    trunk,
-					Receipts: packed.receipts})
+					Receipts: packed.receipts,
+					IsSynced: false,
+				})
 				packed.ack <- struct{}{}
 			}
 		}
@@ -279,6 +259,18 @@ func updateChain(
 	}
 
 	if newBlk.Trunk {
+		if !newBlk.IsSynced {
+			header := newBlk.Blk.Header()
+			if signer, err := header.Signer(); err == nil {
+				log.Info("Best block updated",
+					"number", header.Number(),
+					"id", header.ID().AbbrevString(),
+					"total-score", header.TotalScore(),
+					"proposer", signer.String(),
+				)
+			}
+		}
+
 		sendBestBlock(context.bestBlockUpdated, newBlk.Blk)
 		context.communicator.BroadcastBlock(newBlk.Blk)
 
