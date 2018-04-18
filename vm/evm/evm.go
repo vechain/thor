@@ -362,7 +362,6 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	evm.contractCreationCount++
 
-	evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
 	if evm.StateDB.GetNonce(contractAddr) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
@@ -374,6 +373,9 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
+	// should callback after snapshot
+	evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
+
 	evm.Transfer(evm.StateDB, caller.Address(), contractAddr, value)
 
 	// initialise a new contract and set the code that is to be used by the
