@@ -12,6 +12,8 @@ servers:
 tags:
   - name: Account
     description: Access to account objects
+  - name: Log
+    description: Access to event logs
   - name: Block
     description: Access to blocks
   - name: Transaction
@@ -91,15 +93,14 @@ paths:
                 example:
                   value: >-
                     0x0000000000000000000000000000000000000000000000000000000000000001
-  '/accounts/{address}/logs':
-    parameters:
-      - $ref: '#/components/parameters/AddressInPath'
+  '/logs':
     post:
       tags:
-        - Account
-      summary: filter event logs produced by the account object
+        - Log
+      summary: filter event logs 
       parameters:
         - $ref: '#/components/parameters/LogFilterOrderInQuery'
+        - $ref: '#/components/parameters/LogFilterAddressInQuery'
       requestBody:
         description: log filter criteria
         required: true
@@ -575,6 +576,14 @@ components:
       schema:
         type: string
       example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+    LogFilterAddressInQuery:
+      name: address
+      in: query
+      description: address of account
+      required: false
+      schema:
+        type: string
+      example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     LogFilterOrderInQuery:
       name: order
       in: query

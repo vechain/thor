@@ -3,7 +3,6 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -97,58 +96,20 @@ var code = common.Hex2Bytes("606060405260043610603f576000357c0100000000000000000
 func TestAccount(t *testing.T) {
 	ts := initAccountServer(t)
 	defer ts.Close()
-	getLogs(t, ts)
 	getAccount(t, ts)
 	callContract(t, ts)
-}
-
-func getLogs(t *testing.T, ts *httptest.Server) {
-	t0 := thor.BytesToBytes32([]byte("topic0"))
-	t1 := thor.BytesToBytes32([]byte("topic1"))
-	limit := 5
-	logFilter := &accounts.LogFilter{
-		Range: &logdb.Range{
-			Unit: "",
-			From: 0,
-			To:   10,
-		},
-		Options: &logdb.Options{
-			Offset: 0,
-			Limit:  uint64(limit),
-		},
-		Order:   "",
-		Address: &contractAddr,
-		TopicSets: []*accounts.TopicSet{
-			&accounts.TopicSet{
-				Topic0: &t0,
-			},
-			&accounts.TopicSet{
-				Topic1: &t1,
-			},
-		},
-	}
-	f, err := json.Marshal(logFilter)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := httpPost(t, ts.URL+fmt.Sprintf("/accounts/%v/logs", contractAddr), f)
-	var logs []*accounts.FilteredLog
-	if err := json.Unmarshal(res, &logs); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
 func getAccount(t *testing.T, ts *httptest.Server) {
 	for _, v := range accs {
 		address := v.in.addr
-		res := httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v", address.String()))
+		res := httpGet(t, ts.URL+"/accounts/"+address.String())
 		var acc accounts.Account
 		if err := json.Unmarshal(res, &acc); err != nil {
 			t.Fatal(err)
 		}
 		assert.Equal(t, math.HexOrDecimal256(*v.want.balance), acc.Balance, "balance should be equal")
-		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/code", address))
+		res = httpGet(t, ts.URL+"/accounts/"+address.String()+"/code")
 		var code map[string]string
 		if err := json.Unmarshal(res, &code); err != nil {
 			t.Fatal(err)
@@ -159,7 +120,7 @@ func getAccount(t *testing.T, ts *httptest.Server) {
 		}
 		assert.Equal(t, v.want.code, c, "code should be equal")
 
-		res = httpGet(t, ts.URL+fmt.Sprintf("/accounts/%v/storage/%v", address.String(), storageKey.String()))
+		res = httpGet(t, ts.URL+"/accounts/"+address.String()+"/storage/"+storageKey.String())
 		var value map[string]string
 		if err := json.Unmarshal(res, &value); err != nil {
 			t.Fatal(err)
@@ -226,7 +187,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	accounts.New(chain, stateC, logDB).Mount(router, "/accounts/")
+	accounts.New(chain, stateC).Mount(router, "/accounts/")
 	ts := httptest.NewServer(router)
 	return ts
 }
