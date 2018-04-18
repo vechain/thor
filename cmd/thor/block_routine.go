@@ -97,11 +97,8 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 			Receipts: receipts})
 	}
 
-	subBlockChan := make(chan *block.Block, 100)
-	subBlock := context.communicator.SubscribeBlock(subBlockChan)
-
-	subSyncChan := make(chan []*block.Block, 100)
-	subSync := context.communicator.SubscribeSync(subSyncChan)
+	subChan := make(chan *comm.NewBlockEvent, 100)
+	sub := context.communicator.SubscribeBlock(subChan)
 
 	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer ticker.Stop()
@@ -109,45 +106,20 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 	for {
 		select {
 		case <-context.ctx.Done():
-			subBlock.Unsubscribe()
-			subSync.Unsubscribe()
+			sub.Unsubscribe()
 			return
 		case <-ticker.C:
 			if blk := futures.Pop(); blk != nil {
 				consentFn(blk)
 			}
-		case blks := <-subSyncChan:
-			count := 0
-			start := time.Now()
-			for _, blk := range blks {
-				trunk, err := consentFn(blk)
-				if err != nil {
-					continue
-				}
-				if trunk {
-					count++
-					// header := blk.Header()
-					// if signer, err := header.Signer(); err == nil {
-					// 	log.Info("Block synchronized",
-					// 		"number", header.Number(),
-					// 		"id", header.ID().AbbrevString(),
-					// 		"total-score", header.TotalScore(),
-					// 		"proposer", signer.String(),
-					// 	)
-					// }
-				}
-			}
-			if count > 0 {
-				elapsed := time.Since(start)
-				log.Info("Block synchronized", "elapsed", elapsed.String(), "count", count)
-			}
-		case blk := <-subBlockChan:
-			trunk, err := consentFn(blk)
+		case ev := <-subChan:
+			trunk, err := consentFn(ev.Block)
 			if err != nil {
 				break
 			}
-			if trunk {
-				header := blk.Header()
+
+			if trunk && !ev.IsSynced {
+				header := ev.Block.Header()
 				if signer, err := header.Signer(); err == nil {
 					log.Info("Best block updated",
 						"number", header.Number(),
@@ -158,14 +130,14 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 				}
 			}
 
-			if orphan, ok := orphanMap[blk.Header().ID()]; ok {
+			if orphan, ok := orphanMap[ev.Block.Header().ID()]; ok {
 				if orphan.timestamp+300 >= uint64(time.Now().Unix()) {
 					trunk, err := consentFn(orphan.blk)
 					if err != nil && Consensus.IsParentNotFound(err) {
 						break
 					}
 					if trunk {
-						header := blk.Header()
+						header := orphan.blk.Header()
 						if signer, err := header.Signer(); err == nil {
 							log.Info("Best block updated",
 								"number", header.Number(),
@@ -176,7 +148,7 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 						}
 					}
 				}
-				delete(orphanMap, blk.Header().ID())
+				delete(orphanMap, ev.Block.Header().ID())
 			}
 		case packed := <-context.packedChan:
 			if trunk, err := consensus.IsTrunk(packed.blk.Header()); err == nil {
@@ -195,7 +167,7 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 	defer timer.Stop()
 
 	if !context.communicator.IsSynced() {
-		log.Warn("Chain data has not synced")
+		log.Warn("Chain data has not synced, waiting...")
 	}
 	for !context.communicator.IsSynced() {
 		select {

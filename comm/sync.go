@@ -1,13 +1,18 @@
 package comm
 
 import (
+	"time"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 )
+
+const idealBatchSize = 10 * 1024
 
 func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Session, int) {
 	slice := c.sessionSet.Slice()
@@ -45,10 +50,9 @@ func (c *Communicator) sync() error {
 }
 
 func (c *Communicator) download(session *session.Session, fromNum uint32) error {
-	blocks := []*block.Block{}
-	defer func() {
-		c.syncFeed.Send(blocks)
-	}()
+	start := time.Now()
+	count := 0
+	var size metric.StorageSize
 
 	for {
 		peer := session.Peer()
@@ -58,6 +62,9 @@ func (c *Communicator) download(session *session.Session, fromNum uint32) error 
 			return err
 		}
 		if len(resp) == 0 {
+			if size > 0 {
+				c.syncReport(count, size, time.Since(start))
+			}
 			return nil
 		}
 		for _, raw := range resp {
@@ -66,8 +73,19 @@ func (c *Communicator) download(session *session.Session, fromNum uint32) error 
 				return errors.Wrap(err, "invalid block")
 			}
 			session.MarkBlock(blk.Header().ID())
-			blocks = append(blocks, &blk)
+			c.blockFeed.Send(&NewBlockEvent{
+				Block:    &blk,
+				IsSynced: true,
+			})
 			fromNum++
+			count++
+			size += blk.Size()
+			if size >= idealBatchSize {
+				c.syncReport(count, size, time.Since(start))
+				start = time.Now()
+				count = 0
+				size = 0
+			}
 		}
 	}
 }

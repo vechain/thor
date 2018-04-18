@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -22,6 +23,11 @@ import (
 )
 
 var log = log15.New("pkg", "comm")
+
+type NewBlockEvent struct {
+	Block    *block.Block
+	IsSynced bool
+}
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
@@ -33,11 +39,11 @@ type Communicator struct {
 	syncCh     chan struct{}
 	announceCh chan *announce
 	blockFeed  event.Feed
-	syncFeed   event.Feed
 	txFeed     event.Feed
 	feedScope  event.SubscriptionScope
 	goes       co.Goes
 	txpool     *txpool.TxPool
+	syncReport func(int, metric.StorageSize, time.Duration)
 }
 
 // New create a new Communicator instance.
@@ -74,13 +80,8 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 }
 
 // SubscribeBlock subscribe the event that new blocks received.
-func (c *Communicator) SubscribeBlock(ch chan *block.Block) event.Subscription {
+func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription {
 	return c.feedScope.Track(c.blockFeed.Subscribe(ch))
-}
-
-// SubscribeSync subscribe the event that blocks synchronized.
-func (c *Communicator) SubscribeSync(ch chan []*block.Block) event.Subscription {
-	return c.feedScope.Track(c.syncFeed.Subscribe(ch))
 }
 
 // SubscribeTx subscribe the event that new tx received.
@@ -89,7 +90,8 @@ func (c *Communicator) SubscribeTx(ch chan *tx.Transaction) event.Subscription {
 }
 
 // Start start the communicator.
-func (c *Communicator) Start(peerCh chan *p2psrv.Peer) {
+func (c *Communicator) Start(peerCh chan *p2psrv.Peer, syncReport func(int, metric.StorageSize, time.Duration)) {
+	c.syncReport = syncReport
 	c.goes.Go(func() { c.sessionLoop(peerCh) })
 	c.goes.Go(c.syncLoop)
 	c.goes.Go(c.announceLoop)
@@ -218,7 +220,10 @@ func (c *Communicator) announceLoop() {
 			return errors.New("nil block")
 		}
 
-		c.blockFeed.Send(resp.Block)
+		c.blockFeed.Send(&NewBlockEvent{
+			Block:    resp.Block,
+			IsSynced: false,
+		})
 		return nil
 	}
 
