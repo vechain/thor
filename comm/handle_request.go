@@ -55,7 +55,12 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			s.MarkBlock(req.Block.Header().ID())
 			s.UpdateTrunkHead(req.Block.Header().ID(), req.Block.Header().TotalScore())
 		}
-		c.goes.Go(func() { c.blockFeed.Send(req.Block) })
+		c.goes.Go(func() {
+			c.blockFeed.Send(&NewBlockEvent{
+				Block:    req.Block,
+				IsSynced: false,
+			})
+		})
 		return &struct{}{}, nil
 	case proto.MsgNewBlockID:
 		var req proto.ReqNewBlockID

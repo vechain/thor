@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -22,6 +23,7 @@ import (
 	Genesis "github.com/vechain/thor/genesis"
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
@@ -248,7 +250,10 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	peerCh := make(chan *p2psrv.Peer)
 	p2pSrv.SubscribePeer(peerCh)
 
-	communicator.Start(peerCh)
+	syncReport := func(count int, size metric.StorageSize, elapsed time.Duration) {
+		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
+	}
+	communicator.Start(peerCh, syncReport)
 	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
 	defer communicator.Stop()
 
