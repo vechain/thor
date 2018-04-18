@@ -96,7 +96,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				return badTxError{"reserved fields not empty"}
 			case parent.Number()+1 < tx.BlockRef().Number():
 				return errTxNotAdoptableNow
-			case parent.Number()+1 > tx.BlockRef().Number()+tx.Expiration():
+			case tx.IsExpired(parent.Number() + 1):
 				return badTxError{"expired"}
 			case totalGasUsed+tx.Gas() > gasLimit:
 				// gasUsed < 90% gas limit

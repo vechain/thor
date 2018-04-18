@@ -76,6 +76,11 @@ func (t *Transaction) Expiration() uint32 {
 	return t.body.Expiration
 }
 
+// IsExpired returns whether the tx is expired according to the given blockNum.
+func (t *Transaction) IsExpired(blockNum uint32) bool {
+	return uint64(blockNum) > uint64(t.BlockRef().Number())+uint64(t.body.Expiration) // cast to uint64 to prevent potential overflow
+}
+
 // ID returns id of tx.
 // ID = hash(signingHash, signer).
 // It returns zero Bytes32 if signer not available.
