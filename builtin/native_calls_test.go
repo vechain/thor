@@ -37,8 +37,8 @@ func TestParamsNative(t *testing.T) {
 	st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
 	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	nabi := builtin.Params.NativeABI()
 	for _, tt := range tests {
-		nabi := builtin.Params.NativeABI()
 		method, ok := nabi.MethodByName(tt.name)
 		assert.True(t, ok, "should have method "+tt.name)
 		data, err := method.EncodeInput(tt.args...)
@@ -50,7 +50,7 @@ func TestParamsNative(t *testing.T) {
 
 		out, err := method.EncodeOutput(tt.expectedOutputs...)
 		assert.Nil(t, err, "should encode output of method "+tt.name)
-		assert.Equal(t, out, vmout.Value, "shoudl match output of method: "+tt.name)
+		assert.Equal(t, out, vmout.Value, "should match output of method: "+tt.name)
 	}
 }
 
@@ -98,8 +98,8 @@ func TestAuthorityNative(t *testing.T) {
 	builtin.Params.Native(st).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
 
 	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	nabi := builtin.Authority.NativeABI()
 	for _, tt := range tests {
-		nabi := builtin.Authority.NativeABI()
 		method, ok := nabi.MethodByName(tt.name)
 		assert.True(t, ok, "should have method "+tt.name)
 		data, err := method.EncodeInput(tt.args...)
@@ -113,5 +113,65 @@ func TestAuthorityNative(t *testing.T) {
 		assert.Nil(t, err, "should encode output of method "+tt.name)
 		assert.Equal(t, out, vmout.Value, "should match output of method: "+tt.name)
 
+	}
+}
+
+func TestEnergyNative(t *testing.T) {
+	var (
+		addr     = common.BytesToAddress([]byte("addr"))
+		valueAdd = big.NewInt(100)
+		valueSub = big.NewInt(10)
+	)
+
+	tests := []struct {
+		name            string
+		args            []interface{}
+		expectedOutputs []interface{}
+	}{
+		{"native_getBalance",
+			[]interface{}{addr},
+			[]interface{}{&big.Int{}}},
+		{"native_addBalance",
+			[]interface{}{addr, valueAdd},
+			nil},
+		{"native_getBalance",
+			[]interface{}{addr},
+			[]interface{}{valueAdd}},
+		{"native_subBalance",
+			[]interface{}{addr, valueSub},
+			[]interface{}{true}},
+		{"native_subBalance",
+			[]interface{}{addr, valueAdd},
+			[]interface{}{false}},
+		{"native_getBalance",
+			[]interface{}{addr},
+			[]interface{}{new(big.Int).Sub(valueAdd, valueSub)}},
+		{"native_getTotalSupply",
+			nil,
+			[]interface{}{new(big.Int).Sub(valueAdd, valueSub)}},
+		{"native_getTotalBurned",
+			nil,
+			[]interface{}{new(big.Int).Sub(valueSub, valueAdd)}},
+	}
+
+	kv, _ := lvldb.NewMem()
+	st, _ := state.New(thor.Bytes32{}, kv)
+	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+
+	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	nabi := builtin.Energy.NativeABI()
+	for _, tt := range tests {
+		method, ok := nabi.MethodByName(tt.name)
+		assert.True(t, ok, "should have method "+tt.name)
+		data, err := method.EncodeInput(tt.args...)
+		assert.Nil(t, err, "should encode input of method "+tt.name)
+
+		vmout := rt.Call(tx.NewClause(&builtin.Energy.Address).WithData(data),
+			0, math.MaxUint64, builtin.Energy.Address, &big.Int{}, thor.Bytes32{})
+		assert.Nil(t, vmout.VMErr, "should execute method "+tt.name)
+
+		out, err := method.EncodeOutput(tt.expectedOutputs...)
+		assert.Nil(t, err, "should encode output of method "+tt.name)
+		assert.Equal(t, out, vmout.Value, "should match output of method: "+tt.name)
 	}
 }
