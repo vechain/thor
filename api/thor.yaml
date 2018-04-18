@@ -188,7 +188,7 @@ paths:
     get:
       tags:
         - Node
-      summary: retrieve a node peercount
+      summary: retrieve network status
       responses:
         '200':
           description: OK
