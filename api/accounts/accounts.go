@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -25,14 +24,12 @@ import (
 type Accounts struct {
 	chain        *chain.Chain
 	stateCreator *state.Creator
-	logDB        *logdb.LogDB
 }
 
-func New(chain *chain.Chain, stateCreator *state.Creator, logDB *logdb.LogDB) *Accounts {
+func New(chain *chain.Chain, stateCreator *state.Creator) *Accounts {
 	return &Accounts{
 		chain,
 		stateCreator,
-		logDB,
 	}
 }
 
@@ -201,52 +198,6 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
 }
 
-//Filter query logs with option
-func (a *Accounts) filter(logFilter *LogFilter) ([]FilteredLog, error) {
-	lf := convertLogFilter(logFilter)
-	logs, err := a.logDB.Filter(lf)
-	if err != nil {
-		return nil, err
-	}
-	lgs := make([]FilteredLog, len(logs))
-	for i, log := range logs {
-		lgs[i] = convertLog(log)
-	}
-	return lgs, nil
-}
-
-func (a *Accounts) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	req.Body.Close()
-	logFilter := new(LogFilter)
-	if len(res) != 0 {
-		if err := json.Unmarshal(res, &logFilter); err != nil {
-			return utils.HTTPError(err, http.StatusBadRequest)
-		}
-	}
-	params := mux.Vars(req)
-	addr, err := thor.ParseAddress(params["address"])
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
-	}
-
-	order := req.URL.Query().Get("order")
-	if order != string(logdb.DESC) {
-		logFilter.Order = logdb.ASC
-	} else {
-		logFilter.Order = logdb.DESC
-	}
-	logFilter.Address = &addr
-	logs, err := a.filter(logFilter)
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	return utils.WriteJSON(w, logs)
-}
-
 func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 	if revision == "" || revision == "best" {
 		return a.chain.GetBestBlock()
@@ -279,5 +230,4 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("/{address}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
 	sub.Path("/{address}").Queries("revision", "{revision}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
 
-	sub.Path("/{address}/logs").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleFilterLogs))
 }

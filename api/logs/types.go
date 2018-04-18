@@ -1,0 +1,95 @@
+package logs
+
+import (
+	"fmt"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/thor"
+)
+
+type TopicSet struct {
+	Topic0 *thor.Bytes32 `json:"topic0"`
+	Topic1 *thor.Bytes32 `json:"topic1"`
+	Topic2 *thor.Bytes32 `json:"topic2"`
+	Topic3 *thor.Bytes32 `json:"topic3"`
+	Topic4 *thor.Bytes32 `json:"topic4"`
+}
+
+type LogFilter struct {
+	Address   *thor.Address
+	TopicSets []*TopicSet
+	Range     *logdb.Range
+	Options   *logdb.Options
+	Order     logdb.OrderType
+}
+
+func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
+	f := &logdb.LogFilter{
+		Address: logFilter.Address,
+		Range:   logFilter.Range,
+		Options: logFilter.Options,
+		Order:   logFilter.Order,
+	}
+	if len(logFilter.TopicSets) > 0 {
+		var topicSets [][5]*thor.Bytes32
+		for _, topicSet := range logFilter.TopicSets {
+			var topics [5]*thor.Bytes32
+			topics[0] = topicSet.Topic0
+			topics[1] = topicSet.Topic1
+			topics[2] = topicSet.Topic2
+			topics[3] = topicSet.Topic3
+			topics[4] = topicSet.Topic4
+			topicSets = append(topicSets, topics)
+		}
+		f.TopicSet = topicSets
+	}
+	return f
+}
+
+// FilteredLog only comes from one contract
+type FilteredLog struct {
+	BlockID     thor.Bytes32    `json:"blockID"`
+	BlockNumber uint32          `json:"fromBlock"`
+	BlockTime   uint64          `json:"blockTime"`
+	LogIndex    uint32          `json:"logIndex"`
+	TxID        thor.Bytes32    `json:"txID"`
+	TxOrigin    thor.Address    `json:"txOrigin"` //contract caller
+	Data        string          `json:"data"`
+	Topics      []*thor.Bytes32 `json:"topics"`
+}
+
+//convert a logdb.Log into a json format log
+func convertLog(log *logdb.Log) FilteredLog {
+	l := FilteredLog{
+		BlockID:     log.BlockID,
+		BlockNumber: log.BlockNumber,
+		LogIndex:    log.LogIndex,
+		TxID:        log.TxID,
+		TxOrigin:    log.TxOrigin,
+		Data:        hexutil.Encode(log.Data),
+	}
+	l.Topics = make([]*thor.Bytes32, 0)
+	for i := 0; i < 5; i++ {
+		if log.Topics[i] != nil {
+			l.Topics = append(l.Topics, log.Topics[i])
+		}
+	}
+	return l
+}
+
+func (log *FilteredLog) String() string {
+	return fmt.Sprintf(`
+		Log(
+			blockID:     %v,
+			blockNumber: %v,
+			txID:        %v,
+			txOrigin:    %v,
+			data:        %v,
+			topics:      %v)`, log.BlockID,
+		log.BlockNumber,
+		log.TxID,
+		log.TxOrigin,
+		log.Data,
+		log.Topics)
+}
