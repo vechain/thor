@@ -52,10 +52,34 @@ func TestNormalTransaction(t *testing.T) {
 	initAccounts(t)
 
 	tx := new(tx.Builder).
-		ChainTag(0xc9).
+		ChainTag(0x50).
 		BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
 		Clause(tx.NewClause(&accounts[1].Address).WithValue(big.NewInt(100))).
+		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
+
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), accounts[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx = tx.WithSignature(sig)
+
+	var txRLP bytes.Buffer
+	tx.EncodeRLP(&txRLP)
+
+	t.Log(hex.EncodeToString(txRLP.Bytes()))
+}
+
+func TestEnergyTransaction(t *testing.T) {
+	initAccounts(t)
+
+	tx := new(tx.Builder).
+		ChainTag(0x50).
+		BlockRef(tx.NewBlockRef(0)).
+		Expiration(math.MaxUint32).
+		Clause(tx.NewClause(&builtin.Energy.Address).
+			WithData(mustEncodeInput(builtin.Energy.ABI, "transfer", accounts[1].Address, big.NewInt(100)))).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
 
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), accounts[0].PrivateKey)
@@ -75,7 +99,7 @@ func TestMultiClause(t *testing.T) {
 	initAccounts(t)
 
 	tx := new(tx.Builder).
-		ChainTag(1).
+		ChainTag(0x50).
 		Clause(tx.NewClause(&accounts[1].Address).WithValue(big.NewInt(100))).
 		Clause(tx.NewClause(&accounts[2].Address).WithValue(big.NewInt(100))).
 		Gas(300000).GasPriceCoef(0).Nonce(nonce).Build()
@@ -98,8 +122,8 @@ func TestGetThorBalance(t *testing.T) {
 }
 
 func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
-	m := abi.MethodByName(name)
-	if m == nil {
+	m, ok := abi.MethodByName(name)
+	if !ok {
 		panic("no method '" + name + "'")
 	}
 	data, err := m.EncodeInput(args...)
