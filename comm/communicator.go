@@ -294,3 +294,8 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		})
 	}
 }
+
+// SessionCount returns count of sessions.
+func (c *Communicator) SessionCount() int {
+	return c.sessionSet.Len()
+}

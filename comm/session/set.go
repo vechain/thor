@@ -75,3 +75,11 @@ func (ss *Set) Slice() Slice {
 	}
 	return ret
 }
+
+// Len returns length of set.
+func (ss *Set) Len() int {
+	ss.lock.Lock()
+	defer ss.lock.Unlock()
+
+	return len(ss.m)
+}
