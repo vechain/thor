@@ -163,7 +163,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) txObjec
 	var pendings txObjects
 	for id, obj := range all {
 		tx := obj.Tx()
-		if tx.Expiration()+tx.BlockRef().Number() < bestBlock.Header().Number() || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+		if tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
 			pool.Remove(id)
 			continue
 		}
@@ -230,7 +230,7 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 	//can be pendinged txObjects
 	for id, obj := range all {
 		tx := obj.Tx()
-		if tx.Expiration()+tx.BlockRef().Number() < bestBlock.Header().Number() || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+		if tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
 			pool.Remove(id)
 			continue
 		}
