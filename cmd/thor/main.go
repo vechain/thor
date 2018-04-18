@@ -143,7 +143,7 @@ func action(ctx *cli.Context) error {
 	communicator := comm.New(chain, txpool)
 	consensus := consensus.New(chain, stateCreator)
 	packer := packer.New(chain, stateCreator, proposer, beneficiary)
-	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb)}
+	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
 		MaxPeers:       ctx.Int("maxpeers"),
