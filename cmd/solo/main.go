@@ -110,6 +110,7 @@ func newApp() *cli.App {
 			return errors.Wrap(err, "Preparation")
 		}
 		defer solo.kv.Close()
+		defer solo.txpl.Stop()
 
 		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb)}
 		defer svr.Shutdown(context.Background())
@@ -191,7 +192,6 @@ func (solo *cliContext) prepare() (err error) {
 	}
 
 	solo.txpl = txpool.New(solo.c, solo.stateCreator)
-	defer solo.txpl.Stop()
 
 	solo.pk = NewSoloPacker(solo.c, solo.stateCreator, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
 
