@@ -3,12 +3,15 @@ package main
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/chain"
@@ -17,6 +20,7 @@ import (
 	Genesis "github.com/vechain/thor/genesis"
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -130,15 +134,49 @@ func makeComponent(
 	}
 	log.Info("Beneficiary key loaded", "address", beneficiary)
 
+	p2p, err := initP2PSrv(ctx, dataDir)
+	if err != nil {
+		return nil, err
+	}
+
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
 	return &components{
 		chain:        chain,
 		txpool:       txpool,
+		p2p:          p2p,
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       packer.New(chain, stateCreator, proposer, beneficiary),
 		rest:         &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)},
 	}, nil
+}
+
+func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
+	nodeKey, err := loadKey(dataDir + "/node.key")
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
+
+	opt := &p2psrv.Options{
+		PrivateKey:     nodeKey,
+		MaxPeers:       ctx.Int("maxpeers"),
+		ListenAddr:     ctx.String("p2paddr"),
+		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
+	}
+	var nodes p2psrv.Nodes
+	nodesByte, err := ioutil.ReadFile(dataDir + "/nodes.cache")
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error(fmt.Sprintf("%v", err))
+		}
+	} else {
+		rlp.DecodeBytes(nodesByte, &nodes)
+		opt.GoodNodes = nodes
+	}
+
+	log.Info("P2P network initialed", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
+	return p2psrv.New(opt), nil
 }
