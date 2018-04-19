@@ -56,7 +56,7 @@ type Transaction struct {
 	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	Origin       thor.Address        `json:"origin,string"`
-	Block        blockContext        `json:"block"`
+	Block        BlockContext        `json:"block"`
 }
 
 //ConvertTransaction convert a raw transaction into a json format transaction
@@ -87,21 +87,21 @@ func ConvertTransaction(tx *tx.Transaction) (*Transaction, error) {
 	return t, nil
 }
 
-type blockContext struct {
+type BlockContext struct {
 	ID        thor.Bytes32 `json:"id"`
 	Number    uint32       `json:"number"`
 	Timestamp uint64       `json:"timestamp"`
 }
 
-type txContext struct {
+type TxContext struct {
 	ID     thor.Bytes32 `json:"id"`
 	Origin thor.Address `json:"origin"`
 }
 
 //Receipt for json marshal
 type Receipt struct {
-	Block    blockContext          `json:"block"`
-	Tx       txContext             `json:"tx"`
+	Block    BlockContext          `json:"block"`
+	Tx       TxContext             `json:"tx"`
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
@@ -138,11 +138,11 @@ func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*
 		GasPayer: rece.GasPayer,
 		Reward:   &reward,
 		Reverted: rece.Reverted,
-		Tx: txContext{
+		Tx: TxContext{
 			tx.ID(),
 			signer,
 		},
-		Block: blockContext{
+		Block: BlockContext{
 			block.Header().ID(),
 			block.Header().Number(),
 			block.Header().Timestamp(),

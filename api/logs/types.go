@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
@@ -49,25 +50,25 @@ func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
 
 // FilteredLog only comes from one contract
 type FilteredLog struct {
-	BlockID     thor.Bytes32    `json:"blockID"`
-	BlockNumber uint32          `json:"fromBlock"`
-	BlockTime   uint64          `json:"blockTime"`
-	LogIndex    uint32          `json:"logIndex"`
-	TxID        thor.Bytes32    `json:"txID"`
-	TxOrigin    thor.Address    `json:"txOrigin"` //contract caller
-	Data        string          `json:"data"`
-	Topics      []*thor.Bytes32 `json:"topics"`
+	Topics []*thor.Bytes32           `json:"topics"`
+	Data   string                    `json:"data"`
+	Block  transactions.BlockContext `json:"block"`
+	Tx     transactions.TxContext    `json:"tx"`
 }
 
 //convert a logdb.Log into a json format log
 func convertLog(log *logdb.Log) FilteredLog {
 	l := FilteredLog{
-		BlockID:     log.BlockID,
-		BlockNumber: log.BlockNumber,
-		LogIndex:    log.LogIndex,
-		TxID:        log.TxID,
-		TxOrigin:    log.TxOrigin,
-		Data:        hexutil.Encode(log.Data),
+		Data: hexutil.Encode(log.Data),
+		Block: transactions.BlockContext{
+			ID:        log.BlockID,
+			Number:    log.BlockNumber,
+			Timestamp: log.BlockTime,
+		},
+		Tx: transactions.TxContext{
+			ID:     log.TxID,
+			Origin: log.TxOrigin,
+		},
 	}
 	l.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
@@ -81,15 +82,20 @@ func convertLog(log *logdb.Log) FilteredLog {
 func (log *FilteredLog) String() string {
 	return fmt.Sprintf(`
 		Log(
-			blockID:     %v,
-			blockNumber: %v,
-			txID:        %v,
-			txOrigin:    %v,
-			data:        %v,
-			topics:      %v)`, log.BlockID,
-		log.BlockNumber,
-		log.TxID,
-		log.TxOrigin,
+			topics:        %v,
+			data:          %v,
+			block: (id     %v,
+					num    %v,
+					time   %v),
+			tx:    (id     %v,
+					origin %v)
+			)`,
+		log.Topics,
 		log.Data,
-		log.Topics)
+		log.Block.ID,
+		log.Block.Number,
+		log.Block.Timestamp,
+		log.Tx.ID,
+		log.Tx.Origin,
+	)
 }
