@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
@@ -24,6 +23,7 @@ import (
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -94,13 +94,6 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	restAddr := ctx.String("apiaddr")
-	lsr, err := net.Listen("tcp", restAddr)
-	if err != nil {
-		return err
-	}
-	defer lsr.Close()
-
 	component, err := makeComponent(lvldb, logdb, genesis, dataDir, ctx)
 
 	var goes co.Goes
@@ -118,48 +111,17 @@ func action(ctx *cli.Context) error {
 			},
 			dataDir+"/nodes.cache",
 		)
-		log.Info("Communicator stoped")
 	})
-
-	goes.Go(func() {
-		synchronizeTx(
-			&txRoutineContext{
-				ctx:          c,
-				communicator: component.communicator,
-				txpool:       component.txpool,
-			},
-		)
-	})
-
-	goes.Go(func() {
-		produceBlock(
-			&blockRoutineContext{
-				ctx:              c,
-				communicator:     component.communicator,
-				chain:            component.chain,
-				txpool:           component.txpool,
-				packedChan:       make(chan *packedEvent),
-				bestBlockUpdated: make(chan *block.Block, 1),
-			},
-			component.consensus,
-			component.packer,
-			component.privateKey,
-			logdb,
-		)
-	})
-
-	goes.Go(func() {
-		log.Info("Rest service started", "listen-addr", restAddr)
-		runRestful(c, component.rest, lsr)
-		log.Info("Rest service stoped")
-	})
+	goes.Go(func() { synchronizeTx(c, component) })
+	goes.Go(func() { produceBlock(c, component, logdb) })
+	goes.Go(func() { runRestful(c, component.rest, ctx.String("apiaddr")) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
 
 	select {
 	case <-interrupt:
-		log.Info("Got sigterm, shutting down...")
+		log.Warn("Got sigterm, shutting down...")
 		go func() {
 			// force exited when rcvd 10 interrupts
 			for i := 0; i < 10; i++ {
@@ -220,15 +182,65 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	defer communicator.Stop()
 
 	<-ctx.Done()
+	log.Info("Communicator stoped")
 }
 
-func runRestful(ctx context.Context, rest *http.Server, lsr net.Listener) {
+func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
+	lsr, err := net.Listen("tcp", apiAddr)
+	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
+		return
+	}
+	defer lsr.Close()
+
 	go func() {
 		<-ctx.Done()
 		rest.Shutdown(context.TODO())
 	}()
 
+	log.Info("Rest service started", "listen-addr", apiAddr)
 	if err := rest.Serve(lsr); err != http.ErrServerClosed {
 		log.Error(fmt.Sprintf("%v", err))
 	}
+	log.Info("Rest service stoped")
+}
+
+func synchronizeTx(ctx context.Context, component *component) {
+	var goes co.Goes
+
+	// routine for broadcast new tx
+	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := component.txpool.SubscribeNewTransaction(txCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Unsubscribe()
+				return
+			case tx := <-txCh:
+				component.communicator.BroadcastTx(tx)
+			}
+		}
+	})
+
+	// routine for update txpool
+	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := component.communicator.SubscribeTx(txCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Unsubscribe()
+				return
+			case tx := <-txCh:
+				component.txpool.Add(tx)
+			}
+		}
+	})
+
+	log.Info("Transaction Synchronization started")
+	goes.Wait()
+	log.Info("Transaction Synchronization stoped")
 }
