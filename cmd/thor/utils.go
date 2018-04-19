@@ -96,12 +96,13 @@ func dataDir(genesis *Genesis.Genesis, root string) (string, error) {
 }
 
 func makeComponent(
+	ctx *cli.Context,
 	lvldb *Lvldb.LevelDB,
 	logdb *Logdb.LogDB,
 	genesis *Genesis.Genesis,
+	proposer thor.Address,
 	dataDir string,
-	ctx *cli.Context,
-) (*component, error) {
+) (*components, error) {
 	stateCreator := state.NewCreator(lvldb)
 
 	genesisBlock, txLogs, err := genesis.Build(stateCreator)
@@ -121,18 +122,6 @@ func makeComponent(
 		return nil, err
 	}
 
-	nodeKey, err := loadKey(dataDir + "/node.key")
-	if err != nil {
-		return nil, err
-	}
-	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
-
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
-	if err != nil {
-		return nil, err
-	}
-	log.Info("Proposer key loaded", "address", proposer)
-
 	beneficiary := proposer
 	if ctx.String("beneficiary") != "" {
 		if beneficiary, err = thor.ParseAddress(ctx.String("beneficiary")); err != nil {
@@ -144,14 +133,12 @@ func makeComponent(
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
-	return &component{
+	return &components{
 		chain:        chain,
 		txpool:       txpool,
 		communicator: communicator,
-		nodeKey:      nodeKey,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       packer.New(chain, stateCreator, proposer, beneficiary),
-		privateKey:   privateKey,
 		rest:         &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)},
 	}, nil
 }
