@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/vechain/thor/block"
-	Chain "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/minheap"
 	"github.com/vechain/thor/comm"
 	Consensus "github.com/vechain/thor/consensus"
@@ -21,30 +20,14 @@ import (
 	Txpool "github.com/vechain/thor/txpool"
 )
 
-type blockRoutineContext struct {
-	ctx              context.Context
-	communicator     *comm.Communicator
-	chain            *Chain.Chain
-	txpool           *Txpool.TxPool
-	packedChan       chan *packedEvent
-	bestBlockUpdated chan *block.Block // must be >=1 buffer chan
-}
-
-func produceBlock(
-	context *blockRoutineContext,
-	consensus *Consensus.Consensus,
-	packer *Packer.Packer,
-	privateKey *ecdsa.PrivateKey,
-	logdb *Logdb.LogDB,
-) {
+func produceBlock(ctx context.Context, component *component, logdb *Logdb.LogDB) {
 	var goes co.Goes
 
-	goes.Go(func() {
-		consentLoop(context, consensus, logdb)
-	})
-	goes.Go(func() {
-		packLoop(context, packer, privateKey)
-	})
+	packedChan := make(chan *packedEvent)
+	bestBlockUpdated := make(chan *block.Block, 1)
+
+	goes.Go(func() { consentLoop(ctx, component, logdb, bestBlockUpdated, packedChan) })
+	goes.Go(func() { packLoop(ctx, component, bestBlockUpdated, packedChan) })
 
 	log.Info("Block consensus started")
 	log.Info("Block packer started")
@@ -71,14 +54,20 @@ type packedEvent struct {
 	ack      chan struct{}
 }
 
-func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, logdb *Logdb.LogDB) {
+func consentLoop(
+	ctx context.Context,
+	component *component,
+	logdb *Logdb.LogDB,
+	bestBlockUpdated chan *block.Block,
+	packedChan chan *packedEvent,
+) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
 	updateChainFn := func(newBlk *newBlockEvent) error {
-		return updateChain(context, logdb, newBlk)
+		return updateChain(ctx, component, logdb, newBlk, bestBlockUpdated)
 	}
 	consentFn := func(blk *block.Block, isSynced bool) error {
-		trunk, receipts, err := consensus.Consent(blk, uint64(time.Now().Unix()))
+		trunk, receipts, err := component.consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
 			if Consensus.IsFutureBlock(err) {
@@ -101,14 +90,14 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 	}
 
 	subChan := make(chan *comm.NewBlockEvent, 100)
-	sub := context.communicator.SubscribeBlock(subChan)
+	sub := component.communicator.SubscribeBlock(subChan)
 
 	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-context.ctx.Done():
+		case <-ctx.Done():
 			sub.Unsubscribe()
 			return
 		case <-ticker.C:
@@ -128,8 +117,8 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 				}
 				delete(orphanMap, ev.Block.Header().ID())
 			}
-		case packed := <-context.packedChan:
-			if trunk, err := consensus.IsTrunk(packed.blk.Header()); err == nil {
+		case packed := <-packedChan:
+			if trunk, err := component.consensus.IsTrunk(packed.blk.Header()); err == nil {
 				updateChainFn(&newBlockEvent{
 					Blk:      packed.blk,
 					Trunk:    trunk,
@@ -142,16 +131,21 @@ func consentLoop(context *blockRoutineContext, consensus *Consensus.Consensus, l
 	}
 }
 
-func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *ecdsa.PrivateKey) {
+func packLoop(
+	ctx context.Context,
+	component *component,
+	bestBlockUpdated chan *block.Block,
+	packedChan chan *packedEvent,
+) {
 	timer := time.NewTimer(1 * time.Second)
 	defer timer.Stop()
 
-	if !context.communicator.IsSynced() {
+	if !component.communicator.IsSynced() {
 		log.Warn("Chain data has not synced, waiting...")
 	}
-	for !context.communicator.IsSynced() {
+	for !component.communicator.IsSynced() {
 		select {
-		case <-context.ctx.Done():
+		case <-ctx.Done():
 			return
 		default:
 			time.Sleep(1 * time.Second)
@@ -167,21 +161,21 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 		err       error
 	)
 
-	bestBlock, err = context.chain.GetBestBlock()
+	bestBlock, err = component.chain.GetBestBlock()
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
-	sendBestBlock(context.bestBlockUpdated, bestBlock)
+	sendBestBlock(bestBlockUpdated, bestBlock)
 
 	for {
 		timer.Reset(2 * time.Second)
 
 		select {
-		case <-context.ctx.Done():
+		case <-ctx.Done():
 			return
-		case bestBlock = <-context.bestBlockUpdated:
-			ts, adopt, commit, err = packer.Prepare(bestBlock.Header(), uint64(time.Now().Unix()))
+		case bestBlock = <-bestBlockUpdated:
+			ts, adopt, commit, err = component.packer.Prepare(bestBlock.Header(), uint64(time.Now().Unix()))
 			if err != nil {
 				log.Error(fmt.Sprintf("%v", err))
 				break
@@ -190,7 +184,7 @@ func packLoop(context *blockRoutineContext, packer *Packer.Packer, privateKey *e
 			now := uint64(time.Now().Unix())
 			if now >= ts && now < ts+thor.BlockInterval {
 				ts = 0
-				pack(context.txpool, packer, adopt, commit, privateKey, context.packedChan)
+				pack(component.txpool, component.packer, adopt, commit, component.privateKey, packedChan)
 			} else if ts > now {
 				//fmt.Printf("after %v seconds to pack.\r\n", ts-now)
 			}
@@ -248,11 +242,13 @@ func pack(
 }
 
 func updateChain(
-	context *blockRoutineContext,
+	ctx context.Context,
+	component *component,
 	logdb *Logdb.LogDB,
 	newBlk *newBlockEvent,
+	bestBlockUpdated chan *block.Block,
 ) error {
-	fork, err := context.chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
+	fork, err := component.chain.AddBlock(newBlk.Blk, newBlk.Receipts, newBlk.Trunk)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return err
@@ -271,8 +267,8 @@ func updateChain(
 			}
 		}
 
-		sendBestBlock(context.bestBlockUpdated, newBlk.Blk)
-		context.communicator.BroadcastBlock(newBlk.Blk)
+		sendBestBlock(bestBlockUpdated, newBlk.Blk)
+		component.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
 		logs := []*Logdb.Log{}
@@ -297,7 +293,7 @@ func updateChain(
 		for i, blk := range fork.Branch {
 			forkIDs[i] = blk.Header().ID()
 			for _, tx := range blk.Transactions() {
-				context.txpool.Add(tx)
+				component.txpool.Add(tx)
 			}
 		}
 		logdb.Insert(logs, forkIDs)

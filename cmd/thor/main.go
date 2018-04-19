@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -10,24 +11,19 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	Genesis "github.com/vechain/thor/genesis"
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -39,6 +35,23 @@ var (
 	log       = log15.New()
 	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 )
+
+type component struct {
+	chain        *chain.Chain
+	txpool       *txpool.TxPool
+	communicator *comm.Communicator
+	nodeKey      *ecdsa.PrivateKey
+	consensus    *consensus.Consensus
+	packer       *packer.Packer
+	privateKey   *ecdsa.PrivateKey
+	rest         *http.Server
+}
+
+// txpool := txpool.New(chain, stateCreator)
+// communicator := comm.New(chain, txpool)
+// consensus := consensus.New(chain, stateCreator)
+// packer := packer.New(chain, stateCreator, proposer, beneficiary)
+// rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
 
 func main() {
 	app := cli.NewApp()
@@ -59,27 +72,15 @@ func action(ctx *cli.Context) error {
 	initLog(log15.Lvl(ctx.Int("verbosity")))
 	log.Info("Welcome to thor network")
 
-	var (
-		genesis *Genesis.Genesis
-		err     error
-	)
-	if ctx.Bool("devnet") {
-		genesis, err = Genesis.NewDevnet()
-		log.Info("Using Devnet", "genesis", genesis.ID().AbbrevString())
-	} else {
-		genesis, err = Genesis.NewMainnet()
-		log.Info("Using Mainnet", "genesis", genesis.ID().AbbrevString())
-	}
+	genesis, err := genesis(ctx.Bool("devnet"))
 	if err != nil {
 		return err
 	}
-	dataDir := fmt.Sprintf("%v/chain-%x", ctx.String("datadir"), genesis.ID().Bytes()[24:])
-	if err = os.MkdirAll(dataDir, os.ModePerm); err != nil {
-		if !os.IsExist(err) {
-			return err
-		}
+
+	dataDir, err := dataDir(genesis, ctx.String("datadir"))
+	if err != nil {
+		return err
 	}
-	log.Info("Disk storage enabled for storing data", "path", dataDir)
 
 	lvldb, err := Lvldb.New(dataDir+"/main.db", Lvldb.Options{})
 	if err != nil {
@@ -93,111 +94,34 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	stateCreator := state.NewCreator(lvldb)
-
-	genesisBlock, txLogs, err := genesis.Build(stateCreator)
-	if err != nil {
-		return err
-	}
-
-	logs := []*Logdb.Log{}
-	header := genesisBlock.Header()
-	for _, log := range txLogs {
-		logs = append(logs, Logdb.NewLog(header, 0, thor.Bytes32{}, thor.Address{}, log))
-	}
-	logdb.Insert(logs, nil)
-
-	chain, err := chain.New(lvldb, genesisBlock)
-	if err != nil {
-		return err
-	}
-
-	nodeKey, err := loadKey(dataDir + "/node.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
-
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Proposer key loaded", "address", proposer)
-
-	beneficiary := proposer
-	if ctx.String("beneficiary") != "" {
-		if beneficiary, err = thor.ParseAddress(ctx.String("beneficiary")); err != nil {
-			return err
-		}
-	}
-	log.Info("Beneficiary key loaded", "address", beneficiary)
-
-	restAddr := ctx.String("apiaddr")
-	lsr, err := net.Listen("tcp", restAddr)
-	if err != nil {
-		return err
-	}
-	defer lsr.Close()
-
-	txpool := txpool.New(chain, stateCreator)
-	communicator := comm.New(chain, txpool)
-	consensus := consensus.New(chain, stateCreator)
-	packer := packer.New(chain, stateCreator, proposer, beneficiary)
-	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
-	opt := &p2psrv.Options{
-		PrivateKey:     nodeKey,
-		MaxPeers:       ctx.Int("maxpeers"),
-		ListenAddr:     ctx.String("p2paddr"),
-		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
-	}
+	component, err := makeComponent(lvldb, logdb, genesis, dataDir, ctx)
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
-		log.Info("Communicator stoped")
-	})
-
-	goes.Go(func() {
-		synchronizeTx(
-			&txRoutineContext{
-				ctx:          c,
-				communicator: communicator,
-				txpool:       txpool,
+		runCommunicator(
+			c,
+			component.communicator,
+			&p2psrv.Options{
+				PrivateKey:     component.nodeKey,
+				MaxPeers:       ctx.Int("maxpeers"),
+				ListenAddr:     ctx.String("p2paddr"),
+				BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 			},
+			dataDir+"/nodes.cache",
 		)
 	})
-
-	goes.Go(func() {
-		produceBlock(
-			&blockRoutineContext{
-				ctx:              c,
-				communicator:     communicator,
-				chain:            chain,
-				txpool:           txpool,
-				packedChan:       make(chan *packedEvent),
-				bestBlockUpdated: make(chan *block.Block, 1),
-			},
-			consensus,
-			packer,
-			privateKey,
-			logdb,
-		)
-	})
-
-	goes.Go(func() {
-		log.Info("Rest service started", "listen-addr", restAddr)
-		runRestful(c, rest, lsr)
-		log.Info("Rest service stoped")
-	})
+	goes.Go(func() { synchronizeTx(c, component) })
+	goes.Go(func() { produceBlock(c, component, logdb) })
+	goes.Go(func() { runRestful(c, component.rest, ctx.String("apiaddr")) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
 
 	select {
 	case <-interrupt:
-		log.Info("Got sigterm, shutting down...")
+		log.Warn("Got sigterm, shutting down...")
 		go func() {
 			// force exited when rcvd 10 interrupts
 			for i := 0; i < 10; i++ {
@@ -258,15 +182,65 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 	defer communicator.Stop()
 
 	<-ctx.Done()
+	log.Info("Communicator stoped")
 }
 
-func runRestful(ctx context.Context, rest *http.Server, lsr net.Listener) {
+func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
+	lsr, err := net.Listen("tcp", apiAddr)
+	if err != nil {
+		log.Error(fmt.Sprintf("%v", err))
+		return
+	}
+	defer lsr.Close()
+
 	go func() {
 		<-ctx.Done()
 		rest.Shutdown(context.TODO())
 	}()
 
+	log.Info("Rest service started", "listen-addr", apiAddr)
 	if err := rest.Serve(lsr); err != http.ErrServerClosed {
 		log.Error(fmt.Sprintf("%v", err))
 	}
+	log.Info("Rest service stoped")
+}
+
+func synchronizeTx(ctx context.Context, component *component) {
+	var goes co.Goes
+
+	// routine for broadcast new tx
+	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := component.txpool.SubscribeNewTransaction(txCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Unsubscribe()
+				return
+			case tx := <-txCh:
+				component.communicator.BroadcastTx(tx)
+			}
+		}
+	})
+
+	// routine for update txpool
+	goes.Go(func() {
+		txCh := make(chan *tx.Transaction)
+		sub := component.communicator.SubscribeTx(txCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Unsubscribe()
+				return
+			case tx := <-txCh:
+				component.txpool.Add(tx)
+			}
+		}
+	})
+
+	log.Info("Transaction Synchronization started")
+	goes.Wait()
+	log.Info("Transaction Synchronization stoped")
 }
