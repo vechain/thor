@@ -58,4 +58,24 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, method.DecodeOutput(output, &v))
 		assert.Equal(t, value, v)
 	}
+
+	// pack/unpack event
+	{
+		name := "Set"
+		event, found := abi.EventByName(name)
+		assert.True(t, found)
+
+		value := big.NewInt(999)
+
+		data, err := event.Encode(value)
+		assert.Nil(t, err)
+
+		var d *big.Int
+
+		err = event.Decode(data, &d)
+		assert.Nil(t, err)
+
+		assert.Equal(t, value, d)
+
+	}
 }
