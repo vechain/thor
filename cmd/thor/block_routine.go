@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"time"
 
@@ -17,17 +16,16 @@ import (
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	Txpool "github.com/vechain/thor/txpool"
 )
 
-func produceBlock(ctx context.Context, components *components, logdb *Logdb.LogDB, privateKey *ecdsa.PrivateKey) {
+func produceBlock(ctx context.Context, components *components, logdb *Logdb.LogDB) {
 	var goes co.Goes
 
 	packedChan := make(chan *packedEvent)
 	bestBlockUpdated := make(chan *block.Block, 1)
 
 	goes.Go(func() { consentLoop(ctx, components, logdb, bestBlockUpdated, packedChan) })
-	goes.Go(func() { packLoop(ctx, components, privateKey, bestBlockUpdated, packedChan) })
+	goes.Go(func() { packLoop(ctx, components, bestBlockUpdated, packedChan) })
 
 	log.Info("Block consensus started")
 	log.Info("Block packer started")
@@ -134,7 +132,6 @@ func consentLoop(
 func packLoop(
 	ctx context.Context,
 	components *components,
-	privateKey *ecdsa.PrivateKey,
 	bestBlockUpdated chan *block.Block,
 	packedChan chan *packedEvent,
 ) {
@@ -185,7 +182,7 @@ func packLoop(
 			now := uint64(time.Now().Unix())
 			if now >= ts && now < ts+thor.BlockInterval {
 				ts = 0
-				pack(components.txpool, components.packer, adopt, commit, privateKey, packedChan)
+				pack(components, adopt, commit, packedChan)
 			} else if ts > now {
 				//fmt.Printf("after %v seconds to pack.\r\n", ts-now)
 			}
@@ -193,20 +190,13 @@ func packLoop(
 	}
 }
 
-func pack(
-	txpool *Txpool.TxPool,
-	packer *Packer.Packer,
-	adopt Packer.Adopt,
-	commit Packer.Commit,
-	privateKey *ecdsa.PrivateKey,
-	packedChan chan *packedEvent,
-) {
+func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, packedChan chan *packedEvent) {
 	adoptTx := func() {
-		for _, tx := range txpool.Pending() {
+		for _, tx := range components.txpool.Pending() {
 			err := adopt(tx)
 			switch {
 			case Packer.IsBadTx(err) || Packer.IsKnownTx(err):
-				txpool.Remove(tx.ID())
+				components.txpool.Remove(tx.ID())
 			case Packer.IsGasLimitReached(err):
 				return
 			default:
@@ -216,7 +206,7 @@ func pack(
 
 	startTime := mclock.Now()
 	adoptTx()
-	blk, receipts, err := commit(privateKey)
+	blk, receipts, err := commit(components.packer.privateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
@@ -228,11 +218,10 @@ func pack(
 		// calc target gas limit only if gas used above third of gas limit
 		if gasUsed > blk.Header().GasLimit()/3 {
 			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
-			packer.SetTargetGasLimit(targetGasLimit)
+			components.packer.SetTargetGasLimit(targetGasLimit)
 		}
 	}
 
-	//log.Info(fmt.Sprintf("proposed new block(#%v)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size())
 	pe := &packedEvent{
 		blk:      blk,
 		receipts: receipts,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -20,7 +21,7 @@ import (
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
-	"github.com/vechain/thor/packer"
+	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -34,14 +35,19 @@ var (
 	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 )
 
+type packer struct {
+	*Packer.Packer
+	privateKey *ecdsa.PrivateKey
+}
+
 type components struct {
 	chain        *chain.Chain
 	txpool       *txpool.TxPool
 	p2p          *p2psrv.Server
 	communicator *comm.Communicator
 	consensus    *consensus.Consensus
-	packer       *packer.Packer
-	rest         *http.Server
+	packer       *packer
+	apiSrv       *http.Server
 }
 
 func main() {
@@ -85,13 +91,7 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Proposer key loaded", "address", proposer)
-
-	components, err := makeComponent(ctx, lvldb, logdb, genesis, proposer, dataDir)
+	components, err := makeComponent(ctx, lvldb, logdb, genesis, dataDir)
 	if err != nil {
 		return err
 	}
@@ -100,9 +100,9 @@ func action(ctx *cli.Context) error {
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() { runNetwork(c, components, dataDir) })
-	goes.Go(func() { runRestful(c, components.rest, ctx.String("apiaddr")) })
+	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, logdb, privateKey) })
+	goes.Go(func() { produceBlock(c, components, logdb) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
@@ -132,7 +132,7 @@ func runNetwork(ctx context.Context, components *components, dataDir string) {
 	}
 
 	for _, protocol := range protocols {
-		log.Info("P2P Protocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+		log.Info("Thor network rotocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
 	}
 
 	defer func() {
@@ -158,60 +158,10 @@ func runNetwork(ctx context.Context, components *components, dataDir string) {
 	defer components.communicator.Stop()
 
 	<-ctx.Done()
-	log.Info("Communicator stoped")
+	log.Info("Network stoped")
 }
 
-// func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
-// 	var nodes p2psrv.Nodes
-// 	nodesByte, err := ioutil.ReadFile(filePath)
-// 	if err != nil {
-// 		if !os.IsNotExist(err) {
-// 			log.Error(fmt.Sprintf("%v", err))
-// 		}
-// 	} else {
-// 		rlp.DecodeBytes(nodesByte, &nodes)
-// 		opt.GoodNodes = nodes
-// 	}
-
-// 	p2pSrv := p2psrv.New(opt)
-// 	protocols := communicator.Protocols()
-// 	if err := p2pSrv.Start(protocols); err != nil {
-// 		log.Error(fmt.Sprintf("%v", err))
-// 		return
-// 	}
-
-// 	defer func() {
-// 		p2pSrv.Stop()
-// 		nodes := p2pSrv.GoodNodes()
-// 		data, err := rlp.EncodeToBytes(nodes)
-// 		if err != nil {
-// 			log.Error(fmt.Sprintf("%v", err))
-// 			return
-// 		}
-// 		if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
-// 			log.Error(fmt.Sprintf("%v", err))
-// 		}
-// 	}()
-
-// 	peerCh := make(chan *p2psrv.Peer)
-// 	p2pSrv.SubscribePeer(peerCh)
-
-// 	syncReport := func(count int, size metric.StorageSize, elapsed time.Duration) {
-// 		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
-// 	}
-// 	communicator.Start(peerCh, syncReport)
-// 	defer communicator.Stop()
-
-// 	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
-// 	for _, protocol := range protocols {
-// 		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
-// 	}
-
-// 	<-ctx.Done()
-// 	log.Info("Communicator stoped")
-// }
-
-func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
+func runAPIServer(ctx context.Context, apiSrv *http.Server, apiAddr string) {
 	lsr, err := net.Listen("tcp", apiAddr)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
@@ -221,14 +171,14 @@ func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
 
 	go func() {
 		<-ctx.Done()
-		rest.Shutdown(context.TODO())
+		apiSrv.Shutdown(context.TODO())
 	}()
 
-	log.Info("Rest service started", "listen-addr", apiAddr)
-	if err := rest.Serve(lsr); err != http.ErrServerClosed {
+	log.Info("API service started", "listen-addr", apiAddr)
+	if err := apiSrv.Serve(lsr); err != http.ErrServerClosed {
 		log.Error(fmt.Sprintf("%v", err))
 	}
-	log.Info("Rest service stoped")
+	log.Info("API service stoped")
 }
 
 func synchronizeTx(ctx context.Context, components *components) {
