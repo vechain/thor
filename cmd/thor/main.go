@@ -10,8 +10,6 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/chain"
@@ -39,6 +37,7 @@ var (
 type components struct {
 	chain        *chain.Chain
 	txpool       *txpool.TxPool
+	p2p          *p2psrv.Server
 	communicator *comm.Communicator
 	consensus    *consensus.Consensus
 	packer       *packer.Packer
@@ -86,12 +85,6 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	nodeKey, err := loadKey(dataDir + "/node.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
-
 	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
 	if err != nil {
 		return err
@@ -106,22 +99,10 @@ func action(ctx *cli.Context) error {
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
-	goes.Go(func() {
-		runCommunicator(
-			c,
-			components.communicator,
-			&p2psrv.Options{
-				PrivateKey:     nodeKey,
-				MaxPeers:       ctx.Int("maxpeers"),
-				ListenAddr:     ctx.String("p2paddr"),
-				BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
-			},
-			dataDir+"/nodes.cache",
-		)
-	})
+	goes.Go(func() { runNetwork(c, components, dataDir) })
+	goes.Go(func() { runRestful(c, components.rest, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
 	goes.Go(func() { produceBlock(c, components, logdb, privateKey) })
-	goes.Go(func() { runRestful(c, components.rest, ctx.String("apiaddr")) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
@@ -143,55 +124,92 @@ func action(ctx *cli.Context) error {
 	return nil
 }
 
-func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
-	var nodes p2psrv.Nodes
-	nodesByte, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Error(fmt.Sprintf("%v", err))
-		}
-	} else {
-		rlp.DecodeBytes(nodesByte, &nodes)
-		opt.GoodNodes = nodes
-	}
-
-	p2pSrv := p2psrv.New(opt)
-	protocols := communicator.Protocols()
-	if err := p2pSrv.Start(protocols); err != nil {
+func runNetwork(ctx context.Context, components *components, dataDir string) {
+	protocols := components.communicator.Protocols()
+	if err := components.p2p.Start(protocols); err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
 
+	for _, protocol := range protocols {
+		log.Info("P2P Protocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+	}
+
 	defer func() {
-		p2pSrv.Stop()
-		nodes := p2pSrv.GoodNodes()
+		components.p2p.Stop()
+		nodes := components.p2p.GoodNodes()
 		data, err := rlp.EncodeToBytes(nodes)
 		if err != nil {
 			log.Error(fmt.Sprintf("%v", err))
 			return
 		}
-		if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+		if err := ioutil.WriteFile(dataDir+"/nodes.cache", data, 0644); err != nil {
 			log.Error(fmt.Sprintf("%v", err))
 		}
 	}()
 
 	peerCh := make(chan *p2psrv.Peer)
-	p2pSrv.SubscribePeer(peerCh)
+	components.p2p.SubscribePeer(peerCh)
 
 	syncReport := func(count int, size metric.StorageSize, elapsed time.Duration) {
 		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
 	}
-	communicator.Start(peerCh, syncReport)
-	defer communicator.Stop()
-
-	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
-	for _, protocol := range protocols {
-		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
-	}
+	components.communicator.Start(peerCh, syncReport)
+	defer components.communicator.Stop()
 
 	<-ctx.Done()
 	log.Info("Communicator stoped")
 }
+
+// func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *p2psrv.Options, filePath string) {
+// 	var nodes p2psrv.Nodes
+// 	nodesByte, err := ioutil.ReadFile(filePath)
+// 	if err != nil {
+// 		if !os.IsNotExist(err) {
+// 			log.Error(fmt.Sprintf("%v", err))
+// 		}
+// 	} else {
+// 		rlp.DecodeBytes(nodesByte, &nodes)
+// 		opt.GoodNodes = nodes
+// 	}
+
+// 	p2pSrv := p2psrv.New(opt)
+// 	protocols := communicator.Protocols()
+// 	if err := p2pSrv.Start(protocols); err != nil {
+// 		log.Error(fmt.Sprintf("%v", err))
+// 		return
+// 	}
+
+// 	defer func() {
+// 		p2pSrv.Stop()
+// 		nodes := p2pSrv.GoodNodes()
+// 		data, err := rlp.EncodeToBytes(nodes)
+// 		if err != nil {
+// 			log.Error(fmt.Sprintf("%v", err))
+// 			return
+// 		}
+// 		if err := ioutil.WriteFile(filePath, data, 0644); err != nil {
+// 			log.Error(fmt.Sprintf("%v", err))
+// 		}
+// 	}()
+
+// 	peerCh := make(chan *p2psrv.Peer)
+// 	p2pSrv.SubscribePeer(peerCh)
+
+// 	syncReport := func(count int, size metric.StorageSize, elapsed time.Duration) {
+// 		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
+// 	}
+// 	communicator.Start(peerCh, syncReport)
+// 	defer communicator.Stop()
+
+// 	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
+// 	for _, protocol := range protocols {
+// 		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+// 	}
+
+// 	<-ctx.Done()
+// 	log.Info("Communicator stoped")
+// }
 
 func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
 	lsr, err := net.Listen("tcp", apiAddr)
@@ -248,7 +266,7 @@ func synchronizeTx(ctx context.Context, components *components) {
 		}
 	})
 
-	log.Info("Transaction Synchronization started")
+	log.Info("Transaction synchronization started")
 	goes.Wait()
-	log.Info("Transaction Synchronization stoped")
+	log.Info("Transaction synchronization stoped")
 }
