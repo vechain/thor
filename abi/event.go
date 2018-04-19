@@ -7,8 +7,23 @@ import (
 
 // Event see abi.Event in go-ethereum.
 type Event struct {
-	id    thor.Bytes32
-	event *ethabi.Event
+	id                 thor.Bytes32
+	event              *ethabi.Event
+	argsWithoutIndexed ethabi.Arguments
+}
+
+func newEvent(event *ethabi.Event) *Event {
+	var argsWithoutIndexed ethabi.Arguments
+	for _, arg := range event.Inputs {
+		if !arg.Indexed {
+			argsWithoutIndexed = append(argsWithoutIndexed, arg)
+		}
+	}
+	return &Event{
+		thor.Bytes32(event.Id()),
+		event,
+		argsWithoutIndexed,
+	}
 }
 
 // ID returns event id.
@@ -23,10 +38,10 @@ func (e *Event) Name() string {
 
 // Encode encodes args to data.
 func (e *Event) Encode(args ...interface{}) ([]byte, error) {
-	return e.event.Inputs.Pack(args...)
+	return e.argsWithoutIndexed.Pack(args...)
 }
 
 // Decode decodes event data.
 func (e *Event) Decode(data []byte, v interface{}) error {
-	return e.event.Inputs.Unpack(v, data)
+	return e.argsWithoutIndexed.Unpack(v, data)
 }

@@ -65,9 +65,8 @@ func New(data []byte) (*ABI, error) {
 				Anonymous: field.Anonymous,
 				Inputs:    field.Inputs,
 			}
-			id := thor.Bytes32(ethEvent.Id())
-			event := &Event{id, &ethEvent}
-			abi.events[id] = event
+			event := newEvent(&ethEvent)
+			abi.events[event.ID()] = event
 			abi.nameToEvent[ethEvent.Name] = event
 		}
 	}
