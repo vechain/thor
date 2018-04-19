@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -11,6 +10,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
@@ -36,22 +36,14 @@ var (
 	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 )
 
-type component struct {
+type components struct {
 	chain        *chain.Chain
 	txpool       *txpool.TxPool
 	communicator *comm.Communicator
-	nodeKey      *ecdsa.PrivateKey
 	consensus    *consensus.Consensus
 	packer       *packer.Packer
-	privateKey   *ecdsa.PrivateKey
 	rest         *http.Server
 }
-
-// txpool := txpool.New(chain, stateCreator)
-// communicator := comm.New(chain, txpool)
-// consensus := consensus.New(chain, stateCreator)
-// packer := packer.New(chain, stateCreator, proposer, beneficiary)
-// rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
 
 func main() {
 	app := cli.NewApp()
@@ -94,7 +86,22 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	component, err := makeComponent(lvldb, logdb, genesis, dataDir, ctx)
+	nodeKey, err := loadKey(dataDir + "/node.key")
+	if err != nil {
+		return err
+	}
+	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
+
+	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
+	if err != nil {
+		return err
+	}
+	log.Info("Proposer key loaded", "address", proposer)
+
+	components, err := makeComponent(ctx, lvldb, logdb, genesis, proposer, dataDir)
+	if err != nil {
+		return err
+	}
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
@@ -102,9 +109,9 @@ func action(ctx *cli.Context) error {
 	goes.Go(func() {
 		runCommunicator(
 			c,
-			component.communicator,
+			components.communicator,
 			&p2psrv.Options{
-				PrivateKey:     component.nodeKey,
+				PrivateKey:     nodeKey,
 				MaxPeers:       ctx.Int("maxpeers"),
 				ListenAddr:     ctx.String("p2paddr"),
 				BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
@@ -112,9 +119,9 @@ func action(ctx *cli.Context) error {
 			dataDir+"/nodes.cache",
 		)
 	})
-	goes.Go(func() { synchronizeTx(c, component) })
-	goes.Go(func() { produceBlock(c, component, logdb) })
-	goes.Go(func() { runRestful(c, component.rest, ctx.String("apiaddr")) })
+	goes.Go(func() { synchronizeTx(c, components) })
+	goes.Go(func() { produceBlock(c, components, logdb, privateKey) })
+	goes.Go(func() { runRestful(c, components.rest, ctx.String("apiaddr")) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
@@ -154,9 +161,6 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 		log.Error(fmt.Sprintf("%v", err))
 		return
 	}
-	for _, protocol := range protocols {
-		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
-	}
 
 	defer func() {
 		p2pSrv.Stop()
@@ -178,8 +182,12 @@ func runCommunicator(ctx context.Context, communicator *comm.Communicator, opt *
 		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
 	}
 	communicator.Start(peerCh, syncReport)
-	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
 	defer communicator.Stop()
+
+	log.Info("Communicator started", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
+	for _, protocol := range protocols {
+		log.Info("Protocol parsed", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+	}
 
 	<-ctx.Done()
 	log.Info("Communicator stoped")
@@ -205,13 +213,13 @@ func runRestful(ctx context.Context, rest *http.Server, apiAddr string) {
 	log.Info("Rest service stoped")
 }
 
-func synchronizeTx(ctx context.Context, component *component) {
+func synchronizeTx(ctx context.Context, components *components) {
 	var goes co.Goes
 
 	// routine for broadcast new tx
 	goes.Go(func() {
 		txCh := make(chan *tx.Transaction)
-		sub := component.txpool.SubscribeNewTransaction(txCh)
+		sub := components.txpool.SubscribeNewTransaction(txCh)
 
 		for {
 			select {
@@ -219,7 +227,7 @@ func synchronizeTx(ctx context.Context, component *component) {
 				sub.Unsubscribe()
 				return
 			case tx := <-txCh:
-				component.communicator.BroadcastTx(tx)
+				components.communicator.BroadcastTx(tx)
 			}
 		}
 	})
@@ -227,7 +235,7 @@ func synchronizeTx(ctx context.Context, component *component) {
 	// routine for update txpool
 	goes.Go(func() {
 		txCh := make(chan *tx.Transaction)
-		sub := component.communicator.SubscribeTx(txCh)
+		sub := components.communicator.SubscribeTx(txCh)
 
 		for {
 			select {
@@ -235,7 +243,7 @@ func synchronizeTx(ctx context.Context, component *component) {
 				sub.Unsubscribe()
 				return
 			case tx := <-txCh:
-				component.txpool.Add(tx)
+				components.txpool.Add(tx)
 			}
 		}
 	})
