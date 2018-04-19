@@ -37,6 +37,9 @@ type account struct {
 	Balance    string
 }
 
+type fakeCommunicator struct {
+}
+
 type cliContext struct {
 	kv           *lvldb.LevelDB
 	stateCreator *state.Creator
@@ -112,7 +115,7 @@ func newApp() *cli.App {
 		defer solo.kv.Close()
 		defer solo.txpl.Stop()
 
-		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb)}
+		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb, fakeCommunicator{})}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -299,6 +302,10 @@ func (solo *cliContext) watcher(done <-chan interface{}) {
 			return
 		}
 	}
+}
+
+func (comm fakeCommunicator) SessionCount() int {
+	return 1
 }
 
 func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (err error) {

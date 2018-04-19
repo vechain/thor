@@ -34,6 +34,8 @@ func NewLog(header *block.Header, logIndex uint32, txID thor.Bytes32, txOrigin t
 		Data:        txLog.Data,
 	}
 	for i, topic := range txLog.Topics {
+		// variable topic from range shares the same address, clone topic when need to use topic's pointer
+		topic := topic
 		l.Topics[i] = &topic
 	}
 	return l
