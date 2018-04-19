@@ -5,21 +5,23 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/comm"
 )
 
+type Network interface {
+	SessionCount() int
+}
 type Node struct {
-	comm *comm.Communicator
+	nw Network
 }
 
-func New(comm *comm.Communicator) *Node {
+func New(nw Network) *Node {
 	return &Node{
-		comm,
+		nw,
 	}
 }
 
 func (n *Node) peerCount() int {
-	return n.comm.SessionCount()
+	return n.nw.SessionCount()
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, req *http.Request) error {
