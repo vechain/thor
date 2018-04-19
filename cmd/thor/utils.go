@@ -21,7 +21,7 @@ import (
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
-	"github.com/vechain/thor/packer"
+	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
@@ -104,7 +104,6 @@ func makeComponent(
 	lvldb *Lvldb.LevelDB,
 	logdb *Logdb.LogDB,
 	genesis *Genesis.Genesis,
-	proposer thor.Address,
 	dataDir string,
 ) (*components, error) {
 	stateCreator := state.NewCreator(lvldb)
@@ -125,6 +124,12 @@ func makeComponent(
 	if err != nil {
 		return nil, err
 	}
+
+	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Proposer key loaded", "address", proposer)
 
 	beneficiary := proposer
 	if ctx.String("beneficiary") != "" {
@@ -148,8 +153,8 @@ func makeComponent(
 		p2p:          p2p,
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
-		packer:       packer.New(chain, stateCreator, proposer, beneficiary),
-		rest:         &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)},
+		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
+		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)},
 	}, nil
 }
 
@@ -158,7 +163,6 @@ func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
 
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
@@ -177,6 +181,6 @@ func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
 		opt.GoodNodes = nodes
 	}
 
-	log.Info("P2P network initialed", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers)
+	log.Info("Thor network initialed", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers, "node-key-address", crypto.PubkeyToAddress(nodeKey.PublicKey))
 	return p2psrv.New(opt), nil
 }

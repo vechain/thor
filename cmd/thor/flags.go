@@ -14,7 +14,7 @@ var appFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "apiaddr",
 		Value: "127.0.0.1:8669",
-		Usage: "restful addr",
+		Usage: "api server addr",
 	},
 	cli.StringFlag{
 		Name:  "datadir",
