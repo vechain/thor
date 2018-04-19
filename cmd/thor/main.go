@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -10,24 +11,19 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	Genesis "github.com/vechain/thor/genesis"
 	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -39,6 +35,23 @@ var (
 	log       = log15.New()
 	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
 )
+
+type component struct {
+	chain        *chain.Chain
+	txpool       *txpool.TxPool
+	communicator *comm.Communicator
+	nodeKey      *ecdsa.PrivateKey
+	consensus    *consensus.Consensus
+	packer       *packer.Packer
+	privateKey   *ecdsa.PrivateKey
+	rest         *http.Server
+}
+
+// txpool := txpool.New(chain, stateCreator)
+// communicator := comm.New(chain, txpool)
+// consensus := consensus.New(chain, stateCreator)
+// packer := packer.New(chain, stateCreator, proposer, beneficiary)
+// rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
 
 func main() {
 	app := cli.NewApp()
@@ -59,27 +72,15 @@ func action(ctx *cli.Context) error {
 	initLog(log15.Lvl(ctx.Int("verbosity")))
 	log.Info("Welcome to thor network")
 
-	var (
-		genesis *Genesis.Genesis
-		err     error
-	)
-	if ctx.Bool("devnet") {
-		genesis, err = Genesis.NewDevnet()
-		log.Info("Using Devnet", "genesis", genesis.ID().AbbrevString())
-	} else {
-		genesis, err = Genesis.NewMainnet()
-		log.Info("Using Mainnet", "genesis", genesis.ID().AbbrevString())
-	}
+	genesis, err := genesis(ctx.Bool("devnet"))
 	if err != nil {
 		return err
 	}
-	dataDir := fmt.Sprintf("%v/chain-%x", ctx.String("datadir"), genesis.ID().Bytes()[24:])
-	if err = os.MkdirAll(dataDir, os.ModePerm); err != nil {
-		if !os.IsExist(err) {
-			return err
-		}
+
+	dataDir, err := dataDir(genesis, ctx.String("datadir"))
+	if err != nil {
+		return err
 	}
-	log.Info("Disk storage enabled for storing data", "path", dataDir)
 
 	lvldb, err := Lvldb.New(dataDir+"/main.db", Lvldb.Options{})
 	if err != nil {
@@ -93,45 +94,6 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	stateCreator := state.NewCreator(lvldb)
-
-	genesisBlock, txLogs, err := genesis.Build(stateCreator)
-	if err != nil {
-		return err
-	}
-
-	logs := []*Logdb.Log{}
-	header := genesisBlock.Header()
-	for _, log := range txLogs {
-		logs = append(logs, Logdb.NewLog(header, 0, thor.Bytes32{}, thor.Address{}, log))
-	}
-	logdb.Insert(logs, nil)
-
-	chain, err := chain.New(lvldb, genesisBlock)
-	if err != nil {
-		return err
-	}
-
-	nodeKey, err := loadKey(dataDir + "/node.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Node key loaded", "address", crypto.PubkeyToAddress(nodeKey.PublicKey))
-
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
-	if err != nil {
-		return err
-	}
-	log.Info("Proposer key loaded", "address", proposer)
-
-	beneficiary := proposer
-	if ctx.String("beneficiary") != "" {
-		if beneficiary, err = thor.ParseAddress(ctx.String("beneficiary")); err != nil {
-			return err
-		}
-	}
-	log.Info("Beneficiary key loaded", "address", beneficiary)
-
 	restAddr := ctx.String("apiaddr")
 	lsr, err := net.Listen("tcp", restAddr)
 	if err != nil {
@@ -139,23 +101,23 @@ func action(ctx *cli.Context) error {
 	}
 	defer lsr.Close()
 
-	txpool := txpool.New(chain, stateCreator)
-	communicator := comm.New(chain, txpool)
-	consensus := consensus.New(chain, stateCreator)
-	packer := packer.New(chain, stateCreator, proposer, beneficiary)
-	rest := &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)}
-	opt := &p2psrv.Options{
-		PrivateKey:     nodeKey,
-		MaxPeers:       ctx.Int("maxpeers"),
-		ListenAddr:     ctx.String("p2paddr"),
-		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
-	}
+	component, err := makeComponent(lvldb, logdb, genesis, dataDir, ctx)
 
 	var goes co.Goes
 	c, cancel := context.WithCancel(context.Background())
 
 	goes.Go(func() {
-		runCommunicator(c, communicator, opt, dataDir+"/nodes.cache")
+		runCommunicator(
+			c,
+			component.communicator,
+			&p2psrv.Options{
+				PrivateKey:     component.nodeKey,
+				MaxPeers:       ctx.Int("maxpeers"),
+				ListenAddr:     ctx.String("p2paddr"),
+				BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
+			},
+			dataDir+"/nodes.cache",
+		)
 		log.Info("Communicator stoped")
 	})
 
@@ -163,8 +125,8 @@ func action(ctx *cli.Context) error {
 		synchronizeTx(
 			&txRoutineContext{
 				ctx:          c,
-				communicator: communicator,
-				txpool:       txpool,
+				communicator: component.communicator,
+				txpool:       component.txpool,
 			},
 		)
 	})
@@ -173,22 +135,22 @@ func action(ctx *cli.Context) error {
 		produceBlock(
 			&blockRoutineContext{
 				ctx:              c,
-				communicator:     communicator,
-				chain:            chain,
-				txpool:           txpool,
+				communicator:     component.communicator,
+				chain:            component.chain,
+				txpool:           component.txpool,
 				packedChan:       make(chan *packedEvent),
 				bestBlockUpdated: make(chan *block.Block, 1),
 			},
-			consensus,
-			packer,
-			privateKey,
+			component.consensus,
+			component.packer,
+			component.privateKey,
 			logdb,
 		)
 	})
 
 	goes.Go(func() {
 		log.Info("Rest service started", "listen-addr", restAddr)
-		runRestful(c, rest, lsr)
+		runRestful(c, component.rest, lsr)
 		log.Info("Rest service stoped")
 	})
 
