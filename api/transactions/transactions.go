@@ -39,7 +39,6 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 		}
 		return nil, err
 	}
-
 	block, err := t.chain.GetBlock(location.BlockID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
