@@ -242,7 +242,7 @@ func (solo *cliContext) packing() {
 	for _, tx := range pendingTxs {
 		err := adopt(tx)
 		if err != nil {
-			log.Error("Excuting transaction", "error", fmt.Sprintf("%+v", err))
+			log.Error("Excuting transaction", "error", fmt.Sprintf("%+v", err.Error()))
 		}
 		switch {
 		case IsKnownTx(err) || IsBadTx(err):
@@ -315,7 +315,8 @@ func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (er
 	for index, receipt := range receipts {
 		for _, output := range receipt.Outputs {
 			for _, l := range output.Logs {
-				dblog := logdb.NewLog(blk.Header(), uint32(logIndex), blk.Transactions()[index].ID(), thor.Address{}, l)
+				txOrigin, _ := blk.Transactions()[index].Signer()
+				dblog := logdb.NewLog(blk.Header(), uint32(logIndex), blk.Transactions()[index].ID(), txOrigin, l)
 				dblogs = append(dblogs, dblog)
 				logIndex++
 			}
