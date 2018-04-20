@@ -406,6 +406,9 @@ components:
         gasPayer:
           type: string
           description: address of account who payed used gas
+        payed:
+          type: string
+          description: hex form of amount of payed energy
         reward:
           type: string
           description: hex form of amount of reward

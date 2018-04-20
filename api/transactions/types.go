@@ -100,35 +100,33 @@ type TxContext struct {
 
 //Receipt for json marshal
 type Receipt struct {
-	Block    BlockContext          `json:"block"`
-	Tx       TxContext             `json:"tx"`
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer,string"`
+	Payed    *math.HexOrDecimal256 `json:"payed,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
 	Reverted bool                  `json:"reverted"`
+	Block    BlockContext          `json:"block"`
+	Tx       TxContext             `json:"tx"`
 	Outputs  []*Output             `json:"outputs,string"`
 }
 
 // Output output of clause execution.
 type Output struct {
 	ContractAddress *thor.Address `json:"contractAddress"`
-	// logs produced by the clause
-	Logs []*ReceiptLog `json:"logs,string"`
+	Logs            []*ReceiptLog `json:"logs,string"`
 }
 
 // ReceiptLog ReceiptLog.
 type ReceiptLog struct {
-	// address of the contract that generated the event
-	Address thor.Address `json:"address,string"`
-	// list of topics provided by the contract.
-	Topics []thor.Bytes32 `json:"topics,string"`
-	// supplied by the contract, usually ABI-encoded
-	Data string `json:"data"`
+	Address thor.Address   `json:"address,string"`
+	Topics  []thor.Bytes32 `json:"topics,string"`
+	Data    string         `json:"data"`
 }
 
 //ConvertReceipt convert a raw clause into a jason format clause
 func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*rece.Reward)
+	payed := math.HexOrDecimal256(*rece.Payed)
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
@@ -136,6 +134,7 @@ func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*
 	receipt := &Receipt{
 		GasUsed:  rece.GasUsed,
 		GasPayer: rece.GasPayer,
+		Payed:    &payed,
 		Reward:   &reward,
 		Reverted: rece.Reverted,
 		Tx: TxContext{
