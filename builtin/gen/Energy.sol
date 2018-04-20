@@ -1,6 +1,7 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
 import "./ERC223Receiver.sol";
+import "./Prototype.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -34,34 +35,16 @@ contract Energy is Token {
         return EnergyNative(this).native_getBalance(_owner);
     }
 
-    // promise that it will not modify state when if returns false.
-    function _transfer(address _from, address _to, uint256 _amount) internal returns (bool) {
-        if (_amount > 0) {
-            if (!EnergyNative(this).native_subBalance(_from, _amount)) {
-                return false;
-            }
-            // believed that will never overflow
-            EnergyNative(this).native_addBalance(_to, _amount);
-        }
-    
-        if (isContract(_to)) {
-            // Require proper transaction handling.
-            ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
-        }
-        Transfer(_from, _to, _amount);
+    function transfer(address _to, uint256 _amount) public returns (bool success) {
+        _transfer(msg.sender, _to, _amount);
         return true;
     }
 
-    function transfer(address _to, uint256 _amount) public returns (bool success) {
-        return _transfer(msg.sender, _to, _amount);
-    }
-
     function transferFrom(address _from, address _to, uint256 _amount) public returns(bool success) {
-        if (!_transfer(_from, _to, _amount)) {
-            return false;
-        }
         require(allowed[_from][_to] >= _amount);
         allowed[_from][_to] -= _amount;
+
+        _transfer(_from, _to, _amount);
         return true;
     }
 
@@ -69,24 +52,23 @@ contract Energy is Token {
         return allowed[_owner][_spender];
     }
 
-    function approve(address _reciever, uint256 _amount) public returns (bool success) {
-        allowed[msg.sender][_reciever] = _amount;
-        Approval(msg.sender, _reciever, _amount);
+    function approve(address _spender, uint256 _value) public returns (bool success){
+        allowed[msg.sender][_spender] = _value;
+        Approval(msg.sender, _spender, _value);
         return true;
     }
-    
-    /// @param _addr an address of a normal account or a contract
-    /// 
-    /// @return whether `_addr` is a contract or not
-    function isContract(address _addr) view internal returns(bool) {        
-        if (_addr == 0) {
-            return false;
+
+    function _transfer(address _from, address _to, uint256 _amount) internal {
+        if (_amount > 0) {
+            require(EnergyNative(this).native_subBalance(_from, _amount));
+            // believed that will never overflow
+            EnergyNative(this).native_addBalance(_to, _amount);
         }
-        uint size;
-        assembly {
-            size := extcodesize(_addr)
+        if (proto.Of(_to).$has_code()) {
+            // Require proper transaction handling.
+            ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
         }
-        return size > 0;
+        Transfer(_from, _to, _amount);
     }
 }
 

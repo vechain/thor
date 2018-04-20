@@ -129,6 +129,10 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 				return proc()
 			}
 		}
+		// contractified account actually has zero code size
+		if in.evm.IsContractified(*contract.CodeAddr) {
+			return nil, nil
+		}
 	}
 
 	// Don't bother with the execution if there's no code.
