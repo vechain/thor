@@ -3,7 +3,6 @@ package transactions_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -28,7 +27,6 @@ import (
 )
 
 func TestTransaction(t *testing.T) {
-
 	transaction, ts := initTransactionServer(t)
 	defer ts.Close()
 	getTx(t, ts, transaction)
@@ -41,7 +39,7 @@ func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v", tx.ID()))
+	res := httpGet(t, ts.URL+"/transactions/"+tx.ID().String())
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
@@ -50,7 +48,7 @@ func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
 }
 
 func getTxReceipt(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
-	r := httpGet(t, ts.URL+fmt.Sprintf("/transactions/%v/receipt", tx.ID().String()))
+	r := httpGet(t, ts.URL+"/transactions/"+tx.ID().String()+"/receipt")
 	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
