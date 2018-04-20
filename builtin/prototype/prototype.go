@@ -17,33 +17,33 @@ func New(addr thor.Address, state *state.State) *Prototype {
 	return &Prototype{addr, state}
 }
 
-func (p *Prototype) Bind(contractAddr thor.Address) *Binding {
-	return &Binding{p.addr, p.state, contractAddr}
+func (p *Prototype) Bind(target thor.Address) *Binding {
+	return &Binding{p.addr, p.state, target}
 }
 
 type Binding struct {
-	selfAddr     thor.Address
-	state        *state.State
-	contractAddr thor.Address
+	selfAddr thor.Address
+	state    *state.State
+	target   thor.Address
 }
 
 func (b *Binding) masterKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.contractAddr.Bytes(), []byte("master")))
+	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("master")))
 }
 
 func (b *Binding) userKey(user thor.Address) thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.contractAddr.Bytes(), []byte("user"), user.Bytes()))
+	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("user"), user.Bytes()))
 }
 func (b *Binding) userPlanKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.contractAddr.Bytes(), []byte("user-plan")))
+	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("user-plan")))
 }
 
 func (b *Binding) sponsorKey(sponsor thor.Address) thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.contractAddr.Bytes(), []byte("sponsor"), sponsor.Bytes()))
+	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("sponsor"), sponsor.Bytes()))
 }
 
 func (b *Binding) curSponsorKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.contractAddr.Bytes(), []byte("cur-sponsor")))
+	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("cur-sponsor")))
 }
 
 func (b *Binding) getStorage(key thor.Bytes32, val interface{}) {
