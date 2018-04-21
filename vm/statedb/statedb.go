@@ -24,6 +24,7 @@ type (
 	refundKey      struct{}
 	preimageKey    common.Hash
 	logKey         struct{}
+	stateRevKey    struct{}
 )
 
 // New create a statedb object.
@@ -187,12 +188,17 @@ func (s *StateDB) AddLog(vmlog *types.Log) {
 
 // Snapshot stub.
 func (s *StateDB) Snapshot() int {
-	s.state.NewCheckpoint()
+	srev := s.state.NewCheckpoint()
+	s.repo.Put(stateRevKey{}, srev)
 	return s.repo.Push()
 }
 
 // RevertToSnapshot stub.
 func (s *StateDB) RevertToSnapshot(rev int) {
-	s.state.RevertTo(rev)
 	s.repo.PopTo(rev)
+	if srev, ok := s.repo.Get(stateRevKey{}); ok {
+		s.state.RevertTo(srev.(int))
+	} else {
+		panic("state checkpoint missing")
+	}
 }
