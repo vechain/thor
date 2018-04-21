@@ -3,7 +3,6 @@ package prototype
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -28,22 +27,22 @@ type Binding struct {
 }
 
 func (b *Binding) masterKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("master")))
+	return thor.Blake2b(b.target.Bytes(), []byte("master"))
 }
 
 func (b *Binding) userKey(user thor.Address) thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("user"), user.Bytes()))
+	return thor.Blake2b(b.target.Bytes(), user.Bytes(), []byte("user"))
 }
 func (b *Binding) userPlanKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("user-plan")))
+	return thor.Blake2b(b.target.Bytes(), []byte("user-plan"))
 }
 
 func (b *Binding) sponsorKey(sponsor thor.Address) thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("sponsor"), sponsor.Bytes()))
+	return thor.Blake2b(b.target.Bytes(), sponsor.Bytes(), []byte("sponsor"))
 }
 
 func (b *Binding) curSponsorKey() thor.Bytes32 {
-	return thor.Bytes32(crypto.Keccak256Hash(b.target.Bytes(), []byte("cur-sponsor")))
+	return thor.Blake2b(b.target.Bytes(), []byte("cur-sponsor"))
 }
 
 func (b *Binding) getStorage(key thor.Bytes32, val interface{}) {

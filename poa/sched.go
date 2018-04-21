@@ -1,7 +1,6 @@
 package poa
 
 import (
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 
@@ -126,9 +125,12 @@ func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint
 // dprp deterministic pseudo-random process.
 // H(B, t)[:8]
 func dprp(blockNumber uint32, time uint64) uint64 {
-	var bin [12]byte
-	binary.BigEndian.PutUint32(bin[:], blockNumber)
-	binary.BigEndian.PutUint64(bin[4:], time)
-	sum := sha256.Sum256(bin[:])
-	return binary.BigEndian.Uint64(sum[:])
+	var (
+		b4 [4]byte
+		b8 [8]byte
+	)
+	binary.BigEndian.PutUint32(b4[:], blockNumber)
+	binary.BigEndian.PutUint64(b8[:], time)
+
+	return binary.BigEndian.Uint64(thor.Blake2b(b4[:], b8[:]).Bytes())
 }

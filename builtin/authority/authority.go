@@ -1,14 +1,13 @@
 package authority
 
 import (
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
 var (
-	headKey = thor.Bytes32(crypto.Keccak256Hash([]byte("head")))
-	tailKey = thor.Bytes32(crypto.Keccak256Hash([]byte("tail")))
+	headKey = thor.Blake2b([]byte("head"))
+	tailKey = thor.Blake2b([]byte("tail"))
 )
 
 // Authority implements native methods of `Authority` contract.

@@ -3,15 +3,14 @@ package energy
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
 var (
-	tokenSupplyKey = thor.Bytes32(crypto.Keccak256Hash([]byte("token-supply")))
-	totalAddKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-add")))
-	totalSubKey    = thor.Bytes32(crypto.Keccak256Hash([]byte("total-sub")))
+	tokenSupplyKey = thor.Blake2b([]byte("token-supply"))
+	totalAddKey    = thor.Blake2b([]byte("total-add"))
+	totalSubKey    = thor.Blake2b([]byte("total-sub"))
 )
 
 // Energy implements energy operations.
