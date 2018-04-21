@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/pkg/errors"
 )
 
 type httpError struct {
@@ -19,6 +21,14 @@ func HTTPError(cause error, status int) error {
 	return &httpError{
 		cause:  cause,
 		status: status,
+	}
+}
+
+// BadRequest convenience method to create http bad request error.
+func BadRequest(cause error, msg string) error {
+	return &httpError{
+		cause:  errors.Wrap(cause, msg),
+		status: http.StatusBadRequest,
 	}
 }
 
