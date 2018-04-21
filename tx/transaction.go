@@ -10,7 +10,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
@@ -94,7 +93,7 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	if err != nil {
 		return
 	}
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	hw.Write(t.SigningHash().Bytes())
 	hw.Write(signer.Bytes())
 	hw.Sum(id[:0])
@@ -126,7 +125,7 @@ func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
 		t.cache.hashWithoutNonce.Store(hash)
 	}()
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
 		t.body.BlockRef,
@@ -143,7 +142,7 @@ func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
 
 // EvaluateWork try to compute work when tx signer assumed.
 func (t *Transaction) EvaluateWork(signer thor.Address, nonce uint64) *big.Int {
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	hw.Write(t.hashWithoutNonce().Bytes())
 	hw.Write(signer.Bytes())
 	var nonceBytes [8]byte
@@ -164,7 +163,7 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
 		t.body.BlockRef,
@@ -221,7 +220,7 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	rlp.Encode(hw, &t)
 	var hash thor.Bytes32
 	hw.Sum(hash[:0])

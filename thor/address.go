@@ -1,14 +1,13 @@
 package thor
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -91,6 +90,9 @@ func BytesToAddress(b []byte) Address {
 // CreateContractAddress to generate contract address according to tx id, clause index and
 // contract creation count.
 func CreateContractAddress(txID Bytes32, clauseIndex uint32, creationCount uint32) Address {
-	data, _ := rlp.EncodeToBytes([]interface{}{txID, clauseIndex, creationCount})
-	return BytesToAddress(crypto.Keccak256(data)[12:])
+	var b4_1, b4_2 [4]byte
+
+	binary.BigEndian.PutUint32(b4_1[:], clauseIndex)
+	binary.BigEndian.PutUint32(b4_2[:], creationCount)
+	return BytesToAddress(Blake2b(txID[:], b4_1[:], b4_2[:]).Bytes())
 }

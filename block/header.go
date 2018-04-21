@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/thor"
@@ -114,7 +113,7 @@ func (h *Header) ID() (id thor.Bytes32) {
 		return
 	}
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	hw.Write(h.SigningHash().Bytes())
 	hw.Write(signer.Bytes())
 	hw.Sum(id[:0])
@@ -129,7 +128,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { h.cache.signingHash.Store(hash) }()
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
 		h.body.Timestamp,
@@ -175,7 +174,7 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	hw := sha3.NewKeccak256()
+	hw := thor.NewBlake2b()
 	rlp.Encode(hw, h)
 	var hash thor.Bytes32
 	hw.Sum(hash[:0])
