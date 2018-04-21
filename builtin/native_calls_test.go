@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vm/evm"
 )
 
 type ctest struct {
@@ -64,7 +65,7 @@ func (c *ccase) ShouldOutput(outputs ...interface{}) *ccase {
 	return c
 }
 
-func (c *ccase) Assert(t *testing.T) {
+func (c *ccase) Assert(t *testing.T) *ccase {
 	method, ok := c.abi.MethodByName(c.name)
 	assert.True(t, ok, "should have method")
 
@@ -78,7 +79,7 @@ func (c *ccase) Assert(t *testing.T) {
 	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
 		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{})
 
-	if constant {
+	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
 		assert.Nil(t, err, "should hash state")
 		assert.Equal(t, stateRoot, newStateRoot)
@@ -93,6 +94,10 @@ func (c *ccase) Assert(t *testing.T) {
 	}
 
 	assert.Nil(t, c.rt.State().Error(), "should no state error")
+
+	c.output = nil
+	c.vmerr = nil
+	return c
 }
 
 func TestParamsNative(t *testing.T) {
@@ -112,16 +117,24 @@ func TestParamsNative(t *testing.T) {
 	key := thor.BytesToBytes32([]byte("key"))
 	value := big.NewInt(999)
 
-	test.Case("native_getExecutor").
-		ShouldOutput(builtin.Executor.Address).
-		Assert(t)
+	cases := []*ccase{
+		test.Case("native_getExecutor").
+			ShouldOutput(builtin.Executor.Address).
+			Assert(t),
 
-	test.Case("native_set", key, value).
-		Assert(t)
+		test.Case("native_set", key, value).
+			Assert(t),
 
-	test.Case("native_get", key).
-		ShouldOutput(value).
-		Assert(t)
+		test.Case("native_get", key).
+			ShouldOutput(value).
+			Assert(t),
+	}
+
+	for _, c := range cases {
+		c.Caller(thor.BytesToAddress([]byte("other"))).
+			ShouldVMError(evm.ErrExecutionReverted()).
+			Assert(t)
+	}
 }
 
 func TestAuthorityNative(t *testing.T) {
@@ -153,65 +166,72 @@ func TestAuthorityNative(t *testing.T) {
 		to:     builtin.Authority.Address,
 		caller: builtin.Authority.Address,
 	}
+	cases := []*ccase{
+		test.Case("native_getExecutor").
+			ShouldOutput(builtin.Executor.Address).
+			Assert(t),
 
-	test.Case("native_getExecutor").
-		ShouldOutput(builtin.Executor.Address).
-		Assert(t)
+		test.Case("native_add", signer1, endorsor1, identity1).
+			ShouldOutput(true).
+			Assert(t),
+		test.Case("native_add", signer1, endorsor1, identity1).
+			ShouldOutput(false).
+			Assert(t),
 
-	test.Case("native_add", signer1, endorsor1, identity1).
-		ShouldOutput(true).
-		Assert(t)
-	test.Case("native_add", signer1, endorsor1, identity1).
-		ShouldOutput(false).
-		Assert(t)
+		test.Case("native_remove", signer1).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_remove", signer1).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_add", signer1, endorsor1, identity1).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_add", signer1, endorsor1, identity1).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_add", signer2, endorsor2, identity2).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_add", signer2, endorsor2, identity2).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_add", signer3, endorsor3, identity3).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_add", signer3, endorsor3, identity3).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_get", signer1).
+			ShouldOutput(true, endorsor1, identity1, false).
+			Assert(t),
 
-	test.Case("native_get", signer1).
-		ShouldOutput(true, endorsor1, identity1, false).
-		Assert(t)
+		test.Case("native_first").
+			ShouldOutput(signer1).
+			Assert(t),
 
-	test.Case("native_first").
-		ShouldOutput(signer1).
-		Assert(t)
+		test.Case("native_next", signer1).
+			ShouldOutput(signer2).
+			Assert(t),
 
-	test.Case("native_next", signer1).
-		ShouldOutput(signer2).
-		Assert(t)
+		test.Case("native_next", signer2).
+			ShouldOutput(signer3).
+			Assert(t),
 
-	test.Case("native_next", signer2).
-		ShouldOutput(signer3).
-		Assert(t)
+		test.Case("native_next", signer3).
+			ShouldOutput(thor.Address{}).
+			Assert(t),
 
-	test.Case("native_next", signer3).
-		ShouldOutput(thor.Address{}).
-		Assert(t)
+		test.Case("native_isEndorsed", signer1).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_isEndorsed", signer1).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_isEndorsed", signer2).
+			ShouldOutput(false).
+			Assert(t),
 
-	test.Case("native_isEndorsed", signer2).
-		ShouldOutput(false).
-		Assert(t)
+		test.Case("native_isEndorsed", thor.BytesToAddress([]byte("not a signer"))).
+			ShouldOutput(false).
+			Assert(t),
+	}
 
-	test.Case("native_isEndorsed", thor.BytesToAddress([]byte("not a signer"))).
-		ShouldOutput(false).
-		Assert(t)
+	for _, c := range cases {
+		c.Caller(thor.BytesToAddress([]byte("other"))).
+			ShouldVMError(evm.ErrExecutionReverted()).
+			Assert(t)
+	}
 }
 
 func TestEnergyNative(t *testing.T) {
@@ -233,39 +253,80 @@ func TestEnergyNative(t *testing.T) {
 		caller: builtin.Energy.Address,
 	}
 
-	test.Case("native_getBalance", addr).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
+	cases := []*ccase{
 
-	test.Case("native_addBalance", addr, valueAdd).
-		Assert(t)
+		test.Case("native_getBalance", addr).
+			ShouldOutput(&big.Int{}).
+			Assert(t),
 
-	test.Case("native_getBalance", addr).
-		ShouldOutput(valueAdd).
-		Assert(t)
+		test.Case("native_addBalance", addr, valueAdd).
+			Assert(t),
 
-	test.Case("native_subBalance", addr, valueSub).
-		ShouldOutput(true).
-		Assert(t)
+		test.Case("native_getBalance", addr).
+			ShouldOutput(valueAdd).
+			Assert(t),
 
-	test.Case("native_subBalance", addr, valueAdd).
-		ShouldOutput(false).
-		Assert(t)
+		test.Case("native_subBalance", addr, valueSub).
+			ShouldOutput(true).
+			Assert(t),
 
-	test.Case("native_getBalance", addr).
-		ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
-		Assert(t)
+		test.Case("native_subBalance", addr, valueAdd).
+			ShouldOutput(false).
+			Assert(t),
 
-	test.Case("native_getTotalSupply").
-		ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
-		Assert(t)
+		test.Case("native_getBalance", addr).
+			ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
+			Assert(t),
 
-	test.Case("native_getTotalBurned").
-		ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
-		Assert(t)
+		test.Case("native_getTotalSupply").
+			ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
+			Assert(t),
+
+		test.Case("native_getTotalBurned").
+			ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
+			Assert(t),
+	}
+
+	for _, c := range cases {
+		c.Caller(thor.BytesToAddress([]byte("other"))).
+			ShouldVMError(evm.ErrExecutionReverted()).
+			Assert(t)
+	}
 }
 
 func TestPrototypeNative(t *testing.T) {
+
+	kv, _ := lvldb.NewMem()
+	st, _ := state.New(thor.Bytes32{}, kv)
+	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+
+	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Prototype.NativeABI(),
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
+	}
+
+	var addr = thor.BytesToAddress([]byte("addr"))
+
+	test.Case("native_contractify", addr).
+		Assert(t).
+		Caller(thor.BytesToAddress([]byte("other"))).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_contractify", builtin.Prototype.Address).
+		Assert(t).
+		Caller(thor.BytesToAddress([]byte("other"))).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	assert.True(t, st.GetCodeHash(addr).IsZero())
+	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
+}
+func TestPrototypeInterface(t *testing.T) {
 	var (
 		acc1     = thor.BytesToAddress([]byte("acc1"))
 		acc2     = thor.BytesToAddress([]byte("acc2"))
