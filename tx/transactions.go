@@ -1,13 +1,13 @@
 package tx
 
 import (
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 var (
-	emptyRoot = thor.Bytes32(types.DeriveSha(&derivableTxs{}))
+	emptyRoot = trie.DeriveRoot(&derivableTxs{})
 )
 
 // Transactions a slice of transactions.
@@ -19,7 +19,7 @@ func (txs Transactions) RootHash() thor.Bytes32 {
 		// optimized
 		return emptyRoot
 	}
-	return thor.Bytes32(types.DeriveSha(derivableTxs(txs)))
+	return trie.DeriveRoot(derivableTxs(txs))
 }
 
 // implements types.DerivableList

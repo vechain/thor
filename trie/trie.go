@@ -29,9 +29,9 @@ import (
 
 var (
 	// This is the known root hash of an empty trie.
-	emptyRoot thor.Bytes32
+	emptyRoot = thor.Blake2b(rlp.EmptyString)
 	// This is the known hash of an empty state trie entry.
-	emptyState thor.Bytes32
+	emptyState = thor.Blake2b(nil)
 )
 
 var (
@@ -51,11 +51,6 @@ func CacheMisses() int64 {
 // trie debugging purposes.
 func CacheUnloads() int64 {
 	return cacheUnloadCounter.Count()
-}
-
-func init() {
-	emptyRoot = thor.Blake2b(rlp.EmptyString)
-	emptyState = thor.Blake2b(nil)
 }
 
 // Database must be implemented by backing stores for the trie.
