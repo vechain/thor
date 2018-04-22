@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
@@ -80,7 +79,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			} else {
 				enc, _ := rlp.EncodeToBytes(n)
 				if !ok {
-					hash = crypto.Keccak256(enc)
+					hash = thor.Blake2b(enc).Bytes()
 				}
 				proofDb.Put(hash, enc)
 			}

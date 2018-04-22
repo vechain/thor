@@ -29,7 +29,7 @@ var secureKeyPrefix = []byte("secure-key-")
 const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
-// access operations hash the key using keccak256. This prevents
+// access operations hash the key using blake2b-256. This prevents
 // calling code from creating long chains of nodes that
 // increase the access time.
 //
@@ -48,7 +48,7 @@ type SecureTrie struct {
 
 // NewSecure creates a trie with an existing root node from db.
 //
-// If root is the zero hash or the sha3 hash of an empty string, the
+// If root is the zero hash or the blake2b-256 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
 //
@@ -130,7 +130,7 @@ func (t *SecureTrie) TryDelete(key []byte) error {
 	return t.trie.TryDelete(hk)
 }
 
-// GetKey returns the sha3 preimage of a hashed key that was
+// GetKey returns the blake2b preimage of a hashed key that was
 // previously used to store a value.
 func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
@@ -141,7 +141,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
-// Nodes are stored with their sha3 hash as the key.
+// Nodes are stored with their blake2b hash as the key.
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
@@ -169,7 +169,7 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 }
 
 // CommitTo writes all nodes and the secure hash pre-images to the given database.
-// Nodes are stored with their sha3 hash as the key.
+// Nodes are stored with their blake2b hash as the key.
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes from
 // the trie's database. Calling code must ensure that the changes made to db are

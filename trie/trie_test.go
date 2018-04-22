@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/thor"
 )
 
 func init() {
@@ -44,7 +45,7 @@ func init() {
 // Used for testing
 func newEmpty() *Trie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db)
+	trie, _ := New(thor.Bytes32{}, db)
 	return trie
 }
 
@@ -52,7 +53,7 @@ func TestEmptyTrie(t *testing.T) {
 	var trie Trie
 	res := trie.Hash()
 	exp := emptyRoot
-	if res != common.Hash(exp) {
+	if res != thor.Bytes32(exp) {
 		t.Errorf("expected %x got %x", exp, res)
 	}
 }
@@ -69,7 +70,8 @@ func TestNull(t *testing.T) {
 
 func TestMissingRoot(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	trie, err := New(common.HexToHash("0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33"), db)
+	root := thor.Bytes32{1, 2, 3, 4, 5}
+	trie, err := New(root, db)
 	if trie != nil {
 		t.Error("New returned non-nil trie for invalid root")
 	}
@@ -80,7 +82,7 @@ func TestMissingRoot(t *testing.T) {
 
 func TestMissingNode(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := New(common.Hash{}, db)
+	trie, _ := New(thor.Bytes32{}, db)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit()
@@ -115,7 +117,7 @@ func TestMissingNode(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
+	db.Delete(common.FromHex("f4c6f22acf81fd2d993636c74c17d58ad0344b55343f5121bf16fb5f5ec1fc6f"))
 
 	trie, _ = New(root, db)
 	_, err = trie.TryGet([]byte("120000"))
@@ -155,22 +157,22 @@ func TestInsert(t *testing.T) {
 	updateString(trie, "dog", "puppy")
 	updateString(trie, "dogglesworth", "cat")
 
-	exp := common.HexToHash("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3")
+	exp, _ := thor.ParseBytes32("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b")
 	root := trie.Hash()
 	if root != exp {
-		t.Errorf("exp %x got %x", exp, root)
+		t.Errorf("exp %v got %v", exp, root)
 	}
 
 	trie = newEmpty()
 	updateString(trie, "A", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
-	exp = common.HexToHash("d23786fb4a010da3ce639d66d5e904a11dbc02746d1ce25029e53290cabf28ab")
+	exp, _ = thor.ParseBytes32("e9d7f23f40cd82fe35f5a7a6778c3503f775f3623ba7a71fb335f0eee29dac8a")
 	root, err := trie.Commit()
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}
 	if root != exp {
-		t.Errorf("exp %x got %x", exp, root)
+		t.Errorf("exp %v got %v", exp, root)
 	}
 }
 
@@ -219,9 +221,9 @@ func TestDelete(t *testing.T) {
 	}
 
 	hash := trie.Hash()
-	exp := common.HexToHash("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+	exp, _ := thor.ParseBytes32("79a9b42da0e261b9f3ca9e78560ac8d486bcce2da8a5ddb2df8721d4c0dc2d0a")
 	if hash != exp {
-		t.Errorf("expected %x got %x", exp, hash)
+		t.Errorf("expected %v got %v", exp, hash)
 	}
 }
 
@@ -243,9 +245,9 @@ func TestEmptyValues(t *testing.T) {
 	}
 
 	hash := trie.Hash()
-	exp := common.HexToHash("5991bb8c6514148a29db676a14ac506cd2cd5775ace63c30a4fe457715e9ac84")
+	exp, _ := thor.ParseBytes32("79a9b42da0e261b9f3ca9e78560ac8d486bcce2da8a5ddb2df8721d4c0dc2d0a")
 	if hash != exp {
-		t.Errorf("expected %x got %x", exp, hash)
+		t.Errorf("expected %v got %v", exp, hash)
 	}
 }
 
@@ -408,7 +410,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 
 func runRandTest(rt randTest) bool {
 	db, _ := ethdb.NewMemDatabase()
-	tr, _ := New(common.Hash{}, db)
+	tr, _ := New(thor.Bytes32{}, db)
 	values := make(map[string]string) // tracks content of the trie
 
 	for i, step := range rt {
@@ -442,7 +444,7 @@ func runRandTest(rt randTest) bool {
 			}
 			tr = newtr
 		case opItercheckhash:
-			checktr, _ := New(common.Hash{}, nil)
+			checktr, _ := New(thor.Bytes32{}, nil)
 			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
 				checktr.Update(it.Key, it.Value)
@@ -515,7 +517,7 @@ func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
 		_, tmpdb := tempDB()
-		trie, _ = New(common.Hash{}, tmpdb)
+		trie, _ = New(thor.Bytes32{}, tmpdb)
 	}
 	k := make([]byte, 32)
 	for i := 0; i < benchElemCount; i++ {
@@ -578,7 +580,7 @@ func BenchmarkHash(b *testing.B) {
 	// Insert the accounts into the trie and hash it
 	trie := newEmpty()
 	for i := 0; i < len(addresses); i++ {
-		trie.Update(crypto.Keccak256(addresses[i][:]), accounts[i])
+		trie.Update(thor.Blake2b(addresses[i][:]).Bytes(), accounts[i])
 	}
 	b.ResetTimer()
 	b.ReportAllocs()
