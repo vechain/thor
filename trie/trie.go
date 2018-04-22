@@ -103,7 +103,7 @@ func (t *Trie) newFlag() nodeFlag {
 
 // New creates a trie with an existing root node from db.
 //
-// If root is the zero hash or the sha3 hash of an empty string, the
+// If root is the zero hash or the blake2b hash of an empty string, the
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
@@ -464,7 +464,7 @@ func (t *Trie) Hash() thor.Bytes32 {
 }
 
 // Commit writes all nodes to the trie's database.
-// Nodes are stored with their sha3 hash as the key.
+// Nodes are stored with their blake2b hash as the key.
 //
 // Committing flushes nodes from memory.
 // Subsequent Get calls will load nodes from the database.
@@ -476,7 +476,7 @@ func (t *Trie) Commit() (root thor.Bytes32, err error) {
 }
 
 // CommitTo writes all nodes to the given database.
-// Nodes are stored with their sha3 hash as the key.
+// Nodes are stored with their blake2b hash as the key.
 //
 // Committing flushes nodes from memory. Subsequent Get calls will
 // load nodes from the trie's database. Calling code must ensure that
