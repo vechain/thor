@@ -5,19 +5,17 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 func TestCachedObject(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	db := newTrieDatabase(kv)
-	stgTrie, _ := trie.NewSecure(common.Hash{}, db, 0)
+	stgTrie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
 	storages := []struct {
 		k thor.Bytes32
 		v []byte
@@ -32,8 +30,7 @@ func TestCachedObject(t *testing.T) {
 		saveStorage(stgTrie, s.k, s.v)
 	}
 
-	storageRoot, _ := stgTrie.Commit(nil)
-	db.Commit(storageRoot, false)
+	storageRoot, _ := stgTrie.Commit()
 
 	code := make([]byte, 100)
 	rand.Read(code)
@@ -46,8 +43,8 @@ func TestCachedObject(t *testing.T) {
 		CodeHash:    codeHash,
 		StorageRoot: storageRoot[:],
 	}
-	db = newTrieDatabase(kv)
-	obj := newCachedObject(db, &account)
+
+	obj := newCachedObject(kv, &account)
 
 	assert.Equal(t,
 		M(obj.GetCode()),

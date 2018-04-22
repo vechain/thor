@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 // State manages the main accounts trie.
 type State struct {
 	root  thor.Bytes32 // root of initial accounts trie
-	db    *trie.Database
+	kv    kv.GetPutter
 	trie  trieReader                     // the accounts trie reader
 	cache map[thor.Address]*cachedObject // cache of accounts trie
 	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
@@ -35,15 +34,14 @@ type trieWriter interface {
 
 // New create an state object.
 func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
-	db := newTrieDatabase(kv)
-	trie, err := trie.NewSecure(common.Hash(root), db, 0)
+	trie, err := trie.NewSecure(root, kv, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	state := State{
 		root:  root,
-		db:    db,
+		kv:    kv,
 		trie:  trie,
 		cache: make(map[thor.Address]*cachedObject),
 	}
@@ -130,9 +128,9 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 	a, err := loadAccount(s.trie, addr)
 	if err != nil {
 		s.setError(err)
-		return newCachedObject(s.db, emptyAccount())
+		return newCachedObject(s.kv, emptyAccount())
 	}
-	co := newCachedObject(s.db, a)
+	co := newCachedObject(s.kv, a)
 	s.cache[addr] = co
 	return co
 }
@@ -163,7 +161,7 @@ func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, valu
 	}
 
 	co := s.getCachedObject(addr)
-	strie, err := trie.NewSecure(common.BytesToHash(co.data.StorageRoot), s.db, 0)
+	strie, err := trie.NewSecure(thor.BytesToBytes32(co.data.StorageRoot), s.kv, 0)
 	if err != nil {
 		s.setError(err)
 		return
@@ -335,7 +333,7 @@ func (s *State) Stage() *Stage {
 	if s.err != nil {
 		return &Stage{err: s.err}
 	}
-	return newStage(s.root, s.db, changes)
+	return newStage(s.root, s.kv, changes)
 }
 
 type (

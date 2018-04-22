@@ -3,9 +3,9 @@ package tx
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 // Receipt represents the results of a transaction.
@@ -39,7 +39,7 @@ func (rs Receipts) RootHash() thor.Bytes32 {
 		// optimized
 		return emptyRoot
 	}
-	return thor.Bytes32(types.DeriveSha(derivableReceipts(rs)))
+	return trie.DeriveRoot(derivableReceipts(rs))
 }
 
 // implements DerivableList
