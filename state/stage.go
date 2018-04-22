@@ -1,7 +1,6 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
@@ -24,7 +23,7 @@ type codeWithHash struct {
 
 func newStage(root thor.Bytes32, kv kv.GetPutter, changes map[thor.Address]*changedObject) *Stage {
 
-	accountTrie, err := trie.NewSecure(common.Hash(root), kv, 0)
+	accountTrie, err := trie.NewSecure(root, kv, 0)
 	if err != nil {
 		return &Stage{err: err}
 	}
@@ -44,7 +43,7 @@ func newStage(root thor.Bytes32, kv kv.GetPutter, changes map[thor.Address]*chan
 		// skip storage changes if account is empty
 		if !dataCpy.IsEmpty() {
 			if len(obj.storage) > 0 {
-				strie, err := trie.NewSecure(common.BytesToHash(dataCpy.StorageRoot), kv, 0)
+				strie, err := trie.NewSecure(thor.BytesToBytes32(dataCpy.StorageRoot), kv, 0)
 				if err != nil {
 					return &Stage{err: err}
 				}
@@ -75,7 +74,7 @@ func (s *Stage) Hash() (thor.Bytes32, error) {
 	if s.err != nil {
 		return thor.Bytes32{}, s.err
 	}
-	return thor.Bytes32(s.accountTrie.Hash()), nil
+	return s.accountTrie.Hash(), nil
 }
 
 // Commit commits all changes into main accounts trie and storage tries.
@@ -108,5 +107,5 @@ func (s *Stage) Commit() (thor.Bytes32, error) {
 		return thor.Bytes32{}, err
 	}
 
-	return thor.Bytes32(root), nil
+	return root, nil
 }

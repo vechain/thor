@@ -4,7 +4,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
@@ -36,7 +35,7 @@ func TestAccount(t *testing.T) {
 
 func newTrie() *trie.SecureTrie {
 	kv, _ := lvldb.NewMem()
-	trie, _ := trie.NewSecure(common.Hash{}, kv, 0)
+	trie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
 	return trie
 }
 func TestTrie(t *testing.T) {

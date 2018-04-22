@@ -22,8 +22,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/thor"
 )
 
 type hasher struct {
@@ -35,7 +35,7 @@ type hasher struct {
 // hashers live in a global pool.
 var hasherPool = sync.Pool{
 	New: func() interface{} {
-		return &hasher{tmp: new(bytes.Buffer), sha: sha3.NewKeccak256()}
+		return &hasher{tmp: new(bytes.Buffer), sha: thor.NewBlake2b()}
 	},
 }
 

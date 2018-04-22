@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/thor"
 )
 
 // Prove constructs a merkle proof for key. The result contains all
@@ -93,7 +93,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 // value for key in a trie with the given root hash. VerifyProof
 // returns an error if the proof contains invalid trie nodes or the
 // wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
+func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
 	key = keybytesToHex(key)
 	wantHash := rootHash[:]
 	for i := 0; ; i++ {

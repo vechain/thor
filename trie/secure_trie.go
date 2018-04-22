@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/vechain/thor/thor"
 )
 
 var secureKeyPrefix = []byte("secure-key-")
@@ -55,7 +56,7 @@ type SecureTrie struct {
 // Loaded nodes are kept around until their 'cache generation' expires.
 // A new cache generation is created by each call to Commit.
 // cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, error) {
+func NewSecure(root thor.Bytes32, db Database, cachelimit uint16) (*SecureTrie, error) {
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
@@ -144,11 +145,11 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
-func (t *SecureTrie) Commit() (root common.Hash, err error) {
+func (t *SecureTrie) Commit() (root thor.Bytes32, err error) {
 	return t.CommitTo(t.trie.db)
 }
 
-func (t *SecureTrie) Hash() common.Hash {
+func (t *SecureTrie) Hash() thor.Bytes32 {
 	return t.trie.Hash()
 }
 
@@ -173,11 +174,11 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes from
 // the trie's database. Calling code must ensure that the changes made to db are
 // written back to the trie's attached database before using the trie.
-func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
+func (t *SecureTrie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
 	if len(t.getSecKeyCache()) > 0 {
 		for hk, key := range t.secKeyCache {
 			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
-				return common.Hash{}, err
+				return thor.Bytes32{}, err
 			}
 		}
 		t.secKeyCache = make(map[string][]byte)

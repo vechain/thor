@@ -1,7 +1,6 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
@@ -30,7 +29,7 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 
 	root := thor.BytesToBytes32(co.data.StorageRoot)
 
-	trie, err := trie.NewSecure(common.Hash(root), co.kv, 0)
+	trie, err := trie.NewSecure(root, co.kv, 0)
 	if err != nil {
 		return nil, err
 	}

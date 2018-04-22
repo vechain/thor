@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
@@ -16,7 +15,7 @@ import (
 func TestCachedObject(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	stgTrie, _ := trie.NewSecure(common.Hash{}, kv, 0)
+	stgTrie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
 	storages := []struct {
 		k thor.Bytes32
 		v []byte

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
@@ -35,7 +34,7 @@ type trieWriter interface {
 
 // New create an state object.
 func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
-	trie, err := trie.NewSecure(common.Hash(root), kv, 0)
+	trie, err := trie.NewSecure(root, kv, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +161,7 @@ func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, valu
 	}
 
 	co := s.getCachedObject(addr)
-	strie, err := trie.NewSecure(common.BytesToHash(co.data.StorageRoot), s.kv, 0)
+	strie, err := trie.NewSecure(thor.BytesToBytes32(co.data.StorageRoot), s.kv, 0)
 	if err != nil {
 		s.setError(err)
 		return

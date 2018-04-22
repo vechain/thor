@@ -21,17 +21,17 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/rcrowley/go-metrics"
+	"github.com/vechain/thor/thor"
 )
 
 var (
 	// This is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	emptyRoot thor.Bytes32
 	// This is the known hash of an empty state trie entry.
-	emptyState common.Hash
+	emptyState thor.Bytes32
 )
 
 var (
@@ -54,7 +54,8 @@ func CacheUnloads() int64 {
 }
 
 func init() {
-	sha3.NewKeccak256().Sum(emptyState[:0])
+	emptyRoot = thor.Blake2b(rlp.EmptyString)
+	emptyState = thor.Blake2b(nil)
 }
 
 // Database must be implemented by backing stores for the trie.
@@ -85,7 +86,7 @@ type DatabaseWriter interface {
 type Trie struct {
 	root         node
 	db           Database
-	originalRoot common.Hash
+	originalRoot thor.Bytes32
 
 	// Cache generation values.
 	// cachegen increases by one with each commit operation.
@@ -111,9 +112,9 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db Database) (*Trie, error) {
+func New(root thor.Bytes32, db Database) (*Trie, error) {
 	trie := &Trie{db: db, originalRoot: root}
-	if (root != common.Hash{}) && root != emptyRoot {
+	if (root != thor.Bytes32{}) && root != emptyRoot {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
@@ -449,7 +450,7 @@ func (t *Trie) resolveHash(n hashNode, prefix []byte) (node, error) {
 
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
-		return nil, &MissingNodeError{NodeHash: common.BytesToHash(n), Path: prefix}
+		return nil, &MissingNodeError{NodeHash: thor.BytesToBytes32(n), Path: prefix}
 	}
 	dec := mustDecodeNode(n, enc, t.cachegen)
 	return dec, nil
@@ -461,10 +462,10 @@ func (t *Trie) Root() []byte { return t.Hash().Bytes() }
 
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
-func (t *Trie) Hash() common.Hash {
+func (t *Trie) Hash() thor.Bytes32 {
 	hash, cached, _ := t.hashRoot(nil)
 	t.root = cached
-	return common.BytesToHash(hash.(hashNode))
+	return thor.BytesToBytes32(hash.(hashNode))
 }
 
 // Commit writes all nodes to the trie's database.
@@ -472,7 +473,7 @@ func (t *Trie) Hash() common.Hash {
 //
 // Committing flushes nodes from memory.
 // Subsequent Get calls will load nodes from the database.
-func (t *Trie) Commit() (root common.Hash, err error) {
+func (t *Trie) Commit() (root thor.Bytes32, err error) {
 	if t.db == nil {
 		panic("Commit called on trie with nil database")
 	}
@@ -486,14 +487,14 @@ func (t *Trie) Commit() (root common.Hash, err error) {
 // load nodes from the trie's database. Calling code must ensure that
 // the changes made to db are written back to the trie's attached
 // database before using the trie.
-func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
+func (t *Trie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
 	hash, cached, err := t.hashRoot(db)
 	if err != nil {
-		return (common.Hash{}), err
+		return (thor.Bytes32{}), err
 	}
 	t.root = cached
 	t.cachegen++
-	return common.BytesToHash(hash.(hashNode)), nil
+	return thor.BytesToBytes32(hash.(hashNode)), nil
 }
 
 func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
