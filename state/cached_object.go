@@ -2,13 +2,14 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 // cachedObject to cache code and storage of an account.
 type cachedObject struct {
-	db   *trie.Database // needed for creating storage trie
+	kv   kv.GetPutter
 	data Account
 
 	cache struct {
@@ -18,8 +19,8 @@ type cachedObject struct {
 	}
 }
 
-func newCachedObject(db *trie.Database, data *Account) *cachedObject {
-	return &cachedObject{db: db, data: *data}
+func newCachedObject(kv kv.GetPutter, data *Account) *cachedObject {
+	return &cachedObject{kv: kv, data: *data}
 }
 
 func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
@@ -29,7 +30,7 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 
 	root := thor.BytesToBytes32(co.data.StorageRoot)
 
-	trie, err := trie.NewSecure(common.Hash(root), co.db, 0)
+	trie, err := trie.NewSecure(common.Hash(root), co.kv, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (co *cachedObject) GetCode() ([]byte, error) {
 
 	if len(co.data.CodeHash) > 0 {
 		// do have code
-		code, err := co.db.DiskDB().Get(co.data.CodeHash)
+		code, err := co.kv.Get(co.data.CodeHash)
 		if err != nil {
 			return nil, err
 		}
