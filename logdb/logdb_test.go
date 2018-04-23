@@ -1,7 +1,6 @@
 package logdb_test
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 	"testing"
@@ -50,7 +49,7 @@ func TestLogDB(t *testing.T) {
 		},
 		Options: &logdb.Options{
 			Offset: 0,
-			Limit:  uint32(limit),
+			Limit:  uint64(limit),
 		},
 		Order:   "ASC",
 		Address: &addr,
@@ -69,7 +68,6 @@ func TestLogDB(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, len(los), limit, "limit should be equal")
-	fmt.Println(los)
 }
 
 func home() (string, error) {
