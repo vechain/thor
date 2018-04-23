@@ -132,7 +132,7 @@ func runNetwork(ctx context.Context, components *components, dataDir string) {
 	}
 
 	for _, protocol := range protocols {
-		log.Info("Thor network rotocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
+		log.Info("Thor network protocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
 	}
 
 	defer func() {
