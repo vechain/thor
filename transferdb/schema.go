@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS transfer (
 	blockNumber INTEGER,
 	blockTime INTEGER,
 	txID BLOB(32),
+	txOrigin BLOB(20),
 	fromAddress BLOB(20),
 	toAddress BLOB(20),
 	value BLOB
