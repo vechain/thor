@@ -8,6 +8,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -79,7 +80,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
-		findTx  = p.newTxFinder(parent.ID(), processedTxs)
+
 		builder = new(block.Builder).
 			Beneficiary(p.beneficiary).
 			GasLimit(gasLimit).
@@ -108,24 +109,24 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				return errGasLimitReached
 			}
 			// check if tx already there
-			var found bool
-			if err := findTx(tx.ID(), &found, nil); err != nil {
+			if found, _, err := consensus.FindTransaction(p.chain, parent.ID(), processedTxs, tx.ID()); err != nil {
 				return err
-			}
-			if found {
+			} else if found {
 				return errKnownTx
 			}
 
 			if dependsOn := tx.DependsOn(); dependsOn != nil {
-				var found, reverted bool
 				// check if deps exists
-				if err := findTx(*dependsOn, &found, &reverted); err != nil {
+				found, isReverted, err := consensus.FindTransaction(p.chain, parent.ID(), processedTxs, *dependsOn)
+				if err != nil {
 					return err
 				}
 				if !found {
 					return errTxNotAdoptableNow
 				}
-				if reverted {
+				if reverted, err := isReverted(); err != nil {
+					return err
+				} else if reverted {
 					return errTxNotAdoptableForever
 				}
 			}
@@ -204,41 +205,6 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	}
 
 	return newBlockTime, score, nil
-}
-
-func (p *Packer) newTxFinder(
-	parentBlockID thor.Bytes32,
-	processed map[thor.Bytes32]bool,
-) func(txID thor.Bytes32, found *bool, reverted *bool) error {
-	return func(txID thor.Bytes32, found *bool, reverted *bool) error {
-		if r, ok := processed[txID]; ok {
-			*found = true
-			if reverted != nil {
-				*reverted = r
-			}
-			return nil
-		}
-		loc, err := p.chain.LookupTransaction(parentBlockID, txID)
-		if err != nil {
-			if p.chain.IsNotFound(err) {
-				*found = false
-				return nil
-			}
-			return err
-		}
-		*found = true
-		if reverted != nil {
-			receipts, err := p.chain.GetBlockReceipts(loc.BlockID)
-			if err != nil {
-				return err
-			}
-			if loc.Index >= uint64(len(receipts)) {
-				return errors.New("receipt index out of range")
-			}
-			*reverted = receipts[loc.Index].Reverted
-		}
-		return nil
-	}
 }
 
 // SetTargetGasLimit set target gas limit, the Packer will adjust block gas limit close to

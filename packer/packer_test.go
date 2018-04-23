@@ -88,7 +88,7 @@ func TestP(t *testing.T) {
 			adopt(tx)
 		}
 
-		blk, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
+		blk, _, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
 		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
 
 		if _, err := c.AddBlock(blk, nil, true); err != nil {

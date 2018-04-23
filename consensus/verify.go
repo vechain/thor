@@ -13,7 +13,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
-	passedTxs := make(map[thor.Bytes32]struct{})
+	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
 	traverser := c.chain.NewTraverser(blk.Header().ParentID())
 	rt := runtime.New(state,
@@ -24,9 +24,16 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		func(num uint32) thor.Bytes32 { return traverser.Get(num).ID() })
 
 	for _, tx := range txs {
+		// check if tx existed
+		if found, _, err := FindTransaction(c.chain, header.ParentID(), processedTxs, tx.ID()); err != nil {
+			return nil, nil, err
+		} else if found {
+			return nil, nil, errors.New("bad tx: duplicated tx")
+		}
+
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			found, isReverted, err := c.hasTx(passedTxs, header.ParentID(), *dep)
+			found, isReverted, err := FindTransaction(c.chain, header.ParentID(), processedTxs, *dep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -34,15 +41,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 				return nil, nil, errors.New("bad tx: dep not found")
 			}
 
-			reverted, err := isReverted()
-			if err != nil {
+			if reverted, err := isReverted(); err != nil {
 				return nil, nil, err
-			}
-			if reverted {
+			} else if reverted {
 				return nil, nil, errors.New("bad tx: dep reverted")
 			}
-
-			passedTxs[*dep] = struct{}{} // cache
 		}
 
 		receipt, _, _, err := rt.ExecuteTransaction(tx)
@@ -52,9 +55,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
-		if !receipt.Reverted {
-			passedTxs[tx.ID()] = struct{}{}
-		}
+		processedTxs[tx.ID()] = receipt.Reverted
 	}
 
 	if header.GasUsed() != totalGasUsed {
