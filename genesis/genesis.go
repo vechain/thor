@@ -46,4 +46,4 @@ func mustDecodeHex(str string) []byte {
 	return data
 }
 
-var emptyRuntimeBytecode = mustDecodeHex("6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029")
+var emptyRuntimeBytecode = mustDecodeHex("6060604052600256")
