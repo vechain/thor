@@ -73,7 +73,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	var (
 		receipts     tx.Receipts
 		totalGasUsed uint64
-		processedTxs = make(map[thor.Bytes32]struct{})
+		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
 		traverser    = p.chain.NewTraverser(parent.ID())
 		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
@@ -107,17 +107,25 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				return errGasLimitReached
 			}
 			// check if tx already there
-			if found, err := findTx(tx.ID()); err != nil {
+			var found bool
+			if err := findTx(tx.ID(), &found, nil); err != nil {
 				return err
-			} else if found {
+			}
+			if found {
 				return errKnownTx
 			}
+
 			if dependsOn := tx.DependsOn(); dependsOn != nil {
+				var found, reverted bool
 				// check if deps exists
-				if found, err := findTx(*dependsOn); err != nil {
+				if err := findTx(*dependsOn, &found, &reverted); err != nil {
 					return err
-				} else if !found {
+				}
+				if !found {
 					return errTxNotAdoptableNow
+				}
+				if reverted {
+					return errTxNotAdoptableForever
 				}
 			}
 
@@ -128,7 +136,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				state.RevertTo(chkpt)
 				return badTxError{err.Error()}
 			}
-			processedTxs[tx.ID()] = struct{}{}
+			processedTxs[tx.ID()] = receipt.Reverted
 			totalGasUsed += receipt.GasUsed
 			receipts = append(receipts, receipt)
 			builder.Transaction(tx)
@@ -196,18 +204,38 @@ func (p *Packer) schedule(state *state.State, parent *block.Header, nowTimestamp
 	return newBlockTime, score, nil
 }
 
-func (p *Packer) newTxFinder(parentBlockID thor.Bytes32, processed map[thor.Bytes32]struct{}) func(txID thor.Bytes32) (bool, error) {
-	return func(txID thor.Bytes32) (bool, error) {
-		if _, ok := processed[txID]; ok {
-			return true, nil
-		}
-		if _, err := p.chain.LookupTransaction(parentBlockID, txID); err != nil {
-			if p.chain.IsNotFound(err) {
-				return false, nil
+func (p *Packer) newTxFinder(
+	parentBlockID thor.Bytes32,
+	processed map[thor.Bytes32]bool,
+) func(txID thor.Bytes32, found *bool, reverted *bool) error {
+	return func(txID thor.Bytes32, found *bool, reverted *bool) error {
+		if r, ok := processed[txID]; ok {
+			*found = true
+			if reverted != nil {
+				*reverted = r
 			}
-			return false, err
+			return nil
 		}
-		return true, nil
+		loc, err := p.chain.LookupTransaction(parentBlockID, txID)
+		if err != nil {
+			if p.chain.IsNotFound(err) {
+				*found = false
+				return nil
+			}
+			return err
+		}
+		*found = true
+		if reverted != nil {
+			receipts, err := p.chain.GetBlockReceipts(loc.BlockID)
+			if err != nil {
+				return err
+			}
+			if loc.Index >= uint64(len(receipts)) {
+				return errors.New("receipt index out of range")
+			}
+			*reverted = receipts[loc.Index].Reverted
+		}
+		return nil
 	}
 }
 

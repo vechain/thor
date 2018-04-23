@@ -3,9 +3,10 @@ package packer
 import "github.com/pkg/errors"
 
 var (
-	errGasLimitReached   = errors.New("gas limit reached")
-	errTxNotAdoptableNow = errors.New("tx not adoptable now")
-	errKnownTx           = errors.New("known tx")
+	errGasLimitReached       = errors.New("gas limit reached")
+	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
+	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
+	errKnownTx               = errors.New("known tx")
 )
 
 // IsGasLimitReached block if full of txs.
