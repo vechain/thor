@@ -9,39 +9,6 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func (c *Consensus) hasTx(
-	passedTxs map[thor.Bytes32]struct{},
-	parentID thor.Bytes32,
-	txID thor.Bytes32,
-) (bool, func() (bool, error), error) {
-	if _, ok := passedTxs[txID]; ok {
-		return true, func() (bool, error) {
-			return false, nil
-		}, nil
-	}
-
-	loc, err := c.chain.LookupTransaction(parentID, txID)
-	if err != nil {
-		if c.chain.IsNotFound(err) {
-			return false, nil, nil
-		}
-		return false, nil, err
-	}
-
-	return true, func() (bool, error) {
-		receipts, err := c.chain.GetBlockReceipts(loc.BlockID)
-		if err != nil {
-			return false, err
-		}
-
-		if loc.Index >= uint64(len(receipts)) {
-			return false, errors.New("receipt index out of range")
-		}
-
-		return receipts[loc.Index].Reverted, nil
-	}, nil
-}
-
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 
 	if header.Timestamp() <= parent.Timestamp() {
@@ -116,12 +83,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		return errors.New("incorrect block txs root")
 	}
 
-	if len(txs) == 0 {
-		return nil
-	}
-
-	passedTxs := make(map[thor.Bytes32]struct{})
-
 	for _, tx := range txs {
 		switch {
 		case tx.ChainTag() != c.chain.Tag():
@@ -133,15 +94,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		case tx.HasReservedFields():
 			return errors.New("bad tx: reserved fields not empty")
 		}
-
-		// check if tx already appeared in old blocks, or passed map
-		if found, _, err := c.hasTx(passedTxs, header.ParentID(), tx.ID()); err != nil {
-			return err
-		} else if found {
-			return errors.New("bad tx: duplicated tx")
-		}
-
-		passedTxs[tx.ID()] = struct{}{}
 	}
 
 	return nil
