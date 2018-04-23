@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -103,19 +102,16 @@ func (t *Transactions) sendRawTransaction(rawTx *RawTx) (*thor.Bytes32, error) {
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	res, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	req.Body.Close()
-	if len(res) == 0 {
-		return utils.HTTPError(errors.New("transaction required"), http.StatusBadRequest)
-	}
 	var raw *RawTx
 	if err = json.Unmarshal(res, &raw); err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	txID, err := t.sendRawTransaction(raw)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	return utils.WriteJSON(w, map[string]string{
 		"id": txID.String(),
@@ -126,11 +122,11 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
+		return utils.BadRequest(err, "id")
 	}
 	tx, err := t.getTransactionByID(txID)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	return utils.WriteJSON(w, tx)
 }
@@ -139,11 +135,11 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "id"), http.StatusBadRequest)
+		return utils.BadRequest(err, "id")
 	}
 	receipt, err := t.getTransactionReceiptByID(txID)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	return utils.WriteJSON(w, receipt)
 }

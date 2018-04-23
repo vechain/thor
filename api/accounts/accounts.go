@@ -48,11 +48,11 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	hexAddr := mux.Vars(req)["address"]
 	addr, err := thor.ParseAddress(hexAddr)
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+		return utils.BadRequest(err, "address")
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
+		return utils.BadRequest(err, "revision")
 	}
 	code, err := a.getCode(addr, b.Header().StateRoot())
 	if err != nil {
@@ -130,39 +130,14 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 
 }
 
-func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	req.Body.Close()
-	callBody := &ContractCall{}
-	if err := json.Unmarshal(res, &callBody); err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
-	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
-	}
-	output, err := a.Call(&addr, callBody, b.Header())
-	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
-	}
-	return utils.WriteJSON(w, output)
-}
-
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+		return utils.BadRequest(err, "address")
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
+		return utils.BadRequest(err, "revision")
 	}
 	acc, err := a.getAccount(addr, b.Header())
 	if err != nil {
@@ -174,21 +149,46 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+		return utils.BadRequest(err, "address")
 	}
 	key, err := thor.ParseBytes32(mux.Vars(req)["key"])
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "key"), http.StatusBadRequest)
+		return utils.BadRequest(err, "key")
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.HTTPError(errors.Wrap(err, "revision"), http.StatusBadRequest)
+		return utils.BadRequest(err, "revision")
 	}
 	storage, err := a.getStorage(addr, key, b.Header().StateRoot())
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, map[string]string{"value": storage.String()})
+}
+
+func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
+	res, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		return err
+	}
+	req.Body.Close()
+	callBody := &ContractCall{}
+	if err := json.Unmarshal(res, &callBody); err != nil {
+		return err
+	}
+	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
+	if err != nil {
+		return utils.BadRequest(err, "address")
+	}
+	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	if err != nil {
+		return utils.BadRequest(err, "revision")
+	}
+	output, err := a.Call(&addr, callBody, b.Header())
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, output)
 }
 
 func (a *Accounts) getBlock(revision string) (*block.Block, error) {

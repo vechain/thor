@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -39,20 +38,20 @@ func (l *Logs) filter(logFilter *LogFilter) ([]FilteredLog, error) {
 func (l *Logs) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
 	res, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	req.Body.Close()
 	logFilter := new(LogFilter)
 	if len(res) != 0 {
 		if err := json.Unmarshal(res, &logFilter); err != nil {
-			return utils.HTTPError(err, http.StatusBadRequest)
+			return err
 		}
 	}
 	query := req.URL.Query()
 	if query.Get("address") != "" {
 		addr, err := thor.ParseAddress(query.Get("address"))
 		if err != nil {
-			return utils.HTTPError(errors.Wrap(err, "address"), http.StatusBadRequest)
+			return utils.BadRequest(err, "address")
 		}
 		logFilter.Address = &addr
 	}
@@ -64,7 +63,7 @@ func (l *Logs) handleFilterLogs(w http.ResponseWriter, req *http.Request) error 
 	}
 	logs, err := l.filter(logFilter)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	return utils.WriteJSON(w, logs)
 }
