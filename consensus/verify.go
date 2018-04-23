@@ -26,7 +26,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	)
 
 	for _, tx := range txs {
-		receipt, _, err := rt.ExecuteTransaction(tx)
+		receipt, _, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			return nil, nil, err
 		}

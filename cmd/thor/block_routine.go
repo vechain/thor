@@ -206,7 +206,7 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 
 	startTime := mclock.Now()
 	adoptTx()
-	blk, receipts, err := commit(components.packer.privateKey)
+	blk, receipts, _, err := commit(components.packer.privateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return

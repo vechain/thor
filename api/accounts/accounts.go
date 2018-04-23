@@ -122,7 +122,7 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	gp := big.Int(*body.GasPrice)
 	rt := runtime.New(state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
-	vmout := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{})
+	vmout, _ := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{})
 	if err := state.Error(); err != nil {
 		return nil, err
 	}

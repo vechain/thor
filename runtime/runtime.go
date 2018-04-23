@@ -76,11 +76,12 @@ func (rt *Runtime) execute(
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
 	isStatic bool,
-) *vm.Output {
+) (*vm.Output, Tx.TransferLogs) {
 	to := clause.To()
 	if isStatic && to == nil {
 		panic("static call requires 'To'")
 	}
+	var transferLogs Tx.TransferLogs
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
 		BlockNumber: rt.blockNumber,
@@ -94,6 +95,11 @@ func (rt *Runtime) execute(
 		GetHash:     rt.getBlockID,
 		ClauseIndex: index,
 		OnTransfer: func(sender, recipient thor.Address, amount *big.Int) {
+			transferLogs = append(transferLogs, &Tx.TransferLog{
+				Sender:    sender,
+				Recipient: recipient,
+				Amount:    amount})
+
 			if amount.Sign() == 0 {
 				return
 			}
@@ -142,13 +148,18 @@ func (rt *Runtime) execute(
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
+	var vmout *vm.Output
 	if to == nil {
-		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
+		vmout = env.Create(txOrigin, clause.Data(), gas, clause.Value())
+	} else if isStatic {
+		vmout = env.StaticCall(txOrigin, *to, clause.Data(), gas)
+	} else {
+		vmout = env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 	}
-	if isStatic {
-		return env.StaticCall(txOrigin, *to, clause.Data(), gas)
+	if vmout.VMErr != nil {
+		return vmout, nil
 	}
-	return env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
+	return vmout, transferLogs
 }
 
 // Call executes single clause.
@@ -159,21 +170,21 @@ func (rt *Runtime) Call(
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
-) *vm.Output {
+) (*vm.Output, Tx.TransferLogs) {
 	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
 }
 
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, transferLogs []Tx.TransferLogs, vmOutputs []*vm.Output, err error) {
 	resolvedTx, err := ResolveTransaction(rt.state, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	payer, _, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// checkpoint to be reverted when clause failure.
@@ -183,9 +194,10 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
+	transferLogs = make([]Tx.TransferLogs, 0, len(resolvedTx.Clauses))
 
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
+		vmOutput, tlogs := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -206,6 +218,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			rt.state.RevertTo(clauseCheckpoint)
 			receipt.Reverted = true
 			receipt.Outputs = nil
+			transferLogs = nil
 			break
 		}
 
@@ -215,6 +228,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			logs = append(logs, (*Tx.Log)(vmLog))
 		}
 		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Logs: logs})
+		transferLogs = append(transferLogs, tlogs)
 	}
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
@@ -234,5 +248,5 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.Reward = reward
 
-	return receipt, vmOutputs, nil
+	return receipt, transferLogs, vmOutputs, nil
 }
