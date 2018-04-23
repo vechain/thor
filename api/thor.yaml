@@ -435,6 +435,7 @@ components:
       example:
         gasUsed: 21000
         gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        payed: '0x723daf2'
         reward: '0x723daf2'
         reverted: false
         block:

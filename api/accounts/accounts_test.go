@@ -27,8 +27,7 @@ import (
 )
 
 const (
-	emptyRootHash = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
+	testAddress = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
 )
 
 type account struct {
@@ -158,9 +157,8 @@ func initAccountServer(t *testing.T) *httptest.Server {
 	}
 
 	db, _ := lvldb.NewMem()
-	hash, _ := thor.ParseBytes32(emptyRootHash)
 	stateC := state.NewCreator(db)
-	st, _ := stateC.NewState(hash)
+	st, _ := stateC.NewState(thor.Bytes32{})
 	for _, v := range accs {
 		address := v.in.addr
 		st.SetBalance(address, v.in.balance)

@@ -27,11 +27,11 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	revision := mux.Vars(req)["revision"]
 	block, err := b.getBlock(revision)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return utils.BadRequest(err, "revision")
 	}
 	blk, err := ConvertBlock(block)
 	if err != nil {
-		return utils.HTTPError(err, http.StatusBadRequest)
+		return err
 	}
 	return utils.WriteJSON(w, blk)
 }
