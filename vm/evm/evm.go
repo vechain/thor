@@ -484,7 +484,7 @@ func (evm *EVM) Contractify(addr common.Address) bool {
 
 	// here the code is just a placeholder.
 	// interpreter will cutoff execution.
-	evm.StateDB.SetCode(addr, []byte{0})
+	evm.StateDB.SetCode(addr, []byte{REVERT})
 	if evm.contractified == nil {
 		evm.contractified = make(map[common.Address]bool)
 	}
