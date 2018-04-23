@@ -12,3 +12,6 @@ type TransferLog struct {
 	Recipient thor.Address
 	Amount    *big.Int
 }
+
+// TransferLogs array of transfer logs.
+type TransferLogs []*TransferLog

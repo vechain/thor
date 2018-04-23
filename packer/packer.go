@@ -44,7 +44,7 @@ func New(
 type Adopt func(tx *tx.Transaction) error
 
 // Commit generate new block.
-type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error)
+type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.TransferLogs, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
 func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
@@ -72,6 +72,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 
 	var (
 		receipts     tx.Receipts
+		transferLogs [][]tx.TransferLogs
 		totalGasUsed uint64
 		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
 		traverser    = p.chain.NewTraverser(parent.ID())
@@ -130,7 +131,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			}
 
 			chkpt := state.NewCheckpoint()
-			receipt, _, err := rt.ExecuteTransaction(tx)
+			receipt, tlogs, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
 				state.RevertTo(chkpt)
@@ -139,21 +140,22 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			processedTxs[tx.ID()] = receipt.Reverted
 			totalGasUsed += receipt.GasUsed
 			receipts = append(receipts, receipt)
+			transferLogs = append(transferLogs, tlogs)
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.TransferLogs, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-				return nil, nil, errors.New("private key mismatch")
+				return nil, nil, nil, errors.New("private key mismatch")
 			}
 
 			if err := traverser.Error(); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			stateRoot, err := state.Stage().Commit()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			newBlock := builder.
@@ -163,9 +165,9 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 
 			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, nil
+			return newBlock.WithSignature(sig), receipts, transferLogs, nil
 		}, nil
 }
 
