@@ -181,6 +181,6 @@ func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
 		opt.GoodNodes = nodes
 	}
 
-	log.Info("Thor network initialed", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers, "node-key-address", crypto.PubkeyToAddress(nodeKey.PublicKey))
+	log.Info("Thor network initialized", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers, "node-key-address", crypto.PubkeyToAddress(nodeKey.PublicKey))
 	return p2psrv.New(opt), nil
 }
