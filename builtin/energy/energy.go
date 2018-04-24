@@ -9,9 +9,37 @@ import (
 )
 
 var (
-	tokenSupplyKey = thor.Blake2b([]byte("token-supply"))
-	totalAddSubKey = thor.Blake2b([]byte("total-add-sub"))
+	initialSupplyKey = thor.Blake2b([]byte("initial-supply"))
+	totalAddSubKey   = thor.Blake2b([]byte("total-add-sub"))
 )
+
+type initialSupply struct {
+	Token  *big.Int
+	Energy *big.Int
+}
+
+var _ state.StorageDecoder = (*initialSupply)(nil)
+var _ state.StorageEncoder = (*initialSupply)(nil)
+
+// Encode implements state.StorageEncoder.
+func (i *initialSupply) Encode() ([]byte, error) {
+	if i.Token.Sign() == 0 && i.Energy.Sign() == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(i)
+}
+
+// Decode implements state.StorageDecoder.
+func (i *initialSupply) Decode(data []byte) error {
+	if len(data) == 0 {
+		*i = initialSupply{
+			&big.Int{},
+			&big.Int{},
+		}
+		return nil
+	}
+	return rlp.DecodeBytes(data, i)
+}
 
 type totalAddSub struct {
 	TotalAdd *big.Int
@@ -60,20 +88,23 @@ func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
 	e.state.SetStructedStorage(e.addr, key, val)
 }
 
-// InitializeTokenSupply initializes token supply, to help calculating total energy supply.
-func (e *Energy) InitializeTokenSupply(supply *big.Int) {
-	e.setStorage(tokenSupplyKey, supply)
+// SetInitialSupply set initial token and energy supply, to help calculating total energy supply.
+func (e *Energy) SetInitialSupply(token *big.Int, energy *big.Int) {
+	e.setStorage(initialSupplyKey, &initialSupply{
+		Token:  token,
+		Energy: energy,
+	})
 }
 
 // GetTotalSupply returns total supply of energy.
 func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
 	// that's totalGrown + totalAdd - totalSub
-	var tokenSupply big.Int
-	e.getStorage(tokenSupplyKey, &tokenSupply)
+	var init initialSupply
+	e.getStorage(initialSupplyKey, &init)
 
 	// calc grown energy for total token supply
-	energyState := state.EnergyState{Energy: &big.Int{}}
-	return energyState.CalcEnergy(&tokenSupply, blockNum)
+	energyState := state.EnergyState{Energy: init.Energy}
+	return energyState.CalcEnergy(init.Token, blockNum)
 }
 
 // GetTotalBurned returns energy totally burned.
