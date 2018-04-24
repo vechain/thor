@@ -9,10 +9,11 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, [][]tx.TransferLogs, error) {
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
+	transferLogs := [][]tx.TransferLogs{}
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
 	traverser := c.chain.NewTraverser(blk.Header().ParentID())
@@ -26,58 +27,59 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	for _, tx := range txs {
 		// check if tx existed
 		if found, _, err := FindTransaction(c.chain, header.ParentID(), processedTxs, tx.ID()); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		} else if found {
-			return nil, nil, errors.New("bad tx: duplicated tx")
+			return nil, nil, nil, errors.New("bad tx: duplicated tx")
 		}
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
 			found, isReverted, err := FindTransaction(c.chain, header.ParentID(), processedTxs, *dep)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			if !found {
-				return nil, nil, errors.New("bad tx: dep not found")
+				return nil, nil, nil, errors.New("bad tx: dep not found")
 			}
 
 			if reverted, err := isReverted(); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			} else if reverted {
-				return nil, nil, errors.New("bad tx: dep reverted")
+				return nil, nil, nil, errors.New("bad tx: dep reverted")
 			}
 		}
 
-		receipt, _, _, err := rt.ExecuteTransaction(tx)
+		receipt, transferLog, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
+		transferLogs = append(transferLogs, transferLog)
 		processedTxs[tx.ID()] = receipt.Reverted
 	}
 
 	if header.GasUsed() != totalGasUsed {
-		return nil, nil, errors.New("incorrect block gas used")
+		return nil, nil, nil, errors.New("incorrect block gas used")
 	}
 	if header.ReceiptsRoot() != receipts.RootHash() {
-		return nil, nil, errors.New("incorrect block receipts root")
+		return nil, nil, nil, errors.New("incorrect block receipts root")
 	}
 
 	if err := traverser.Error(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	stage := state.Stage()
 	root, err := stage.Hash()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if blk.Header().StateRoot() != root {
-		return nil, nil, errors.New("incorrect block state root")
+		return nil, nil, transferLogs, errors.New("incorrect block state root")
 	}
 
-	return stage, receipts, nil
+	return stage, receipts, nil, nil
 }
