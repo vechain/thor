@@ -14,6 +14,8 @@ tags:
     description: Access to account objects
   - name: Log
     description: Access to event logs
+  - name: TransferLog
+    description: Access to transfer logs 
   - name: Block
     description: Access to blocks
   - name: Transaction
@@ -119,6 +121,29 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredLog'
+  '/transfers':
+    post:
+      tags:
+        - TransferLog
+      summary: filter transfer logs 
+      parameters:
+        - $ref: '#/components/parameters/LogFilterOrderInQuery'
+      requestBody:
+        description: transfer log filter criteria
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileteredTransfer'
   '/blocks/{revision}':
     parameters:
       - $ref: '#/components/parameters/RevisionInPath'
@@ -563,6 +588,58 @@ components:
         tx:
           id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+    AddressSet:
+      properties:
+        txOrigin: 
+          type: string
+        from:
+          type: string
+        to: 
+          type: string
+      example:
+        txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        from: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+    TransferFilter:
+      properties:
+        range:
+          $ref: '#/components/schemas/Range'
+        options:
+          $ref: '#/components/schemas/Options'
+        AddressSets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressSet'
+    FileteredTransfer:
+      properties:
+        blockID:
+          type: string
+        transferIndex:
+          type: integer
+        blockNumber:
+          type: integer
+        blockTime:
+          type: integer
+        txID:
+          type: string
+        txOrigin:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        value:
+          type: string
+      example:
+        blockID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+        transferIndex: 0
+        blockNumber: 0
+        blockTime: 15678990282
+        txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+        txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        from: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        value: '0x9fad'
     NodeNetwork:
       properties:
         peerCount:
@@ -611,6 +688,17 @@ components:
       name: order
       in: query
       description: order of filtered logs
+      required: false
+      schema:
+        type: string
+        enum:
+          - ASC
+          - DESC
+      example: 'ASC'
+    TransferFilterOrderInQuery:
+      name: order
+      in: query
+      description: order of filtered transfer logs
       required: false
       schema:
         type: string

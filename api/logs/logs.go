@@ -42,10 +42,8 @@ func (l *Logs) handleFilterLogs(w http.ResponseWriter, req *http.Request) error 
 	}
 	req.Body.Close()
 	logFilter := new(LogFilter)
-	if len(res) != 0 {
-		if err := json.Unmarshal(res, &logFilter); err != nil {
-			return err
-		}
+	if err := json.Unmarshal(res, &logFilter); err != nil {
+		return err
 	}
 	query := req.URL.Query()
 	if query.Get("address") != "" {

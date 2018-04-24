@@ -91,7 +91,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, receipts, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
