@@ -75,7 +75,7 @@ func action(ctx *cli.Context) error {
 		return err
 	}
 
-	dataDir, err := dataDir(genesis, ctx.String("datadir"))
+	dataDir, err := dataDir(genesis, ctx.String("dir"))
 	if err != nil {
 		return err
 	}

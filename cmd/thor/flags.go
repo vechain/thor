@@ -6,20 +6,20 @@ import (
 )
 
 var appFlags = []cli.Flag{
-	cli.StringFlag{
-		Name:  "p2paddr",
-		Value: ":11235",
-		Usage: "p2p listen addr",
+	cli.IntFlag{
+		Name:  "p2pport",
+		Value: 11235,
+		Usage: "P2P network listening port",
 	},
 	cli.StringFlag{
 		Name:  "apiaddr",
-		Value: "127.0.0.1:8669",
-		Usage: "api server addr",
+		Value: "localhost:8669",
+		Usage: "API service listening address",
 	},
 	cli.StringFlag{
-		Name:  "datadir",
-		Value: "/tmp/thor-data",
-		Usage: "chain data path",
+		Name:  "dir",
+		Value: defaultMainDir(),
+		Usage: "Main directory for configs and databases",
 	},
 	cli.IntFlag{
 		Name:  "verbosity",
@@ -27,7 +27,7 @@ var appFlags = []cli.Flag{
 		Usage: "log verbosity (0-9)",
 	},
 	cli.BoolFlag{
-		Name:  "devnet",
+		Name:  "devnet,dev",
 		Usage: "develop network",
 	},
 	cli.StringFlag{
@@ -36,7 +36,7 @@ var appFlags = []cli.Flag{
 	},
 	cli.IntFlag{
 		Name:  "maxpeers",
-		Usage: "maximum number of network peers (network disabled if set to 0)",
+		Usage: "maximum number of P2P network peers (P2P network disabled if set to 0)",
 		Value: 10,
 	},
 }

@@ -7,6 +7,9 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/user"
+	"path/filepath"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
@@ -169,7 +172,7 @@ func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
 	opt := &p2psrv.Options{
 		PrivateKey:     nodeKey,
 		MaxPeers:       ctx.Int("maxpeers"),
-		ListenAddr:     ctx.String("p2paddr"),
+		ListenAddr:     fmt.Sprintf(":%v", ctx.Int("p2pport")),
 		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
 	}
 	var nodes p2psrv.Nodes
@@ -185,4 +188,30 @@ func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
 
 	log.Info("Thor network initialized", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers, "node-key-address", crypto.PubkeyToAddress(nodeKey.PublicKey))
 	return p2psrv.New(opt), nil
+}
+
+// copy from go-ethereum
+func defaultMainDir() string {
+	// Try to place the data folder in the user's home dir
+	if home := homeDir(); home != "" {
+		if runtime.GOOS == "darwin" {
+			return filepath.Join(home, "Library", "VeChain", "thor")
+		} else if runtime.GOOS == "windows" {
+			return filepath.Join(home, "AppData", "Roaming", "VeChain", "thor")
+		} else {
+			return filepath.Join(home, ".vechain", "thor")
+		}
+	}
+	// As we cannot guess a stable location, return empty and handle later
+	return ""
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }
