@@ -109,7 +109,7 @@ func action(ctx *cli.Context) error {
 	goes.Go(func() { runNetwork(c, components, dataDir) })
 	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, logdb) })
+	goes.Go(func() { produceBlock(c, components, logdb, transferdb) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)

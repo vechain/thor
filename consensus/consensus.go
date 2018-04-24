@@ -26,56 +26,57 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 }
 
 // Consent is Consensus's main func.
-func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (isTrunk bool, receipts tx.Receipts, err error) {
+func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Receipts, [][]tx.TransferLogs, error) {
 	header := blk.Header()
 
 	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
 		if !c.chain.IsNotFound(err) {
-			return false, nil, err
+			return false, nil, nil, err
 		}
 	} else {
-		return false, nil, errKnownBlock
+		return false, nil, nil, errKnownBlock
 	}
 
 	parent, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
 		if !c.chain.IsNotFound(err) {
-			return false, nil, err
+			return false, nil, nil, err
 		}
-		return false, nil, errParentNotFound
+		return false, nil, nil, errParentNotFound
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	state, err := c.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	if err := c.validateProposer(header, parent, state); err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
 	if err := c.validateBlockBody(blk); err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
-	stage, receipts, err := c.verifyBlock(blk, state)
+	stage, receipts, transferLogs, err := c.verifyBlock(blk, state)
 	if err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
-	if isTrunk, err = c.IsTrunk(header); err != nil {
-		return false, nil, err
+	isTrunk, err := c.IsTrunk(header)
+	if err != nil {
+		return false, nil, nil, err
 	}
 
 	if _, err = stage.Commit(); err != nil {
-		return false, nil, err
+		return false, nil, nil, err
 	}
 
-	return isTrunk, receipts, nil
+	return isTrunk, receipts, transferLogs, nil
 }
 
 // IsTrunk to determine if the block can be head of trunk.

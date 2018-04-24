@@ -15,16 +15,17 @@ import (
 	Logdb "github.com/vechain/thor/logdb"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
+	Transferdb "github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 )
 
-func produceBlock(ctx context.Context, components *components, logdb *Logdb.LogDB) {
+func produceBlock(ctx context.Context, components *components, logdb *Logdb.LogDB, transferdb *Transferdb.TransferDB) {
 	var goes co.Goes
 
 	packedChan := make(chan *packedEvent)
 	bestBlockUpdated := make(chan *block.Block, 1)
 
-	goes.Go(func() { consentLoop(ctx, components, logdb, bestBlockUpdated, packedChan) })
+	goes.Go(func() { consentLoop(ctx, components, logdb, transferdb, bestBlockUpdated, packedChan) })
 	goes.Go(func() { packLoop(ctx, components, bestBlockUpdated, packedChan) })
 
 	log.Info("Block consensus started")
@@ -40,32 +41,35 @@ type orphan struct {
 }
 
 type newBlockEvent struct {
-	Blk      *block.Block
-	Receipts tx.Receipts
-	Trunk    bool
-	IsSynced bool
+	Blk          *block.Block
+	Receipts     tx.Receipts
+	TransferLogs [][]tx.TransferLogs
+	Trunk        bool
+	IsSynced     bool
 }
 
 type packedEvent struct {
-	blk      *block.Block
-	receipts tx.Receipts
-	ack      chan struct{}
+	blk          *block.Block
+	receipts     tx.Receipts
+	transferLogs [][]tx.TransferLogs
+	ack          chan struct{}
 }
 
 func consentLoop(
 	ctx context.Context,
 	components *components,
 	logdb *Logdb.LogDB,
+	transferdb *Transferdb.TransferDB,
 	bestBlockUpdated chan *block.Block,
 	packedChan chan *packedEvent,
 ) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
 	updateChainFn := func(newBlk *newBlockEvent) error {
-		return updateChain(ctx, components, logdb, newBlk, bestBlockUpdated)
+		return updateChain(ctx, components, logdb, transferdb, newBlk, bestBlockUpdated)
 	}
 	consentFn := func(blk *block.Block, isSynced bool) error {
-		trunk, receipts, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
+		trunk, receipts, transferLogs, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
 			if Consensus.IsFutureBlock(err) {
@@ -80,10 +84,11 @@ func consentLoop(
 		}
 
 		return updateChainFn(&newBlockEvent{
-			Blk:      blk,
-			Trunk:    trunk,
-			Receipts: receipts,
-			IsSynced: isSynced,
+			Blk:          blk,
+			Trunk:        trunk,
+			Receipts:     receipts,
+			TransferLogs: transferLogs,
+			IsSynced:     isSynced,
 		})
 	}
 
@@ -118,10 +123,11 @@ func consentLoop(
 		case packed := <-packedChan:
 			if trunk, err := components.consensus.IsTrunk(packed.blk.Header()); err == nil {
 				updateChainFn(&newBlockEvent{
-					Blk:      packed.blk,
-					Trunk:    trunk,
-					Receipts: packed.receipts,
-					IsSynced: false,
+					Blk:          packed.blk,
+					Receipts:     packed.receipts,
+					TransferLogs: packed.transferLogs,
+					Trunk:        trunk,
+					IsSynced:     false,
 				})
 				packed.ack <- struct{}{}
 			}
@@ -206,7 +212,7 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 
 	startTime := mclock.Now()
 	adoptTx()
-	blk, receipts, _, err := commit(components.packer.privateKey)
+	blk, receipts, transferLogs, err := commit(components.packer.privateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
@@ -223,9 +229,10 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 	}
 
 	pe := &packedEvent{
-		blk:      blk,
-		receipts: receipts,
-		ack:      make(chan struct{}),
+		blk:          blk,
+		receipts:     receipts,
+		transferLogs: transferLogs,
+		ack:          make(chan struct{}),
 	}
 	packedChan <- pe
 	<-pe.ack
@@ -235,6 +242,7 @@ func updateChain(
 	ctx context.Context,
 	components *components,
 	logdb *Logdb.LogDB,
+	transferdb *Transferdb.TransferDB,
 	newBlk *newBlockEvent,
 	bestBlockUpdated chan *block.Block,
 ) error {
@@ -261,9 +269,11 @@ func updateChain(
 		components.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
-		logs := []*Logdb.Log{}
 		var index uint32
 		txs := newBlk.Blk.Transactions()
+		logs := []*Logdb.Log{}
+		transferdbLogs := []*Transferdb.Transfer{}
+
 		for i, receipt := range newBlk.Receipts {
 			for _, output := range receipt.Outputs {
 				tx := txs[i]
@@ -275,10 +285,14 @@ func updateChain(
 				header := newBlk.Blk.Header()
 				for _, log := range output.Logs {
 					logs = append(logs, Logdb.NewLog(header, index, tx.ID(), signer, log))
+					for _, transferdbLog := range newBlk.TransferLogs[i][index] {
+						transferdbLogs = append(transferdbLogs, Transferdb.NewTransfer(header, index, tx.ID(), signer, transferdbLog))
+					}
 				}
 				index++
 			}
 		}
+
 		forkIDs := make([]thor.Bytes32, len(fork.Branch), len(fork.Branch))
 		for i, blk := range fork.Branch {
 			forkIDs[i] = blk.Header().ID()
@@ -286,7 +300,9 @@ func updateChain(
 				components.txpool.Add(tx)
 			}
 		}
+
 		logdb.Insert(logs, forkIDs)
+		transferdb.Insert(transferdbLogs, forkIDs)
 	}
 
 	return nil
