@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	Packer "github.com/vechain/thor/packer"
+	Transferdb "github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -91,7 +92,13 @@ func action(ctx *cli.Context) error {
 	}
 	defer logdb.Close()
 
-	components, err := makeComponent(ctx, lvldb, logdb, genesis, dataDir)
+	transferdb, err := Transferdb.New(dataDir + "/transfer.db")
+	if err != nil {
+		return err
+	}
+	defer transferdb.Close()
+
+	components, err := makeComponent(ctx, lvldb, logdb, transferdb, genesis, dataDir)
 	if err != nil {
 		return err
 	}
