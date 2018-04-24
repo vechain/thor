@@ -24,6 +24,7 @@ import (
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	Transferdb "github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -103,6 +104,7 @@ func makeComponent(
 	ctx *cli.Context,
 	lvldb *Lvldb.LevelDB,
 	logdb *Logdb.LogDB,
+	transferDB *Transferdb.TransferDB,
 	genesis *Genesis.Genesis,
 	dataDir string,
 ) (*components, error) {
@@ -154,7 +156,7 @@ func makeComponent(
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, communicator)},
+		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, transferDB, communicator)},
 	}, nil
 }
 
