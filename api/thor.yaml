@@ -15,7 +15,7 @@ tags:
   - name: Log
     description: Access to event logs
   - name: TransferLog
-    description: Access to transfer logs 
+    description: Access to transfer logs
   - name: Block
     description: Access to blocks
   - name: Transaction
@@ -121,7 +121,24 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredLog'
-  '/transfers':
+  '/transactions/{id}/transfers':
+    parameters:
+      - $ref: '#/components/parameters/TxIDInPath'
+      - $ref: '#/components/parameters/LogFilterOrderInQuery'
+    get:
+      tags:
+        - TransferLog
+      summary: retrieve transfer logs by transaction ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileteredTransfer'
+  '/transactions/transfers':
     post:
       tags:
         - TransferLog

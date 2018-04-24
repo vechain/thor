@@ -16,12 +16,15 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transactions"
+	"github.com/vechain/thor/api/transfers"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -32,6 +35,7 @@ func TestTransaction(t *testing.T) {
 	getTx(t, ts, transaction)
 	getTxReceipt(t, ts, transaction)
 	senTx(t, ts, transaction)
+	getTransfers(t, ts)
 }
 
 func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
@@ -73,6 +77,16 @@ func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
 	assert.Equal(t, transaction.ID().String(), txObj["id"], "shoudl be the same transaction")
 }
 
+func getTransfers(t *testing.T, ts *httptest.Server) {
+	limit := 100
+	res := httpGet(t, ts.URL+"/transactions/"+thor.Bytes32{}.String()+"/transfers")
+	var tLogs []*transfers.FilteredTransfer
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, limit, len(tLogs), "should be `limit` transfers")
+}
+
 func httpPost(t *testing.T, url string, data []byte) []byte {
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
@@ -87,6 +101,31 @@ func httpPost(t *testing.T, url string, data []byte) []byte {
 }
 
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
+	transdb, err := transferdb.NewMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	from := thor.BytesToAddress([]byte("from"))
+	to := thor.BytesToAddress([]byte("to"))
+	value := big.NewInt(10)
+	header := new(block.Builder).Build().Header()
+	var trs []*transferdb.Transfer
+	count := 100
+	for i := 0; i < count; i++ {
+		transLog := &tx.TransferLog{
+			Sender:    from,
+			Recipient: to,
+			Amount:    value,
+		}
+		header = new(block.Builder).ParentID(header.ID()).Build().Header()
+		trans := transferdb.NewTransfer(header, uint32(i), thor.Bytes32{}, from, transLog)
+		trs = append(trs, trans)
+	}
+	err = transdb.Insert(trs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gene, err := genesis.NewDevnet()
@@ -131,7 +170,8 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
 	defer pool.Stop()
-	transactions.New(chain, pool).Mount(router, "/transactions")
+
+	transactions.New(chain, pool, transdb).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
 	return tx, ts
 }

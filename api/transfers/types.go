@@ -18,7 +18,7 @@ type FilteredTransfer struct {
 	Value         *math.HexOrDecimal256 `json:"value"`
 }
 
-func convertTransfer(transfer *transferdb.Transfer) *FilteredTransfer {
+func ConvertTransfer(transfer *transferdb.Transfer) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Value)
 	return &FilteredTransfer{
 		BlockID:       transfer.BlockID,
