@@ -30,7 +30,7 @@ func (t *Transfers) filter(transferFilter *transferdb.TransferFilter) ([]*Filter
 	}
 	tLogs := make([]*FilteredTransfer, len(transfers))
 	for i, trans := range transfers {
-		tLogs[i] = convertTransfer(trans)
+		tLogs[i] = ConvertTransfer(trans)
 	}
 	return tLogs, nil
 }

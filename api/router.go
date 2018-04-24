@@ -22,9 +22,9 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	router := mux.NewRouter()
 	accounts.New(chain, stateCreator).Mount(router, "/accounts")
 	logs.New(logDB).Mount(router, "/logs")
-	transfers.New(transferDB).Mount(router, "/transfers")
+	transfers.New(transferDB).Mount(router, "/transactions")
 	blocks.New(chain).Mount(router, "/blocks")
-	transactions.New(chain, txPool).Mount(router, "/transactions")
+	transactions.New(chain, txPool, transferDB).Mount(router, "/transactions")
 	node.New(nw).Mount(router, "/node")
 	return func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
