@@ -40,6 +40,7 @@ type AddressSet struct {
 }
 
 type TransferFilter struct {
+	TxID        *thor.Bytes32 `json:"txID"`
 	AddressSets []*AddressSet `json:"addressSets"`
 	Range       *Range        `json:"range"`
 	Options     *Options      `json:"options"`
@@ -125,6 +126,10 @@ func (db *TransferDB) Filter(transferFilter *TransferFilter) ([]*Transfer, error
 			args = append(args, transferFilter.Range.To)
 			stmt += " AND " + condition + " <= ? "
 		}
+	}
+	if transferFilter.TxID != nil {
+		args = append(args, transferFilter.TxID.Bytes())
+		stmt += " AND txID = ? "
 	}
 	length := len(transferFilter.AddressSets)
 	if length > 0 {
