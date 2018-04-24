@@ -8,24 +8,26 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func TestSchedule(t *testing.T) {
+var (
+	p1 = thor.BytesToAddress([]byte("p1"))
+	p2 = thor.BytesToAddress([]byte("p2"))
+	p3 = thor.BytesToAddress([]byte("p3"))
+	p4 = thor.BytesToAddress([]byte("p4"))
+	p5 = thor.BytesToAddress([]byte("p5"))
 
-	p1, p2, p3, p4, p5 :=
-		thor.BytesToAddress([]byte("p1")),
-		thor.BytesToAddress([]byte("p2")),
-		thor.BytesToAddress([]byte("p3")),
-		thor.BytesToAddress([]byte("p4")),
-		thor.BytesToAddress([]byte("p5"))
-
-	proposers := []poa.Proposer{
-		{p1, 0},
-		{p2, 0},
-		{p3, 0},
-		{p4, 0},
-		{p5, 0},
+	proposers = []poa.Proposer{
+		{p1, false},
+		{p2, true},
+		{p3, false},
+		{p4, false},
+		{p5, false},
 	}
 
-	parentTime := uint64(1001)
+	parentTime = uint64(1001)
+)
+
+func TestSchedule(t *testing.T) {
+
 	_, err := poa.NewScheduler(thor.BytesToAddress([]byte("px")), proposers, 1, parentTime)
 	assert.NotNil(t, err)
 
@@ -36,5 +38,40 @@ func TestSchedule(t *testing.T) {
 		nbt := sched.Schedule(now)
 		assert.True(t, nbt >= now)
 		assert.True(t, sched.IsTheTime(nbt))
+	}
+}
+
+func TestIsTheTime(t *testing.T) {
+	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime)
+
+	tests := []struct {
+		now  uint64
+		want bool
+	}{
+		{parentTime - 1, false},
+		{parentTime + thor.BlockInterval/2, false},
+		{parentTime + thor.BlockInterval, true},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, sched.IsTheTime(tt.now))
+	}
+}
+
+func TestUpdates(t *testing.T) {
+
+	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime)
+
+	tests := []struct {
+		newBlockTime uint64
+		want         uint64
+	}{
+		{parentTime + thor.BlockInterval, 2},
+		{parentTime + thor.BlockInterval*30, 1},
+	}
+
+	for _, tt := range tests {
+		_, score := sched.Updates(tt.newBlockTime)
+		assert.Equal(t, tt.want, score)
 	}
 }
