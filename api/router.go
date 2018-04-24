@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/api/blocks"
@@ -16,7 +18,7 @@ import (
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, transferDB *transferdb.TransferDB, nw node.Network) *mux.Router {
+func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, transferDB *transferdb.TransferDB, nw node.Network) http.HandlerFunc {
 	router := mux.NewRouter()
 	accounts.New(chain, stateCreator).Mount(router, "/accounts")
 	logs.New(logDB).Mount(router, "/logs")
@@ -24,5 +26,8 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	blocks.New(chain).Mount(router, "/blocks")
 	transactions.New(chain, txPool).Mount(router, "/transactions")
 	node.New(nw).Mount(router, "/node")
-	return router
+	return func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		router.ServeHTTP(w, req)
+	}
 }
