@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -15,9 +16,10 @@ import (
 )
 
 var (
-	errGasLimitReached   = errors.New("gas limit reached")
-	errTxNotAdoptableNow = errors.New("tx not adoptable now")
-	errKnownTx           = errors.New("known tx")
+	errGasLimitReached       = errors.New("gas limit reached")
+	errTxNotAdoptableNow     = errors.New("tx not adoptable now")
+	errTxNotAdoptableForever = errors.New("tx not adoptable forever")
+	errKnownTx               = errors.New("known tx")
 )
 
 // SoloPacker to pack txs and build new blocks.
@@ -74,13 +76,13 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 
 	var (
 		receipts     tx.Receipts
+		transferLogs [][]tx.TransferLogs
 		totalGasUsed uint64
-		processedTxs = make(map[thor.Bytes32]struct{})
+		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
 		traverser    = p.chain.NewTraverser(parent.ID())
 		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, newBlockTimestamp, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
-		findTx  = p.newTxFinder(parent.ID(), processedTxs)
 		builder = new(block.Builder).
 			Beneficiary(p.beneficiary).
 			GasLimit(gasLimit).
@@ -95,8 +97,10 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 				return badTxError{"chain tag mismatch"}
 			case tx.HasReservedFields():
 				return badTxError{"reserved fields not empty"}
-			case tx.BlockRef().Number() > parent.Number():
+			case parent.Number()+1 < tx.BlockRef().Number():
 				return errTxNotAdoptableNow
+			case tx.IsExpired(parent.Number() + 1):
+				return badTxError{"expired"}
 			case totalGasUsed+tx.Gas() > gasLimit:
 				// gasUsed < 90% gas limit
 				if float64(gasLimit-totalGasUsed)/float64(gasLimit) < 0.9 {
@@ -106,45 +110,54 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 				return errGasLimitReached
 			}
 			// check if tx already there
-			if found, err := findTx(tx.ID()); err != nil {
+			if found, _, err := consensus.FindTransaction(p.chain, parent.ID(), processedTxs, tx.ID()); err != nil {
 				return err
 			} else if found {
 				return errKnownTx
 			}
+
 			if dependsOn := tx.DependsOn(); dependsOn != nil {
 				// check if deps exists
-				if found, err := findTx(*dependsOn); err != nil {
+				found, isReverted, err := consensus.FindTransaction(p.chain, parent.ID(), processedTxs, *dependsOn)
+				if err != nil {
 					return err
-				} else if !found {
+				}
+				if !found {
 					return errTxNotAdoptableNow
+				}
+				if reverted, err := isReverted(); err != nil {
+					return err
+				} else if reverted {
+					return errTxNotAdoptableForever
 				}
 			}
 
 			chkpt := state.NewCheckpoint()
-			receipt, _, err := rt.ExecuteTransaction(tx)
+			receipt, tlogs, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
 				state.RevertTo(chkpt)
 				return badTxError{err.Error()}
 			}
-			processedTxs[tx.ID()] = struct{}{}
+			processedTxs[tx.ID()] = receipt.Reverted
 			totalGasUsed += receipt.GasUsed
 			receipts = append(receipts, receipt)
+			transferLogs = append(transferLogs, tlogs)
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.TransferLogs, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-				return nil, nil, errors.New("private key mismatch")
+				return nil, nil, nil, errors.New("private key mismatch")
 			}
 
 			if err := traverser.Error(); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			stateRoot, err := state.Stage().Commit()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			newBlock := builder.
@@ -154,25 +167,10 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 
 			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, nil
+			return newBlock.WithSignature(sig), receipts, transferLogs, nil
 		}, nil
-}
-
-func (p *SoloPacker) newTxFinder(parentBlockID thor.Bytes32, processed map[thor.Bytes32]struct{}) func(txID thor.Bytes32) (bool, error) {
-	return func(txID thor.Bytes32) (bool, error) {
-		if _, ok := processed[txID]; ok {
-			return true, nil
-		}
-		if _, err := p.chain.LookupTransaction(parentBlockID, txID); err != nil {
-			if p.chain.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		return true, nil
-	}
 }
 
 // IsGasLimitReached block if full of txs.

@@ -27,6 +27,7 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -47,6 +48,7 @@ type cliContext struct {
 	txpl         *txpool.TxPool
 	pk           *SoloPacker
 	ldb          *logdb.LogDB
+	tdb          *transferdb.TransferDB
 	launchTime   uint64
 	onDemand     bool
 }
@@ -112,10 +114,13 @@ func newApp() *cli.App {
 		if err != nil {
 			return errors.Wrap(err, "Preparation")
 		}
+
 		defer solo.kv.Close()
 		defer solo.txpl.Stop()
+		defer solo.ldb.Close()
+		defer solo.tdb.Close()
 
-		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb, fakeCommunicator{})}
+		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.ldb, solo.tdb, fakeCommunicator{})}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -165,6 +170,11 @@ func (solo *cliContext) prepare() (err error) {
 	solo.stateCreator = state.NewCreator(solo.kv)
 
 	solo.ldb, err = logdb.NewMem()
+	if err != nil {
+		return
+	}
+
+	solo.tdb, err = transferdb.NewMem()
 	if err != nil {
 		return
 	}
@@ -256,7 +266,7 @@ func (solo *cliContext) packing() {
 		}
 	}
 
-	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, receipts, tlogs, err := commit(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
@@ -269,7 +279,12 @@ func (solo *cliContext) packing() {
 	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
 	log.Debug(b.String())
 
-	err = saveBlockLogs(b, receipts, solo.ldb)
+	err = saveEventLogs(b, receipts, solo.ldb)
+	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+
+	err = saveTransferLogs(b, tlogs, solo.tdb)
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
@@ -308,7 +323,7 @@ func (comm fakeCommunicator) SessionCount() int {
 	return 1
 }
 
-func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (err error) {
+func saveEventLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (err error) {
 	logIndex := 0
 	dblogs := []*logdb.Log{}
 
@@ -324,6 +339,24 @@ func saveBlockLogs(blk *block.Block, receipts tx.Receipts, ldb *logdb.LogDB) (er
 	}
 
 	return ldb.Insert(dblogs, nil)
+}
+
+func saveTransferLogs(blk *block.Block, transferLogs [][]tx.TransferLogs, tdb *transferdb.TransferDB) (err error) {
+	logIndex := 0
+	dblogs := []*transferdb.Transfer{}
+
+	for index, txLog := range transferLogs {
+		for _, clauseLog := range txLog {
+			for _, log := range clauseLog {
+				txOrigin, _ := blk.Transactions()[index].Signer()
+				transferLog := transferdb.NewTransfer(blk.Header(), uint32(logIndex), blk.Transactions()[index].ID(), txOrigin, log)
+				dblogs = append(dblogs, transferLog)
+				logIndex++
+			}
+		}
+	}
+
+	return tdb.Insert(dblogs, nil)
 }
 
 func initLog(lvl log15.Lvl) {
