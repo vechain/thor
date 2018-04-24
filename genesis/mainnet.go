@@ -29,7 +29,7 @@ func NewMainnet() (*Genesis, error) {
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 
-			builtin.Energy.Native(state).InitializeTokenSupply(tokenSupply)
+			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{})
 			return nil
 		}).
 		Call(
