@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/transferdb"
+	"github.com/vechain/thor/tx"
 )
 
 func TestTransferDB(t *testing.T) {
@@ -25,8 +26,13 @@ func TestTransferDB(t *testing.T) {
 	var transfers []*transferdb.Transfer
 	count := 100
 	for i := 0; i < count; i++ {
+		transLog := &tx.TransferLog{
+			Sender:    from,
+			Recipient: to,
+			Amount:    value,
+		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		trans := transferdb.NewTransfer(header, uint32(i), thor.Bytes32{}, from, from, to, value)
+		trans := transferdb.NewTransfer(header, uint32(i), thor.Bytes32{}, from, transLog)
 		transfers = append(transfers, trans)
 	}
 	err = db.Insert(transfers, nil)

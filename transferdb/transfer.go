@@ -6,6 +6,7 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 //Transfer store in db
@@ -22,7 +23,7 @@ type Transfer struct {
 }
 
 //NewTransfer return a format transfer
-func NewTransfer(header *block.Header, transferIndex uint32, txID thor.Bytes32, txOrigin thor.Address, from thor.Address, to thor.Address, Value *big.Int) *Transfer {
+func NewTransfer(header *block.Header, transferIndex uint32, txID thor.Bytes32, txOrigin thor.Address, transferLog *tx.TransferLog) *Transfer {
 	return &Transfer{
 		BlockID:       header.ID(),
 		TransferIndex: transferIndex,
@@ -30,9 +31,9 @@ func NewTransfer(header *block.Header, transferIndex uint32, txID thor.Bytes32, 
 		BlockTime:     header.Timestamp(),
 		TxID:          txID,
 		TxOrigin:      txOrigin,
-		From:          from,
-		To:            to,
-		Value:         Value,
+		From:          transferLog.Sender,
+		To:            transferLog.Recipient,
+		Value:         transferLog.Amount,
 	}
 }
 
