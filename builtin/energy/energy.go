@@ -3,15 +3,43 @@ package energy
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
 var (
 	tokenSupplyKey = thor.Blake2b([]byte("token-supply"))
-	totalAddKey    = thor.Blake2b([]byte("total-add"))
-	totalSubKey    = thor.Blake2b([]byte("total-sub"))
+	totalAddSubKey = thor.Blake2b([]byte("total-add-sub"))
 )
+
+type totalAddSub struct {
+	TotalAdd *big.Int
+	TotalSub *big.Int
+}
+
+var _ state.StorageDecoder = (*totalAddSub)(nil)
+var _ state.StorageEncoder = (*totalAddSub)(nil)
+
+// Encode implements state.StorageEncoder.
+func (t *totalAddSub) Encode() ([]byte, error) {
+	if t.TotalAdd.Sign() == 0 && t.TotalSub.Sign() == 0 {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(t)
+}
+
+// Decode implements state.StorageDecoder.
+func (t *totalAddSub) Decode(data []byte) error {
+	if len(data) == 0 {
+		*t = totalAddSub{
+			&big.Int{},
+			&big.Int{},
+		}
+		return nil
+	}
+	return rlp.DecodeBytes(data, t)
+}
 
 // Energy implements energy operations.
 type Energy struct {
@@ -50,10 +78,9 @@ func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
 
 // GetTotalBurned returns energy totally burned.
 func (e *Energy) GetTotalBurned() *big.Int {
-	var totalAdd, totalSub big.Int
-	e.getStorage(totalAddKey, &totalAdd)
-	e.getStorage(totalSubKey, &totalSub)
-	return new(big.Int).Sub(&totalSub, &totalAdd)
+	var total totalAddSub
+	e.getStorage(totalAddSubKey, &total)
+	return new(big.Int).Sub(total.TotalSub, total.TotalAdd)
 }
 
 // GetBalance returns energy balance of an account at given block time.
@@ -64,9 +91,12 @@ func (e *Energy) GetBalance(addr thor.Address, blockNum uint32) *big.Int {
 func (e *Energy) AddBalance(addr thor.Address, amount *big.Int, blockNum uint32) {
 	bal := e.state.GetEnergy(addr, blockNum)
 	if amount.Sign() != 0 {
-		var totalAdd big.Int
-		e.getStorage(totalAddKey, &totalAdd)
-		e.setStorage(totalAddKey, totalAdd.Add(&totalAdd, amount))
+		var total totalAddSub
+		e.getStorage(totalAddSubKey, &total)
+		e.setStorage(totalAddSubKey, &totalAddSub{
+			TotalAdd: new(big.Int).Add(total.TotalAdd, amount),
+			TotalSub: total.TotalSub,
+		})
 
 		e.state.SetEnergy(addr, new(big.Int).Add(bal, amount), blockNum)
 	} else {
@@ -80,9 +110,13 @@ func (e *Energy) SubBalance(addr thor.Address, amount *big.Int, blockNum uint32)
 		if bal.Cmp(amount) < 0 {
 			return false
 		}
-		var totalSub big.Int
-		e.getStorage(totalSubKey, &totalSub)
-		e.setStorage(totalSubKey, totalSub.Add(&totalSub, amount))
+
+		var total totalAddSub
+		e.getStorage(totalAddSubKey, &total)
+		e.setStorage(totalAddSubKey, &totalAddSub{
+			TotalAdd: total.TotalAdd,
+			TotalSub: new(big.Int).Add(total.TotalSub, amount),
+		})
 
 		e.state.SetEnergy(addr, new(big.Int).Sub(bal, amount), blockNum)
 	} else {
