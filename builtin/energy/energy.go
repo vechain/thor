@@ -45,13 +45,7 @@ func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
 
 	// calc grown energy for total token supply
 	energyState := state.EnergyState{Energy: &big.Int{}}
-	grown := energyState.CalcEnergy(&tokenSupply, blockNum)
-
-	var totalAdd, totalSub big.Int
-	e.getStorage(totalAddKey, &totalAdd)
-	e.getStorage(totalSubKey, &totalSub)
-	grown.Add(grown, &totalAdd)
-	return grown.Sub(grown, &totalSub)
+	return energyState.CalcEnergy(&tokenSupply, blockNum)
 }
 
 // GetTotalBurned returns energy totally burned.
