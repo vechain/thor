@@ -195,11 +195,11 @@ func defaultMainDir() string {
 	// Try to place the data folder in the user's home dir
 	if home := homeDir(); home != "" {
 		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "VeChain", "thor")
+			return filepath.Join(home, "Library", "Application Support", "org.vechain.thor")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "VeChain", "thor")
+			return filepath.Join(home, "AppData", "Roaming", "org.vechain.thor")
 		} else {
-			return filepath.Join(home, ".vechain", "thor")
+			return filepath.Join(home, ".org.vechain.thor")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
