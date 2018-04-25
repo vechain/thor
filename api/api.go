@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -20,6 +21,7 @@ import (
 //New return api router
 func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, transferDB *transferdb.TransferDB, nw node.Network) http.HandlerFunc {
 	router := mux.NewRouter()
+	serveStatic(router, "/static")
 	accounts.New(chain, stateCreator).Mount(router, "/accounts")
 	logs.New(logDB).Mount(router, "/logs")
 	transfers.New(transferDB).Mount(router, "/transfers")
@@ -29,5 +31,11 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	return func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		router.ServeHTTP(w, req)
+		fmt.Println(w)
 	}
+}
+
+func serveStatic(root *mux.Router, pathPrefix string) {
+	sub := root.PathPrefix(pathPrefix).Subrouter()
+	sub.Path("/static").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(""))))
 }
