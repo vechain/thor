@@ -138,7 +138,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FileteredTransfer'
-  '/transactions/transfers':
+  '/transfers':
     post:
       tags:
         - TransferLog
