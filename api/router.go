@@ -22,7 +22,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	router := mux.NewRouter()
 	accounts.New(chain, stateCreator).Mount(router, "/accounts")
 	logs.New(logDB).Mount(router, "/logs")
-	transfers.New(transferDB).Mount(router, "/transactions")
+	transfers.New(transferDB).Mount(router, "/transfers")
 	blocks.New(chain).Mount(router, "/blocks")
 	transactions.New(chain, txPool, transferDB).Mount(router, "/transactions")
 	node.New(nw).Mount(router, "/node")
