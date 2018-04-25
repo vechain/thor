@@ -269,13 +269,14 @@ func updateChain(
 		components.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
-		var index uint32
+		var logIndex uint32
+		var transferdbLogIndex uint32
 		txs := newBlk.Blk.Transactions()
 		logs := []*Logdb.Log{}
 		transferdbLogs := []*Transferdb.Transfer{}
 
 		for i, receipt := range newBlk.Receipts {
-			for _, output := range receipt.Outputs {
+			for j, output := range receipt.Outputs {
 				tx := txs[i]
 				signer, err := tx.Signer()
 				if err != nil {
@@ -284,12 +285,13 @@ func updateChain(
 				}
 				header := newBlk.Blk.Header()
 				for _, log := range output.Logs {
-					logs = append(logs, Logdb.NewLog(header, index, tx.ID(), signer, log))
-					for _, transferdbLog := range newBlk.TransferLogs[i][index] {
-						transferdbLogs = append(transferdbLogs, Transferdb.NewTransfer(header, index, tx.ID(), signer, transferdbLog))
-					}
+					logs = append(logs, Logdb.NewLog(header, logIndex, tx.ID(), signer, log))
+					logIndex++
 				}
-				index++
+				for _, transferdbLog := range newBlk.TransferLogs[i][j] {
+					transferdbLogs = append(transferdbLogs, Transferdb.NewTransfer(header, transferdbLogIndex, tx.ID(), signer, transferdbLog))
+					transferdbLogIndex++
+				}
 			}
 		}
 

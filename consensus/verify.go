@@ -78,8 +78,8 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	}
 
 	if blk.Header().StateRoot() != root {
-		return nil, nil, transferLogs, errors.New("incorrect block state root")
+		return nil, nil, nil, errors.New("incorrect block state root")
 	}
 
-	return stage, receipts, nil, nil
+	return stage, receipts, transferLogs, nil
 }
