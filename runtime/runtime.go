@@ -94,11 +94,13 @@ func (rt *Runtime) execute(
 
 		GetHash:     rt.getBlockID,
 		ClauseIndex: index,
-		OnTransfer: func(sender, recipient thor.Address, amount *big.Int) {
-			transferLogs = append(transferLogs, &Tx.TransferLog{
-				Sender:    sender,
-				Recipient: recipient,
-				Amount:    amount})
+		OnTransfer: func(depth int, sender, recipient thor.Address, amount *big.Int) {
+			if depth == 0 || amount.Sign() != 0 {
+				transferLogs = append(transferLogs, &Tx.TransferLog{
+					Sender:    sender,
+					Recipient: recipient,
+					Amount:    amount})
+			}
 
 			if amount.Sign() == 0 {
 				return

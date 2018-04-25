@@ -40,7 +40,7 @@ type Log struct {
 type State statedb.State
 
 // OnTransfer callback before transfer occur.
-type OnTransfer func(sender, recipient thor.Address, amount *big.Int)
+type OnTransfer func(depth int, sender, recipient thor.Address, amount *big.Int)
 
 // VM is a facade for ethEvm.
 type VM struct {
@@ -96,8 +96,8 @@ func transfer(db evm.StateDB, sender, recipient common.Address, amount *big.Int)
 func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 	evmCtx := evm.Context{
 		CanTransfer: canTransfer,
-		Transfer: func(db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
-			ctx.OnTransfer(thor.Address(sender), thor.Address(recipient), amount)
+		Transfer: func(depth int, db evm.StateDB, sender, recipient common.Address, amount *big.Int) {
+			ctx.OnTransfer(depth, thor.Address(sender), thor.Address(recipient), amount)
 			transfer(db, sender, recipient, amount)
 		},
 		GetHash: func(n uint64) common.Hash {
