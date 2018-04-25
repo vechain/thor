@@ -1,5 +1,7 @@
 package api
 
+//go:generate go-bindata -nometadata -pkg gen -o gen/bindata.go swagger-ui/... thor.yaml
+
 import (
 	"fmt"
 	"net/http"
