@@ -12,14 +12,14 @@ servers:
 tags:
   - name: Accounts
     description: Access to account objects
+  - name: Transactions
+    description: Access to transactions
+  - name: Blocks
+    description: Access to blocks
   - name: Events
     description: Access to event logs
   - name: Transfers
     description: Access to transfer logs
-  - name: Blocks
-    description: Access to blocks
-  - name: Transactions
-    description: Access to transactions
   - name: Node
     description: Access to node info
 paths:
