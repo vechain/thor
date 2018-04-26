@@ -166,7 +166,7 @@ paths:
     get:
       tags:
         - Transactions
-      summary: retrieve transaction by its id (if raw true , retrive a raw transaction)
+      summary: retrieve transaction by its id (if raw true , retrieve a raw transaction)
       responses:
         '200':
           description: OK
@@ -672,7 +672,7 @@ components:
     RawInQuery:
       name: raw
       in: query
-      description: whether retrive a raw transaction.
+      description: whether retrieve a raw transaction.
       required: false
       schema:
         type: boolean
