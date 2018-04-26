@@ -1,0 +1,1 @@
+swagger-ui from https://github.com/swagger-api/swagger-ui
