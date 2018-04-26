@@ -1,4 +1,4 @@
-package logs
+package events
 
 import (
 	"encoding/json"
@@ -11,20 +11,20 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type Logs struct {
+type Events struct {
 	logDB *logdb.LogDB
 }
 
-func New(logDB *logdb.LogDB) *Logs {
-	return &Logs{
+func New(logDB *logdb.LogDB) *Events {
+	return &Events{
 		logDB,
 	}
 }
 
 //Filter query logs with option
-func (l *Logs) filter(logFilter *LogFilter) ([]FilteredLog, error) {
+func (e *Events) filter(logFilter *LogFilter) ([]FilteredLog, error) {
 	lf := convertLogFilter(logFilter)
-	logs, err := l.logDB.Filter(lf)
+	logs, err := e.logDB.Filter(lf)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (l *Logs) filter(logFilter *LogFilter) ([]FilteredLog, error) {
 	return lgs, nil
 }
 
-func (l *Logs) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
+func (e *Events) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
 	res, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return err
@@ -59,15 +59,15 @@ func (l *Logs) handleFilterLogs(w http.ResponseWriter, req *http.Request) error 
 	} else {
 		logFilter.Order = logdb.DESC
 	}
-	logs, err := l.filter(logFilter)
+	logs, err := e.filter(logFilter)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, logs)
 }
 
-func (l *Logs) Mount(root *mux.Router, pathPrefix string) {
+func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(l.handleFilterLogs))
+	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(e.handleFilterLogs))
 }
