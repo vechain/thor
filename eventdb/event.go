@@ -1,4 +1,4 @@
-package logdb
+package eventdb
 
 import (
 	"fmt"
@@ -8,10 +8,10 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-//Log format tx.Log to store in db
-type Log struct {
+//Event format tx.Event to store in db
+type Event struct {
 	BlockID     thor.Bytes32
-	LogIndex    uint32
+	Index       uint32
 	BlockNumber uint32
 	BlockTime   uint64
 	TxID        thor.Bytes32
@@ -21,19 +21,19 @@ type Log struct {
 	Data        []byte
 }
 
-//NewLog return a format log
-func NewLog(header *block.Header, logIndex uint32, txID thor.Bytes32, txOrigin thor.Address, txLog *tx.Log) *Log {
-	l := &Log{
+//NewEvent return a format tx event.
+func NewEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, txEvent *tx.Event) *Event {
+	l := &Event{
 		BlockID:     header.ID(),
-		LogIndex:    logIndex,
+		Index:       index,
 		BlockNumber: header.Number(),
 		BlockTime:   header.Timestamp(),
 		TxID:        txID,
 		TxOrigin:    txOrigin,
-		Address:     txLog.Address, // always a contract address
-		Data:        txLog.Data,
+		Address:     txEvent.Address, // always a contract address
+		Data:        txEvent.Data,
 	}
-	for i, topic := range txLog.Topics {
+	for i, topic := range txEvent.Topics {
 		// variable topic from range shares the same address, clone topic when need to use topic's pointer
 		topic := topic
 		l.Topics[i] = &topic
@@ -41,11 +41,11 @@ func NewLog(header *block.Header, logIndex uint32, txID thor.Bytes32, txOrigin t
 	return l
 }
 
-func (log *Log) String() string {
+func (e *Event) String() string {
 	return fmt.Sprintf(`
-		Log(
+		Event(
 			blockID:     %v,
-			logIndex:	 %v,
+			index:	 %v,
 			blockNumber: %v,
 			blockTime:   %v,
 			txID:        %v,
@@ -57,17 +57,17 @@ func (log *Log) String() string {
 			topic3:      %v,
 			topic4:      %v,
 			data:        0x%x)`,
-		log.BlockID,
-		log.LogIndex,
-		log.BlockNumber,
-		log.BlockTime,
-		log.TxID,
-		log.TxOrigin,
-		log.Address,
-		log.Topics[0],
-		log.Topics[1],
-		log.Topics[2],
-		log.Topics[3],
-		log.Topics[4],
-		log.Data)
+		e.BlockID,
+		e.Index,
+		e.BlockNumber,
+		e.BlockTime,
+		e.TxID,
+		e.TxOrigin,
+		e.Address,
+		e.Topics[0],
+		e.Topics[1],
+		e.Topics[2],
+		e.Topics[3],
+		e.Topics[4],
+		e.Data)
 }

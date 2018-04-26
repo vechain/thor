@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
@@ -169,7 +169,7 @@ func (t *Transactions) handleFilterTransferLogsByTxID(w http.ResponseWriter, req
 	}
 	transFilter := &transferdb.TransferFilter{TxID: &txID}
 	order := req.URL.Query().Get("order")
-	if order != string(logdb.DESC) {
+	if order != string(eventdb.DESC) {
 		transFilter.Order = transferdb.ASC
 	} else {
 		transFilter.Order = transferdb.DESC

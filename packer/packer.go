@@ -45,7 +45,7 @@ func New(
 type Adopt func(tx *tx.Transaction) error
 
 // Commit generate new block.
-type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.TransferLogs, error)
+type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.Transfers, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
 func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
@@ -72,12 +72,12 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	}
 
 	var (
-		receipts     tx.Receipts
-		transferLogs [][]tx.TransferLogs
-		totalGasUsed uint64
-		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
-		traverser    = p.chain.NewTraverser(parent.ID())
-		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
+		receipts       tx.Receipts
+		blockTransfers [][]tx.Transfers
+		totalGasUsed   uint64
+		processedTxs   = make(map[thor.Bytes32]bool) // txID -> reverted
+		traverser      = p.chain.NewTraverser(parent.ID())
+		rt             = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
 
@@ -132,7 +132,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			}
 
 			chkpt := state.NewCheckpoint()
-			receipt, tlogs, _, err := rt.ExecuteTransaction(tx)
+			receipt, txTransfers, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
 				state.RevertTo(chkpt)
@@ -141,11 +141,11 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			processedTxs[tx.ID()] = receipt.Reverted
 			totalGasUsed += receipt.GasUsed
 			receipts = append(receipts, receipt)
-			transferLogs = append(transferLogs, tlogs)
+			blockTransfers = append(blockTransfers, txTransfers)
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.TransferLogs, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.Transfers, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 				return nil, nil, nil, errors.New("private key mismatch")
 			}
@@ -168,7 +168,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, transferLogs, nil
+			return newBlock.WithSignature(sig), receipts, blockTransfers, nil
 		}, nil
 }
 

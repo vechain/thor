@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -20,7 +20,7 @@ import (
 var contractAddr = thor.BytesToAddress([]byte("contract"))
 
 func TestEvents(t *testing.T) {
-	ts := initLogServer(t)
+	ts := initEventServer(t)
 	defer ts.Close()
 	getLogs(t, ts)
 }
@@ -29,13 +29,13 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
-	logFilter := &events.LogFilter{
-		Range: &logdb.Range{
+	filter := &events.Filter{
+		Range: &eventdb.Range{
 			Unit: "",
 			From: 0,
 			To:   10,
 		},
-		Options: &logdb.Options{
+		Options: &eventdb.Options{
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
@@ -50,42 +50,42 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 			},
 		},
 	}
-	f, err := json.Marshal(logFilter)
+	f, err := json.Marshal(&filter)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := httpPost(t, ts.URL+"/logs?address="+contractAddr.String(), f)
-	var logs []*events.FilteredLog
+	res := httpPost(t, ts.URL+"/events?address="+contractAddr.String(), f)
+	var logs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
-func initLogServer(t *testing.T) *httptest.Server {
-	logDB, err := logdb.NewMem()
+func initEventServer(t *testing.T) *httptest.Server {
+	db, err := eventdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
-	l := &tx.Log{
+	txEv := &tx.Event{
 		Address: contractAddr,
 		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
 		Data:    []byte("data"),
 	}
 
 	header := new(block.Builder).Build().Header()
-	var lgs []*logdb.Log
+	var evs []*eventdb.Event
 	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
-		lgs = append(lgs, log)
+		ev := eventdb.NewEvent(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), txEv)
+		evs = append(evs, ev)
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = logDB.Insert(lgs, nil)
+	err = db.Insert(evs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	events.New(logDB).Mount(router, "/logs")
+	events.New(db).Mount(router, "/events")
 	ts := httptest.NewServer(router)
 	return ts
 }

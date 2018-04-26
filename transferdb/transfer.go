@@ -11,29 +11,29 @@ import (
 
 //Transfer store in db
 type Transfer struct {
-	BlockID       thor.Bytes32
-	TransferIndex uint32
-	BlockNumber   uint32
-	BlockTime     uint64
-	TxID          thor.Bytes32
-	TxOrigin      thor.Address
-	From          thor.Address
-	To            thor.Address
-	Value         *big.Int
+	BlockID     thor.Bytes32
+	Index       uint32
+	BlockNumber uint32
+	BlockTime   uint64
+	TxID        thor.Bytes32
+	TxOrigin    thor.Address
+	From        thor.Address
+	To          thor.Address
+	Value       *big.Int
 }
 
 //NewTransfer return a format transfer
-func NewTransfer(header *block.Header, transferIndex uint32, txID thor.Bytes32, txOrigin thor.Address, transferLog *tx.TransferLog) *Transfer {
+func NewTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, transfer *tx.Transfer) *Transfer {
 	return &Transfer{
-		BlockID:       header.ID(),
-		TransferIndex: transferIndex,
-		BlockNumber:   header.Number(),
-		BlockTime:     header.Timestamp(),
-		TxID:          txID,
-		TxOrigin:      txOrigin,
-		From:          transferLog.Sender,
-		To:            transferLog.Recipient,
-		Value:         transferLog.Amount,
+		BlockID:     header.ID(),
+		Index:       index,
+		BlockNumber: header.Number(),
+		BlockTime:   header.Timestamp(),
+		TxID:        txID,
+		TxOrigin:    txOrigin,
+		From:        transfer.Sender,
+		To:          transfer.Recipient,
+		Value:       transfer.Amount,
 	}
 }
 
@@ -41,7 +41,7 @@ func (trans *Transfer) String() string {
 	return fmt.Sprintf(`
 		Transfer(
 			blockID:    	%v,
-			transferIndex:	%v,
+			index:			%v,
 			blockNumber: 	%v,
 			blockTime:  	%v,
 			txID:        	%v,
@@ -50,7 +50,7 @@ func (trans *Transfer) String() string {
 			to:     	 	%v,
 			value:      	%v,)`,
 		trans.BlockID,
-		trans.TransferIndex,
+		trans.Index,
 		trans.BlockNumber,
 		trans.BlockTime,
 		trans.TxID,

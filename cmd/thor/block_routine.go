@@ -5,27 +5,26 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vechain/thor/co"
-
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cmd/thor/minheap"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	Consensus "github.com/vechain/thor/consensus"
-	Logdb "github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
-	Transferdb "github.com/vechain/thor/transferdb"
+	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 )
 
-func produceBlock(ctx context.Context, components *components, logdb *Logdb.LogDB, transferdb *Transferdb.TransferDB) {
+func produceBlock(ctx context.Context, components *components, eventDB *eventdb.EventDB, transferDB *transferdb.TransferDB) {
 	var goes co.Goes
 
 	packedChan := make(chan *packedEvent)
 	bestBlockUpdated := make(chan *block.Block, 1)
 
-	goes.Go(func() { consentLoop(ctx, components, logdb, transferdb, bestBlockUpdated, packedChan) })
+	goes.Go(func() { consentLoop(ctx, components, eventDB, transferDB, bestBlockUpdated, packedChan) })
 	goes.Go(func() { packLoop(ctx, components, bestBlockUpdated, packedChan) })
 
 	log.Info("Block consensus started")
@@ -41,35 +40,35 @@ type orphan struct {
 }
 
 type newBlockEvent struct {
-	Blk          *block.Block
-	Receipts     tx.Receipts
-	TransferLogs [][]tx.TransferLogs
-	Trunk        bool
-	IsSynced     bool
+	Blk       *block.Block
+	Receipts  tx.Receipts
+	Transfers [][]tx.Transfers
+	Trunk     bool
+	IsSynced  bool
 }
 
 type packedEvent struct {
-	blk          *block.Block
-	receipts     tx.Receipts
-	transferLogs [][]tx.TransferLogs
-	ack          chan struct{}
+	blk       *block.Block
+	receipts  tx.Receipts
+	transfers [][]tx.Transfers
+	ack       chan struct{}
 }
 
 func consentLoop(
 	ctx context.Context,
 	components *components,
-	logdb *Logdb.LogDB,
-	transferdb *Transferdb.TransferDB,
+	eventDB *eventdb.EventDB,
+	transferDB *transferdb.TransferDB,
 	bestBlockUpdated chan *block.Block,
 	packedChan chan *packedEvent,
 ) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
 	updateChainFn := func(newBlk *newBlockEvent) error {
-		return updateChain(ctx, components, logdb, transferdb, newBlk, bestBlockUpdated)
+		return updateChain(ctx, components, eventDB, transferDB, newBlk, bestBlockUpdated)
 	}
 	consentFn := func(blk *block.Block, isSynced bool) error {
-		trunk, receipts, transferLogs, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
+		trunk, receipts, transfers, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
 			if Consensus.IsFutureBlock(err) {
@@ -84,11 +83,11 @@ func consentLoop(
 		}
 
 		return updateChainFn(&newBlockEvent{
-			Blk:          blk,
-			Trunk:        trunk,
-			Receipts:     receipts,
-			TransferLogs: transferLogs,
-			IsSynced:     isSynced,
+			Blk:       blk,
+			Trunk:     trunk,
+			Receipts:  receipts,
+			Transfers: transfers,
+			IsSynced:  isSynced,
 		})
 	}
 
@@ -123,11 +122,11 @@ func consentLoop(
 		case packed := <-packedChan:
 			if trunk, err := components.consensus.IsTrunk(packed.blk.Header()); err == nil {
 				updateChainFn(&newBlockEvent{
-					Blk:          packed.blk,
-					Receipts:     packed.receipts,
-					TransferLogs: packed.transferLogs,
-					Trunk:        trunk,
-					IsSynced:     false,
+					Blk:       packed.blk,
+					Receipts:  packed.receipts,
+					Transfers: packed.transfers,
+					Trunk:     trunk,
+					IsSynced:  false,
 				})
 				packed.ack <- struct{}{}
 			}
@@ -212,7 +211,7 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 
 	startTime := mclock.Now()
 	adoptTx()
-	blk, receipts, transferLogs, err := commit(components.packer.privateKey)
+	blk, receipts, transfers, err := commit(components.packer.privateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
@@ -229,10 +228,10 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 	}
 
 	pe := &packedEvent{
-		blk:          blk,
-		receipts:     receipts,
-		transferLogs: transferLogs,
-		ack:          make(chan struct{}),
+		blk:       blk,
+		receipts:  receipts,
+		transfers: transfers,
+		ack:       make(chan struct{}),
 	}
 	packedChan <- pe
 	<-pe.ack
@@ -241,8 +240,8 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 func updateChain(
 	ctx context.Context,
 	components *components,
-	logdb *Logdb.LogDB,
-	transferdb *Transferdb.TransferDB,
+	eventDB *eventdb.EventDB,
+	transferDB *transferdb.TransferDB,
 	newBlk *newBlockEvent,
 	bestBlockUpdated chan *block.Block,
 ) error {
@@ -269,11 +268,11 @@ func updateChain(
 		components.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
-		var logIndex uint32
-		var transferdbLogIndex uint32
+		var eventIndex uint32
+		var transferIndex uint32
 		txs := newBlk.Blk.Transactions()
-		logs := []*Logdb.Log{}
-		transferdbLogs := []*Transferdb.Transfer{}
+		var events []*eventdb.Event
+		var transfers []*transferdb.Transfer
 
 		for i, receipt := range newBlk.Receipts {
 			for j, output := range receipt.Outputs {
@@ -284,13 +283,13 @@ func updateChain(
 					return err
 				}
 				header := newBlk.Blk.Header()
-				for _, log := range output.Logs {
-					logs = append(logs, Logdb.NewLog(header, logIndex, tx.ID(), signer, log))
-					logIndex++
+				for _, e := range output.Events {
+					events = append(events, eventdb.NewEvent(header, eventIndex, tx.ID(), signer, e))
+					eventIndex++
 				}
-				for _, transferdbLog := range newBlk.TransferLogs[i][j] {
-					transferdbLogs = append(transferdbLogs, Transferdb.NewTransfer(header, transferdbLogIndex, tx.ID(), signer, transferdbLog))
-					transferdbLogIndex++
+				for _, transfer := range newBlk.Transfers[i][j] {
+					transfers = append(transfers, transferdb.NewTransfer(header, transferIndex, tx.ID(), signer, transfer))
+					transferIndex++
 				}
 			}
 		}
@@ -303,8 +302,8 @@ func updateChain(
 			}
 		}
 
-		logdb.Insert(logs, forkIDs)
-		transferdb.Insert(transferdbLogs, forkIDs)
+		eventDB.Insert(events, forkIDs)
+		transferDB.Insert(transfers, forkIDs)
 	}
 
 	return nil

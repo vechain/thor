@@ -26,8 +26,8 @@ type Receipt struct {
 
 // Output output of clause execution.
 type Output struct {
-	// logs produced by the clause
-	Logs []*Log
+	// events produced by the clause
+	Events Events
 }
 
 // Receipts slice of receipts.

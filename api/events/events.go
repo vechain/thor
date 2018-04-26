@@ -7,42 +7,42 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/thor"
 )
 
 type Events struct {
-	logDB *logdb.LogDB
+	db *eventdb.EventDB
 }
 
-func New(logDB *logdb.LogDB) *Events {
+func New(db *eventdb.EventDB) *Events {
 	return &Events{
-		logDB,
+		db,
 	}
 }
 
-//Filter query logs with option
-func (e *Events) filter(logFilter *LogFilter) ([]FilteredLog, error) {
-	lf := convertLogFilter(logFilter)
-	logs, err := e.logDB.Filter(lf)
+//Filter query events with option
+func (e *Events) filter(filter *Filter) ([]*FilteredEvent, error) {
+	f := convertFilter(filter)
+	events, err := e.db.Filter(f)
 	if err != nil {
 		return nil, err
 	}
-	lgs := make([]FilteredLog, len(logs))
-	for i, log := range logs {
-		lgs[i] = convertLog(log)
+	fes := make([]*FilteredEvent, len(events))
+	for i, e := range events {
+		fes[i] = convertEvent(e)
 	}
-	return lgs, nil
+	return fes, nil
 }
 
-func (e *Events) handleFilterLogs(w http.ResponseWriter, req *http.Request) error {
+func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	res, err := ioutil.ReadAll(req.Body)
 	if err != nil {
 		return err
 	}
 	req.Body.Close()
-	logFilter := new(LogFilter)
-	if err := json.Unmarshal(res, &logFilter); err != nil {
+	var filter Filter
+	if err := json.Unmarshal(res, &filter); err != nil {
 		return err
 	}
 	query := req.URL.Query()
@@ -51,23 +51,23 @@ func (e *Events) handleFilterLogs(w http.ResponseWriter, req *http.Request) erro
 		if err != nil {
 			return utils.BadRequest(err, "address")
 		}
-		logFilter.Address = &addr
+		filter.Address = &addr
 	}
 	order := query.Get("order")
-	if order != string(logdb.DESC) {
-		logFilter.Order = logdb.ASC
+	if order != string(eventdb.DESC) {
+		filter.Order = eventdb.ASC
 	} else {
-		logFilter.Order = logdb.DESC
+		filter.Order = eventdb.DESC
 	}
-	logs, err := e.filter(logFilter)
+	fes, err := e.filter(&filter)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, logs)
+	return utils.WriteJSON(w, fes)
 }
 
 func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(e.handleFilterLogs))
+	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
 }

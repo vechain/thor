@@ -20,14 +20,14 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
+	"github.com/vechain/thor/eventdb"
 	Genesis "github.com/vechain/thor/genesis"
-	Logdb "github.com/vechain/thor/logdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	Transferdb "github.com/vechain/thor/transferdb"
+	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -106,24 +106,24 @@ func dataDir(genesis *Genesis.Genesis, root string) (string, error) {
 func makeComponent(
 	ctx *cli.Context,
 	lvldb *Lvldb.LevelDB,
-	logdb *Logdb.LogDB,
-	transferDB *Transferdb.TransferDB,
+	eventDB *eventdb.EventDB,
+	transferDB *transferdb.TransferDB,
 	genesis *Genesis.Genesis,
 	dataDir string,
 ) (*components, error) {
 	stateCreator := state.NewCreator(lvldb)
 
-	genesisBlock, txLogs, err := genesis.Build(stateCreator)
+	genesisBlock, blockEvents, err := genesis.Build(stateCreator)
 	if err != nil {
 		return nil, err
 	}
 
-	logs := []*Logdb.Log{}
+	var events []*eventdb.Event
 	header := genesisBlock.Header()
-	for _, log := range txLogs {
-		logs = append(logs, Logdb.NewLog(header, 0, thor.Bytes32{}, thor.Address{}, log))
+	for _, e := range blockEvents {
+		events = append(events, eventdb.NewEvent(header, 0, thor.Bytes32{}, thor.Address{}, e))
 	}
-	logdb.Insert(logs, nil)
+	eventDB.Insert(events, nil)
 
 	chain, err := chain.New(lvldb, genesisBlock)
 	if err != nil {
@@ -159,7 +159,7 @@ func makeComponent(
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, logdb, transferDB, communicator)},
+		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)},
 	}, nil
 }
 

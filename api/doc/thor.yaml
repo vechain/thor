@@ -10,15 +10,15 @@ servers:
   - url: 'http://localhost:8669'
     description: local thor node
 tags:
-  - name: Account
+  - name: Accounts
     description: Access to account objects
-  - name: Event
-    description: Access to event
-  - name: TransferLog
+  - name: Events
+    description: Access to event logs
+  - name: Transfers
     description: Access to transfer logs
-  - name: Block
+  - name: Blocks
     description: Access to blocks
-  - name: Transaction
+  - name: Transactions
     description: Access to transactions
   - name: Node
     description: Access to node info
@@ -29,7 +29,7 @@ paths:
       - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
-        - Account
+        - Accounts
       summary: get account object detail
       responses:
         '200':
@@ -40,7 +40,7 @@ paths:
                 $ref: '#/components/schemas/Account'
     post:
       tags:
-        - Account
+        - Accounts
       summary: perform contract call on account object
       requestBody:
         description: arguments and environment
@@ -62,7 +62,7 @@ paths:
       - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
-        - Account
+        - Accounts
       summary: retrieve code of account object
       responses:
         '200':
@@ -83,7 +83,7 @@ paths:
       - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
-        - Account
+        - Accounts
       summary: retrieve storage value of account object for given key
       responses:
         '200':
@@ -100,7 +100,7 @@ paths:
   '/events':
     post:
       tags:
-        - Event
+        - Events
       summary: filter event logs 
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
@@ -111,7 +111,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LogFilter'
+              $ref: '#/components/schemas/EventFilter'
       responses:
         '200':
           description: OK
@@ -120,28 +120,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FilteredLog'
-  '/transactions/{id}/transfers':
-    parameters:
-      - $ref: '#/components/parameters/TxIDInPath'
-      - $ref: '#/components/parameters/FilterOrderInQuery'
-    get:
-      tags:
-        - TransferLog
-      summary: retrieve transfer logs by transaction ID
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FileteredTransfer'
+                  $ref: '#/components/schemas/FilteredEvent'
+  
   '/transfers':
     post:
       tags:
-        - TransferLog
+        - Transfers
       summary: filter transfer logs 
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
@@ -160,13 +144,13 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FileteredTransfer'
+                  $ref: '#/components/schemas/FilteredTransfer'
   '/blocks/{revision}':
     parameters:
       - $ref: '#/components/parameters/RevisionInPath'
     get:
       tags:
-        - Block
+        - Blocks
       summary: 'retrieve block by ID, number, or ''best'' for the latest one'
       responses:
         '200':
@@ -180,7 +164,7 @@ paths:
       - $ref: '#/components/parameters/TxIDInPath'
     get:
       tags:
-        - Transaction
+        - Transactions
       summary: retrieve transaction by its id
       responses:
         '200':
@@ -194,7 +178,7 @@ paths:
       - $ref: '#/components/parameters/TxIDInPath'
     get:
       tags:
-        - Transaction
+        - Transactions
       summary: retrieve transaction receipt by transaction ID
       responses:
         '200':
@@ -203,10 +187,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Receipt'
+
+  '/transactions/{id}/transfers':
+    parameters:
+      - $ref: '#/components/parameters/TxIDInPath'
+      - $ref: '#/components/parameters/FilterOrderInQuery'
+    get:
+      tags:
+        - Transactions
+      summary: retrieve transfer logs by transaction ID
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FilteredTransfer'
   '/transactions':
     post:
       tags:
-        - Transaction
+        - Transactions
       summary: send raw transaction
       requestBody:
         required: true
@@ -424,11 +426,11 @@ components:
           id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
           number: 1
           timestamp: 1523156271
-    Log:
+    Event:
       properties:
         address:
           type: string
-          description: the address of contract which produces the log (bytes20)
+          description: the address of contract which produces the event (bytes20)
         topics:
           type: array
           items:
@@ -470,10 +472,10 @@ components:
                 description: >-
                   deployed contract address, if the corresponding clause is a
                   contract deployment clause
-              logs:
+              events:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Log'
+                  $ref: '#/components/schemas/Event'
       example:
         gasUsed: 21000
         gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
@@ -490,7 +492,7 @@ components:
         outputs: 
           - {
             'contractAddress':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
-            logs:[{
+            events:[{
                 'address':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
                 'topics':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8',
                 'data':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
@@ -572,7 +574,7 @@ components:
           type: string
       example:
         topic0: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
-    LogFilter:
+    EventFilter:
       properties:
         range:
           $ref: '#/components/schemas/Range'
@@ -582,7 +584,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TopicSet'
-    FilteredLog:
+    FilteredEvent:
       properties:
         topics:
           type: array
@@ -627,36 +629,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AddressSet'
-    FileteredTransfer:
-      properties:
-        blockID:
-          type: string
-        transferIndex:
-          type: integer
-        blockNumber:
-          type: integer
-        blockTime:
-          type: integer
-        txID:
-          type: string
-        txOrigin:
-          type: string
+    FilteredTransfer:
+      properties:       
         from:
           type: string
         to:
           type: string
         value:
           type: string
-      example:
-        blockID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        transferIndex: 0
-        blockNumber: 0
-        blockTime: 15678990282
-        txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        block:
+          $ref: '#/components/schemas/BlockContext'
+        tx:
+          $ref: '#/components/schemas/TxContext'
+      example:        
         from: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         value: '0x9fad'
+        block:
+          id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          number: 1
+          timestamp: 1523156271
+        tx:
+          id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     NodeNetwork:
       properties:
         peerCount:
@@ -712,17 +707,7 @@ components:
           - ASC
           - DESC
       example: 'ASC'
-    TransferFilterOrderInQuery:
-      name: order
-      in: query
-      description: order of filtered transfer logs
-      required: false
-      schema:
-        type: string
-        enum:
-          - ASC
-          - DESC
-      example: 'ASC'
+    
     TxIDInPath:
       in: path
       description: ID of transaction

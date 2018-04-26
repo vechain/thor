@@ -1,4 +1,4 @@
-package logdb
+package eventdb
 
 import (
 	"database/sql"
@@ -33,8 +33,8 @@ type Options struct {
 	Limit  uint64 `json:"limit"`
 }
 
-//LogFilter filter
-type LogFilter struct {
+//Filter filter
+type Filter struct {
 	Address  *thor.Address      `json:"address"` // always a contract address
 	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
 	Order    OrderType          `json:"order"` //default asc
@@ -42,24 +42,24 @@ type LogFilter struct {
 	Options  *Options
 }
 
-//LogDB manages all logs
-type LogDB struct {
+//EventDB manages all events
+type EventDB struct {
 	path          string
 	db            *sql.DB
 	sqliteVersion string
 }
 
-//New open a logdb
-func New(path string) (*LogDB, error) {
+//New open a event db
+func New(path string) (*EventDB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(logTableSchema); err != nil {
+	if _, err := db.Exec(eventTableSchema); err != nil {
 		return nil, err
 	}
 	s, _, _ := sqlite3.Version()
-	return &LogDB{
+	return &EventDB{
 		path:          path,
 		db:            db,
 		sqliteVersion: s,
@@ -67,40 +67,40 @@ func New(path string) (*LogDB, error) {
 }
 
 //NewMem create a memory sqlite db
-func NewMem() (*LogDB, error) {
+func NewMem() (*EventDB, error) {
 	return New(":memory:")
 }
 
-//Insert insert logs into db, and abandon logs which associated with given block ids.
-func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Bytes32) error {
-	if len(logs) == 0 && len(abandonedBlockIDs) == 0 {
+//Insert insert events into db, and abandon events which associated with given block ids.
+func (db *EventDB) Insert(events []*Event, abandonedBlockIDs []thor.Bytes32) error {
+	if len(events) == 0 && len(abandonedBlockIDs) == 0 {
 		return nil
 	}
 	tx, err := db.db.Begin()
 	if err != nil {
 		return err
 	}
-	for _, log := range logs {
-		if _, err = tx.Exec("INSERT OR REPLACE INTO log(blockID ,logIndex, blockNumber ,blockTime ,txID ,txOrigin ,address ,topic0 ,topic1 ,topic2 ,topic3 ,topic4, data) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); ",
-			log.BlockID.Bytes(),
-			log.LogIndex,
-			log.BlockNumber,
-			log.BlockTime,
-			log.TxID.Bytes(),
-			log.TxOrigin.Bytes(),
-			log.Address.Bytes(),
-			topicValue(log.Topics[0]),
-			topicValue(log.Topics[1]),
-			topicValue(log.Topics[2]),
-			topicValue(log.Topics[3]),
-			topicValue(log.Topics[4]),
-			log.Data); err != nil {
+	for _, event := range events {
+		if _, err = tx.Exec("INSERT OR REPLACE INTO event(blockID ,eventIndex, blockNumber ,blockTime ,txID ,txOrigin ,address ,topic0 ,topic1 ,topic2 ,topic3 ,topic4, data) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?); ",
+			event.BlockID.Bytes(),
+			event.Index,
+			event.BlockNumber,
+			event.BlockTime,
+			event.TxID.Bytes(),
+			event.TxOrigin.Bytes(),
+			event.Address.Bytes(),
+			topicValue(event.Topics[0]),
+			topicValue(event.Topics[1]),
+			topicValue(event.Topics[2]),
+			topicValue(event.Topics[3]),
+			topicValue(event.Topics[4]),
+			event.Data); err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 	for _, id := range abandonedBlockIDs {
-		if _, err = tx.Exec("DELETE FROM log WHERE blockID = ?;", id.Bytes()); err != nil {
+		if _, err = tx.Exec("DELETE FROM event WHERE blockID = ?;", id.Bytes()); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -108,32 +108,32 @@ func (db *LogDB) Insert(logs []*Log, abandonedBlockIDs []thor.Bytes32) error {
 	return tx.Commit()
 }
 
-//Filter return logs with options
-func (db *LogDB) Filter(logFilter *LogFilter) ([]*Log, error) {
-	if logFilter == nil {
-		return db.query("SELECT * FROM log")
+//Filter return events with options
+func (db *EventDB) Filter(filter *Filter) ([]*Event, error) {
+	if filter == nil {
+		return db.query("SELECT * FROM event")
 	}
 	var args []interface{}
-	stmt := "SELECT * FROM log WHERE 1"
+	stmt := "SELECT * FROM event WHERE 1"
 	condition := "blockNumber"
-	if logFilter.Range != nil {
-		if logFilter.Range.Unit == Time {
+	if filter.Range != nil {
+		if filter.Range.Unit == Time {
 			condition = "blockTime"
 		}
-		args = append(args, logFilter.Range.From)
+		args = append(args, filter.Range.From)
 		stmt += " AND " + condition + " >= ? "
-		if logFilter.Range.To >= logFilter.Range.From {
-			args = append(args, logFilter.Range.To)
+		if filter.Range.To >= filter.Range.From {
+			args = append(args, filter.Range.To)
 			stmt += " AND " + condition + " <= ? "
 		}
 	}
-	if logFilter.Address != nil {
-		args = append(args, logFilter.Address.Bytes())
+	if filter.Address != nil {
+		args = append(args, filter.Address.Bytes())
 		stmt += " AND address = ? "
 	}
-	length := len(logFilter.TopicSet)
+	length := len(filter.TopicSet)
 	if length > 0 {
-		for i, topics := range logFilter.TopicSet {
+		for i, topics := range filter.TopicSet {
 			if i == 0 {
 				stmt += " AND (( 1 "
 			} else {
@@ -153,32 +153,32 @@ func (db *LogDB) Filter(logFilter *LogFilter) ([]*Log, error) {
 		}
 	}
 
-	if logFilter.Order == DESC {
+	if filter.Order == DESC {
 		stmt += " ORDER BY " + condition + " DESC "
 	} else {
 		stmt += " ORDER BY " + condition + " ASC "
 	}
 
-	if logFilter.Options != nil {
+	if filter.Options != nil {
 		stmt += " limit ?, ? "
-		args = append(args, logFilter.Options.Offset, logFilter.Options.Limit)
+		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 	return db.query(stmt, args...)
 }
 
-//query query logs
-func (db *LogDB) query(stmt string, args ...interface{}) ([]*Log, error) {
+//query query events
+func (db *EventDB) query(stmt string, args ...interface{}) ([]*Event, error) {
 	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var logs []*Log
+	var events []*Event
 	for rows.Next() {
 		var (
 			blockID     []byte
-			logIndex    uint32
+			index       uint32
 			blockNumber uint32
 			blockTime   uint64
 			txID        []byte
@@ -189,7 +189,7 @@ func (db *LogDB) query(stmt string, args ...interface{}) ([]*Log, error) {
 		)
 		if err := rows.Scan(
 			&blockID,
-			&logIndex,
+			&index,
 			&blockNumber,
 			&blockTime,
 			&txID,
@@ -204,9 +204,9 @@ func (db *LogDB) query(stmt string, args ...interface{}) ([]*Log, error) {
 		); err != nil {
 			return nil, err
 		}
-		log := &Log{
+		event := &Event{
 			BlockID:     thor.BytesToBytes32(blockID),
-			LogIndex:    logIndex,
+			Index:       index,
 			BlockNumber: blockNumber,
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
@@ -217,24 +217,24 @@ func (db *LogDB) query(stmt string, args ...interface{}) ([]*Log, error) {
 		for i, topic := range topics {
 			if len(topic) > 0 {
 				h := thor.BytesToBytes32(topic)
-				log.Topics[i] = &h
+				event.Topics[i] = &h
 			}
 		}
-		logs = append(logs, log)
+		events = append(events, event)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return logs, nil
+	return events, nil
 }
 
 //Path return db's directory
-func (db *LogDB) Path() string {
+func (db *EventDB) Path() string {
 	return db.path
 }
 
 //Close close sqlite
-func (db *LogDB) Close() {
+func (db *EventDB) Close() {
 	db.db.Close()
 }
 

@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	Logdb "github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
@@ -86,11 +86,11 @@ func action(ctx *cli.Context) error {
 	}
 	defer lvldb.Close()
 
-	logdb, err := Logdb.New(dataDir + "/log.db")
+	eventDB, err := eventdb.New(dataDir + "/log.db")
 	if err != nil {
 		return err
 	}
-	defer logdb.Close()
+	defer eventDB.Close()
 
 	transferdb, err := Transferdb.New(dataDir + "/transfer.db")
 	if err != nil {
@@ -98,7 +98,7 @@ func action(ctx *cli.Context) error {
 	}
 	defer transferdb.Close()
 
-	components, err := makeComponent(ctx, lvldb, logdb, transferdb, genesis, dataDir)
+	components, err := makeComponent(ctx, lvldb, eventDB, transferdb, genesis, dataDir)
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func action(ctx *cli.Context) error {
 	goes.Go(func() { runNetwork(c, components, dataDir) })
 	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, logdb, transferdb) })
+	goes.Go(func() { produceBlock(c, components, eventDB, transferdb) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)

@@ -66,7 +66,7 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
+func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events tx.Events, err error) {
 	state, err := stateCreator.NewState(thor.Bytes32{})
 	if err != nil {
 		return nil, nil, err
@@ -86,7 +86,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*
 			return nil, nil, errors.Wrap(out.VMErr, "vm")
 		}
 		for _, log := range out.Logs {
-			logs = append(logs, (*tx.Log)(log))
+			events = append(events, (*tx.Event)(log))
 		}
 	}
 
@@ -102,5 +102,5 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, logs []*
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).
 		ReceiptsRoot(tx.Transactions(nil).RootHash()).
-		Build(), logs, nil
+		Build(), events, nil
 }

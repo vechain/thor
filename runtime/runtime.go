@@ -76,12 +76,12 @@ func (rt *Runtime) execute(
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
 	isStatic bool,
-) (*vm.Output, Tx.TransferLogs) {
+) (*vm.Output, Tx.Transfers) {
 	to := clause.To()
 	if isStatic && to == nil {
 		panic("static call requires 'To'")
 	}
-	var transferLogs Tx.TransferLogs
+	var transfers Tx.Transfers
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
 		BlockNumber: rt.blockNumber,
@@ -96,7 +96,7 @@ func (rt *Runtime) execute(
 		ClauseIndex: index,
 		OnTransfer: func(depth int, sender, recipient thor.Address, amount *big.Int) {
 			if depth == 0 || amount.Sign() != 0 {
-				transferLogs = append(transferLogs, &Tx.TransferLog{
+				transfers = append(transfers, &Tx.Transfer{
 					Sender:    sender,
 					Recipient: recipient,
 					Amount:    amount})
@@ -161,7 +161,7 @@ func (rt *Runtime) execute(
 	if vmout.VMErr != nil {
 		return vmout, nil
 	}
-	return vmout, transferLogs
+	return vmout, transfers
 }
 
 // Call executes single clause.
@@ -172,13 +172,13 @@ func (rt *Runtime) Call(
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
-) (*vm.Output, Tx.TransferLogs) {
+) (*vm.Output, Tx.Transfers) {
 	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
 }
 
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, transferLogs []Tx.TransferLogs, vmOutputs []*vm.Output, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, txTransfers []Tx.Transfers, vmOutputs []*vm.Output, err error) {
 	resolvedTx, err := ResolveTransaction(rt.state, tx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -196,10 +196,10 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
-	transferLogs = make([]Tx.TransferLogs, 0, len(resolvedTx.Clauses))
+	txTransfers = make([]Tx.Transfers, 0, len(resolvedTx.Clauses))
 
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput, tlogs := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
+		vmOutput, transfers := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -220,17 +220,17 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			rt.state.RevertTo(clauseCheckpoint)
 			receipt.Reverted = true
 			receipt.Outputs = nil
-			transferLogs = nil
+			txTransfers = nil
 			break
 		}
 
 		// transform vm output to clause output
-		var logs []*Tx.Log
+		var events Tx.Events
 		for _, vmLog := range vmOutput.Logs {
-			logs = append(logs, (*Tx.Log)(vmLog))
+			events = append(events, (*Tx.Event)(vmLog))
 		}
-		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Logs: logs})
-		transferLogs = append(transferLogs, tlogs)
+		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Events: events})
+		txTransfers = append(txTransfers, transfers)
 	}
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
@@ -250,5 +250,5 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.Reward = reward
 
-	return receipt, transferLogs, vmOutputs, nil
+	return receipt, txTransfers, vmOutputs, nil
 }

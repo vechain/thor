@@ -9,11 +9,11 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, [][]tx.TransferLogs, error) {
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, [][]tx.Transfers, error) {
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
-	transferLogs := [][]tx.TransferLogs{}
+	blockTransfers := make([][]tx.Transfers, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
 	traverser := c.chain.NewTraverser(blk.Header().ParentID())
@@ -49,14 +49,14 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			}
 		}
 
-		receipt, transferLog, _, err := rt.ExecuteTransaction(tx)
+		receipt, txTransfers, _, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
-		transferLogs = append(transferLogs, transferLog)
+		blockTransfers = append(blockTransfers, txTransfers)
 		processedTxs[tx.ID()] = receipt.Reverted
 	}
 
@@ -81,5 +81,5 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		return nil, nil, nil, errors.New("incorrect block state root")
 	}
 
-	return stage, receipts, transferLogs, nil
+	return stage, receipts, blockTransfers, nil
 }

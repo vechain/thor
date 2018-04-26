@@ -26,7 +26,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 }
 
 // Consent is Consensus's main func.
-func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Receipts, [][]tx.TransferLogs, error) {
+func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Receipts, [][]tx.Transfers, error) {
 	header := blk.Header()
 
 	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
@@ -62,7 +62,7 @@ func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Rec
 		return false, nil, nil, err
 	}
 
-	stage, receipts, transferLogs, err := c.verifyBlock(blk, state)
+	stage, receipts, transfers, err := c.verifyBlock(blk, state)
 	if err != nil {
 		return false, nil, nil, err
 	}
@@ -76,7 +76,7 @@ func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Rec
 		return false, nil, nil, err
 	}
 
-	return isTrunk, receipts, transferLogs, nil
+	return isTrunk, receipts, transfers, nil
 }
 
 // IsTrunk to determine if the block can be head of trunk.
