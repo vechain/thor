@@ -76,7 +76,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	data, err := method.EncodeInput(c.args...)
 	assert.Nil(t, err, "should encode input")
 
-	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
+	vmout, _ := c.rt.Call(tx.NewClause(&c.to).WithData(data),
 		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{})
 
 	if constant || vmout.VMErr != nil {
@@ -279,7 +279,7 @@ func TestEnergyNative(t *testing.T) {
 			Assert(t),
 
 		test.Case("native_getTotalSupply").
-			ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
+			ShouldOutput(new(big.Int)).
 			Assert(t),
 
 		test.Case("native_getTotalBurned").
@@ -349,7 +349,7 @@ func TestPrototypeInterface(t *testing.T) {
 	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{})
+	out, _ := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{})
 	contract = *out.ContractAddress
 
 	energy := big.NewInt(1000)
