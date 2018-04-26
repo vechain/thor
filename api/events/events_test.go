@@ -22,10 +22,10 @@ var contractAddr = thor.BytesToAddress([]byte("contract"))
 func TestEvents(t *testing.T) {
 	ts := initEventServer(t)
 	defer ts.Close()
-	getLogs(t, ts)
+	getEvents(t, ts)
 }
 
-func getLogs(t *testing.T, ts *httptest.Server) {
+func getEvents(t *testing.T, ts *httptest.Server) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5

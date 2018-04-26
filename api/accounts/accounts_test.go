@@ -19,11 +19,9 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 )
 
 const (
@@ -134,28 +132,6 @@ func getAccount(t *testing.T, ts *httptest.Server) {
 }
 
 func initAccountServer(t *testing.T) *httptest.Server {
-	logDB, err := logdb.NewMem()
-	if err != nil {
-		t.Fatal(err)
-	}
-	l := &tx.Log{
-		Address: contractAddr,
-		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
-		Data:    []byte("data"),
-	}
-
-	header := new(block.Builder).Build().Header()
-	var lgs []*logdb.Log
-	for i := 0; i < 100; i++ {
-		log := logdb.NewLog(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
-		lgs = append(lgs, log)
-		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-	}
-	err = logDB.Insert(lgs, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	st, _ := stateC.NewState(thor.Bytes32{})

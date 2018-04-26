@@ -112,7 +112,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	var trs []*transferdb.Transfer
 	count := 100
 	for i := 0; i < count; i++ {
-		transLog := &tx.TransferLog{
+		transLog := &tx.Transfer{
 			Sender:    from,
 			Recipient: to,
 			Amount:    value,
