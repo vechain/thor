@@ -17,7 +17,7 @@ type Genesis struct {
 }
 
 // Build build the genesis block.
-func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, logs []*tx.Log, err error) {
+func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, events tx.Events, err error) {
 	return g.builder.Build(stateCreator)
 }
 

@@ -113,11 +113,11 @@ type Receipt struct {
 // Output output of clause execution.
 type Output struct {
 	ContractAddress *thor.Address `json:"contractAddress"`
-	Logs            []*ReceiptLog `json:"logs,string"`
+	Events          []*Event      `json:"events,string"`
 }
 
-// ReceiptLog ReceiptLog.
-type ReceiptLog struct {
+// Event event.
+type Event struct {
 	Address thor.Address   `json:"address,string"`
 	Topics  []thor.Bytes32 `json:"topics,string"`
 	Data    string         `json:"data"`
@@ -155,17 +155,17 @@ func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*
 			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)
 			contractAddr = &cAddr
 		}
-		otp := &Output{contractAddr, make([]*ReceiptLog, len(output.Logs))}
-		for j, log := range output.Logs {
-			receiptLog := &ReceiptLog{
-				Address: log.Address,
-				Data:    hexutil.Encode(log.Data),
+		otp := &Output{contractAddr, make([]*Event, len(output.Events))}
+		for j, txEvent := range output.Events {
+			event := &Event{
+				Address: txEvent.Address,
+				Data:    hexutil.Encode(txEvent.Data),
 			}
-			receiptLog.Topics = make([]thor.Bytes32, len(log.Topics))
-			for k, topic := range log.Topics {
-				receiptLog.Topics[k] = topic
+			event.Topics = make([]thor.Bytes32, len(txEvent.Topics))
+			for k, topic := range txEvent.Topics {
+				event.Topics[k] = topic
 			}
-			otp.Logs[j] = receiptLog
+			otp.Events[j] = event
 		}
 		receipt.Outputs[i] = otp
 	}

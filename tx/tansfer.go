@@ -6,12 +6,12 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// TransferLog token transfer log.
-type TransferLog struct {
+// Transfer token transfer log.
+type Transfer struct {
 	Sender    thor.Address
 	Recipient thor.Address
 	Amount    *big.Int
 }
 
-// TransferLogs array of transfer logs.
-type TransferLogs []*TransferLog
+// Transfers slisce of transfer logs.
+type Transfers []*Transfer

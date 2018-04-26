@@ -54,7 +54,7 @@ type TransferDB struct {
 	sqliteVersion string
 }
 
-//New open a logdb
+//New open a transfer db
 func New(path string) (*TransferDB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -76,7 +76,7 @@ func NewMem() (*TransferDB, error) {
 	return New(":memory:")
 }
 
-//Insert insert logs into db, and abandon logs which associated with given block ids.
+//Insert insert transfer logs into db, and abandon transfer logs which associated with given block ids.
 func (db *TransferDB) Insert(transfers []*Transfer, abandonedBlockIDs []thor.Bytes32) error {
 	if len(transfers) == 0 && len(transfers) == 0 {
 		return nil
@@ -88,7 +88,7 @@ func (db *TransferDB) Insert(transfers []*Transfer, abandonedBlockIDs []thor.Byt
 	for _, trans := range transfers {
 		if _, err = tx.Exec("INSERT OR REPLACE INTO transfer(blockID ,transferIndex, blockNumber ,blockTime ,txID ,txOrigin ,fromAddress ,toAddress ,value) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?); ",
 			trans.BlockID.Bytes(),
-			trans.TransferIndex,
+			trans.Index,
 			trans.BlockNumber,
 			trans.BlockTime,
 			trans.TxID.Bytes(),
@@ -170,7 +170,7 @@ func (db *TransferDB) Filter(transferFilter *TransferFilter) ([]*Transfer, error
 	return db.query(stmt, args...)
 }
 
-//query query logs
+//query query transfer logs
 func (db *TransferDB) query(stmt string, args ...interface{}) ([]*Transfer, error) {
 	rows, err := db.db.Query(stmt, args...)
 	if err != nil {
@@ -180,19 +180,19 @@ func (db *TransferDB) query(stmt string, args ...interface{}) ([]*Transfer, erro
 	var transfers []*Transfer
 	for rows.Next() {
 		var (
-			blockID       []byte
-			transferIndex uint32
-			blockNumber   uint32
-			blockTime     uint64
-			txID          []byte
-			txOrigin      []byte
-			from          []byte
-			to            []byte
-			value         []byte
+			blockID     []byte
+			index       uint32
+			blockNumber uint32
+			blockTime   uint64
+			txID        []byte
+			txOrigin    []byte
+			from        []byte
+			to          []byte
+			value       []byte
 		)
 		if err := rows.Scan(
 			&blockID,
-			&transferIndex,
+			&index,
 			&blockNumber,
 			&blockTime,
 			&txID,
@@ -204,15 +204,15 @@ func (db *TransferDB) query(stmt string, args ...interface{}) ([]*Transfer, erro
 			return nil, err
 		}
 		trans := &Transfer{
-			BlockID:       thor.BytesToBytes32(blockID),
-			TransferIndex: transferIndex,
-			BlockNumber:   blockNumber,
-			BlockTime:     blockTime,
-			TxID:          thor.BytesToBytes32(txID),
-			TxOrigin:      thor.BytesToAddress(txOrigin),
-			From:          thor.BytesToAddress(from),
-			To:            thor.BytesToAddress(to),
-			Value:         new(big.Int).SetBytes(value),
+			BlockID:     thor.BytesToBytes32(blockID),
+			Index:       index,
+			BlockNumber: blockNumber,
+			BlockTime:   blockTime,
+			TxID:        thor.BytesToBytes32(txID),
+			TxOrigin:    thor.BytesToAddress(txOrigin),
+			From:        thor.BytesToAddress(from),
+			To:          thor.BytesToAddress(to),
+			Value:       new(big.Int).SetBytes(value),
 		}
 		transfers = append(transfers, trans)
 	}

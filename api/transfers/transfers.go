@@ -5,11 +5,10 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/vechain/thor/transferdb"
-
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/transferdb"
 )
 
 type Transfers struct {
@@ -46,7 +45,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	order := req.URL.Query().Get("order")
-	if order != string(logdb.DESC) {
+	if order != string(eventdb.DESC) {
 		transFilter.Order = transferdb.ASC
 	} else {
 		transFilter.Order = transferdb.DESC

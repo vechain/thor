@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/api/transactions"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/thor"
 )
 
@@ -17,24 +17,24 @@ type TopicSet struct {
 	Topic4 *thor.Bytes32 `json:"topic4"`
 }
 
-type LogFilter struct {
+type Filter struct {
 	Address   *thor.Address
 	TopicSets []*TopicSet
-	Range     *logdb.Range
-	Options   *logdb.Options
-	Order     logdb.OrderType
+	Range     *eventdb.Range
+	Options   *eventdb.Options
+	Order     eventdb.OrderType
 }
 
-func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
-	f := &logdb.LogFilter{
-		Address: logFilter.Address,
-		Range:   logFilter.Range,
-		Options: logFilter.Options,
-		Order:   logFilter.Order,
+func convertFilter(filter *Filter) *eventdb.Filter {
+	f := &eventdb.Filter{
+		Address: filter.Address,
+		Range:   filter.Range,
+		Options: filter.Options,
+		Order:   filter.Order,
 	}
-	if len(logFilter.TopicSets) > 0 {
+	if len(filter.TopicSets) > 0 {
 		var topicSets [][5]*thor.Bytes32
-		for _, topicSet := range logFilter.TopicSets {
+		for _, topicSet := range filter.TopicSets {
 			var topics [5]*thor.Bytes32
 			topics[0] = topicSet.Topic0
 			topics[1] = topicSet.Topic1
@@ -48,40 +48,40 @@ func convertLogFilter(logFilter *LogFilter) *logdb.LogFilter {
 	return f
 }
 
-// FilteredLog only comes from one contract
-type FilteredLog struct {
+// FilteredEvent only comes from one contract
+type FilteredEvent struct {
 	Topics []*thor.Bytes32           `json:"topics"`
 	Data   string                    `json:"data"`
 	Block  transactions.BlockContext `json:"block"`
 	Tx     transactions.TxContext    `json:"tx"`
 }
 
-//convert a logdb.Log into a json format log
-func convertLog(log *logdb.Log) FilteredLog {
-	l := FilteredLog{
-		Data: hexutil.Encode(log.Data),
+//convert a eventdb.Event into a json format Event
+func convertEvent(event *eventdb.Event) *FilteredEvent {
+	fe := FilteredEvent{
+		Data: hexutil.Encode(event.Data),
 		Block: transactions.BlockContext{
-			ID:        log.BlockID,
-			Number:    log.BlockNumber,
-			Timestamp: log.BlockTime,
+			ID:        event.BlockID,
+			Number:    event.BlockNumber,
+			Timestamp: event.BlockTime,
 		},
 		Tx: transactions.TxContext{
-			ID:     log.TxID,
-			Origin: log.TxOrigin,
+			ID:     event.TxID,
+			Origin: event.TxOrigin,
 		},
 	}
-	l.Topics = make([]*thor.Bytes32, 0)
+	fe.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
-		if log.Topics[i] != nil {
-			l.Topics = append(l.Topics, log.Topics[i])
+		if event.Topics[i] != nil {
+			fe.Topics = append(fe.Topics, event.Topics[i])
 		}
 	}
-	return l
+	return &fe
 }
 
-func (log *FilteredLog) String() string {
+func (e *FilteredEvent) String() string {
 	return fmt.Sprintf(`
-		Log(
+		Event(
 			topics:        %v,
 			data:          %v,
 			block: (id     %v,
@@ -90,12 +90,12 @@ func (log *FilteredLog) String() string {
 			tx:    (id     %v,
 					origin %v)
 			)`,
-		log.Topics,
-		log.Data,
-		log.Block.ID,
-		log.Block.Number,
-		log.Block.Timestamp,
-		log.Tx.ID,
-		log.Tx.Origin,
+		e.Topics,
+		e.Data,
+		e.Block.ID,
+		e.Block.Number,
+		e.Block.Timestamp,
+		e.Tx.ID,
+		e.Tx.Origin,
 	)
 }
