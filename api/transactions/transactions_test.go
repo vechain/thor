@@ -49,6 +49,17 @@ func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
 		t.Fatal(err)
 	}
 	checkTx(t, raw, rtx)
+
+	res = httpGet(t, ts.URL+"/transactions/"+tx.ID().String()+"?raw=true")
+	var rawTx map[string]interface{}
+	if err := json.Unmarshal(res, &rawTx); err != nil {
+		t.Fatal(err)
+	}
+	rlpTx, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, hexutil.Encode(rlpTx), rawTx["raw"], "should be equal raw")
 }
 
 func getTxReceipt(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {

@@ -40,7 +40,7 @@ func (c *Clause) String() string {
 }
 
 type RawTx struct {
-	Raw string `json:"raw"`
+	Raw string `json:"raw"` //hex of transaction which rlp encoded
 }
 
 //Transaction transaction
@@ -57,6 +57,11 @@ type Transaction struct {
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	Origin       thor.Address        `json:"origin,string"`
 	Block        BlockContext        `json:"block"`
+}
+
+type rawTransaction struct {
+	Block BlockContext `json:"block"`
+	RawTx
 }
 
 //ConvertTransaction convert a raw transaction into a json format transaction
