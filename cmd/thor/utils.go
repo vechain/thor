@@ -152,6 +152,14 @@ func makeComponent(
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
+	api := api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)
+	var handleAPI http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
+		if domains := ctx.String("apicors"); domains != "" {
+			w.Header().Set("Access-Control-Allow-Origin", domains)
+		}
+		api(w, req)
+	}
+
 	return &components{
 		chain:        chain,
 		txpool:       txpool,
@@ -159,7 +167,7 @@ func makeComponent(
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)},
+		apiSrv:       &http.Server{Handler: handleAPI},
 	}, nil
 }
 

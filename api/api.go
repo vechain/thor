@@ -50,9 +50,5 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	node.New(nw).
 		Mount(router, "/node")
 
-	return func(w http.ResponseWriter, req *http.Request) {
-		// TODO make CORS setting according to cmd flags
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		router.ServeHTTP(w, req)
-	}
+	return router.ServeHTTP
 }

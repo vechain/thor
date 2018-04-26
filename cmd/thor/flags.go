@@ -17,6 +17,11 @@ var appFlags = []cli.Flag{
 		Usage: "API service listening address",
 	},
 	cli.StringFlag{
+		Name:  "apicors",
+		Value: "",
+		Usage: "Comma separated list of domains from which to accept cross origin requests to API",
+	},
+	cli.StringFlag{
 		Name:  "dir",
 		Value: defaultMainDir(),
 		Usage: "Main directory for configs and databases",
