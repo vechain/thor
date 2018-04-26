@@ -12,8 +12,8 @@ servers:
 tags:
   - name: Account
     description: Access to account objects
-  - name: Log
-    description: Access to event logs
+  - name: Event
+    description: Access to event
   - name: TransferLog
     description: Access to transfer logs
   - name: Block
@@ -97,16 +97,16 @@ paths:
                 example:
                   value: >-
                     0x0000000000000000000000000000000000000000000000000000000000000001
-  '/logs':
+  '/events':
     post:
       tags:
-        - Log
+        - Event
       summary: filter event logs 
       parameters:
-        - $ref: '#/components/parameters/LogFilterOrderInQuery'
-        - $ref: '#/components/parameters/LogFilterAddressInQuery'
+        - $ref: '#/components/parameters/FilterOrderInQuery'
+        - $ref: '#/components/parameters/FilterAddressInQuery'
       requestBody:
-        description: log filter criteria
+        description: event filter criteria
         required: true
         content:
           application/json:
@@ -124,7 +124,7 @@ paths:
   '/transactions/{id}/transfers':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
-      - $ref: '#/components/parameters/LogFilterOrderInQuery'
+      - $ref: '#/components/parameters/FilterOrderInQuery'
     get:
       tags:
         - TransferLog
@@ -144,7 +144,7 @@ paths:
         - TransferLog
       summary: filter transfer logs 
       parameters:
-        - $ref: '#/components/parameters/LogFilterOrderInQuery'
+        - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
         description: transfer log filter criteria
         required: true
@@ -693,7 +693,7 @@ components:
       schema:
         type: string
       example: '0x0000000000000000000000000000000000000000000000000000000000000001'
-    LogFilterAddressInQuery:
+    FilterAddressInQuery:
       name: address
       in: query
       description: address of account
@@ -701,10 +701,10 @@ components:
       schema:
         type: string
       example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-    LogFilterOrderInQuery:
+    FilterOrderInQuery:
       name: order
       in: query
-      description: order of filtered logs
+      description: order of filters
       required: false
       schema:
         type: string

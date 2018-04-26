@@ -1,4 +1,4 @@
-package logs_test
+package events_test
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api/logs"
+	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -19,7 +19,7 @@ import (
 
 var contractAddr = thor.BytesToAddress([]byte("contract"))
 
-func TestLogs(t *testing.T) {
+func TestEvents(t *testing.T) {
 	ts := initLogServer(t)
 	defer ts.Close()
 	getLogs(t, ts)
@@ -29,7 +29,7 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
-	logFilter := &logs.LogFilter{
+	logFilter := &events.LogFilter{
 		Range: &logdb.Range{
 			Unit: "",
 			From: 0,
@@ -41,11 +41,11 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 		},
 		Order:   "",
 		Address: &contractAddr,
-		TopicSets: []*logs.TopicSet{
-			&logs.TopicSet{
+		TopicSets: []*events.TopicSet{
+			&events.TopicSet{
 				Topic0: &t0,
 			},
-			&logs.TopicSet{
+			&events.TopicSet{
 				Topic1: &t1,
 			},
 		},
@@ -55,7 +55,7 @@ func getLogs(t *testing.T, ts *httptest.Server) {
 		t.Fatal(err)
 	}
 	res := httpPost(t, ts.URL+"/logs?address="+contractAddr.String(), f)
-	var logs []*logs.FilteredLog
+	var logs []*events.FilteredLog
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
 	}
@@ -85,10 +85,11 @@ func initLogServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	logs.New(logDB).Mount(router, "/logs")
+	events.New(logDB).Mount(router, "/logs")
 	ts := httptest.NewServer(router)
 	return ts
 }
+
 func httpPost(t *testing.T, url string, data []byte) []byte {
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {

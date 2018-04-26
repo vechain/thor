@@ -8,7 +8,7 @@ import (
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/api/blocks"
 	"github.com/vechain/thor/api/doc"
-	"github.com/vechain/thor/api/logs"
+	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/api/node"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
@@ -39,8 +39,8 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 
 	accounts.New(chain, stateCreator).
 		Mount(router, "/accounts")
-	logs.New(logDB).
-		Mount(router, "/logs")
+	events.New(logDB).
+		Mount(router, "/events")
 	transfers.New(transferDB).
 		Mount(router, "/transfers")
 	blocks.New(chain).
