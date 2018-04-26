@@ -449,10 +449,10 @@ components:
           format: uint64
         gasPayer:
           type: string
-          description: address of account who payed used gas
-        payed:
+          description: address of account who paid used gas
+        paid:
           type: string
-          description: hex form of amount of payed energy
+          description: hex form of amount of paid energy
         reward:
           type: string
           description: hex form of amount of reward
@@ -479,7 +479,7 @@ components:
       example:
         gasUsed: 21000
         gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        payed: '0x723daf2'
+        paid: '0x723daf2'
         reward: '0x723daf2'
         reverted: false
         block:

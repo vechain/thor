@@ -235,7 +235,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
 	receipt.GasPayer = payer
-	receipt.Payed = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), resolvedTx.GasPrice)
+	receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), resolvedTx.GasPrice)
 
 	returnGas(leftOverGas)
 

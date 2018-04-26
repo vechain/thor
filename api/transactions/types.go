@@ -102,7 +102,7 @@ type TxContext struct {
 type Receipt struct {
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer,string"`
-	Payed    *math.HexOrDecimal256 `json:"payed,string"`
+	Paid     *math.HexOrDecimal256 `json:"paid,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
 	Reverted bool                  `json:"reverted"`
 	Block    BlockContext          `json:"block"`
@@ -124,19 +124,19 @@ type Event struct {
 }
 
 //ConvertReceipt convert a raw clause into a jason format clause
-func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*Receipt, error) {
-	reward := math.HexOrDecimal256(*rece.Reward)
-	payed := math.HexOrDecimal256(*rece.Payed)
+func convertReceipt(txReceipt *tx.Receipt, block *block.Block, tx *tx.Transaction) (*Receipt, error) {
+	reward := math.HexOrDecimal256(*txReceipt.Reward)
+	paid := math.HexOrDecimal256(*txReceipt.Paid)
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
 	}
 	receipt := &Receipt{
-		GasUsed:  rece.GasUsed,
-		GasPayer: rece.GasPayer,
-		Payed:    &payed,
+		GasUsed:  txReceipt.GasUsed,
+		GasPayer: txReceipt.GasPayer,
+		Paid:     &paid,
 		Reward:   &reward,
-		Reverted: rece.Reverted,
+		Reverted: txReceipt.Reverted,
 		Tx: TxContext{
 			tx.ID(),
 			signer,
@@ -147,8 +147,8 @@ func convertReceipt(rece *tx.Receipt, block *block.Block, tx *tx.Transaction) (*
 			block.Header().Timestamp(),
 		},
 	}
-	receipt.Outputs = make([]*Output, len(rece.Outputs))
-	for i, output := range rece.Outputs {
+	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))
+	for i, output := range txReceipt.Outputs {
 		clause := tx.Clauses()[i]
 		var contractAddr *thor.Address
 		if clause.To() == nil {
