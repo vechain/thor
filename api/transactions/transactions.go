@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 
@@ -30,6 +31,43 @@ func New(chain *chain.Chain, pool *txpool.TxPool, transferDB *transferdb.Transfe
 		pool,
 		transferDB,
 	}
+}
+
+func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, error) {
+	var transaction *tx.Transaction
+	var blockC BlockContext
+	if pengdingTransaction := t.pool.GetTransaction(txID); pengdingTransaction != nil {
+		transaction = pengdingTransaction
+	} else {
+		tx, location, err := t.chain.GetTransaction(txID)
+		if err != nil {
+			if t.chain.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		block, err := t.chain.GetBlock(location.BlockID)
+		if err != nil {
+			if t.chain.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		blockC = BlockContext{
+			ID:        block.Header().ID(),
+			Number:    block.Header().Number(),
+			Timestamp: block.Header().Timestamp(),
+		}
+		transaction = tx
+	}
+	raw, err := rlp.EncodeToBytes(transaction)
+	if err != nil {
+		return nil, err
+	}
+	return &rawTransaction{
+		Block: blockC,
+		RawTx: RawTx{hexutil.Encode(raw)},
+	}, nil
 }
 
 func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
@@ -129,11 +167,23 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
+	raw := req.URL.Query().Get("raw")
+	if raw != "" && raw != "false" && raw != "true" {
+		return utils.BadRequest(errors.New("raw should be bool"), "raw")
+	}
+	if raw == "true" {
+		tx, err := t.getRawTransaction(txID)
+		if err != nil {
+			return err
+		}
+		return utils.WriteJSON(w, tx)
+	}
 	tx, err := t.getTransactionByID(txID)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, tx)
+
 }
 
 func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {

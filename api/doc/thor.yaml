@@ -162,17 +162,20 @@ paths:
   '/transactions/{id}':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
+      - $ref: '#/components/parameters/RawInQuery'
     get:
       tags:
         - Transactions
-      summary: retrieve transaction by its id
+      summary: retrieve transaction by its id (if raw true , retrieve a raw transaction)
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Transaction'
+                allOf:
+                  - $ref: '#/components/schemas/Transaction'
+                  - $ref: '#/components/schemas/RawTx'
   '/transactions/{id}/receipt':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
@@ -666,6 +669,13 @@ components:
       schema:
         type: string
       example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+    RawInQuery:
+      name: raw
+      in: query
+      description: whether retrieve a raw transaction.
+      required: false
+      schema:
+        type: boolean
     RevisionInQuery:
       name: revision
       in: query
@@ -707,7 +717,6 @@ components:
           - ASC
           - DESC
       example: 'ASC'
-    
     TxIDInPath:
       in: path
       description: ID of transaction
