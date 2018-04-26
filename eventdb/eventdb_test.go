@@ -41,7 +41,7 @@ func TestLogDB(t *testing.T) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	addr := thor.BytesToAddress([]byte("addr"))
-	los, err := db.Filter(&eventdb.Filter{
+	es, err := db.Filter(&eventdb.Filter{
 		Range: &eventdb.Range{
 			Unit: "Block",
 			From: 0,
@@ -51,7 +51,7 @@ func TestLogDB(t *testing.T) {
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
-		Order:   "ASC",
+		Order:   "DESC",
 		Address: &addr,
 		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
@@ -67,7 +67,7 @@ func TestLogDB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, len(los), limit, "limit should be equal")
+	assert.Equal(t, len(es), limit, "limit should be equal")
 }
 
 func home() (string, error) {
