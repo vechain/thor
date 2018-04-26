@@ -154,9 +154,9 @@ func (db *EventDB) Filter(filter *Filter) ([]*Event, error) {
 	}
 
 	if filter.Order == DESC {
-		stmt += " ORDER BY " + condition + " DESC "
+		stmt += " ORDER BY blockNumber,eventIndex DESC "
 	} else {
-		stmt += " ORDER BY " + condition + " ASC "
+		stmt += " ORDER BY blockNumber,eventIndex ASC "
 	}
 
 	if filter.Options != nil {
