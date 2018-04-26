@@ -159,9 +159,9 @@ func (db *TransferDB) Filter(transferFilter *TransferFilter) ([]*Transfer, error
 		}
 	}
 	if transferFilter.Order == DESC {
-		stmt += " ORDER BY " + condition + " DESC "
+		stmt += " ORDER BY blockNumber,transferIndex DESC "
 	} else {
-		stmt += " ORDER BY " + condition + " ASC "
+		stmt += " ORDER BY blockNumber,transferIndex ASC "
 	}
 	if transferFilter.Options != nil {
 		stmt += " limit ?, ? "
