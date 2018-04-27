@@ -17,20 +17,17 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/eventdb"
-	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	Packer "github.com/vechain/thor/packer"
-	Transferdb "github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
 var (
+	version   string
 	gitCommit string
-	version   = "1.0"
 	release   = "dev"
 	log       = log15.New()
 	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
@@ -52,13 +49,23 @@ type components struct {
 }
 
 func main() {
-	app := cli.NewApp()
-	app.Version = fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit)
-	app.Name = "Thor"
-	app.Usage = "Core of VeChain"
-	app.Copyright = "2018 VeChain Foundation <https://vechain.org/>"
-	app.Flags = appFlags
-	app.Action = action
+	app := cli.App{
+		Version:   fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit),
+		Name:      "Thor",
+		Usage:     "Node of VeChain Thor Network",
+		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Flags: []cli.Flag{
+			p2pPortFlag,
+			apiAddrFlag,
+			apiCorsFlag,
+			dirFlag,
+			verbosityFlag,
+			devFlag,
+			beneficiaryFlag,
+			maxPeersFlag,
+		},
+		Action: action,
+	}
 
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -66,39 +73,21 @@ func main() {
 	}
 }
 
-func action(ctx *cli.Context) error {
-	initLog(log15.Lvl(ctx.Int("verbosity")))
-	log.Info("Welcome to thor network")
+func action(ctx *cli.Context) (err error) {
+	initLogger(ctx)
+	gene := selectGenesis(ctx)
+	dataDir := makeDataDir(ctx, gene)
 
-	genesis, err := genesis(ctx.Bool("devnet"))
-	if err != nil {
-		return err
-	}
+	chainDB := openChainDB(ctx, dataDir)
+	defer chainDB.Close()
 
-	dataDir, err := dataDir(genesis, ctx.String("dir"))
-	if err != nil {
-		return err
-	}
-
-	lvldb, err := Lvldb.New(dataDir+"/main.db", Lvldb.Options{})
-	if err != nil {
-		return err
-	}
-	defer lvldb.Close()
-
-	eventDB, err := eventdb.New(dataDir + "/log.db")
-	if err != nil {
-		return err
-	}
+	eventDB := openEventDB(ctx, dataDir)
 	defer eventDB.Close()
 
-	transferdb, err := Transferdb.New(dataDir + "/transfer.db")
-	if err != nil {
-		return err
-	}
-	defer transferdb.Close()
+	transferDB := openTransferDB(ctx, dataDir)
+	defer transferDB.Close()
 
-	components, err := makeComponent(ctx, lvldb, eventDB, transferdb, genesis, dataDir)
+	components, err := makeComponent(ctx, chainDB, eventDB, transferDB, gene, dataDir)
 	if err != nil {
 		return err
 	}
@@ -109,7 +98,7 @@ func action(ctx *cli.Context) error {
 	goes.Go(func() { runNetwork(c, components, dataDir) })
 	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, eventDB, transferdb) })
+	goes.Go(func() { produceBlock(c, components, eventDB, transferDB) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)
