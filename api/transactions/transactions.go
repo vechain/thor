@@ -125,21 +125,11 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, e
 	return convertReceipt(rece, block, tx)
 }
 
-//SendRawTransaction send a raw transactoion
-func (t *Transactions) sendRawTransaction(rawTx *RawTx) (*thor.Bytes32, error) {
-	data, err := hexutil.Decode(rawTx.Raw)
-	if err != nil {
-		return nil, err
-	}
-	var tx *tx.Transaction
-	if err := rlp.DecodeBytes(data, &tx); err != nil {
-		return nil, err
-	}
+func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
 	if err := t.pool.Add(tx); err != nil {
-		return nil, err
+		return thor.Bytes32{}, err
 	}
-	txID := tx.ID()
-	return &txID, nil
+	return tx.ID(), nil
 }
 
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
@@ -152,9 +142,13 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err = json.Unmarshal(res, &raw); err != nil {
 		return err
 	}
-	txID, err := t.sendRawTransaction(raw)
+	tx, err := raw.decode()
 	if err != nil {
 		return err
+	}
+	txID, err := t.sendTx(tx)
+	if err != nil {
+		return utils.Forbidden(err, "rejected tx")
 	}
 	return utils.WriteJSON(w, map[string]string{
 		"id": txID.String(),
