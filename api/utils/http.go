@@ -32,6 +32,14 @@ func BadRequest(cause error, msg string) error {
 	}
 }
 
+// Forbidden convenience method to create http forbidden error.
+func Forbidden(cause error, msg string) error {
+	return &httpError{
+		cause:  errors.Wrap(cause, msg),
+		status: http.StatusForbidden,
+	}
+}
+
 // HandlerFunc like http.HandlerFunc, bu it returns an error.
 // If the returned error is httpError type, httpError.status will be responded,
 // otherwise http.StatusInternalServerError responded.

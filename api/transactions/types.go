@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -41,6 +42,18 @@ func (c *Clause) String() string {
 
 type RawTx struct {
 	Raw string `json:"raw"` //hex of transaction which rlp encoded
+}
+
+func (r *RawTx) decode() (*tx.Transaction, error) {
+	data, err := hexutil.Decode(r.Raw)
+	if err != nil {
+		return nil, err
+	}
+	var tx *tx.Transaction
+	if err := rlp.DecodeBytes(data, &tx); err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 //Transaction transaction
