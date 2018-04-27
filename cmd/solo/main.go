@@ -278,10 +278,7 @@ func (solo *cliContext) packing() {
 	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
 	log.Debug(b.String())
 
-	err = saveLogs(b, receipts, solo.eventDB, blockTransfers, solo.transferDB)
-	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
-	}
+	saveLogs(b, receipts, solo.eventDB, blockTransfers, solo.transferDB)
 
 	// ignore fork when solo
 	_, err = solo.c.AddBlock(b, receipts, true)
@@ -317,7 +314,7 @@ func (comm fakeCommunicator) SessionCount() int {
 	return 1
 }
 
-func saveLogs(blk *block.Block, receipts tx.Receipts, eventDB *eventdb.EventDB, blockTransfers [][]tx.Transfers, transferDB *transferdb.TransferDB) (err error) {
+func saveLogs(blk *block.Block, receipts tx.Receipts, eventDB *eventdb.EventDB, blockTransfers [][]tx.Transfers, transferDB *transferdb.TransferDB) {
 	var eventIndex, transferIndex uint32
 
 	eventLogs := []*eventdb.Event{}
@@ -337,14 +334,15 @@ func saveLogs(blk *block.Block, receipts tx.Receipts, eventDB *eventdb.EventDB, 
 		}
 	}
 
+	var err error
 	err = eventDB.Insert(eventLogs, nil)
 	if err != nil {
-		return
+		log.Error(fmt.Sprintf("%+v", err))
 	}
 
 	err = transferDB.Insert(transferLogs, nil)
 	if err != nil {
-		return
+		log.Error(fmt.Sprintf("%+v", err))
 	}
 
 	return
