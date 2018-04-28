@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/evm"
 )
 
@@ -29,6 +30,7 @@ type ccase struct {
 	to, caller thor.Address
 	name       string
 	args       []interface{}
+	logs       []*vm.Log
 
 	output *[]interface{}
 	vmerr  error
@@ -57,6 +59,11 @@ func (c *ccase) Caller(caller thor.Address) *ccase {
 
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
+	return c
+}
+
+func (c *ccase) ShouldLog(logs []*vm.Log) *ccase {
+	c.logs = logs
 	return c
 }
 
@@ -93,11 +100,49 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Equal(t, out, vmout.Value, "should match output")
 	}
 
+	if c.logs != nil {
+		assert.Equal(t, c.logs, vmout.Logs, "should match log")
+	}
+
 	assert.Nil(t, c.rt.State().Error(), "should no state error")
 
 	c.output = nil
 	c.vmerr = nil
+	c.logs = nil
+
 	return c
+}
+
+func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*vm.Log {
+	nativeABI := builtin.Prototype.InterfaceABI()
+
+	mustEventByName := func(name string) *abi.Event {
+		if event, found := nativeABI.EventByName(name); found {
+			return event
+		}
+		panic("event not found")
+	}
+
+	methodEvent := mustEventByName(methodName)
+
+	etopics := make([]thor.Bytes32, 0, len(topics)+1)
+	etopics = append(etopics, methodEvent.ID())
+
+	for _, t := range topics {
+		etopics = append(etopics, t)
+	}
+
+	data, _ := methodEvent.Encode(args...)
+
+	testLogs := []*vm.Log{
+		&vm.Log{
+			Address: contractAddr,
+			Topics:  etopics,
+			Data:    data,
+		},
+	}
+
+	return testLogs
 }
 
 func TestParamsNative(t *testing.T) {
@@ -375,6 +420,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$set_master", acc1).
 		To(acc1).Caller(acc1).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc1[:])})).
 		Assert(t)
 
 	test.Case("$has_code").
@@ -426,6 +472,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$set_user_plan", credit, recoveryRate).
 		To(contract).Caller(master).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$SetUserPlan", contract, nil, credit, recoveryRate)).
 		Assert(t)
 
 	test.Case("$user_plan").
@@ -440,6 +487,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$add_user", user).
 		To(contract).Caller(master).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, true)).
 		Assert(t)
 	test.Case("$is_user", user).
 		To(contract).Caller(anyCaller).
@@ -453,6 +501,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$remove_user", user).
 		To(contract).Caller(master).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, false)).
 		Assert(t)
 	test.Case("$user_credit", user).
 		To(contract).Caller(anyCaller).
@@ -466,6 +515,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$sponsor", true).
 		To(contract).Caller(sponsor).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$Sponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor.Bytes())}, true)).
 		Assert(t)
 	test.Case("$is_sponsor", sponsor).
 		To(contract).Caller(anyCaller).
@@ -479,6 +529,7 @@ func TestPrototypeInterface(t *testing.T) {
 	test.Case("$select_sponsor", sponsor).
 		To(contract).Caller(master).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$SelectSponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor[:])})).
 		Assert(t)
 	test.Case("$sponsor", false).
 		To(contract).Caller(sponsor).
