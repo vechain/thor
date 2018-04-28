@@ -11,11 +11,13 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gorilla/handlers"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/chain"
@@ -195,12 +197,9 @@ func makeComponent(
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
-	api := api.New(chain, stateCreator, txpool, logDB, communicator)
-	var handleAPI http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
-		if domains := ctx.String("apicors"); domains != "" {
-			w.Header().Set("Access-Control-Allow-Origin", domains)
-		}
-		api(w, req)
+	apiHandler := api.New(chain, stateCreator, txpool, logDB, communicator)
+	if origins := ctx.String(apiCorsFlag.Name); origins != "" {
+		apiHandler = handlers.CORS(handlers.AllowedOrigins(strings.Split(origins, ",")))(apiHandler).ServeHTTP
 	}
 
 	return &components{
@@ -210,7 +209,7 @@ func makeComponent(
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: handleAPI},
+		apiSrv:       &http.Server{Handler: apiHandler},
 	}, nil
 }
 
