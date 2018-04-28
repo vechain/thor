@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -21,7 +22,9 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/genesis"
 	Genesis "github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/lvldb"
 	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	Packer "github.com/vechain/thor/packer"
@@ -32,12 +35,52 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
-func initLog(lvl log15.Lvl) {
-	log15.Root().SetHandler(log15.LvlFilterHandler(lvl, log15.StderrHandler))
+func fatal(args ...interface{}) {
+	var w io.Writer
+	if runtime.GOOS == "windows" {
+		// The SameFile check below doesn't work on Windows.
+		// stdout is unlikely to get redirected though, so just print there.
+		w = os.Stdout
+	} else {
+		outf, _ := os.Stdout.Stat()
+		errf, _ := os.Stderr.Stat()
+		if outf != nil && errf != nil && os.SameFile(outf, errf) {
+			w = os.Stderr
+		} else {
+			w = io.MultiWriter(os.Stdout, os.Stderr)
+		}
+	}
+	fmt.Print(w, "Fatal:")
+	fmt.Fprintln(w, args...)
+	os.Exit(1)
+}
+
+func fatalf(format string, args ...interface{}) {
+	fatal(fmt.Sprintf(format, args...))
+}
+
+func initLogger(ctx *cli.Context) {
+	logLevel := ctx.Int(verbosityFlag.Name)
+	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
 	// set go-ethereum log lvl to Warn
 	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
 	ethLogHandler.Verbosity(ethlog.LvlWarn)
 	ethlog.Root().SetHandler(ethLogHandler)
+}
+
+func selectGenesis(ctx *cli.Context) *genesis.Genesis {
+	if ctx.IsSet(devFlag.Name) {
+		gene, err := genesis.NewDevnet()
+		if err != nil {
+			fatal(err)
+		}
+		return gene
+	}
+	gene, err := genesis.NewMainnet()
+	if err != nil {
+		fatal(err)
+	}
+	return gene
 }
 
 func loadKey(keyFile string) (key *ecdsa.PrivateKey, err error) {
@@ -75,32 +118,44 @@ func loadProposer(isDev bool, keyFile string) (thor.Address, *ecdsa.PrivateKey, 
 	return thor.Address(crypto.PubkeyToAddress(key.PublicKey)), key, nil
 }
 
-func genesis(isDev bool) (*Genesis.Genesis, error) {
-	var (
-		genesis *Genesis.Genesis
-		err     error
-	)
-	if isDev {
-		genesis, err = Genesis.NewDevnet()
-		log.Info("Using Devnet", "genesis", genesis.ID().AbbrevString())
-	} else {
-		genesis, err = Genesis.NewMainnet()
-		log.Info("Using Mainnet", "genesis", genesis.ID().AbbrevString())
+func makeDataDir(ctx *cli.Context, gene *Genesis.Genesis) string {
+	mainDir := ctx.String(dirFlag.Name)
+	if mainDir == "" {
+		fatalf("unable to infer default main dir, use -%s to specify one", dirFlag.Name)
 	}
 
-	return genesis, err
+	dataDir := fmt.Sprintf("%v/instance-%x", mainDir, gene.ID().Bytes()[24:])
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		fatalf("create data dir at '%v': %v", dataDir, err)
+	}
+	return dataDir
 }
 
-func dataDir(genesis *Genesis.Genesis, root string) (string, error) {
-	dataDir := fmt.Sprintf("%v/chain-%x", root, genesis.ID().Bytes()[24:])
-	if err := os.MkdirAll(dataDir, os.ModePerm); err != nil {
-		if !os.IsExist(err) {
-			return "", err
-		}
+func openChainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
+	dir := filepath.Join(dataDir, "chain.db")
+	db, err := Lvldb.New(dir, Lvldb.Options{})
+	if err != nil {
+		fatalf("open chain database at '%v': %v", dir, err)
 	}
-	log.Info("Disk storage enabled for storing data", "path", dataDir)
+	return db
+}
 
-	return dataDir, nil
+func openEventDB(ctx *cli.Context, dataDir string) *eventdb.EventDB {
+	dir := filepath.Join(dataDir, "event.db")
+	db, err := eventdb.New(dir)
+	if err != nil {
+		fatal("open event database at '%v': %v", dir, err)
+	}
+	return db
+}
+
+func openTransferDB(ctx *cli.Context, dataDir string) *transferdb.TransferDB {
+	dir := filepath.Join(dataDir, "transfer.db")
+	db, err := transferdb.New(dir)
+	if err != nil {
+		fatal("open transfer database at '%v': %v", dir, err)
+	}
+	return db
 }
 
 func makeComponent(
@@ -152,6 +207,14 @@ func makeComponent(
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
+	api := api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)
+	var handleAPI http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
+		if domains := ctx.String("apicors"); domains != "" {
+			w.Header().Set("Access-Control-Allow-Origin", domains)
+		}
+		api(w, req)
+	}
+
 	return &components{
 		chain:        chain,
 		txpool:       txpool,
@@ -159,7 +222,7 @@ func makeComponent(
 		communicator: communicator,
 		consensus:    consensus.New(chain, stateCreator),
 		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)},
+		apiSrv:       &http.Server{Handler: handleAPI},
 	}, nil
 }
 
