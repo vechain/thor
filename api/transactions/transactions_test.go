@@ -20,11 +20,11 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -112,7 +112,7 @@ func httpPost(t *testing.T, url string, data []byte) []byte {
 }
 
 func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
-	transdb, err := transferdb.NewMem()
+	logDB, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,6 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	to := thor.BytesToAddress([]byte("to"))
 	value := big.NewInt(10)
 	header := new(block.Builder).Build().Header()
-	var trs []*transferdb.Transfer
 	count := 100
 	for i := 0; i < count; i++ {
 		transLog := &tx.Transfer{
@@ -129,14 +128,11 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 			Amount:    value,
 		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		trans := transferdb.NewTransfer(header, uint32(i), thor.Bytes32{}, from, transLog)
-		trs = append(trs, trans)
+		if err := logDB.Prepare(header).ForTransaction(thor.Bytes32{}, from).
+			Insert(nil, tx.Transfers{transLog}).Commit(); err != nil {
+			t.Fatal(err)
+		}
 	}
-	err = transdb.Insert(trs, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gene, err := genesis.NewDevnet()
@@ -182,7 +178,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	pool := txpool.New(chain, stateC)
 	defer pool.Stop()
 
-	transactions.New(chain, pool, transdb).Mount(router, "/transactions")
+	transactions.New(chain, pool, logDB).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
 	return tx, ts
 }

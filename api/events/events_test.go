@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -30,12 +30,12 @@ func getEvents(t *testing.T, ts *httptest.Server) {
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
 	filter := &events.Filter{
-		Range: &eventdb.Range{
+		Range: &logdb.Range{
 			Unit: "",
 			From: 0,
 			To:   10,
 		},
-		Options: &eventdb.Options{
+		Options: &logdb.Options{
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
@@ -63,7 +63,7 @@ func getEvents(t *testing.T, ts *httptest.Server) {
 }
 
 func initEventServer(t *testing.T) *httptest.Server {
-	db, err := eventdb.NewMem()
+	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,16 +74,16 @@ func initEventServer(t *testing.T) *httptest.Server {
 	}
 
 	header := new(block.Builder).Build().Header()
-	var evs []*eventdb.Event
 	for i := 0; i < 100; i++ {
-		ev := eventdb.NewEvent(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), txEv)
-		evs = append(evs, ev)
+		if err := db.Prepare(header).ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin"))).
+			Insert(tx.Events{txEv}, nil).Commit(); err != nil {
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
 	}
-	err = db.Insert(evs, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	router := mux.NewRouter()
 	events.New(db).Mount(router, "/events")
 	ts := httptest.NewServer(router)

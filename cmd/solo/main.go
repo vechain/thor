@@ -22,12 +22,11 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -47,8 +46,7 @@ type cliContext struct {
 	c            *chain.Chain
 	txpl         *txpool.TxPool
 	pk           *SoloPacker
-	eventDB      *eventdb.EventDB
-	transferDB   *transferdb.TransferDB
+	logDB        *logdb.LogDB
 	launchTime   uint64
 	onDemand     bool
 }
@@ -117,10 +115,9 @@ func newApp() *cli.App {
 
 		defer solo.kv.Close()
 		defer solo.txpl.Stop()
-		defer solo.eventDB.Close()
-		defer solo.transferDB.Close()
+		defer solo.logDB.Close()
 
-		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.eventDB, solo.transferDB, fakeCommunicator{})}
+		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.logDB, fakeCommunicator{})}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -169,12 +166,7 @@ func (solo *cliContext) prepare() (err error) {
 
 	solo.stateCreator = state.NewCreator(solo.kv)
 
-	solo.eventDB, err = eventdb.NewMem()
-	if err != nil {
-		return
-	}
-
-	solo.transferDB, err = transferdb.NewMem()
+	solo.logDB, err = logdb.NewMem()
 	if err != nil {
 		return
 	}
@@ -189,12 +181,8 @@ func (solo *cliContext) prepare() (err error) {
 		return
 	}
 
-	eventLogs := []*eventdb.Event{}
-	for index, l := range logs {
-		eventLogs = append(eventLogs, eventdb.NewEvent(b0.Header(), uint32(index), thor.Bytes32{}, thor.Address{}, l))
-	}
-	err = solo.eventDB.Insert(eventLogs, nil)
-	if err != nil {
+	if err = solo.logDB.Prepare(b0.Header()).ForTransaction(thor.Bytes32{}, thor.Address{}).
+		Insert(logs, nil).Commit(); err != nil {
 		return
 	}
 
@@ -278,7 +266,7 @@ func (solo *cliContext) packing() {
 	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
 	log.Debug(b.String())
 
-	saveLogs(b, receipts, solo.eventDB, blockTransfers, solo.transferDB)
+	saveLogs(b, receipts, blockTransfers, solo.logDB)
 
 	// ignore fork when solo
 	_, err = solo.c.AddBlock(b, receipts, true)
@@ -314,38 +302,23 @@ func (comm fakeCommunicator) SessionCount() int {
 	return 1
 }
 
-func saveLogs(blk *block.Block, receipts tx.Receipts, eventDB *eventdb.EventDB, blockTransfers [][]tx.Transfers, transferDB *transferdb.TransferDB) {
-	var eventIndex, transferIndex uint32
-
-	eventLogs := []*eventdb.Event{}
-	transferLogs := []*transferdb.Transfer{}
-
-	for i, receipt := range receipts {
-		for j, output := range receipt.Outputs {
-			txOrigin, _ := blk.Transactions()[i].Signer()
-			for _, event := range output.Events {
-				eventLogs = append(eventLogs, eventdb.NewEvent(blk.Header(), eventIndex, blk.Transactions()[i].ID(), txOrigin, event))
-				eventIndex++
-			}
-			for _, transfer := range blockTransfers[i][j] {
-				transferLogs = append(transferLogs, transferdb.NewTransfer(blk.Header(), transferIndex, blk.Transactions()[i].ID(), txOrigin, transfer))
-				transferIndex++
-			}
+func saveLogs(blk *block.Block, receipts tx.Receipts, blockTransfers [][]tx.Transfers, logDB *logdb.LogDB) {
+	batch := logDB.Prepare(blk.Header())
+	for i, tx := range blk.Transactions() {
+		origin, _ := tx.Signer()
+		txBatch := batch.ForTransaction(tx.ID(), origin)
+		receipt := receipts[i]
+		for _, output := range receipt.Outputs {
+			txBatch.Insert(output.Events, nil)
+		}
+		txTransfers := blockTransfers[i]
+		for _, transfers := range txTransfers {
+			txBatch.Insert(nil, transfers)
 		}
 	}
-
-	var err error
-	err = eventDB.Insert(eventLogs, nil)
-	if err != nil {
+	if err := batch.Commit(); err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
-
-	err = transferDB.Insert(transferLogs, nil)
-	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
-	}
-
-	return
 }
 
 func initLog(lvl log15.Lvl) {

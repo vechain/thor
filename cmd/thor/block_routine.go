@@ -11,20 +11,19 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	Consensus "github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 )
 
-func produceBlock(ctx context.Context, components *components, eventDB *eventdb.EventDB, transferDB *transferdb.TransferDB) {
+func produceBlock(ctx context.Context, components *components, logDB *logdb.LogDB) {
 	var goes co.Goes
 
 	packedChan := make(chan *packedEvent)
 	bestBlockUpdated := make(chan *block.Block, 1)
 
-	goes.Go(func() { consentLoop(ctx, components, eventDB, transferDB, bestBlockUpdated, packedChan) })
+	goes.Go(func() { consentLoop(ctx, components, logDB, bestBlockUpdated, packedChan) })
 	goes.Go(func() { packLoop(ctx, components, bestBlockUpdated, packedChan) })
 
 	log.Info("Block consensus started")
@@ -57,15 +56,14 @@ type packedEvent struct {
 func consentLoop(
 	ctx context.Context,
 	components *components,
-	eventDB *eventdb.EventDB,
-	transferDB *transferdb.TransferDB,
+	logDB *logdb.LogDB,
 	bestBlockUpdated chan *block.Block,
 	packedChan chan *packedEvent,
 ) {
 	futures := minheap.NewBlockMinHeap()
 	orphanMap := make(map[thor.Bytes32]*orphan)
 	updateChainFn := func(newBlk *newBlockEvent) error {
-		return updateChain(ctx, components, eventDB, transferDB, newBlk, bestBlockUpdated)
+		return updateChain(ctx, components, logDB, newBlk, bestBlockUpdated)
 	}
 	consentFn := func(blk *block.Block, isSynced bool) error {
 		trunk, receipts, transfers, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
@@ -240,8 +238,7 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 func updateChain(
 	ctx context.Context,
 	components *components,
-	eventDB *eventdb.EventDB,
-	transferDB *transferdb.TransferDB,
+	logDB *logdb.LogDB,
 	newBlk *newBlockEvent,
 	bestBlockUpdated chan *block.Block,
 ) error {
@@ -268,32 +265,6 @@ func updateChain(
 		components.communicator.BroadcastBlock(newBlk.Blk)
 
 		// fork
-		var eventIndex uint32
-		var transferIndex uint32
-		txs := newBlk.Blk.Transactions()
-		var events []*eventdb.Event
-		var transfers []*transferdb.Transfer
-
-		for i, receipt := range newBlk.Receipts {
-			for j, output := range receipt.Outputs {
-				tx := txs[i]
-				signer, err := tx.Signer()
-				if err != nil {
-					log.Error(fmt.Sprintf("%v", err))
-					return err
-				}
-				header := newBlk.Blk.Header()
-				for _, e := range output.Events {
-					events = append(events, eventdb.NewEvent(header, eventIndex, tx.ID(), signer, e))
-					eventIndex++
-				}
-				for _, transfer := range newBlk.Transfers[i][j] {
-					transfers = append(transfers, transferdb.NewTransfer(header, transferIndex, tx.ID(), signer, transfer))
-					transferIndex++
-				}
-			}
-		}
-
 		forkIDs := make([]thor.Bytes32, len(fork.Branch), len(fork.Branch))
 		for i, blk := range fork.Branch {
 			forkIDs[i] = blk.Header().ID()
@@ -302,10 +273,22 @@ func updateChain(
 			}
 		}
 
-		eventDB.Insert(events, forkIDs)
-		transferDB.Insert(transfers, forkIDs)
-	}
+		batch := logDB.Prepare(newBlk.Blk.Header())
+		for i, tx := range newBlk.Blk.Transactions() {
+			origin, _ := tx.Signer()
+			txBatch := batch.ForTransaction(tx.ID(), origin)
+			receipt := newBlk.Receipts[i]
+			for _, output := range receipt.Outputs {
+				txBatch.Insert(output.Events, nil)
+			}
+			txTransfers := newBlk.Transfers[i]
+			for _, transfers := range txTransfers {
+				txBatch.Insert(nil, transfers)
+			}
+		}
 
+		return batch.Commit(forkIDs...)
+	}
 	return nil
 }
 

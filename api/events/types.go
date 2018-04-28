@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/api/transactions"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
 
@@ -20,13 +20,13 @@ type TopicSet struct {
 type Filter struct {
 	Address   *thor.Address
 	TopicSets []*TopicSet
-	Range     *eventdb.Range
-	Options   *eventdb.Options
-	Order     eventdb.OrderType
+	Range     *logdb.Range
+	Options   *logdb.Options
+	Order     logdb.Order
 }
 
-func convertFilter(filter *Filter) *eventdb.Filter {
-	f := &eventdb.Filter{
+func convertFilter(filter *Filter) *logdb.EventFilter {
+	f := &logdb.EventFilter{
 		Address: filter.Address,
 		Range:   filter.Range,
 		Options: filter.Options,
@@ -56,8 +56,8 @@ type FilteredEvent struct {
 	Tx     transactions.TxContext    `json:"tx"`
 }
 
-//convert a eventdb.Event into a json format Event
-func convertEvent(event *eventdb.Event) *FilteredEvent {
+//convert a logdb.Event into a json format Event
+func convertEvent(event *logdb.Event) *FilteredEvent {
 	fe := FilteredEvent{
 		Data: hexutil.Encode(event.Data),
 		Block: transactions.BlockContext{

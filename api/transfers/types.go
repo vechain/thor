@@ -2,8 +2,8 @@ package transfers
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 )
 
 type FilteredTransfer struct {
@@ -18,7 +18,7 @@ type FilteredTransfer struct {
 	Value       *math.HexOrDecimal256 `json:"value"`
 }
 
-func ConvertTransfer(transfer *transferdb.Transfer) *FilteredTransfer {
+func ConvertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Value)
 	return &FilteredTransfer{
 		BlockID:     transfer.BlockID,

@@ -21,16 +21,14 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/genesis"
 	Genesis "github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
-	Lvldb "github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	Packer "github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -133,59 +131,49 @@ func makeDataDir(ctx *cli.Context, gene *Genesis.Genesis) string {
 
 func openChainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 	dir := filepath.Join(dataDir, "chain.db")
-	db, err := Lvldb.New(dir, Lvldb.Options{})
+	db, err := lvldb.New(dir, lvldb.Options{})
 	if err != nil {
 		fatalf("open chain database at '%v': %v", dir, err)
 	}
 	return db
 }
 
-func openEventDB(ctx *cli.Context, dataDir string) *eventdb.EventDB {
-	dir := filepath.Join(dataDir, "event.db")
-	db, err := eventdb.New(dir)
+func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
+	dir := filepath.Join(dataDir, "logs.db")
+	db, err := logdb.New(dir)
 	if err != nil {
 		fatal("open event database at '%v': %v", dir, err)
 	}
 	return db
 }
 
-func openTransferDB(ctx *cli.Context, dataDir string) *transferdb.TransferDB {
-	dir := filepath.Join(dataDir, "transfer.db")
-	db, err := transferdb.New(dir)
-	if err != nil {
-		fatal("open transfer database at '%v': %v", dir, err)
-	}
-	return db
-}
-
 func makeComponent(
 	ctx *cli.Context,
-	lvldb *Lvldb.LevelDB,
-	eventDB *eventdb.EventDB,
-	transferDB *transferdb.TransferDB,
+	lvlDB *lvldb.LevelDB,
+	logDB *logdb.LogDB,
 	genesis *Genesis.Genesis,
 	dataDir string,
 ) (*components, error) {
-	stateCreator := state.NewCreator(lvldb)
+	stateCreator := state.NewCreator(lvlDB)
 
 	genesisBlock, blockEvents, err := genesis.Build(stateCreator)
 	if err != nil {
 		return nil, err
 	}
 
-	var events []*eventdb.Event
 	header := genesisBlock.Header()
-	for _, e := range blockEvents {
-		events = append(events, eventdb.NewEvent(header, 0, thor.Bytes32{}, thor.Address{}, e))
+	if err := logDB.Prepare(header).
+		ForTransaction(thor.Bytes32{}, thor.Address{}).
+		Insert(blockEvents, nil).Commit(); err != nil {
+		return nil, err
 	}
-	eventDB.Insert(events, nil)
 
-	chain, err := chain.New(lvldb, genesisBlock)
+	chain, err := chain.New(lvlDB, genesisBlock)
 	if err != nil {
 		return nil, err
 	}
 
-	proposer, privateKey, err := loadProposer(ctx.Bool("devnet"), dataDir+"/master.key")
+	proposer, privateKey, err := loadProposer(ctx.Bool("dev"), dataDir+"/master.key")
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +195,7 @@ func makeComponent(
 	txpool := txpool.New(chain, stateCreator)
 	communicator := comm.New(chain, txpool)
 
-	api := api.New(chain, stateCreator, txpool, eventDB, transferDB, communicator)
+	api := api.New(chain, stateCreator, txpool, logDB, communicator)
 	var handleAPI http.HandlerFunc = func(w http.ResponseWriter, req *http.Request) {
 		if domains := ctx.String("apicors"); domains != "" {
 			w.Header().Set("Access-Control-Allow-Origin", domains)

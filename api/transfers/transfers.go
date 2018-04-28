@@ -1,29 +1,29 @@
 package transfers
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/eventdb"
-	"github.com/vechain/thor/transferdb"
+	"github.com/vechain/thor/logdb"
 )
 
 type Transfers struct {
-	transferDB *transferdb.TransferDB
+	db *logdb.LogDB
 }
 
-func New(transferDB *transferdb.TransferDB) *Transfers {
+func New(db *logdb.LogDB) *Transfers {
 	return &Transfers{
-		transferDB,
+		db,
 	}
 }
 
 //Filter query logs with option
-func (t *Transfers) filter(transferFilter *transferdb.TransferFilter) ([]*FilteredTransfer, error) {
-	transfers, err := t.transferDB.Filter(transferFilter)
+func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([]*FilteredTransfer, error) {
+	transfers, err := t.db.FilterTransfers(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -40,17 +40,17 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	req.Body.Close()
-	transFilter := new(transferdb.TransferFilter)
-	if err := json.Unmarshal(res, &transFilter); err != nil {
+	var filter logdb.TransferFilter
+	if err := json.Unmarshal(res, &filter); err != nil {
 		return err
 	}
 	order := req.URL.Query().Get("order")
-	if order != string(eventdb.DESC) {
-		transFilter.Order = transferdb.ASC
+	if order != string(logdb.DESC) {
+		filter.Order = logdb.ASC
 	} else {
-		transFilter.Order = transferdb.DESC
+		filter.Order = logdb.DESC
 	}
-	tLogs, err := t.filter(transFilter)
+	tLogs, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}

@@ -9,10 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/eventdb"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 )
 
@@ -46,7 +44,7 @@ func TestEvents(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("addr"))
 	es, err := db.FilterEvents(context.Background(), &logdb.EventFilter{
 		Range: &logdb.Range{
-			Unit: "Block",
+			Unit: logdb.Block,
 			From: 0,
 			To:   10,
 		},
@@ -54,7 +52,7 @@ func TestEvents(t *testing.T) {
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
-		Order:   "DESC",
+		Order:   logdb.DESC,
 		Address: &addr,
 		TopicSet: [][5]*thor.Bytes32{{&t0,
 			nil,
@@ -115,7 +113,7 @@ func TestTransfers(t *testing.T) {
 			Offset: 0,
 			Limit:  uint64(count),
 		},
-		Order: transferdb.DESC,
+		Order: logdb.DESC,
 	}
 	ts, err := db.FilterTransfers(context.Background(), tf)
 	if err != nil {
@@ -148,7 +146,7 @@ func BenchmarkLog(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	db, err := eventdb.New(path + "/log.db")
+	db, err := logdb.New(path + "/log.db")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -157,17 +155,18 @@ func BenchmarkLog(b *testing.B) {
 		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
 		Data:    []byte("data"),
 	}
-	var events []*eventdb.Event
-	header := new(block.Builder).Build().Header()
-	for i := 0; i < 100; i++ {
-		event := eventdb.NewEvent(header, uint32(i), thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")), l)
-		events = append(events, event)
-		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-	}
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := db.Insert(events, nil)
-		if err != nil {
+		header := new(block.Builder).Build().Header()
+		batch := db.Prepare(header)
+		txBatch := batch.ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")))
+		for j := 0; j < 100; j++ {
+			txBatch.Insert(tx.Events{l}, nil)
+			header = new(block.Builder).ParentID(header.ID()).Build().Header()
+		}
+
+		if err := batch.Commit(); err != nil {
 			b.Fatal(err)
 		}
 	}
