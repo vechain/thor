@@ -81,13 +81,10 @@ func action(ctx *cli.Context) (err error) {
 	chainDB := openChainDB(ctx, dataDir)
 	defer chainDB.Close()
 
-	eventDB := openEventDB(ctx, dataDir)
-	defer eventDB.Close()
+	logDB := openLogDB(ctx, dataDir)
+	defer logDB.Close()
 
-	transferDB := openTransferDB(ctx, dataDir)
-	defer transferDB.Close()
-
-	components, err := makeComponent(ctx, chainDB, eventDB, transferDB, gene, dataDir)
+	components, err := makeComponent(ctx, chainDB, logDB, gene, dataDir)
 	if err != nil {
 		return err
 	}
@@ -98,7 +95,7 @@ func action(ctx *cli.Context) (err error) {
 	goes.Go(func() { runNetwork(c, components, dataDir) })
 	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
 	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, eventDB, transferDB) })
+	goes.Go(func() { produceBlock(c, components, logDB) })
 
 	interrupt := make(chan os.Signal)
 	signal.Notify(interrupt, os.Interrupt)

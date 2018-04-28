@@ -1,6 +1,7 @@
 package transactions
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -12,24 +13,23 @@ import (
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
 type Transactions struct {
-	chain      *chain.Chain
-	pool       *txpool.TxPool
-	transferDB *transferdb.TransferDB
+	chain *chain.Chain
+	pool  *txpool.TxPool
+	logDB *logdb.LogDB
 }
 
-func New(chain *chain.Chain, pool *txpool.TxPool, transferDB *transferdb.TransferDB) *Transactions {
+func New(chain *chain.Chain, pool *txpool.TxPool, logDB *logdb.LogDB) *Transactions {
 	return &Transactions{
 		chain,
 		pool,
-		transferDB,
+		logDB,
 	}
 }
 
@@ -193,8 +193,8 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	return utils.WriteJSON(w, receipt)
 }
 
-func (t *Transactions) getTransfers(filter *transferdb.TransferFilter) ([]*transfers.FilteredTransfer, error) {
-	transferLogs, err := t.transferDB.Filter(filter)
+func (t *Transactions) getTransfers(ctx context.Context, filter *logdb.TransferFilter) ([]*transfers.FilteredTransfer, error) {
+	transferLogs, err := t.logDB.FilterTransfers(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -211,14 +211,14 @@ func (t *Transactions) handleFilterTransferLogsByTxID(w http.ResponseWriter, req
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	transFilter := &transferdb.TransferFilter{TxID: &txID}
+	transFilter := &logdb.TransferFilter{TxID: &txID}
 	order := req.URL.Query().Get("order")
-	if order != string(eventdb.DESC) {
-		transFilter.Order = transferdb.ASC
+	if order != string(logdb.DESC) {
+		transFilter.Order = logdb.ASC
 	} else {
-		transFilter.Order = transferdb.DESC
+		transFilter.Order = logdb.DESC
 	}
-	transferLogs, err := t.getTransfers(transFilter)
+	transferLogs, err := t.getTransfers(req.Context(), transFilter)
 	if err != nil {
 		return err
 	}

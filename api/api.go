@@ -13,14 +13,13 @@ import (
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/txpool"
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, eventDB *eventdb.EventDB, transferDB *transferdb.TransferDB, nw node.Network) http.HandlerFunc {
+func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network) http.HandlerFunc {
 	router := mux.NewRouter()
 
 	// to serve api doc and swagger-ui
@@ -39,13 +38,13 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 
 	accounts.New(chain, stateCreator).
 		Mount(router, "/accounts")
-	events.New(eventDB).
+	events.New(logDB).
 		Mount(router, "/events")
-	transfers.New(transferDB).
+	transfers.New(logDB).
 		Mount(router, "/transfers")
 	blocks.New(chain).
 		Mount(router, "/blocks")
-	transactions.New(chain, txPool, transferDB).
+	transactions.New(chain, txPool, logDB).
 		Mount(router, "/transactions")
 	node.New(nw).
 		Mount(router, "/node")

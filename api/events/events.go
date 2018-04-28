@@ -1,30 +1,31 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/eventdb"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
 
 type Events struct {
-	db *eventdb.EventDB
+	db *logdb.LogDB
 }
 
-func New(db *eventdb.EventDB) *Events {
+func New(db *logdb.LogDB) *Events {
 	return &Events{
 		db,
 	}
 }
 
 //Filter query events with option
-func (e *Events) filter(filter *Filter) ([]*FilteredEvent, error) {
+func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, error) {
 	f := convertFilter(filter)
-	events, err := e.db.Filter(f)
+	events, err := e.db.FilterEvents(ctx, f)
 	if err != nil {
 		return nil, err
 	}
@@ -54,12 +55,12 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		filter.Address = &addr
 	}
 	order := query.Get("order")
-	if order != string(eventdb.DESC) {
-		filter.Order = eventdb.ASC
+	if order != string(logdb.DESC) {
+		filter.Order = logdb.ASC
 	} else {
-		filter.Order = eventdb.DESC
+		filter.Order = logdb.DESC
 	}
-	fes, err := e.filter(&filter)
+	fes, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}

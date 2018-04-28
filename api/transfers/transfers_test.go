@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/transferdb"
 	"github.com/vechain/thor/tx"
 )
 
@@ -28,23 +28,23 @@ func getTransfers(t *testing.T, ts *httptest.Server) {
 	limit := 5
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
-	tf := &transferdb.TransferFilter{
-		AddressSets: []*transferdb.AddressSet{
-			&transferdb.AddressSet{
+	tf := &logdb.TransferFilter{
+		AddressSets: []*logdb.AddressSet{
+			&logdb.AddressSet{
 				From: &from,
 				To:   &to,
 			},
 		},
-		Range: &transferdb.Range{
-			Unit: transferdb.Block,
+		Range: &logdb.Range{
+			Unit: logdb.Block,
 			From: 0,
 			To:   1000,
 		},
-		Options: &transferdb.Options{
+		Options: &logdb.Options{
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
-		Order: transferdb.DESC,
+		Order: logdb.DESC,
 	}
 	f, err := json.Marshal(tf)
 	if err != nil {
@@ -59,7 +59,7 @@ func getTransfers(t *testing.T, ts *httptest.Server) {
 }
 
 func initLogServer(t *testing.T) *httptest.Server {
-	db, err := transferdb.NewMem()
+	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,6 @@ func initLogServer(t *testing.T) *httptest.Server {
 	to := thor.BytesToAddress([]byte("to"))
 	value := big.NewInt(10)
 	header := new(block.Builder).Build().Header()
-	var trs []*transferdb.Transfer
 	count := 100
 	for i := 0; i < count; i++ {
 		transLog := &tx.Transfer{
@@ -77,13 +76,12 @@ func initLogServer(t *testing.T) *httptest.Server {
 			Amount:    value,
 		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		trans := transferdb.NewTransfer(header, uint32(i), thor.Bytes32{}, from, transLog)
-		trs = append(trs, trans)
+		if err := db.Prepare(header).ForTransaction(thor.Bytes32{}, from).Insert(nil, tx.Transfers{transLog}).
+			Commit(); err != nil {
+			t.Fatal(err)
+		}
 	}
-	err = db.Insert(trs, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	router := mux.NewRouter()
 	transfers.New(db).Mount(router, "/transfers")
 	ts := httptest.NewServer(router)

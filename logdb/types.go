@@ -8,7 +8,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-//Event represents tx.Event to event to store in db
+//Event represents tx.Event that can be stored in db.
 type Event struct {
 	BlockID     thor.Bytes32
 	Index       uint32
@@ -21,7 +21,7 @@ type Event struct {
 	Data        []byte
 }
 
-//newEvent return a format tx event.
+//newEvent converts tx.Event to Event.
 func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, txEvent *tx.Event) *Event {
 	ev := &Event{
 		BlockID:     header.ID(),
@@ -39,7 +39,7 @@ func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin th
 	return ev
 }
 
-//Transfer store in db
+//Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockID     thor.Bytes32
 	Index       uint32
@@ -52,7 +52,7 @@ type Transfer struct {
 	Value       *big.Int
 }
 
-//newTransfer return a format transfer
+//newTransfer converts tx.Transfer to Transfer.
 func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, transfer *tx.Transfer) *Transfer {
 	return &Transfer{
 		BlockID:     header.ID(),
@@ -70,47 +70,47 @@ func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin
 type RangeType string
 
 const (
-	Block RangeType = "Block"
-	Time  RangeType = "Time"
+	Block RangeType = "block"
+	Time  RangeType = "time"
 )
 
-type OrderType string
+type Order string
 
 const (
-	ASC  OrderType = "ASC"
-	DESC OrderType = "DESC"
+	ASC  Order = "asc"
+	DESC Order = "desc"
 )
 
 type Range struct {
-	Unit RangeType `json:"unit"`
-	From uint64    `json:"from"`
-	To   uint64    `json:"to"`
+	Unit RangeType
+	From uint64
+	To   uint64
 }
 
 type Options struct {
-	Offset uint64 `json:"offset"`
-	Limit  uint64 `json:"limit"`
+	Offset uint64
+	Limit  uint64
 }
 
 //EventFilter filter
 type EventFilter struct {
-	Address  *thor.Address      `json:"address"` // always a contract address
-	TopicSet [][5]*thor.Bytes32 `json:"topicSet"`
-	Range    *Range             `json:"range"`
-	Options  *Options           `json:"options"`
-	Order    OrderType          `json:"order"` //default asc
+	Address  *thor.Address // always a contract address
+	TopicSet [][5]*thor.Bytes32
+	Range    *Range
+	Options  *Options
+	Order    Order //default asc
 }
 
 type AddressSet struct {
-	TxOrigin *thor.Address `json:"txOrigin"` //who send transaction
-	From     *thor.Address `json:"from"`     //who transferred tokens
-	To       *thor.Address `json:"to"`       //who recieved tokens
+	TxOrigin *thor.Address //who send transaction
+	From     *thor.Address //who transferred tokens
+	To       *thor.Address //who recieved tokens
 }
 
 type TransferFilter struct {
-	TxID        *thor.Bytes32 `json:"txID"`
-	AddressSets []*AddressSet `json:"addressSets"`
-	Range       *Range        `json:"range"`
-	Options     *Options      `json:"options"`
-	Order       OrderType     `json:"order"` //default asc
+	TxID        *thor.Bytes32
+	AddressSets []*AddressSet
+	Range       *Range
+	Options     *Options
+	Order       Order //default asc
 }
