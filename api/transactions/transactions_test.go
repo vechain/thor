@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transactions"
-	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -35,7 +34,6 @@ func TestTransaction(t *testing.T) {
 	getTx(t, ts, transaction)
 	getTxReceipt(t, ts, transaction)
 	senTx(t, ts, transaction)
-	getTransfers(t, ts)
 }
 
 func getTx(t *testing.T, ts *httptest.Server, tx *tx.Transaction) {
@@ -86,16 +84,6 @@ func senTx(t *testing.T, ts *httptest.Server, transaction *tx.Transaction) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, transaction.ID().String(), txObj["id"], "shoudl be the same transaction")
-}
-
-func getTransfers(t *testing.T, ts *httptest.Server) {
-	limit := 100
-	res := httpGet(t, ts.URL+"/transactions/"+thor.Bytes32{}.String()+"/transfers")
-	var tLogs []*transfers.FilteredTransfer
-	if err := json.Unmarshal(res, &tLogs); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, limit, len(tLogs), "should be `limit` transfers")
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {
@@ -167,7 +155,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, receipts, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +166,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	pool := txpool.New(chain, stateC)
 	defer pool.Stop()
 
-	transactions.New(chain, pool, logDB).Mount(router, "/transactions")
+	transactions.New(chain, pool).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
 	return tx, ts
 }

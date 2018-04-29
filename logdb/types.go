@@ -47,9 +47,9 @@ type Transfer struct {
 	BlockTime   uint64
 	TxID        thor.Bytes32
 	TxOrigin    thor.Address
-	From        thor.Address
-	To          thor.Address
-	Value       *big.Int
+	Sender      thor.Address
+	Recipient   thor.Address
+	Amount      *big.Int
 }
 
 //newTransfer converts tx.Transfer to Transfer.
@@ -61,9 +61,9 @@ func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin
 		BlockTime:   header.Timestamp(),
 		TxID:        txID,
 		TxOrigin:    txOrigin,
-		From:        transfer.Sender,
-		To:          transfer.Recipient,
-		Value:       transfer.Amount,
+		Sender:      transfer.Sender,
+		Recipient:   transfer.Recipient,
+		Amount:      transfer.Amount,
 	}
 }
 
@@ -102,9 +102,9 @@ type EventFilter struct {
 }
 
 type AddressSet struct {
-	TxOrigin *thor.Address //who send transaction
-	From     *thor.Address //who transferred tokens
-	To       *thor.Address //who recieved tokens
+	TxOrigin  *thor.Address //who send transaction
+	Sender    *thor.Address //who transferred tokens
+	Recipient *thor.Address //who recieved tokens
 }
 
 type TransferFilter struct {

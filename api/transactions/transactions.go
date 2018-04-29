@@ -1,7 +1,6 @@
 package transactions
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -10,10 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
-	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
@@ -22,14 +19,12 @@ import (
 type Transactions struct {
 	chain *chain.Chain
 	pool  *txpool.TxPool
-	logDB *logdb.LogDB
 }
 
-func New(chain *chain.Chain, pool *txpool.TxPool, logDB *logdb.LogDB) *Transactions {
+func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		chain,
 		pool,
-		logDB,
 	}
 }
 
@@ -193,43 +188,10 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	return utils.WriteJSON(w, receipt)
 }
 
-func (t *Transactions) getTransfers(ctx context.Context, filter *logdb.TransferFilter) ([]*transfers.FilteredTransfer, error) {
-	transferLogs, err := t.logDB.FilterTransfers(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	tLogs := make([]*transfers.FilteredTransfer, len(transferLogs))
-	for i, trans := range transferLogs {
-		tLogs[i] = transfers.ConvertTransfer(trans)
-	}
-	return tLogs, nil
-}
-
-func (t *Transactions) handleFilterTransferLogsByTxID(w http.ResponseWriter, req *http.Request) error {
-	id := mux.Vars(req)["id"]
-	txID, err := thor.ParseBytes32(id)
-	if err != nil {
-		return utils.BadRequest(err, "id")
-	}
-	transFilter := &logdb.TransferFilter{TxID: &txID}
-	order := req.URL.Query().Get("order")
-	if order != string(logdb.DESC) {
-		transFilter.Order = logdb.ASC
-	} else {
-		transFilter.Order = logdb.DESC
-	}
-	transferLogs, err := t.getTransfers(req.Context(), transFilter)
-	if err != nil {
-		return err
-	}
-	return utils.WriteJSON(w, transferLogs)
-}
-
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
-	sub.Path("/{id}/transfers").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogsByTxID))
 }
