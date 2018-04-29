@@ -43,7 +43,7 @@ func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
 	}
 
 	return &VMOutput{
-		Data:     hexutil.Encode(vo.Value),
+		Data:     hexutil.Encode(vo.Data),
 		GasUsed:  gasUsed,
 		Reverted: reverted,
 		VMError:  vmError,
