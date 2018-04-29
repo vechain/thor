@@ -37,15 +37,15 @@ CREATE INDEX IF NOT EXISTS topicIndex4 ON event(topic4);`
 	blockTime INTEGER,
 	txID BLOB(32),
 	txOrigin BLOB(20),
-	fromAddress BLOB(20),
-	toAddress BLOB(20),
-	value BLOB
+	sender BLOB(20),
+	recipient BLOB(20),
+	amount BLOB
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS prim ON transfer(blockID, transferIndex);
 
 CREATE INDEX IF NOT EXISTS blockNumberIndex ON transfer(blockNumber);
 CREATE INDEX IF NOT EXISTS blockTimeIndex ON transfer(blockTime);
-CREATE INDEX IF NOT EXISTS fromIndex ON transfer(fromAddress);
-CREATE INDEX IF NOT EXISTS toIndex ON transfer(toAddress);`
+CREATE INDEX IF NOT EXISTS senderIndex ON transfer(sender);
+CREATE INDEX IF NOT EXISTS recipientIndex ON transfer(recipient);`
 )

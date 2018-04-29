@@ -97,11 +97,11 @@ paths:
                 example:
                   value: >-
                     0x0000000000000000000000000000000000000000000000000000000000000001
-  '/events':
+  /events:
     post:
       tags:
         - Events
-      summary: filter event logs 
+      summary: filter event logs
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
         - $ref: '#/components/parameters/FilterAddressInQuery'
@@ -121,12 +121,11 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredEvent'
-  
-  '/transfers':
+  /transfers:
     post:
       tags:
         - Transfers
-      summary: filter transfer logs 
+      summary: filter transfer logs
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
@@ -166,7 +165,9 @@ paths:
     get:
       tags:
         - Transactions
-      summary: retrieve transaction by its id (if raw true , retrieve a raw transaction)
+      summary: >-
+        retrieve transaction by its id (if raw true , retrieve a raw
+        transaction)
       responses:
         '200':
           description: OK
@@ -190,25 +191,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Receipt'
-
-  '/transactions/{id}/transfers':
-    parameters:
-      - $ref: '#/components/parameters/TxIDInPath'
-      - $ref: '#/components/parameters/FilterOrderInQuery'
-    get:
-      tags:
-        - Transactions
-      summary: retrieve transfer logs by transaction ID
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FilteredTransfer'
-  '/transactions':
+  /transactions:
     post:
       tags:
         - Transactions
@@ -231,7 +214,7 @@ paths:
                 example:
                   id: >-
                     0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
-  '/node/network':
+  /node/network:
     get:
       tags:
         - Node
@@ -353,7 +336,8 @@ components:
           type: string
           description: hex form of encoded transaction
       example:
-        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'  
+        raw: >-
+          0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400
     Clause:
       properties:
         to:
@@ -445,6 +429,21 @@ components:
         topics:
           - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         data: '0xddff'
+    Transfer:
+      properties:
+        sender:
+          type: string
+          description: address that sends tokens
+        recipient:
+          type: string
+          description: address that receives tokens
+        amount:
+          type: string
+          description: amount of tokens
+      example:
+        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        recipient: '0x733b7269443c70de16bbf9b0615307884bcc5636'
+        amount: '0xde0b6b3a7640000'
     Receipt:
       properties:
         gasUsed:
@@ -479,6 +478,10 @@ components:
                 type: array
                 items:
                   $ref: '#/components/schemas/Event'
+              transfers:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transfer'
       example:
         gasUsed: 21000
         gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
@@ -492,15 +495,18 @@ components:
         tx:
           id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        outputs: 
-          - {
-            'contractAddress':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
-            events:[{
-                'address':'0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
-                'topics':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8',
-                'data':'0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-              }]
-          }
+        outputs:
+          - 'contractAddress:''0x7567d83b7b8d80addcb281a71d54fc7b3364ffed''': null
+            events:
+              - address: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+                topics: >-
+                  0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
+                data: >-
+                  0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
+            transfers:
+              - sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+                recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+                amount: '0x123f'
     ContractCall:
       properties:
         value:
@@ -544,7 +550,7 @@ components:
       properties:
         offset:
           type: integer
-        limit: 
+        limit:
           type: integer
     Range:
       properties:
@@ -612,16 +618,16 @@ components:
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     AddressSet:
       properties:
-        txOrigin: 
+        txOrigin:
           type: string
-        from:
+        sender:
           type: string
-        to: 
+        recipient:
           type: string
       example:
         txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        from: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     TransferFilter:
       properties:
         range:
@@ -633,10 +639,10 @@ components:
           items:
             $ref: '#/components/schemas/AddressSet'
     FilteredTransfer:
-      properties:       
-        from:
+      properties:
+        sender:
           type: string
-        to:
+        recipient:
           type: string
         value:
           type: string
@@ -644,9 +650,9 @@ components:
           $ref: '#/components/schemas/BlockContext'
         tx:
           $ref: '#/components/schemas/TxContext'
-      example:        
-        from: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+      example:
+        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         value: '0x9fad'
         block:
           id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
@@ -716,7 +722,7 @@ components:
         enum:
           - ASC
           - DESC
-      example: 'ASC'
+      example: ASC
     TxIDInPath:
       in: path
       description: ID of transaction

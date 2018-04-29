@@ -13,13 +13,13 @@ type FilteredTransfer struct {
 	BlockTime   uint64                `json:"blockTime"`
 	TxID        thor.Bytes32          `json:"txID"`
 	TxOrigin    thor.Address          `json:"txOrigin"`
-	From        thor.Address          `json:"from"`
-	To          thor.Address          `json:"to"`
-	Value       *math.HexOrDecimal256 `json:"value"`
+	Sender      thor.Address          `json:"sender"`
+	Recipient   thor.Address          `json:"recipient"`
+	Amount      *math.HexOrDecimal256 `json:"amount"`
 }
 
 func ConvertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
-	v := math.HexOrDecimal256(*transfer.Value)
+	v := math.HexOrDecimal256(*transfer.Amount)
 	return &FilteredTransfer{
 		BlockID:     transfer.BlockID,
 		Index:       transfer.Index,
@@ -27,8 +27,8 @@ func ConvertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 		BlockTime:   transfer.BlockTime,
 		TxID:        transfer.TxID,
 		TxOrigin:    transfer.TxOrigin,
-		From:        transfer.From,
-		To:          transfer.To,
-		Value:       &v,
+		Sender:      transfer.Sender,
+		Recipient:   transfer.Recipient,
+		Amount:      &v,
 	}
 }

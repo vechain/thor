@@ -153,13 +153,13 @@ func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([
 				args = append(args, addressSet.TxOrigin.Bytes())
 				stmt += " AND txOrigin = ? "
 			}
-			if addressSet.From != nil {
-				args = append(args, addressSet.From.Bytes())
-				stmt += " AND fromAddress = ? "
+			if addressSet.Sender != nil {
+				args = append(args, addressSet.Sender.Bytes())
+				stmt += " AND sender = ? "
 			}
-			if addressSet.To != nil {
-				args = append(args, addressSet.To.Bytes())
-				stmt += " AND toAddress = ? "
+			if addressSet.Recipient != nil {
+				args = append(args, addressSet.Recipient.Bytes())
+				stmt += " AND recipient = ? "
 			}
 			if i == length-1 {
 				stmt += " )) "
@@ -266,9 +266,9 @@ func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interf
 			blockTime   uint64
 			txID        []byte
 			txOrigin    []byte
-			from        []byte
-			to          []byte
-			value       []byte
+			sender      []byte
+			recipient   []byte
+			amount      []byte
 		)
 		if err := rows.Scan(
 			&blockID,
@@ -277,9 +277,9 @@ func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interf
 			&blockTime,
 			&txID,
 			&txOrigin,
-			&from,
-			&to,
-			&value,
+			&sender,
+			&recipient,
+			&amount,
 		); err != nil {
 			return nil, err
 		}
@@ -290,9 +290,9 @@ func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interf
 			BlockTime:   blockTime,
 			TxID:        thor.BytesToBytes32(txID),
 			TxOrigin:    thor.BytesToAddress(txOrigin),
-			From:        thor.BytesToAddress(from),
-			To:          thor.BytesToAddress(to),
-			Value:       new(big.Int).SetBytes(value),
+			Sender:      thor.BytesToAddress(sender),
+			Recipient:   thor.BytesToAddress(recipient),
+			Amount:      new(big.Int).SetBytes(amount),
 		}
 		transfers = append(transfers, trans)
 	}
@@ -351,16 +351,16 @@ func (bb *BlockBatch) Commit(abandonedBlocks ...thor.Bytes32) error {
 		}
 
 		for _, transfer := range bb.transfers {
-			if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockID ,transferIndex, blockNumber ,blockTime ,txID ,txOrigin ,fromAddress ,toAddress ,value) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+			if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockID ,transferIndex, blockNumber ,blockTime ,txID ,txOrigin ,sender ,recipient ,value) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 				transfer.BlockID.Bytes(),
 				transfer.Index,
 				transfer.BlockNumber,
 				transfer.BlockTime,
 				transfer.TxID.Bytes(),
 				transfer.TxOrigin.Bytes(),
-				transfer.From.Bytes(),
-				transfer.To.Bytes(),
-				transfer.Value.Bytes(),
+				transfer.Sender.Bytes(),
+				transfer.Recipient.Bytes(),
+				transfer.Amount.Bytes(),
 			); err != nil {
 				return err
 			}

@@ -119,26 +119,34 @@ type TxContext struct {
 //Receipt for json marshal
 type Receipt struct {
 	GasUsed  uint64                `json:"gasUsed"`
-	GasPayer thor.Address          `json:"gasPayer,string"`
+	GasPayer thor.Address          `json:"gasPayer"`
 	Paid     *math.HexOrDecimal256 `json:"paid,string"`
 	Reward   *math.HexOrDecimal256 `json:"reward,string"`
 	Reverted bool                  `json:"reverted"`
 	Block    BlockContext          `json:"block"`
 	Tx       TxContext             `json:"tx"`
-	Outputs  []*Output             `json:"outputs,string"`
+	Outputs  []*Output             `json:"outputs"`
 }
 
 // Output output of clause execution.
 type Output struct {
 	ContractAddress *thor.Address `json:"contractAddress"`
-	Events          []*Event      `json:"events,string"`
+	Events          []*Event      `json:"events"`
+	Transfers       []*Transfer   `json:"transfers"`
 }
 
 // Event event.
 type Event struct {
-	Address thor.Address   `json:"address,string"`
-	Topics  []thor.Bytes32 `json:"topics,string"`
+	Address thor.Address   `json:"address"`
+	Topics  []thor.Bytes32 `json:"topics"`
 	Data    string         `json:"data"`
+}
+
+// Transfer transfer log.
+type Transfer struct {
+	Sender    thor.Address          `json:"sender"`
+	Recipient thor.Address          `json:"recipient"`
+	Amount    *math.HexOrDecimal256 `json:"amount"`
 }
 
 //ConvertReceipt convert a raw clause into a jason format clause
@@ -173,7 +181,10 @@ func convertReceipt(txReceipt *tx.Receipt, block *block.Block, tx *tx.Transactio
 			cAddr := thor.CreateContractAddress(tx.ID(), uint32(i), 0)
 			contractAddr = &cAddr
 		}
-		otp := &Output{contractAddr, make([]*Event, len(output.Events))}
+		otp := &Output{contractAddr,
+			make([]*Event, len(output.Events)),
+			make([]*Transfer, len(output.Transfers)),
+		}
 		for j, txEvent := range output.Events {
 			event := &Event{
 				Address: txEvent.Address,
@@ -184,6 +195,15 @@ func convertReceipt(txReceipt *tx.Receipt, block *block.Block, tx *tx.Transactio
 				event.Topics[k] = topic
 			}
 			otp.Events[j] = event
+
+		}
+		for j, txTransfer := range output.Transfers {
+			transfer := &Transfer{
+				Sender:    txTransfer.Sender,
+				Recipient: txTransfer.Recipient,
+				Amount:    (*math.HexOrDecimal256)(txTransfer.Amount),
+			}
+			otp.Transfers[j] = transfer
 		}
 		receipt.Outputs[i] = otp
 	}
