@@ -28,6 +28,8 @@ type Receipt struct {
 type Output struct {
 	// events produced by the clause
 	Events Events
+	// transfer occurred in clause
+	Transfers Transfers
 }
 
 // Receipts slice of receipts.
