@@ -24,7 +24,14 @@ type (
 	refundKey      struct{}
 	preimageKey    common.Hash
 	logKey         struct{}
+	transferKey    struct{}
 	stateRevKey    struct{}
+
+	Transfer struct {
+		Sender    thor.Address
+		Recipient thor.Address
+		Amount    *big.Int
+	}
 )
 
 // New create a statedb object.
@@ -55,15 +62,18 @@ func (s *StateDB) GetRefund() uint64 {
 // GetOutputs callback ouputs include logs, new addresses and preimages.
 // Merge callbacks for performance reasons.
 func (s *StateDB) GetOutputs(
-	logCB func(*types.Log) bool,
-	preimagesCB func(common.Hash, []byte) bool,
+	logCallback func(*types.Log) bool,
+	transferCallback func(*Transfer) bool,
+	preimagesCallback func(common.Hash, []byte) bool,
 ) {
 	s.repo.Journal(func(k, v interface{}) bool {
 		switch key := k.(type) {
 		case logKey:
-			return logCB(v.(*types.Log))
+			return logCallback(v.(*types.Log))
+		case transferKey:
+			return transferCallback(v.(*Transfer))
 		case preimageKey:
-			return preimagesCB(common.Hash(key), v.([]byte))
+			return preimagesCallback(common.Hash(key), v.([]byte))
 		}
 		return true
 	})
@@ -184,6 +194,10 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 // AddLog stub.
 func (s *StateDB) AddLog(vmlog *types.Log) {
 	s.repo.Put(logKey{}, vmlog)
+}
+
+func (s *StateDB) AddTransfer(transfer *Transfer) {
+	s.repo.Put(transferKey{}, transfer)
 }
 
 // Snapshot stub.

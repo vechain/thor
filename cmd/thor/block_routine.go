@@ -39,18 +39,16 @@ type orphan struct {
 }
 
 type newBlockEvent struct {
-	Blk       *block.Block
-	Receipts  tx.Receipts
-	Transfers [][]tx.Transfers
-	Trunk     bool
-	IsSynced  bool
+	Blk      *block.Block
+	Receipts tx.Receipts
+	Trunk    bool
+	IsSynced bool
 }
 
 type packedEvent struct {
-	blk       *block.Block
-	receipts  tx.Receipts
-	transfers [][]tx.Transfers
-	ack       chan struct{}
+	blk      *block.Block
+	receipts tx.Receipts
+	ack      chan struct{}
 }
 
 func consentLoop(
@@ -66,7 +64,7 @@ func consentLoop(
 		return updateChain(ctx, components, logDB, newBlk, bestBlockUpdated)
 	}
 	consentFn := func(blk *block.Block, isSynced bool) error {
-		trunk, receipts, transfers, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
+		trunk, receipts, err := components.consensus.Consent(blk, uint64(time.Now().Unix()))
 		if err != nil {
 			//log.Warn(fmt.Sprintf("received new block(#%v bad)", blk.Header().Number()), "id", blk.Header().ID(), "size", blk.Size(), "err", err.Error())
 			if Consensus.IsFutureBlock(err) {
@@ -81,11 +79,10 @@ func consentLoop(
 		}
 
 		return updateChainFn(&newBlockEvent{
-			Blk:       blk,
-			Trunk:     trunk,
-			Receipts:  receipts,
-			Transfers: transfers,
-			IsSynced:  isSynced,
+			Blk:      blk,
+			Trunk:    trunk,
+			Receipts: receipts,
+			IsSynced: isSynced,
 		})
 	}
 
@@ -120,11 +117,10 @@ func consentLoop(
 		case packed := <-packedChan:
 			if trunk, err := components.consensus.IsTrunk(packed.blk.Header()); err == nil {
 				updateChainFn(&newBlockEvent{
-					Blk:       packed.blk,
-					Receipts:  packed.receipts,
-					Transfers: packed.transfers,
-					Trunk:     trunk,
-					IsSynced:  false,
+					Blk:      packed.blk,
+					Receipts: packed.receipts,
+					Trunk:    trunk,
+					IsSynced: false,
 				})
 				packed.ack <- struct{}{}
 			}
@@ -209,7 +205,7 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 
 	startTime := mclock.Now()
 	adoptTx()
-	blk, receipts, transfers, err := commit(components.packer.privateKey)
+	blk, receipts, err := commit(components.packer.privateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%v", err))
 		return
@@ -226,10 +222,9 @@ func pack(components *components, adopt Packer.Adopt, commit Packer.Commit, pack
 	}
 
 	pe := &packedEvent{
-		blk:       blk,
-		receipts:  receipts,
-		transfers: transfers,
-		ack:       make(chan struct{}),
+		blk:      blk,
+		receipts: receipts,
+		ack:      make(chan struct{}),
 	}
 	packedChan <- pe
 	<-pe.ack
@@ -279,11 +274,7 @@ func updateChain(
 			txBatch := batch.ForTransaction(tx.ID(), origin)
 			receipt := newBlk.Receipts[i]
 			for _, output := range receipt.Outputs {
-				txBatch.Insert(output.Events, nil)
-			}
-			txTransfers := newBlk.Transfers[i]
-			for _, transfers := range txTransfers {
-				txBatch.Insert(nil, transfers)
+				txBatch.Insert(output.Events, output.Transfers)
 			}
 		}
 

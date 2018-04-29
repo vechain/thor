@@ -4,10 +4,9 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/vechain/thor/lvldb"
-
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -81,12 +80,12 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
 	for _, call := range b.calls {
-		out, _ := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{})
+		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{})
 		if out.VMErr != nil {
 			return nil, nil, errors.Wrap(out.VMErr, "vm")
 		}
-		for _, log := range out.Logs {
-			events = append(events, (*tx.Event)(log))
+		for _, event := range out.Events {
+			events = append(events, (*tx.Event)(event))
 		}
 	}
 

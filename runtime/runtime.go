@@ -76,12 +76,11 @@ func (rt *Runtime) execute(
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
 	isStatic bool,
-) (*vm.Output, Tx.Transfers) {
+) *vm.Output {
 	to := clause.To()
 	if isStatic && to == nil {
 		panic("static call requires 'To'")
 	}
-	var transfers Tx.Transfers
 	ctx := vm.Context{
 		Beneficiary: rt.blockBeneficiary,
 		BlockNumber: rt.blockNumber,
@@ -94,21 +93,6 @@ func (rt *Runtime) execute(
 
 		GetHash:     rt.getBlockID,
 		ClauseIndex: index,
-		OnTransfer: func(depth int, sender, recipient thor.Address, amount *big.Int) {
-			if depth == 0 || amount.Sign() != 0 {
-				transfers = append(transfers, &Tx.Transfer{
-					Sender:    sender,
-					Recipient: recipient,
-					Amount:    amount})
-			}
-
-			if amount.Sign() == 0 {
-				return
-			}
-			// touch energy accounts which token balance changed
-			builtin.Energy.Native(rt.state).AddBalance(sender, &big.Int{}, rt.blockNumber)
-			builtin.Energy.Native(rt.state).AddBalance(recipient, &big.Int{}, rt.blockNumber)
-		},
 		ContractHook: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
 			return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
 		},
@@ -150,18 +134,13 @@ func (rt *Runtime) execute(
 	}
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
-	var vmout *vm.Output
 	if to == nil {
-		vmout = env.Create(txOrigin, clause.Data(), gas, clause.Value())
+		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
 	} else if isStatic {
-		vmout = env.StaticCall(txOrigin, *to, clause.Data(), gas)
+		return env.StaticCall(txOrigin, *to, clause.Data(), gas)
 	} else {
-		vmout = env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
+		return env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
 	}
-	if vmout.VMErr != nil {
-		return vmout, nil
-	}
-	return vmout, transfers
 }
 
 // Call executes single clause.
@@ -172,21 +151,21 @@ func (rt *Runtime) Call(
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
-) (*vm.Output, Tx.Transfers) {
+) *vm.Output {
 	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
 }
 
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
-func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, txTransfers []Tx.Transfers, vmOutputs []*vm.Output, err error) {
+func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
 	resolvedTx, err := ResolveTransaction(rt.state, tx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	payer, _, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// checkpoint to be reverted when clause failure.
@@ -196,10 +175,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
-	txTransfers = make([]Tx.Transfers, 0, len(resolvedTx.Clauses))
 
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput, transfers := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -220,17 +198,22 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 			rt.state.RevertTo(clauseCheckpoint)
 			receipt.Reverted = true
 			receipt.Outputs = nil
-			txTransfers = nil
 			break
 		}
 
 		// transform vm output to clause output
-		var events Tx.Events
-		for _, vmLog := range vmOutput.Logs {
-			events = append(events, (*Tx.Event)(vmLog))
+		var (
+			events    = make(Tx.Events, 0, len(vmOutput.Events))
+			transfers = make(Tx.Transfers, 0, len(vmOutput.Transfers))
+		)
+		for _, vmEvent := range vmOutput.Events {
+			events = append(events, (*Tx.Event)(vmEvent))
 		}
-		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Events: events})
-		txTransfers = append(txTransfers, transfers)
+		for _, vmTransfer := range vmOutput.Transfers {
+			transfers = append(transfers, (*Tx.Transfer)(vmTransfer))
+		}
+
+		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Events: events, Transfers: transfers})
 	}
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
@@ -250,5 +233,5 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.Reward = reward
 
-	return receipt, txTransfers, vmOutputs, nil
+	return receipt, vmOutputs, nil
 }

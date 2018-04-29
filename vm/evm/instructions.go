@@ -732,11 +732,12 @@ func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 }
 
 func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	tokenReceiver := common.BigToAddress(stack.pop())
-	evm.OnSuicideContract(evm, thor.Address(contract.Address()), thor.Address(tokenReceiver))
+	receiver := common.BigToAddress(stack.pop())
+	evm.OnSuicideContract(evm, thor.Address(contract.Address()), thor.Address(receiver))
 
 	balance := evm.StateDB.GetBalance(contract.Address())
-	evm.StateDB.AddBalance(tokenReceiver, balance)
+	// use Transfer to ensure transfe log recorded
+	evm.Transfer(evm.StateDB, contract.Address(), receiver, balance)
 
 	evm.StateDB.Suicide(contract.Address())
 	return nil, nil
