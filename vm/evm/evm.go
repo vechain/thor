@@ -33,7 +33,7 @@ var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 type (
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
-	TransferFunc    func(int, StateDB, common.Address, common.Address, *big.Int)
+	TransferFunc    func(StateDB, common.Address, common.Address, *big.Int)
 	// GetHashFunc returns the nth block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
@@ -209,7 +209,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	evm.Transfer(evm.depth, evm.StateDB, caller.Address(), to.Address(), value)
+	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
@@ -410,7 +410,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// should callback after snapshot
 	evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
 
-	evm.Transfer(evm.depth, evm.StateDB, caller.Address(), contractAddr, value)
+	evm.Transfer(evm.StateDB, caller.Address(), contractAddr, value)
 
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
