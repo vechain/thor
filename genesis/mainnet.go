@@ -49,5 +49,5 @@ func NewMainnet() (*Genesis, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Genesis{builder, id}, nil
+	return &Genesis{builder, id, "mainnet"}, nil
 }

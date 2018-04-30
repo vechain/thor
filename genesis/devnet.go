@@ -109,5 +109,5 @@ func NewDevnet() (*Genesis, error) {
 		return nil, err
 	}
 
-	return &Genesis{builder, id}, nil
+	return &Genesis{builder, id, "devnet"}, nil
 }
