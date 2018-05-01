@@ -25,58 +25,52 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 		stateCreator: stateCreator}
 }
 
-// Consent is Consensus's main func.
-func (c *Consensus) Consent(blk *block.Block, nowTimestamp uint64) (bool, tx.Receipts, error) {
+// Process process a block.
+func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts, error) {
 	header := blk.Header()
 
 	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
 		if !c.chain.IsNotFound(err) {
-			return false, nil, err
+			return nil, err
 		}
 	} else {
-		return false, nil, errKnownBlock
+		return nil, errKnownBlock
 	}
 
 	parent, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
 		if !c.chain.IsNotFound(err) {
-			return false, nil, err
+			return nil, err
 		}
-		return false, nil, errParentNotFound
+		return nil, errParentNotFound
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	state, err := c.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	if err := c.validateProposer(header, parent, state); err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	if err := c.validateBlockBody(blk); err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	stage, receipts, err := c.verifyBlock(blk, state)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 
 	if _, err = stage.Commit(); err != nil {
-		return false, nil, err
+		return nil, err
 	}
-
-	isTrunk, err := c.IsTrunk(header)
-	if err != nil {
-		return false, nil, err
-	}
-
-	return isTrunk, receipts, nil
+	return receipts, nil
 }
 
 // IsTrunk to determine if the block can be head of trunk.
