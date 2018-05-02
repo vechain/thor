@@ -351,7 +351,7 @@ func (bb *BlockBatch) Commit(abandonedBlocks ...thor.Bytes32) error {
 		}
 
 		for _, transfer := range bb.transfers {
-			if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockID ,transferIndex, blockNumber ,blockTime ,txID ,txOrigin ,sender ,recipient ,value) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+			if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockID ,transferIndex, blockNumber ,blockTime ,txID ,txOrigin ,sender ,recipient ,amount) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?);",
 				transfer.BlockID.Bytes(),
 				transfer.Index,
 				transfer.BlockNumber,
