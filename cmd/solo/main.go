@@ -9,15 +9,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/gorilla/handlers"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
-	cli "gopkg.in/urfave/cli.v1"
-
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 type account struct {
@@ -69,6 +70,10 @@ func newApp() *cli.App {
 			Name:  "api-addr",
 			Value: "127.0.0.1:8669",
 			Usage: "listen address",
+		},
+		cli.StringFlag{
+			Name:  "api-cors",
+			Usage: "comma separated list of domains from which to accept cross origin requests to API",
 		},
 		cli.BoolFlag{
 			Name:  "on-demand",
@@ -117,7 +122,15 @@ func newApp() *cli.App {
 		defer solo.txpl.Stop()
 		defer solo.logDB.Close()
 
-		svr := &http.Server{Handler: api.New(solo.c, solo.stateCreator, solo.txpl, solo.logDB, fakeCommunicator{})}
+		apiHandler := api.New(solo.c, solo.stateCreator, solo.txpl, solo.logDB, fakeCommunicator{})
+		if origins := ctx.String("api-cors"); origins != "" {
+			apiHandler = handlers.CORS(
+				handlers.AllowedOrigins(strings.Split(origins, ",")),
+				handlers.AllowedHeaders([]string{"content-type"}),
+			)(apiHandler).ServeHTTP
+		}
+
+		svr := &http.Server{Handler: apiHandler}
 		defer svr.Shutdown(context.Background())
 		defer log.Info("Killing restful service......")
 
@@ -253,7 +266,7 @@ func (solo *cliContext) packing() {
 		}
 	}
 
-	b, receipts, blockTransfers, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
@@ -266,7 +279,7 @@ func (solo *cliContext) packing() {
 	log.Info("Packed block", "block id", b.Header().ID(), "transaction num", len(b.Transactions()), "timestamp", b.Header().Timestamp())
 	log.Debug(b.String())
 
-	saveLogs(b, receipts, blockTransfers, solo.logDB)
+	saveLogs(b, receipts, solo.logDB)
 
 	// ignore fork when solo
 	_, err = solo.c.AddBlock(b, receipts, true)
@@ -302,18 +315,14 @@ func (comm fakeCommunicator) SessionCount() int {
 	return 1
 }
 
-func saveLogs(blk *block.Block, receipts tx.Receipts, blockTransfers [][]tx.Transfers, logDB *logdb.LogDB) {
+func saveLogs(blk *block.Block, receipts tx.Receipts, logDB *logdb.LogDB) {
 	batch := logDB.Prepare(blk.Header())
 	for i, tx := range blk.Transactions() {
 		origin, _ := tx.Signer()
 		txBatch := batch.ForTransaction(tx.ID(), origin)
 		receipt := receipts[i]
 		for _, output := range receipt.Outputs {
-			txBatch.Insert(output.Events, nil)
-		}
-		txTransfers := blockTransfers[i]
-		for _, transfers := range txTransfers {
-			txBatch.Insert(nil, transfers)
+			txBatch.Insert(output.Events, output.Transfers)
 		}
 	}
 	if err := batch.Commit(); err != nil {
