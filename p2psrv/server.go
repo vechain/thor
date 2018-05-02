@@ -1,6 +1,7 @@
 package p2psrv
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -28,6 +29,8 @@ type Server struct {
 
 	peerFeed  event.Feed
 	feedScope event.SubscriptionScope
+
+	inboundPeerCount int32
 }
 
 // New create a p2p server.
@@ -79,8 +82,16 @@ func (s *Server) SubscribePeer(ch chan *Peer) event.Subscription {
 	return s.feedScope.Track(s.peerFeed.Subscribe(ch))
 }
 
-func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (s *Server) newProtocolHandler(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+		if peer.Inbound() {
+			defer atomic.AddInt32(&s.inboundPeerCount, -1)
+			// limit inbound peers to MaxPeers/2, to avoid potential vulnerability
+			if int(atomic.AddInt32(&s.inboundPeerCount, 1)) >= s.srv.MaxPeers/2 {
+				return p2p.DiscTooManyPeers
+			}
+		}
+
 		log := log.New("peer", peer)
 		log.Debug("peer connected")
 		p := newPeer(peer, proto)
@@ -106,7 +117,7 @@ func (s *Server) Start(protocols []*Protocol) error {
 			Length:  proto.Length,
 			//			NodeInfo: p.NodeInfo,
 			//			PeerInfo: p.PeerInfo,
-			Run: s.runProtocol(proto),
+			Run: s.newProtocolHandler(proto),
 		})
 	}
 
