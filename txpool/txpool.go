@@ -12,6 +12,7 @@ import (
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
+	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -286,22 +287,35 @@ func (pool *TxPool) GetTransaction(txID thor.Bytes32) *tx.Transaction {
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
-	// go-ethereum says: Heuristic limit, reject transactions over 32KB to prevent DOS attacks
 	if tx.Size() > 32*1024 {
 		return errors.New("tx too large")
 	}
 
-	// resolvedTx, err := runtime.ResolveTransaction(tx)
-	// if err != nil {
-	// 	return err
-	// }
+	bestBlock, err := pool.chain.GetBestBlock()
+	if err != nil {
+		return err
+	}
 
-	// // go-ethereum says: Transactions can't be negative. This may never happen using RLP decoded
-	// // transactions but may occur if you create a transaction using the RPC.
-	// for _, clause := range resolvedTx.Clauses {
-	// 	if clause.Value().Sign() < 0 {
-	// 		return errors.New("negative clause value")
-	// 	}
-	// }
+	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
+	if err != nil {
+		return err
+	}
+
+	resolvedTx, err := runtime.ResolveTransaction(st, tx)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = resolvedTx.BuyGas(bestBlock.Header().Number() + 1)
+	if err != nil {
+		return err
+	}
+
+	for _, clause := range resolvedTx.Clauses {
+		if clause.Value().Sign() < 0 {
+			return errors.New("negative clause value")
+		}
+	}
+
 	return nil
 }
