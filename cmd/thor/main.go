@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/p2psrv"
@@ -85,16 +84,9 @@ func defaultAction(ctx *cli.Context) error {
 	peerSub := p2pSrv.SubscribePeer(peerCh)
 	defer peerSub.Unsubscribe()
 
-	syncChannelPair := node.SyncChannelPair{
-		make(chan []*block.Block),
-		make(chan error),
-	}
+	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
 
-	communicator.Start(peerCh, func(blocks []*block.Block) error {
-		syncChannelPair.Blocks <- blocks
-		return <-syncChannelPair.Ack
-	})
-
+	communicator.Start(peerCh, node.HandleBlockBatch)
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
@@ -102,11 +94,5 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
 
-	return node.New(
-		master,
-		chain,
-		state.NewCreator(mainDB),
-		logDB,
-		txPool,
-		communicator).Run(handleExitSignal(), syncChannelPair)
+	return node.Run(handleExitSignal())
 }

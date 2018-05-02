@@ -23,11 +23,6 @@ import (
 
 var log = log15.New("pkg", "node")
 
-type SyncChannelPair struct {
-	Blocks chan []*block.Block
-	Ack    chan error
-}
-
 type Node struct {
 	goes   co.Goes
 	packer *packer.Packer
@@ -35,6 +30,8 @@ type Node struct {
 
 	bestBlockFeed   event.Feed
 	packedBlockFeed event.Feed
+	blockBatchCh    chan []*block.Block
+	blockBatchAckCh chan error
 
 	master *Master
 	chain  *chain.Chain
@@ -52,44 +49,52 @@ func New(
 	comm *comm.Communicator,
 ) *Node {
 	return &Node{
-		packer: packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:   consensus.New(chain, stateCreator),
-		master: master,
-		chain:  chain,
-		logDB:  logDB,
-		txPool: txPool,
-		comm:   comm,
+		packer:          packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
+		cons:            consensus.New(chain, stateCreator),
+		blockBatchCh:    make(chan []*block.Block),
+		blockBatchAckCh: make(chan error),
+		master:          master,
+		chain:           chain,
+		logDB:           logDB,
+		txPool:          txPool,
+		comm:            comm,
 	}
 }
 
-func (n *Node) Run(ctx context.Context, syncChannelPair SyncChannelPair) error {
+func (n *Node) Run(ctx context.Context) error {
 	defer n.goes.Wait()
 
 	n.goes.Go(func() { n.txLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
-	n.goes.Go(func() { n.consensusLoop(ctx, syncChannelPair) })
+	n.goes.Go(func() { n.consensusLoop(ctx) })
 
 	return nil
+}
+func (n *Node) HandleBlockBatch(blocks []*block.Block) error {
+	n.blockBatchCh <- blocks
+	return <-n.blockBatchAckCh
+}
+
+func (n *Node) waitForSynced(ctx context.Context) bool {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		if n.comm.IsSynced() {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
 }
 
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
 	// wait for synced
-	if !func() bool {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			if n.comm.IsSynced() {
-				return true
-			}
-			select {
-			case <-ctx.Done():
-				return false
-			case <-ticker.C:
-			}
-		}
-	}() {
+	if !n.waitForSynced(ctx) {
 		return
 	}
 
@@ -134,7 +139,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) consensusLoop(ctx context.Context, syncChannelPair SyncChannelPair) {
+func (n *Node) consensusLoop(ctx context.Context) {
 	log.Debug("enter consensus loop")
 	defer log.Debug("leave consensus loop")
 
@@ -169,12 +174,17 @@ func (n *Node) consensusLoop(ctx context.Context, syncChannelPair SyncChannelPai
 					log.Error("failed to import block", "err", err)
 				}
 			}
-		case blocks := <-syncChannelPair.Blocks:
-			syncChannelPair.Ack <- func() error {
+		case blocks := <-n.blockBatchCh:
+			n.blockBatchAckCh <- func() error {
 				for _, block := range blocks {
 					if err := n.processBlock(block); err != nil {
 						log.Error("failed to import downloaded block", "err", err)
 						return err
+					}
+
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
 					}
 				}
 				return nil
