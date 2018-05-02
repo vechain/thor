@@ -100,8 +100,8 @@ func TestTransfers(t *testing.T) {
 	tf := &logdb.TransferFilter{
 		AddressSets: []*logdb.AddressSet{
 			&logdb.AddressSet{
-				From: &from,
-				To:   &to,
+				TxOrigin:  &from,
+				Recipient: &to,
 			},
 		},
 		Range: &logdb.Range{
