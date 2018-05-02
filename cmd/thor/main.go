@@ -1,26 +1,17 @@
 package main
 
 import (
-	"context"
-	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
-	"net"
-	"net/http"
 	"os"
-	"os/signal"
-	"time"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/co"
+	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
-	Packer "github.com/vechain/thor/packer"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -30,27 +21,19 @@ var (
 	gitCommit string
 	release   = "dev"
 	log       = log15.New()
-	boot      = "enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"
+
+	bootstrapNodes = []*discover.Node{
+		discover.MustParseNode("enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"),
+	}
 )
 
-type packer struct {
-	*Packer.Packer
-	privateKey *ecdsa.PrivateKey
-}
-
-type components struct {
-	chain        *chain.Chain
-	txpool       *txpool.TxPool
-	p2p          *p2psrv.Server
-	communicator *comm.Communicator
-	consensus    *consensus.Consensus
-	packer       *packer
-	apiSrv       *http.Server
+func fullVersion() string {
+	return fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit)
 }
 
 func main() {
 	app := cli.App{
-		Version:   fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit),
+		Version:   fullVersion(),
 		Name:      "Thor",
 		Usage:     "Node of VeChain Thor Network",
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
@@ -64,7 +47,7 @@ func main() {
 			beneficiaryFlag,
 			maxPeersFlag,
 		},
-		Action: action,
+		Action: defaultAction,
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -73,143 +56,57 @@ func main() {
 	}
 }
 
-func action(ctx *cli.Context) (err error) {
+func defaultAction(ctx *cli.Context) error {
+	defer func() { log.Info("exited") }()
+
 	initLogger(ctx)
 	gene := selectGenesis(ctx)
 	dataDir := makeDataDir(ctx, gene)
 
-	chainDB := openChainDB(ctx, dataDir)
-	defer chainDB.Close()
+	mainDB := openMainDB(ctx, dataDir)
+	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
 	logDB := openLogDB(ctx, dataDir)
-	defer logDB.Close()
+	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
-	components, err := makeComponent(ctx, chainDB, logDB, gene, dataDir)
-	if err != nil {
-		return err
-	}
+	chain := initChain(gene, mainDB, logDB)
+	master := loadNodeMaster(ctx, dataDir)
 
-	var goes co.Goes
-	c, cancel := context.WithCancel(context.Background())
+	txPool := txpool.New(chain, state.NewCreator(mainDB))
+	defer func() { log.Info("stopping tx pool..."); txPool.Stop() }()
 
-	goes.Go(func() { runNetwork(c, components, dataDir) })
-	goes.Go(func() { runAPIServer(c, components.apiSrv, ctx.String("apiaddr")) })
-	goes.Go(func() { synchronizeTx(c, components) })
-	goes.Go(func() { produceBlock(c, components, logDB) })
+	communicator := comm.New(chain, txPool)
 
-	interrupt := make(chan os.Signal)
-	signal.Notify(interrupt, os.Interrupt)
-
-	select {
-	case <-interrupt:
-		log.Warn("Got sigterm, shutting down...")
-		go func() {
-			// force exited when rcvd 10 interrupts
-			for i := 0; i < 10; i++ {
-				<-interrupt
-			}
-			os.Exit(1)
-		}()
-		cancel()
-		goes.Wait()
-	}
-
-	return nil
-}
-
-func runNetwork(ctx context.Context, components *components, dataDir string) {
-	protocols := components.communicator.Protocols()
-	if err := components.p2p.Start(protocols); err != nil {
-		log.Error(fmt.Sprintf("%v", err))
-		return
-	}
-
-	for _, protocol := range protocols {
-		log.Info("Thor network protocol used", "name", protocol.Name, "version", protocol.Version, "disc-topic", protocol.DiscTopic)
-	}
-
-	defer func() {
-		components.p2p.Stop()
-		nodes := components.p2p.GoodNodes()
-		data, err := rlp.EncodeToBytes(nodes)
-		if err != nil {
-			log.Error(fmt.Sprintf("%v", err))
-			return
-		}
-		if err := ioutil.WriteFile(dataDir+"/nodes.cache", data, 0644); err != nil {
-			log.Error(fmt.Sprintf("%v", err))
-		}
-	}()
+	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
+	defer func() { log.Info("saving peers cache..."); savePeers() }()
+	defer func() { log.Info("stopping P2P server..."); p2pSrv.Stop() }()
 
 	peerCh := make(chan *p2psrv.Peer)
-	components.p2p.SubscribePeer(peerCh)
+	peerSub := p2pSrv.SubscribePeer(peerCh)
+	defer peerSub.Unsubscribe()
 
-	syncReport := func(count int, size metric.StorageSize, elapsed time.Duration) {
-		log.Info("Block synchronized", "count", count, "size", size, "elapsed", elapsed.String())
+	syncChannelPair := node.SyncChannelPair{
+		make(chan []*block.Block),
+		make(chan error),
 	}
-	components.communicator.Start(peerCh, syncReport)
-	defer components.communicator.Stop()
 
-	<-ctx.Done()
-	log.Info("Network stoped")
-}
-
-func runAPIServer(ctx context.Context, apiSrv *http.Server, apiAddr string) {
-	lsr, err := net.Listen("tcp", apiAddr)
-	if err != nil {
-		log.Error(fmt.Sprintf("%v", err))
-		return
-	}
-	defer lsr.Close()
-
-	go func() {
-		<-ctx.Done()
-		apiSrv.Shutdown(context.TODO())
-	}()
-
-	log.Info("API service started", "listen-addr", apiAddr)
-	if err := apiSrv.Serve(lsr); err != http.ErrServerClosed {
-		log.Error(fmt.Sprintf("%v", err))
-	}
-	log.Info("API service stoped")
-}
-
-func synchronizeTx(ctx context.Context, components *components) {
-	var goes co.Goes
-
-	// routine for broadcast new tx
-	goes.Go(func() {
-		txCh := make(chan *tx.Transaction)
-		sub := components.txpool.SubscribeNewTransaction(txCh)
-
-		for {
-			select {
-			case <-ctx.Done():
-				sub.Unsubscribe()
-				return
-			case tx := <-txCh:
-				components.communicator.BroadcastTx(tx)
-			}
-		}
+	communicator.Start(peerCh, func(blocks []*block.Block) error {
+		syncChannelPair.Blocks <- blocks
+		return <-syncChannelPair.Ack
 	})
 
-	// routine for update txpool
-	goes.Go(func() {
-		txCh := make(chan *tx.Transaction)
-		sub := components.communicator.SubscribeTx(txCh)
+	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
-		for {
-			select {
-			case <-ctx.Done():
-				sub.Unsubscribe()
-				return
-			case tx := <-txCh:
-				components.txpool.Add(tx)
-			}
-		}
-	})
+	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
+	defer func() { log.Info("shutting down API server..."); apiSrv.Stop() }()
 
-	log.Info("Transaction synchronization started")
-	goes.Wait()
-	log.Info("Transaction synchronization stoped")
+	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
+
+	return node.New(
+		master,
+		chain,
+		state.NewCreator(mainDB),
+		logDB,
+		txPool,
+		communicator).Run(handleExitSignal(), syncChannelPair)
 }

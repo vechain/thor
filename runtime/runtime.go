@@ -163,7 +163,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, _, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
+	payer, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
 		return nil, nil, err
 	}

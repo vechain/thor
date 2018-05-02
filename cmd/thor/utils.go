@@ -1,38 +1,20 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"math/rand"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"os/user"
 	"path/filepath"
 	"runtime"
-	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	ethlog "github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/handlers"
-	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/genesis"
-	Genesis "github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/p2psrv"
-	Packer "github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/txpool"
-	cli "gopkg.in/urfave/cli.v1"
 )
 
 func fatal(args ...interface{}) {
@@ -50,194 +32,29 @@ func fatal(args ...interface{}) {
 			w = io.MultiWriter(os.Stdout, os.Stderr)
 		}
 	}
-	fmt.Print(w, "Fatal:")
+	fmt.Fprint(w, "Fatal: ")
 	fmt.Fprintln(w, args...)
 	os.Exit(1)
 }
 
-func fatalf(format string, args ...interface{}) {
-	fatal(fmt.Sprintf(format, args...))
-}
-
-func initLogger(ctx *cli.Context) {
-	logLevel := ctx.Int(verbosityFlag.Name)
-	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
-	// set go-ethereum log lvl to Warn
-	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
-	ethLogHandler.Verbosity(ethlog.LvlWarn)
-	ethlog.Root().SetHandler(ethLogHandler)
-}
-
-func selectGenesis(ctx *cli.Context) *genesis.Genesis {
-	if ctx.IsSet(devFlag.Name) {
-		gene, err := genesis.NewDevnet()
-		if err != nil {
-			fatal(err)
-		}
-		return gene
-	}
-	gene, err := genesis.NewMainnet()
-	if err != nil {
-		fatal(err)
-	}
-	return gene
-}
-
-func loadKey(keyFile string) (key *ecdsa.PrivateKey, err error) {
-	// try to load from file
-	if key, err = crypto.LoadECDSA(keyFile); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-	} else {
+func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
+	key, err := crypto.LoadECDSA(path)
+	if err == nil {
 		return key, nil
 	}
 
-	// no such file, generate new key and write in
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+
 	key, err = crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
-
-	if err := crypto.SaveECDSA(keyFile, key); err != nil {
+	if err := crypto.SaveECDSA(path, key); err != nil {
 		return nil, err
 	}
 	return key, nil
-}
-
-func loadProposer(isDev bool, keyFile string) (thor.Address, *ecdsa.PrivateKey, error) {
-	if isDev {
-		index := rand.Intn(len(Genesis.DevAccounts()))
-		return Genesis.DevAccounts()[index].Address, Genesis.DevAccounts()[index].PrivateKey, nil
-	}
-
-	key, err := loadKey(keyFile)
-	if err != nil {
-		return thor.Address{}, nil, err
-	}
-	return thor.Address(crypto.PubkeyToAddress(key.PublicKey)), key, nil
-}
-
-func makeDataDir(ctx *cli.Context, gene *Genesis.Genesis) string {
-	mainDir := ctx.String(dirFlag.Name)
-	if mainDir == "" {
-		fatalf("unable to infer default main dir, use -%s to specify one", dirFlag.Name)
-	}
-
-	dataDir := fmt.Sprintf("%v/instance-%x", mainDir, gene.ID().Bytes()[24:])
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
-		fatalf("create data dir at '%v': %v", dataDir, err)
-	}
-	return dataDir
-}
-
-func openChainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
-	dir := filepath.Join(dataDir, "chain.db")
-	db, err := lvldb.New(dir, lvldb.Options{})
-	if err != nil {
-		fatalf("open chain database at '%v': %v", dir, err)
-	}
-	return db
-}
-
-func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
-	dir := filepath.Join(dataDir, "logs.db")
-	db, err := logdb.New(dir)
-	if err != nil {
-		fatal("open event database at '%v': %v", dir, err)
-	}
-	return db
-}
-
-func makeComponent(
-	ctx *cli.Context,
-	lvlDB *lvldb.LevelDB,
-	logDB *logdb.LogDB,
-	genesis *Genesis.Genesis,
-	dataDir string,
-) (*components, error) {
-	stateCreator := state.NewCreator(lvlDB)
-
-	genesisBlock, blockEvents, err := genesis.Build(stateCreator)
-	if err != nil {
-		return nil, err
-	}
-
-	header := genesisBlock.Header()
-	if err := logDB.Prepare(header).
-		ForTransaction(thor.Bytes32{}, thor.Address{}).
-		Insert(blockEvents, nil).Commit(); err != nil {
-		return nil, err
-	}
-
-	chain, err := chain.New(lvlDB, genesisBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	proposer, privateKey, err := loadProposer(ctx.Bool("dev"), dataDir+"/master.key")
-	if err != nil {
-		return nil, err
-	}
-	log.Info("Proposer key loaded", "address", proposer)
-
-	beneficiary := proposer
-	if ctx.String("beneficiary") != "" {
-		if beneficiary, err = thor.ParseAddress(ctx.String("beneficiary")); err != nil {
-			return nil, err
-		}
-	}
-	log.Info("Beneficiary key loaded", "address", beneficiary)
-
-	p2p, err := initP2PSrv(ctx, dataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	txpool := txpool.New(chain, stateCreator)
-	communicator := comm.New(chain, txpool)
-
-	apiHandler := api.New(chain, stateCreator, txpool, logDB, communicator)
-	if origins := ctx.String(apiCorsFlag.Name); origins != "" {
-		apiHandler = handlers.CORS(handlers.AllowedOrigins(strings.Split(origins, ",")))(apiHandler).ServeHTTP
-	}
-
-	return &components{
-		chain:        chain,
-		txpool:       txpool,
-		p2p:          p2p,
-		communicator: communicator,
-		consensus:    consensus.New(chain, stateCreator),
-		packer:       &packer{Packer.New(chain, stateCreator, proposer, beneficiary), privateKey},
-		apiSrv:       &http.Server{Handler: apiHandler},
-	}, nil
-}
-
-func initP2PSrv(ctx *cli.Context, dataDir string) (*p2psrv.Server, error) {
-	nodeKey, err := loadKey(dataDir + "/node.key")
-	if err != nil {
-		return nil, err
-	}
-
-	opt := &p2psrv.Options{
-		PrivateKey:     nodeKey,
-		MaxPeers:       ctx.Int("maxpeers"),
-		ListenAddr:     fmt.Sprintf(":%v", ctx.Int("p2pport")),
-		BootstrapNodes: []*discover.Node{discover.MustParseNode(boot)},
-	}
-	var nodes p2psrv.Nodes
-	nodesByte, err := ioutil.ReadFile(dataDir + "/nodes.cache")
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Error(fmt.Sprintf("%v", err))
-		}
-	} else {
-		rlp.DecodeBytes(nodesByte, &nodes)
-		opt.GoodNodes = nodes
-	}
-
-	log.Info("Thor network initialized", "listen-addr", opt.ListenAddr, "max-peers", opt.MaxPeers, "node-key-address", crypto.PubkeyToAddress(nodeKey.PublicKey))
-	return p2psrv.New(opt), nil
 }
 
 // copy from go-ethereum
@@ -264,4 +81,35 @@ func homeDir() string {
 		return usr.HomeDir
 	}
 	return ""
+}
+
+type httpServer struct {
+	*http.Server
+	listener net.Listener
+}
+
+func (s *httpServer) Start() {
+	go func() {
+		s.Serve(s.listener)
+	}()
+}
+
+func (s *httpServer) Stop() {
+	s.Shutdown(context.Background())
+	s.listener.Close()
+}
+
+func handleExitSignal() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		exitSignalCh := make(chan os.Signal)
+		signal.Notify(exitSignalCh, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+		select {
+		case sig := <-exitSignalCh:
+			log.Info("exit signal received", "signal", sig)
+			cancel()
+		}
+	}()
+	return ctx
 }

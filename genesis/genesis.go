@@ -14,6 +14,7 @@ import (
 type Genesis struct {
 	builder *Builder
 	id      thor.Bytes32
+	name    string
 }
 
 // Build build the genesis block.
@@ -24,6 +25,11 @@ func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, events t
 // ID returns genesis block ID.
 func (g *Genesis) ID() thor.Bytes32 {
 	return g.id
+}
+
+// Name returns network name.
+func (g *Genesis) Name() string {
+	return g.name
 }
 
 func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {

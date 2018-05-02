@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
-	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -24,26 +23,20 @@ import (
 
 var log = log15.New("pkg", "comm")
 
-type NewBlockEvent struct {
-	Block    *block.Block
-	IsSynced bool
-}
-
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	chain      *chain.Chain
-	synced     bool
-	ctx        context.Context
-	cancel     context.CancelFunc
-	sessionSet *session.Set
-	syncCh     chan struct{}
-	announceCh chan *announce
-	blockFeed  event.Feed
-	txFeed     event.Feed
-	feedScope  event.SubscriptionScope
-	goes       co.Goes
-	txpool     *txpool.TxPool
-	syncReport func(int, metric.StorageSize, time.Duration)
+	chain        *chain.Chain
+	synced       bool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	sessionSet   *session.Set
+	syncCh       chan struct{}
+	announceCh   chan *announce
+	newBlockFeed event.Feed
+	newTxFeed    event.Feed
+	feedScope    event.SubscriptionScope
+	goes         co.Goes
+	txpool       *txpool.TxPool
 }
 
 // New create a new Communicator instance.
@@ -79,21 +72,20 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 		}}
 }
 
-// SubscribeBlock subscribe the event that new blocks received.
+// SubscribeBlock subscribe the event that new block received.
 func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription {
-	return c.feedScope.Track(c.blockFeed.Subscribe(ch))
+	return c.feedScope.Track(c.newBlockFeed.Subscribe(ch))
 }
 
-// SubscribeTx subscribe the event that new tx received.
-func (c *Communicator) SubscribeTx(ch chan *tx.Transaction) event.Subscription {
-	return c.feedScope.Track(c.txFeed.Subscribe(ch))
+// SubscribeTransaction subscribe the event that new tx received.
+func (c *Communicator) SubscribeTransaction(ch chan *NewTransactionEvent) event.Subscription {
+	return c.feedScope.Track(c.newTxFeed.Subscribe(ch))
 }
 
 // Start start the communicator.
-func (c *Communicator) Start(peerCh chan *p2psrv.Peer, syncReport func(int, metric.StorageSize, time.Duration)) {
-	c.syncReport = syncReport
+func (c *Communicator) Start(peerCh chan *p2psrv.Peer, handler HandleBlockBatch) {
 	c.goes.Go(func() { c.sessionLoop(peerCh) })
-	c.goes.Go(c.syncLoop)
+	c.goes.Go(func() { c.syncLoop(handler) })
 	c.goes.Go(c.announceLoop)
 }
 
@@ -158,7 +150,7 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 	}
 }
 
-func (c *Communicator) syncLoop() {
+func (c *Communicator) syncLoop(handler HandleBlockBatch) {
 	wait := 10 * time.Second
 
 	timer := time.NewTimer(wait)
@@ -166,7 +158,7 @@ func (c *Communicator) syncLoop() {
 
 	sync := func() {
 		log.Debug("synchronization start")
-		if err := c.sync(); err != nil {
+		if err := c.sync(handler); err != nil {
 			log.Debug("synchronization failed", "err", err)
 		} else {
 			c.synced = true
@@ -220,9 +212,8 @@ func (c *Communicator) announceLoop() {
 			return errors.New("nil block")
 		}
 
-		c.blockFeed.Send(&NewBlockEvent{
-			Block:    resp.Block,
-			IsSynced: false,
+		c.newBlockFeed.Send(&NewBlockEvent{
+			Block: resp.Block,
 		})
 		return nil
 	}

@@ -75,12 +75,11 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 	}
 
 	var (
-		receipts       tx.Receipts
-		blockTransfers [][]tx.Transfers
-		totalGasUsed   uint64
-		processedTxs   = make(map[thor.Bytes32]bool) // txID -> reverted
-		traverser      = p.chain.NewTraverser(parent.ID())
-		rt             = runtime.New(state, p.beneficiary, parent.Number()+1, newBlockTimestamp, gasLimit, func(num uint32) thor.Bytes32 {
+		receipts     tx.Receipts
+		totalGasUsed uint64
+		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
+		traverser    = p.chain.NewTraverser(parent.ID())
+		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, newBlockTimestamp, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
 		builder = new(block.Builder).
@@ -133,7 +132,7 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 			}
 
 			chkpt := state.NewCheckpoint()
-			receipt, transfers, _, err := rt.ExecuteTransaction(tx)
+			receipt, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
 				state.RevertTo(chkpt)
@@ -142,22 +141,21 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 			processedTxs[tx.ID()] = receipt.Reverted
 			totalGasUsed += receipt.GasUsed
 			receipts = append(receipts, receipt)
-			blockTransfers = append(blockTransfers, transfers)
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, [][]tx.Transfers, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-				return nil, nil, nil, errors.New("private key mismatch")
+				return nil, nil, errors.New("private key mismatch")
 			}
 
 			if err := traverser.Error(); err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 
 			stateRoot, err := state.Stage().Commit()
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
 
 			newBlock := builder.
@@ -167,9 +165,9 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 
 			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, blockTransfers, nil
+			return newBlock.WithSignature(sig), receipts, nil
 		}, nil
 }
 
