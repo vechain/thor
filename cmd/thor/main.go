@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vechain/thor/block"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/p2psrv"
@@ -101,7 +100,7 @@ func defaultAction(ctx *cli.Context) error {
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
 	defer func() { log.Info("shutting down API server..."); apiSrv.Stop() }()
 
-	printStartupMessage(gene, chain, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
+	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
 
 	return node.New(
 		master,

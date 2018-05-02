@@ -179,7 +179,10 @@ func startAPIServer(ctx *cli.Context, handler http.Handler) *httpServer {
 	}
 
 	if origins := ctx.String(apiCorsFlag.Name); origins != "" {
-		handler = handlers.CORS(handlers.AllowedOrigins(strings.Split(origins, ",")))(handler)
+		handler = handlers.CORS(
+			handlers.AllowedOrigins(strings.Split(origins, ",")),
+			handlers.AllowedHeaders([]string{"content-type"}),
+		)(handler)
 	}
 	srv := &httpServer{&http.Server{Handler: handler}, listener}
 	srv.Start()
@@ -189,6 +192,7 @@ func startAPIServer(ctx *cli.Context, handler http.Handler) *httpServer {
 func printStartupMessage(
 	gene *genesis.Genesis,
 	chain *chain.Chain,
+	master *node.Master,
 	dataDir string,
 	apiURL string,
 ) {
@@ -198,14 +202,17 @@ func printStartupMessage(
 	}
 
 	fmt.Printf(`Starting %v
-    Network    [ %v %v ]
-    Best block [ %v #%v @%v]
-    Data dir   [ %v ]
-    API portal [ %v ]
+    Network     [ %v %v ]    
+    Best block  [ %v #%v @%v ]
+    Master      [ %v ]
+    Beneficiary [ %v ]
+    Data dir    [ %v ]
+    API portal  [ %v ]
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		master.Address(), master.Beneficiary,
 		dataDir,
 		apiURL)
 }
