@@ -1,18 +1,13 @@
 package comm
 
 import (
-	"time"
-
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
-	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/p2psrv"
 )
-
-const idealBatchSize = 10 * 1024
 
 func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Session, int) {
 	slice := c.sessionSet.Slice()
@@ -27,7 +22,7 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Ses
 	return nil, len(slice)
 }
 
-func (c *Communicator) sync() error {
+func (c *Communicator) sync(handler HandleBlockBatch) error {
 	best, err := c.chain.GetBestBlock()
 	if err != nil {
 		return err
@@ -38,7 +33,7 @@ func (c *Communicator) sync() error {
 		if nSessions >= 3 {
 			return nil
 		}
-		return errors.New("not suitable session")
+		return errors.New("no suitable session")
 	}
 
 	ancestor, err := c.findCommonAncestor(s.Peer(), best.Header().Number())
@@ -46,13 +41,12 @@ func (c *Communicator) sync() error {
 		return err
 	}
 
-	return c.download(s, ancestor+1)
+	return c.download(s, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32) error {
-	start := time.Now()
-	count := 0
-	var size metric.StorageSize
+func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockBatch) error {
+	const maxBatchCount = 1024
+	var batch []*block.Block
 
 	for {
 		peer := session.Peer()
@@ -62,29 +56,28 @@ func (c *Communicator) download(session *session.Session, fromNum uint32) error 
 			return err
 		}
 		if len(resp) == 0 {
-			if size > 0 {
-				c.syncReport(count, size, time.Since(start))
+			if len(batch) > 0 {
+				if err := handler(batch); err != nil {
+					return err
+				}
+				batch = nil
 			}
 			return nil
 		}
+
 		for _, raw := range resp {
 			var blk block.Block
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
 			session.MarkBlock(blk.Header().ID())
-			c.blockFeed.Send(&NewBlockEvent{
-				Block:    &blk,
-				IsSynced: true,
-			})
 			fromNum++
-			count++
-			size += blk.Size()
-			if size >= idealBatchSize {
-				c.syncReport(count, size, time.Since(start))
-				start = time.Now()
-				count = 0
-				size = 0
+			batch = append(batch, &blk)
+			if len(batch) >= maxBatchCount {
+				if err := handler(batch); err != nil {
+					return err
+				}
+				batch = nil
 			}
 		}
 	}
