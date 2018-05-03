@@ -42,7 +42,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts,
 		if !c.chain.IsNotFound(err) {
 			return nil, err
 		}
-		return nil, errParentNotFound
+		return nil, errParentMissing
 	}
 
 	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {

@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -155,30 +156,24 @@ func (n *Node) consensusLoop(ctx context.Context) {
 
 	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		case packedBlock := <-packedBlockCh:
-			if err := n.insertBlock(packedBlock.Block, packedBlock.receipts); err != nil {
-				log.Error("failed to insert block", "err", err)
-			}
+			n.insertBlock(packedBlock.Block, packedBlock.receipts)
 		case newBlock := <-newBlockCh:
 			if err := n.processBlock(newBlock.Block); err != nil {
-				switch {
-				case consensus.IsFutureBlock(err) || consensus.IsParentNotFound(err):
+				if consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) {
 					futureBlocks.Set(newBlock.Header().ID(), newBlock, -float64(newBlock.Header().Number()))
-				case consensus.IsKnownBlock(err):
-				default:
-					log.Error("failed to import block", "err", err)
 				}
 			}
 		case blocks := <-n.blockChunkCh:
 			n.blockChunkAckCh <- func() error {
 				for _, block := range blocks {
 					if err := n.processBlock(block); err != nil {
-						log.Error("failed to import downloaded block", "err", err)
 						return err
 					}
 
@@ -228,10 +223,24 @@ func (n *Node) processBlock(blk *block.Block) error {
 	now := uint64(time.Now().Unix())
 	receipts, err := n.cons.Process(blk, now)
 	if err != nil {
+		switch {
+		case consensus.IsKnownBlock(err):
+			return nil
+		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err):
+		case consensus.IsCritical(err):
+			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, blk.Header())
+			log.Error(msg, "err", err)
+		default:
+			log.Error("failed to process block", "err", err)
+		}
 		return err
 	}
 
-	return n.insertBlock(blk, receipts)
+	if err := n.insertBlock(blk, receipts); err != nil {
+		log.Error("failed to insert block", "err", err)
+		return err
+	}
+	return nil
 }
 
 func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) error {
