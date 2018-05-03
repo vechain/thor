@@ -70,6 +70,7 @@ func NewDevnet() (*Genesis, error) {
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
+			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
 			energy := builtin.Energy.Native(state)
 			tokenSupply := &big.Int{}
