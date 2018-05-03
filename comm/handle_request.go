@@ -70,7 +70,12 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		if s := c.sessionSet.Find(peer.ID()); s != nil {
 			s.MarkBlock(req.ID)
 		}
-		c.goes.Go(func() { c.announceCh <- &announce{req.ID, peer} })
+		c.goes.Go(func() {
+			select {
+			case c.announceCh <- &announce{req.ID, peer}:
+			case <-c.ctx.Done():
+			}
+		})
 		return &struct{}{}, nil
 	case proto.MsgGetBlockByID:
 		var req proto.ReqGetBlockByID
