@@ -545,3 +545,24 @@ func TestPrototypeInterface(t *testing.T) {
 
 	// test log
 }
+
+func TestExtensionNative(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	st, _ := state.New(thor.Bytes32{}, kv)
+	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+
+	contract := builtin.Extension.Address
+
+	value := []byte("extension")
+
+	test := &ctest{
+		rt:  rt,
+		abi: builtin.Extension.NativeABI(),
+	}
+
+	test.Case("native_blake2b256", value).
+		To(contract).Caller(contract).
+		ShouldOutput(thor.Blake2b(value)).
+		Assert(t)
+}

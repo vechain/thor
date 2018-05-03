@@ -5,3 +5,4 @@ import "./Energy.sol";
 import "./Executor.sol";
 import "./Params.sol";
 import "./Prototype.sol";
+import "./Extension.sol";
