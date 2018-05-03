@@ -1,7 +1,8 @@
 package consensus
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -12,10 +13,10 @@ import (
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 
 	if header.Timestamp() <= parent.Timestamp() {
-		return errors.New("block timestamp too small")
+		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
-		return errors.New("invalid block interval")
+		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
 	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
@@ -23,15 +24,15 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return errors.New("invalid block gas limit")
+		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
 
 	if header.GasUsed() > header.GasLimit() {
-		return errors.New("block gas used exceeds limit")
+		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
 
 	if header.TotalScore() <= parent.TotalScore() {
-		return errors.New("block total score too small")
+		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 	return nil
 }
@@ -39,7 +40,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) error {
 	signer, err := header.Signer()
 	if err != nil {
-		return errors.Wrap(err, "invalid block signer")
+		return consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
 	authority := builtin.Authority.Native(st)
@@ -58,16 +59,16 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
-		return err
+		return consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
-		return errors.New("block timestamp not scheduled")
+		return consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
-		return errors.New("incorrect block total score")
+		return consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
 	for _, proposer := range updates {
@@ -80,19 +81,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	header := blk.Header()
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
-		return errors.New("incorrect block txs root")
+		return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
 	}
 
 	for _, tx := range txs {
 		switch {
 		case tx.ChainTag() != c.chain.Tag():
-			return errors.New("bad tx: chain tag mismatch")
+			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.chain.Tag(), tx.ChainTag()))
 		case header.Number() < tx.BlockRef().Number():
-			return errors.New("bad tx: ref blcok too new")
+			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
 		case tx.IsExpired(header.Number()):
-			return errors.New("bad tx: expired")
+			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
 		case tx.HasReservedFields():
-			return errors.New("bad tx: reserved fields not empty")
+			return consensusError(fmt.Sprintf("tx reserved fields not empty"))
 		}
 	}
 

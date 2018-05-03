@@ -1,7 +1,8 @@
 package consensus
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -28,7 +29,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		if found, _, err := FindTransaction(c.chain, header.ParentID(), processedTxs, tx.ID()); err != nil {
 			return nil, nil, err
 		} else if found {
-			return nil, nil, errors.New("bad tx: duplicated tx")
+			return nil, nil, consensusError("tx already exists")
 		}
 
 		// check depended tx
@@ -38,13 +39,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 				return nil, nil, err
 			}
 			if !found {
-				return nil, nil, errors.New("bad tx: dep not found")
+				return nil, nil, consensusError("tx dep broken")
 			}
 
 			if reverted, err := isReverted(); err != nil {
 				return nil, nil, err
 			} else if reverted {
-				return nil, nil, errors.New("bad tx: dep reverted")
+				return nil, nil, consensusError("tx dep reverted")
 			}
 		}
 
@@ -59,10 +60,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	}
 
 	if header.GasUsed() != totalGasUsed {
-		return nil, nil, errors.New("incorrect block gas used")
+		return nil, nil, consensusError(fmt.Sprintf("block gas used mismatch: want %v, have %v", header.GasUsed(), totalGasUsed))
 	}
-	if header.ReceiptsRoot() != receipts.RootHash() {
-		return nil, nil, errors.New("incorrect block receipts root")
+	receiptsRoot := receipts.RootHash()
+	if header.ReceiptsRoot() != receiptsRoot {
+		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
 	}
 
 	if err := traverser.Error(); err != nil {
@@ -70,13 +72,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	}
 
 	stage := state.Stage()
-	root, err := stage.Hash()
+	stateRoot, err := stage.Hash()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if blk.Header().StateRoot() != root {
-		return nil, nil, errors.New("incorrect block state root")
+	if blk.Header().StateRoot() != stateRoot {
+		return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
 	}
 
 	return stage, receipts, nil
