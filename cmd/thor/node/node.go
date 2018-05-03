@@ -201,31 +201,33 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			} else if isTrunk {
 				log.Info("imported blocks", stats.LogContext(newBlock.Block.Header())...)
 			}
-		case blocks := <-n.blockChunkCh:
-			n.blockChunkAckCh <- func() error {
-				var stats blockStats
-				startTime := mclock.Now()
-				for i, block := range blocks {
-					if _, err := n.processBlock(block, &stats); err != nil {
-						return err
-					}
-
-					if stats.processed > 0 &&
-						(i == len(blocks)-1 || mclock.Now()-startTime > mclock.AbsTime(5*time.Second)) {
-						log.Info("imported blocks", stats.LogContext(block.Header())...)
-						stats = blockStats{}
-					}
-
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					default:
-					}
-				}
-				return nil
-			}()
+		case chunk := <-n.blockChunkCh:
+			n.blockChunkAckCh <- n.processBlockChunk(ctx, chunk)
 		}
 	}
+}
+
+func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) error {
+	var stats blockStats
+	startTime := mclock.Now()
+	for i, block := range chunk {
+		if _, err := n.processBlock(block, &stats); err != nil {
+			return err
+		}
+
+		if stats.processed > 0 &&
+			(i == len(chunk)-1 || mclock.Now()-startTime > mclock.AbsTime(5*time.Second)) {
+			log.Info("imported blocks", stats.LogContext(block.Header())...)
+			stats = blockStats{}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+	return nil
 }
 
 func (n *Node) pack(adopt packer.Adopt, pack packer.Pack) {
