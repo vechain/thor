@@ -15,5 +15,5 @@ type NewTransactionEvent struct {
 	*tx.Transaction
 }
 
-// HandleBlockBatch to handle a batch of blocks downloaded in sync process.
-type HandleBlockBatch func(batch []*block.Block) error
+// HandleBlockChunk to handle a chunk of blocks downloaded in sync process.
+type HandleBlockChunk func(chunk []*block.Block) error

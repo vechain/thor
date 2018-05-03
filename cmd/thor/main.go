@@ -86,7 +86,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
 
-	communicator.Start(peerCh, node.HandleBlockBatch)
+	communicator.Start(peerCh, node.HandleBlockChunk)
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
