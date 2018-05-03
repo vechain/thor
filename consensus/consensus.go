@@ -37,7 +37,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts,
 		return nil, errKnownBlock
 	}
 
-	parent, err := c.chain.GetBlockHeader(header.ParentID())
+	parentHeader, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
 		if !c.chain.IsNotFound(err) {
 			return nil, err
@@ -45,24 +45,12 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts,
 		return nil, errParentMissing
 	}
 
-	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
-		return nil, err
-	}
-
-	state, err := c.stateCreator.NewState(parent.StateRoot())
+	state, err := c.stateCreator.NewState(parentHeader.StateRoot())
 	if err != nil {
 		return nil, err
 	}
 
-	if err := c.validateProposer(header, parent, state); err != nil {
-		return nil, err
-	}
-
-	if err := c.validateBlockBody(blk); err != nil {
-		return nil, err
-	}
-
-	stage, receipts, err := c.verifyBlock(blk, state)
+	stage, receipts, err := c.validate(state, blk, parentHeader, nowTimestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -70,6 +58,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts,
 	if _, err = stage.Commit(); err != nil {
 		return nil, err
 	}
+
 	return receipts, nil
 }
 
