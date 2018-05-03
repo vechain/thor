@@ -149,14 +149,17 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
-	pack := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
-	_, adopt, commit, err := pack.Prepare(b.Header(), uint64(time.Now().Unix()))
+	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
+	_, adopt, pack, err := packer.Prepare(b.Header(), uint64(time.Now().Unix()))
 	err = adopt(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, err := pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := chain.AddBlock(b, receipts, true); err != nil {
