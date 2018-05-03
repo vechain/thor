@@ -163,9 +163,17 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case packedBlock := <-packedBlockCh:
-			n.insertBlock(packedBlock.Block, packedBlock.receipts)
+			if isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts); err != nil {
+			} else if isTrunk {
+				log.Info("📦 new block packed",
+					"txs", len(packedBlock.receipts),
+					"gas-used", packedBlock.Header().GasUsed(),
+					"number", packedBlock.Header().Number(),
+					"hash", fmt.Sprintf("[…%x]", packedBlock.Header().ID().Bytes()[28:]),
+				)
+			}
 		case newBlock := <-newBlockCh:
-			if err := n.processBlock(newBlock.Block); err != nil {
+			if _, err := n.processBlock(newBlock.Block); err != nil {
 				if consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) {
 					futureBlocks.Set(newBlock.Header().ID(), newBlock, -float64(newBlock.Header().Number()))
 				}
@@ -173,7 +181,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 		case blocks := <-n.blockChunkCh:
 			n.blockChunkAckCh <- func() error {
 				for _, block := range blocks {
-					if err := n.processBlock(block); err != nil {
+					if _, err := n.processBlock(block); err != nil {
 						return err
 					}
 
@@ -219,13 +227,13 @@ func (n *Node) pack(adopt packer.Adopt, commit packer.Commit) {
 	n.goes.Go(func() { n.packedBlockFeed.Send(&packedBlockEvent{newBlock, receipts}) })
 }
 
-func (n *Node) processBlock(blk *block.Block) error {
+func (n *Node) processBlock(blk *block.Block) (bool, error) {
 	now := uint64(time.Now().Unix())
 	receipts, err := n.cons.Process(blk, now)
 	if err != nil {
 		switch {
 		case consensus.IsKnownBlock(err):
-			return nil
+			return false, nil
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err):
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, blk.Header())
@@ -233,25 +241,26 @@ func (n *Node) processBlock(blk *block.Block) error {
 		default:
 			log.Error("failed to process block", "err", err)
 		}
-		return err
+		return false, err
 	}
 
-	if err := n.insertBlock(blk, receipts); err != nil {
+	isTrunk, err := n.insertBlock(blk, receipts)
+	if err != nil {
 		log.Error("failed to insert block", "err", err)
-		return err
+		return false, err
 	}
-	return nil
+	return isTrunk, err
 }
 
-func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) error {
+func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) (bool, error) {
 	isTrunk, err := n.cons.IsTrunk(newBlock.Header())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	fork, err := n.chain.AddBlock(newBlock, receipts, isTrunk)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
@@ -274,13 +283,13 @@ func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) error {
 	}
 
 	if err := batch.Commit(forkIDs...); err != nil {
-		return err
+		return false, err
 	}
 	if isTrunk {
 		n.bestBlockFeed.Send(&bestBlockEvent{newBlock})
 		n.comm.BroadcastBlock(newBlock)
 	}
-	return nil
+	return isTrunk, nil
 }
 
 func (n *Node) txLoop(ctx context.Context) {
