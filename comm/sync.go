@@ -22,7 +22,7 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Ses
 	return nil, len(slice)
 }
 
-func (c *Communicator) sync(handler HandleBlockBatch) error {
+func (c *Communicator) sync(handler HandleBlockChunk) error {
 	best, err := c.chain.GetBestBlock()
 	if err != nil {
 		return err
@@ -44,9 +44,9 @@ func (c *Communicator) sync(handler HandleBlockBatch) error {
 	return c.download(s, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockBatch) error {
-	const maxBatchCount = 1024
-	var batch []*block.Block
+func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockChunk) error {
+	const maxChunkBlocks = 1024
+	var chunk []*block.Block
 
 	for {
 		peer := session.Peer()
@@ -56,11 +56,11 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			return err
 		}
 		if len(resp) == 0 {
-			if len(batch) > 0 {
-				if err := handler(batch); err != nil {
+			if len(chunk) > 0 {
+				if err := handler(chunk); err != nil {
 					return err
 				}
-				batch = nil
+				chunk = nil
 			}
 			return nil
 		}
@@ -72,12 +72,12 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			}
 			session.MarkBlock(blk.Header().ID())
 			fromNum++
-			batch = append(batch, &blk)
-			if len(batch) >= maxBatchCount {
-				if err := handler(batch); err != nil {
+			chunk = append(chunk, &blk)
+			if len(chunk) >= maxChunkBlocks {
+				if err := handler(chunk); err != nil {
 					return err
 				}
-				batch = nil
+				chunk = nil
 			}
 		}
 	}

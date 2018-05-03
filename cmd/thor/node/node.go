@@ -30,8 +30,8 @@ type Node struct {
 
 	bestBlockFeed   event.Feed
 	packedBlockFeed event.Feed
-	blockBatchCh    chan []*block.Block
-	blockBatchAckCh chan error
+	blockChunkCh    chan []*block.Block
+	blockChunkAckCh chan error
 
 	master *Master
 	chain  *chain.Chain
@@ -51,8 +51,8 @@ func New(
 	return &Node{
 		packer:          packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
 		cons:            consensus.New(chain, stateCreator),
-		blockBatchCh:    make(chan []*block.Block),
-		blockBatchAckCh: make(chan error),
+		blockChunkCh:    make(chan []*block.Block),
+		blockChunkAckCh: make(chan error),
 		master:          master,
 		chain:           chain,
 		logDB:           logDB,
@@ -70,9 +70,9 @@ func (n *Node) Run(ctx context.Context) error {
 
 	return nil
 }
-func (n *Node) HandleBlockBatch(blocks []*block.Block) error {
-	n.blockBatchCh <- blocks
-	return <-n.blockBatchAckCh
+func (n *Node) HandleBlockChunk(chunk []*block.Block) error {
+	n.blockChunkCh <- chunk
+	return <-n.blockChunkAckCh
 }
 
 func (n *Node) waitForSynced(ctx context.Context) bool {
@@ -174,8 +174,8 @@ func (n *Node) consensusLoop(ctx context.Context) {
 					log.Error("failed to import block", "err", err)
 				}
 			}
-		case blocks := <-n.blockBatchCh:
-			n.blockBatchAckCh <- func() error {
+		case blocks := <-n.blockChunkCh:
+			n.blockChunkAckCh <- func() error {
 				for _, block := range blocks {
 					if err := n.processBlock(block); err != nil {
 						log.Error("failed to import downloaded block", "err", err)
