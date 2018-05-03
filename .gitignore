@@ -23,3 +23,4 @@ package.json
 /node_modules/
 
 /.vscode/
+/vendor/
