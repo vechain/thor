@@ -94,10 +94,14 @@ func (n *Node) waitForSynced(ctx context.Context) bool {
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
+
+	log.Info("waiting for synchronization...")
 	// wait for synced
 	if !n.waitForSynced(ctx) {
 		return
 	}
+
+	log.Info("synchronization process done")
 
 	parent, err := n.chain.GetBestBlock()
 	if err != nil {
@@ -167,8 +171,8 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			} else if isTrunk {
 				log.Info("📦 new block packed",
 					"txs", len(packedBlock.receipts),
-					"gas-used", packedBlock.Header().GasUsed(),
-					"number", packedBlock.Header().Number(),
+					"ugas", packedBlock.Header().GasUsed(),
+					"num", packedBlock.Header().Number(),
 					"hash", fmt.Sprintf("[…%x]", packedBlock.Header().ID().Bytes()[28:]),
 				)
 			}
@@ -188,6 +192,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
+					default:
 					}
 				}
 				return nil
