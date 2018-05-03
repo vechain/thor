@@ -242,7 +242,7 @@ func (solo *cliContext) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
-	adopt, commit, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
+	adopt, pack, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
@@ -266,8 +266,11 @@ func (solo *cliContext) packing() {
 		}
 	}
 
-	b, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, err := pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
+		log.Error(fmt.Sprintf("%+v", err))
+	}
+	if _, err := stage.Commit(); err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 

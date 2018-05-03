@@ -44,22 +44,22 @@ func New(
 // Adopt adopt transaction into new block.
 type Adopt func(tx *tx.Transaction) error
 
-// Commit generate new block.
-type Commit func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error)
+// Pack generate new block.
+type Pack func(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error)
 
 // Prepare calculates the time to pack and do necessary things before pack.
 func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 	uint64, // target time
 	Adopt,
-	Commit,
+	Pack,
 	error) {
 
-	state, err := p.stateCreator.NewState(parent.StateRoot())
+	st, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return 0, nil, nil, errors.Wrap(err, "state")
 	}
 
-	targetTime, score, err := p.schedule(state, parent, nowTimestamp)
+	targetTime, score, err := p.schedule(st, parent, nowTimestamp)
 	if err != nil {
 		return 0, nil, nil, err
 	}
@@ -76,7 +76,7 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 		totalGasUsed uint64
 		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
 		traverser    = p.chain.NewTraverser(parent.ID())
-		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
+		rt           = runtime.New(st, p.beneficiary, parent.Number()+1, targetTime, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
 
@@ -130,11 +130,11 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 				}
 			}
 
-			chkpt := state.NewCheckpoint()
+			chkpt := st.NewCheckpoint()
 			receipt, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
-				state.RevertTo(chkpt)
+				st.RevertTo(chkpt)
 				return badTxError{err.Error()}
 			}
 			processedTxs[tx.ID()] = receipt.Reverted
@@ -143,18 +143,20 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-				return nil, nil, errors.New("private key mismatch")
+				return nil, nil, nil, errors.New("private key mismatch")
 			}
 
 			if err := traverser.Error(); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
-			stateRoot, err := state.Stage().Commit()
+			stage := st.Stage()
+
+			stateRoot, err := stage.Hash()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			newBlock := builder.
@@ -164,9 +166,9 @@ func (p *Packer) Prepare(parent *block.Header, nowTimestamp uint64) (
 
 			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, nil
+			return newBlock.WithSignature(sig), stage, receipts, nil
 		}, nil
 }
 

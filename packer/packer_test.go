@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
@@ -88,10 +89,12 @@ func TestP(t *testing.T) {
 			adopt(tx)
 		}
 
-		blk, _, _, err := commit(genesis.DevAccounts()[0].PrivateKey)
-		fmt.Println(consensus.New(c, stateCreator).Consent(blk, uint64(time.Now().Unix()*2)))
+		blk, stage, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+		root, _ := stage.Commit()
+		assert.Equal(t, root, blk.Header().StateRoot())
+		fmt.Println(consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2)))
 
-		if _, err := c.AddBlock(blk, nil, true); err != nil {
+		if _, err := c.AddBlock(blk, receipts, true); err != nil {
 			t.Fatal(err)
 		}
 

@@ -119,7 +119,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	defer timer.Stop()
 	for {
 		now := uint64(time.Now().Unix())
-		if timestamp, adopt, commit, err := n.packer.Prepare(parent.Header(), now); err != nil {
+		if timestamp, adopt, pack, err := n.packer.Prepare(parent.Header(), now); err != nil {
 			log.Warn("failed to prepare for packing", "err", err)
 		} else {
 			timer.Reset(time.Duration(timestamp-now) * time.Second)
@@ -130,7 +130,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				parent = bestBlock.Block
 				continue
 			case <-timer.C:
-				n.pack(adopt, commit)
+				n.pack(adopt, pack)
 			}
 		}
 
@@ -167,8 +167,16 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case packedBlock := <-packedBlockCh:
-			if isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts); err != nil {
-			} else if isTrunk {
+			if _, err := packedBlock.stage.Commit(); err != nil {
+				log.Error("failed to commit state of packed block", "err", err)
+				continue
+			}
+			isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts)
+			if err != nil {
+				continue
+			}
+
+			if isTrunk {
 				log.Info("📦 new block packed",
 					"txs", len(packedBlock.receipts),
 					"ugas", packedBlock.Header().GasUsed(),
@@ -201,7 +209,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(adopt packer.Adopt, commit packer.Commit) {
+func (n *Node) pack(adopt packer.Adopt, pack packer.Pack) {
 	startTime := mclock.Now()
 	for _, tx := range n.txPool.Pending() {
 		err := adopt(tx)
@@ -214,12 +222,11 @@ func (n *Node) pack(adopt packer.Adopt, commit packer.Commit) {
 			n.txPool.Remove(tx.ID())
 		}
 	}
-	newBlock, receipts, err := commit(n.master.PrivateKey)
+	newBlock, stage, receipts, err := pack(n.master.PrivateKey)
 	if err != nil {
 		log.Error("failed to pack block", "err", err)
 		return
 	}
-
 	if elapsed := mclock.Now() - startTime; elapsed > 0 {
 		gasUsed := newBlock.Header().GasUsed()
 		// calc target gas limit only if gas used above third of gas limit
@@ -229,12 +236,12 @@ func (n *Node) pack(adopt packer.Adopt, commit packer.Commit) {
 		}
 	}
 
-	n.goes.Go(func() { n.packedBlockFeed.Send(&packedBlockEvent{newBlock, receipts}) })
+	n.goes.Go(func() { n.packedBlockFeed.Send(&packedBlockEvent{newBlock, stage, receipts}) })
 }
 
 func (n *Node) processBlock(blk *block.Block) (bool, error) {
 	now := uint64(time.Now().Unix())
-	receipts, err := n.cons.Process(blk, now)
+	stage, receipts, err := n.cons.Process(blk, now)
 	if err != nil {
 		switch {
 		case consensus.IsKnownBlock(err):
@@ -246,6 +253,10 @@ func (n *Node) processBlock(blk *block.Block) (bool, error) {
 		default:
 			log.Error("failed to process block", "err", err)
 		}
+		return false, err
+	}
+	if _, err := stage.Commit(); err != nil {
+		log.Error("failed to commit state", "err", err)
 		return false, err
 	}
 

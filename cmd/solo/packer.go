@@ -58,10 +58,10 @@ func NewSoloPacker(
 // Prepare is for diffing from `Prepare` in package packer, SoloPacker works itself doesn't deal with scheduler, Setup function accept new block timestamp as an param
 func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 	packer.Adopt,
-	packer.Commit,
+	packer.Pack,
 	error) {
 
-	state, err := p.stateCreator.NewState(parent.StateRoot())
+	st, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "state")
 	}
@@ -79,7 +79,7 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 		totalGasUsed uint64
 		processedTxs = make(map[thor.Bytes32]bool) // txID -> reverted
 		traverser    = p.chain.NewTraverser(parent.ID())
-		rt           = runtime.New(state, p.beneficiary, parent.Number()+1, newBlockTimestamp, gasLimit, func(num uint32) thor.Bytes32 {
+		rt           = runtime.New(st, p.beneficiary, parent.Number()+1, newBlockTimestamp, gasLimit, func(num uint32) thor.Bytes32 {
 			return traverser.Get(num).ID()
 		})
 		builder = new(block.Builder).
@@ -131,11 +131,11 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 				}
 			}
 
-			chkpt := state.NewCheckpoint()
+			chkpt := st.NewCheckpoint()
 			receipt, _, err := rt.ExecuteTransaction(tx)
 			if err != nil {
 				// skip and revert state
-				state.RevertTo(chkpt)
+				st.RevertTo(chkpt)
 				return badTxError{err.Error()}
 			}
 			processedTxs[tx.ID()] = receipt.Reverted
@@ -144,18 +144,19 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 			builder.Transaction(tx)
 			return nil
 		},
-		func(privateKey *ecdsa.PrivateKey) (*block.Block, tx.Receipts, error) {
+		func(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 			if p.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-				return nil, nil, errors.New("private key mismatch")
+				return nil, nil, nil, errors.New("private key mismatch")
 			}
 
 			if err := traverser.Error(); err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
-			stateRoot, err := state.Stage().Commit()
+			stage := st.Stage()
+			stateRoot, err := stage.Hash()
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
 			newBlock := builder.
@@ -165,9 +166,9 @@ func (p *SoloPacker) Prepare(parent *block.Header, newBlockTimestamp uint64) (
 
 			sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			return newBlock.WithSignature(sig), receipts, nil
+			return newBlock.WithSignature(sig), stage, receipts, nil
 		}, nil
 }
 

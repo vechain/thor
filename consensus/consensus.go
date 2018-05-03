@@ -26,40 +26,36 @@ func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 }
 
 // Process process a block.
-func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (tx.Receipts, error) {
+func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 
 	if _, err := c.chain.GetBlockHeader(header.ID()); err != nil {
 		if !c.chain.IsNotFound(err) {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
-		return nil, errKnownBlock
+		return nil, nil, errKnownBlock
 	}
 
 	parentHeader, err := c.chain.GetBlockHeader(header.ParentID())
 	if err != nil {
 		if !c.chain.IsNotFound(err) {
-			return nil, err
+			return nil, nil, err
 		}
-		return nil, errParentMissing
+		return nil, nil, errParentMissing
 	}
 
 	state, err := c.stateCreator.NewState(parentHeader.StateRoot())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	stage, receipts, err := c.validate(state, blk, parentHeader, nowTimestamp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if _, err = stage.Commit(); err != nil {
-		return nil, err
-	}
-
-	return receipts, nil
+	return stage, receipts, nil
 }
 
 // IsTrunk to determine if the block can be head of trunk.
