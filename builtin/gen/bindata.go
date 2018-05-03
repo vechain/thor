@@ -12,6 +12,10 @@
 // compiled/EnergyNative.bin-runtime
 // compiled/Executor.abi
 // compiled/Executor.bin-runtime
+// compiled/Extension.abi
+// compiled/Extension.bin-runtime
+// compiled/ExtensionNative.abi
+// compiled/ExtensionNative.bin-runtime
 // compiled/Params.abi
 // compiled/Params.bin-runtime
 // compiled/ParamsNative.abi
@@ -329,6 +333,86 @@ func compiledExecutorBinRuntime() (*asset, error) {
 	}
 
 	info := bindataFileInfo{name: "compiled/Executor.bin-runtime", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _compiledExtensionAbi = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x5c\xcc\x41\x0a\xc2\x30\x10\x85\xe1\xbb\xbc\x75\x56\x15\x5d\xe4\x0e\x9e\xa0\x14\x99\x94\x29\x04\xe3\xb4\x98\x37\x95\x50\x7a\x77\x51\x10\xa1\xcb\x07\xef\xfb\xfb\x0d\xe3\x6c\x95\x62\x44\xe4\xd3\x35\x20\xdb\xe2\xac\x88\xfd\x06\x93\x87\x22\xe2\xb6\x4a\x71\x45\x00\xdb\xf2\xd9\xa9\x51\x2b\xf6\x21\xfc\x0e\xa9\xc8\x5d\xbb\xd4\x9d\x2f\x08\x98\x9d\xc7\xc0\x81\x9e\xba\x2f\x5e\xa4\x49\x2a\x8a\x38\x49\xa9\x1a\x50\x29\xd4\xab\x53\x52\x2e\x99\x0d\x11\x6b\xd6\xd7\xdf\x4e\x6e\x23\xf3\x6c\xd8\x87\x77\x00\x00\x00\xff\xff\xb4\x23\xfe\x55\xb7\x00\x00\x00")
+
+func compiledExtensionAbiBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledExtensionAbi,
+		"compiled/Extension.abi",
+	)
+}
+
+func compiledExtensionAbi() (*asset, error) {
+	bytes, err := compiledExtensionAbiBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/Extension.abi", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _compiledExtensionBinRuntime = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\xa4\x92\x6d\xd2\x1c\x21\x08\x84\xaf\xd4\x0d\x82\x70\x1c\xe7\xc3\xfb\x1f\x21\x85\xce\xbc\xbb\xc9\x9f\x54\x25\x5a\x5b\x3b\x5a\xd8\xc0\xd3\x38\x6a\x37\x98\x38\xd0\xd4\x09\x27\xea\xdc\x5d\xe7\xb3\xfa\x09\xe2\x1f\x97\x03\x50\x43\xa3\xbb\x6a\x97\x66\xc1\x16\x64\x5b\x59\xcc\xba\x1d\x15\x11\x98\x97\x1d\xda\x68\x75\x6f\x95\xfd\xe7\xb6\x6e\xd2\xab\x3a\x87\xb4\xa0\x5a\x30\x08\x26\x42\x51\x27\x38\x04\x0e\xce\x10\x30\x98\x40\x0b\x42\xc0\xd5\x57\xc5\xf1\xf9\x96\x7a\x69\x92\x92\xcc\xf5\x2a\x1a\x18\x1a\x1a\x08\x89\xa6\xdd\x90\x2d\xdd\x16\x83\x11\x69\x86\xaf\xed\x55\xeb\xab\x58\xbc\x04\x6f\x8e\x40\x12\x9a\x98\xba\xfb\x51\xf4\x1f\x7a\x7f\x5b\x45\x66\xf4\x1b\x63\x48\x84\xfa\x62\x56\x9a\x5b\xbf\xf2\xac\x0c\xf2\xf1\x83\xfe\x3f\x8e\x40\x76\xf5\xa8\xde\xb1\xe9\x81\x21\x41\x68\x88\x49\xe8\xa2\xc4\x4f\x8f\x49\x43\xac\xbe\x9f\x33\x02\x45\xad\x6a\xb5\xa3\xe2\x89\xe5\x1c\x35\xac\x17\x4b\xd4\x7b\x5d\xff\x2f\x27\x82\xb2\x18\xbe\x3c\x73\xfd\xb6\x93\xe5\x1e\x3d\x1e\x15\xb7\x47\x45\x63\x71\x28\x8f\x96\x4a\x8d\x67\xf5\x3d\xa0\x4c\xfa\xef\x15\x96\x72\xca\xd6\xde\x13\xb1\x9d\x09\x85\x06\xd7\x3c\xf5\x80\x1e\xb4\x9d\x25\xf4\x8f\x29\x93\xd3\x6d\x40\x27\xdf\x88\x6c\xdf\x11\xaf\xf2\x56\x35\xa6\xbe\xd9\xcc\x81\x41\x37\x97\x3e\xfa\xe8\xa2\xb0\x10\xe0\xe6\x00\xe1\x69\xed\xc6\x50\x21\xee\x2b\xfb\xe5\x47\x4c\x1f\x21\xc7\x3c\x30\x6d\x0a\x4f\x37\x0b\x6d\x37\xc3\x75\x9c\x57\x77\x99\x66\x17\x4e\x40\xf2\x57\x00\x00\x00\xff\xff\xb9\x18\xac\x76\x9e\x03\x00\x00")
+
+func compiledExtensionBinRuntimeBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledExtensionBinRuntime,
+		"compiled/Extension.bin-runtime",
+	)
+}
+
+func compiledExtensionBinRuntime() (*asset, error) {
+	bytes, err := compiledExtensionBinRuntimeBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/Extension.bin-runtime", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _compiledExtensionnativeAbi = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x5c\xcc\x41\xaa\x83\x40\x10\x84\xe1\xbb\xd4\x7a\x56\x3e\x5e\x16\x73\x87\x9c\x40\x44\x7a\xa4\x85\x21\x93\x56\x32\xd5\x86\x41\xbc\x7b\x48\x20\x04\x5c\x16\xd4\xff\xf5\x3b\xa6\xc5\x2a\xc5\x88\xc8\x87\x6b\x40\xb6\xd5\x59\x11\xfb\x1d\x26\x77\x45\xc4\xb8\x49\x71\x45\x00\xdb\xfa\xde\xa9\x51\x2b\x8e\x21\x7c\x0f\x26\xcc\x9b\x8e\xa9\xc8\x4d\xbb\xd4\xfd\x5f\x10\xb0\x38\xcf\xce\x49\xf8\xeb\x3e\xc6\x2a\x4d\x52\x51\xc4\x59\x4a\xd5\x80\x4a\xa1\x5e\x9d\x92\x72\xc9\x6c\x88\xd8\xb2\x3e\x7f\xed\xec\x36\x31\x2f\x86\x63\x78\x05\x00\x00\xff\xff\x30\x2a\x49\xda\xbe\x00\x00\x00")
+
+func compiledExtensionnativeAbiBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledExtensionnativeAbi,
+		"compiled/ExtensionNative.abi",
+	)
+}
+
+func compiledExtensionnativeAbi() (*asset, error) {
+	bytes, err := compiledExtensionnativeAbiBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/ExtensionNative.abi", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
+	a := &asset{bytes: bytes, info: info}
+	return a, nil
+}
+
+var _compiledExtensionnativeBinRuntime = []byte("\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\xff\x01\x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00")
+
+func compiledExtensionnativeBinRuntimeBytes() ([]byte, error) {
+	return bindataRead(
+		_compiledExtensionnativeBinRuntime,
+		"compiled/ExtensionNative.bin-runtime",
+	)
+}
+
+func compiledExtensionnativeBinRuntime() (*asset, error) {
+	bytes, err := compiledExtensionnativeBinRuntimeBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	info := bindataFileInfo{name: "compiled/ExtensionNative.bin-runtime", size: 0, mode: os.FileMode(0), modTime: time.Unix(0, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -677,6 +761,10 @@ var _bindata = map[string]func() (*asset, error){
 	"compiled/EnergyNative.bin-runtime": compiledEnergynativeBinRuntime,
 	"compiled/Executor.abi": compiledExecutorAbi,
 	"compiled/Executor.bin-runtime": compiledExecutorBinRuntime,
+	"compiled/Extension.abi": compiledExtensionAbi,
+	"compiled/Extension.bin-runtime": compiledExtensionBinRuntime,
+	"compiled/ExtensionNative.abi": compiledExtensionnativeAbi,
+	"compiled/ExtensionNative.bin-runtime": compiledExtensionnativeBinRuntime,
 	"compiled/Params.abi": compiledParamsAbi,
 	"compiled/Params.bin-runtime": compiledParamsBinRuntime,
 	"compiled/ParamsNative.abi": compiledParamsnativeAbi,
@@ -746,6 +834,10 @@ var _bintree = &bintree{nil, map[string]*bintree{
 		"EnergyNative.bin-runtime": &bintree{compiledEnergynativeBinRuntime, map[string]*bintree{}},
 		"Executor.abi": &bintree{compiledExecutorAbi, map[string]*bintree{}},
 		"Executor.bin-runtime": &bintree{compiledExecutorBinRuntime, map[string]*bintree{}},
+		"Extension.abi": &bintree{compiledExtensionAbi, map[string]*bintree{}},
+		"Extension.bin-runtime": &bintree{compiledExtensionBinRuntime, map[string]*bintree{}},
+		"ExtensionNative.abi": &bintree{compiledExtensionnativeAbi, map[string]*bintree{}},
+		"ExtensionNative.bin-runtime": &bintree{compiledExtensionnativeBinRuntime, map[string]*bintree{}},
 		"Params.abi": &bintree{compiledParamsAbi, map[string]*bintree{}},
 		"Params.bin-runtime": &bintree{compiledParamsBinRuntime, map[string]*bintree{}},
 		"ParamsNative.abi": &bintree{compiledParamsnativeAbi, map[string]*bintree{}},
