@@ -5,6 +5,7 @@ import (
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/builtin/energy"
+	"github.com/vechain/thor/builtin/extension"
 	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
@@ -18,6 +19,7 @@ var (
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{mustLoadContract("Prototype")}
+	Extension = &extensionContract{mustLoadContract("Extension")}
 )
 
 type (
@@ -26,6 +28,7 @@ type (
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
 	prototypeContract struct{ *contract }
+	extensionContract struct{ *contract }
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {
@@ -42,6 +45,10 @@ func (e *energyContract) Native(state *state.State) *energy.Energy {
 
 func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 	return prototype.New(p.Address, state)
+}
+
+func (e *extensionContract) Native(state *state.State) *extension.Extension {
+	return extension.New(e.Address, state)
 }
 
 func (p *prototypeContract) InterfaceABI() *abi.ABI {

@@ -459,12 +459,45 @@ func initPrototypeInterfaceMethods() {
 
 }
 
+const (
+	blake2b256WordGas uint64 = 3
+	blake2b256Gas     uint64 = 15
+)
+
+func initExtensionMethods() {
+	defines := []struct {
+		name string
+		run  func(env *bridge) []interface{}
+	}{
+		{"native_blake2b256", func(env *bridge) []interface{} {
+			var data []byte
+			env.ParseArgs(&data)
+			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
+			output := Extension.Native(env.State).Blake2b256(data)
+			return []interface{}{output}
+		}},
+	}
+
+	nativeABI := Extension.NativeABI()
+	for _, def := range defines {
+		if method, found := nativeABI.MethodByName(def.name); found {
+			privateMethods[addressAndMethodID{Extension.Address, method.ID()}] = &nativeMethod{
+				ABI: method,
+				Run: def.run,
+			}
+		} else {
+			panic("method not found: " + def.name)
+		}
+	}
+}
+
 func init() {
 	initParamsMethods()
 	initAuthorityMethods()
 	initEnergyMethods()
 	initPrototypeMethods()
 	initPrototypeInterfaceMethods()
+	initExtensionMethods()
 }
 
 // HandleNativeCall entry of native methods implementaion.
