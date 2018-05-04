@@ -2,6 +2,7 @@ package txpool
 
 import (
 	"errors"
+	"math/big"
 	"sort"
 	"sync"
 	"time"
@@ -28,6 +29,21 @@ type PoolConfig struct {
 var defaultTxPoolConfig = PoolConfig{
 	PoolSize: 20000,
 	Lifetime: 1000,
+}
+
+type objectStatus int
+
+const (
+	Pending objectStatus = iota
+	Queued
+)
+
+//txObject wrap transaction
+type txObject struct {
+	tx           *tx.Transaction
+	status       objectStatus
+	overallGP    *big.Int
+	creationTime int64
 }
 
 //TxPool TxPool
@@ -73,7 +89,7 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 
 	if pool.all.Len() > pool.config.PoolSize {
 		if picked, ok := pool.all.Pick().Value.(*txObject); ok {
-			pool.all.Remove(picked.Tx().ID())
+			pool.all.Remove(picked.tx.ID())
 		}
 	}
 
@@ -87,11 +103,17 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 		return err
 	}
 
-	if sp {
-		pool.all.Set(txID, newTxObject(tx, time.Now().Unix(), Pending))
-	} else {
-		pool.all.Set(txID, newTxObject(tx, time.Now().Unix(), Queued))
+	to := &txObject{
+		tx:           tx,
+		overallGP:    new(big.Int),
+		creationTime: time.Now().Unix(),
 	}
+	if sp {
+		to.status = Pending
+	} else {
+		to.status = Queued
+	}
+	pool.all.Set(txID, to)
 
 	pool.goes.Go(func() { pool.txFeed.Send(tx) })
 
@@ -129,7 +151,7 @@ func (pool *TxPool) Dump() []*tx.Transaction {
 	pendingObjs := pool.pendingObjs(bestBlock, false)
 	txs := make([]*tx.Transaction, len(pendingObjs))
 	for i, obj := range pendingObjs {
-		txs[i] = obj.Tx()
+		txs[i] = obj.tx
 	}
 	return txs
 }
@@ -143,12 +165,12 @@ func (pool *TxPool) Pending() []*tx.Transaction {
 	pendingObjs := pool.pendingObjs(bestBlock, true)
 	txs := make([]*tx.Transaction, len(pendingObjs))
 	for i, obj := range pendingObjs {
-		txs[i] = obj.Tx()
+		txs[i] = obj.tx
 	}
 	return txs
 }
 
-func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) txObjects {
+func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) []*txObject {
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
 		return nil
@@ -156,24 +178,23 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) txObjec
 	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 	all := pool.allObjs()
-	var pendings txObjects
+	var pendings []*txObject
 	for id, obj := range all {
-		tx := obj.Tx()
-		if tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+		if obj.tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.creationTime > int64(pool.config.Lifetime) {
 			pool.Remove(id)
 			continue
 		}
-		if obj.Status() == Pending {
-			overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
+		if obj.status == Pending {
+			overallGP := obj.tx.OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
 				return traverser.Get(num).ID()
 			})
-			obj.SetOverallGP(overallGP)
+			obj.overallGP = overallGP
 			pendings = append(pendings, obj)
 		}
 	}
 	if shouldSort {
 		sort.Slice(pendings, func(i, j int) bool {
-			return pendings[i].OverallGP().Cmp(pendings[j].OverallGP()) > 0
+			return pendings[i].overallGP.Cmp(pendings[j].overallGP) > 0
 		})
 	}
 	return pendings
@@ -225,22 +246,21 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 	all := pool.allObjs()
 	//can be pendinged txObjects
 	for id, obj := range all {
-		tx := obj.Tx()
-		if tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.CreationTime() > int64(pool.config.Lifetime) {
+		if obj.tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.creationTime > int64(pool.config.Lifetime) {
 			pool.Remove(id)
 			continue
 		}
-		if obj.Status() == Queued {
-			sp, err := pool.shouldPending(obj.Tx(), bestBlock)
+		if obj.status == Queued {
+			sp, err := pool.shouldPending(obj.tx, bestBlock)
 			if err != nil {
 				return
 			}
 			if sp {
-				overallGP := obj.Tx().OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
+				overallGP := obj.tx.OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
 					return traverser.Get(num).ID()
 				})
-				obj.SetOverallGP(overallGP)
-				obj.SetStatus(Pending)
+				obj.overallGP = overallGP
+				obj.status = Pending
 				pool.all.Set(id, obj)
 			}
 		}
@@ -275,7 +295,7 @@ func (pool *TxPool) GetTransaction(txID thor.Bytes32) *tx.Transaction {
 	defer pool.rw.RUnlock()
 	if res, ok := pool.all.Get(txID); ok {
 		if obj, ok := res.(*txObject); ok {
-			return obj.Tx()
+			return obj.tx
 		}
 	}
 	return nil
