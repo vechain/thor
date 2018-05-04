@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -162,16 +163,31 @@ func (n *Node) consensusLoop(ctx context.Context) {
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 	defer scope.Close()
 
-	futureBlocks := cache.NewPrioCache(256)
+	futureBlocks := cache.NewRandCache(256)
 
-	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
-	defer ticker.Stop()
+	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	defer futureTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-futureTicker.C:
+			// process future blocks
+			var blocks []*block.Block
+			futureBlocks.ForEach(func(ent *cache.Entry) bool {
+				blocks = append(blocks, ent.Value.(*block.Block))
+				return true
+			})
+			sort.Slice(blocks, func(i, j int) bool {
+				return blocks[i].Header().Number() < blocks[j].Header().Number()
+			})
+			for _, block := range blocks {
+				var stats blockStats
+				if _, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
+					futureBlocks.Remove(block.Header().ID())
+				}
+			}
 		case packedBlock := <-packedBlockCh:
 			startTime := mclock.Now()
 			if _, err := packedBlock.stage.Commit(); err != nil {
@@ -183,7 +199,6 @@ func (n *Node) consensusLoop(ctx context.Context) {
 				continue
 			}
 			commitElapsed := mclock.Now() - startTime
-
 			if isTrunk {
 				log.Info("📦 new block packed",
 					"txs", len(packedBlock.receipts),
@@ -195,8 +210,9 @@ func (n *Node) consensusLoop(ctx context.Context) {
 		case newBlock := <-newBlockCh:
 			var stats blockStats
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
-				if consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) {
-					futureBlocks.Set(newBlock.Header().ID(), newBlock, -float64(newBlock.Header().Number()))
+				if consensus.IsFutureBlock(err) ||
+					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					futureBlocks.Set(newBlock.Header().ID(), newBlock)
 				}
 			} else if isTrunk {
 				log.Info("imported blocks", stats.LogContext(newBlock.Block.Header())...)
@@ -216,7 +232,8 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 		}
 
 		if stats.processed > 0 &&
-			(i == len(chunk)-1 || mclock.Now()-startTime > mclock.AbsTime(5*time.Second)) {
+			(i == len(chunk)-1 ||
+				mclock.Now()-startTime > mclock.AbsTime(time.Duration(thor.BlockInterval)*time.Second/2)) {
 			log.Info("imported blocks", stats.LogContext(block.Header())...)
 			stats = blockStats{}
 		}
