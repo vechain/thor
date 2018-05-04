@@ -41,7 +41,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		if s := c.sessionSet.Find(peer.ID()); s != nil {
 			s.MarkTransaction(req.Tx.ID())
 		}
-		c.goes.Go(func() { c.newTxFeed.Send(req.Tx) })
+		c.goes.Go(func() { c.newTxFeed.Send(&NewTransactionEvent{req.Tx}) })
 		return &struct{}{}, nil
 	case proto.MsgNewBlock:
 		var req proto.ReqNewBlock
