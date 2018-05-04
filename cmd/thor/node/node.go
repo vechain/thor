@@ -120,15 +120,20 @@ func (n *Node) packerLoop(ctx context.Context) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
-	var prepareErrorLogged bool
+	var authorized bool
 	for {
 		now := uint64(time.Now().Unix())
 		if timestamp, adopt, pack, err := n.packer.Prepare(parent.Header(), now); err != nil {
-			if !prepareErrorLogged {
-				prepareErrorLogged = true
+			if authorized {
+				authorized = false
 				log.Warn("unable to pack block", "err", err)
 			}
 		} else {
+			if !authorized {
+				authorized = true
+				log.Info("prepared to pack block")
+			}
+
 			timer.Reset(time.Duration(timestamp-now) * time.Second)
 			select {
 			case <-ctx.Done():
