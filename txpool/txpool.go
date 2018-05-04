@@ -18,13 +18,6 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-var (
-	// ErrIntrinsicGas intrinsic gas too low
-	ErrIntrinsicGas = errors.New("intrinsic gas too low")
-	// ErrKnownTransaction transaction has beed added to pool
-	ErrKnownTransaction = errors.New("known transaction")
-)
-
 //PoolConfig PoolConfig
 type PoolConfig struct {
 	PoolSize int           // Maximum number of executable transaction slots for all accounts
@@ -63,11 +56,6 @@ func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
 	return pool
 }
 
-//IsKonwnTransactionError whether err is a ErrKnownTransaction
-func (pool *TxPool) IsKonwnTransactionError(err error) bool {
-	return ErrKnownTransaction == err
-}
-
 //Add transaction
 func (pool *TxPool) Add(tx *tx.Transaction) error {
 	pool.rw.Lock()
@@ -75,31 +63,38 @@ func (pool *TxPool) Add(tx *tx.Transaction) error {
 
 	txID := tx.ID()
 	if _, ok := pool.all.Get(txID); ok {
-		return ErrKnownTransaction
+		return errors.New("known transaction")
 	}
+
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx); err != nil {
 		return err
 	}
+
 	if pool.all.Len() > pool.config.PoolSize {
 		if picked, ok := pool.all.Pick().Value.(*txObject); ok {
 			pool.all.Remove(picked.Tx().ID())
 		}
 	}
+
 	bestBlock, err := pool.chain.GetBestBlock()
 	if err != nil {
 		return err
 	}
+
 	sp, err := pool.shouldPending(tx, bestBlock)
 	if err != nil {
 		return err
 	}
+
 	if sp {
 		pool.all.Set(txID, newTxObject(tx, time.Now().Unix(), Pending))
 	} else {
 		pool.all.Set(txID, newTxObject(tx, time.Now().Unix(), Queued))
 	}
+
 	pool.goes.Go(func() { pool.txFeed.Send(tx) })
+
 	return nil
 }
 

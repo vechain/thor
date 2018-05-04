@@ -91,7 +91,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
-	defer func() { log.Info("shutting down API server..."); apiSrv.Stop() }()
+	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()
 
 	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
 
