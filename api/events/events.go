@@ -2,8 +2,6 @@ package events
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -37,15 +35,11 @@ func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, 
 }
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
+	var filter Filter
+	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return err
 	}
 	req.Body.Close()
-	var filter Filter
-	if err := json.Unmarshal(res, &filter); err != nil {
-		return err
-	}
 	query := req.URL.Query()
 	if query.Get("address") != "" {
 		addr, err := thor.ParseAddress(query.Get("address"))

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/pkg/errors"
@@ -68,6 +69,13 @@ const (
 	JSONContentType        = "application/json; charset=utf-8"
 	OctetStreamContentType = "application/octet-stream"
 )
+
+// ParseJSON parse a JSON object using strict mode.
+func ParseJSON(r io.Reader, v interface{}) error {
+	decoder := json.NewDecoder(r)
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(v)
+}
 
 // WriteJSON reponse a object in JSON enconding.
 func WriteJSON(w http.ResponseWriter, obj interface{}) error {

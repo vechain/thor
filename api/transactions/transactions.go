@@ -1,9 +1,7 @@
 package transactions
 
 import (
-	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -128,15 +126,11 @@ func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
 }
 
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
+	var raw *RawTx
+	if err := utils.ParseJSON(req.Body, &raw); err != nil {
 		return err
 	}
 	req.Body.Close()
-	var raw *RawTx
-	if err = json.Unmarshal(res, &raw); err != nil {
-		return err
-	}
 	tx, err := raw.decode()
 	if err != nil {
 		return err

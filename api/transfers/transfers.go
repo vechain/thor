@@ -2,8 +2,6 @@ package transfers
 
 import (
 	"context"
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -35,15 +33,11 @@ func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([
 }
 
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
+	var filter logdb.TransferFilter
+	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return err
 	}
 	req.Body.Close()
-	var filter logdb.TransferFilter
-	if err := json.Unmarshal(res, &filter); err != nil {
-		return err
-	}
 	order := req.URL.Query().Get("order")
 	if order != string(logdb.DESC) {
 		filter.Order = logdb.ASC
