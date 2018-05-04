@@ -78,6 +78,14 @@ func (rc *RandCache) Get(key interface{}) (interface{}, bool) {
 	return nil, false
 }
 
+// Contains returns whether the given key is contained.
+func (rc *RandCache) Contains(key interface{}) bool {
+	rc.lock.Lock()
+	defer rc.lock.Unlock()
+	_, ok := rc.m[key]
+	return ok
+}
+
 // Remove removes key.
 func (rc *RandCache) Remove(key interface{}) bool {
 	rc.lock.Lock()
