@@ -79,17 +79,17 @@ func TestP(t *testing.T) {
 	for {
 		best, _ := c.GetBestBlock()
 		p := packer.New(c, stateCreator, a1.Address, a1.Address)
-		_, adopt, commit, err := p.Prepare(best.Header(), uint64(time.Now().Unix()))
+		_, flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
 		iter := &txIterator{chainTag: b0.Header().ID()[31]}
 		for iter.HasNext() {
 			tx := iter.Next()
-			adopt(tx)
+			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, err := commit(genesis.DevAccounts()[0].PrivateKey)
+		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
 		fmt.Println(consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2)))

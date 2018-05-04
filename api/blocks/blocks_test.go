@@ -86,12 +86,12 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	}
 	tx = tx.WithSignature(sig)
 	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
-	_, adopt, pack, err := packer.Prepare(b.Header(), uint64(time.Now().Unix()))
-	err = adopt(tx)
+	_, flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
+	err = flow.Adopt(tx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := pack(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	}
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
-	defer pool.Stop()
+	defer pool.Shutdown()
 	blocks.New(chain).Mount(router, "/blocks")
 	ts := httptest.NewServer(router)
 	return b, ts
