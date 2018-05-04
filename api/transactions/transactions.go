@@ -27,46 +27,6 @@ func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
 }
 
 func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, error) {
-	var transaction *tx.Transaction
-	var blockC BlockContext
-	if pengdingTransaction := t.pool.GetTransaction(txID); pengdingTransaction != nil {
-		transaction = pengdingTransaction
-	} else {
-		tx, location, err := t.chain.GetTransaction(txID)
-		if err != nil {
-			if t.chain.IsNotFound(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		block, err := t.chain.GetBlock(location.BlockID)
-		if err != nil {
-			if t.chain.IsNotFound(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		blockC = BlockContext{
-			ID:        block.Header().ID(),
-			Number:    block.Header().Number(),
-			Timestamp: block.Header().Timestamp(),
-		}
-		transaction = tx
-	}
-	raw, err := rlp.EncodeToBytes(transaction)
-	if err != nil {
-		return nil, err
-	}
-	return &rawTransaction{
-		Block: blockC,
-		RawTx: RawTx{hexutil.Encode(raw)},
-	}, nil
-}
-
-func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
-	if pengdingTransaction := t.pool.GetTransaction(txID); pengdingTransaction != nil {
-		return ConvertTransaction(pengdingTransaction)
-	}
 	tx, location, err := t.chain.GetTransaction(txID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
@@ -81,13 +41,44 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 		}
 		return nil, err
 	}
+	raw, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		return nil, err
+	}
+	return &rawTransaction{
+		Block: BlockContext{
+			ID:        block.Header().ID(),
+			Number:    block.Header().Number(),
+			Timestamp: block.Header().Timestamp(),
+		},
+		RawTx: RawTx{hexutil.Encode(raw)},
+	}, nil
+}
+
+func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
+	tx, location, err := t.chain.GetTransaction(txID)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
 	tc, err := ConvertTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
-	tc.Block.ID = block.Header().ID()
-	tc.Block.Number = block.Header().Number()
-	tc.Block.Timestamp = block.Header().Timestamp()
+	block, err := t.chain.GetBlock(location.BlockID)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	tc.Block = BlockContext{
+		ID:        block.Header().ID(),
+		Number:    block.Header().Number(),
+		Timestamp: block.Header().Timestamp(),
+	}
 	return tc, nil
 }
 
