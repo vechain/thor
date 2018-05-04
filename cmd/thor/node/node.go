@@ -334,6 +334,14 @@ func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) (bool, e
 	if err != nil {
 		return false, err
 	}
+	if len(fork.Branch) > 2 {
+		context := []interface{}{"ancestor", fork.Ancestor.Header().ID().String()}
+		if len(fork.Trunk) > 0 {
+			context = append(context, "trunk", fork.Trunk[len(fork.Trunk)-1].Header().ID().String())
+		}
+		context = append(context, "branch", fork.Branch[len(fork.Trunk)-1].Header().ID().String())
+		log.Warn("⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂", context...)
+	}
 
 	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
 	for _, block := range fork.Branch {
