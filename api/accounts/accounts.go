@@ -1,8 +1,6 @@
 package accounts
 
 import (
-	"encoding/json"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -167,15 +165,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	res, err := ioutil.ReadAll(req.Body)
-	if err != nil {
+	callBody := &ContractCall{}
+	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
 		return err
 	}
 	req.Body.Close()
-	callBody := &ContractCall{}
-	if err := json.Unmarshal(res, &callBody); err != nil {
-		return err
-	}
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
 	if err != nil {
 		return utils.BadRequest(err, "address")
