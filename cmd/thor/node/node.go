@@ -187,11 +187,14 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			sort.Slice(blocks, func(i, j int) bool {
 				return blocks[i].Header().Number() < blocks[j].Header().Number()
 			})
+			var stats blockStats
 			for _, block := range blocks {
-				var stats blockStats
 				if _, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
 					futureBlocks.Remove(block.Header().ID())
 				}
+			}
+			if stats.processed > 0 {
+				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(blocks[len(blocks)-1].Header())...)
 			}
 		case packedBlock := <-packedBlockCh:
 			startTime := mclock.Now()
@@ -220,7 +223,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
-				log.Info("imported blocks", stats.LogContext(newBlock.Block.Header())...)
+				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
 		case chunk := <-n.blockChunkCh:
 			n.blockChunkAckCh <- n.processBlockChunk(ctx, chunk)
@@ -239,7 +242,7 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 		if stats.processed > 0 &&
 			(i == len(chunk)-1 ||
 				mclock.Now()-startTime > mclock.AbsTime(time.Duration(thor.BlockInterval)*time.Second/2)) {
-			log.Info("imported blocks", stats.LogContext(block.Header())...)
+			log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 			stats = blockStats{}
 		}
 
