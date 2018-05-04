@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/handlers"
 	"github.com/inconshreveable/log15"
@@ -137,13 +138,19 @@ func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protoc
 		fatal("load or generate P2P key:", err)
 	}
 
+	nat, err := nat.Parse(ctx.String(natFlag.Name))
+	if err != nil {
+		fatal("parse nat flag:", err)
+	}
 	opts := &p2psrv.Options{
 		Name:           common.MakeName("thor", fullVersion()),
 		PrivateKey:     key,
 		MaxPeers:       ctx.Int(maxPeersFlag.Name),
 		ListenAddr:     fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
 		BootstrapNodes: bootstrapNodes,
+		NAT:            nat,
 	}
+
 	const peersCacheFile = "peers.cache"
 
 	if data, err := ioutil.ReadFile(filepath.Join(dataDir, peersCacheFile)); err != nil {
@@ -157,7 +164,6 @@ func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protoc
 	if err := srv.Start(protocols); err != nil {
 		fatal("start P2P server:", err)
 	}
-
 	return srv, func() {
 		nodes := srv.GoodNodes()
 		data, err := rlp.EncodeToBytes(nodes)
