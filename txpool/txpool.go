@@ -73,10 +73,21 @@ func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
 }
 
 //Add transaction
-func (pool *TxPool) Add(tx *tx.Transaction) error {
+func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
 
+	var err error
+	for _, tx := range txs {
+		if err = pool.add(tx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (pool *TxPool) add(tx *tx.Transaction) error {
 	txID := tx.ID()
 	if _, ok := pool.all.Get(txID); ok {
 		return errors.New("known transaction")
@@ -201,10 +212,13 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) []*txOb
 }
 
 //Remove remove transaction by txID with TransactionCategory
-func (pool *TxPool) Remove(txID thor.Bytes32) {
+func (pool *TxPool) Remove(txIDs ...thor.Bytes32) {
 	pool.rw.Lock()
 	defer pool.rw.Unlock()
-	pool.all.Remove(txID)
+
+	for _, txID := range txIDs {
+		pool.all.Remove(txID)
+	}
 }
 
 //dequeueTxs for dequeue transactions
@@ -283,9 +297,10 @@ func (pool *TxPool) allObjs() map[thor.Bytes32]*txObject {
 	return all
 }
 
-//Stop stop pool loop
-func (pool *TxPool) Stop() {
+//Shutdown shutdown pool loop
+func (pool *TxPool) Shutdown() {
 	close(pool.done)
+	pool.scope.Close()
 	pool.goes.Wait()
 }
 
