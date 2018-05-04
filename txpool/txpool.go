@@ -146,8 +146,8 @@ func (pool *TxPool) shouldPending(tx *tx.Transaction, bestBlock *block.Block) (b
 			return false, err
 		}
 	}
-	blockNum := tx.BlockRef().Number()
-	if blockNum > bestBlock.Header().Number() {
+	nextBlockNum := bestBlock.Header().Number() + 1
+	if tx.BlockRef().Number() > nextBlockNum {
 		return false, nil
 	}
 	return true, nil
