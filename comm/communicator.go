@@ -114,6 +114,15 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 			log.Debug("failed to handshake", "err", "genesis id mismatch")
 			return
 		}
+		now := uint64(time.Now().Unix())
+		diff := now - respStatus.SysTimestamp
+		if now < respStatus.SysTimestamp {
+			diff = respStatus.SysTimestamp
+		}
+		if diff > thor.BlockInterval {
+			log.Debug("failed to handshake", "err", "sys time diff too large")
+			return
+		}
 
 		respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
 		if err != nil {

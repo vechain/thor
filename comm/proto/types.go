@@ -25,6 +25,7 @@ func (req ReqStatus) Do(ctx context.Context, peer *p2psrv.Peer) (*RespStatus, er
 // RespStatus response payload of MsgStatus.
 type RespStatus struct {
 	GenesisBlockID thor.Bytes32
+	SysTimestamp   uint64
 	BestBlockID    thor.Bytes32
 	TotalScore     uint64
 }

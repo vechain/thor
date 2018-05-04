@@ -2,6 +2,7 @@ package comm
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -27,6 +28,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return &proto.RespStatus{
 			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
+			SysTimestamp:   uint64(time.Now().Unix()),
 			TotalScore:     bestBlock.Header().TotalScore(),
 			BestBlockID:    bestBlock.Header().ID(),
 		}, nil
