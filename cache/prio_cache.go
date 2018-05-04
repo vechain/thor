@@ -69,6 +69,14 @@ func (pc *PrioCache) Get(key interface{}) (interface{}, float64, bool) {
 	return nil, 0, false
 }
 
+// Contains returns whether the given key is contained.
+func (pc *PrioCache) Contains(key interface{}) bool {
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
+	_, ok := pc.m[key]
+	return ok
+}
+
 // Remove removes the given key, and returns the removed entry if any.
 func (pc *PrioCache) Remove(key interface{}) *PrioEntry {
 	pc.lock.Lock()
