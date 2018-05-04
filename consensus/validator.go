@@ -184,6 +184,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	if header.GasUsed() != totalGasUsed {
 		return nil, nil, consensusError(fmt.Sprintf("block gas used mismatch: want %v, have %v", header.GasUsed(), totalGasUsed))
 	}
+
 	receiptsRoot := receipts.RootHash()
 	if header.ReceiptsRoot() != receiptsRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
