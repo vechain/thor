@@ -123,7 +123,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	var authorized bool
 	for {
 		now := uint64(time.Now().Unix())
-		if timestamp, adopt, pack, err := n.packer.Prepare(parent.Header(), now); err != nil {
+		if timestamp, flow, err := n.packer.Schedule(parent.Header(), now); err != nil {
 			if authorized {
 				authorized = false
 				log.Warn("unable to pack block", "err", err)
@@ -142,7 +142,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				parent = bestBlock.Block
 				continue
 			case <-timer.C:
-				n.pack(adopt, pack)
+				n.pack(flow)
 			}
 		}
 
@@ -255,10 +255,10 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 	return nil
 }
 
-func (n *Node) pack(adopt packer.Adopt, pack packer.Pack) {
+func (n *Node) pack(flow *packer.Flow) {
 	startTime := mclock.Now()
 	for _, tx := range n.txPool.Pending() {
-		err := adopt(tx)
+		err := flow.Adopt(tx)
 		switch {
 		case packer.IsGasLimitReached(err):
 			break
@@ -268,7 +268,7 @@ func (n *Node) pack(adopt packer.Adopt, pack packer.Pack) {
 			n.txPool.Remove(tx.ID())
 		}
 	}
-	newBlock, stage, receipts, err := pack(n.master.PrivateKey)
+	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 	if err != nil {
 		log.Error("failed to pack block", "err", err)
 		return
