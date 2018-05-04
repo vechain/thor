@@ -239,14 +239,16 @@ func (s *Server) dialLoop() {
 			log := log.New("node", node)
 			log.Debug("try to dial node")
 			s.busyNodes.Add(node)
-			s.goes.Go(func() {
+			// don't use goes.Go, since the dial process can't be interrupted
+			go func() {
 				if err := s.tryDial(node); err != nil {
 					s.busyNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
-			})
+			}()
 			dialCount++
-			if dialCount == 20 {
+			if dialCount == 20 || s.srv.PeerCount() > s.srv.MaxPeers/5 {
+				ticker.Stop()
 				ticker = time.NewTicker(nonFastDialDur)
 			}
 		case <-s.done:
