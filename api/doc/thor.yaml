@@ -7,7 +7,7 @@ info:
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
   description: RESTful API to access VeChain Thor
 servers:
-  - url: 'http://localhost:8669'
+  - url: '/'
     description: local thor node
 tags:
   - name: Accounts
