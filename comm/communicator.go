@@ -151,23 +151,24 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 }
 
 func (c *Communicator) syncLoop(handler HandleBlockChunk) {
-	wait := 10 * time.Second
 
-	timer := time.NewTimer(wait)
+	timer := time.NewTimer(0)
 	defer timer.Stop()
 
+	delay := 2 * time.Second
 	sync := func() {
 		log.Debug("synchronization start")
 		if err := c.sync(handler); err != nil {
 			log.Debug("synchronization failed", "err", err)
 		} else {
 			c.synced = true
+			delay = 30 * time.Second
 			log.Debug("synchronization done")
 		}
 	}
 
 	for {
-		timer.Reset(wait)
+		timer.Reset(delay)
 		select {
 		case <-timer.C:
 			sync()
