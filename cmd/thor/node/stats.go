@@ -34,7 +34,6 @@ func (s *blockStats) UpdateQueued(n int) {
 
 func (s *blockStats) LogContext(last *block.Header) []interface{} {
 	return []interface{}{
-		"count", s.processed,
 		"txs", s.txs,
 		"mgas", float64(s.usedGas) / 1000 / 1000,
 		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(s.exec), common.PrettyDuration(s.commit)),
