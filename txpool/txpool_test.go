@@ -27,7 +27,7 @@ const (
 
 func TestTxPool(t *testing.T) {
 	pool := initPool(t)
-	defer pool.Stop()
+	defer pool.Shutdown()
 	count := 10
 	addTx(t, pool, count)
 	pending(t, pool, count)

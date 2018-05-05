@@ -119,7 +119,7 @@ func newApp() *cli.App {
 		}
 
 		defer solo.kv.Close()
-		defer solo.txpl.Stop()
+		defer solo.txpl.Shutdown()
 		defer solo.logDB.Close()
 
 		apiHandler := api.New(solo.c, solo.stateCreator, solo.txpl, solo.logDB, fakeCommunicator{})
