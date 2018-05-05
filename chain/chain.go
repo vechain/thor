@@ -223,7 +223,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 //               b4--b5
 //
 // When call buildFork(B6, b5), the return values will be:
-// ((B3, [B6, B5, B4], [b5, b4]), nil)
+// ((B3, [B4, B5, B6], [b4, b5]), nil)
 func (c *Chain) buildFork(trunkHead *block.Block, branchHead *block.Block) (*Fork, error) {
 	var (
 		trunk, branch []*block.Block
@@ -248,6 +248,13 @@ func (c *Chain) buildFork(trunkHead *block.Block, branchHead *block.Block) (*For
 			continue
 		}
 		if b1.Header().ID() == b2.Header().ID() {
+			// reverse trunk and branch
+			for i, j := 0, len(trunk)-1; i < j; i, j = i+1, j-1 {
+				trunk[i], trunk[j] = trunk[j], trunk[i]
+			}
+			for i, j := 0, len(branch)-1; i < j; i, j = i+1, j-1 {
+				branch[i], branch[j] = branch[j], branch[i]
+			}
 			return &Fork{b1, trunk, branch}, nil
 		}
 
