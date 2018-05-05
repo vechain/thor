@@ -163,15 +163,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
+	payer, leftOverGas, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// checkpoint to be reverted when clause failure.
-	clauseCheckpoint := rt.state.NewCheckpoint()
-
-	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
+	checkpoint := rt.state.NewCheckpoint()
 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
@@ -195,7 +193,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		if vmOutput.VMErr != nil {
 			// vm exception here
 			// revert all executed clauses
-			rt.state.RevertTo(clauseCheckpoint)
+			rt.state.RevertTo(checkpoint)
 			receipt.Reverted = true
 			receipt.Outputs = nil
 			break
