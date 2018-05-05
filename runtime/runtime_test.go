@@ -45,7 +45,7 @@ func TestCall(t *testing.T) {
 	}
 
 	var addr common.Address
-	if err := method.DecodeOutput(out.Value, &addr); err != nil {
+	if err := method.DecodeOutput(out.Data, &addr); err != nil {
 		t.Fatal(err)
 	}
 
