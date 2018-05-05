@@ -264,8 +264,11 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 }
 
 func (n *Node) pack(flow *packer.Flow) {
+	txs := n.txPool.Pending()
+	var txsToRemove []thor.Bytes32
+
 	startTime := mclock.Now()
-	for _, tx := range n.txPool.Pending() {
+	for _, tx := range txs {
 		err := flow.Adopt(tx)
 		switch {
 		case packer.IsGasLimitReached(err):
@@ -273,7 +276,7 @@ func (n *Node) pack(flow *packer.Flow) {
 		case packer.IsTxNotAdoptableNow(err):
 			continue
 		default:
-			n.txPool.Remove(tx.ID())
+			txsToRemove = append(txsToRemove, tx.ID())
 		}
 	}
 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
@@ -293,6 +296,10 @@ func (n *Node) pack(flow *packer.Flow) {
 			n.packer.SetTargetGasLimit(targetGasLimit)
 			log.Debug("reset target gas limit", "value", targetGasLimit)
 		}
+	}
+
+	for _, id := range txsToRemove {
+		n.txPool.Remove(id)
 	}
 }
 
