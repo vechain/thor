@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
@@ -133,14 +134,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 				authorized = true
 				log.Info("prepared to pack block")
 			}
+			after := time.Duration(timestamp-now) * time.Second
+			log.Debug("scheduled to pack block", "after", after)
 
 			timer.Stop()
-			timer = time.NewTimer(time.Duration(timestamp-now) * time.Second)
+			timer = time.NewTimer(after)
+
 			select {
 			case <-ctx.Done():
 				return
 			case bestBlock := <-bestBlockCh:
 				parent = bestBlock.Block
+				log.Debug("re-schedule packer due to new best block")
 				continue
 			case <-timer.C:
 				n.pack(flow)
@@ -191,6 +196,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			var stats blockStats
 			for _, block := range blocks {
 				if _, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
+					log.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
 				}
 			}
@@ -221,6 +227,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
 					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					log.Debug("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
@@ -284,6 +291,7 @@ func (n *Node) pack(flow *packer.Flow) {
 		if gasUsed > newBlock.Header().GasLimit()/3 {
 			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
 			n.packer.SetTargetGasLimit(targetGasLimit)
+			log.Debug("reset target gas limit", "value", targetGasLimit)
 		}
 	}
 }
@@ -351,7 +359,9 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 	for _, block := range fork.Branch {
 		forkIDs = append(forkIDs, block.Header().ID())
 		for _, tx := range block.Transactions() {
-			n.txPool.Add(tx)
+			if err := n.txPool.Add(tx); err != nil {
+				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+			}
 		}
 	}
 
@@ -367,7 +377,7 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 	}
 
 	if err := batch.Commit(forkIDs...); err != nil {
-		return false, err
+		return false, errors.Wrap(err, "commit logs")
 	}
 	if isTrunk {
 		n.goes.Go(func() {
@@ -396,7 +406,9 @@ func (n *Node) txLoop(ctx context.Context) {
 		case tx := <-txPoolCh:
 			n.comm.BroadcastTx(tx)
 		case tx := <-commTxCh:
-			n.txPool.Add(tx.Transaction)
+			if err := n.txPool.Add(tx.Transaction); err != nil {
+				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+			}
 		}
 	}
 }
