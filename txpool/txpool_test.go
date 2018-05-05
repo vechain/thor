@@ -94,7 +94,7 @@ func initPool(t *testing.T) *txpool.TxPool {
 		t.Fatal(err)
 	}
 	c, _ := chain.New(db, b)
-	best, _ := c.GetBestBlock()
+	best := c.BestBlock()
 	blk := new(block.Builder).
 		ParentID(best.Header().ID()).
 		StateRoot(best.Header().StateRoot()).

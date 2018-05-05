@@ -106,11 +106,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	log.Info("synchronization process done")
 
-	parent, err := n.chain.GetBestBlock()
-	if err != nil {
-		log.Error("failed to get best block", "err", err)
-		return
-	}
+	parent := n.chain.BestBlock()
 
 	var scope event.SubscriptionScope
 	bestBlockCh := make(chan *bestBlockEvent)
@@ -341,11 +337,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 }
 
 func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) (bool, error) {
-	isTrunk, err := n.cons.IsTrunk(newBlock.Header())
-	if err != nil {
-		return false, err
-	}
-
+	isTrunk := n.cons.IsTrunk(newBlock.Header())
 	fork, err := n.chain.AddBlock(newBlock, receipts, isTrunk)
 	if err != nil {
 		return false, err

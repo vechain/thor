@@ -59,27 +59,24 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 }
 
 // IsTrunk to determine if the block can be head of trunk.
-func (c *Consensus) IsTrunk(header *block.Header) (bool, error) {
-	bestBlock, err := c.chain.GetBestBlock()
-	if err != nil {
-		return false, err
+func (c *Consensus) IsTrunk(header *block.Header) bool {
+	bestHeader := c.chain.BestBlock().Header()
+
+	if header.TotalScore() < bestHeader.TotalScore() {
+		return false
 	}
 
-	if header.TotalScore() < bestBlock.Header().TotalScore() {
-		return false, nil
-	}
-
-	if header.TotalScore() > bestBlock.Header().TotalScore() {
-		return true, nil
+	if header.TotalScore() > bestHeader.TotalScore() {
+		return true
 	}
 
 	// total scores are equal
-	if bytes.Compare(header.ID().Bytes(), bestBlock.Header().ID().Bytes()) < 0 {
+	if bytes.Compare(header.ID().Bytes(), bestHeader.ID().Bytes()) < 0 {
 		// smaller ID is preferred, since block with smaller ID usually has larger average score.
 		// also, it's a deterministic decision.
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // FindTransaction to get the existence of a transaction on the chain identified by parentID, and

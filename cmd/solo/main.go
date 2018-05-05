@@ -237,10 +237,7 @@ func (solo *cliContext) interval(done <-chan interface{}) {
 func (solo *cliContext) packing() {
 	log.Debug("Try packing......")
 
-	best, err := solo.c.GetBestBlock()
-	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
-	}
+	best := solo.c.BestBlock()
 
 	adopt, pack, err := solo.pk.Prepare(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {

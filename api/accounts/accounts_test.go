@@ -152,7 +152,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	chain, _ := chain.New(db, b)
-	best, _ := chain.GetBestBlock()
+	best := chain.BestBlock()
 	bl := new(block.Builder).
 		ParentID(best.Header().ID()).
 		StateRoot(stateRoot).

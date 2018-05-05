@@ -22,10 +22,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 
 	switch msg.Code {
 	case proto.MsgStatus:
-		bestBlock, err := c.chain.GetBestBlock()
-		if err != nil {
-			return nil, err
-		}
+		bestBlock := c.chain.BestBlock()
 		return &proto.RespStatus{
 			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),

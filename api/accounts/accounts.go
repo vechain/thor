@@ -187,7 +187,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 
 func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 	if revision == "" || revision == "best" {
-		return a.chain.GetBestBlock()
+		return a.chain.BestBlock(), nil
 	}
 	blkID, err := thor.ParseBytes32(revision)
 	if err != nil {

@@ -38,7 +38,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 
 func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 	if revision == "" || revision == "best" {
-		return b.chain.GetBestBlock()
+		return b.chain.BestBlock(), nil
 	}
 	blkID, err := thor.ParseBytes32(revision)
 	if err != nil {
