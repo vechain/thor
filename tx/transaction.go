@@ -3,6 +3,7 @@ package tx
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -15,13 +16,13 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm/evm"
 )
 
 const signerCacheSize = 1024
 
 var (
-	signerCache, _ = lru.New(signerCacheSize)
+	signerCache, _          = lru.New(signerCacheSize)
+	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 )
 
 // Transaction is an immutable tx type.
@@ -298,7 +299,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		}
 		total, overflow = math.SafeAdd(total, gas)
 		if overflow {
-			return 0, evm.ErrOutOfGas
+			return 0, errIntrinsicGasOverflow
 		}
 
 		var cgas uint64
@@ -311,7 +312,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 
 		total, overflow = math.SafeAdd(total, cgas)
 		if overflow {
-			return 0, evm.ErrOutOfGas
+			return 0, errIntrinsicGasOverflow
 		}
 	}
 	return total, nil
@@ -417,16 +418,16 @@ func dataGas(data []byte) (uint64, error) {
 	}
 	zgas, overflow := math.SafeMul(params.TxDataZeroGas, z)
 	if overflow {
-		return 0, evm.ErrOutOfGas
+		return 0, errIntrinsicGasOverflow
 	}
 	nzgas, overflow := math.SafeMul(params.TxDataNonZeroGas, nz)
 	if overflow {
-		return 0, evm.ErrOutOfGas
+		return 0, errIntrinsicGasOverflow
 	}
 
 	gas, overflow := math.SafeAdd(zgas, nzgas)
 	if overflow {
-		return 0, evm.ErrOutOfGas
+		return 0, errIntrinsicGasOverflow
 	}
 	return gas, nil
 }
