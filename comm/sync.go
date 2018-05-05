@@ -23,11 +23,7 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Ses
 }
 
 func (c *Communicator) sync(handler HandleBlockChunk) error {
-	best, err := c.chain.GetBestBlock()
-	if err != nil {
-		return err
-	}
-
+	best := c.chain.BestBlock()
 	s, nSessions := c.chooseSessionToSync(best)
 	if s == nil {
 		if nSessions >= 3 {

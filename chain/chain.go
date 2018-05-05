@@ -3,7 +3,6 @@ package chain
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain/persist"
@@ -27,8 +26,8 @@ var errBlockExist = errors.New("block already exists")
 type Chain struct {
 	kv           kv.GetPutter
 	genesisBlock *block.Block
+	bestBlock    *block.Block
 	tag          byte
-	bestBlock    atomic.Value
 	caches       caches
 	rw           sync.RWMutex
 }
@@ -66,6 +65,19 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 	} else if genesisID != genesisBlock.Header().ID() {
 		return nil, errors.New("genesis mismatch")
 	}
+	bestBlockID, err := persist.LoadBestBlockID(kv)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := persist.LoadRawBlock(kv, bestBlockID)
+	if err != nil {
+		return nil, err
+	}
+	bestBlock, err := (&rawBlock{raw: raw}).Block()
+	if err != nil {
+		return nil, err
+	}
 
 	rawBlocksCache := newCache(blockCacheLimit, func(key interface{}) (interface{}, error) {
 		raw, err := persist.LoadRawBlock(kv, key.(thor.Bytes32))
@@ -101,6 +113,7 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 	return &Chain{
 		kv:           kv,
 		genesisBlock: genesisBlock,
+		bestBlock:    bestBlock,
 		tag:          genesisBlock.Header().ID()[31],
 		caches: caches{
 			rawBlocks:     rawBlocksCache,
@@ -119,6 +132,13 @@ func (c *Chain) Tag() byte {
 // GenesisBlock returns genesis block.
 func (c *Chain) GenesisBlock() *block.Block {
 	return c.genesisBlock
+}
+
+// BestBlock returns the newest block on trunk.
+func (c *Chain) BestBlock() *block.Block {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.bestBlock
 }
 
 // AddBlock add a new block into block chain.
@@ -158,11 +178,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 	var trunkUpdates map[thor.Bytes32]bool
 	if isTrunk {
 		trunkUpdates = make(map[thor.Bytes32]bool)
-		best, err := c.getBestBlock()
-		if err != nil {
-			return nil, err
-		}
-		if fork, err = c.buildFork(newBlock, best); err != nil {
+		if fork, err = c.buildFork(newBlock, c.bestBlock); err != nil {
 			return nil, err
 		}
 
@@ -210,7 +226,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 	}
 
 	if isTrunk {
-		c.bestBlock.Store(newBlock)
+		c.bestBlock = newBlock
 	}
 	return fork, nil
 }
@@ -394,31 +410,6 @@ func (c *Chain) GetBlockHeaderByNumber(num uint32) (*block.Header, error) {
 	return c.getBlockHeader(id)
 }
 
-// GetBestBlock get the newest block on trunk.
-func (c *Chain) GetBestBlock() (*block.Block, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-
-	return c.getBestBlock()
-}
-
-func (c *Chain) getBestBlock() (*block.Block, error) {
-
-	if best := c.bestBlock.Load(); best != nil {
-		return best.(*block.Block), nil
-	}
-	id, err := persist.LoadBestBlockID(c.kv)
-	if err != nil {
-		return nil, err
-	}
-	best, err := c.getBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	c.bestBlock.Store(best)
-	return best, nil
-}
-
 // GetTransaction get transaction by id on trunk.
 func (c *Chain) GetTransaction(txID thor.Bytes32) (*tx.Transaction, *persist.TxLocation, error) {
 	c.rw.RLock()
@@ -452,15 +443,11 @@ func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (*per
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
-	best, err := c.getBestBlock()
-	if err != nil {
-		return nil, err
-	}
 	from, err := c.getBlock(blockID)
 	if err != nil {
 		return nil, err
 	}
-	fork, err := c.buildFork(best, from)
+	fork, err := c.buildFork(c.bestBlock, from)
 	if err != nil {
 		return nil, err
 	}

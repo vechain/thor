@@ -77,7 +77,7 @@ func TestP(t *testing.T) {
 	// defer pprof.StopCPUProfile()
 
 	for {
-		best, _ := c.GetBestBlock()
+		best := c.BestBlock()
 		p := packer.New(c, stateCreator, a1.Address, a1.Address)
 		_, flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
@@ -103,7 +103,7 @@ func TestP(t *testing.T) {
 		}
 	}
 
-	best, _ := c.GetBestBlock()
+	best := c.BestBlock()
 	fmt.Println(best.Header().Number(), best.Header().GasUsed())
 	//	fmt.Println(best)
 }

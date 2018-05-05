@@ -202,10 +202,7 @@ func printStartupMessage(
 	dataDir string,
 	apiURL string,
 ) {
-	bestBlock, err := chain.GetBestBlock()
-	if err != nil {
-		fatal("get best block:", err)
-	}
+	bestBlock := chain.BestBlock()
 
 	fmt.Printf(`Starting %v
     Network     [ %v %v ]    

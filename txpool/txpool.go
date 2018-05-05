@@ -104,11 +104,7 @@ func (pool *TxPool) add(tx *tx.Transaction) error {
 		}
 	}
 
-	bestBlock, err := pool.chain.GetBestBlock()
-	if err != nil {
-		return err
-	}
-
+	bestBlock := pool.chain.BestBlock()
 	sp, err := pool.shouldPending(tx, bestBlock)
 	if err != nil {
 		return err
@@ -155,10 +151,7 @@ func (pool *TxPool) shouldPending(tx *tx.Transaction, bestBlock *block.Block) (b
 
 //Dump dump transactions by TransactionCategory
 func (pool *TxPool) Dump() []*tx.Transaction {
-	bestBlock, err := pool.chain.GetBestBlock()
-	if err != nil {
-		return nil
-	}
+	bestBlock := pool.chain.BestBlock()
 	pendingObjs := pool.pendingObjs(bestBlock, false)
 	txs := make([]*tx.Transaction, len(pendingObjs))
 	for i, obj := range pendingObjs {
@@ -169,10 +162,8 @@ func (pool *TxPool) Dump() []*tx.Transaction {
 
 //Pending return all pending txs
 func (pool *TxPool) Pending() []*tx.Transaction {
-	bestBlock, err := pool.chain.GetBestBlock()
-	if err != nil {
-		return nil
-	}
+	bestBlock := pool.chain.BestBlock()
+
 	pendingObjs := pool.pendingObjs(bestBlock, true)
 	txs := make([]*tx.Transaction, len(pendingObjs))
 	for i, obj := range pendingObjs {
@@ -231,10 +222,7 @@ func (pool *TxPool) dequeue() {
 		case <-pool.done:
 			return
 		case <-ticker.C:
-			b, err := pool.chain.GetBestBlock()
-			if err != nil {
-				continue
-			}
+			b := pool.chain.BestBlock()
 			if bestBlock == nil {
 				bestBlock = b
 			} else {
@@ -321,10 +309,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 		return errors.New("tx too large")
 	}
 
-	bestBlock, err := pool.chain.GetBestBlock()
-	if err != nil {
-		return err
-	}
+	bestBlock := pool.chain.BestBlock()
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {

@@ -19,7 +19,7 @@ func TestChain(t *testing.T) {
 	chain, _ := New(s, blk)
 
 	for i := 0; i < 100; i++ {
-		best, _ := chain.GetBestBlock()
+		best := chain.BestBlock()
 		b := new(block.Builder).
 			ParentID(best.Header().ID()).
 			Build()
@@ -28,6 +28,5 @@ func TestChain(t *testing.T) {
 			fmt.Println(err)
 		}
 	}
-	best, _ := chain.GetBestBlock()
-	fmt.Println(best.Header().Number())
+	fmt.Println(chain.BestBlock().Header().Number())
 }
