@@ -134,7 +134,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 				log.Info("prepared to pack block")
 			}
 
-			timer.Reset(time.Duration(timestamp-now) * time.Second)
+			timer.Stop()
+			timer = time.NewTimer(time.Duration(timestamp-now) * time.Second)
 			select {
 			case <-ctx.Done():
 				return
