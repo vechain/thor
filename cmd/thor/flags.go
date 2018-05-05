@@ -9,7 +9,7 @@ var (
 	dirFlag = cli.StringFlag{
 		Name:  "dir",
 		Value: defaultMainDir(),
-		Usage: "Main directory for configs and databases",
+		Usage: "main directory for configs and databases",
 	}
 	devFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -27,7 +27,7 @@ var (
 	apiCorsFlag = cli.StringFlag{
 		Name:  "api-cors",
 		Value: "",
-		Usage: "Comma separated list of domains from which to accept cross origin requests to API",
+		Usage: "comma separated list of domains from which to accept cross origin requests to API",
 	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
