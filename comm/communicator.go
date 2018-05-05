@@ -177,7 +177,8 @@ func (c *Communicator) syncLoop(handler HandleBlockChunk) {
 	}
 
 	for {
-		timer.Reset(delay)
+		timer.Stop()
+		timer = time.NewTimer(delay)
 		select {
 		case <-timer.C:
 			sync()
