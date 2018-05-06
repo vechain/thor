@@ -56,7 +56,7 @@ To find out usages of all command line options:
 bin/thor -h
 ```
 
-- `--dir value`          main directory for configs and databases (default: "/Users/cola/Library/Application Support/org.vechain.thor")
+- `--dir value`          main directory for configs and databases
 - `--dev`                develop mode
 - `--beneficiary value`  address for block rewards
 - `--api-addr value`     API service listening address (default: "localhost:8669")
