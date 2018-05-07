@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/vechain/thor/block"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
@@ -74,8 +75,6 @@ func defaultAction(ctx *cli.Context) error {
 	master := loadNodeMaster(ctx, dataDir)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
-	defer func() { log.Info("shutdown tx pool..."); txPool.Shutdown() }()
-
 	communicator := comm.New(chain, txPool)
 
 	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
@@ -87,6 +86,13 @@ func defaultAction(ctx *cli.Context) error {
 	defer peerSub.Unsubscribe()
 
 	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
+
+	bestBlockCh := make(chan *block.Block)
+	bestBlockSub := node.SubscribeUpdatedBestBlock(bestBlockCh)
+	defer bestBlockSub.Unsubscribe()
+
+	txPool.Start(bestBlockCh)
+	defer func() { log.Info("stop tx pool..."); txPool.Stop() }()
 
 	communicator.Start(peerCh, node.HandleBlockChunk)
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
