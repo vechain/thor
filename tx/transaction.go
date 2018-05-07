@@ -36,6 +36,7 @@ type Transaction struct {
 		hashWithoutNonce atomic.Value
 		provedWork       atomic.Value
 		size             atomic.Value
+		intrinsicGas     atomic.Value
 	}
 }
 
@@ -290,6 +291,10 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		return thor.TxGas + thor.ClauseGas, nil
 	}
 
+	if cached := t.cache.intrinsicGas.Load(); cached != nil {
+		return cached.(uint64), nil
+	}
+
 	var total = thor.TxGas
 	var overflow bool
 	for _, c := range t.body.Clauses {
@@ -315,6 +320,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 			return 0, errIntrinsicGasOverflow
 		}
 	}
+	t.cache.intrinsicGas.Store(total)
 	return total, nil
 }
 
