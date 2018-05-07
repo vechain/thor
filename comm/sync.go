@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
 	"github.com/vechain/thor/p2psrv"
@@ -41,9 +42,54 @@ func (c *Communicator) sync(handler HandleBlockChunk) error {
 }
 
 func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockChunk) error {
-	const maxChunkBlocks = 1024
-	var chunk []*block.Block
 
+	type blockWithSize struct {
+		*block.Block
+		size int
+	}
+
+	var goes co.Goes
+	defer goes.Wait()
+
+	errCh := make(chan error)
+	// buffer between downloading and processing
+	blockCh := make(chan *blockWithSize, 512)
+	defer close(blockCh)
+
+	goes.Go(func() {
+		const maxChunkBlocks = 2048
+		const maxChunkSize = 1024 * 1024
+		var chunk []*block.Block
+		var chunkSize int
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case bs := <-blockCh:
+				if bs == nil {
+					if len(chunk) > 0 {
+						if err := handler(chunk); err != nil {
+							errCh <- err
+							return
+						}
+					}
+					return
+				}
+
+				chunkSize += bs.size
+				chunk = append(chunk, bs.Block)
+
+				if len(chunk) >= maxChunkBlocks || chunkSize >= maxChunkSize {
+					if err := handler(chunk); err != nil {
+						errCh <- err
+						return
+					}
+					chunk = nil
+					chunkSize = 0
+				}
+			}
+		}
+	})
 	for {
 		peer := session.Peer()
 		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
@@ -52,12 +98,6 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			return err
 		}
 		if len(resp) == 0 {
-			if len(chunk) > 0 {
-				if err := handler(chunk); err != nil {
-					return err
-				}
-				chunk = nil
-			}
 			return nil
 		}
 
@@ -66,14 +106,16 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
+
 			session.MarkBlock(blk.Header().ID())
 			fromNum++
-			chunk = append(chunk, &blk)
-			if len(chunk) >= maxChunkBlocks {
-				if err := handler(chunk); err != nil {
-					return err
-				}
-				chunk = nil
+
+			select {
+			case <-c.ctx.Done():
+				return c.ctx.Err()
+			case blockCh <- &blockWithSize{&blk, len(raw)}:
+			case err := <-errCh:
+				return err
 			}
 		}
 	}
