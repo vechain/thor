@@ -251,6 +251,7 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 				mclock.Now()-startTime > mclock.AbsTime(time.Duration(thor.BlockInterval)*time.Second/2)) {
 			log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 			stats = blockStats{}
+			startTime = mclock.Now()
 		}
 
 		select {

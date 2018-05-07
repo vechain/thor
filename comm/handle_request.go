@@ -108,8 +108,8 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 			return nil, badRequest{err}
 		}
 
-		const maxBlocks = 256
-		resp := make(proto.RespGetBlocksFromNumber, 0, 100)
+		const maxBlocks = 1024
+		resp := make(proto.RespGetBlocksFromNumber, 0, maxBlocks)
 		num := req.Num
 		var size metric.StorageSize
 		for size < maxRespSize && len(resp) < maxBlocks {
