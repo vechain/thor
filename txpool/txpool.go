@@ -311,6 +311,10 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 
 	bestBlock := pool.chain.BestBlock()
 
+	if tx.IsExpired(bestBlock.Header().Number()) {
+		return errors.New("tx expired")
+	}
+
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
 		return err
