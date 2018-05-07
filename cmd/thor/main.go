@@ -74,7 +74,7 @@ func defaultAction(ctx *cli.Context) error {
 	master := loadNodeMaster(ctx, dataDir)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
-	defer func() { log.Info("stopping tx pool..."); txPool.Shutdown() }()
+	defer func() { log.Info("shutdown tx pool..."); txPool.Shutdown() }()
 
 	communicator := comm.New(chain, txPool)
 

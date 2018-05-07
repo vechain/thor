@@ -105,22 +105,17 @@ func (pool *TxPool) add(tx *tx.Transaction) error {
 	}
 
 	bestBlock := pool.chain.BestBlock()
-	sp, err := pool.shouldPending(tx, bestBlock)
+	state, err := pool.status(tx, bestBlock)
 	if err != nil {
 		return err
 	}
 
-	to := &txObject{
+	pool.all.Set(txID, &txObject{
 		tx:           tx,
 		overallGP:    new(big.Int),
 		creationTime: time.Now().Unix(),
-	}
-	if sp {
-		to.status = Pending
-	} else {
-		to.status = Queued
-	}
-	pool.all.Set(txID, to)
+		status:       state,
+	})
 
 	pool.goes.Go(func() { pool.txFeed.Send(tx) })
 
@@ -132,21 +127,21 @@ func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subsc
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
-func (pool *TxPool) shouldPending(tx *tx.Transaction, bestBlock *block.Block) (bool, error) {
+func (pool *TxPool) status(tx *tx.Transaction, bestBlock *block.Block) (objectStatus, error) {
 	dependsOn := tx.DependsOn()
 	if dependsOn != nil {
 		if _, _, err := pool.chain.GetTransaction(*dependsOn); err != nil {
 			if pool.chain.IsNotFound(err) {
-				return false, nil
+				return Queued, nil
 			}
-			return false, err
+			return Queued, err
 		}
 	}
 	nextBlockNum := bestBlock.Header().Number() + 1
 	if tx.BlockRef().Number() > nextBlockNum {
-		return false, nil
+		return Queued, nil
 	}
-	return true, nil
+	return Pending, nil
 }
 
 //Dump dump transactions by TransactionCategory
@@ -253,11 +248,11 @@ func (pool *TxPool) update(bestBlock *block.Block) {
 			continue
 		}
 		if obj.status == Queued {
-			sp, err := pool.shouldPending(obj.tx, bestBlock)
+			state, err := pool.status(obj.tx, bestBlock)
 			if err != nil {
 				return
 			}
-			if sp {
+			if state == Pending {
 				overallGP := obj.tx.OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
 					return traverser.Get(num).ID()
 				})
@@ -290,18 +285,6 @@ func (pool *TxPool) Shutdown() {
 	close(pool.done)
 	pool.scope.Close()
 	pool.goes.Wait()
-}
-
-//GetTransaction returns a transaction
-func (pool *TxPool) GetTransaction(txID thor.Bytes32) *tx.Transaction {
-	pool.rw.RLock()
-	defer pool.rw.RUnlock()
-	if res, ok := pool.all.Get(txID); ok {
-		if obj, ok := res.(*txObject); ok {
-			return obj.tx
-		}
-	}
-	return nil
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
