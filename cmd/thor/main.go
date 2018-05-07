@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/vechain/thor/block"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
