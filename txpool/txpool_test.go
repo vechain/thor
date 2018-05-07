@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
