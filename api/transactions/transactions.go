@@ -128,7 +128,14 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	}
 	txID, err := t.sendTx(tx)
 	if err != nil {
-		return utils.Forbidden(err, "rejected tx")
+		switch {
+		case txpool.IsErrNegativeValue(err) || txpool.IsErrIntrisicGasExceeded(err):
+			return utils.BadRequest(err, "")
+		case txpool.IsErrKnownTx(err) || txpool.IsErrExpired(err) || txpool.IsErrInsufficientEnergy(err) || txpool.IsErrTooLarge(err):
+			return utils.Forbidden(err, "tx rejected")
+		default:
+			return err
+		}
 	}
 	return utils.WriteJSON(w, map[string]string{
 		"id": txID.String(),
