@@ -11,10 +11,12 @@ import (
 // ABI holds information about methods and events of contract.
 type ABI struct {
 	constructor  *Method
+	methods      []*Method
+	events       []*Event
 	nameToMethod map[string]*Method
 	nameToEvent  map[string]*Event
-	methods      map[MethodID]*Method
-	events       map[thor.Bytes32]*Event
+	idToMethod   map[MethodID]*Method
+	idToEvent    map[thor.Bytes32]*Event
 }
 
 // New create an ABI instance.
@@ -35,8 +37,8 @@ func New(data []byte) (*ABI, error) {
 	abi := &ABI{
 		nameToMethod: make(map[string]*Method),
 		nameToEvent:  make(map[string]*Event),
-		methods:      make(map[MethodID]*Method),
-		events:       make(map[thor.Bytes32]*Event),
+		idToMethod:   make(map[MethodID]*Method),
+		idToEvent:    make(map[thor.Bytes32]*Event),
 	}
 
 	for _, field := range fields {
@@ -57,7 +59,8 @@ func New(data []byte) (*ABI, error) {
 			var id MethodID
 			copy(id[:], ethMethod.Id())
 			method := &Method{id, &ethMethod}
-			abi.methods[id] = method
+			abi.methods = append(abi.methods, method)
+			abi.idToMethod[id] = method
 			abi.nameToMethod[ethMethod.Name] = method
 		case "event":
 			ethEvent := ethabi.Event{
@@ -66,7 +69,8 @@ func New(data []byte) (*ABI, error) {
 				Inputs:    field.Inputs,
 			}
 			event := newEvent(&ethEvent)
-			abi.events[event.ID()] = event
+			abi.events = append(abi.events, event)
+			abi.idToEvent[event.ID()] = event
 			abi.nameToEvent[ethEvent.Name] = event
 		}
 	}
@@ -78,6 +82,16 @@ func (a *ABI) Constructor() *Method {
 	return a.constructor
 }
 
+// Methods returns all methods excluding constructor.
+func (a *ABI) Methods() []*Method {
+	return a.methods
+}
+
+// Events returns all events
+func (a *ABI) Events() []*Event {
+	return a.events
+}
+
 // MethodByInput find the method for given input.
 // If the input shorter than MethodID, or method not found, an error returned.
 func (a *ABI) MethodByInput(input []byte) (*Method, error) {
@@ -85,7 +99,7 @@ func (a *ABI) MethodByInput(input []byte) (*Method, error) {
 	if err != nil {
 		return nil, err
 	}
-	m, found := a.methods[id]
+	m, found := a.idToMethod[id]
 	if !found {
 		return nil, errors.New("method not found")
 	}
@@ -100,7 +114,7 @@ func (a *ABI) MethodByName(name string) (*Method, bool) {
 
 // MethodByID returns method for given method id.
 func (a *ABI) MethodByID(id MethodID) (*Method, bool) {
-	m, found := a.methods[id]
+	m, found := a.idToMethod[id]
 	return m, found
 }
 
@@ -112,6 +126,6 @@ func (a *ABI) EventByName(name string) (*Event, bool) {
 
 // EventByID returns the event for the given event id.
 func (a *ABI) EventByID(id thor.Bytes32) (*Event, bool) {
-	e, found := a.events[id]
+	e, found := a.idToEvent[id]
 	return e, found
 }
