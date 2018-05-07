@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
@@ -305,4 +306,22 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 // SessionCount returns count of sessions.
 func (c *Communicator) SessionCount() int {
 	return c.sessionSet.Len()
+}
+
+// SessionsStats returns all sessions' stats
+func (c *Communicator) SessionsStats() []*SessionStats {
+	var stats []*SessionStats
+	now := mclock.Now()
+	for _, s := range c.sessionSet.Slice() {
+		bestID, totalScore := s.TrunkHead()
+		stats = append(stats, &SessionStats{
+			BestBlockID: bestID,
+			TotalScore:  totalScore,
+			PeerID:      s.Peer().ID().String(),
+			NetAddr:     s.Peer().RemoteAddr().String(),
+			Inbound:     s.Peer().Inbound(),
+			Duration:    uint64(time.Duration(now-s.CreatedTime()) / time.Second),
+		})
+	}
+	return stats
 }

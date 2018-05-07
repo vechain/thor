@@ -3,6 +3,7 @@ package session
 import (
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
@@ -16,6 +17,7 @@ const (
 // Session abstraction of a p2p connection.
 type Session struct {
 	peer        *p2psrv.Peer
+	created     mclock.AbsTime
 	knownTxs    *lru.Cache
 	knownBlocks *lru.Cache
 	trunkHead   struct {
@@ -31,6 +33,7 @@ func New(peer *p2psrv.Peer) *Session {
 	knownBlocks, _ := lru.New(maxKnownBlocks)
 	return &Session{
 		peer:        peer,
+		created:     mclock.Now(),
 		knownTxs:    knownTxs,
 		knownBlocks: knownBlocks,
 	}
@@ -75,4 +78,8 @@ func (s *Session) IsTransactionKnown(id thor.Bytes32) bool {
 // IsBlockKnown returns if the block is known.
 func (s *Session) IsBlockKnown(id thor.Bytes32) bool {
 	return s.knownBlocks.Contains(id)
+}
+
+func (s *Session) CreatedTime() mclock.AbsTime {
+	return s.created
 }
