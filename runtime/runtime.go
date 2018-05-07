@@ -163,11 +163,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, leftOverGas, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
+	payer, returnGas, err := resolvedTx.BuyGas(rt.blockNumber)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// ResolveTransaction has checked that tx.Gas() >= IntrinsicGas
+	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 

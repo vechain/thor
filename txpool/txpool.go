@@ -305,7 +305,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 		return err
 	}
 
-	_, _, _, err = resolvedTx.BuyGas(bestBlock.Header().Number() + 1)
+	_, _, err = resolvedTx.BuyGas(bestBlock.Header().Number() + 1)
 	if err != nil {
 		return err
 	}
