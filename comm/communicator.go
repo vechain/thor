@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -303,11 +304,6 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	}
 }
 
-// SessionCount returns count of sessions.
-func (c *Communicator) SessionCount() int {
-	return c.sessionSet.Len()
-}
-
 // SessionsStats returns all sessions' stats
 func (c *Communicator) SessionsStats() []*SessionStats {
 	var stats []*SessionStats
@@ -323,5 +319,8 @@ func (c *Communicator) SessionsStats() []*SessionStats {
 			Duration:    uint64(time.Duration(now-s.CreatedTime()) / time.Second),
 		})
 	}
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].PeerID < stats[j].PeerID
+	})
 	return stats
 }
