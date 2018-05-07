@@ -235,7 +235,7 @@ func initPrototypeMethods() {
 }
 
 func initPrototypeInterfaceMethods() {
-	nativeABI := Prototype.InterfaceABI()
+	nativeABI := Prototype.InterfaceABI
 
 	mustEventByName := func(name string) *abi.Event {
 		if event, found := nativeABI.EventByName(name); found {

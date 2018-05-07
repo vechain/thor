@@ -18,7 +18,10 @@ var (
 	Authority = &authorityContract{mustLoadContract("Authority")}
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
-	Prototype = &prototypeContract{mustLoadContract("Prototype")}
+	Prototype = &prototypeContract{
+		mustLoadContract("Prototype"),
+		mustLoadPrototypeInterfaceABI(),
+	}
 	Extension = &extensionContract{mustLoadContract("Extension")}
 )
 
@@ -27,7 +30,10 @@ type (
 	authorityContract struct{ *contract }
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
-	prototypeContract struct{ *contract }
+	prototypeContract struct {
+		*contract
+		InterfaceABI *abi.ABI
+	}
 	extensionContract struct{ *contract }
 )
 
@@ -51,7 +57,7 @@ func (e *extensionContract) Native(state *state.State) *extension.Extension {
 	return extension.New(e.Address, state)
 }
 
-func (p *prototypeContract) InterfaceABI() *abi.ABI {
+func mustLoadPrototypeInterfaceABI() *abi.ABI {
 	asset := "compiled/PrototypeInterface.abi"
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(data)
