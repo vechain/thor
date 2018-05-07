@@ -42,7 +42,7 @@ func TestSchedule(t *testing.T) {
 }
 
 func TestIsTheTime(t *testing.T) {
-	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime)
+	sched, _ := poa.NewScheduler(p2, proposers, 1, parentTime)
 
 	tests := []struct {
 		now  uint64
