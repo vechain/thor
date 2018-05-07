@@ -26,7 +26,7 @@ const (
 
 func TestTxPool(t *testing.T) {
 	pool := initPool(t)
-	defer pool.Shutdown()
+	defer pool.Stop()
 	count := 10
 	addTx(t, pool, count)
 	pending(t, pool, count)
@@ -44,7 +44,6 @@ func dump(t *testing.T, pool *txpool.TxPool, count int) {
 }
 
 func addTx(t *testing.T, pool *txpool.TxPool, count int) {
-
 	ch := make(chan *tx.Transaction, count)
 	sub := pool.SubscribeNewTransaction(ch)
 	defer sub.Unsubscribe()
