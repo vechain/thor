@@ -1,7 +1,6 @@
 package txpool
 
 import (
-	"errors"
 	"math/big"
 	"sort"
 	"sync"
@@ -90,7 +89,7 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 func (pool *TxPool) add(tx *tx.Transaction) error {
 	txID := tx.ID()
 	if _, ok := pool.all.Get(txID); ok {
-		return errors.New("known transaction")
+		return errKnownTx
 	}
 
 	// If the transaction fails basic validation, discard it
@@ -286,13 +285,13 @@ func (pool *TxPool) Shutdown() {
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 	if tx.Size() > 32*1024 {
-		return errors.New("tx too large")
+		return errTooLarge
 	}
 
 	bestBlock := pool.chain.BestBlock()
 
 	if tx.IsExpired(bestBlock.Header().Number()) {
-		return errors.New("tx expired")
+		return errExpired
 	}
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
@@ -302,17 +301,17 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 
 	resolvedTx, err := runtime.ResolveTransaction(st, tx)
 	if err != nil {
-		return err
+		return errIntrisicGasExceeded
 	}
 
 	_, _, err = resolvedTx.BuyGas(bestBlock.Header().Number() + 1)
 	if err != nil {
-		return err
+		return errInsufficientEnergy
 	}
 
 	for _, clause := range resolvedTx.Clauses {
 		if clause.Value().Sign() < 0 {
-			return errors.New("negative clause value")
+			return errNegativeValue
 		}
 	}
 
