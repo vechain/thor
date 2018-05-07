@@ -210,23 +210,20 @@ func (pool *TxPool) Remove(txIDs ...thor.Bytes32) {
 //dequeueTxs for dequeue transactions
 func (pool *TxPool) dequeue() {
 	ticker := time.NewTicker(1 * time.Second)
-	var bestBlock *block.Block
 	defer ticker.Stop()
+	bestBlock := pool.chain.BestBlock()
+
 	for {
 		select {
 		case <-pool.done:
 			return
 		case <-ticker.C:
 			b := pool.chain.BestBlock()
-			if bestBlock == nil {
-				bestBlock = b
-			} else {
-				if b.Header().ID() == bestBlock.Header().ID() {
-					continue
-				}
-				bestBlock = b
+			if b.Header().ID() == bestBlock.Header().ID() {
+				continue
 			}
 			pool.update(bestBlock)
+			bestBlock = b
 		}
 	}
 }
