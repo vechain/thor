@@ -32,6 +32,7 @@ type Node struct {
 	packer *packer.Packer
 	cons   *consensus.Consensus
 
+	feedScope       event.SubscriptionScope
 	bestBlockFeed   event.Feed
 	packedBlockFeed event.Feed
 	blockChunkCh    chan []*block.Block
@@ -66,7 +67,11 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	defer n.goes.Wait()
+	defer func() {
+		<-ctx.Done()
+		n.feedScope.Close()
+		n.goes.Wait()
+	}()
 
 	n.goes.Go(func() { n.txLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
@@ -94,6 +99,10 @@ func (n *Node) waitForSynced(ctx context.Context) bool {
 	}
 }
 
+func (n *Node) SubscribeUpdatedBestBlock(ch chan *block.Block) event.Subscription {
+	return n.feedScope.Track(n.bestBlockFeed.Subscribe(ch))
+}
+
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
@@ -103,21 +112,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 	if !n.waitForSynced(ctx) {
 		return
 	}
-
 	log.Info("synchronization process done")
 
-	parent := n.chain.BestBlock()
-
-	var scope event.SubscriptionScope
-	bestBlockCh := make(chan *bestBlockEvent)
-	scope.Track(n.bestBlockFeed.Subscribe(bestBlockCh))
-
-	defer scope.Close()
+	bestBlockCh := make(chan *block.Block)
+	sub := n.SubscribeUpdatedBestBlock(bestBlockCh)
+	defer sub.Unsubscribe()
 
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
 	var authorized bool
+	parent := n.chain.BestBlock()
 	for {
 		now := uint64(time.Now().Unix())
 		if timestamp, flow, err := n.packer.Schedule(parent.Header(), now); err != nil {
@@ -139,8 +144,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case bestBlock := <-bestBlockCh:
-				parent = bestBlock.Block
+			case parent = <-bestBlockCh:
 				log.Debug("re-schedule packer due to new best block")
 				continue
 			case <-timer.C:
@@ -151,8 +155,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case bestBlock := <-bestBlockCh:
-			parent = bestBlock.Block
+		case parent = <-bestBlockCh:
 			continue
 		}
 	}
@@ -380,7 +383,7 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 	}
 	if isTrunk {
 		n.goes.Go(func() {
-			n.bestBlockFeed.Send(&bestBlockEvent{newBlock})
+			n.bestBlockFeed.Send(newBlock)
 			n.comm.BroadcastBlock(newBlock)
 		})
 	}

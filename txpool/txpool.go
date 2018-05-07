@@ -45,6 +45,16 @@ type txObject struct {
 	creationTime int64
 }
 
+type txObjects []*txObject
+
+func (txObjs txObjects) parseTxs() []*tx.Transaction {
+	txs := make([]*tx.Transaction, len(txObjs))
+	for i, obj := range txObjs {
+		txs[i] = obj.tx
+	}
+	return txs
+}
+
 //TxPool TxPool
 type TxPool struct {
 	config PoolConfig
@@ -67,8 +77,21 @@ func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
 		done:   make(chan struct{}),
 	}
 	pool.all = cache.NewRandCache(pool.config.PoolSize)
-	pool.goes.Go(pool.dequeue)
 	return pool
+}
+
+// Start start txpool loop
+func (pool *TxPool) Start(ch chan *block.Block) {
+	pool.goes.Go(func() {
+		for {
+			select {
+			case <-pool.done:
+				return
+			case bestBlock := <-ch:
+				pool.update(bestBlock)
+			}
+		}
+	})
 }
 
 //Add transaction
@@ -103,8 +126,7 @@ func (pool *TxPool) add(tx *tx.Transaction) error {
 		}
 	}
 
-	bestBlock := pool.chain.BestBlock()
-	state, err := pool.status(tx, bestBlock)
+	state, err := pool.status(tx, pool.chain.BestBlock())
 	if err != nil {
 		return err
 	}
@@ -145,28 +167,16 @@ func (pool *TxPool) status(tx *tx.Transaction, bestBlock *block.Block) (objectSt
 
 //Dump dump transactions by TransactionCategory
 func (pool *TxPool) Dump() []*tx.Transaction {
-	bestBlock := pool.chain.BestBlock()
-	pendingObjs := pool.pendingObjs(bestBlock, false)
-	txs := make([]*tx.Transaction, len(pendingObjs))
-	for i, obj := range pendingObjs {
-		txs[i] = obj.tx
-	}
-	return txs
+	return pool.pendingObjs(false).parseTxs()
 }
 
 //Pending return all pending txs
 func (pool *TxPool) Pending() []*tx.Transaction {
-	bestBlock := pool.chain.BestBlock()
-
-	pendingObjs := pool.pendingObjs(bestBlock, true)
-	txs := make([]*tx.Transaction, len(pendingObjs))
-	for i, obj := range pendingObjs {
-		txs[i] = obj.tx
-	}
-	return txs
+	return pool.pendingObjs(true).parseTxs()
 }
 
-func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) []*txObject {
+func (pool *TxPool) pendingObjs(shouldSort bool) txObjects {
+	bestBlock := pool.chain.BestBlock()
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
 		return nil
@@ -174,7 +184,7 @@ func (pool *TxPool) pendingObjs(bestBlock *block.Block, shouldSort bool) []*txOb
 	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 	all := pool.allObjs()
-	var pendings []*txObject
+	var pendings txObjects
 	for id, obj := range all {
 		if obj.tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.creationTime > int64(pool.config.Lifetime) {
 			pool.Remove(id)
@@ -203,27 +213,6 @@ func (pool *TxPool) Remove(txIDs ...thor.Bytes32) {
 
 	for _, txID := range txIDs {
 		pool.all.Remove(txID)
-	}
-}
-
-//dequeueTxs for dequeue transactions
-func (pool *TxPool) dequeue() {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	bestBlock := pool.chain.BestBlock()
-
-	for {
-		select {
-		case <-pool.done:
-			return
-		case <-ticker.C:
-			b := pool.chain.BestBlock()
-			if b.Header().ID() == bestBlock.Header().ID() {
-				continue
-			}
-			pool.update(bestBlock)
-			bestBlock = b
-		}
 	}
 }
 
@@ -276,8 +265,8 @@ func (pool *TxPool) allObjs() map[thor.Bytes32]*txObject {
 	return all
 }
 
-//Shutdown shutdown pool loop
-func (pool *TxPool) Shutdown() {
+//Stop Stop pool loop
+func (pool *TxPool) Stop() {
 	close(pool.done)
 	pool.scope.Close()
 	pool.goes.Wait()
