@@ -16,6 +16,7 @@ type ResolvedTransaction struct {
 	tx    *tx.Transaction
 
 	Origin       thor.Address
+	IntrinsicGas uint64
 	BaseGasPrice *big.Int
 	GasPrice     *big.Int
 	Clauses      []*tx.Clause
@@ -27,6 +28,13 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 	if err != nil {
 		return nil, err
 	}
+	intrinsicGas, err := tx.IntrinsicGas()
+	if err != nil {
+		return nil, err
+	}
+	if tx.Gas() < intrinsicGas {
+		return nil, errors.New("intrinsic gas exceeds provided gas")
+	}
 
 	baseGasPrice := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	gasPrice := tx.GasPrice(baseGasPrice)
@@ -35,6 +43,7 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 		state,
 		tx,
 		origin,
+		intrinsicGas,
 		baseGasPrice,
 		gasPrice,
 		clauses,
@@ -66,17 +75,7 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, leftOverGas uint64, returnGas func(uint64), err error) {
-	intrinsicGas, err := r.tx.IntrinsicGas()
-	if err != nil {
-		return thor.Address{}, 0, nil, err
-	}
-	if intrinsicGas > r.tx.Gas() {
-		return thor.Address{}, 0, nil, errors.New("intrinsic gas exceeds provided gas")
-	}
-
-	leftOverGas = r.tx.Gas() - intrinsicGas
-
+func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, returnGas func(uint64), err error) {
 	energy := builtin.Energy.Native(r.state)
 	doReturnGas := func(rgas uint64) *big.Int {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
@@ -99,19 +98,19 @@ func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, leftO
 			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
 				// deduct from sponsor, if any
 				if energy.SubBalance(sponsor, prepaid, blockNum) {
-					return sponsor, leftOverGas, doReturnGasAndSetCredit, nil
+					return sponsor, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
 			if energy.SubBalance(*commonTo, prepaid, blockNum) {
-				return *commonTo, leftOverGas, doReturnGasAndSetCredit, nil
+				return *commonTo, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
 	if energy.SubBalance(r.Origin, prepaid, blockNum) {
-		return r.Origin, leftOverGas, func(rgas uint64) { doReturnGas(rgas) }, nil
+		return r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
 	}
-	return thor.Address{}, 0, nil, errors.New("insufficient energy")
+	return thor.Address{}, nil, errors.New("insufficient energy")
 }
