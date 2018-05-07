@@ -22,7 +22,6 @@ import (
 const (
 	emptyRootHash = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 	testAddress   = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
-	testPrivHex   = "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
 )
 
 func TestTxPool(t *testing.T) {
@@ -59,11 +58,7 @@ func addTx(t *testing.T, pool *txpool.TxPool, count int) {
 			Clause(cla).
 			Nonce(1).
 			Build()
-		key, err := crypto.HexToECDSA(testPrivHex)
-		if err != nil {
-			t.Fatal(err)
-		}
-		sig, err := crypto.Sign(tx.SigningHash().Bytes(), key)
+		sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 		if err != nil {
 			t.Fatal(err)
 		}
