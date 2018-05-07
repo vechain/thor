@@ -10,7 +10,7 @@ import (
 	"github.com/vechain/thor/vm/evm"
 )
 
-// NetTestnet create genesis for testnet.
+// NewTestnet create genesis for testnet.
 func NewTestnet() (*Genesis, error) {
 	launchTime := uint64(1526054400000)                                // Sat May 12 2018 00:00:00 GMT+0800 (CST)
 	tokenSupply := new(big.Int).Mul(big.NewInt(1e9), big.NewInt(1e18)) // VET 1 billion
