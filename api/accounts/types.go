@@ -3,6 +3,7 @@ package accounts
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
 )
@@ -24,10 +25,12 @@ type ContractCall struct {
 }
 
 type VMOutput struct {
-	Data     string `json:"data"`
-	GasUsed  uint64 `json:"gasUsed"`
-	Reverted bool   `json:"reverted"`
-	VMError  string `json:"vmError"`
+	Data      string                   `json:"data"`
+	Events    []*transactions.Event    `json:"events"`
+	Transfers []*transactions.Transfer `json:"transfers"`
+	GasUsed   uint64                   `json:"gasUsed"`
+	Reverted  bool                     `json:"reverted"`
+	VMError   string                   `json:"vmError"`
 }
 
 func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
@@ -42,10 +45,34 @@ func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
 		vmError = vo.VMErr.Error()
 	}
 
+	events := make([]*transactions.Event, len(vo.Events))
+	transfers := make([]*transactions.Transfer, len(vo.Transfers))
+
+	for j, txEvent := range vo.Events {
+		event := &transactions.Event{
+			Address: txEvent.Address,
+			Data:    hexutil.Encode(txEvent.Data),
+		}
+		event.Topics = make([]thor.Bytes32, len(txEvent.Topics))
+		for k, topic := range txEvent.Topics {
+			event.Topics[k] = topic
+		}
+		events[j] = event
+	}
+	for j, txTransfer := range vo.Transfers {
+		transfer := &transactions.Transfer{
+			Sender:    txTransfer.Sender,
+			Recipient: txTransfer.Recipient,
+			Amount:    (*math.HexOrDecimal256)(txTransfer.Amount),
+		}
+		transfers[j] = transfer
+	}
 	return &VMOutput{
-		Data:     hexutil.Encode(vo.Data),
-		GasUsed:  gasUsed,
-		Reverted: reverted,
-		VMError:  vmError,
+		Data:      hexutil.Encode(vo.Data),
+		Events:    events,
+		Transfers: transfers,
+		GasUsed:   gasUsed,
+		Reverted:  reverted,
+		VMError:   vmError,
 	}
 }

@@ -170,15 +170,21 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	req.Body.Close()
-	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
-	if err != nil {
-		return utils.BadRequest(err, "address")
-	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
 		return utils.BadRequest(err, "revision")
 	}
-	output, err := a.Call(&addr, callBody, b.Header())
+	address := mux.Vars(req)["address"]
+	var output *VMOutput
+	if address == "" {
+		output, err = a.Call(nil, callBody, b.Header())
+	} else {
+		addr, err := thor.ParseAddress(address)
+		if err != nil {
+			return utils.BadRequest(err, "address")
+		}
+		output, err = a.Call(&addr, callBody, b.Header())
+	}
 	if err != nil {
 		return err
 	}
@@ -213,6 +219,9 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
 	sub.Path("/{address}/storage/{key}").Queries("revision", "{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
+
+	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+	sub.Path("").Queries("revision", "{revision}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
 
 	sub.Path("/{address}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
 	sub.Path("/{address}").Queries("revision", "{revision}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
