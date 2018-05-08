@@ -67,98 +67,25 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	defer func() {
-		<-ctx.Done()
-		n.feedScope.Close()
-		n.goes.Wait()
-	}()
 
 	n.goes.Go(func() { n.txLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
 	n.goes.Go(func() { n.consensusLoop(ctx) })
 
+	<-ctx.Done()
+
+	n.feedScope.Close()
+	n.goes.Wait()
 	return nil
 }
+
 func (n *Node) HandleBlockChunk(chunk []*block.Block) error {
 	n.blockChunkCh <- chunk
 	return <-n.blockChunkAckCh
 }
 
-func (n *Node) waitForSynced(ctx context.Context) bool {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		if n.comm.IsSynced() {
-			return true
-		}
-		select {
-		case <-ctx.Done():
-			return false
-		case <-ticker.C:
-		}
-	}
-}
-
 func (n *Node) SubscribeUpdatedBestBlock(ch chan *block.Block) event.Subscription {
 	return n.feedScope.Track(n.bestBlockFeed.Subscribe(ch))
-}
-
-func (n *Node) packerLoop(ctx context.Context) {
-	log.Debug("enter packer loop")
-	defer log.Debug("leave packer loop")
-
-	log.Info("waiting for synchronization...")
-	// wait for synced
-	if !n.waitForSynced(ctx) {
-		return
-	}
-	log.Info("synchronization process done")
-
-	bestBlockCh := make(chan *block.Block)
-	sub := n.SubscribeUpdatedBestBlock(bestBlockCh)
-	defer sub.Unsubscribe()
-
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-
-	var authorized bool
-	parent := n.chain.BestBlock()
-	for {
-		now := uint64(time.Now().Unix())
-		if timestamp, flow, err := n.packer.Schedule(parent.Header(), now); err != nil {
-			if authorized {
-				authorized = false
-				log.Warn("unable to pack block", "err", err)
-			}
-		} else {
-			if !authorized {
-				authorized = true
-				log.Info("prepared to pack block")
-			}
-			after := time.Duration(timestamp-now) * time.Second
-			log.Debug("scheduled to pack block", "after", after)
-
-			timer.Stop()
-			timer = time.NewTimer(after)
-
-			select {
-			case <-ctx.Done():
-				return
-			case parent = <-bestBlockCh:
-				log.Debug("re-schedule packer due to new best block")
-				continue
-			case <-timer.C:
-				n.pack(flow)
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case parent = <-bestBlockCh:
-			continue
-		}
-	}
 }
 
 func (n *Node) consensusLoop(ctx context.Context) {
@@ -194,7 +121,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			})
 			var stats blockStats
 			for _, block := range blocks {
-				if _, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
+				if _, err := n.processBlock(block, &stats, false); err == nil || consensus.IsKnownBlock(err) {
 					log.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
 				}
@@ -208,7 +135,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 				log.Error("failed to commit state of packed block", "err", err)
 				continue
 			}
-			isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts)
+			isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts, false)
 			if err != nil {
 				continue
 			}
@@ -223,7 +150,7 @@ func (n *Node) consensusLoop(ctx context.Context) {
 			}
 		case newBlock := <-newBlockCh:
 			var stats blockStats
-			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
+			if isTrunk, err := n.processBlock(newBlock.Block, &stats, false); err != nil {
 				if consensus.IsFutureBlock(err) ||
 					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
 					log.Debug("future block added", "id", newBlock.Header().ID())
@@ -242,7 +169,7 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 	var stats blockStats
 	startTime := mclock.Now()
 	for i, block := range chunk {
-		if _, err := n.processBlock(block, &stats); err != nil {
+		if _, err := n.processBlock(block, &stats, true); err != nil {
 			return err
 		}
 
@@ -263,47 +190,7 @@ func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) erro
 	return nil
 }
 
-func (n *Node) pack(flow *packer.Flow) {
-	txs := n.txPool.Pending()
-	var txsToRemove []thor.Bytes32
-
-	startTime := mclock.Now()
-	for _, tx := range txs {
-		err := flow.Adopt(tx)
-		switch {
-		case packer.IsGasLimitReached(err):
-			break
-		case packer.IsTxNotAdoptableNow(err):
-			continue
-		default:
-			txsToRemove = append(txsToRemove, tx.ID())
-		}
-	}
-	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
-	if err != nil {
-		log.Error("failed to pack block", "err", err)
-		return
-	}
-
-	elapsed := mclock.Now() - startTime
-	n.goes.Go(func() { n.packedBlockFeed.Send(&packedBlockEvent{newBlock, stage, receipts, elapsed}) })
-
-	if elapsed > 0 {
-		gasUsed := newBlock.Header().GasUsed()
-		// calc target gas limit only if gas used above third of gas limit
-		if gasUsed > newBlock.Header().GasLimit()/3 {
-			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
-			n.packer.SetTargetGasLimit(targetGasLimit)
-			log.Debug("reset target gas limit", "value", targetGasLimit)
-		}
-	}
-
-	for _, id := range txsToRemove {
-		n.txPool.Remove(id)
-	}
-}
-
-func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
+func (n *Node) processBlock(blk *block.Block, stats *blockStats, isChunked bool) (bool, error) {
 	startTime := mclock.Now()
 	now := uint64(time.Now().Unix())
 	stage, receipts, err := n.cons.Process(blk, now)
@@ -330,7 +217,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	isTrunk, err := n.insertBlock(blk, receipts)
+	isTrunk, err := n.insertBlock(blk, receipts, isChunked)
 	if err != nil {
 		log.Error("failed to insert block", "err", err)
 		return false, err
@@ -340,7 +227,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	return isTrunk, err
 }
 
-func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts) (bool, error) {
+func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts, isChunked bool) (bool, error) {
 	isTrunk := n.cons.IsTrunk(newBlock.Header())
 	fork, err := n.chain.AddBlock(newBlock, receipts, isTrunk)
 	if err != nil {
@@ -382,7 +269,7 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 	if err := batch.Commit(forkIDs...); err != nil {
 		return false, errors.Wrap(err, "commit logs")
 	}
-	if isTrunk {
+	if isTrunk && !isChunked {
 		n.goes.Go(func() {
 			n.bestBlockFeed.Send(newBlock)
 			n.comm.BroadcastBlock(newBlock)
