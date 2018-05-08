@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"bytes"
 	"errors"
 	"sync"
 
@@ -142,9 +143,9 @@ func (c *Chain) BestBlock() *block.Block {
 }
 
 // AddBlock add a new block into block chain.
-// Once reorg happened, Fork.Branch will be the chain transitted from trunk to branch.
+// Once reorg happened (len(Trunk) > 0 && len(Branch) >0), Fork.Branch will be the chain transitted from trunk to branch.
 // Reorg happens when isTrunk is true.
-func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bool) (*Fork, error) {
+func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, error) {
 	c.rw.Lock()
 	defer c.rw.Unlock()
 
@@ -159,7 +160,8 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 		return nil, errBlockExist
 	}
 
-	if _, err := c.getBlock(newBlock.Header().ParentID()); err != nil {
+	parent, err := c.getBlock(newBlock.Header().ParentID())
+	if err != nil {
 		if c.IsNotFound(err) {
 			return nil, errors.New("parent missing")
 		}
@@ -176,6 +178,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 	}
 	var fork *Fork
 	var trunkUpdates map[thor.Bytes32]bool
+	isTrunk := c.isTrunk(newBlock.Header())
 	if isTrunk {
 		trunkUpdates = make(map[thor.Bytes32]bool)
 		if fork, err = c.buildFork(newBlock, c.bestBlock); err != nil {
@@ -203,7 +206,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 		}
 		persist.SaveBestBlockID(batch, newBlockID)
 	} else {
-		fork = &Fork{Ancestor: newBlock}
+		fork = &Fork{Ancestor: parent, Branch: []*block.Block{newBlock}}
 	}
 
 	if err := batch.Write(); err != nil {
@@ -229,6 +232,26 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts, isTrunk bo
 		c.bestBlock = newBlock
 	}
 	return fork, nil
+}
+
+func (c *Chain) isTrunk(header *block.Header) bool {
+	bestHeader := c.bestBlock.Header()
+
+	if header.TotalScore() < bestHeader.TotalScore() {
+		return false
+	}
+
+	if header.TotalScore() > bestHeader.TotalScore() {
+		return true
+	}
+
+	// total scores are equal
+	if bytes.Compare(header.ID().Bytes(), bestHeader.ID().Bytes()) < 0 {
+		// smaller ID is preferred, since block with smaller ID usually has larger average score.
+		// also, it's a deterministic decision.
+		return true
+	}
+	return false
 }
 
 // Think about the example below:
