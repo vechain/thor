@@ -44,6 +44,11 @@ func newFlow(
 	}
 }
 
+// When the target time to do packing.
+func (f *Flow) When() uint64 {
+	return f.runtime.BlockTime()
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
