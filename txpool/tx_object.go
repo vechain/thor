@@ -25,10 +25,10 @@ type txObject struct {
 type txObjects []*txObject
 
 func (txObjs txObjects) parseTxs() []*tx.Transaction {
-	txs := make(tx.Transactions, len(txObjs))
-	for i, obj := range txObjs {
+	txs := make(tx.Transactions, 0, len(txObjs))
+	for _, obj := range txObjs {
 		if !obj.deleted {
-			txs[i] = obj.tx
+			txs = append(txs, obj.tx)
 		}
 	}
 	return txs

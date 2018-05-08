@@ -30,6 +30,13 @@ func TestTxPool(t *testing.T) {
 	addTx(t, pool, count)
 	pending(t, pool, count)
 	dump(t, pool, count)
+
+	txID, err := thor.ParseBytes32("0xa51d1fba34f57477e57992535893382839cbbf73a8599da9adcbb4a999e36f29")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.Remove(txID)
+	dump(t, pool, count-1)
 }
 
 func pending(t *testing.T, pool *txpool.TxPool, count int) {
@@ -75,6 +82,7 @@ func addTx(t *testing.T, pool *txpool.TxPool, count int) {
 		}
 	}
 }
+
 func initPool(t *testing.T) *txpool.TxPool {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
