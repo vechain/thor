@@ -17,7 +17,7 @@ import (
 // Flow the flow of packing a new block.
 type Flow struct {
 	packer       *Packer
-	parentID     thor.Bytes32
+	parentHeader *block.Header
 	runtime      *runtime.Runtime
 	traverser    *chain.Traverser
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
@@ -29,19 +29,24 @@ type Flow struct {
 
 func newFlow(
 	packer *Packer,
-	parentID thor.Bytes32,
+	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	totalScore uint64,
 	traverser *chain.Traverser,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
-		parentID:     parentID,
+		parentHeader: parentHeader,
 		runtime:      runtime,
 		traverser:    traverser,
 		processedTxs: make(map[thor.Bytes32]bool),
 		totalScore:   totalScore,
 	}
+}
+
+// ParentHeader returns parent block header.
+func (f *Flow) ParentHeader() *block.Header {
+	return f.parentHeader
 }
 
 // When the target time to do packing.
@@ -71,7 +76,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return errGasLimitReached
 	}
 	// check if tx already there
-	if found, _, err := consensus.FindTransaction(f.packer.chain, f.parentID, f.processedTxs, tx.ID()); err != nil {
+	if found, _, err := consensus.FindTransaction(f.packer.chain, f.parentHeader.ID(), f.processedTxs, tx.ID()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
@@ -79,7 +84,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		found, isReverted, err := consensus.FindTransaction(f.packer.chain, f.parentID, f.processedTxs, *dependsOn)
+		found, isReverted, err := consensus.FindTransaction(f.packer.chain, f.parentHeader.ID(), f.processedTxs, *dependsOn)
 		if err != nil {
 			return err
 		}
@@ -126,7 +131,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	builder := new(block.Builder).
 		Beneficiary(f.packer.beneficiary).
 		GasLimit(f.runtime.BlockGasLimit()).
-		ParentID(f.parentID).
+		ParentID(f.parentHeader.ID()).
 		Timestamp(f.runtime.BlockTime()).
 		TotalScore(f.totalScore).
 		GasUsed(f.gasUsed).

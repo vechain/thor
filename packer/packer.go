@@ -80,7 +80,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 			return traverser.Get(num).ID()
 		})
 
-	return newFlow(p, parent.ID(), runtime, parent.TotalScore()+score, traverser), nil
+	return newFlow(p, parent, runtime, parent.TotalScore()+score, traverser), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -102,7 +102,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 			return traverser.Get(num).ID()
 		})
 
-	return newFlow(p, parent.ID(), runtime, parent.TotalScore()+1, traverser), nil
+	return newFlow(p, parent, runtime, parent.TotalScore()+1, traverser), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
