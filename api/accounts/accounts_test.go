@@ -88,12 +88,14 @@ var abiJSON = `[
 	}
 ]`
 var contractAddr = thor.BytesToAddress([]byte("contract"))
-var code = common.Hex2Bytes("606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063bb4e3f4d146044575b600080fd5b3415604e57600080fd5b6071600480803560ff1690602001909190803560ff16906020019091905050608d565b604051808260ff1660ff16815260200191505060405180910390f35b60008183019050929150505600a165627a7a72305820080cbeb07e393a5e37a16fff2145c3344b9cf35a9e3202e68036015e968ff14f0029")
+var bytecode = common.Hex2Bytes("608060405234801561001057600080fd5b5060d18061001f6000396000f300608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063bb4e3f4d146044575b600080fd5b348015604f57600080fd5b50607c600480360381019080803560ff169060200190929190803560ff1690602001909291905050506098565b604051808260ff1660ff16815260200191505060405180910390f35b60008183019050929150505600a165627a7a7230582088ec26b462eafea6ac5de1fa068cf233c32c0ad80ab31b4b586261e765e02e950029")
+var runtimeBytecode = common.Hex2Bytes("608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063bb4e3f4d146044575b600080fd5b348015604f57600080fd5b50607c600480360381019080803560ff169060200190929190803560ff1690602001909291905050506098565b604051808260ff1660ff16815260200191505060405180910390f35b60008183019050929150505600a165627a7a7230582088ec26b462eafea6ac5de1fa068cf233c32c0ad80ab31b4b586261e765e02e950029")
 
 func TestAccount(t *testing.T) {
 	ts := initAccountServer(t)
 	defer ts.Close()
 	getAccount(t, ts)
+	deployContract(t, ts)
 	callContract(t, ts)
 }
 
@@ -141,7 +143,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		st.SetCode(address, v.in.code)
 		st.SetStorage(address, storageKey, v.in.storage)
 	}
-	st.SetCode(contractAddr, code)
+	st.SetCode(contractAddr, runtimeBytecode)
 	stateRoot, _ := st.Stage().Commit()
 	gene, err := genesis.NewDevnet()
 	if err != nil {
@@ -161,9 +163,28 @@ func initAccountServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	accounts.New(chain, stateC).Mount(router, "/accounts/")
+	accounts.New(chain, stateC).Mount(router, "/accounts")
 	ts := httptest.NewServer(router)
 	return ts
+}
+
+func deployContract(t *testing.T, ts *httptest.Server) {
+	reqBody := &accounts.ContractCall{
+		Gas:    10000000,
+		Caller: thor.Address{},
+		Data:   hexutil.Encode(bytecode),
+	}
+	reqBodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httpPost(t, ts.URL+"/accounts", reqBodyBytes)
+	var output *accounts.VMOutput
+	if err = json.Unmarshal(response, &output); err != nil {
+		t.Fatal(err)
+	}
+	assert.False(t, output.Reverted)
+
 }
 
 func callContract(t *testing.T, ts *httptest.Server) {

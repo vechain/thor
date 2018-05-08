@@ -56,6 +56,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ContractCallResult'
+  '/accounts':
+    post:
+      tags:
+        - Accounts
+      summary: deploy a contract
+      requestBody:
+        description: arguments and environment
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractCall'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractCallResult'
   '/accounts/{address}/code':
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -535,6 +554,14 @@ components:
         data:
           type: string
           description: the output data
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        transfers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transfer'
         gasUsed:
           type: integer
           format: uint64
@@ -545,6 +572,8 @@ components:
           type: string
       example:
         data: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
+        events: []
+        transfers: []
         gasUsed: 21000
         reverted: false
         vmError: ''
