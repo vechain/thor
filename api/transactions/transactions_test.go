@@ -167,7 +167,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	}
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
-	defer pool.Shutdown()
+	defer pool.Stop()
 
 	transactions.New(chain, pool).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
