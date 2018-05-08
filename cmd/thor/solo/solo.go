@@ -100,7 +100,7 @@ func (s *Solo) watcher(ctx context.Context) {
 			if err != nil {
 				singer = thor.Address{}
 			}
-			log.Info("new Tx", "id", tx.ID(), "from", singer)
+			log.Info("new Tx", "id", tx.ID(), "signer", singer)
 			if s.onDemand {
 				s.packing()
 			}
@@ -174,7 +174,7 @@ func (s *Solo) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
-	// ignore fork when s
+	// ignore fork when solo
 	_, err = s.chain.AddBlock(b, receipts, true)
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))

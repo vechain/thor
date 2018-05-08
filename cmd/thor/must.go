@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -250,17 +252,40 @@ func printSoloStartupMessage(
 	dataDir string,
 	apiURL string,
 ) {
+	tableHead := `
+┌────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────┬──────────┬──────────┐
+│                   Address                  │                             Private Key                            │    VET   │  Energy  │`
+	tableContent := `
+├────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────┼──────────┼──────────┤
+│ %v │ %v │ %v │ %v │`
+	tableEnd := `
+└────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────┴──────────┴──────────┘`
+
 	bestBlock := chain.BestBlock()
 
-	fmt.Printf(`Starting %v
+	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    
     Best block  [ %v #%v @%v ]
     Data dir    [ %v ]
-    API portal  [ %v ]
-`,
-		common.MakeName("Thor", fullVersion()),
+    API portal  [ %v ]`,
+		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
 		dataDir,
 		apiURL)
+
+	info += tableHead
+
+	balance := big.NewInt(10000000)
+	for _, a := range genesis.DevAccounts() {
+		info += fmt.Sprintf(tableContent,
+			a.Address,
+			thor.BytesToBytes32(crypto.FromECDSA(a.PrivateKey)),
+			balance,
+			balance,
+		)
+	}
+	info += tableEnd + "\r\n"
+
+	fmt.Print(info)
 }
