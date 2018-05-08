@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/lvldb"
+
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cmd/thor/node"
+	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
@@ -50,6 +54,21 @@ func main() {
 			natFlag,
 		},
 		Action: defaultAction,
+		Commands: []cli.Command{
+			{
+				Name:  "solo",
+				Usage: "VeChain Thor client for test & dev",
+				Flags: []cli.Flag{
+					dirFlag,
+					apiAddrFlag,
+					apiCorsFlag,
+					onDemandFlag,
+					persistFlag,
+					verbosityFlag,
+				},
+				Action: soloAction,
+			},
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -92,7 +111,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer bestBlockSub.Unsubscribe()
 
 	txPool.Start(bestBlockCh)
-	defer func() { log.Info("stop tx pool..."); txPool.Stop() }()
+	defer func() { log.Info("stopping tx pool..."); txPool.Stop() }()
 
 	communicator.Start(peerCh, node.HandleBlockChunk)
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
@@ -103,4 +122,46 @@ func defaultAction(ctx *cli.Context) error {
 	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
 
 	return node.Run(handleExitSignal())
+}
+
+func soloAction(ctx *cli.Context) error {
+	defer func() { log.Info("exited") }()
+
+	initLogger(ctx)
+	gene := soloGenesis(ctx)
+
+	var mainDB *lvldb.LevelDB
+	var logDB *logdb.LogDB
+	var dataDir string
+
+	if ctx.Bool("persist") {
+		dataDir = makeDataDir(ctx, gene)
+		mainDB = openMainDB(ctx, dataDir)
+		logDB = openLogDB(ctx, dataDir)
+	} else {
+		dataDir = "Memory"
+		mainDB = openMemMainDB()
+		logDB = openMemLogDB()
+	}
+
+	defer func() { log.Info("closing main database..."); mainDB.Close() }()
+	defer func() { log.Info("closing log database..."); logDB.Close() }()
+
+	chain := initChain(gene, mainDB, logDB)
+
+	txPool := txpool.New(chain, state.NewCreator(mainDB))
+
+	bestBlockCh := make(chan *block.Block)
+
+	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, bestBlockCh, ctx.Bool("on-demand"))
+
+	txPool.Start(bestBlockCh)
+	defer func() { log.Info("stopping tx pool..."); txPool.Stop() }()
+
+	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
+	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()
+
+	printSoloStartupMessage(gene, chain, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
+
+	return soloContext.Run(handleExitSignal())
 }

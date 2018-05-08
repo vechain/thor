@@ -219,3 +219,48 @@ func printStartupMessage(
 		dataDir,
 		apiURL)
 }
+
+func soloGenesis(ctx *cli.Context) *genesis.Genesis {
+	gene, err := genesis.NewDevnet()
+	if err != nil {
+		fatal(err)
+	}
+	return gene
+}
+
+func openMemMainDB() *lvldb.LevelDB {
+	db, err := lvldb.NewMem()
+	if err != nil {
+		fatal(fmt.Sprintf("open chain database: %v", err))
+	}
+	return db
+}
+
+func openMemLogDB() *logdb.LogDB {
+	db, err := logdb.NewMem()
+	if err != nil {
+		fatal(fmt.Sprintf("open log database: %v", err))
+	}
+	return db
+}
+
+func printSoloStartupMessage(
+	gene *genesis.Genesis,
+	chain *chain.Chain,
+	dataDir string,
+	apiURL string,
+) {
+	bestBlock := chain.BestBlock()
+
+	fmt.Printf(`Starting %v
+    Network     [ %v %v ]    
+    Best block  [ %v #%v @%v ]
+    Data dir    [ %v ]
+    API portal  [ %v ]
+`,
+		common.MakeName("Thor", fullVersion()),
+		gene.ID(), gene.Name(),
+		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		dataDir,
+		apiURL)
+}

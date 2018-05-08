@@ -50,4 +50,12 @@ var (
 		Value: "none",
 		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 	}
+	onDemandFlag = cli.BoolFlag{
+		Name:  "on-demand",
+		Usage: "create new block when there is pending transaction",
+	}
+	persistFlag = cli.BoolFlag{
+		Name:  "persist",
+		Usage: "blockchain data storage option, if setted data will be saved to disk",
+	}
 )
