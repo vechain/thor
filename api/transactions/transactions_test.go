@@ -150,7 +150,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	}
 	tx = tx.WithSignature(sig)
 	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
-	_, flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
+	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
 	err = flow.Adopt(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +167,7 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	}
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
-	defer pool.Shutdown()
+	defer pool.Stop()
 
 	transactions.New(chain, pool).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)

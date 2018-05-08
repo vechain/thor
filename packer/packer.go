@@ -37,10 +37,10 @@ func New(
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (targetTime uint64, flow *Flow, err error) {
+func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
-		return 0, nil, errors.Wrap(err, "state")
+		return nil, errors.Wrap(err, "state")
 	}
 	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
 	authority := builtin.Authority.Native(state)
@@ -59,7 +59,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (targetTime
 	// calc the time when it's turn to produce block
 	sched, err := poa.NewScheduler(p.proposer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
-		return 0, nil, err
+		return nil, err
 	}
 
 	newBlockTime := sched.Schedule(nowTimestamp)
@@ -80,7 +80,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (targetTime
 			return traverser.Get(num).ID()
 		})
 
-	return newBlockTime, newFlow(p, parent.ID(), runtime, parent.TotalScore()+score, traverser), nil
+	return newFlow(p, parent.ID(), runtime, parent.TotalScore()+score, traverser), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
