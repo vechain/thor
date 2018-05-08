@@ -103,7 +103,7 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	}
 	router := mux.NewRouter()
 	pool := txpool.New(chain, stateC)
-	defer pool.Shutdown()
+	defer pool.Stop()
 	blocks.New(chain).Mount(router, "/blocks")
 	ts := httptest.NewServer(router)
 	return b, ts
