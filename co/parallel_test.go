@@ -1,0 +1,29 @@
+package co_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/vechain/thor/co"
+)
+
+func TestParallel(t *testing.T) {
+	n := 50
+	fn := func() {
+		time.Sleep(time.Millisecond * 20)
+	}
+
+	startTime := time.Now().UnixNano()
+	for i := 0; i < n; i++ {
+		fn()
+	}
+	t.Log("non-parallel", time.Duration(time.Now().UnixNano()-startTime))
+
+	startTime = time.Now().UnixNano()
+	co.Parallel(func(en co.Enqueue) {
+		for i := 0; i < n; i++ {
+			en(fn)
+		}
+	})
+	t.Log("parallel", time.Duration(time.Now().UnixNano()-startTime))
+}
