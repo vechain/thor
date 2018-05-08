@@ -24,7 +24,7 @@ func TestChain(t *testing.T) {
 			ParentID(best.Header().ID()).
 			Build()
 		fmt.Println(b.Header().ID())
-		if _, err := chain.AddBlock(b, nil, true); err != nil {
+		if _, err := chain.AddBlock(b, nil); err != nil {
 			fmt.Println(err)
 		}
 	}

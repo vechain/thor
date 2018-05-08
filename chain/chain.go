@@ -475,21 +475,22 @@ func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (*per
 		return nil, err
 	}
 
+	for _, b := range fork.Branch {
+		ids, err := c.getTransactionIDs(b.Header().ID())
+		if err != nil {
+			return nil, err
+		}
+		if index, found := ids[txID]; found {
+			return &persist.TxLocation{
+				BlockID: b.Header().ID(),
+				Index:   uint64(index),
+			}, nil
+		}
+	}
+
 	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		if c.IsNotFound(err) {
-			for _, b := range fork.Branch {
-				ids, err := c.getTransactionIDs(b.Header().ID())
-				if err != nil {
-					return nil, err
-				}
-				if index, found := ids[txID]; found {
-					return &persist.TxLocation{
-						BlockID: b.Header().ID(),
-						Index:   uint64(index),
-					}, nil
-				}
-			}
 			return nil, errNotFound
 		}
 		return nil, err
