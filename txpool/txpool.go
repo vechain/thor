@@ -18,6 +18,8 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+const maxTxSize = 32 * 1024 // Reject transactions over 32KB to prevent DOS attacks
+
 //PoolConfig PoolConfig
 type PoolConfig struct {
 	PoolSize int           // Maximum number of executable transaction slots for all accounts
@@ -232,7 +234,7 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
-	if tx.Size() > 32*1024 {
+	if tx.Size() > maxTxSize {
 		return errTooLarge
 	}
 
