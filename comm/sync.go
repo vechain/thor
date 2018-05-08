@@ -68,7 +68,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			case bs := <-blockCh:
 				if bs == nil {
 					if len(chunk) > 0 {
-						if err := handler(chunk); err != nil {
+						if err := handler(c.ctx, chunk); err != nil {
 							errCh <- err
 							return
 						}
@@ -80,7 +80,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 				chunk = append(chunk, bs.Block)
 
 				if len(chunk) >= maxChunkBlocks || chunkSize >= maxChunkSize {
-					if err := handler(chunk); err != nil {
+					if err := handler(c.ctx, chunk); err != nil {
 						errCh <- err
 						return
 					}
