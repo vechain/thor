@@ -5,16 +5,16 @@ import (
 )
 
 type cache struct {
-	*lru.ARCCache
+	*lru.Cache
 	loader func(key interface{}) (interface{}, error)
 }
 
 func newCache(maxSize int, loader func(key interface{}) (interface{}, error)) *cache {
-	arc, err := lru.NewARC(maxSize)
+	c, err := lru.New(maxSize)
 	if err != nil {
 		panic(err)
 	}
-	return &cache{arc, loader}
+	return &cache{c, loader}
 }
 
 func (c *cache) GetOrLoad(key interface{}) (interface{}, error) {
