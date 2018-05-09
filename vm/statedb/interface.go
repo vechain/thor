@@ -13,7 +13,7 @@ type State interface {
 	GetCodeHash(thor.Address) thor.Bytes32
 	GetStorage(thor.Address, thor.Bytes32) thor.Bytes32
 	Exists(thor.Address) bool
-	ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool)
+	//	ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool)
 
 	SetBalance(thor.Address, *big.Int)
 	SetCode(thor.Address, []byte)

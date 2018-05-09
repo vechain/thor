@@ -137,50 +137,50 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 
 // ForEachStorage iterates all storage key-value pairs for given address.
 // It's for debug purpose.
-func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool) {
-	// skip if no code
-	if (s.GetCodeHash(addr) == thor.Bytes32{}) {
-		return
-	}
+// func (s *State) ForEachStorage(addr thor.Address, cb func(key thor.Bytes32, value []byte) bool) {
+// 	// skip if no code
+// 	if (s.GetCodeHash(addr) == thor.Bytes32{}) {
+// 		return
+// 	}
 
-	// build ongoing key-value pairs
-	ongoing := make(map[thor.Bytes32][]byte)
-	s.sm.Journal(func(k, v interface{}) bool {
-		if key, ok := k.(storageKey); ok {
-			if key.addr == addr {
-				ongoing[key.key] = v.([]byte)
-			}
-		}
-		return true
-	})
+// 	// build ongoing key-value pairs
+// 	ongoing := make(map[thor.Bytes32][]byte)
+// 	s.sm.Journal(func(k, v interface{}) bool {
+// 		if key, ok := k.(storageKey); ok {
+// 			if key.addr == addr {
+// 				ongoing[key.key] = v.([]byte)
+// 			}
+// 		}
+// 		return true
+// 	})
 
-	for k, v := range ongoing {
-		if !cb(k, v) {
-			return
-		}
-	}
+// 	for k, v := range ongoing {
+// 		if !cb(k, v) {
+// 			return
+// 		}
+// 	}
 
-	co := s.getCachedObject(addr)
-	strie, err := trie.NewSecure(thor.BytesToBytes32(co.data.StorageRoot), s.kv, 0)
-	if err != nil {
-		s.setError(err)
-		return
-	}
+// 	co := s.getCachedObject(addr)
+// 	strie, err := trie.NewSecure(thor.BytesToBytes32(co.data.StorageRoot), s.kv, 0)
+// 	if err != nil {
+// 		s.setError(err)
+// 		return
+// 	}
 
-	iter := trie.NewIterator(strie.NodeIterator(nil))
-	for iter.Next() {
-		if s.err != nil {
-			return
-		}
-		// skip cached values
-		key := thor.BytesToBytes32(strie.GetKey(iter.Key))
-		if _, ok := ongoing[key]; !ok {
-			if !cb(key, iter.Value) {
-				return
-			}
-		}
-	}
-}
+// 	iter := trie.NewIterator(strie.NodeIterator(nil))
+// 	for iter.Next() {
+// 		if s.err != nil {
+// 			return
+// 		}
+// 		// skip cached values
+// 		key := thor.BytesToBytes32(strie.GetKey(iter.Key))
+// 		if _, ok := ongoing[key]; !ok {
+// 			if !cb(key, iter.Value) {
+// 				return
+// 			}
+// 		}
+// 	}
+// }
 
 func (s *State) setError(err error) {
 	if s.err == nil {
