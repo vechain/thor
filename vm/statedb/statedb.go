@@ -6,10 +6,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm/evm"
 )
+
+var codeSizeCache, _ = lru.New(32 * 1024)
 
 // StateDB implements evm.StateDB, only adapt to evm.
 type StateDB struct {
@@ -131,7 +134,16 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 
 // GetCodeSize stub.
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	return len(s.state.GetCode(thor.Address(addr)))
+	hash := s.state.GetCodeHash(thor.Address(addr))
+	if hash.IsZero() {
+		return 0
+	}
+	if v, ok := codeSizeCache.Get(hash); ok {
+		return v.(int)
+	}
+	size := len(s.state.GetCode(thor.Address(addr)))
+	codeSizeCache.Add(hash, size)
+	return size
 }
 
 // SetCode stub.
