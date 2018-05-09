@@ -3,10 +3,13 @@ package txpool
 import (
 	"math/big"
 
+	"github.com/vechain/thor/chain"
+
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/tx"
 )
 
-type objectStatus int
+type objectStatus uint
 
 const (
 	Pending objectStatus = iota
@@ -20,6 +23,24 @@ type txObject struct {
 	overallGP    *big.Int
 	creationTime int64
 	deleted      bool
+}
+
+func (txObjs *txObject) currentState(chain *chain.Chain, bestBlockNum uint32) objectStatus {
+	dependsOn := txObjs.tx.DependsOn()
+	if dependsOn != nil {
+		if _, _, err := chain.GetTransaction(*dependsOn); err != nil {
+			if !chain.IsNotFound(err) {
+				log.Error("err", err)
+			}
+			return Queued
+		}
+	}
+
+	if txObjs.tx.BlockRef().Number() > bestBlockNum+1 {
+		return Queued
+	}
+
+	return Pending
 }
 
 type txObjects []*txObject

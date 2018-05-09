@@ -94,6 +94,8 @@ func defaultAction(ctx *cli.Context) error {
 	master := loadNodeMaster(ctx, dataDir)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
+	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+
 	communicator := comm.New(chain, txPool)
 
 	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
@@ -109,9 +111,6 @@ func defaultAction(ctx *cli.Context) error {
 	bestBlockCh := make(chan *block.Block)
 	bestBlockSub := node.SubscribeUpdatedBestBlock(bestBlockCh)
 	defer bestBlockSub.Unsubscribe()
-
-	txPool.Start(bestBlockCh)
-	defer func() { log.Info("stopping tx pool..."); txPool.Stop() }()
 
 	communicator.Start(peerCh, node.HandleBlockChunk)
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
@@ -150,13 +149,11 @@ func soloAction(ctx *cli.Context) error {
 	chain := initChain(gene, mainDB, logDB)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
+	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	bestBlockCh := make(chan *block.Block)
 
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, bestBlockCh, ctx.Bool("on-demand"))
-
-	txPool.Start(bestBlockCh)
-	defer func() { log.Info("stopping tx pool..."); txPool.Stop() }()
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
 	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()

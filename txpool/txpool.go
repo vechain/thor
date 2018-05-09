@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -44,6 +42,7 @@ type TxPool struct {
 	scope  event.SubscriptionScope
 
 	data struct {
+		dirty   bool
 		all     *cache.RandCache
 		pending txObjects
 		sorted  bool
@@ -59,25 +58,12 @@ func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
 		done:   make(chan struct{}),
 	}
 	pool.data.all = cache.NewRandCache(pool.config.PoolSize)
+	pool.goes.Go(pool.updateLoop)
 	return pool
 }
 
-// Start start txpool loop
-func (pool *TxPool) Start(ch chan *block.Block) {
-	pool.goes.Go(func() {
-		for {
-			select {
-			case <-pool.done:
-				return
-			case bestBlock := <-ch:
-				pool.updateData(bestBlock)
-			}
-		}
-	})
-}
-
-//Stop Stop pool loop
-func (pool *TxPool) Stop() {
+//Close close pool loop
+func (pool *TxPool) Close() {
 	close(pool.done)
 	pool.scope.Close()
 	pool.goes.Wait()
@@ -109,9 +95,10 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 			tx:           tx,
 			overallGP:    new(big.Int),
 			creationTime: time.Now().Unix(),
+			status:       Queued,
 		})
 
-		pool.data.pending = nil
+		pool.data.dirty = true
 		pool.goes.Go(func() { pool.txFeed.Send(tx) })
 	}
 
@@ -149,88 +136,33 @@ func (pool *TxPool) Pending() tx.Transactions {
 }
 
 func (pool *TxPool) pending(shouldSort bool) txObjects {
-	if pool.data.pending == nil {
+	if pool.data.dirty {
 		pool.updateData(pool.chain.BestBlock())
 	}
 
+	pending := pool.dumpPending()
 	if shouldSort && !pool.data.sorted {
-		sort.Slice(pool.data.pending, func(i, j int) bool {
-			return pool.data.pending[i].overallGP.Cmp(pool.data.pending[j].overallGP) > 0
+		sort.Slice(pending, func(i, j int) bool {
+			return pending[i].overallGP.Cmp(pending[j].overallGP) > 0
 		})
 		pool.data.sorted = true
 	}
 
-	return pool.data.pending
+	return pending
 }
 
-func (pool *TxPool) updateData(bestBlock *block.Block) {
-	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
-	if err != nil {
-		return
-	}
-
-	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
-	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
-
+func (pool *TxPool) dumpPending() txObjects {
 	pool.rw.Lock()
-	allObjs := make(map[thor.Bytes32]*txObject)
-	pool.data.all.ForEach(func(entry *cache.Entry) bool {
-		if obj, ok := entry.Value.(*txObject); ok {
-			if key, ok := entry.Key.(thor.Bytes32); ok {
-				allObjs[key] = obj
-				return true
-			}
-		}
-		return false
-	})
-	pool.rw.Unlock()
+	defer pool.rw.Unlock()
 
-	status := func(tx *tx.Transaction) (objectStatus, error) {
-		dependsOn := tx.DependsOn()
-		if dependsOn != nil {
-			if _, _, err := pool.chain.GetTransaction(*dependsOn); err != nil {
-				if pool.chain.IsNotFound(err) {
-					return Queued, nil
-				}
-				return Queued, err
-			}
-		}
-		nextBlockNum := bestBlock.Header().Number() + 1
-		if tx.BlockRef().Number() > nextBlockNum {
-			return Queued, nil
-		}
-		return Pending, nil
+	size := len(pool.data.pending)
+	pending := make(txObjects, size, size)
+
+	for i, obj := range pool.data.pending {
+		pending[i] = obj
 	}
 
-	pool.data.pending = make(txObjects, 0, len(allObjs))
-	pool.data.sorted = false
-
-	//can be pendinged txObjects
-	for id, obj := range allObjs {
-		if obj.tx.IsExpired(bestBlock.Header().Number()) || time.Now().Unix()-obj.creationTime > int64(pool.config.Lifetime) {
-			pool.Remove(id)
-			continue
-		}
-
-		if obj.status == Queued {
-			state, err := status(obj.tx)
-			if err != nil {
-				return
-			}
-			if state == Pending {
-				overallGP := obj.tx.OverallGasPrice(baseGasPrice, bestBlock.Header().Number(), func(num uint32) thor.Bytes32 {
-					return traverser.Get(num).ID()
-				})
-				obj.overallGP = overallGP
-				obj.status = Pending
-				pool.data.all.Set(id, obj)
-			}
-		}
-
-		if obj.status == Pending {
-			pool.data.pending = append(pool.data.pending, obj)
-		}
-	}
+	return pending
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {
