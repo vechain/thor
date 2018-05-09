@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -28,36 +29,37 @@ var log = log15.New("pkg", "comm")
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
 	chain        *chain.Chain
-	synced       bool
 	ctx          context.Context
 	cancel       context.CancelFunc
 	sessionSet   *session.Set
+	syncedCh     chan struct{}
 	syncCh       chan struct{}
 	announceCh   chan *announce
 	newBlockFeed event.Feed
 	newTxFeed    event.Feed
 	feedScope    event.SubscriptionScope
 	goes         co.Goes
-	txpool       *txpool.TxPool
+	txPool       *txpool.TxPool
 }
 
 // New create a new Communicator instance.
-func New(chain *chain.Chain, txpool *txpool.TxPool) *Communicator {
+func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		chain:      chain,
-		txpool:     txpool,
+		txPool:     txPool,
 		ctx:        ctx,
 		cancel:     cancel,
 		sessionSet: session.NewSet(),
+		syncedCh:   make(chan struct{}),
 		syncCh:     make(chan struct{}),
 		announceCh: make(chan *announce),
 	}
 }
 
-// IsSynced returns if the synchronization process ever passed.
-func (c *Communicator) IsSynced() bool {
-	return c.synced
+// Synced returns a channel indicates if synchronization process passed.
+func (c *Communicator) Synced() <-chan struct{} {
+	return c.syncedCh
 }
 
 // Protocols returns all supported protocols.
@@ -84,8 +86,8 @@ func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
 	defer peer.Disconnect()
 
 	log := log.New("peer", peer)
-	// 20sec timeout for handshake and txs transfer
-	ctx, cancel := context.WithTimeout(c.ctx, time.Second*20)
+	// 5sec timeout for handshake
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
 	defer cancel()
 	respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
 	if err != nil {
@@ -106,15 +108,6 @@ func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
 		return
 	}
 
-	respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
-	if err != nil {
-		log.Debug("failed to request txs", "err", err)
-		return
-	}
-	for _, raw := range respTxs {
-		c.txpool.Add(raw)
-	}
-
 	session := session.New(peer)
 	session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
 
@@ -128,7 +121,35 @@ func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
 	select {
 	case <-peer.Done():
 	case <-c.ctx.Done():
+	case <-c.syncedCh:
+		c.syncTxs(peer)
+		select {
+		case <-peer.Done():
+		case <-c.ctx.Done():
+		}
 	}
+}
+
+func (c *Communicator) syncTxs(peer *p2psrv.Peer) {
+	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
+	defer cancel()
+	respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
+	if err != nil {
+		log.Debug("failed to request txs", "err", err)
+		return
+	}
+	for _, tx := range respTxs {
+		c.txPool.Add(tx)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-peer.Done():
+			return
+		default:
+		}
+	}
+	log.Debug("tx synced")
 }
 
 // SubscribeBlock subscribe the event that new block received.
@@ -158,14 +179,18 @@ func (c *Communicator) syncLoop(handler HandleBlockStream) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 
+	var once sync.Once
 	delay := 2 * time.Second
+
 	sync := func() {
 		log.Debug("synchronization start")
 		if err := c.sync(handler); err != nil {
 			log.Debug("synchronization failed", "err", err)
 		} else {
-			c.synced = true
-			delay = 30 * time.Second
+			once.Do(func() {
+				close(c.syncedCh)
+				delay = 30 * time.Second
+			})
 			log.Debug("synchronization done")
 		}
 	}

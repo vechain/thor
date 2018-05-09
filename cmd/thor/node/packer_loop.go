@@ -12,29 +12,15 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func (n *Node) waitForSynced(ctx context.Context) bool {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		if n.comm.IsSynced() {
-			return true
-		}
-		select {
-		case <-ctx.Done():
-			return false
-		case <-ticker.C:
-		}
-	}
-}
-
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
 
 	log.Info("waiting for synchronization...")
-	// wait for synced
-	if !n.waitForSynced(ctx) {
+	select {
+	case <-ctx.Done():
 		return
+	case <-n.comm.Synced():
 	}
 	log.Info("synchronization process done")
 
