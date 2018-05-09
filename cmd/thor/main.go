@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -97,23 +96,13 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	communicator := comm.New(chain, txPool)
+	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
+	communicator.Start(node.HandleBlockStream)
+	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
 	defer func() { log.Info("saving peers cache..."); savePeers() }()
 	defer func() { log.Info("stopping P2P server..."); p2pSrv.Stop() }()
-
-	peerCh := make(chan *p2psrv.Peer)
-	peerSub := p2pSrv.SubscribePeer(peerCh)
-	defer peerSub.Unsubscribe()
-
-	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
-
-	bestBlockCh := make(chan *block.Block)
-	bestBlockSub := node.SubscribeUpdatedBestBlock(bestBlockCh)
-	defer bestBlockSub.Unsubscribe()
-
-	communicator.Start(peerCh, node.HandleBlockChunk)
-	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
 	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()
