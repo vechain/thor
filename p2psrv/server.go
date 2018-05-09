@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -24,10 +23,6 @@ type Server struct {
 	goodNodes       *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	busyNodes       *nodeMap
-	dialCh          chan *discover.Node
-
-	peerFeed  event.Feed
-	feedScope event.SubscriptionScope
 }
 
 // New create a p2p server.
@@ -64,7 +59,6 @@ func New(opts *Options) *Server {
 		goodNodes:       goodNodes,
 		discoveredNodes: discoveredNodes,
 		busyNodes:       newNodeMap(),
-		dialCh:          make(chan *discover.Node),
 	}
 }
 
@@ -74,17 +68,11 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
-// SubscribePeer subscribe new peer event.
-func (s *Server) SubscribePeer(ch chan *Peer) event.Subscription {
-	return s.feedScope.Track(s.peerFeed.Subscribe(ch))
-}
-
 func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 		log := log.New("peer", peer)
 		log.Debug("peer connected")
 		p := newPeer(peer, proto)
-		s.goes.Go(func() { s.peerFeed.Send(p) })
 
 		defer func() {
 			if node := s.busyNodes.Remove(peer.ID()); node != nil {
@@ -93,7 +81,7 @@ func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgRea
 			log.Debug("peer disconnected", "reason", err)
 		}()
 
-		return p.serve(rw, proto.HandleRequest)
+		return p.serve(rw, proto.HandlePeer(p))
 	}
 }
 
@@ -136,7 +124,6 @@ func (s *Server) Start(protocols []*Protocol) error {
 func (s *Server) Stop() {
 	s.srv.Stop()
 	close(s.done)
-	s.feedScope.Close()
 	s.goes.Wait()
 }
 

@@ -2,9 +2,12 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 )
@@ -37,7 +40,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	var (
 		authorized bool
-		parent     = n.chain.BestBlock()
 		flow       *packer.Flow
 		err        error
 		ticker     = time.NewTicker(time.Second)
@@ -52,39 +54,40 @@ func (n *Node) packerLoop(ctx context.Context) {
 		}
 
 		best := n.chain.BestBlock()
-		if best.Header().ID() != parent.Header().ID() {
-			parent = best
-			if flow != nil {
-				flow = nil
-				log.Debug("re-schedule packer due to new best block")
-			}
-			continue
-		}
-
 		now := uint64(time.Now().Unix())
-		if flow != nil {
-			if now >= flow.When() {
-				n.pack(flow)
+
+		if flow == nil {
+			if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
+				if authorized {
+					authorized = false
+					log.Warn("unable to pack block", "err", err)
+				}
+				continue
 			}
+			if !authorized {
+				authorized = true
+				log.Info("prepared to pack block")
+			}
+			log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 			continue
 		}
 
-		if flow, err = n.packer.Schedule(parent.Header(), now); err != nil {
-			if authorized {
-				authorized = false
-				log.Warn("unable to pack block", "err", err)
-			}
+		if flow.ParentHeader().ID() != best.Header().ID() {
+			flow = nil
+			log.Debug("re-schedule packer due to new best block")
 			continue
 		}
-		if !authorized {
-			authorized = true
-			log.Info("prepared to pack block")
+
+		if now+1 >= flow.When() {
+			if err := n.pack(flow); err != nil {
+				log.Error("failed to pack block", "err", err)
+			}
+			flow = nil
 		}
-		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) {
+func (n *Node) pack(flow *packer.Flow) error {
 	txs := n.txPool.Pending()
 	var txsToRemove []thor.Bytes32
 	defer func() {
@@ -105,14 +108,36 @@ func (n *Node) pack(flow *packer.Flow) {
 			txsToRemove = append(txsToRemove, tx.ID())
 		}
 	}
+
 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 	if err != nil {
-		log.Error("failed to pack block", "err", err)
-		return
+		return err
+	}
+	execElapsed := mclock.Now() - startTime
+
+	if _, err := stage.Commit(); err != nil {
+		return errors.WithMessage(err, "commit state")
 	}
 
-	elapsed := mclock.Now() - startTime
-	n.goes.Go(func() { n.packedBlockFeed.Send(&packedBlockEvent{newBlock, stage, receipts, elapsed}) })
+	fork, err := n.commitBlock(newBlock, receipts)
+	if err != nil {
+		return errors.WithMessage(err, "commit block")
+	}
+	commitElapsed := mclock.Now() - startTime - execElapsed
+
+	n.processFork(fork)
+
+	if len(fork.Trunk) > 0 {
+		n.comm.BroadcastBlock(newBlock)
+		log.Info("📦 new block packed",
+			"txs", len(receipts),
+			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
+			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+			"id", shortID(newBlock.Header().ID()),
+		)
+	}
+
+	elapsed := execElapsed + commitElapsed
 
 	if elapsed > 0 {
 		gasUsed := newBlock.Header().GasUsed()
@@ -123,4 +148,5 @@ func (n *Node) pack(flow *packer.Flow) {
 			log.Debug("reset target gas limit", "value", targetGasLimit)
 		}
 	}
+	return nil
 }

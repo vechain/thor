@@ -17,5 +17,5 @@ type Protocol struct {
 
 	DiscTopic string
 
-	HandleRequest HandleRequest
+	HandlePeer func(peer *Peer) HandleRequest
 }

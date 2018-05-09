@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
@@ -32,17 +32,12 @@ type Node struct {
 	packer *packer.Packer
 	cons   *consensus.Consensus
 
-	feedScope       event.SubscriptionScope
-	bestBlockFeed   event.Feed
-	packedBlockFeed event.Feed
-	blockChunkCh    chan []*block.Block
-	blockChunkAckCh chan error
-
-	master *Master
-	chain  *chain.Chain
-	logDB  *logdb.LogDB
-	txPool *txpool.TxPool
-	comm   *comm.Communicator
+	master     *Master
+	chain      *chain.Chain
+	logDB      *logdb.LogDB
+	txPool     *txpool.TxPool
+	comm       *comm.Communicator
+	commitLock sync.Mutex
 }
 
 func New(
@@ -54,62 +49,93 @@ func New(
 	comm *comm.Communicator,
 ) *Node {
 	return &Node{
-		packer:          packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:            consensus.New(chain, stateCreator),
-		blockChunkCh:    make(chan []*block.Block),
-		blockChunkAckCh: make(chan error),
-		master:          master,
-		chain:           chain,
-		logDB:           logDB,
-		txPool:          txPool,
-		comm:            comm,
+		packer: packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
+		cons:   consensus.New(chain, stateCreator),
+		master: master,
+		chain:  chain,
+		logDB:  logDB,
+		txPool: txPool,
+		comm:   comm,
 	}
 }
 
 func (n *Node) Run(ctx context.Context) error {
 
+	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
-	n.goes.Go(func() { n.consensusLoop(ctx) })
 
-	<-ctx.Done()
-
-	n.feedScope.Close()
 	n.goes.Wait()
 	return nil
 }
 
-func (n *Node) HandleBlockChunk(chunk []*block.Block) error {
-	n.blockChunkCh <- chunk
-	return <-n.blockChunkAckCh
+func (n *Node) HandleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
+	log.Debug("start to process block stream")
+	defer log.Debug("process block stream done", "err", err)
+	var stats blockStats
+	startTime := mclock.Now()
+
+	report := func(block *block.Block) {
+		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+		stats = blockStats{}
+		startTime = mclock.Now()
+	}
+
+	var blk *block.Block
+	for blk = range stream {
+		if _, err := n.processBlock(blk, &stats); err != nil {
+			return err
+		}
+
+		if stats.processed > 0 &&
+			mclock.Now()-startTime > mclock.AbsTime(time.Second*2) {
+			report(blk)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+	if blk != nil && stats.processed > 0 {
+		report(blk)
+	}
+	return nil
 }
 
-func (n *Node) SubscribeUpdatedBestBlock(ch chan *block.Block) event.Subscription {
-	return n.feedScope.Track(n.bestBlockFeed.Subscribe(ch))
-}
-
-func (n *Node) consensusLoop(ctx context.Context) {
-	log.Debug("enter consensus loop")
-	defer log.Debug("leave consensus loop")
+func (n *Node) houseKeeping(ctx context.Context) {
+	log.Debug("enter house keeping")
+	defer log.Debug("leave house keeping")
 
 	var scope event.SubscriptionScope
-	packedBlockCh := make(chan *packedBlockEvent)
-	newBlockCh := make(chan *comm.NewBlockEvent)
-
-	scope.Track(n.packedBlockFeed.Subscribe(packedBlockCh))
-	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 	defer scope.Close()
 
-	futureBlocks := cache.NewRandCache(256)
+	newBlockCh := make(chan *comm.NewBlockEvent)
+	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 
-	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
-	defer futureTicker.Stop()
+	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	defer ticker.Stop()
+
+	futureBlocks := cache.NewRandCache(32)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-futureTicker.C:
+		case newBlock := <-newBlockCh:
+			var stats blockStats
+			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
+				if consensus.IsFutureBlock(err) ||
+					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					log.Debug("future block added", "id", newBlock.Header().ID())
+					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
+				}
+			} else if isTrunk {
+				n.comm.BroadcastBlock(newBlock.Block)
+				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+			}
+		case <-ticker.C:
 			// process future blocks
 			var blocks []*block.Block
 			futureBlocks.ForEach(func(ent *cache.Entry) bool {
@@ -120,77 +146,24 @@ func (n *Node) consensusLoop(ctx context.Context) {
 				return blocks[i].Header().Number() < blocks[j].Header().Number()
 			})
 			var stats blockStats
-			for _, block := range blocks {
-				if _, err := n.processBlock(block, &stats, false); err == nil || consensus.IsKnownBlock(err) {
+			for i, block := range blocks {
+				if isTrunk, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
 					log.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
+					if isTrunk {
+						n.comm.BroadcastBlock(block)
+					}
+				}
+
+				if stats.processed > 0 && i == len(blocks)-1 {
+					log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 				}
 			}
-			if stats.processed > 0 {
-				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(blocks[len(blocks)-1].Header())...)
-			}
-		case packedBlock := <-packedBlockCh:
-			startTime := mclock.Now()
-			if _, err := packedBlock.stage.Commit(); err != nil {
-				log.Error("failed to commit state of packed block", "err", err)
-				continue
-			}
-			isTrunk, err := n.insertBlock(packedBlock.Block, packedBlock.receipts, false)
-			if err != nil {
-				continue
-			}
-			commitElapsed := mclock.Now() - startTime
-			if isTrunk {
-				log.Info("📦 new block packed",
-					"txs", len(packedBlock.receipts),
-					"mgas", float64(packedBlock.Header().GasUsed())/1000/1000,
-					"et", fmt.Sprintf("%v|%v", common.PrettyDuration(packedBlock.elapsed), common.PrettyDuration(commitElapsed)),
-					"id", shortID(packedBlock.Header().ID()),
-				)
-			}
-		case newBlock := <-newBlockCh:
-			var stats blockStats
-			if isTrunk, err := n.processBlock(newBlock.Block, &stats, false); err != nil {
-				if consensus.IsFutureBlock(err) ||
-					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					log.Debug("future block added", "id", newBlock.Header().ID())
-					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
-				}
-			} else if isTrunk {
-				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
-			}
-		case chunk := <-n.blockChunkCh:
-			n.blockChunkAckCh <- n.processBlockChunk(ctx, chunk)
 		}
 	}
 }
 
-func (n *Node) processBlockChunk(ctx context.Context, chunk []*block.Block) error {
-	var stats blockStats
-	startTime := mclock.Now()
-	for i, block := range chunk {
-		if _, err := n.processBlock(block, &stats, true); err != nil {
-			return err
-		}
-
-		if stats.processed > 0 &&
-			(i == len(chunk)-1 ||
-				mclock.Now()-startTime > mclock.AbsTime(time.Duration(thor.BlockInterval)*time.Second/2)) {
-			log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
-			stats = blockStats{}
-			startTime = mclock.Now()
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-	}
-	return nil
-}
-
-func (n *Node) processBlock(blk *block.Block, stats *blockStats, isChunked bool) (bool, error) {
+func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	startTime := mclock.Now()
 	now := uint64(time.Now().Unix())
 	stage, receipts, err := n.cons.Process(blk, now)
@@ -217,23 +190,48 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats, isChunked bool)
 		return false, err
 	}
 
-	isTrunk, err := n.insertBlock(blk, receipts, isChunked)
+	fork, err := n.commitBlock(blk, receipts)
 	if err != nil {
-		log.Error("failed to insert block", "err", err)
+		log.Error("failed to commit block", "err", err)
 		return false, err
 	}
 	commitElapsed := mclock.Now() - startTime - execElapsed
 	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
-	return isTrunk, err
+	n.processFork(fork)
+	return len(fork.Trunk) > 0, nil
 }
 
-func (n *Node) insertBlock(newBlock *block.Block, receipts tx.Receipts, isChunked bool) (bool, error) {
-	isTrunk := n.cons.IsTrunk(newBlock.Header())
-	fork, err := n.chain.AddBlock(newBlock, receipts, isTrunk)
+func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.Fork, error) {
+	n.commitLock.Lock()
+	defer n.commitLock.Unlock()
+
+	fork, err := n.chain.AddBlock(newBlock, receipts)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	if len(fork.Branch) > 2 {
+
+	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
+	for _, block := range fork.Branch {
+		forkIDs = append(forkIDs, block.Header().ID())
+	}
+
+	batch := n.logDB.Prepare(newBlock.Header())
+	for i, tx := range newBlock.Transactions() {
+		origin, _ := tx.Signer()
+		txBatch := batch.ForTransaction(tx.ID(), origin)
+		for _, output := range receipts[i].Outputs {
+			txBatch.Insert(output.Events, output.Transfers)
+		}
+	}
+
+	if err := batch.Commit(forkIDs...); err != nil {
+		return nil, errors.Wrap(err, "commit logs")
+	}
+	return fork, nil
+}
+
+func (n *Node) processFork(fork *chain.Fork) {
+	if len(fork.Branch) >= 2 {
 		trunkLen := len(fork.Trunk)
 		branchLen := len(fork.Branch)
 		log.Warn(fmt.Sprintf(
@@ -244,59 +242,9 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 			trunkLen, fork.Trunk[trunkLen-1].Header(),
 			branchLen, fork.Branch[branchLen-1].Header()))
 	}
-
-	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
 	for _, block := range fork.Branch {
-		forkIDs = append(forkIDs, block.Header().ID())
 		for _, tx := range block.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
-				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
-			}
-		}
-	}
-
-	batch := n.logDB.Prepare(newBlock.Header())
-	for i, tx := range newBlock.Transactions() {
-		origin, _ := tx.Signer()
-		txBatch := batch.ForTransaction(tx.ID(), origin)
-		receipt := receipts[i]
-
-		for _, output := range receipt.Outputs {
-			txBatch.Insert(output.Events, output.Transfers)
-		}
-	}
-
-	if err := batch.Commit(forkIDs...); err != nil {
-		return false, errors.Wrap(err, "commit logs")
-	}
-	if isTrunk && !isChunked {
-		n.goes.Go(func() {
-			n.bestBlockFeed.Send(newBlock)
-			n.comm.BroadcastBlock(newBlock)
-		})
-	}
-	return isTrunk, nil
-}
-
-func (n *Node) txLoop(ctx context.Context) {
-	log.Debug("enter tx loop")
-	defer log.Debug("leave tx loop")
-
-	txPoolCh := make(chan *tx.Transaction)
-	commTxCh := make(chan *comm.NewTransactionEvent)
-	var scope event.SubscriptionScope
-	scope.Track(n.txPool.SubscribeNewTransaction(txPoolCh))
-	scope.Track(n.comm.SubscribeTransaction(commTxCh))
-	defer scope.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case tx := <-txPoolCh:
-			n.comm.BroadcastTx(tx)
-		case tx := <-commTxCh:
-			if err := n.txPool.Add(tx.Transaction); err != nil {
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}

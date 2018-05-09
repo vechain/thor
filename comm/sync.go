@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
 	"github.com/vechain/thor/p2psrv"
@@ -23,7 +22,7 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Ses
 	return nil, len(slice)
 }
 
-func (c *Communicator) sync(handler HandleBlockChunk) error {
+func (c *Communicator) sync(handler HandleBlockStream) error {
 	best := c.chain.BestBlock()
 	s, nSessions := c.chooseSessionToSync(best)
 	if s == nil {
@@ -41,55 +40,24 @@ func (c *Communicator) sync(handler HandleBlockChunk) error {
 	return c.download(s, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockChunk) error {
+func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockStream) (err error) {
 
-	type blockWithSize struct {
-		*block.Block
-		size int
-	}
+	errCh := make(chan error, 1)
+	defer func() {
+		if err != nil {
+			<-errCh
+		} else {
+			err = <-errCh
+		}
+	}()
 
-	var goes co.Goes
-	defer goes.Wait()
-
-	errCh := make(chan error)
-	// buffer between downloading and processing
-	blockCh := make(chan *blockWithSize, 512)
+	blockCh := make(chan *block.Block, 32)
 	defer close(blockCh)
 
-	goes.Go(func() {
-		const maxChunkBlocks = 2048
-		const maxChunkSize = 1024 * 1024
-		var chunk []*block.Block
-		var chunkSize int
-		for {
-			select {
-			case <-c.ctx.Done():
-				return
-			case bs := <-blockCh:
-				if bs == nil {
-					if len(chunk) > 0 {
-						if err := handler(chunk); err != nil {
-							errCh <- err
-							return
-						}
-					}
-					return
-				}
+	go func() {
+		errCh <- handler(c.ctx, blockCh)
+	}()
 
-				chunkSize += bs.size
-				chunk = append(chunk, bs.Block)
-
-				if len(chunk) >= maxChunkBlocks || chunkSize >= maxChunkSize {
-					if err := handler(chunk); err != nil {
-						errCh <- err
-						return
-					}
-					chunk = nil
-					chunkSize = 0
-				}
-			}
-		}
-	})
 	for {
 		peer := session.Peer()
 		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
@@ -106,6 +74,12 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
+			if _, err := blk.Header().Signer(); err != nil {
+				return errors.Wrap(err, "invalid block")
+			}
+			if blk.Header().Number() != fromNum {
+				return errors.New("broken sequence")
+			}
 
 			session.MarkBlock(blk.Header().ID())
 			fromNum++
@@ -113,8 +87,9 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			select {
 			case <-c.ctx.Done():
 				return c.ctx.Err()
-			case blockCh <- &blockWithSize{&blk, len(raw)}:
+			case blockCh <- &blk:
 			case err := <-errCh:
+				errCh <- err
 				return err
 			}
 		}

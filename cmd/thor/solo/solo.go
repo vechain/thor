@@ -174,8 +174,8 @@ func (s *Solo) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
-	// ignore fork when solo
-	_, err = s.chain.AddBlock(b, receipts, true)
+	// ignore fork when s
+	_, err = s.chain.AddBlock(b, receipts)
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}

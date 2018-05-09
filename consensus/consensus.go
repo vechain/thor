@@ -1,8 +1,6 @@
 package consensus
 
 import (
-	"bytes"
-
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -56,27 +54,6 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 
 	return stage, receipts, nil
-}
-
-// IsTrunk to determine if the block can be head of trunk.
-func (c *Consensus) IsTrunk(header *block.Header) bool {
-	bestHeader := c.chain.BestBlock().Header()
-
-	if header.TotalScore() < bestHeader.TotalScore() {
-		return false
-	}
-
-	if header.TotalScore() > bestHeader.TotalScore() {
-		return true
-	}
-
-	// total scores are equal
-	if bytes.Compare(header.ID().Bytes(), bestHeader.ID().Bytes()) < 0 {
-		// smaller ID is preferred, since block with smaller ID usually has larger average score.
-		// also, it's a deterministic decision.
-		return true
-	}
-	return false
 }
 
 // FindTransaction to get the existence of a transaction on the chain identified by parentID, and
