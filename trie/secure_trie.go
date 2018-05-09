@@ -19,14 +19,12 @@ package trie
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/thor"
 )
 
-var secureKeyPrefix = []byte("secure-key-")
-
-const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
+var keyCache, _ = lru.New(32 * 1024)
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
 // access operations hash the key using blake2b-256. This prevents
@@ -39,11 +37,7 @@ const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 //
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
-	trie             Trie
-	hashKeyBuf       [secureKeyLength]byte
-	secKeyBuf        [200]byte
-	secKeyCache      map[string][]byte
-	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
+	trie Trie
 }
 
 // NewSecure creates a trie with an existing root node from db.
@@ -111,7 +105,6 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	if err != nil {
 		return err
 	}
-	t.getSecKeyCache()[string(hk)] = common.CopyBytes(key)
 	return nil
 }
 
@@ -126,18 +119,7 @@ func (t *SecureTrie) Delete(key []byte) {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryDelete(key []byte) error {
 	hk := t.hashKey(key)
-	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
-}
-
-// GetKey returns the blake2b preimage of a hashed key that was
-// previously used to store a value.
-func (t *SecureTrie) GetKey(shaKey []byte) []byte {
-	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
-		return key
-	}
-	key, _ := t.trie.db.Get(t.secKey(shaKey))
-	return key
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
@@ -175,45 +157,25 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // the trie's database. Calling code must ensure that the changes made to db are
 // written back to the trie's attached database before using the trie.
 func (t *SecureTrie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
-	if len(t.getSecKeyCache()) > 0 {
-		for hk, key := range t.secKeyCache {
-			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
-				return thor.Bytes32{}, err
-			}
-		}
-		t.secKeyCache = make(map[string][]byte)
-	}
 	return t.trie.CommitTo(db)
-}
-
-// secKey returns the database key for the preimage of key, as an ephemeral buffer.
-// The caller must not hold onto the return value because it will become
-// invalid on the next call to hashKey or secKey.
-func (t *SecureTrie) secKey(key []byte) []byte {
-	buf := append(t.secKeyBuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
-	return buf
 }
 
 // hashKey returns the hash of key as an ephemeral buffer.
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
+	strKey := string(key)
+	if hk, found := keyCache.Get(strKey); found {
+		return hk.([]byte)
+	}
+
 	h := newHasher(0, 0)
 	h.sha.Reset()
 	h.sha.Write(key)
-	buf := h.sha.Sum(t.hashKeyBuf[:0])
+	var buf thor.Bytes32
+	h.sha.Sum(buf[:0])
 	returnHasherToPool(h)
-	return buf
-}
+	keyCache.Add(strKey, buf[:])
 
-// getSecKeyCache returns the current secure key cache, creating a new one if
-// ownership changed (i.e. the current secure trie is a copy of another owning
-// the actual cache).
-func (t *SecureTrie) getSecKeyCache() map[string][]byte {
-	if t != t.secKeyCacheOwner {
-		t.secKeyCacheOwner = t
-		t.secKeyCache = make(map[string][]byte)
-	}
-	return t.secKeyCache
+	return buf[:]
 }

@@ -83,12 +83,12 @@ func (s *StateDB) GetOutputs(
 }
 
 // ForEachStorage see state.State.ForEachStorage.
-func (s *StateDB) ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) {
-	s.state.ForEachStorage(thor.Address(addr), func(k thor.Bytes32, v []byte) bool {
-		// TODO should rlp decode v
-		return cb(common.Hash(k), common.BytesToHash(v))
-	})
-}
+// func (s *StateDB) ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) {
+// 	s.state.ForEachStorage(thor.Address(addr), func(k thor.Bytes32, v []byte) bool {
+// 		// TODO should rlp decode v
+// 		return cb(common.Hash(k), common.BytesToHash(v))
+// 	})
+// }
 
 // CreateAccount stub.
 func (s *StateDB) CreateAccount(addr common.Address) {}
