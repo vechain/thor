@@ -12,6 +12,12 @@ func (n *Node) txLoop(ctx context.Context) {
 	log.Debug("enter tx loop")
 	defer log.Debug("leave tx loop")
 
+	select {
+	case <-ctx.Done():
+		return
+	case <-n.comm.Synced():
+	}
+
 	var scope event.SubscriptionScope
 	defer scope.Close()
 

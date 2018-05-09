@@ -126,15 +126,15 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return resp, nil
 	case proto.MsgGetTxs:
-		pendings := c.txpool.Dump()
-		resp := make(proto.RespGetTxs, 0, 100)
+		txs := c.txPool.Dump()
+		resp := make(proto.RespGetTxs, 0, len(txs))
 		var size metric.StorageSize
-		for _, pending := range pendings {
-			size += pending.Size()
+		for _, tx := range txs {
+			size += tx.Size()
 			if size > maxRespSize {
 				break
 			}
-			resp = append(resp, pending)
+			resp = append(resp, tx)
 		}
 		return resp, nil
 	}
