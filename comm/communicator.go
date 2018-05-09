@@ -65,13 +65,70 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 	genesisID := c.chain.GenesisBlock().Header().ID()
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
-			Name:          proto.Name,
-			Version:       proto.Version,
-			Length:        proto.Length,
-			MaxMsgSize:    proto.MaxMsgSize,
-			DiscTopic:     fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
-			HandleRequest: c.handleRequest,
+			Name:       proto.Name,
+			Version:    proto.Version,
+			Length:     proto.Length,
+			MaxMsgSize: proto.MaxMsgSize,
+			DiscTopic:  fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
+			HandlePeer: c.handlePeer,
 		}}
+}
+
+func (c *Communicator) handlePeer(peer *p2psrv.Peer) p2psrv.HandleRequest {
+	// controls session lifecycle
+	c.goes.Go(func() { c.sessionLoop(peer) })
+	return c.handleRequest
+}
+
+func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
+	defer peer.Disconnect()
+
+	log := log.New("peer", peer)
+	// 20sec timeout for handshake and txs transfer
+	ctx, cancel := context.WithTimeout(c.ctx, time.Second*20)
+	defer cancel()
+	respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
+	if err != nil {
+		log.Debug("failed to request status", "err", err)
+		return
+	}
+	if respStatus.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
+		log.Debug("failed to handshake", "err", "genesis id mismatch")
+		return
+	}
+	now := uint64(time.Now().Unix())
+	diff := now - respStatus.SysTimestamp
+	if now < respStatus.SysTimestamp {
+		diff = respStatus.SysTimestamp
+	}
+	if diff > thor.BlockInterval {
+		log.Debug("failed to handshake", "err", "sys time diff too large")
+		return
+	}
+
+	respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
+	if err != nil {
+		log.Debug("failed to request txs", "err", err)
+		return
+	}
+	for _, raw := range respTxs {
+		c.txpool.Add(raw)
+	}
+
+	session := session.New(peer)
+	session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
+
+	log.Debug("session created")
+	c.sessionSet.Add(session)
+	defer func() {
+		c.sessionSet.Remove(peer.ID())
+		log.Debug("session destroyed")
+	}()
+
+	select {
+	case <-peer.Done():
+	case <-c.ctx.Done():
+	}
 }
 
 // SubscribeBlock subscribe the event that new block received.
@@ -85,8 +142,7 @@ func (c *Communicator) SubscribeTransaction(ch chan *NewTransactionEvent) event.
 }
 
 // Start start the communicator.
-func (c *Communicator) Start(peerCh chan *p2psrv.Peer, handler HandleBlockStream) {
-	c.goes.Go(func() { c.sessionLoop(peerCh) })
+func (c *Communicator) Start(handler HandleBlockStream) {
 	c.goes.Go(func() { c.syncLoop(handler) })
 	c.goes.Go(c.announceLoop)
 }
@@ -98,71 +154,7 @@ func (c *Communicator) Stop() {
 	c.goes.Wait()
 }
 
-func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
-	// controls session lifecycle
-	lifecycle := func(peer *p2psrv.Peer) {
-		defer peer.Disconnect()
-
-		log := log.New("peer", peer)
-		// 20sec timeout for handshake and txs transfer
-		ctx, cancel := context.WithTimeout(c.ctx, time.Second*20)
-		defer cancel()
-		respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
-		if err != nil {
-			log.Debug("failed to request status", "err", err)
-			return
-		}
-		if respStatus.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
-			log.Debug("failed to handshake", "err", "genesis id mismatch")
-			return
-		}
-		now := uint64(time.Now().Unix())
-		diff := now - respStatus.SysTimestamp
-		if now < respStatus.SysTimestamp {
-			diff = respStatus.SysTimestamp
-		}
-		if diff > thor.BlockInterval {
-			log.Debug("failed to handshake", "err", "sys time diff too large")
-			return
-		}
-
-		respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
-		if err != nil {
-			log.Debug("failed to request txs", "err", err)
-			return
-		}
-		for _, raw := range respTxs {
-			c.txpool.Add(raw)
-		}
-
-		session := session.New(peer)
-		session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
-
-		log.Debug("session created")
-		c.sessionSet.Add(session)
-		defer func() {
-			c.sessionSet.Remove(peer.ID())
-			log.Debug("session destroyed")
-		}()
-
-		select {
-		case <-peer.Done():
-		case <-c.ctx.Done():
-		}
-	}
-
-	for {
-		select {
-		case peer := <-peerCh:
-			c.goes.Go(func() { lifecycle(peer) })
-		case <-c.ctx.Done():
-			return
-		}
-	}
-}
-
 func (c *Communicator) syncLoop(handler HandleBlockStream) {
-
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 

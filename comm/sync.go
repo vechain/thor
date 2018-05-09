@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/comm/session"
 	"github.com/vechain/thor/p2psrv"
@@ -41,18 +40,23 @@ func (c *Communicator) sync(handler HandleBlockStream) error {
 	return c.download(s, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockStream) error {
+func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockStream) (err error) {
 
-	var goes co.Goes
-	defer goes.Wait()
+	errCh := make(chan error, 1)
+	defer func() {
+		if err != nil {
+			<-errCh
+		} else {
+			err = <-errCh
+		}
+	}()
 
-	errCh := make(chan error)
-	blockCh := make(chan *block.Block, 16)
+	blockCh := make(chan *block.Block, 32)
 	defer close(blockCh)
 
-	goes.Go(func() {
+	go func() {
 		errCh <- handler(c.ctx, blockCh)
-	})
+	}()
 
 	for {
 		peer := session.Peer()
@@ -85,6 +89,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 				return c.ctx.Err()
 			case blockCh <- &blk:
 			case err := <-errCh:
+				errCh <- err
 				return err
 			}
 		}
