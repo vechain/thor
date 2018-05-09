@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/comm"
@@ -140,9 +139,7 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	bestBlockCh := make(chan *block.Block)
-
-	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, bestBlockCh, ctx.Bool("on-demand"))
+	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
 
 	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
 	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()

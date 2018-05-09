@@ -36,16 +36,14 @@ func New(
 	stateCreator *state.Creator,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
-	bestBlockCh chan *block.Block,
 	onDemand bool,
 ) *Solo {
 	return &Solo{
-		chain:       chain,
-		txPool:      txPool,
-		packer:      packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address),
-		logDB:       logDB,
-		bestBlockCh: bestBlockCh,
-		onDemand:    onDemand,
+		chain:    chain,
+		txPool:   txPool,
+		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address),
+		logDB:    logDB,
+		onDemand: onDemand,
 	}
 }
 
@@ -179,6 +177,4 @@ func (s *Solo) packing() {
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
-
-	s.bestBlockCh <- b
 }
