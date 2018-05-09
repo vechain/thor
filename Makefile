@@ -1,5 +1,4 @@
 PACKAGE = github.com/vechain/thor
-SYS_GOPATH := $(GOPATH)
 export GOPATH = $(CURDIR)/.build
 SRC_BASE = $(GOPATH)/src/$(PACKAGE)
 PACKAGES = `cd $(SRC_BASE) && go list ./... | grep -v '/vendor/'`
