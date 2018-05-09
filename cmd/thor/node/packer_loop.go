@@ -74,7 +74,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 }
 
 func (n *Node) pack(flow *packer.Flow) error {
-	txs := n.txPool.Pending()
+	txs := n.txPool.Pending(true)
 	var txsToRemove []thor.Bytes32
 	defer func() {
 		for _, id := range txsToRemove {

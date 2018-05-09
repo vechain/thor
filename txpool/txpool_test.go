@@ -40,12 +40,12 @@ func TestTxPool(t *testing.T) {
 }
 
 func pending(t *testing.T, pool *txpool.TxPool, count int) {
-	txs := pool.Pending()
+	txs := pool.Pending(true)
 	assert.Equal(t, len(txs), count)
 }
 
 func dump(t *testing.T, pool *txpool.TxPool, count int) {
-	txs := pool.Dump()
+	txs := pool.Pending(false)
 	assert.Equal(t, len(txs), count)
 }
 
@@ -100,7 +100,7 @@ func initPool(t *testing.T) *txpool.TxPool {
 		ParentID(best.Header().ID()).
 		StateRoot(best.Header().StateRoot()).
 		Build()
-	if _, err := c.AddBlock(blk, nil, true); err != nil {
+	if _, err := c.AddBlock(blk, nil); err != nil {
 		t.Fatal(err)
 	}
 	return txpool.New(c, stateC)

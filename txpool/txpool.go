@@ -2,12 +2,9 @@ package txpool
 
 import (
 	"math/big"
-	"sort"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/runtime"
@@ -37,16 +34,9 @@ type TxPool struct {
 	stateC *state.Creator
 	goes   co.Goes
 	done   chan struct{}
-	rw     sync.RWMutex
 	txFeed event.Feed
 	scope  event.SubscriptionScope
-
-	data struct {
-		dirty   bool
-		all     *cache.RandCache
-		pending txObjects
-		sorted  bool
-	}
+	entry  *entry
 }
 
 //New construct a new txpool
@@ -57,7 +47,7 @@ func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
 		stateC: stateC,
 		done:   make(chan struct{}),
 	}
-	pool.data.all = cache.NewRandCache(pool.config.PoolSize)
+	pool.entry = newEntry(pool.config.PoolSize)
 	pool.goes.Go(pool.updateLoop)
 	return pool
 }
@@ -71,12 +61,9 @@ func (pool *TxPool) Close() {
 
 //Add transaction
 func (pool *TxPool) Add(txs ...*tx.Transaction) error {
-	pool.rw.Lock()
-	defer pool.rw.Unlock()
-
 	for _, tx := range txs {
 		txID := tx.ID()
-		if _, ok := pool.data.all.Get(txID); ok {
+		if obj := pool.entry.find(txID); obj != nil {
 			return errKnownTx
 		}
 
@@ -85,20 +72,16 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 			return err
 		}
 
-		if pool.data.all.Len() > pool.config.PoolSize {
-			if picked, ok := pool.data.all.Pick().Value.(*txObject); ok {
-				pool.data.all.Remove(picked.tx.ID())
-			}
+		if pool.entry.size() > pool.config.PoolSize {
+			pool.entry.pick()
 		}
 
-		pool.data.all.Set(txID, &txObject{
+		pool.entry.save(&txObject{
 			tx:           tx,
 			overallGP:    new(big.Int),
 			creationTime: time.Now().Unix(),
 			status:       Queued,
 		})
-
-		pool.data.dirty = true
 		pool.goes.Go(func() { pool.txFeed.Send(tx) })
 	}
 
@@ -107,16 +90,8 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 
 //Remove remove transaction by txID with TransactionCategory
 func (pool *TxPool) Remove(txIDs ...thor.Bytes32) {
-	pool.rw.Lock()
-	defer pool.rw.Unlock()
-
 	for _, txID := range txIDs {
-		if value, ok := pool.data.all.Get(txID); ok {
-			if obj, ok := value.(*txObject); ok {
-				pool.data.all.Remove(txID)
-				obj.deleted = true
-			}
-		}
+		pool.entry.delete(txID)
 	}
 }
 
@@ -125,44 +100,12 @@ func (pool *TxPool) SubscribeNewTransaction(ch chan *tx.Transaction) event.Subsc
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
 }
 
-//Dump dump transactions by TransactionCategory
-func (pool *TxPool) Dump() tx.Transactions {
-	return pool.pending(false).parseTxs()
-}
-
 //Pending return all pending txs
-func (pool *TxPool) Pending() tx.Transactions {
-	return pool.pending(true).parseTxs()
-}
-
-func (pool *TxPool) pending(shouldSort bool) txObjects {
-	if pool.data.dirty {
+func (pool *TxPool) Pending(sort bool) tx.Transactions {
+	if pool.entry.isDirty() {
 		pool.updateData(pool.chain.BestBlock())
 	}
-
-	pending := pool.dumpPending()
-	if shouldSort && !pool.data.sorted {
-		sort.Slice(pending, func(i, j int) bool {
-			return pending[i].overallGP.Cmp(pending[j].overallGP) > 0
-		})
-		pool.data.sorted = true
-	}
-
-	return pending
-}
-
-func (pool *TxPool) dumpPending() txObjects {
-	pool.rw.Lock()
-	defer pool.rw.Unlock()
-
-	size := len(pool.data.pending)
-	pending := make(txObjects, size, size)
-
-	for i, obj := range pool.data.pending {
-		pending[i] = obj
-	}
-
-	return pending
+	return pool.entry.dumpPending(sort).parseTxs()
 }
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) error {

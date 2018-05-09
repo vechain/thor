@@ -119,7 +119,7 @@ func (s *Solo) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
-	pendingTxs := s.txPool.Pending()
+	pendingTxs := s.txPool.Pending(true)
 
 	for _, tx := range pendingTxs {
 		err := flow.Adopt(tx)
