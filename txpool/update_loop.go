@@ -6,7 +6,6 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/thor"
 )
 
@@ -32,14 +31,9 @@ func (pool *TxPool) updateLoop() {
 }
 
 func (pool *TxPool) updateData(bestBlock *block.Block) {
-	pool.rw.Lock()
-	defer pool.rw.Unlock()
-
 	log := log15.New("txpool", pool)
-	allObjs := pool.parseTxObjects()
-	pool.data.pending = make(txObjects, 0, len(allObjs))
-	pool.data.dirty = false
-	pool.data.sorted = false
+	allObjs := pool.entry.dumpAll()
+	pending := make(txObjects, 0, len(allObjs))
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
@@ -52,9 +46,9 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 	bestBlockNum := bestBlock.Header().Number()
 
 	//can be pendinged txObjects
-	for id, obj := range allObjs {
+	for _, obj := range allObjs {
 		if obj.tx.IsExpired(bestBlockNum) || time.Now().Unix()-obj.creationTime > int64(pool.config.Lifetime) {
-			pool.Remove(id)
+			pool.entry.delete(obj.tx.ID())
 			continue
 		}
 
@@ -68,26 +62,13 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, func(num uint32) thor.Bytes32 {
 				return traverser.Get(num).ID()
 			})
-			pool.data.all.Set(id, obj)
+			pool.entry.save(obj)
 		}
 
 		if obj.status == Pending {
-			pool.data.pending = append(pool.data.pending, obj)
+			pending = append(pending, obj)
 		}
 	}
-}
 
-func (pool *TxPool) parseTxObjects() map[thor.Bytes32]*txObject {
-	allObjs := make(map[thor.Bytes32]*txObject)
-	pool.data.all.ForEach(func(entry *cache.Entry) bool {
-		if obj, ok := entry.Value.(*txObject); ok {
-			if key, ok := entry.Key.(thor.Bytes32); ok {
-				allObjs[key] = obj
-				return true
-			}
-		}
-		return false
-	})
-
-	return allObjs
+	pool.entry.cachePending(pending)
 }

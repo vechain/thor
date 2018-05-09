@@ -126,7 +126,7 @@ func (c *Communicator) handleRequest(peer *p2psrv.Peer, msg *p2p.Msg) (interface
 		}
 		return resp, nil
 	case proto.MsgGetTxs:
-		txs := c.txPool.Dump()
+		txs := c.txPool.Pending(false)
 		resp := make(proto.RespGetTxs, 0, len(txs))
 		var size metric.StorageSize
 		for _, tx := range txs {
