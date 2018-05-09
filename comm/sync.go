@@ -23,7 +23,7 @@ func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Ses
 	return nil, len(slice)
 }
 
-func (c *Communicator) sync(handler HandleBlockChunk) error {
+func (c *Communicator) sync(handler HandleBlockStream) error {
 	best := c.chain.BestBlock()
 	s, nSessions := c.chooseSessionToSync(best)
 	if s == nil {
@@ -41,55 +41,19 @@ func (c *Communicator) sync(handler HandleBlockChunk) error {
 	return c.download(s, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockChunk) error {
-
-	type blockWithSize struct {
-		*block.Block
-		size int
-	}
+func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockStream) error {
 
 	var goes co.Goes
 	defer goes.Wait()
 
 	errCh := make(chan error)
-	// buffer between downloading and processing
-	blockCh := make(chan *blockWithSize, 512)
+	blockCh := make(chan *block.Block, 16)
 	defer close(blockCh)
 
 	goes.Go(func() {
-		const maxChunkBlocks = 2048
-		const maxChunkSize = 1024 * 1024
-		var chunk []*block.Block
-		var chunkSize int
-		for {
-			select {
-			case <-c.ctx.Done():
-				return
-			case bs := <-blockCh:
-				if bs == nil {
-					if len(chunk) > 0 {
-						if err := handler(c.ctx, chunk); err != nil {
-							errCh <- err
-							return
-						}
-					}
-					return
-				}
-
-				chunkSize += bs.size
-				chunk = append(chunk, bs.Block)
-
-				if len(chunk) >= maxChunkBlocks || chunkSize >= maxChunkSize {
-					if err := handler(c.ctx, chunk); err != nil {
-						errCh <- err
-						return
-					}
-					chunk = nil
-					chunkSize = 0
-				}
-			}
-		}
+		errCh <- handler(c.ctx, blockCh)
 	})
+
 	for {
 		peer := session.Peer()
 		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
@@ -106,6 +70,12 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
+			if _, err := blk.Header().Signer(); err != nil {
+				return errors.Wrap(err, "invalid block")
+			}
+			if blk.Header().Number() != fromNum {
+				return errors.New("broken sequence")
+			}
 
 			session.MarkBlock(blk.Header().ID())
 			fromNum++
@@ -113,7 +83,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			select {
 			case <-c.ctx.Done():
 				return c.ctx.Err()
-			case blockCh <- &blockWithSize{&blk, len(raw)}:
+			case blockCh <- &blk:
 			case err := <-errCh:
 				return err
 			}

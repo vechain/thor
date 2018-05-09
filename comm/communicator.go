@@ -85,7 +85,7 @@ func (c *Communicator) SubscribeTransaction(ch chan *NewTransactionEvent) event.
 }
 
 // Start start the communicator.
-func (c *Communicator) Start(peerCh chan *p2psrv.Peer, handler HandleBlockChunk) {
+func (c *Communicator) Start(peerCh chan *p2psrv.Peer, handler HandleBlockStream) {
 	c.goes.Go(func() { c.sessionLoop(peerCh) })
 	c.goes.Go(func() { c.syncLoop(handler) })
 	c.goes.Go(c.announceLoop)
@@ -161,7 +161,7 @@ func (c *Communicator) sessionLoop(peerCh chan *p2psrv.Peer) {
 	}
 }
 
-func (c *Communicator) syncLoop(handler HandleBlockChunk) {
+func (c *Communicator) syncLoop(handler HandleBlockStream) {
 
 	timer := time.NewTimer(0)
 	defer timer.Stop()
