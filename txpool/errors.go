@@ -3,16 +3,26 @@ package txpool
 import "github.com/pkg/errors"
 
 var (
-	errKnownTx             = errors.New("known transaction")
-	errTooLarge            = errors.New("tx too large")
-	errExpired             = errors.New("tx expired")
-	errIntrisicGasExceeded = errors.New("intrinsic gas exceeds provided gas")
-	errInsufficientEnergy  = errors.New("insufficient energy")
-	errNegativeValue       = errors.New("negative clause value")
+	errKnownTx                = errors.New("known transaction")
+	errChainTagMismatched     = errors.New("chain tag mismatched")
+	errReservedFieldsNotEmpty = errors.New("reserved fields not empty")
+	errTooLarge               = errors.New("tx too large")
+	errExpired                = errors.New("tx expired")
+	errIntrisicGasExceeded    = errors.New("intrinsic gas exceeds provided gas")
+	errInsufficientEnergy     = errors.New("insufficient energy")
+	errNegativeValue          = errors.New("negative clause value")
 )
 
 func IsErrKnownTx(err error) bool {
 	return err == errKnownTx
+}
+
+func IsErrChainTagMismatched(err error) bool {
+	return err == errChainTagMismatched
+}
+
+func IsErrReservedFieldsNotEmpty(err error) bool {
+	return err == errReservedFieldsNotEmpty
 }
 
 func IsErrTooLarge(err error) bool {

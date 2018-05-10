@@ -113,6 +113,14 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) error {
 		return errTooLarge
 	}
 
+	if tx.ChainTag() != pool.chain.Tag() {
+		return errChainTagMismatched
+	}
+
+	if tx.HasReservedFields() {
+		return errReservedFieldsNotEmpty
+	}
+
 	bestBlock := pool.chain.BestBlock()
 
 	if tx.IsExpired(bestBlock.Header().Number()) {
