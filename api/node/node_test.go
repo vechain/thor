@@ -40,9 +40,7 @@ func initCommServer(t *testing.T) *httptest.Server {
 		t.Fatal(err)
 	}
 	chain, _ := chain.New(db, b)
-	pool := txpool.New(chain, stateC)
-	defer pool.Stop()
-	comm := comm.New(chain, pool)
+	comm := comm.New(chain, txpool.New(chain, stateC))
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
 	ts := httptest.NewServer(router)
