@@ -1,11 +1,9 @@
 package consensus
 
 import (
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -54,41 +52,4 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 
 	return stage, receipts, nil
-}
-
-// FindTransaction to get the existence of a transaction on the chain identified by parentID, and
-// also give a chance to check the reverted flag in receipt if the transaction exists.
-func FindTransaction(
-	chain *chain.Chain,
-	parentID thor.Bytes32,
-	processedTxs map[thor.Bytes32]bool, // txID -> reverted
-	txID thor.Bytes32,
-) (found bool, isReverted func() (bool, error), err error) {
-
-	if reverted, ok := processedTxs[txID]; ok {
-		return true, func() (bool, error) {
-			return reverted, nil
-		}, nil
-	}
-
-	loc, err := chain.LookupTransaction(parentID, txID)
-	if err != nil {
-		if chain.IsNotFound(err) {
-			return false, func() (bool, error) { return false, nil }, nil
-		}
-		return false, nil, err
-	}
-
-	return true, func() (bool, error) {
-		receipts, err := chain.GetBlockReceipts(loc.BlockID)
-		if err != nil {
-			return false, err
-		}
-
-		if loc.Index >= uint64(len(receipts)) {
-			return false, errors.New("receipt index out of range")
-		}
-
-		return receipts[loc.Index].Reverted, nil
-	}, nil
 }

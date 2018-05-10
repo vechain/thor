@@ -7,7 +7,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -54,6 +53,28 @@ func (f *Flow) When() uint64 {
 	return f.runtime.BlockTime()
 }
 
+func (f *Flow) findTx(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+	if reverted, ok := f.processedTxs[txID]; ok {
+		return true, func() (bool, error) {
+			return reverted, nil
+		}, nil
+	}
+	_, getReceipt, err := f.packer.chain.LookupTransaction(f.parentHeader.ID(), txID)
+	if err != nil {
+		if f.packer.chain.IsNotFound(err) {
+			return false, func() (bool, error) { return false, nil }, nil
+		}
+		return false, nil, err
+	}
+	return true, func() (bool, error) {
+		r, err := getReceipt()
+		if err != nil {
+			return false, err
+		}
+		return r.Reverted, nil
+	}, nil
+}
+
 // Adopt try to execute the given transaction.
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
@@ -75,8 +96,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		}
 		return errGasLimitReached
 	}
+
 	// check if tx already there
-	if found, _, err := consensus.FindTransaction(f.packer.chain, f.parentHeader.ID(), f.processedTxs, tx.ID()); err != nil {
+	if found, _, err := f.findTx(tx.ID()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
@@ -84,7 +106,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		found, isReverted, err := consensus.FindTransaction(f.packer.chain, f.parentHeader.ID(), f.processedTxs, *dependsOn)
+		found, isReverted, err := f.findTx(*dependsOn)
 		if err != nil {
 			return err
 		}
