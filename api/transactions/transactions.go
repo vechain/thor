@@ -129,10 +129,10 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	txID, err := t.sendTx(tx)
 	if err != nil {
 		switch {
-		case txpool.IsErrNegativeValue(err) || txpool.IsErrIntrisicGasExceeded(err):
-			return utils.BadRequest(err, "")
-		case txpool.IsErrKnownTx(err) || txpool.IsErrExpired(err) || txpool.IsErrInsufficientEnergy(err) || txpool.IsErrTooLarge(err):
-			return utils.Forbidden(err, "tx rejected")
+		case t.isBadTx(err):
+			return utils.BadRequest(err, "bad tx")
+		case t.isTxRejected(err):
+			return utils.Forbidden(err, "rejected tx")
 		default:
 			return err
 		}
@@ -140,6 +140,20 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	return utils.WriteJSON(w, map[string]string{
 		"id": txID.String(),
 	})
+}
+
+func (t *Transactions) isBadTx(err error) bool {
+	if txpool.IsErrNegativeValue(err) || txpool.IsErrIntrisicGasExceeded(err) || txpool.IsErrChainTagMismatched(err) || txpool.IsErrReservedFieldsNotEmpty(err) {
+		return true
+	}
+	return false
+}
+
+func (t *Transactions) isTxRejected(err error) bool {
+	if txpool.IsErrKnownTx(err) || txpool.IsErrExpired(err) || txpool.IsErrInsufficientEnergy(err) || txpool.IsErrTooLarge(err) {
+		return true
+	}
+	return false
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
