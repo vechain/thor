@@ -94,7 +94,7 @@ func TestP(t *testing.T) {
 		assert.Equal(t, root, blk.Header().StateRoot())
 		fmt.Println(consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2)))
 
-		if _, err := c.AddBlock(blk, receipts, true); err != nil {
+		if _, err := c.AddBlock(blk, receipts); err != nil {
 			t.Fatal(err)
 		}
 
