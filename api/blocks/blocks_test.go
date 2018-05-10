@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
 )
 
 const (
@@ -87,6 +86,9 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	tx = tx.WithSignature(sig)
 	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address)
 	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = flow.Adopt(tx)
 	if err != nil {
 		t.Fatal(err)
@@ -98,12 +100,10 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := chain.AddBlock(b, receipts, true); err != nil {
+	if _, err := chain.AddBlock(b, receipts); err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	pool := txpool.New(chain, stateC)
-	defer pool.Stop()
 	blocks.New(chain).Mount(router, "/blocks")
 	ts := httptest.NewServer(router)
 	return b, ts

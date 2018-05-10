@@ -162,14 +162,11 @@ func initTransactionServer(t *testing.T) (*tx.Transaction, *httptest.Server) {
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := chain.AddBlock(b, receipts, true); err != nil {
+	if _, err := chain.AddBlock(b, receipts); err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	pool := txpool.New(chain, stateC)
-	defer pool.Stop()
-
-	transactions.New(chain, pool).Mount(router, "/transactions")
+	transactions.New(chain, txpool.New(chain, stateC)).Mount(router, "/transactions")
 	ts := httptest.NewServer(router)
 	return tx, ts
 }
