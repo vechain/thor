@@ -462,28 +462,45 @@ func (c *Chain) getTransactionIDs(blockID thor.Bytes32) (map[thor.Bytes32]int, e
 }
 
 // LookupTransaction find out the location of a tx, on the chain which ends with blockID.
-func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (*persist.TxLocation, error) {
+func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (
+	*persist.TxLocation,
+	func() (*tx.Receipt, error),
+	error,
+) {
+	getReceipt := func(loc *persist.TxLocation) (*tx.Receipt, error) {
+		receipts, err := c.GetBlockReceipts(loc.BlockID)
+		if err != nil {
+			return nil, err
+		}
+		if loc.Index >= uint64(len(receipts)) {
+			return nil, errors.New("receipt index out of range")
+		}
+		return receipts[loc.Index], nil
+	}
 	c.rw.RLock()
 	defer c.rw.RUnlock()
 
 	from, err := c.getBlock(blockID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	fork, err := c.buildFork(c.bestBlock, from)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, b := range fork.Branch {
 		ids, err := c.getTransactionIDs(b.Header().ID())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if index, found := ids[txID]; found {
-			return &persist.TxLocation{
+			loc := &persist.TxLocation{
 				BlockID: b.Header().ID(),
 				Index:   uint64(index),
+			}
+			return loc, func() (*tx.Receipt, error) {
+				return getReceipt(loc)
 			}, nil
 		}
 	}
@@ -491,14 +508,16 @@ func (c *Chain) LookupTransaction(blockID thor.Bytes32, txID thor.Bytes32) (*per
 	loc, err := persist.LoadTxLocation(c.kv, txID)
 	if err != nil {
 		if c.IsNotFound(err) {
-			return nil, errNotFound
+			return nil, nil, errNotFound
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	if block.Number(loc.BlockID) <= fork.Ancestor.Header().Number() {
-		return loc, nil
+		return loc, func() (*tx.Receipt, error) {
+			return getReceipt(loc)
+		}, nil
 	}
-	return nil, errNotFound
+	return nil, nil, errNotFound
 }
 
 // GetBlockReceipts get tx receipts of a block.

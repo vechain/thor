@@ -146,9 +146,30 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		header.GasLimit(),
 		func(num uint32) thor.Bytes32 { return traverser.Get(num).ID() })
 
+	findTx := func(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+		if reverted, ok := processedTxs[txID]; ok {
+			return true, func() (bool, error) {
+				return reverted, nil
+			}, nil
+		}
+		_, getReceipt, err := c.chain.LookupTransaction(header.ParentID(), txID)
+		if err != nil {
+			if c.chain.IsNotFound(err) {
+				return false, func() (bool, error) { return false, nil }, nil
+			}
+			return false, nil, err
+		}
+		return true, func() (bool, error) {
+			r, err := getReceipt()
+			if err != nil {
+				return false, err
+			}
+			return r.Reverted, nil
+		}, nil
+	}
 	for _, tx := range txs {
 		// check if tx existed
-		if found, _, err := FindTransaction(c.chain, header.ParentID(), processedTxs, tx.ID()); err != nil {
+		if found, _, err := findTx(tx.ID()); err != nil {
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
@@ -156,7 +177,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			found, isReverted, err := FindTransaction(c.chain, header.ParentID(), processedTxs, *dep)
+			found, isReverted, err := findTx(*dep)
 			if err != nil {
 				return nil, nil, err
 			}
