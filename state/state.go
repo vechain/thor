@@ -8,7 +8,6 @@ import (
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
 )
 
 // State manages the main accounts trie.
@@ -34,7 +33,8 @@ type trieWriter interface {
 
 // New create an state object.
 func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
-	trie, err := trie.NewSecure(root, kv, 0)
+
+	trie, err := trCache.Get(root, kv, false)
 	if err != nil {
 		return nil, err
 	}
