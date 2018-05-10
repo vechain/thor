@@ -3,7 +3,6 @@ package state
 import (
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
 )
 
 // cachedObject to cache code and storage of an account.
@@ -29,7 +28,7 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 
 	root := thor.BytesToBytes32(co.data.StorageRoot)
 
-	trie, err := trie.NewSecure(root, co.kv, 0)
+	trie, err := trCache.Get(root, co.kv, false)
 	if err != nil {
 		return nil, err
 	}
