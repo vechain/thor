@@ -61,7 +61,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 			return badCall{errors.New("nil tx")}
 		}
 		peer.MarkTransaction(arg.Tx.ID())
-		c.goes.Go(func() { c.newTxFeed.Send(&NewTransactionEvent{arg.Tx}) })
+		c.txPool.Add(arg.Tx)
 	case proto.MsgGetBlockByID:
 		var arg proto.GetBlockByID
 		if err := msg.Decode(&arg); err != nil {
