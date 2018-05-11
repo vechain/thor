@@ -455,7 +455,7 @@ func TestPrototypeInterface(t *testing.T) {
 		ShouldOutput(new(big.Int).Sub(energy, big.NewInt(1))).
 		Assert(t)
 
-	test.Case("$transfer_energy_to", acc1, big.NewInt(1)).
+	test.Case("$move_energy_to", acc1, big.NewInt(1)).
 		To(acc2).Caller(acc2).
 		ShouldOutput().
 		Assert(t)

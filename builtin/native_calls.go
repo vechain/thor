@@ -308,7 +308,7 @@ func initPrototypeInterfaceMethods() {
 			}
 			return nil
 		}},
-		{"$transfer_energy_to", func(env *bridge, binding *prototype.Binding) []interface{} {
+		{"$move_energy_to", func(env *bridge, binding *prototype.Binding) []interface{} {
 			var args struct {
 				To     common.Address
 				Amount *big.Int
