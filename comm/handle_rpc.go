@@ -20,6 +20,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 	}()
 
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
+	log.Debug("received RPC msg")
 
 	switch msg.Code {
 	case proto.MsgStatus:
