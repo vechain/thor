@@ -60,6 +60,7 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
+	n.comm.Sync(n.handleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
@@ -68,7 +69,7 @@ func (n *Node) Run(ctx context.Context) error {
 	return nil
 }
 
-func (n *Node) HandleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
+func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
 	log.Debug("start to process block stream")
 	defer log.Debug("process block stream done", "err", err)
 	var stats blockStats
