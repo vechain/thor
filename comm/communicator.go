@@ -220,6 +220,7 @@ func (c *Communicator) txLoop() {
 			})
 
 			for _, peer := range peers {
+				peer := peer
 				peer.MarkTransaction(tx.ID())
 				c.goes.Go(func() {
 					if err := (proto.NewTx{Tx: tx}.Call(c.ctx, peer)); err != nil {
@@ -275,6 +276,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	toAnnounce := peers[p:]
 
 	for _, peer := range toPropagate {
+		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
 			if err := (proto.NewBlock{Block: blk}.Call(c.ctx, peer)); err != nil {
@@ -284,6 +286,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	}
 
 	for _, peer := range toAnnounce {
+		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
 			if err := (proto.NewBlockID{ID: blk.Header().ID()}.Call(c.ctx, peer)); err != nil {

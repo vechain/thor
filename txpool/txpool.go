@@ -62,6 +62,7 @@ func (pool *TxPool) Close() {
 //Add transaction
 func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 	for _, tx := range txs {
+		tx := tx
 		txID := tx.ID()
 		if obj := pool.entry.find(txID); obj != nil {
 			return errKnownTx
