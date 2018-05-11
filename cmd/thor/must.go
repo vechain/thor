@@ -21,12 +21,14 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
+	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -134,7 +136,13 @@ func loadNodeMaster(ctx *cli.Context, dataDir string) *node.Master {
 	return master
 }
 
-func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protocol) (*p2psrv.Server, func()) {
+type p2pComm struct {
+	comm      *comm.Communicator
+	p2pSrv    *p2psrv.Server
+	savePeers func()
+}
+
+func startP2PComm(ctx *cli.Context, dataDir string, chain *chain.Chain, txPool *txpool.TxPool) *p2pComm {
 	key, err := loadOrGeneratePrivateKey(filepath.Join(dataDir, "p2p.key"))
 	if err != nil {
 		fatal("load or generate P2P key:", err)
@@ -163,23 +171,42 @@ func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protoc
 		log.Warn("failed to load peers cache", "err", err)
 	}
 	srv := p2psrv.New(opts)
-	if err := srv.Start(protocols); err != nil {
+
+	comm := comm.New(chain, txPool)
+	if err := srv.Start(comm.Protocols()); err != nil {
 		fatal("start P2P server:", err)
 	}
-	return srv, func() {
-		nodes := srv.KnownNodes()
-		data, err := rlp.EncodeToBytes(nodes)
-		if err != nil {
-			log.Warn("failed to encode cached peers", "err", err)
-			return
-		}
-		if err := ioutil.WriteFile(filepath.Join(dataDir, peersCacheFile), data, 0600); err != nil {
-			log.Warn("failed to write peers cache", "err", err)
-		}
+	comm.Start()
+
+	return &p2pComm{
+		comm:   comm,
+		p2pSrv: srv,
+		savePeers: func() {
+			nodes := srv.KnownNodes()
+			data, err := rlp.EncodeToBytes(nodes)
+			if err != nil {
+				log.Warn("failed to encode cached peers", "err", err)
+				return
+			}
+			if err := ioutil.WriteFile(filepath.Join(dataDir, peersCacheFile), data, 0600); err != nil {
+				log.Warn("failed to write peers cache", "err", err)
+			}
+		},
 	}
 }
 
-func startAPIServer(ctx *cli.Context, handler http.Handler) *httpServer {
+func (c *p2pComm) Shutdown() {
+	c.comm.Stop()
+	log.Info("stopping communicator...")
+
+	c.p2pSrv.Stop()
+	log.Info("stopping P2P server...")
+
+	c.savePeers()
+	log.Info("saving peers cache...")
+}
+
+func startAPIServer(ctx *cli.Context, handler http.Handler) (*http.Server, string) {
 	addr := ctx.String(apiAddrFlag.Name)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -192,9 +219,11 @@ func startAPIServer(ctx *cli.Context, handler http.Handler) *httpServer {
 			handlers.AllowedHeaders([]string{"content-type"}),
 		)(handler)
 	}
-	srv := &httpServer{&http.Server{Handler: handler}, listener}
-	srv.Start()
-	return srv
+	srv := &http.Server{Handler: handler}
+	go func() {
+		srv.Serve(listener)
+	}()
+	return srv, "http://" + listener.Addr().String() + "/"
 }
 
 func printStartupMessage(

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
-	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -93,20 +93,15 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	communicator := comm.New(chain, txPool)
-	communicator.Start()
-	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
+	p2pcom := startP2PComm(ctx, dataDir, chain, txPool)
+	defer p2pcom.Shutdown()
 
-	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
-	defer func() { log.Info("saving peers cache..."); savePeers() }()
-	defer func() { log.Info("stopping P2P server..."); p2pSrv.Stop() }()
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
+	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
 
-	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, communicator))
-	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()
+	printStartupMessage(gene, chain, master, dataDir, apiURL)
 
-	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
-
-	return node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator).
+	return node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, p2pcom.comm).
 		Run(handleExitSignal())
 }
 
@@ -140,10 +135,10 @@ func soloAction(ctx *cli.Context) error {
 
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
 
-	apiSrv := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
-	defer func() { log.Info("stopping API server..."); apiSrv.Stop() }()
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
+	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
 
-	printSoloStartupMessage(gene, chain, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
+	printSoloStartupMessage(gene, chain, dataDir, apiURL)
 
 	return soloContext.Run(handleExitSignal())
 }
