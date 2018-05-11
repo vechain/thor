@@ -20,12 +20,12 @@ import (
 
 func TestNode(t *testing.T) {
 	ts := initCommServer(t)
-	res := httpGet(t, ts.URL+"/node/network/sessions")
-	var sessionStats map[string]string
-	if err := json.Unmarshal(res, &sessionStats); err != nil {
+	res := httpGet(t, ts.URL+"/node/network/peers")
+	var peersStats map[string]string
+	if err := json.Unmarshal(res, &peersStats); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 0, len(sessionStats), "count should be zero")
+	assert.Equal(t, 0, len(peersStats), "count should be zero")
 }
 
 func initCommServer(t *testing.T) *httptest.Server {

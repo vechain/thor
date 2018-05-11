@@ -6,10 +6,10 @@ import (
 )
 
 type Network interface {
-	SessionsStats() []*comm.SessionStats
+	PeersStats() []*comm.PeerStats
 }
 
-type SessionStats struct {
+type PeerStats struct {
 	BestBlockID thor.Bytes32 `json:"bestBlockID"`
 	TotalScore  uint64       `json:"totalScore"`
 	PeerID      string       `json:"peerID"`
@@ -18,20 +18,20 @@ type SessionStats struct {
 	Duration    uint64       `json:"duration"`
 }
 
-func ConvertSessionStats(ss []*comm.SessionStats) []*SessionStats {
+func ConvertPeersStats(ss []*comm.PeerStats) []*PeerStats {
 	if len(ss) == 0 {
 		return nil
 	}
-	sessionStats := make([]*SessionStats, len(ss))
-	for i, sessionStat := range ss {
-		sessionStats[i] = &SessionStats{
-			BestBlockID: sessionStat.BestBlockID,
-			TotalScore:  sessionStat.TotalScore,
-			PeerID:      sessionStat.PeerID,
-			NetAddr:     sessionStat.NetAddr,
-			Inbound:     sessionStat.Inbound,
-			Duration:    sessionStat.Duration,
+	peersStats := make([]*PeerStats, len(ss))
+	for i, peerStats := range ss {
+		peersStats[i] = &PeerStats{
+			BestBlockID: peerStats.BestBlockID,
+			TotalScore:  peerStats.TotalScore,
+			PeerID:      peerStats.PeerID,
+			NetAddr:     peerStats.NetAddr,
+			Inbound:     peerStats.Inbound,
+			Duration:    peerStats.Duration,
 		}
 	}
-	return sessionStats
+	return peersStats
 }

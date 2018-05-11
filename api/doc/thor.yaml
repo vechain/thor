@@ -233,7 +233,7 @@ paths:
                 example:
                   id: >-
                     0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
-  /node/network/sessions:
+  /node/network/peers:
     get:
       tags:
         - Node
@@ -245,8 +245,7 @@ paths:
             application/json:
               schema:
                 items:
-                  oneOf:
-                    - $ref: '#/components/schemas/NodeNetwork'
+                  $ref: '#/components/schemas/PeerStats'
 components:
   schemas:
     Account:
@@ -692,7 +691,7 @@ components:
         tx:
           id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-    NodeNetwork:
+    PeerStats:
       properties:
         bestBlockID:
           type: string
