@@ -1,9 +1,13 @@
 package comm
 
 import (
+	"context"
+	"sync/atomic"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 )
 
@@ -37,57 +41,60 @@ func (c *Communicator) sync(handler HandleBlockStream) error {
 	return c.download(peer, ancestor+1, handler)
 }
 
-func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) (err error) {
-
-	errCh := make(chan error, 1)
-	defer func() {
-		if err != nil {
-			<-errCh
-		} else {
-			err = <-errCh
-		}
-	}()
-
+func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) error {
+	ctx, cancel := context.WithCancel(c.ctx)
+	var errValue atomic.Value
 	blockCh := make(chan *block.Block, 32)
-	defer close(blockCh)
 
-	go func() {
-		errCh <- handler(c.ctx, blockCh)
-	}()
-
-	for {
-		result, err := proto.GetBlocksFromNumber{Num: fromNum}.Call(c.ctx, peer)
-		if err != nil {
-			return err
+	var goes co.Goes
+	goes.Go(func() {
+		defer cancel()
+		if err := handler(ctx, blockCh); err != nil {
+			errValue.Store(err)
 		}
-		if len(result) == 0 {
-			return nil
-		}
+	})
+	goes.Go(func() {
+		defer close(blockCh)
+		for {
+			result, err := proto.GetBlocksFromNumber{Num: fromNum}.Call(ctx, peer)
+			if err != nil {
+				errValue.Store(err)
+				return
+			}
+			if len(result) == 0 {
+				return
+			}
 
-		for _, raw := range result {
-			var blk block.Block
-			if err := rlp.DecodeBytes(raw, &blk); err != nil {
-				return errors.Wrap(err, "invalid block")
-			}
-			if _, err := blk.Header().Signer(); err != nil {
-				return errors.Wrap(err, "invalid block")
-			}
-			if blk.Header().Number() != fromNum {
-				return errors.New("broken sequence")
-			}
-			peer.MarkBlock(blk.Header().ID())
-			fromNum++
+			for _, raw := range result {
+				var blk block.Block
+				if err := rlp.DecodeBytes(raw, &blk); err != nil {
+					errValue.Store(errors.Wrap(err, "invalid block"))
+					return
+				}
+				if _, err := blk.Header().Signer(); err != nil {
+					errValue.Store(errors.Wrap(err, "invalid block"))
+					return
+				}
+				if blk.Header().Number() != fromNum {
+					errValue.Store(errors.New("broken sequence"))
+					return
+				}
+				peer.MarkBlock(blk.Header().ID())
+				fromNum++
 
-			select {
-			case <-c.ctx.Done():
-				return c.ctx.Err()
-			case blockCh <- &blk:
-			case err := <-errCh:
-				errCh <- err
-				return err
+				select {
+				case <-ctx.Done():
+					return
+				case blockCh <- &blk:
+				}
 			}
 		}
+	})
+	goes.Wait()
+	if err := errValue.Load(); err != nil {
+		return err.(error)
 	}
+	return nil
 }
 
 func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, error) {

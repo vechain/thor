@@ -18,7 +18,7 @@ func init() {
 }
 
 const (
-	rpcDefaultTimeout = time.Second * 30
+	rpcDefaultTimeout = time.Second * 10
 )
 
 var (
