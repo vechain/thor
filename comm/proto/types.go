@@ -5,136 +5,117 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
-// ReqStatus request payload of MsgStatus.
-type ReqStatus struct{}
+type (
+	// Status arg of MsgStatus.
+	Status struct{}
 
-// Do make request to peer.
-func (req ReqStatus) Do(ctx context.Context, peer *p2psrv.Peer) (*RespStatus, error) {
-	var resp RespStatus
-	if err := peer.Request(ctx, MsgStatus, &req, &resp); err != nil {
+	// StatusResult result of MsgStatus.
+	StatusResult struct {
+		GenesisBlockID thor.Bytes32
+		SysTimestamp   uint64
+		BestBlockID    thor.Bytes32
+		TotalScore     uint64
+	}
+
+	// NewBlockID arg of MsgNewBlockID.
+	NewBlockID struct{ ID thor.Bytes32 }
+
+	// NewBlock arg of MsgNewBlock.
+	NewBlock struct{ Block *block.Block }
+
+	// NewTx arg of MsgNewTx
+	NewTx struct{ Tx *tx.Transaction }
+
+	// GetBlockIDByNumber arg of MsgGetBlockIDByNumber.
+	GetBlockIDByNumber struct{ Num uint32 }
+
+	// GetBlockIDByNumberResult result of MsgGetBlockIDByNumber.
+	GetBlockIDByNumberResult struct{ ID thor.Bytes32 }
+
+	// GetBlocksFromNumber arg of MsgGetBlocksFromNumber.
+	GetBlocksFromNumber struct{ Num uint32 }
+
+	// GetBlocksFromNumberResult result of MsgGetBlocksFromNumber.
+	GetBlocksFromNumberResult []rlp.RawValue
+
+	// GetBlockByID arg of MsgGetBlockByID.
+	GetBlockByID struct{ ID thor.Bytes32 }
+
+	// GetBlockByIDResult result of MsgGetBlockByID.
+	GetBlockByIDResult struct{ Block *block.Block }
+
+	// GetTxs arg of MsgGetTxs.
+	GetTxs struct{}
+
+	// GetTxsResult result of MsgGetTxs.
+	GetTxsResult []*tx.Transaction
+)
+
+// RPC defines RPC interface.
+type RPC interface {
+	Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error
+}
+
+// Call perform RPC call.
+func (a Status) Call(ctx context.Context, rpc RPC) (*StatusResult, error) {
+	var result StatusResult
+	if err := rpc.Call(ctx, MsgStatus, &a, &result); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return &result, nil
 }
 
-// RespStatus response payload of MsgStatus.
-type RespStatus struct {
-	GenesisBlockID thor.Bytes32
-	SysTimestamp   uint64
-	BestBlockID    thor.Bytes32
-	TotalScore     uint64
+// Call perform RPC call.
+func (a NewBlockID) Call(ctx context.Context, rpc RPC) error {
+	return rpc.Call(ctx, MsgNewBlockID, &a, &struct{}{})
 }
 
-// ReqNewBlockID request payload of MsgNewBlockID.
-type ReqNewBlockID struct {
-	ID thor.Bytes32
+// Call perform RPC call.
+func (a NewBlock) Call(ctx context.Context, rpc RPC) error {
+	return rpc.Call(ctx, MsgNewBlock, &a, &struct{}{})
 }
 
-// Do make request to peer.
-func (req ReqNewBlockID) Do(ctx context.Context, peer *p2psrv.Peer) error {
-	var resp struct{}
-	return peer.Request(ctx, MsgNewBlockID, &req, &resp)
+// Call perform RPC call.
+func (a NewTx) Call(ctx context.Context, rpc RPC) error {
+	return rpc.Call(ctx, MsgNewTx, &a, &struct{}{})
 }
 
-// ReqMsgNewTx request payload of MsgNewTx.
-type ReqMsgNewTx struct {
-	Tx *tx.Transaction
-}
-
-// Do make request to peer.
-func (req ReqMsgNewTx) Do(ctx context.Context, peer *p2psrv.Peer) error {
-	var resp struct{}
-	return peer.Request(ctx, MsgNewTx, &req, &resp)
-}
-
-// ReqNewBlock request payload of MsgNewBlock.
-type ReqNewBlock struct {
-	Block *block.Block
-}
-
-// Do make request.
-func (req ReqNewBlock) Do(ctx context.Context, peer *p2psrv.Peer) error {
-	var resp struct{}
-	return peer.Request(ctx, MsgNewBlock, &req, &resp)
-}
-
-// ReqGetBlockIDByNumber request payload of MsgGetBlockIDByNumber.
-type ReqGetBlockIDByNumber struct {
-	Num uint32
-}
-
-// Do make request to peer.
-func (req ReqGetBlockIDByNumber) Do(ctx context.Context, peer *p2psrv.Peer) (*RespGetBlockIDByNumber, error) {
-	var resp RespGetBlockIDByNumber
-	if err := peer.Request(ctx, MsgGetBlockIDByNumber, &req, &resp); err != nil {
+// Call perform RPC call.
+func (a GetBlockIDByNumber) Call(ctx context.Context, rpc RPC) (*GetBlockIDByNumberResult, error) {
+	var result GetBlockIDByNumberResult
+	if err := rpc.Call(ctx, MsgGetBlockIDByNumber, &a, &result); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return &result, nil
 }
 
-// RespGetBlockIDByNumber response payload of MsgGetBlockIDByNumber.
-type RespGetBlockIDByNumber struct {
-	ID thor.Bytes32
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// ReqGetBlocksFromNumber request payload of MsgGetBlocksFromNumber.
-type ReqGetBlocksFromNumber struct {
-	Num uint32
-}
-
-// Do make request to peer.
-func (req ReqGetBlocksFromNumber) Do(ctx context.Context, peer *p2psrv.Peer) (RespGetBlocksFromNumber, error) {
-	var resp RespGetBlocksFromNumber
-	if err := peer.Request(ctx, MsgGetBlocksFromNumber, &req, &resp); err != nil {
+// Call perform RPC call.
+func (a GetBlocksFromNumber) Call(ctx context.Context, rpc RPC) (GetBlocksFromNumberResult, error) {
+	var result GetBlocksFromNumberResult
+	if err := rpc.Call(ctx, MsgGetBlocksFromNumber, &a, &result); err != nil {
 		return nil, err
 	}
-	return resp, nil
+	return result, nil
 }
 
-// RespGetBlocksFromNumber response payload of MsgGetBlocksByNumber.
-type RespGetBlocksFromNumber []rlp.RawValue
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// ReqGetBlockByID request payload of MsgGetBlockByID.
-type ReqGetBlockByID struct {
-	ID thor.Bytes32
-}
-
-// Do make request to peer.
-func (req ReqGetBlockByID) Do(ctx context.Context, peer *p2psrv.Peer) (*RespGetBlockByID, error) {
-	var resp RespGetBlockByID
-	if err := peer.Request(ctx, MsgGetBlockByID, &req, &resp); err != nil {
+// Call perform RPC call.
+func (a GetBlockByID) Call(ctx context.Context, rpc RPC) (*GetBlockByIDResult, error) {
+	var result GetBlockByIDResult
+	if err := rpc.Call(ctx, MsgGetBlockByID, &a, &result); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return &result, nil
 }
 
-// RespGetBlockByID response payload of MsgGetBlockByID.
-type RespGetBlockByID struct {
-	Block *block.Block
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// ReqGetTxs request payload of MsgGetTxs.
-type ReqGetTxs struct{}
-
-// Do make request to peer.
-func (req ReqGetTxs) Do(ctx context.Context, peer *p2psrv.Peer) (RespGetTxs, error) {
-	var resp RespGetTxs
-	if err := peer.Request(ctx, MsgGetTxs, &req, &resp); err != nil {
+// Call perform RPC call.
+func (a GetTxs) Call(ctx context.Context, rpc RPC) (GetTxsResult, error) {
+	var result GetTxsResult
+	if err := rpc.Call(ctx, MsgGetTxs, &a, &result); err != nil {
 		return nil, err
 	}
-	return resp, nil
+	return result, nil
 }
-
-// RespGetTxs response payload of MsgGetTxs.
-type RespGetTxs []*tx.Transaction

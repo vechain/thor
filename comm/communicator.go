@@ -3,21 +3,19 @@ package comm
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/comm/session"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -31,10 +29,9 @@ type Communicator struct {
 	chain        *chain.Chain
 	ctx          context.Context
 	cancel       context.CancelFunc
-	sessionSet   *session.Set
+	peerSet      *PeerSet
 	syncedCh     chan struct{}
 	syncCh       chan struct{}
-	announceCh   chan *announce
 	newBlockFeed event.Feed
 	newTxFeed    event.Feed
 	feedScope    event.SubscriptionScope
@@ -46,14 +43,13 @@ type Communicator struct {
 func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		chain:      chain,
-		txPool:     txPool,
-		ctx:        ctx,
-		cancel:     cancel,
-		sessionSet: session.NewSet(),
-		syncedCh:   make(chan struct{}),
-		syncCh:     make(chan struct{}),
-		announceCh: make(chan *announce),
+		chain:    chain,
+		txPool:   txPool,
+		ctx:      ctx,
+		cancel:   cancel,
+		peerSet:  newPeerSet(),
+		syncedCh: make(chan struct{}),
+		syncCh:   make(chan struct{}),
 	}
 }
 
@@ -67,55 +63,59 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 	genesisID := c.chain.GenesisBlock().Header().ID()
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
-			Name:       proto.Name,
-			Version:    proto.Version,
-			Length:     proto.Length,
-			MaxMsgSize: proto.MaxMsgSize,
-			DiscTopic:  fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
-			HandlePeer: c.handlePeer,
+			Protocol: p2p.Protocol{
+				Name:    proto.Name,
+				Version: proto.Version,
+				Length:  proto.Length,
+				Run:     c.runPeer,
+			},
+			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
 		}}
 }
 
-func (c *Communicator) handlePeer(peer *p2psrv.Peer) p2psrv.HandleRequest {
-	// controls session lifecycle
-	c.goes.Go(func() { c.sessionLoop(peer) })
-	return c.handleRequest
+func (c *Communicator) runPeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	peer := newPeer(p, rw)
+	c.goes.Go(func() {
+		c.peerLifeCycle(peer)
+	})
+	return peer.Serve(func(msg *p2p.Msg, w func(interface{})) error {
+		return c.handleRPC(peer, msg, w)
+	}, proto.MaxMsgSize)
 }
 
-func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
-	defer peer.Disconnect()
+func (c *Communicator) peerLifeCycle(peer *Peer) {
+	defer peer.Disconnect(p2p.DiscRequested)
 
-	log := log.New("peer", peer)
 	// 5sec timeout for handshake
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
 	defer cancel()
-	respStatus, err := proto.ReqStatus{}.Do(ctx, peer)
+
+	result, err := proto.Status{}.Call(ctx, peer)
 	if err != nil {
-		log.Debug("failed to request status", "err", err)
+		peer.logger.Debug("failed to request status", "err", err)
 		return
 	}
-	if respStatus.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
-		log.Debug("failed to handshake", "err", "genesis id mismatch")
+	if result.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
+		peer.logger.Debug("failed to handshake", "err", "genesis id mismatch")
 		return
 	}
 	now := uint64(time.Now().Unix())
-	diff := now - respStatus.SysTimestamp
-	if now < respStatus.SysTimestamp {
-		diff = respStatus.SysTimestamp
+	diff := now - result.SysTimestamp
+	if now < result.SysTimestamp {
+		diff = result.SysTimestamp
 	}
 	if diff > thor.BlockInterval {
-		log.Debug("failed to handshake", "err", "sys time diff too large")
+		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}
 
-	session := session.New(peer)
-	session.UpdateTrunkHead(respStatus.BestBlockID, respStatus.TotalScore)
+	peer.UpdateHead(result.BestBlockID, result.TotalScore)
+	c.peerSet.Add(peer)
+	peer.logger.Debug("peer added")
 
-	log.Debug("session created")
-	c.sessionSet.Add(session)
 	defer func() {
-		c.sessionSet.Remove(peer.ID())
-		log.Debug("session destroyed")
+		c.peerSet.Remove(peer.ID())
+		peer.logger.Debug("peer removed")
 	}()
 
 	select {
@@ -130,15 +130,15 @@ func (c *Communicator) sessionLoop(peer *p2psrv.Peer) {
 	}
 }
 
-func (c *Communicator) syncTxs(peer *p2psrv.Peer) {
+func (c *Communicator) syncTxs(peer *Peer) {
 	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
 	defer cancel()
-	respTxs, err := proto.ReqGetTxs{}.Do(ctx, peer)
+	result, err := proto.GetTxs{}.Call(ctx, peer)
 	if err != nil {
-		log.Debug("failed to request txs", "err", err)
+		peer.logger.Debug("failed to request txs", "err", err)
 		return
 	}
-	for _, tx := range respTxs {
+	for _, tx := range result {
 		c.txPool.Add(tx)
 
 		select {
@@ -149,7 +149,7 @@ func (c *Communicator) syncTxs(peer *p2psrv.Peer) {
 		default:
 		}
 	}
-	log.Debug("tx synced")
+	peer.logger.Debug("tx synced")
 }
 
 // SubscribeBlock subscribe the event that new block received.
@@ -165,7 +165,6 @@ func (c *Communicator) SubscribeTransaction(ch chan *NewTransactionEvent) event.
 // Start start the communicator.
 func (c *Communicator) Start(handler HandleBlockStream) {
 	c.goes.Go(func() { c.syncLoop(handler) })
-	c.goes.Go(c.announceLoop)
 }
 
 // Stop stop the communicator.
@@ -208,56 +207,37 @@ func (c *Communicator) syncLoop(handler HandleBlockStream) {
 		}
 	}
 }
-
-func (c *Communicator) announceLoop() {
-	fetch := func(blockID thor.Bytes32, peer *p2psrv.Peer) error {
-		if _, err := c.chain.GetBlockHeader(blockID); err != nil {
-			if !c.chain.IsNotFound(err) {
-				return err
-			}
-		} else {
-			// already in chain
-			return nil
+func (c *Communicator) handleAnnounce(blockID thor.Bytes32, src *Peer) {
+	if _, err := c.chain.GetBlockHeader(blockID); err != nil {
+		if !c.chain.IsNotFound(err) {
+			log.Error("failed to get block header", "err", err)
 		}
-
-		if !isPeerAlive(peer) {
-			slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
-				id, _ := s.TrunkHead()
-				return bytes.Compare(id[:], blockID[:]) >= 0
-			})
-			if len(slice) > 0 {
-				peer = slice[0].Peer()
-			}
-		}
-		if peer == nil {
-			return errors.New("no peer to fetch block by id")
-		}
-
-		req := proto.ReqGetBlockByID{ID: blockID}
-		resp, err := req.Do(c.ctx, peer)
-		if err != nil {
-			return err
-		}
-		if resp.Block == nil {
-			return errors.New("nil block")
-		}
-
-		c.newBlockFeed.Send(&NewBlockEvent{
-			Block: resp.Block,
-		})
-		return nil
+	} else {
+		// already in chain
+		return
 	}
 
-	for {
-		select {
-		case ann := <-c.announceCh:
-			if err := fetch(ann.blockID, ann.peer); err != nil {
-				log.Debug("failed to fetch block by ID", "peer", ann.peer, "err", err)
-			}
-		case <-c.ctx.Done():
-			return
-		}
+	target := c.peerSet.Slice().Find(func(p *Peer) bool {
+		id, _ := p.Head()
+		return bytes.Compare(id[:], blockID[:]) >= 0
+	})
+	if target == nil {
+		target = src
 	}
+
+	result, err := proto.GetBlockByID{ID: blockID}.Call(c.ctx, target)
+	if err != nil {
+		target.logger.Debug("failed to get block by id", "err", err)
+		return
+	}
+
+	if result.Block == nil {
+		target.logger.Debug("get nil block by id")
+		return
+	}
+	c.newBlockFeed.Send(&NewBlockEvent{
+		Block: result.Block,
+	})
 }
 
 // RequestSync request sync operation.
@@ -272,17 +252,15 @@ func (c *Communicator) RequestSync() bool {
 
 // BroadcastTx broadcast new tx to remote peers.
 func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
-	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
-		return !s.IsTransactionKnown(tx.ID())
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsTransactionKnown(tx.ID())
 	})
 
-	for _, s := range slice {
-		s.MarkTransaction(tx.ID())
-		peer := s.Peer()
+	for _, peer := range peers {
+		peer.MarkTransaction(tx.ID())
 		c.goes.Go(func() {
-			req := proto.ReqMsgNewTx{Tx: tx}
-			if err := req.Do(c.ctx, peer); err != nil {
-				log.Debug("failed to broadcast tx", "peer", peer, "err", err)
+			if err := (proto.NewTx{Tx: tx}.Call(c.ctx, peer)); err != nil {
+				peer.logger.Debug("failed to broadcast tx", "err", err)
 			}
 		})
 	}
@@ -290,50 +268,45 @@ func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
 
 // BroadcastBlock broadcast a block to remote peers.
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
-	slice := c.sessionSet.Slice().Filter(func(s *session.Session) bool {
-		return !s.IsBlockKnown(blk.Header().ID())
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsBlockKnown(blk.Header().ID())
 	})
 
-	p := int(math.Sqrt(float64(len(slice))))
-	toPropagate := slice[:p]
-	toAnnounce := slice[p:]
+	p := int(math.Sqrt(float64(len(peers))))
+	toPropagate := peers[:p]
+	toAnnounce := peers[p:]
 
-	for _, s := range toPropagate {
-		s.MarkBlock(blk.Header().ID())
-		peer := s.Peer()
+	for _, peer := range toPropagate {
+		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			req := proto.ReqNewBlock{Block: blk}
-			if err := req.Do(c.ctx, peer); err != nil {
-				log.Debug("failed to broadcast new block", "peer", peer, "err", err)
+			if err := (proto.NewBlock{Block: blk}.Call(c.ctx, peer)); err != nil {
+				peer.logger.Debug("failed to broadcast new block", "err", err)
 			}
 		})
 	}
 
-	for _, s := range toAnnounce {
-		s.MarkBlock(blk.Header().ID())
-		peer := s.Peer()
+	for _, peer := range toAnnounce {
+		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			req := proto.ReqNewBlockID{ID: blk.Header().ID()}
-			if err := req.Do(c.ctx, peer); err != nil {
-				log.Debug("failed to broadcast new block id", "peer", peer, "err", err)
+			if err := (proto.NewBlockID{ID: blk.Header().ID()}.Call(c.ctx, peer)); err != nil {
+				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}
 		})
 	}
 }
 
-// SessionsStats returns all sessions' stats
-func (c *Communicator) SessionsStats() []*SessionStats {
-	var stats []*SessionStats
-	now := mclock.Now()
-	for _, s := range c.sessionSet.Slice() {
-		bestID, totalScore := s.TrunkHead()
-		stats = append(stats, &SessionStats{
+// PeersStats returns all peers' stats
+func (c *Communicator) PeersStats() []*PeerStats {
+	var stats []*PeerStats
+	for _, peer := range c.peerSet.Slice() {
+		bestID, totalScore := peer.Head()
+		stats = append(stats, &PeerStats{
 			BestBlockID: bestID,
 			TotalScore:  totalScore,
-			PeerID:      s.Peer().ID().String(),
-			NetAddr:     s.Peer().RemoteAddr().String(),
-			Inbound:     s.Peer().Inbound(),
-			Duration:    uint64(time.Duration(now-s.CreatedTime()) / time.Second),
+			PeerID:      peer.ID().String(),
+			NetAddr:     peer.RemoteAddr().String(),
+			Inbound:     peer.Inbound(),
+			Duration:    uint64(time.Duration(peer.Duration()) / time.Second),
 		})
 	}
 	sort.Slice(stats, func(i, j int) bool {
