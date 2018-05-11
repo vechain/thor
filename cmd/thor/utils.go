@@ -5,8 +5,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -81,22 +79,6 @@ func homeDir() string {
 		return usr.HomeDir
 	}
 	return ""
-}
-
-type httpServer struct {
-	*http.Server
-	listener net.Listener
-}
-
-func (s *httpServer) Start() {
-	go func() {
-		s.Serve(s.listener)
-	}()
-}
-
-func (s *httpServer) Stop() {
-	s.Shutdown(context.Background())
-	s.listener.Close()
 }
 
 func handleExitSignal() context.Context {
