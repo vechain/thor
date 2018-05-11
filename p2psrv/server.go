@@ -196,10 +196,12 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 }
 
 func (s *Server) dialLoop() {
-	const nonFastDialDur = 10 * time.Second
+	const fastDialDur = 500 * time.Millisecond
+	const nonFastDialDur = 2 * time.Second
+	const stableDialDur = 10 * time.Second
 
 	// fast dialing initially
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(fastDialDur)
 	defer ticker.Stop()
 
 	dialCount := 0
@@ -228,10 +230,19 @@ func (s *Server) dialLoop() {
 					log.Debug("failed to dial node", "err", err)
 				}
 			}()
+
 			dialCount++
-			if dialCount == 20 || s.srv.PeerCount() > s.srv.MaxPeers/5 {
+			if dialCount == 20 {
 				ticker.Stop()
 				ticker = time.NewTicker(nonFastDialDur)
+			} else if dialCount > 20 {
+				if s.srv.PeerCount() > s.srv.MaxPeers/2 {
+					ticker.Stop()
+					ticker = time.NewTicker(stableDialDur)
+				} else {
+					ticker.Stop()
+					ticker = time.NewTicker(nonFastDialDur)
+				}
 			}
 		case <-s.done:
 			return
