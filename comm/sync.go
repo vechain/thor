@@ -5,42 +5,39 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/comm/session"
-	"github.com/vechain/thor/p2psrv"
 )
 
-func (c *Communicator) chooseSessionToSync(bestBlock *block.Block) (*session.Session, int) {
-	slice := c.sessionSet.Slice()
-	betters := slice.Filter(func(s *session.Session) bool {
-		_, totalScore := s.TrunkHead()
+func (c *Communicator) choosePeerToSync(bestBlock *block.Block) *Peer {
+	betters := c.peerSet.Slice().Filter(func(peer *Peer) bool {
+		_, totalScore := peer.Head()
 		return totalScore >= bestBlock.Header().TotalScore()
 	})
 
 	if len(betters) > 0 {
-		return betters[0], len(slice)
+		return betters[0]
 	}
-	return nil, len(slice)
+	return nil
 }
 
 func (c *Communicator) sync(handler HandleBlockStream) error {
-	best := c.chain.BestBlock()
-	s, nSessions := c.chooseSessionToSync(best)
-	if s == nil {
-		if nSessions >= 3 {
+	localBest := c.chain.BestBlock()
+	peer := c.choosePeerToSync(localBest)
+	if peer == nil {
+		if c.peerSet.Len() >= 3 {
 			return nil
 		}
-		return errors.New("no suitable session")
+		return errors.New("no suitable peer")
 	}
 
-	ancestor, err := c.findCommonAncestor(s.Peer(), best.Header().Number())
+	ancestor, err := c.findCommonAncestor(peer, localBest.Header().Number())
 	if err != nil {
 		return err
 	}
 
-	return c.download(s, ancestor+1, handler)
+	return c.download(peer, ancestor+1, handler)
 }
 
-func (c *Communicator) download(session *session.Session, fromNum uint32, handler HandleBlockStream) (err error) {
+func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) (err error) {
 
 	errCh := make(chan error, 1)
 	defer func() {
@@ -59,17 +56,15 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 	}()
 
 	for {
-		peer := session.Peer()
-		req := proto.ReqGetBlocksFromNumber{Num: fromNum}
-		resp, err := req.Do(c.ctx, peer)
+		result, err := proto.GetBlocksFromNumber{Num: fromNum}.Call(c.ctx, peer)
 		if err != nil {
 			return err
 		}
-		if len(resp) == 0 {
+		if len(result) == 0 {
 			return nil
 		}
 
-		for _, raw := range resp {
+		for _, raw := range result {
 			var blk block.Block
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
@@ -80,8 +75,7 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 			if blk.Header().Number() != fromNum {
 				return errors.New("broken sequence")
 			}
-
-			session.MarkBlock(blk.Header().ID())
+			peer.MarkBlock(blk.Header().ID())
 			fromNum++
 
 			select {
@@ -96,14 +90,13 @@ func (c *Communicator) download(session *session.Session, fromNum uint32, handle
 	}
 }
 
-func (c *Communicator) findCommonAncestor(peer *p2psrv.Peer, headNum uint32) (uint32, error) {
+func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, error) {
 	if headNum == 0 {
 		return headNum, nil
 	}
 
 	isOverlapped := func(num uint32) (bool, error) {
-		req := proto.ReqGetBlockIDByNumber{Num: num}
-		resp, err := req.Do(c.ctx, peer)
+		result, err := proto.GetBlockIDByNumber{Num: num}.Call(c.ctx, peer)
 		if err != nil {
 			return false, err
 		}
@@ -111,7 +104,7 @@ func (c *Communicator) findCommonAncestor(peer *p2psrv.Peer, headNum uint32) (ui
 		if err != nil {
 			return false, err
 		}
-		return id == resp.ID, nil
+		return id == result.ID, nil
 	}
 
 	var find func(start uint32, end uint32, ancestor uint32) (uint32, error)

@@ -17,16 +17,16 @@ func New(nw Network) *Node {
 	}
 }
 
-func (n *Node) SessionsStats() []*SessionStats {
-	return ConvertSessionStats(n.nw.SessionsStats())
+func (n *Node) PeersStats() []*PeerStats {
+	return ConvertPeersStats(n.nw.PeersStats())
 }
 
 func (n *Node) handleNetwork(w http.ResponseWriter, req *http.Request) error {
-	return utils.WriteJSON(w, n.SessionsStats())
+	return utils.WriteJSON(w, n.PeersStats())
 }
 
 func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/network/sessions").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
+	sub.Path("/network/peers").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
 }

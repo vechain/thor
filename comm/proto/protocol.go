@@ -7,7 +7,7 @@ import (
 // Constants
 const (
 	Name              = "thor"
-	Version    uint32 = 1
+	Version    uint   = 1
 	Length     uint64 = 40
 	MaxMsgSize        = 10 * 1024 * 1024
 )

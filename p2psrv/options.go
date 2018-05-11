@@ -33,7 +33,7 @@ type Options struct {
 	// the server is started.
 	ListenAddr string
 
-	GoodNodes Nodes
+	KnownNodes Nodes
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.

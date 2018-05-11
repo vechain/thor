@@ -10,8 +10,8 @@ import (
 // 	Errors   uint64
 // }
 
-// SessionStats records stats of a p2p session.
-type SessionStats struct {
+// PeerStats records stats of a peer.
+type PeerStats struct {
 	BestBlockID thor.Bytes32
 	TotalScore  uint64
 	PeerID      string

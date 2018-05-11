@@ -16,13 +16,12 @@ var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	srv  *p2p.Server
-	goes co.Goes
-	done chan struct{}
-
-	goodNodes       *cache.PrioCache
+	srv             *p2p.Server
+	goes            co.Goes
+	done            chan struct{}
+	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
-	busyNodes       *nodeMap
+	dialingNodes    *nodeMap
 }
 
 // New create a p2p server.
@@ -33,10 +32,10 @@ func New(opts *Options) *Server {
 		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
 	}
 
-	goodNodes := cache.NewPrioCache(16)
+	knownNodes := cache.NewPrioCache(16)
 	discoveredNodes := cache.NewRandCache(128)
-	for _, node := range opts.GoodNodes {
-		goodNodes.Set(node.ID, node, 0)
+	for _, node := range opts.KnownNodes {
+		knownNodes.Set(node.ID, node, 0)
 		discoveredNodes.Set(node.ID, node)
 	}
 
@@ -56,9 +55,9 @@ func New(opts *Options) *Server {
 			},
 		},
 		done:            make(chan struct{}),
-		goodNodes:       goodNodes,
+		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
-		busyNodes:       newNodeMap(),
+		dialingNodes:    newNodeMap(),
 	}
 }
 
@@ -68,34 +67,30 @@ func (s *Server) Self() *discover.Node {
 	return s.srv.Self()
 }
 
-func (s *Server) runProtocol(proto *Protocol) func(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	return func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-		log := log.New("peer", peer)
-		log.Debug("peer connected")
-		p := newPeer(peer, proto)
-
-		defer func() {
-			if node := s.busyNodes.Remove(peer.ID()); node != nil {
-				s.goodNodes.Set(peer.ID(), node, p.stats.weight())
-			}
-			log.Debug("peer disconnected", "reason", err)
-		}()
-
-		return p.serve(rw, proto.HandlePeer(p))
-	}
-}
-
 // Start start the server.
 func (s *Server) Start(protocols []*Protocol) error {
 	for _, proto := range protocols {
-		s.srv.Protocols = append(s.srv.Protocols, p2p.Protocol{
-			Name:    proto.Name,
-			Version: uint(proto.Version),
-			Length:  proto.Length,
-			//			NodeInfo: p.NodeInfo,
-			//			PeerInfo: p.PeerInfo,
-			Run: s.runProtocol(proto),
-		})
+		cpy := proto.Protocol
+		run := cpy.Run
+		cpy.Run = func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+			dir := "outbound"
+			if peer.Inbound() {
+				dir = "inbound"
+			}
+			log := log.New("peer", peer, "dir", dir)
+
+			log.Debug("peer connected")
+			startTime := mclock.Now()
+			defer func() {
+				log.Debug("peer disconnected", "reason", err)
+				if node := s.dialingNodes.Remove(peer.ID()); node != nil {
+					// we assume that good peer has longer connection duration.
+					s.knownNodes.Set(peer.ID(), node, float64(mclock.Now()-startTime))
+				}
+			}()
+			return run(peer, rw)
+		}
+		s.srv.Protocols = append(s.srv.Protocols, cpy)
 	}
 
 	if err := s.srv.Start(); err != nil {
@@ -127,14 +122,14 @@ func (s *Server) Stop() {
 	s.goes.Wait()
 }
 
-// GoodNodes returns good nodes.
-func (s *Server) GoodNodes() Nodes {
-	gns := make([]*discover.Node, 0, s.goodNodes.Len())
-	s.goodNodes.ForEach(func(ent *cache.PrioEntry) bool {
-		gns = append(gns, ent.Value.(*discover.Node))
+// KnownNodes returns known nodes that can be saved for fast connecting next time.
+func (s *Server) KnownNodes() Nodes {
+	nodes := make([]*discover.Node, 0, s.knownNodes.Len())
+	s.knownNodes.ForEach(func(ent *cache.PrioEntry) bool {
+		nodes = append(nodes, ent.Value.(*discover.Node))
 		return true
 	})
-	return gns
+	return nodes
 }
 
 // AddStatic connects to the given node and maintains the connection until the
@@ -219,17 +214,17 @@ func (s *Server) dialLoop() {
 			if s.srv.PeerCount() >= s.srv.MaxPeers {
 				continue
 			}
-			if s.busyNodes.Contains(node.ID) {
+			if s.dialingNodes.Contains(node.ID) {
 				continue
 			}
 
 			log := log.New("node", node)
 			log.Debug("try to dial node")
-			s.busyNodes.Add(node)
+			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
 				if err := s.tryDial(node); err != nil {
-					s.busyNodes.Remove(node.ID)
+					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
 			}()

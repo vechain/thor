@@ -6,7 +6,7 @@ import "github.com/vechain/thor/comm"
 type Communicator struct {
 }
 
-// SessionsStats returns nil solo doesn't join p2p network
-func (comm Communicator) SessionsStats() []*comm.SessionStats {
+// PeersStats returns nil solo doesn't join p2p network
+func (comm Communicator) PeersStats() []*comm.PeerStats {
 	return nil
 }

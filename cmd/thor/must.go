@@ -159,7 +159,7 @@ func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protoc
 		if !os.IsNotExist(err) {
 			log.Warn("failed to load peers cache", "err", err)
 		}
-	} else if err := rlp.DecodeBytes(data, &opts.GoodNodes); err != nil {
+	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
 	}
 	srv := p2psrv.New(opts)
@@ -167,7 +167,7 @@ func startP2PServer(ctx *cli.Context, dataDir string, protocols []*p2psrv.Protoc
 		fatal("start P2P server:", err)
 	}
 	return srv, func() {
-		nodes := srv.GoodNodes()
+		nodes := srv.KnownNodes()
 		data, err := rlp.EncodeToBytes(nodes)
 		if err != nil {
 			log.Warn("failed to encode cached peers", "err", err)
