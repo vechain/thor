@@ -45,6 +45,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		c.goes.Go(func() {
 			c.newBlockFeed.Send(&NewBlockEvent{Block: arg.Block})
 		})
+		w(&struct{}{})
 	case proto.MsgNewBlockID:
 		var arg proto.NewBlockID
 		if err := msg.Decode(&arg); err != nil {
@@ -52,6 +53,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		}
 		peer.MarkBlock(arg.ID)
 		c.goes.Go(func() { c.handleAnnounce(arg.ID, peer) })
+		w(&struct{}{})
 	case proto.MsgNewTx:
 		var arg proto.NewTx
 		if err := msg.Decode(&arg); err != nil {
@@ -62,6 +64,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		}
 		peer.MarkTransaction(arg.Tx.ID())
 		c.txPool.Add(arg.Tx)
+		w(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var arg proto.GetBlockByID
 		if err := msg.Decode(&arg); err != nil {
@@ -69,7 +72,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		}
 		blk, err := c.chain.GetBlock(arg.ID)
 		if err != nil {
-			log.Error("failed to get block", "err", err)
+			if !c.chain.IsNotFound(err) {
+				log.Error("failed to get block", "err", err)
+			}
 			return nil
 		}
 		peer.MarkBlock(arg.ID)
@@ -81,7 +86,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		}
 		id, err := c.chain.GetBlockIDByNumber(arg.Num)
 		if err != nil {
-			log.Error("failed to get block id by number", "err", err)
+			if !c.chain.IsNotFound(err) {
+				log.Error("failed to get block id by number", "err", err)
+			}
 			return nil
 		}
 		w(&proto.GetBlockIDByNumberResult{ID: id})
