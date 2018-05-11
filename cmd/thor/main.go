@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -95,8 +94,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	communicator := comm.New(chain, txPool)
-	node := node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator)
-	communicator.Start(node.HandleBlockStream)
+	communicator.Start()
 	defer func() { log.Info("stopping communicator..."); communicator.Stop() }()
 
 	p2pSrv, savePeers := startP2PServer(ctx, dataDir, communicator.Protocols())
@@ -108,7 +106,8 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage(gene, chain, master, dataDir, "http://"+apiSrv.listener.Addr().String()+"/")
 
-	return node.Run(handleExitSignal())
+	return node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, communicator).
+		Run(handleExitSignal())
 }
 
 func soloAction(ctx *cli.Context) error {

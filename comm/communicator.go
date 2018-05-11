@@ -26,16 +26,16 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	chain        *chain.Chain
-	ctx          context.Context
-	cancel       context.CancelFunc
-	peerSet      *PeerSet
-	syncedCh     chan struct{}
-	syncCh       chan struct{}
-	newBlockFeed event.Feed
-	feedScope    event.SubscriptionScope
-	goes         co.Goes
-	txPool       *txpool.TxPool
+	chain           *chain.Chain
+	txPool          *txpool.TxPool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	peerSet         *PeerSet
+	syncedCh        chan struct{}
+	newBlockFeed    event.Feed
+	feedScope       event.SubscriptionScope
+	goes            co.Goes
+	onceForSyncedCh sync.Once
 }
 
 // New create a new Communicator instance.
@@ -48,13 +48,50 @@ func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
 		cancel:   cancel,
 		peerSet:  newPeerSet(),
 		syncedCh: make(chan struct{}),
-		syncCh:   make(chan struct{}),
 	}
 }
 
 // Synced returns a channel indicates if synchronization process passed.
 func (c *Communicator) Synced() <-chan struct{} {
 	return c.syncedCh
+}
+
+func (c *Communicator) setSynced() {
+	c.onceForSyncedCh.Do(func() {
+		close(c.syncedCh)
+	})
+}
+
+// Sync start synchronization process.
+func (c *Communicator) Sync(handler HandleBlockStream) {
+	c.goes.Go(func() {
+		timer := time.NewTimer(0)
+		defer timer.Stop()
+
+		delay := 2 * time.Second
+
+		sync := func() {
+			log.Debug("synchronization start")
+			if err := c.sync(handler); err != nil {
+				log.Debug("synchronization failed", "err", err)
+			} else {
+				delay = 30 * time.Second
+				c.setSynced()
+				log.Debug("synchronization done")
+			}
+		}
+
+		for {
+			timer.Stop()
+			timer = time.NewTimer(delay)
+			select {
+			case <-timer.C:
+				sync()
+			case <-c.ctx.Done():
+				return
+			}
+		}
+	})
 }
 
 // Protocols returns all supported protocols.
@@ -157,8 +194,7 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 }
 
 // Start start the communicator.
-func (c *Communicator) Start(handler HandleBlockStream) {
-	c.goes.Go(func() { c.syncLoop(handler) })
+func (c *Communicator) Start() {
 	c.goes.Go(c.txLoop)
 }
 
@@ -195,39 +231,6 @@ func (c *Communicator) txLoop() {
 	}
 }
 
-func (c *Communicator) syncLoop(handler HandleBlockStream) {
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-
-	var once sync.Once
-	delay := 2 * time.Second
-
-	sync := func() {
-		log.Debug("synchronization start")
-		if err := c.sync(handler); err != nil {
-			log.Debug("synchronization failed", "err", err)
-		} else {
-			once.Do(func() {
-				close(c.syncedCh)
-				delay = 30 * time.Second
-			})
-			log.Debug("synchronization done")
-		}
-	}
-
-	for {
-		timer.Stop()
-		timer = time.NewTimer(delay)
-		select {
-		case <-timer.C:
-			sync()
-		case <-c.syncCh:
-			sync()
-		case <-c.ctx.Done():
-			return
-		}
-	}
-}
 func (c *Communicator) handleAnnounce(blockID thor.Bytes32, src *Peer) {
 	if _, err := c.chain.GetBlockHeader(blockID); err != nil {
 		if !c.chain.IsNotFound(err) {
@@ -259,16 +262,6 @@ func (c *Communicator) handleAnnounce(blockID thor.Bytes32, src *Peer) {
 	c.newBlockFeed.Send(&NewBlockEvent{
 		Block: result.Block,
 	})
-}
-
-// RequestSync request sync operation.
-func (c *Communicator) RequestSync() bool {
-	select {
-	case c.syncCh <- struct{}{}:
-		return true
-	default:
-		return false
-	}
 }
 
 // BroadcastBlock broadcast a block to remote peers.
