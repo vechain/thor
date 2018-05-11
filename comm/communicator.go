@@ -33,7 +33,6 @@ type Communicator struct {
 	syncedCh     chan struct{}
 	syncCh       chan struct{}
 	newBlockFeed event.Feed
-	newTxFeed    event.Feed
 	feedScope    event.SubscriptionScope
 	goes         co.Goes
 	txPool       *txpool.TxPool
@@ -157,14 +156,10 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 	return c.feedScope.Track(c.newBlockFeed.Subscribe(ch))
 }
 
-// SubscribeTransaction subscribe the event that new tx received.
-func (c *Communicator) SubscribeTransaction(ch chan *NewTransactionEvent) event.Subscription {
-	return c.feedScope.Track(c.newTxFeed.Subscribe(ch))
-}
-
 // Start start the communicator.
 func (c *Communicator) Start(handler HandleBlockStream) {
 	c.goes.Go(func() { c.syncLoop(handler) })
+	c.goes.Go(c.txLoop)
 }
 
 // Stop stop the communicator.
@@ -172,6 +167,32 @@ func (c *Communicator) Stop() {
 	c.cancel()
 	c.feedScope.Close()
 	c.goes.Wait()
+}
+
+func (c *Communicator) txLoop() {
+	txCh := make(chan *tx.Transaction)
+	sub := c.txPool.SubscribeNewTransaction(txCh)
+	defer sub.Unsubscribe()
+
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case tx := <-txCh:
+			peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+				return !p.IsTransactionKnown(tx.ID())
+			})
+
+			for _, peer := range peers {
+				peer.MarkTransaction(tx.ID())
+				c.goes.Go(func() {
+					if err := (proto.NewTx{Tx: tx}.Call(c.ctx, peer)); err != nil {
+						peer.logger.Debug("failed to broadcast tx", "err", err)
+					}
+				})
+			}
+		}
+	}
 }
 
 func (c *Communicator) syncLoop(handler HandleBlockStream) {
@@ -247,22 +268,6 @@ func (c *Communicator) RequestSync() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// BroadcastTx broadcast new tx to remote peers.
-func (c *Communicator) BroadcastTx(tx *tx.Transaction) {
-	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
-		return !p.IsTransactionKnown(tx.ID())
-	})
-
-	for _, peer := range peers {
-		peer.MarkTransaction(tx.ID())
-		c.goes.Go(func() {
-			if err := (proto.NewTx{Tx: tx}.Call(c.ctx, peer)); err != nil {
-				peer.logger.Debug("failed to broadcast tx", "err", err)
-			}
-		})
 	}
 }
 

@@ -62,7 +62,6 @@ func New(
 func (n *Node) Run(ctx context.Context) error {
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
-	n.goes.Go(func() { n.txLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
 
 	n.goes.Wait()
