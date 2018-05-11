@@ -57,7 +57,7 @@ func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
 
 func TestP(t *testing.T) {
 
-	kv, _ := lvldb.New("/tmp/thor", lvldb.Options{})
+	kv, _ := lvldb.NewMem()
 	defer kv.Close()
 
 	g, _ := genesis.NewDevnet()
