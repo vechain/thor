@@ -17,8 +17,6 @@ import (
 	"github.com/vechain/thor/state"
 )
 
-type signFn func(blk *block.Block) (*block.Block, error)
-
 func TestConsensus(t *testing.T) {
 	assert := assert.New(t)
 	tc := newTestConsensus(t)
