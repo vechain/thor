@@ -12,33 +12,11 @@ import (
 	"github.com/vechain/thor/comm/proto"
 )
 
-func (c *Communicator) choosePeerToSync(bestBlock *block.Block) *Peer {
-	betters := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		_, totalScore := peer.Head()
-		return totalScore >= bestBlock.Header().TotalScore()
-	})
-
-	if len(betters) > 0 {
-		return betters[0]
-	}
-	return nil
-}
-
-func (c *Communicator) sync(handler HandleBlockStream) error {
-	localBest := c.chain.BestBlock()
-	peer := c.choosePeerToSync(localBest)
-	if peer == nil {
-		if c.peerSet.Len() >= 3 {
-			return nil
-		}
-		return errors.New("no suitable peer")
-	}
-
-	ancestor, err := c.findCommonAncestor(peer, localBest.Header().Number())
+func (c *Communicator) sync(peer *Peer, headNum uint32, handler HandleBlockStream) error {
+	ancestor, err := c.findCommonAncestor(peer, headNum)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "find common ancestor")
 	}
-
 	return c.download(peer, ancestor+1, handler)
 }
 

@@ -24,17 +24,17 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	chain           *chain.Chain
-	txPool          *txpool.TxPool
-	ctx             context.Context
-	cancel          context.CancelFunc
-	peerSet         *PeerSet
-	syncedCh        chan struct{}
-	newBlockFeed    event.Feed
-	announcementCh  chan *announcement
-	feedScope       event.SubscriptionScope
-	goes            co.Goes
-	onceForSyncedCh sync.Once
+	chain          *chain.Chain
+	txPool         *txpool.TxPool
+	ctx            context.Context
+	cancel         context.CancelFunc
+	peerSet        *PeerSet
+	syncedCh       chan struct{}
+	newBlockFeed   event.Feed
+	announcementCh chan *announcement
+	feedScope      event.SubscriptionScope
+	goes           co.Goes
+	onceSynced     sync.Once
 }
 
 // New create a new Communicator instance.
@@ -56,39 +56,66 @@ func (c *Communicator) Synced() <-chan struct{} {
 	return c.syncedCh
 }
 
-func (c *Communicator) setSynced() {
-	c.onceForSyncedCh.Do(func() {
-		close(c.syncedCh)
-	})
-}
-
 // Sync start synchronization process.
 func (c *Communicator) Sync(handler HandleBlockStream) {
+	const initSyncInterval = 2 * time.Second
+	const syncInterval = 30 * time.Second
+
 	c.goes.Go(func() {
 		timer := time.NewTimer(0)
 		defer timer.Stop()
+		delay := initSyncInterval
+		syncCount := 0
 
-		delay := 2 * time.Second
-
-		sync := func() {
-			log.Debug("synchronization start")
-			if err := c.sync(handler); err != nil {
-				log.Debug("synchronization failed", "err", err)
-			} else {
-				delay = 30 * time.Second
-				c.setSynced()
-				log.Debug("synchronization done")
+		shouldSynced := func() bool {
+			bestBlockTime := c.chain.BestBlock().Header().Timestamp()
+			now := uint64(time.Now().Unix())
+			if bestBlockTime+thor.BlockInterval >= now {
+				return true
 			}
+			if syncCount > 2 {
+				return true
+			}
+			return false
 		}
 
 		for {
 			timer.Stop()
 			timer = time.NewTimer(delay)
 			select {
-			case <-timer.C:
-				sync()
 			case <-c.ctx.Done():
 				return
+			case <-timer.C:
+				log.Debug("synchronization start")
+
+				best := c.chain.BestBlock().Header()
+				// choose peer which has the head block with higher total score
+				peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
+					_, totalScore := peer.Head()
+					return totalScore >= best.TotalScore()
+				})
+				if peer == nil {
+					if c.peerSet.Len() < 3 {
+						log.Debug("no suitable peer to sync")
+						break
+					}
+					// if more than 3 peers connected, we are assumed to be the best
+					log.Debug("synchronization done, best assumed")
+				} else {
+					if err := c.sync(peer, best.Number(), handler); err != nil {
+						peer.logger.Debug("synchronization failed", "err", err)
+						break
+					}
+					peer.logger.Debug("synchronization done")
+				}
+				syncCount++
+
+				if shouldSynced() {
+					delay = syncInterval
+					c.onceSynced.Do(func() {
+						close(c.syncedCh)
+					})
+				}
 			}
 		}
 	})
