@@ -166,9 +166,9 @@ func (c *Communicator) runPeer(peer *Peer) {
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
 	defer cancel()
 
-	result, err := proto.Status{}.Call(ctx, peer)
+	result, err := proto.GetStatus{}.Call(ctx, peer)
 	if err != nil {
-		peer.logger.Debug("failed to request status", "err", err)
+		peer.logger.Debug("failed to get status", "err", err)
 		return
 	}
 	if result.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {

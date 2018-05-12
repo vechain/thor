@@ -24,14 +24,14 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 	}()
 
 	switch msg.Code {
-	case proto.MsgStatus:
-		var arg proto.Status
+	case proto.MsgGetStatus:
+		var arg proto.GetStatus
 		if err := msg.Decode(&arg); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 
 		best := c.chain.BestBlock().Header()
-		write(&proto.StatusResult{
+		write(&proto.GetStatusResult{
 			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),
 			TotalScore:     best.TotalScore(),

@@ -8,13 +8,13 @@ import (
 const (
 	Name              = "thor"
 	Version    uint   = 1
-	Length     uint64 = 40
+	Length     uint64 = 8
 	MaxMsgSize        = 10 * 1024 * 1024
 )
 
 // Protocol messages of thor
 const (
-	MsgStatus = iota
+	MsgGetStatus = iota
 	MsgNewBlockID
 	MsgNewBlock
 	MsgNewTx
@@ -27,8 +27,8 @@ const (
 // MsgName convert msg code to string.
 func MsgName(msgCode uint64) string {
 	switch msgCode {
-	case MsgStatus:
-		return "MsgStatus"
+	case MsgGetStatus:
+		return "MsgGetStatus"
 	case MsgNewBlockID:
 		return "MsgNewBlockID"
 	case MsgNewBlock:

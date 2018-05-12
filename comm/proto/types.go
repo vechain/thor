@@ -10,11 +10,11 @@ import (
 )
 
 type (
-	// Status arg of MsgStatus.
-	Status struct{}
+	// GetStatus arg of MsgStatus.
+	GetStatus struct{}
 
-	// StatusResult result of MsgStatus.
-	StatusResult struct {
+	// GetStatusResult result of MsgStatus.
+	GetStatusResult struct {
 		GenesisBlockID thor.Bytes32
 		SysTimestamp   uint64
 		BestBlockID    thor.Bytes32
@@ -63,9 +63,9 @@ type RPC interface {
 }
 
 // Call perform RPC call.
-func (a Status) Call(ctx context.Context, rpc RPC) (*StatusResult, error) {
-	var result StatusResult
-	if err := rpc.Call(ctx, MsgStatus, &a, &result); err != nil {
+func (a GetStatus) Call(ctx context.Context, rpc RPC) (*GetStatusResult, error) {
+	var result GetStatusResult
+	if err := rpc.Call(ctx, MsgGetStatus, &a, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
