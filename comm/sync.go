@@ -3,6 +3,7 @@ package comm
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
@@ -166,4 +167,26 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 	}
 
 	return find(seekedNum, headNum, 0)
+}
+
+func (c *Communicator) syncTxs(peer *Peer) {
+	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
+	defer cancel()
+	result, err := proto.GetTxs{}.Call(ctx, peer)
+	if err != nil {
+		peer.logger.Debug("failed to request txs", "err", err)
+		return
+	}
+	for _, tx := range result {
+		c.txPool.Add(tx)
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-peer.Done():
+			return
+		default:
+		}
+	}
+	peer.logger.Debug("tx synced")
 }

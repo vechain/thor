@@ -11,6 +11,7 @@ import (
 	"github.com/vechain/thor/metric"
 )
 
+// peer will be disconnected if error returned
 func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{})) (err error) {
 	const maxResultSize = 2 * 1024 * 1024
 
@@ -44,10 +45,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 
 		peer.MarkBlock(arg.Block.Header().ID())
 		peer.UpdateHead(arg.Block.Header().ID(), arg.Block.Header().TotalScore())
-
-		c.goes.Go(func() {
-			c.newBlockFeed.Send(&NewBlockEvent{Block: arg.Block})
-		})
+		c.newBlockFeed.Send(&NewBlockEvent{Block: arg.Block})
 		write(&struct{}{})
 	case proto.MsgNewBlockID:
 		var arg proto.NewBlockID
@@ -55,7 +53,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkBlock(arg.ID)
-		c.goes.Go(func() { c.handleAnnounce(arg.ID, peer) })
+		select {
+		case <-c.ctx.Done():
+		case c.announcementCh <- &announcement{arg.ID, peer}:
+		}
 		write(&struct{}{})
 	case proto.MsgNewTx:
 		var arg proto.NewTx
