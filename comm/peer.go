@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/comm/rpc"
+	"github.com/vechain/thor/p2psrv/rpc"
 	"github.com/vechain/thor/thor"
 )
 
@@ -51,7 +51,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	knownBlocks, _ := lru.New(maxKnownBlocks)
 	return &Peer{
 		Peer:        peer,
-		RPC:         rpc.New(rw, ctx),
+		RPC:         rpc.New(peer, rw),
 		logger:      log.New(ctx...),
 		createdTime: mclock.Now(),
 		knownTxs:    knownTxs,

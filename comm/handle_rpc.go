@@ -1,31 +1,36 @@
 package comm
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/metric"
 )
 
-func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) (err error) {
+func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{})) (err error) {
 	const maxResultSize = 2 * 1024 * 1024
+
+	log := peer.logger.New("msg", proto.MsgName(msg.Code))
+	log.Debug("received RPC call")
 	defer func() {
-		if _, bad := err.(badCall); bad {
-			peer.Disconnect(p2p.DiscSubprotocolError)
+		if err != nil {
+			log.Debug("failed to handle RPC call", "err", err)
 		}
 	}()
 
-	log := peer.logger.New("msg", proto.MsgName(msg.Code))
-	log.Debug("received RPC msg")
-
 	switch msg.Code {
 	case proto.MsgStatus:
+		var arg proto.Status
+		if err := msg.Decode(&arg); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+
 		best := c.chain.BestBlock().Header()
-		w(&proto.StatusResult{
+		write(&proto.StatusResult{
 			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),
 			TotalScore:     best.TotalScore(),
@@ -34,10 +39,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 	case proto.MsgNewBlock:
 		var arg proto.NewBlock
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
-		}
-		if arg.Block == nil {
-			return badCall{errors.New("nil block")}
+			return errors.WithMessage(err, "decode msg")
 		}
 
 		peer.MarkBlock(arg.Block.Header().ID())
@@ -46,57 +48,55 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		c.goes.Go(func() {
 			c.newBlockFeed.Send(&NewBlockEvent{Block: arg.Block})
 		})
-		w(&struct{}{})
+		write(&struct{}{})
 	case proto.MsgNewBlockID:
 		var arg proto.NewBlockID
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
+			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkBlock(arg.ID)
 		c.goes.Go(func() { c.handleAnnounce(arg.ID, peer) })
-		w(&struct{}{})
+		write(&struct{}{})
 	case proto.MsgNewTx:
 		var arg proto.NewTx
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
-		}
-		if arg.Tx == nil {
-			return badCall{errors.New("nil tx")}
+			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(arg.Tx.ID())
 		c.txPool.Add(arg.Tx)
-		w(&struct{}{})
+		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var arg proto.GetBlockByID
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
+			return errors.WithMessage(err, "decode msg")
 		}
 		blk, err := c.chain.GetBlock(arg.ID)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block", "err", err)
 			}
-			return nil
+			write(&proto.GetBlockByIDResult{})
+		} else {
+			write(&proto.GetBlockByIDResult{Block: blk})
 		}
-		peer.MarkBlock(arg.ID)
-		w(&proto.GetBlockByIDResult{Block: blk})
 	case proto.MsgGetBlockIDByNumber:
 		var arg proto.GetBlockIDByNumber
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
+			return errors.WithMessage(err, "decode msg")
 		}
 		id, err := c.chain.GetBlockIDByNumber(arg.Num)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block id by number", "err", err)
 			}
-			return nil
+			write(&proto.GetBlockIDByNumberResult{})
+		} else {
+			write(&proto.GetBlockIDByNumberResult{ID: id})
 		}
-		w(&proto.GetBlockIDByNumberResult{ID: id})
 	case proto.MsgGetBlocksFromNumber:
 		var arg proto.GetBlocksFromNumber
 		if err := msg.Decode(&arg); err != nil {
-			return badCall{err}
+			return errors.WithMessage(err, "decode msg")
 		}
 
 		const maxBlocks = 1024
@@ -106,18 +106,21 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 		for size < maxResultSize && len(result) < maxBlocks {
 			raw, err := c.chain.GetBlockRawByNumber(num)
 			if err != nil {
-				if c.chain.IsNotFound(err) {
-					break
+				if !c.chain.IsNotFound(err) {
+					log.Error("failed to get block raw by number", "err", err)
 				}
-				log.Error("failed to get block raw by number", "err", err)
-				return nil
+				break
 			}
 			result = append(result, rlp.RawValue(raw))
 			num++
 			size += metric.StorageSize(len(raw))
 		}
-		w(result)
+		write(result)
 	case proto.MsgGetTxs:
+		var arg proto.GetTxs
+		if err := msg.Decode(&arg); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
 		txs := c.txPool.Pending(false)
 		result := make(proto.GetTxsResult, 0, len(txs))
 		var size metric.StorageSize
@@ -128,17 +131,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, w func(interface{})) 
 			}
 			result = append(result, tx)
 		}
-		w(result)
+		write(result)
 	default:
-		return badCall{fmt.Errorf("unexpected message code(%v)", msg.Code)}
+		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}
 	return nil
-}
-
-type badCall struct {
-	err error
-}
-
-func (b badCall) Error() string {
-	return "bad call: " + b.err.Error()
 }

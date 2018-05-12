@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
+	"github.com/pkg/errors"
 )
 
 func init() {
@@ -28,6 +28,7 @@ var (
 )
 
 type RPC struct {
+	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
 	doneCh   chan struct{}
 	pendings map[uint32]*resultListener
@@ -35,12 +36,21 @@ type RPC struct {
 	logger   log15.Logger
 }
 
-func New(rw p2p.MsgReadWriter, logCtx []interface{}) *RPC {
+func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
+	dir := "outbound"
+	if peer.Inbound() {
+		dir = "inbound"
+	}
+	ctx := []interface{}{
+		"peer", peer,
+		"dir", dir,
+	}
 	return &RPC{
+		peer:     peer,
 		rw:       rw,
 		doneCh:   make(chan struct{}),
 		pendings: make(map[uint32]*resultListener),
-		logger:   log.New(logCtx...),
+		logger:   log.New(ctx...),
 	}
 }
 func (r *RPC) Done() <-chan struct{} {
@@ -53,12 +63,14 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 	processMsg := func() error {
 		msg, err := r.rw.ReadMsg()
 		if err != nil {
+			r.logger.Debug("failed to read msg", "err", err)
 			return err
 		}
 		// ensure msg.Payload consumed
 		defer msg.Discard()
 
 		if msg.Size > maxMsgSize {
+			r.logger.Debug("read message too large")
 			return errMsgTooLarge
 		}
 		// parse first two elements, which are callID and isResult
@@ -83,12 +95,14 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 		if isResult {
 			if err := r.handleResult(callID, &msg); err != nil {
 				r.logger.Debug("handle result", "msg", msg.Code, "callid", callID, "err", err)
+				return err
 			}
 		} else {
 			if err := handleFunc(&msg, func(result interface{}) {
 				p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
 			}); err != nil {
 				r.logger.Debug("handle call", "msg", msg.Code, "callid", callID, "err", err)
+				return err
 			}
 		}
 		return nil
@@ -110,20 +124,21 @@ func (r *RPC) handleResult(callID uint32, msg *p2p.Msg) error {
 	r.lock.Unlock()
 
 	if !ok {
-		return errors.New("unexpected call result")
+		r.logger.Debug("unexpected call result", "msg", msg.Code)
+		return nil
 	}
 
 	if listener.msgCode != msg.Code {
 		return errors.New("msg code mismatch")
 	}
 
-	if err := listener.onResult(msg, nil); err != nil {
+	if err := listener.onResult(msg); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg, error) error) uint32 {
+func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	for {
@@ -148,17 +163,14 @@ func (r *RPC) Call(ctx context.Context, msgCode uint64, arg interface{}, result 
 	defer cancel()
 
 	errCh := make(chan error, 1)
-	id := r.prepareCall(msgCode, func(msg *p2p.Msg, err error) error {
-		defer func() {
-			errCh <- err
-		}()
+	id := r.prepareCall(msgCode, func(msg *p2p.Msg) error {
+		// msg should decode here, or its payload will be discarded by msg loop
+		err := msg.Decode(result)
 		if err != nil {
-			return err
+			err = errors.WithMessage(err, "decode result")
 		}
-		if err = msg.Decode(result); err != nil {
-			return err
-		}
-		return nil
+		errCh <- err
+		return err
 	})
 	defer r.finalizeCall(id)
 

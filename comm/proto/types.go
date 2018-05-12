@@ -46,7 +46,9 @@ type (
 	GetBlockByID struct{ ID thor.Bytes32 }
 
 	// GetBlockByIDResult result of MsgGetBlockByID.
-	GetBlockByIDResult struct{ Block *block.Block }
+	GetBlockByIDResult struct {
+		Block *block.Block `rlp:"nil"`
+	}
 
 	// GetTxs arg of MsgGetTxs.
 	GetTxs struct{}
