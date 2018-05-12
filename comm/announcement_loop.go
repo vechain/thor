@@ -36,7 +36,12 @@ func (c *Communicator) announcementLoop() {
 				fetchingBlockIDs[ann.newBlockID] = n + 1
 
 				c.goes.Go(func() {
-					defer func() { fetchDone <- ann }()
+					defer func() {
+						select {
+						case fetchDone <- ann:
+						case <-c.ctx.Done():
+						}
+					}()
 					c.fetchBlockByID(ann.peer, ann.newBlockID)
 				})
 			} else {

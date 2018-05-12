@@ -10,11 +10,11 @@ import (
 )
 
 type (
-	// Status arg of MsgStatus.
-	Status struct{}
+	// GetStatus arg of MsgStatus.
+	GetStatus struct{}
 
-	// StatusResult result of MsgStatus.
-	StatusResult struct {
+	// GetStatusResult result of MsgStatus.
+	GetStatusResult struct {
 		GenesisBlockID thor.Bytes32
 		SysTimestamp   uint64
 		BestBlockID    thor.Bytes32
@@ -60,30 +60,31 @@ type (
 // RPC defines RPC interface.
 type RPC interface {
 	Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error
+	Notify(ctx context.Context, msgCode uint64, arg interface{}) error
 }
 
 // Call perform RPC call.
-func (a Status) Call(ctx context.Context, rpc RPC) (*StatusResult, error) {
-	var result StatusResult
-	if err := rpc.Call(ctx, MsgStatus, &a, &result); err != nil {
+func (a GetStatus) Call(ctx context.Context, rpc RPC) (*GetStatusResult, error) {
+	var result GetStatusResult
+	if err := rpc.Call(ctx, MsgGetStatus, &a, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// Call perform RPC call.
-func (a NewBlockID) Call(ctx context.Context, rpc RPC) error {
-	return rpc.Call(ctx, MsgNewBlockID, &a, &struct{}{})
+// Notify notify new block ID.
+func (a NewBlockID) Notify(ctx context.Context, rpc RPC) error {
+	return rpc.Notify(ctx, MsgNewBlockID, &a)
 }
 
-// Call perform RPC call.
-func (a NewBlock) Call(ctx context.Context, rpc RPC) error {
-	return rpc.Call(ctx, MsgNewBlock, &a, &struct{}{})
+// Notify notify new block.
+func (a NewBlock) Notify(ctx context.Context, rpc RPC) error {
+	return rpc.Notify(ctx, MsgNewBlock, &a)
 }
 
-// Call perform RPC call.
-func (a NewTx) Call(ctx context.Context, rpc RPC) error {
-	return rpc.Call(ctx, MsgNewTx, &a, &struct{}{})
+// Notify notify new Tx.
+func (a NewTx) Notify(ctx context.Context, rpc RPC) error {
+	return rpc.Notify(ctx, MsgNewTx, &a)
 }
 
 // Call perform RPC call.
