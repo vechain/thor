@@ -99,7 +99,10 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 			}
 		} else {
 			if err := handleFunc(&msg, func(result interface{}) {
-				p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
+				// here we ignore writing result for Notify
+				if callID != 0 {
+					p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
+				}
 			}); err != nil {
 				r.logger.Debug("handle call", "msg", msg.Code, "callid", callID, "err", err)
 				return err
@@ -143,6 +146,10 @@ func (r *RPC) prepareCall(msgCode uint64, onResult func(*p2p.Msg) error) uint32 
 	defer r.lock.Unlock()
 	for {
 		id := rand.Uint32()
+		if id == 0 {
+			// 0 id is taken by Notify
+			continue
+		}
 		if _, ok := r.pendings[id]; !ok {
 			r.pendings[id] = &resultListener{
 				msgCode,
@@ -156,6 +163,10 @@ func (r *RPC) finalizeCall(id uint32) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	delete(r.pendings, id)
+}
+
+func (r *RPC) Notify(ctx context.Context, msgCode uint64, arg interface{}) error {
+	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 
 func (r *RPC) Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error {
