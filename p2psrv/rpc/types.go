@@ -10,7 +10,7 @@ type msgData struct {
 
 type resultListener struct {
 	msgCode  uint64
-	onResult func(*p2p.Msg, error) error
+	onResult func(*p2p.Msg) error
 }
 
-type HandleFunc func(msg *p2p.Msg, w func(interface{})) error
+type HandleFunc func(msg *p2p.Msg, write func(interface{})) error
