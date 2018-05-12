@@ -161,8 +161,6 @@ func (c *Communicator) syncTxs(peer *Peer) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-peer.Done():
-			return
 		default:
 		}
 	}

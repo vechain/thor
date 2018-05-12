@@ -225,7 +225,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := (proto.NewBlock{Block: blk}.Call(c.ctx, peer)); err != nil {
+			if err := (proto.NewBlock{Block: blk}.Notify(c.ctx, peer)); err != nil {
 				peer.logger.Debug("failed to broadcast new block", "err", err)
 			}
 		})
@@ -235,7 +235,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := (proto.NewBlockID{ID: blk.Header().ID()}.Call(c.ctx, peer)); err != nil {
+			if err := (proto.NewBlockID{ID: blk.Header().ID()}.Notify(c.ctx, peer)); err != nil {
 				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}
 		})
