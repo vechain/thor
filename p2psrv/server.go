@@ -32,7 +32,7 @@ func New(opts *Options) *Server {
 		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
 	}
 
-	knownNodes := cache.NewPrioCache(16)
+	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
 		knownNodes.Set(node.ID, node, 0)

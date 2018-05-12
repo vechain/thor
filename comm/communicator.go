@@ -1,7 +1,6 @@
 package comm
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -18,7 +17,6 @@ import (
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -33,6 +31,7 @@ type Communicator struct {
 	peerSet         *PeerSet
 	syncedCh        chan struct{}
 	newBlockFeed    event.Feed
+	announcementCh  chan *announcement
 	feedScope       event.SubscriptionScope
 	goes            co.Goes
 	onceForSyncedCh sync.Once
@@ -42,12 +41,13 @@ type Communicator struct {
 func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		chain:    chain,
-		txPool:   txPool,
-		ctx:      ctx,
-		cancel:   cancel,
-		peerSet:  newPeerSet(),
-		syncedCh: make(chan struct{}),
+		chain:          chain,
+		txPool:         txPool,
+		ctx:            ctx,
+		cancel:         cancel,
+		peerSet:        newPeerSet(),
+		syncedCh:       make(chan struct{}),
+		announcementCh: make(chan *announcement),
 	}
 }
 
@@ -103,23 +103,36 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 				Name:    proto.Name,
 				Version: proto.Version,
 				Length:  proto.Length,
-				Run:     c.runPeer,
+				Run:     c.servePeer,
 			},
 			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
 		}}
 }
 
-func (c *Communicator) runPeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+// Start start the communicator.
+func (c *Communicator) Start() {
+	c.goes.Go(c.txsLoop)
+	c.goes.Go(c.announcementLoop)
+}
+
+// Stop stop the communicator.
+func (c *Communicator) Stop() {
+	c.cancel()
+	c.feedScope.Close()
+	c.goes.Wait()
+}
+
+func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := newPeer(p, rw)
 	c.goes.Go(func() {
-		c.peerLifeCycle(peer)
+		c.runPeer(peer)
 	})
 	return peer.Serve(func(msg *p2p.Msg, w func(interface{})) error {
 		return c.handleRPC(peer, msg, w)
 	}, proto.MaxMsgSize)
 }
 
-func (c *Communicator) peerLifeCycle(peer *Peer) {
+func (c *Communicator) runPeer(peer *Peer) {
 	defer peer.Disconnect(p2p.DiscRequested)
 
 	// 5sec timeout for handshake
@@ -147,11 +160,11 @@ func (c *Communicator) peerLifeCycle(peer *Peer) {
 
 	peer.UpdateHead(result.BestBlockID, result.TotalScore)
 	c.peerSet.Add(peer)
-	peer.logger.Debug("peer added")
+	peer.logger.Debug(fmt.Sprintf("peer added (%v)", c.peerSet.Len()))
 
 	defer func() {
 		c.peerSet.Remove(peer.ID())
-		peer.logger.Debug("peer removed")
+		peer.logger.Debug(fmt.Sprintf("peer removed (%v)", c.peerSet.Len()))
 	}()
 
 	select {
@@ -166,103 +179,9 @@ func (c *Communicator) peerLifeCycle(peer *Peer) {
 	}
 }
 
-func (c *Communicator) syncTxs(peer *Peer) {
-	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
-	defer cancel()
-	result, err := proto.GetTxs{}.Call(ctx, peer)
-	if err != nil {
-		peer.logger.Debug("failed to request txs", "err", err)
-		return
-	}
-	for _, tx := range result {
-		c.txPool.Add(tx)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-peer.Done():
-			return
-		default:
-		}
-	}
-	peer.logger.Debug("tx synced")
-}
-
 // SubscribeBlock subscribe the event that new block received.
 func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription {
 	return c.feedScope.Track(c.newBlockFeed.Subscribe(ch))
-}
-
-// Start start the communicator.
-func (c *Communicator) Start() {
-	c.goes.Go(c.txLoop)
-}
-
-// Stop stop the communicator.
-func (c *Communicator) Stop() {
-	c.cancel()
-	c.feedScope.Close()
-	c.goes.Wait()
-}
-
-func (c *Communicator) txLoop() {
-	txCh := make(chan *tx.Transaction)
-	sub := c.txPool.SubscribeNewTransaction(txCh)
-	defer sub.Unsubscribe()
-
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case tx := <-txCh:
-			peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
-				return !p.IsTransactionKnown(tx.ID())
-			})
-
-			for _, peer := range peers {
-				peer := peer
-				peer.MarkTransaction(tx.ID())
-				c.goes.Go(func() {
-					if err := (proto.NewTx{Tx: tx}.Call(c.ctx, peer)); err != nil {
-						peer.logger.Debug("failed to broadcast tx", "err", err)
-					}
-				})
-			}
-		}
-	}
-}
-
-func (c *Communicator) handleAnnounce(blockID thor.Bytes32, src *Peer) {
-	if _, err := c.chain.GetBlockHeader(blockID); err != nil {
-		if !c.chain.IsNotFound(err) {
-			log.Error("failed to get block header", "err", err)
-		}
-	} else {
-		// already in chain
-		return
-	}
-
-	target := c.peerSet.Slice().Find(func(p *Peer) bool {
-		id, _ := p.Head()
-		return bytes.Compare(id[:], blockID[:]) >= 0
-	})
-	if target == nil {
-		target = src
-	}
-
-	result, err := proto.GetBlockByID{ID: blockID}.Call(c.ctx, target)
-	if err != nil {
-		target.logger.Debug("failed to get block by id", "err", err)
-		return
-	}
-
-	if result.Block == nil {
-		target.logger.Debug("get nil block by id")
-		return
-	}
-	c.newBlockFeed.Send(&NewBlockEvent{
-		Block: result.Block,
-	})
 }
 
 // BroadcastBlock broadcast a block to remote peers.
