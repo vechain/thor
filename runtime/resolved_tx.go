@@ -12,9 +12,7 @@ import (
 
 // ResolvedTransaction resolve the transaction according to given state.
 type ResolvedTransaction struct {
-	state *state.State
-	tx    *tx.Transaction
-
+	tx           *tx.Transaction
 	Origin       thor.Address
 	IntrinsicGas uint64
 	BaseGasPrice *big.Int
@@ -40,7 +38,6 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 	gasPrice := tx.GasPrice(baseGasPrice)
 	clauses := tx.Clauses()
 	return &ResolvedTransaction{
-		state,
 		tx,
 		origin,
 		intrinsicGas,
@@ -75,8 +72,8 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, returnGas func(uint64), err error) {
-	energy := builtin.Energy.Native(r.state)
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockNum uint32) (payer thor.Address, returnGas func(uint64), err error) {
+	energy := builtin.Energy.Native(state)
 	doReturnGas := func(rgas uint64) *big.Int {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
 		energy.AddBalance(payer, returnedEnergy, blockNum)
@@ -86,7 +83,7 @@ func (r *ResolvedTransaction) BuyGas(blockNum uint32) (payer thor.Address, retur
 	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
 	commonTo := r.CommonTo()
 	if commonTo != nil {
-		binding := builtin.Prototype.Native(r.state).Bind(*commonTo)
+		binding := builtin.Prototype.Native(state).Bind(*commonTo)
 		credit := binding.UserCredit(r.Origin, blockNum)
 		if credit.Cmp(prepaid) >= 0 {
 			doReturnGasAndSetCredit := func(rgas uint64) {
