@@ -12,5 +12,3 @@ type resultListener struct {
 	msgCode  uint64
 	onResult func(*p2p.Msg) error
 }
-
-type HandleFunc func(msg *p2p.Msg, write func(interface{})) error
