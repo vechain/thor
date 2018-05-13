@@ -27,6 +27,10 @@ var (
 	log                 = log15.New("pkg", "rpc")
 )
 
+// HandleFunc to handle received messages from peer.
+type HandleFunc func(msg *p2p.Msg, write func(interface{})) error
+
+// RPC defines the common pattern that peer interacts with each other.
 type RPC struct {
 	peer     *p2p.Peer
 	rw       p2p.MsgReadWriter
@@ -36,6 +40,7 @@ type RPC struct {
 	logger   log15.Logger
 }
 
+// New create a new RPC instance.
 func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 	dir := "outbound"
 	if peer.Inbound() {
@@ -53,10 +58,13 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 		logger:   log.New(ctx...),
 	}
 }
+
+// Done returns a channel to indicates whether peer disconnected.
 func (r *RPC) Done() <-chan struct{} {
 	return r.doneCh
 }
 
+// Serve handles peer's IO loop, and dispatches calls and results.
 func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 	defer func() { close(r.doneCh) }()
 
@@ -99,10 +107,10 @@ func (r *RPC) Serve(handleFunc HandleFunc, maxMsgSize uint32) error {
 			}
 		} else {
 			if err := handleFunc(&msg, func(result interface{}) {
-				// here we ignore writing result for Notify
 				if callID != 0 {
 					p2p.Send(r.rw, msg.Code, &msgData{callID, true, result})
 				}
+				// here we skip result for Notify (callID == 0)
 			}); err != nil {
 				r.logger.Debug("handle call", "msg", msg.Code, "callid", callID, "err", err)
 				return err
@@ -165,10 +173,12 @@ func (r *RPC) finalizeCall(id uint32) {
 	delete(r.pendings, id)
 }
 
+// Notify notifies a message to the peer.
 func (r *RPC) Notify(ctx context.Context, msgCode uint64, arg interface{}) error {
 	return p2p.Send(r.rw, msgCode, &msgData{0, false, arg})
 }
 
+// Call send a call to the peer and wait for result.
 func (r *RPC) Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, rpcDefaultTimeout)
 	defer cancel()
