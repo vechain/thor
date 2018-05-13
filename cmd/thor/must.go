@@ -42,18 +42,26 @@ func initLogger(ctx *cli.Context) {
 }
 
 func selectGenesis(ctx *cli.Context) *genesis.Genesis {
-	if ctx.IsSet(devFlag.Name) {
+	network := ctx.String(networkFlag.Name)
+	switch network {
+	case "test":
+		gene, err := genesis.NewTestnet()
+		if err != nil {
+			fatal(err)
+		}
+		return gene
+	case "dev":
 		gene, err := genesis.NewDevnet()
 		if err != nil {
 			fatal(err)
 		}
 		return gene
+	default:
+		cli.ShowAppHelp(ctx)
+		fmt.Println("unrecognized value of -network:", network)
+		os.Exit(1)
+		return nil
 	}
-	gene, err := genesis.NewMainnet()
-	if err != nil {
-		fatal(err)
-	}
-	return gene
 }
 
 func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
@@ -119,7 +127,7 @@ func loadNodeMaster(ctx *cli.Context, dataDir string) *node.Master {
 		return bene
 	}
 
-	if ctx.IsSet(devFlag.Name) {
+	if ctx.String(networkFlag.Name) == "dev" {
 		i := rand.Intn(len(genesis.DevAccounts()))
 		acc := genesis.DevAccounts()[i]
 		return &node.Master{
@@ -150,7 +158,9 @@ func startP2PComm(ctx *cli.Context, dataDir string, chain *chain.Chain, txPool *
 
 	nat, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
-		fatal("parse nat flag:", err)
+		cli.ShowAppHelp(ctx)
+		fmt.Println("parse -nat flag:", err)
+		os.Exit(1)
 	}
 	opts := &p2psrv.Options{
 		Name:           common.MakeName("thor", fullVersion()),

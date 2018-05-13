@@ -11,9 +11,10 @@ var (
 		Value: defaultMainDir(),
 		Usage: "main directory for configs and databases",
 	}
-	devFlag = cli.BoolFlag{
-		Name:  "dev",
-		Usage: "develop mode",
+	networkFlag = cli.StringFlag{
+		Name:  "network",
+		Value: "test",
+		Usage: "the network to join (test|dev)",
 	}
 	beneficiaryFlag = cli.StringFlag{
 		Name:  "beneficiary",

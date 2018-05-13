@@ -14,7 +14,6 @@ import (
 func NewTestnet() (*Genesis, error) {
 
 	launchTime := uint64(1526227200) // Mon May 14 2018 00:00:00 GMT+0800 (CST)
-	tokenSupply := new(big.Int)
 
 	builtin.Executor.Address, _ = thor.ParseAddress("0xB5A34b62b63A6f1EE99DFD30b133B657859f8d79")
 	acccount0, _ := thor.ParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
@@ -26,6 +25,8 @@ func NewTestnet() (*Genesis, error) {
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
 		State(func(state *state.State) error {
+			tokenSupply := new(big.Int)
+
 			// alloc precompiled contracts
 			for addr := range evm.PrecompiledContractsByzantium {
 				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)

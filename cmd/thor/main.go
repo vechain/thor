@@ -41,7 +41,7 @@ func main() {
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
 		Flags: []cli.Flag{
 			dirFlag,
-			devFlag,
+			networkFlag,
 			beneficiaryFlag,
 			apiAddrFlag,
 			apiCorsFlag,

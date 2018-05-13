@@ -19,7 +19,14 @@ type Genesis struct {
 
 // Build build the genesis block.
 func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, events tx.Events, err error) {
-	return g.builder.Build(stateCreator)
+	block, events, err := g.builder.Build(stateCreator)
+	if err != nil {
+		return nil, nil, err
+	}
+	if block.Header().ID() != g.id {
+		panic("built genesis ID incorrect")
+	}
+	return block, events, nil
 }
 
 // ID returns genesis block ID.
