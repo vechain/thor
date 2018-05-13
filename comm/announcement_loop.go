@@ -45,7 +45,7 @@ func (c *Communicator) announcementLoop() {
 					c.fetchBlockByID(ann.peer, ann.newBlockID)
 				})
 			} else {
-				ann.peer.logger.Debug("ignored new block ID announcement")
+				ann.peer.logger.Debug("skip new block ID announcement")
 			}
 		}
 	}

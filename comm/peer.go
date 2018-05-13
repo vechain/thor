@@ -23,6 +23,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// Peer extends p2p.Peer with RPC integrated.
 type Peer struct {
 	*p2p.Peer
 	*rpc.RPC
@@ -59,12 +60,14 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 }
 
+// Head returns head block ID and total score.
 func (p *Peer) Head() (id thor.Bytes32, totalScore uint64) {
 	p.head.Lock()
 	defer p.head.Unlock()
 	return p.head.id, p.head.totalScore
 }
 
+// UpdateHead update ID and total score of head block.
 func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 	p.head.Lock()
 	defer p.head.Unlock()
@@ -93,6 +96,7 @@ func (p *Peer) IsBlockKnown(id thor.Bytes32) bool {
 	return p.knownBlocks.Contains(id)
 }
 
+// Duration returns duration of connection.
 func (p *Peer) Duration() mclock.AbsTime {
 	return mclock.Now() - p.createdTime
 }
@@ -111,6 +115,7 @@ func (ps Peers) Filter(cond func(*Peer) bool) Peers {
 	return ret
 }
 
+// Find find one peer that satisfies the given condition.
 func (ps Peers) Find(cond func(*Peer) bool) *Peer {
 	for _, peer := range ps {
 		if cond(peer) {
