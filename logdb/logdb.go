@@ -107,9 +107,9 @@ func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Even
 	}
 
 	if filter.Order == DESC {
-		stmt += " ORDER BY blockNumber,eventIndex DESC "
+		stmt += " ORDER BY blockNumber DESC,eventIndex DESC "
 	} else {
-		stmt += " ORDER BY blockNumber,eventIndex ASC "
+		stmt += " ORDER BY blockNumber ASC,eventIndex ASC "
 	}
 
 	if filter.Options != nil {
@@ -169,9 +169,9 @@ func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([
 		}
 	}
 	if filter.Order == DESC {
-		stmt += " ORDER BY blockNumber,transferIndex DESC "
+		stmt += " ORDER BY blockNumber DESC,transferIndex DESC "
 	} else {
-		stmt += " ORDER BY blockNumber,transferIndex ASC "
+		stmt += " ORDER BY blockNumber ASC,transferIndex ASC "
 	}
 	if filter.Options != nil {
 		stmt += " limit ?, ? "
