@@ -7,8 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/metric"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 // peer will be disconnected if error returned
@@ -25,84 +28,82 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 
 	switch msg.Code {
 	case proto.MsgGetStatus:
-		var arg proto.GetStatus
-		if err := msg.Decode(&arg); err != nil {
+		if err := msg.Decode(&struct{}{}); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 
 		best := c.chain.BestBlock().Header()
-		write(&proto.GetStatusResult{
+		write(&proto.Status{
 			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),
 			TotalScore:     best.TotalScore(),
 			BestBlockID:    best.ID(),
 		})
 	case proto.MsgNewBlock:
-		var arg proto.NewBlock
-		if err := msg.Decode(&arg); err != nil {
+		var newBlock *block.Block
+		if err := msg.Decode(&newBlock); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		peer.MarkBlock(arg.Block.Header().ID())
-		peer.UpdateHead(arg.Block.Header().ID(), arg.Block.Header().TotalScore())
-		c.newBlockFeed.Send(&NewBlockEvent{Block: arg.Block})
+		peer.MarkBlock(newBlock.Header().ID())
+		peer.UpdateHead(newBlock.Header().ID(), newBlock.Header().TotalScore())
+		c.newBlockFeed.Send(&NewBlockEvent{Block: newBlock})
 		write(&struct{}{})
 	case proto.MsgNewBlockID:
-		var arg proto.NewBlockID
-		if err := msg.Decode(&arg); err != nil {
+		var newBlockID thor.Bytes32
+		if err := msg.Decode(&newBlockID); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkBlock(arg.ID)
+		peer.MarkBlock(newBlockID)
 		select {
 		case <-c.ctx.Done():
-		case c.announcementCh <- &announcement{arg.ID, peer}:
+		case c.announcementCh <- &announcement{newBlockID, peer}:
 		}
 		write(&struct{}{})
 	case proto.MsgNewTx:
-		var arg proto.NewTx
-		if err := msg.Decode(&arg); err != nil {
+		var newTx *tx.Transaction
+		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkTransaction(arg.Tx.ID())
-		c.txPool.Add(arg.Tx)
+		peer.MarkTransaction(newTx.ID())
+		c.txPool.Add(newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
-		var arg proto.GetBlockByID
-		if err := msg.Decode(&arg); err != nil {
+		var blockID thor.Bytes32
+		if err := msg.Decode(&blockID); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		blk, err := c.chain.GetBlock(arg.ID)
+		blk, err := c.chain.GetBlock(blockID)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block", "err", err)
 			}
-			write(&proto.GetBlockByIDResult{})
+			write(&struct{}{})
 		} else {
-			write(&proto.GetBlockByIDResult{Block: blk})
+			write(blk)
 		}
 	case proto.MsgGetBlockIDByNumber:
-		var arg proto.GetBlockIDByNumber
-		if err := msg.Decode(&arg); err != nil {
+		var num uint32
+		if err := msg.Decode(&num); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		id, err := c.chain.GetBlockIDByNumber(arg.Num)
+		id, err := c.chain.GetBlockIDByNumber(num)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block id by number", "err", err)
 			}
-			write(&proto.GetBlockIDByNumberResult{})
+			write(thor.Bytes32{})
 		} else {
-			write(&proto.GetBlockIDByNumberResult{ID: id})
+			write(id)
 		}
 	case proto.MsgGetBlocksFromNumber:
-		var arg proto.GetBlocksFromNumber
-		if err := msg.Decode(&arg); err != nil {
+		var num uint32
+		if err := msg.Decode(&num); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 
 		const maxBlocks = 1024
-		result := make(proto.GetBlocksFromNumberResult, 0, maxBlocks)
-		num := arg.Num
+		result := make([]rlp.RawValue, 0, maxBlocks)
 		var size metric.StorageSize
 		for size < maxResultSize && len(result) < maxBlocks {
 			raw, err := c.chain.GetBlockRawByNumber(num)
@@ -118,12 +119,12 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		}
 		write(result)
 	case proto.MsgGetTxs:
-		var arg proto.GetTxs
-		if err := msg.Decode(&arg); err != nil {
+		if err := msg.Decode(&struct{}{}); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
+
 		txs := c.txPool.Pending(false)
-		result := make(proto.GetTxsResult, 0, len(txs))
+		result := make([]*tx.Transaction, 0, len(txs))
 		var size metric.StorageSize
 		for _, tx := range txs {
 			size += tx.Size()

@@ -166,26 +166,26 @@ func (c *Communicator) runPeer(peer *Peer) {
 	ctx, cancel := context.WithTimeout(c.ctx, time.Second*5)
 	defer cancel()
 
-	result, err := proto.GetStatus{}.Call(ctx, peer)
+	status, err := proto.GetStatus(ctx, peer)
 	if err != nil {
 		peer.logger.Debug("failed to get status", "err", err)
 		return
 	}
-	if result.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
+	if status.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
 		peer.logger.Debug("failed to handshake", "err", "genesis id mismatch")
 		return
 	}
 	now := uint64(time.Now().Unix())
-	diff := now - result.SysTimestamp
-	if now < result.SysTimestamp {
-		diff = result.SysTimestamp
+	diff := now - status.SysTimestamp
+	if now < status.SysTimestamp {
+		diff = status.SysTimestamp
 	}
 	if diff > thor.BlockInterval {
 		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}
 
-	peer.UpdateHead(result.BestBlockID, result.TotalScore)
+	peer.UpdateHead(status.BestBlockID, status.TotalScore)
 	c.peerSet.Add(peer)
 	peer.logger.Debug(fmt.Sprintf("peer added (%v)", c.peerSet.Len()))
 
@@ -225,7 +225,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := (proto.NewBlock{Block: blk}.Notify(c.ctx, peer)); err != nil {
+			if err := proto.NotifyNewBlock(c.ctx, peer, blk); err != nil {
 				peer.logger.Debug("failed to broadcast new block", "err", err)
 			}
 		})
@@ -235,7 +235,8 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-			if err := (proto.NewBlockID{ID: blk.Header().ID()}.Notify(c.ctx, peer)); err != nil {
+
+			if err := proto.NotifyNewBlockID(c.ctx, peer, blk.Header().ID()); err != nil {
 				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}
 		})

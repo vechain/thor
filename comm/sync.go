@@ -35,7 +35,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 	goes.Go(func() {
 		defer close(blockCh)
 		for {
-			result, err := proto.GetBlocksFromNumber{Num: fromNum}.Call(ctx, peer)
+			result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
 			if err != nil {
 				errValue.Store(err)
 				return
@@ -82,7 +82,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 	}
 
 	isOverlapped := func(num uint32) (bool, error) {
-		result, err := proto.GetBlockIDByNumber{Num: num}.Call(c.ctx, peer)
+		result, err := proto.GetBlockIDByNumber(c.ctx, peer, num)
 		if err != nil {
 			return false, err
 		}
@@ -90,7 +90,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 		if err != nil {
 			return false, err
 		}
-		return id == result.ID, nil
+		return id == result, nil
 	}
 
 	var find func(start uint32, end uint32, ancestor uint32) (uint32, error)
@@ -150,7 +150,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 func (c *Communicator) syncTxs(peer *Peer) {
 	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
 	defer cancel()
-	result, err := proto.GetTxs{}.Call(ctx, peer)
+	result, err := proto.GetTxs(ctx, peer)
 	if err != nil {
 		peer.logger.Debug("failed to request txs", "err", err)
 		return

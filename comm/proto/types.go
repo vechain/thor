@@ -2,6 +2,7 @@ package proto
 
 import (
 	"context"
+	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -10,115 +11,111 @@ import (
 )
 
 type (
-	// GetStatus arg of MsgStatus.
-	GetStatus struct{}
 
-	// GetStatusResult result of MsgStatus.
-	GetStatusResult struct {
+	// Status result of MsgGetStatus.
+	Status struct {
 		GenesisBlockID thor.Bytes32
 		SysTimestamp   uint64
 		BestBlockID    thor.Bytes32
 		TotalScore     uint64
 	}
 
-	// NewBlockID arg of MsgNewBlockID.
-	NewBlockID struct{ ID thor.Bytes32 }
-
-	// NewBlock arg of MsgNewBlock.
-	NewBlock struct{ Block *block.Block }
-
-	// NewTx arg of MsgNewTx
-	NewTx struct{ Tx *tx.Transaction }
-
-	// GetBlockIDByNumber arg of MsgGetBlockIDByNumber.
-	GetBlockIDByNumber struct{ Num uint32 }
-
-	// GetBlockIDByNumberResult result of MsgGetBlockIDByNumber.
-	GetBlockIDByNumberResult struct{ ID thor.Bytes32 }
-
-	// GetBlocksFromNumber arg of MsgGetBlocksFromNumber.
-	GetBlocksFromNumber struct{ Num uint32 }
-
-	// GetBlocksFromNumberResult result of MsgGetBlocksFromNumber.
-	GetBlocksFromNumberResult []rlp.RawValue
-
-	// GetBlockByID arg of MsgGetBlockByID.
-	GetBlockByID struct{ ID thor.Bytes32 }
-
-	// GetBlockByIDResult result of MsgGetBlockByID.
-	GetBlockByIDResult struct {
-		Block *block.Block `rlp:"nil"`
-	}
-
-	// GetTxs arg of MsgGetTxs.
-	GetTxs struct{}
-
-	// GetTxsResult result of MsgGetTxs.
-	GetTxsResult []*tx.Transaction
+	nilableBlock struct{ *block.Block }
 )
 
 // RPC defines RPC interface.
 type RPC interface {
-	Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error
 	Notify(ctx context.Context, msgCode uint64, arg interface{}) error
+	Call(ctx context.Context, msgCode uint64, arg interface{}, result interface{}) error
 }
 
-// Call perform RPC call.
-func (a GetStatus) Call(ctx context.Context, rpc RPC) (*GetStatusResult, error) {
-	var result GetStatusResult
-	if err := rpc.Call(ctx, MsgGetStatus, &a, &result); err != nil {
+// GetStatus get status of remote peer.
+func GetStatus(ctx context.Context, rpc RPC) (*Status, error) {
+	var status Status
+	if err := rpc.Call(ctx, MsgGetStatus, &struct{}{}, &status); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return &status, nil
 }
 
-// Notify notify new block ID.
-func (a NewBlockID) Notify(ctx context.Context, rpc RPC) error {
-	return rpc.Notify(ctx, MsgNewBlockID, &a)
+// NotifyNewBlockID notify new block ID to remote peer.
+func NotifyNewBlockID(ctx context.Context, rpc RPC, id thor.Bytes32) error {
+	return rpc.Notify(ctx, MsgNewBlockID, &id)
 }
 
-// Notify notify new block.
-func (a NewBlock) Notify(ctx context.Context, rpc RPC) error {
-	return rpc.Notify(ctx, MsgNewBlock, &a)
+// NotifyNewBlock notify new block to remote peer.
+func NotifyNewBlock(ctx context.Context, rpc RPC, block *block.Block) error {
+	return rpc.Notify(ctx, MsgNewBlock, block)
 }
 
-// Notify notify new Tx.
-func (a NewTx) Notify(ctx context.Context, rpc RPC) error {
-	return rpc.Notify(ctx, MsgNewTx, &a)
+// NotifyNewTx notify new tx to remote peer.
+func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
+	return rpc.Notify(ctx, MsgNewTx, tx)
 }
 
-// Call perform RPC call.
-func (a GetBlockIDByNumber) Call(ctx context.Context, rpc RPC) (*GetBlockIDByNumberResult, error) {
-	var result GetBlockIDByNumberResult
-	if err := rpc.Call(ctx, MsgGetBlockIDByNumber, &a, &result); err != nil {
+// GetBlockByID query block from remote peer by given block ID.
+// It may return nil block even no error.
+func GetBlockByID(ctx context.Context, rpc RPC, id thor.Bytes32) (*block.Block, error) {
+	var result nilableBlock
+	if err := rpc.Call(ctx, MsgGetBlockByID, id, &result); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return result.Block, nil
 }
 
-// Call perform RPC call.
-func (a GetBlocksFromNumber) Call(ctx context.Context, rpc RPC) (GetBlocksFromNumberResult, error) {
-	var result GetBlocksFromNumberResult
-	if err := rpc.Call(ctx, MsgGetBlocksFromNumber, &a, &result); err != nil {
-		return nil, err
+// GetBlockIDByNumber query block ID from remote peer by given number.
+func GetBlockIDByNumber(ctx context.Context, rpc RPC, num uint32) (thor.Bytes32, error) {
+	var id thor.Bytes32
+	if err := rpc.Call(ctx, MsgGetBlockIDByNumber, num, &id); err != nil {
+		return thor.Bytes32{}, err
 	}
-	return result, nil
+	return id, nil
 }
 
-// Call perform RPC call.
-func (a GetBlockByID) Call(ctx context.Context, rpc RPC) (*GetBlockByIDResult, error) {
-	var result GetBlockByIDResult
-	if err := rpc.Call(ctx, MsgGetBlockByID, &a, &result); err != nil {
+// GetBlocksFromNumber get a batch of blocks starts with num from remote peer.
+func GetBlocksFromNumber(ctx context.Context, rpc RPC, num uint32) ([]rlp.RawValue, error) {
+	var blocks []rlp.RawValue
+	if err := rpc.Call(ctx, MsgGetBlocksFromNumber, num, &blocks); err != nil {
 		return nil, err
 	}
-	return &result, nil
+	return blocks, nil
 }
 
-// Call perform RPC call.
-func (a GetTxs) Call(ctx context.Context, rpc RPC) (GetTxsResult, error) {
-	var result GetTxsResult
-	if err := rpc.Call(ctx, MsgGetTxs, &a, &result); err != nil {
+// GetTxs get txs from remote peer.
+func GetTxs(ctx context.Context, rpc RPC) ([]*tx.Transaction, error) {
+	var txs []*tx.Transaction
+	if err := rpc.Call(ctx, MsgGetTxs, &struct{}{}, &txs); err != nil {
 		return nil, err
 	}
-	return result, nil
+	return txs, nil
 }
+
+// EncodeRLP implements rlp.Encoder.
+func (m *nilableBlock) EncodeRLP(w io.Writer) error {
+	if m.Block == nil {
+		return rlp.Encode(w, &struct{}{})
+	}
+	return rlp.Encode(w, m.Block)
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (m *nilableBlock) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return err
+	}
+	if kind != rlp.List {
+		return rlp.ErrExpectedList
+	}
+	if size > 0 {
+		return s.Decode(&m.Block)
+	}
+	if err := s.Decode(&struct{}{}); err != nil {
+		return err
+	}
+	m.Block = nil
+	return nil
+}
+
+var _ rlp.Encoder = (*nilableBlock)(nil)
+var _ rlp.Decoder = (*nilableBlock)(nil)
