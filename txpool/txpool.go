@@ -66,7 +66,7 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 		tx := tx // it's for closure
 		txID := tx.ID()
 		if obj := pool.entry.find(txID); obj != nil {
-			return errKnownTx
+			return rejectedTx("known transaction")
 		}
 
 		// If the transaction fails basic validation, discard it
@@ -114,21 +114,25 @@ func (pool *TxPool) Pending(sort bool) tx.Transactions {
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 	if tx.Size() > maxTxSize {
-		return thor.Address{}, errTooLarge
+		return thor.Address{}, rejectedTx("tx too large")
 	}
 
 	if tx.ChainTag() != pool.chain.Tag() {
-		return thor.Address{}, errChainTagMismatched
+		return thor.Address{}, badTx("chain tag mismatched")
 	}
 
 	if tx.HasReservedFields() {
-		return thor.Address{}, errReservedFieldsNotEmpty
+		return thor.Address{}, badTx("reserved fields not empty")
 	}
 
 	bestBlock := pool.chain.BestBlock()
 
+	if tx.Gas() > bestBlock.Header().GasLimit() {
+		return thor.Address{}, badTx("tx gas exceeded")
+	}
+
 	if tx.IsExpired(bestBlock.Header().Number()) {
-		return thor.Address{}, errExpired
+		return thor.Address{}, rejectedTx("tx expired")
 	}
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
@@ -138,21 +142,21 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 
 	resolvedTx, err := runtime.ResolveTransaction(st, tx)
 	if err != nil {
-		return thor.Address{}, errIntrisicGasExceeded
+		return thor.Address{}, badTx("intrinsic gas exceeds provided gas")
 	}
 
 	if pool.entry.quotaBySinger(resolvedTx.Origin) >= quotaSignerTx {
-		return thor.Address{}, errQuotaExceeded
+		return thor.Address{}, rejectedTx("quota exceeds limit")
 	}
 
 	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Number()+1)
 	if err != nil {
-		return thor.Address{}, errInsufficientEnergy
+		return thor.Address{}, rejectedTx("insufficient energy")
 	}
 
 	for _, clause := range resolvedTx.Clauses {
 		if clause.Value().Sign() < 0 {
-			return thor.Address{}, errNegativeValue
+			return thor.Address{}, badTx("negative clause value")
 		}
 	}
 
