@@ -3,6 +3,8 @@ package txpool
 import (
 	"math/big"
 
+	"github.com/vechain/thor/thor"
+
 	"github.com/vechain/thor/chain"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -19,6 +21,7 @@ const (
 //txObject wrap transaction
 type txObject struct {
 	tx           *tx.Transaction
+	signer       thor.Address
 	status       objectStatus
 	overallGP    *big.Int
 	creationTime int64

@@ -14,6 +14,7 @@ import (
 )
 
 const maxTxSize = 32 * 1024 // Reject transactions over 32KB to prevent DOS attacks
+const quotaSignerTx = 100   // Each signer saves up to 100 txs
 
 //PoolConfig PoolConfig
 type PoolConfig struct {
@@ -62,14 +63,15 @@ func (pool *TxPool) Close() {
 //Add transaction
 func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 	for _, tx := range txs {
-		tx := tx
+		tx := tx // it's for closure
 		txID := tx.ID()
 		if obj := pool.entry.find(txID); obj != nil {
 			return errKnownTx
 		}
 
 		// If the transaction fails basic validation, discard it
-		if err := pool.validateTx(tx); err != nil {
+		signer, err := pool.validateTx(tx)
+		if err != nil {
 			return err
 		}
 
@@ -79,6 +81,7 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 
 		pool.entry.save(&txObject{
 			tx:           tx,
+			signer:       signer,
 			overallGP:    new(big.Int),
 			creationTime: time.Now().Unix(),
 			status:       Queued,
@@ -109,45 +112,49 @@ func (pool *TxPool) Pending(sort bool) tx.Transactions {
 	return pool.entry.dumpPending(sort).parseTxs()
 }
 
-func (pool *TxPool) validateTx(tx *tx.Transaction) error {
+func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 	if tx.Size() > maxTxSize {
-		return errTooLarge
+		return thor.Address{}, errTooLarge
 	}
 
 	if tx.ChainTag() != pool.chain.Tag() {
-		return errChainTagMismatched
+		return thor.Address{}, errChainTagMismatched
 	}
 
 	if tx.HasReservedFields() {
-		return errReservedFieldsNotEmpty
+		return thor.Address{}, errReservedFieldsNotEmpty
 	}
 
 	bestBlock := pool.chain.BestBlock()
 
 	if tx.IsExpired(bestBlock.Header().Number()) {
-		return errExpired
+		return thor.Address{}, errExpired
 	}
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
 	if err != nil {
-		return err
+		return thor.Address{}, err
 	}
 
 	resolvedTx, err := runtime.ResolveTransaction(st, tx)
 	if err != nil {
-		return errIntrisicGasExceeded
+		return thor.Address{}, errIntrisicGasExceeded
+	}
+
+	if pool.entry.quotaBySinger(resolvedTx.Origin) >= quotaSignerTx {
+		return thor.Address{}, errQuotaExceeded
 	}
 
 	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Number()+1)
 	if err != nil {
-		return errInsufficientEnergy
+		return thor.Address{}, errInsufficientEnergy
 	}
 
 	for _, clause := range resolvedTx.Clauses {
 		if clause.Value().Sign() < 0 {
-			return errNegativeValue
+			return thor.Address{}, errNegativeValue
 		}
 	}
 
-	return nil
+	return resolvedTx.Origin, nil
 }

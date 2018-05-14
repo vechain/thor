@@ -9,6 +9,7 @@ var (
 	errTooLarge               = errors.New("tx too large")
 	errExpired                = errors.New("tx expired")
 	errIntrisicGasExceeded    = errors.New("intrinsic gas exceeds provided gas")
+	errQuotaExceeded          = errors.New("quota exceeds limit")
 	errInsufficientEnergy     = errors.New("insufficient energy")
 	errNegativeValue          = errors.New("negative clause value")
 )

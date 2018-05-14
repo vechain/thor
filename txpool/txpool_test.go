@@ -31,7 +31,7 @@ var (
 func TestTxPool(t *testing.T) {
 	pool := initPool(t)
 	defer pool.Close()
-	count := 10
+	count := 100
 	addTx(t, pool, count)
 	pending(t, pool, count)
 	dump(t, pool, count)
