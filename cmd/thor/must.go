@@ -64,11 +64,19 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	}
 }
 
-func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
+func makeMainDir(ctx *cli.Context) string {
 	mainDir := ctx.String(dirFlag.Name)
 	if mainDir == "" {
 		fatal(fmt.Sprintf("unable to infer default main dir, use -%s to specify one", dirFlag.Name))
 	}
+	if err := os.MkdirAll(mainDir, 0700); err != nil {
+		fatal(fmt.Sprintf("create main dir [%v]: %v", mainDir, err))
+	}
+	return mainDir
+}
+
+func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
+	mainDir := makeMainDir(ctx)
 
 	dataDir := fmt.Sprintf("%v/instance-%x", mainDir, gene.ID().Bytes()[24:])
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
@@ -114,7 +122,8 @@ func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB)
 	return chain
 }
 
-func loadNodeMaster(ctx *cli.Context, dataDir string) *node.Master {
+func loadNodeMaster(ctx *cli.Context) *node.Master {
+	mainDir := makeMainDir(ctx)
 	bene := func(master thor.Address) thor.Address {
 		beneStr := ctx.String(beneficiaryFlag.Name)
 		if beneStr == "" {
@@ -135,7 +144,7 @@ func loadNodeMaster(ctx *cli.Context, dataDir string) *node.Master {
 			Beneficiary: bene(acc.Address),
 		}
 	}
-	key, err := loadOrGeneratePrivateKey(filepath.Join(dataDir, "master.key"))
+	key, err := loadOrGeneratePrivateKey(filepath.Join(mainDir, "master.key"))
 	if err != nil {
 		fatal("load or generate master key:", err)
 	}

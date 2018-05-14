@@ -88,7 +88,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
-	master := loadNodeMaster(ctx, dataDir)
+	master := loadNodeMaster(ctx)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
