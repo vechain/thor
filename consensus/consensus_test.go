@@ -15,28 +15,105 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 func TestConsensus(t *testing.T) {
 	assert := assert.New(t)
 	tc := newTestConsensus(t)
 
-	triggerErrInterval(tc, assert)
-
+	testValidateBlockHeader(tc, assert)
 }
 
-func triggerErrInterval(tc *testConsensus, assert *assert.Assertions) {
-	build := tc.originalBuilder()
-	blk := tc.sign(build.Timestamp(tc.original.Header().Timestamp() + 1).Build())
-	err := tc.consent(blk)
-	expect := consensusError(
-		fmt.Sprintf(
-			"block interval not rounded: parent %v, current %v",
-			tc.parent.Header().Timestamp(),
-			blk.Header().Timestamp(),
-		),
-	)
-	assert.Equal(err, expect)
+func testValidateBlockHeader(tc *testConsensus, assert *assert.Assertions) {
+	triggers := make(map[string]func())
+	triggers["triggerErrTimestampBehindParent"] = func() {
+		build := tc.originalBuilder()
+
+		blk := tc.sign(build.Timestamp(tc.parent.Header().Timestamp()).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block timestamp behind parents: parent %v, current %v",
+				tc.parent.Header().Timestamp(),
+				blk.Header().Timestamp(),
+			),
+		)
+		assert.Equal(err, expect)
+
+		blk = tc.sign(build.Timestamp(tc.parent.Header().Timestamp() - 1).Build())
+		err = tc.consent(blk)
+		expect = consensusError(
+			fmt.Sprintf(
+				"block timestamp behind parents: parent %v, current %v",
+				tc.parent.Header().Timestamp(),
+				blk.Header().Timestamp(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrInterval"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.Timestamp(tc.original.Header().Timestamp() + 1).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block interval not rounded: parent %v, current %v",
+				tc.parent.Header().Timestamp(),
+				blk.Header().Timestamp(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrFutureBlock"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.Timestamp(tc.time + thor.BlockInterval*2).Build())
+		err := tc.consent(blk)
+		assert.Equal(err, errFutureBlock)
+	}
+	triggers["triggerInvalidGasLimit"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.GasLimit(tc.parent.Header().GasLimit() * 2).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block gas limit invalid: parent %v, current %v",
+				tc.parent.Header().GasLimit(),
+				blk.Header().GasLimit(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerExceedGaUsed"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.GasUsed(tc.original.Header().GasLimit() + 1).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block gas used exceeds limit: limit %v, used %v",
+				tc.parent.Header().GasLimit(),
+				blk.Header().GasUsed(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerInvalidTotalScore"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.TotalScore(tc.parent.Header().TotalScore()).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block total score invalid: parent %v, current %v",
+				tc.parent.Header().TotalScore(),
+				blk.Header().TotalScore(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+
+	for _, trigger := range triggers {
+		trigger()
+	}
 }
 
 type testConsensus struct {
@@ -115,7 +192,7 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 	header := tc.original.Header()
 	return new(block.Builder).
 		ParentID(header.ParentID()).
-		Timestamp(header.Timestamp() + 1).
+		Timestamp(header.Timestamp()).
 		TotalScore(header.TotalScore()).
 		GasLimit(header.GasLimit()).
 		GasUsed(header.GasUsed()).
