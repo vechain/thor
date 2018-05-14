@@ -1,7 +1,5 @@
 pragma solidity ^0.4.18;
 import "./Token.sol";
-import "./ERC223Receiver.sol";
-import "./Prototype.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -63,10 +61,6 @@ contract Energy is Token {
             require(EnergyNative(this).native_subBalance(_from, _amount));
             // believed that will never overflow
             EnergyNative(this).native_addBalance(_to, _amount);
-        }
-        if (proto.Of(_to).$has_code()) {
-            // Require proper transaction handling.
-            ERC223Receiver(_to).tokenFallback(_from, _amount, new bytes(0));
         }
         Transfer(_from, _to, _amount);
     }
