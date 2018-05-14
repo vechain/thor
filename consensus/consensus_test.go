@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	Assert "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -19,13 +19,13 @@ import (
 )
 
 func TestConsensus(t *testing.T) {
-	assert := Assert.New(t)
+	assert := assert.New(t)
 	tc := newTestConsensus(t)
 
 	testValidateBlockHeader(tc, assert)
 }
 
-func testValidateBlockHeader(tc *testConsensus, assert *Assert.Assertions) {
+func testValidateBlockHeader(tc *testConsensus, assert *assert.Assertions) {
 	triggers := make(map[string]func())
 	triggers["triggerErrTimestampBehindParent"] = func() {
 		build := tc.originalBuilder()
