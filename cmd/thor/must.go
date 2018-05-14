@@ -159,8 +159,9 @@ type p2pComm struct {
 	savePeers func()
 }
 
-func startP2PComm(ctx *cli.Context, dataDir string, chain *chain.Chain, txPool *txpool.TxPool) *p2pComm {
-	key, err := loadOrGeneratePrivateKey(filepath.Join(dataDir, "p2p.key"))
+func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool) *p2pComm {
+	mainDir := makeMainDir(ctx)
+	key, err := loadOrGeneratePrivateKey(filepath.Join(mainDir, "p2p.key"))
 	if err != nil {
 		fatal("load or generate P2P key:", err)
 	}
@@ -180,9 +181,9 @@ func startP2PComm(ctx *cli.Context, dataDir string, chain *chain.Chain, txPool *
 		NAT:            nat,
 	}
 
-	const peersCacheFile = "peers.cache"
+	peersCachePath := filepath.Join(mainDir, "peers.cache")
 
-	if data, err := ioutil.ReadFile(filepath.Join(dataDir, peersCacheFile)); err != nil {
+	if data, err := ioutil.ReadFile(peersCachePath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warn("failed to load peers cache", "err", err)
 		}
@@ -207,7 +208,7 @@ func startP2PComm(ctx *cli.Context, dataDir string, chain *chain.Chain, txPool *
 				log.Warn("failed to encode cached peers", "err", err)
 				return
 			}
-			if err := ioutil.WriteFile(filepath.Join(dataDir, peersCacheFile), data, 0600); err != nil {
+			if err := ioutil.WriteFile(peersCachePath, data, 0600); err != nil {
 				log.Warn("failed to write peers cache", "err", err)
 			}
 		},
