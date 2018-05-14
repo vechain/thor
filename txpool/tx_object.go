@@ -3,11 +3,9 @@ package txpool
 import (
 	"math/big"
 
-	"github.com/vechain/thor/thor"
-
-	"github.com/vechain/thor/chain"
-
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 

@@ -1,47 +1,25 @@
 package txpool
 
-import "github.com/pkg/errors"
+import "errors"
 
-var (
-	errKnownTx                = errors.New("known transaction")
-	errChainTagMismatched     = errors.New("chain tag mismatched")
-	errReservedFieldsNotEmpty = errors.New("reserved fields not empty")
-	errTooLarge               = errors.New("tx too large")
-	errExpired                = errors.New("tx expired")
-	errIntrisicGasExceeded    = errors.New("intrinsic gas exceeds provided gas")
-	errQuotaExceeded          = errors.New("quota exceeds limit")
-	errInsufficientEnergy     = errors.New("insufficient energy")
-	errNegativeValue          = errors.New("negative clause value")
-)
+type errBadTx error
 
-func IsErrKnownTx(err error) bool {
-	return err == errKnownTx
+func badTx(err string) errBadTx {
+	return errBadTx(errors.New(err))
 }
 
-func IsErrChainTagMismatched(err error) bool {
-	return err == errChainTagMismatched
+type errRejectedTx error
+
+func rejectedTx(err string) errRejectedTx {
+	return errRejectedTx(errors.New(err))
 }
 
-func IsErrReservedFieldsNotEmpty(err error) bool {
-	return err == errReservedFieldsNotEmpty
+func IsErrBadTx(err error) bool {
+	_, ok := err.(errBadTx)
+	return ok
 }
 
-func IsErrTooLarge(err error) bool {
-	return err == errTooLarge
-}
-
-func IsErrExpired(err error) bool {
-	return err == errExpired
-}
-
-func IsErrIntrisicGasExceeded(err error) bool {
-	return err == errIntrisicGasExceeded
-}
-
-func IsErrInsufficientEnergy(err error) bool {
-	return err == errInsufficientEnergy
-}
-
-func IsErrNegativeValue(err error) bool {
-	return err == errNegativeValue
+func IsErrRejectedTx(err error) bool {
+	_, ok := err.(errRejectedTx)
+	return ok
 }

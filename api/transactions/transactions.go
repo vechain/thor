@@ -126,34 +126,20 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return err
 	}
+
 	txID, err := t.sendTx(tx)
 	if err != nil {
-		switch {
-		case t.isBadTx(err):
+		if txpool.IsErrBadTx(err) {
 			return utils.BadRequest(err, "bad tx")
-		case t.isTxRejected(err):
-			return utils.Forbidden(err, "rejected tx")
-		default:
-			return err
 		}
+		if txpool.IsErrRejectedTx(err) {
+			return utils.Forbidden(err, "rejected tx")
+		}
+		return err
 	}
 	return utils.WriteJSON(w, map[string]string{
 		"id": txID.String(),
 	})
-}
-
-func (t *Transactions) isBadTx(err error) bool {
-	if txpool.IsErrNegativeValue(err) || txpool.IsErrIntrisicGasExceeded(err) || txpool.IsErrChainTagMismatched(err) || txpool.IsErrReservedFieldsNotEmpty(err) {
-		return true
-	}
-	return false
-}
-
-func (t *Transactions) isTxRejected(err error) bool {
-	if txpool.IsErrKnownTx(err) || txpool.IsErrExpired(err) || txpool.IsErrInsufficientEnergy(err) || txpool.IsErrTooLarge(err) {
-		return true
-	}
-	return false
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
