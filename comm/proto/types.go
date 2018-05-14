@@ -82,8 +82,8 @@ func GetBlocksFromNumber(ctx context.Context, rpc RPC, num uint32) ([]rlp.RawVal
 }
 
 // GetTxs get txs from remote peer.
-func GetTxs(ctx context.Context, rpc RPC) ([]*tx.Transaction, error) {
-	var txs []*tx.Transaction
+func GetTxs(ctx context.Context, rpc RPC) (tx.Transactions, error) {
+	var txs tx.Transactions
 	if err := rpc.Call(ctx, MsgGetTxs, &struct{}{}, &txs); err != nil {
 		return nil, err
 	}

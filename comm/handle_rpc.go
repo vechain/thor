@@ -15,7 +15,7 @@ import (
 )
 
 // peer will be disconnected if error returned
-func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{})) (err error) {
+func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{}), txsToSync *txsToSync) (err error) {
 	const maxResultSize = 2 * 1024 * 1024
 
 	log := peer.logger.New("msg", proto.MsgName(msg.Code))
@@ -119,21 +119,43 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		}
 		write(result)
 	case proto.MsgGetTxs:
+		const maxTxSyncSize = 100 * 1024
 		if err := msg.Decode(&struct{}{}); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		txs := c.txPool.Pending(false)
-		result := make([]*tx.Transaction, 0, len(txs))
-		var size metric.StorageSize
-		for _, tx := range txs {
-			size += tx.Size()
-			if size > maxResultSize {
-				break
+		if txsToSync.synced {
+			write(tx.Transactions(nil))
+		} else {
+			if len(txsToSync.txs) == 0 {
+				txsToSync.txs = c.txPool.Pending(false)
 			}
-			result = append(result, tx)
+
+			var (
+				toSend tx.Transactions
+				size   metric.StorageSize
+				n      int
+			)
+
+			for _, tx := range txsToSync.txs {
+				n++
+				if peer.IsTransactionKnown(tx.ID()) {
+					continue
+				}
+				toSend = append(toSend, tx)
+				size += tx.Size()
+				if size >= maxTxSyncSize {
+					break
+				}
+			}
+
+			txsToSync.txs = txsToSync.txs[n:]
+			if len(txsToSync.txs) == 0 {
+				txsToSync.txs = nil
+				txsToSync.synced = true
+			}
+			write(toSend)
 		}
-		write(result)
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -149,13 +150,21 @@ func (c *Communicator) Stop() {
 	c.goes.Wait()
 }
 
+type txsToSync struct {
+	txs    tx.Transactions
+	synced bool
+}
+
 func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := newPeer(p, rw)
 	c.goes.Go(func() {
 		c.runPeer(peer)
 	})
+
+	var txsToSync txsToSync
+
 	return peer.Serve(func(msg *p2p.Msg, w func(interface{})) error {
-		return c.handleRPC(peer, msg, w)
+		return c.handleRPC(peer, msg, w, &txsToSync)
 	}, proto.MaxMsgSize)
 }
 

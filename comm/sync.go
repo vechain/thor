@@ -2,8 +2,8 @@ package comm
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
@@ -153,21 +153,32 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 }
 
 func (c *Communicator) syncTxs(peer *Peer) {
-	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
-	defer cancel()
-	result, err := proto.GetTxs(ctx, peer)
-	if err != nil {
-		peer.logger.Debug("failed to request txs", "err", err)
-		return
-	}
-	for _, tx := range result {
-		c.txPool.Add(tx)
-
-		select {
-		case <-ctx.Done():
+	for i := 0; ; i++ {
+		peer.logger.Debug(fmt.Sprintf("sync txs loop %v", i))
+		result, err := proto.GetTxs(c.ctx, peer)
+		if err != nil {
+			peer.logger.Debug("failed to request txs", "err", err)
 			return
-		default:
+		}
+
+		// no more txs
+		if len(result) == 0 {
+			break
+		}
+
+		for _, tx := range result {
+			c.txPool.Add(tx)
+			select {
+			case <-c.ctx.Done():
+				return
+			default:
+			}
+		}
+
+		if i >= 100 {
+			peer.logger.Debug("too many loops to sync txs, break")
+			return
 		}
 	}
-	peer.logger.Debug("tx synced")
+	peer.logger.Debug("sync txs done")
 }
