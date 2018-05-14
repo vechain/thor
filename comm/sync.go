@@ -121,10 +121,8 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 	}
 
 	fastSeek := func() (uint32, error) {
-		i := uint32(0)
+		var backward uint32
 		for {
-			backward := uint32(4) << i
-			i++
 			if backward >= headNum {
 				return 0, nil
 			}
@@ -136,15 +134,22 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 			if overlapped {
 				return headNum - backward, nil
 			}
+			if backward == 0 {
+				backward = 1
+			} else {
+				backward <<= 1
+			}
 		}
 	}
 
-	seekedNum, err := fastSeek()
+	seekNum, err := fastSeek()
 	if err != nil {
 		return 0, err
 	}
-
-	return find(seekedNum, headNum, 0)
+	if seekNum == headNum {
+		return headNum, nil
+	}
+	return find(seekNum, headNum, 0)
 }
 
 func (c *Communicator) syncTxs(peer *Peer) {
