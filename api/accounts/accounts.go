@@ -66,7 +66,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	}
 	b := state.GetBalance(addr)
 	code := state.GetCode(addr)
-	energy := state.GetEnergy(addr, header.Number())
+	energy := state.GetEnergy(addr, header.Timestamp())
 	if err := state.Error(); err != nil {
 		return nil, err
 	}

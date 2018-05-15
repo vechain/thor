@@ -19,7 +19,7 @@ const (
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exeeds this value, no energy can be exchanged.
+	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
 
 	MaxBlockProposers uint64 = 101
 
@@ -36,5 +36,5 @@ var (
 	InitialBaseGasPrice        = big.NewInt(1e13)
 	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250000))
 
-	EnergyGrowthRate = big.NewInt(50000000000) // WEI THOR per token(VET) per block. about 0.000432 THOR per token per day.
+	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )

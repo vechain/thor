@@ -39,7 +39,7 @@ func TestEnergyGrowth(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	blockNum1 := uint32(1000)
+	time1 := uint64(1000)
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st)
 
@@ -48,9 +48,9 @@ func TestEnergyGrowth(t *testing.T) {
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1 := eng.GetBalance(acc, blockNum1)
+	bal1 := eng.GetBalance(acc, time1)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(uint64(blockNum1-10)))
+	x.Mul(x, new(big.Int).SetUint64(time1-10))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)

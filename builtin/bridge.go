@@ -95,9 +95,13 @@ func (b *bridge) Require(cond bool) {
 	}
 }
 
-func (b *bridge) BlockNumber() uint32 {
-	return uint32(b.VM.BlockNumber.Uint64())
+func (b *bridge) BlockTime() uint64 {
+	return b.VM.Time.Uint64()
 }
+
+// func (b *bridge) BlockNumber() uint32 {
+// 	return uint32(b.VM.BlockNumber.Uint64())
+// }
 
 func (b *bridge) Caller() thor.Address {
 	return thor.Address(b.Contract.Caller())

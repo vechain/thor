@@ -91,7 +91,7 @@ func BenchmarkStorageGet(b *testing.B) {
 
 	addr := thor.BytesToAddress([]byte("acc"))
 	key := thor.BytesToBytes32([]byte("key"))
-	st.SetStructedStorage(addr, key, thor.Bytes32{1})
+	st.SetStructuredStorage(addr, key, thor.Bytes32{1})
 	for i := 0; i < b.N; i++ {
 		st.GetStorage(addr, key)
 	}

@@ -47,8 +47,8 @@ type Transfer struct {
 // State to decouple with state.State
 type State interface {
 	statedb.State
-	GetEnergy(thor.Address, uint32) *big.Int
-	SetEnergy(thor.Address, *big.Int, uint32)
+	GetEnergy(thor.Address, uint64) *big.Int
+	SetEnergy(thor.Address, *big.Int, uint64)
 }
 
 // VM is a facade for ethEvm.
@@ -112,9 +112,9 @@ func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
 			state.SetEnergy(thor.Address(sender),
-				state.GetEnergy(thor.Address(sender), ctx.BlockNumber), ctx.BlockNumber)
+				state.GetEnergy(thor.Address(sender), ctx.Time), ctx.Time)
 			state.SetEnergy(thor.Address(recipient),
-				state.GetEnergy(thor.Address(recipient), ctx.BlockNumber), ctx.BlockNumber)
+				state.GetEnergy(thor.Address(recipient), ctx.Time), ctx.Time)
 
 			transfer(db, sender, recipient, amount)
 

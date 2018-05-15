@@ -41,18 +41,21 @@ func NewTestnet() (*Genesis, error) {
 			// 1 million
 			amount := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1000*1000))
 			state.SetBalance(builtin.Executor.Address, amount)
+			state.SetEnergy(builtin.Executor.Address, &big.Int{}, launchTime)
 			tokenSupply.Add(tokenSupply, amount)
 
 			// 1 billion
 			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1000*1000*1000))
 			state.SetBalance(acccount0, amount)
+			state.SetEnergy(acccount0, &big.Int{}, launchTime)
 			tokenSupply.Add(tokenSupply, amount)
 
 			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250*1000))
 			state.SetBalance(endorser0, amount)
+			state.SetEnergy(endorser0, &big.Int{}, launchTime)
 			tokenSupply.Add(tokenSupply, amount)
 
-			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{})
+			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{}, launchTime)
 			return nil
 		}).
 		Call(

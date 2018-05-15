@@ -78,11 +78,11 @@ func NewDevnet() (*Genesis, error) {
 			for _, a := range DevAccounts() {
 				bal, _ := new(big.Int).SetString("10000000000000000000000000", 10)
 				state.SetBalance(a.Address, bal)
-				state.SetEnergy(a.Address, bal, 0)
+				state.SetEnergy(a.Address, bal, launchTime)
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			energy.SetInitialSupply(tokenSupply, energySupply)
+			energy.SetInitialSupply(tokenSupply, energySupply, launchTime)
 			return nil
 		}).
 		Call(

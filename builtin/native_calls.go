@@ -151,7 +151,7 @@ func initEnergyMethods() {
 	}{
 		{"native_getTotalSupply", func(env *bridge) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			supply := Energy.Native(env.State).GetTotalSupply(env.BlockNumber())
+			supply := Energy.Native(env.State).GetTotalSupply(env.BlockTime())
 			return []interface{}{supply}
 		}},
 		{"native_getTotalBurned", func(env *bridge) []interface{} {
@@ -163,7 +163,7 @@ func initEnergyMethods() {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			bal := Energy.Native(env.State).GetBalance(thor.Address(addr), env.BlockNumber())
+			bal := Energy.Native(env.State).GetBalance(thor.Address(addr), env.BlockTime())
 			return []interface{}{bal}
 		}},
 		{"native_addBalance", func(env *bridge) []interface{} {
@@ -177,7 +177,7 @@ func initEnergyMethods() {
 			} else {
 				env.UseGas(ethparams.SstoreSetGas)
 			}
-			Energy.Native(env.State).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockNumber())
+			Energy.Native(env.State).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
 			return nil
 		}},
 		{"native_subBalance", func(env *bridge) []interface{} {
@@ -187,7 +187,7 @@ func initEnergyMethods() {
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Energy.Native(env.State).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockNumber())
+			ok := Energy.Native(env.State).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
 			if ok {
 				env.UseGas(ethparams.SstoreResetGas)
 			}
@@ -245,7 +245,7 @@ func initPrototypeInterfaceMethods() {
 	}
 	setMasterEvent := mustEventByName("$SetMaster")
 	addRemoveUserEvent := mustEventByName("$AddRemoveUser")
-	setUesrPlanEvent := mustEventByName("$SetUserPlan")
+	setUserPlanEvent := mustEventByName("$SetUserPlan")
 	sponsorEvent := mustEventByName("$Sponsor")
 	selectSponsorEvent := mustEventByName("$SelectSponsor")
 
@@ -283,7 +283,7 @@ func initPrototypeInterfaceMethods() {
 		}},
 		{"$energy", func(env *bridge, binding *prototype.Binding) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			bal := Energy.Native(env.State).GetBalance(env.To(), env.BlockNumber())
+			bal := Energy.Native(env.State).GetBalance(env.To(), env.BlockTime())
 			return []interface{}{bal}
 		}},
 		{"$transfer_energy", func(env *bridge, binding *prototype.Binding) []interface{} {
@@ -346,7 +346,7 @@ func initPrototypeInterfaceMethods() {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			credit := binding.UserCredit(thor.Address(addr), env.BlockNumber())
+			credit := binding.UserCredit(thor.Address(addr), env.BlockTime())
 			return []interface{}{credit}
 		}},
 		{"$add_user", func(env *bridge, binding *prototype.Binding) []interface{} {
@@ -357,7 +357,7 @@ func initPrototypeInterfaceMethods() {
 			// master or account itself is allowed
 			env.Require(env.Caller() == binding.Master() || env.Caller() == env.To())
 			env.UseGas(ethparams.SloadGas)
-			env.Require(binding.AddUser(thor.Address(addr), env.BlockNumber()))
+			env.Require(binding.AddUser(thor.Address(addr), env.BlockTime()))
 
 			env.UseGas(ethparams.SloadGas)
 			env.UseGas(ethparams.SstoreSetGas)
@@ -399,7 +399,7 @@ func initPrototypeInterfaceMethods() {
 
 			env.UseGas(ethparams.SstoreSetGas)
 			binding.SetUserPlan(args.Credit, args.RecoveryRate)
-			env.Log(setUesrPlanEvent, nil, args.Credit, args.RecoveryRate)
+			env.Log(setUserPlanEvent, nil, args.Credit, args.RecoveryRate)
 			return nil
 		}},
 		{"$sponsor", func(env *bridge, binding *prototype.Binding) []interface{} {

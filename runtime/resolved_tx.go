@@ -72,11 +72,11 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockNum uint32) (payer thor.Address, returnGas func(uint64), err error) {
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (payer thor.Address, returnGas func(uint64), err error) {
 	energy := builtin.Energy.Native(state)
 	doReturnGas := func(rgas uint64) *big.Int {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
-		energy.AddBalance(payer, returnedEnergy, blockNum)
+		energy.AddBalance(payer, returnedEnergy, blockTime)
 		return returnedEnergy
 	}
 
@@ -84,29 +84,29 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockNum uint32) (payer
 	commonTo := r.CommonTo()
 	if commonTo != nil {
 		binding := builtin.Prototype.Native(state).Bind(*commonTo)
-		credit := binding.UserCredit(r.Origin, blockNum)
+		credit := binding.UserCredit(r.Origin, blockTime)
 		if credit.Cmp(prepaid) >= 0 {
 			doReturnGasAndSetCredit := func(rgas uint64) {
 				returnedEnergy := doReturnGas(rgas)
 				usedEnergy := new(big.Int).Sub(prepaid, returnedEnergy)
-				binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockNum)
+				binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
 			}
 			// has enough credit
 			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
 				// deduct from sponsor, if any
-				if energy.SubBalance(sponsor, prepaid, blockNum) {
+				if energy.SubBalance(sponsor, prepaid, blockTime) {
 					return sponsor, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
-			if energy.SubBalance(*commonTo, prepaid, blockNum) {
+			if energy.SubBalance(*commonTo, prepaid, blockTime) {
 				return *commonTo, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
-	if energy.SubBalance(r.Origin, prepaid, blockNum) {
+	if energy.SubBalance(r.Origin, prepaid, blockTime) {
 		return r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
 	}
 	return thor.Address{}, nil, errors.New("insufficient energy")

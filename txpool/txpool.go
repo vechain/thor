@@ -149,7 +149,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 		return thor.Address{}, rejectedTxErr{"quota exceeds limit"}
 	}
 
-	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Number()+1)
+	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Timestamp()+thor.BlockInterval)
 	if err != nil {
 		return thor.Address{}, rejectedTxErr{"insufficient energy"}
 	}

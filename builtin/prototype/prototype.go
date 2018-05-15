@@ -46,11 +46,11 @@ func (b *Binding) curSponsorKey() thor.Bytes32 {
 }
 
 func (b *Binding) getStorage(key thor.Bytes32, val interface{}) {
-	b.state.GetStructedStorage(b.selfAddr, key, val)
+	b.state.GetStructuredStorage(b.selfAddr, key, val)
 }
 
 func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
-	b.state.SetStructedStorage(b.selfAddr, key, val)
+	b.state.SetStructuredStorage(b.selfAddr, key, val)
 }
 
 func (b *Binding) Master() (master thor.Address) {
@@ -68,7 +68,7 @@ func (b *Binding) IsUser(user thor.Address) bool {
 	return !uo.IsEmpty()
 }
 
-func (b *Binding) AddUser(user thor.Address, blockNum uint32) bool {
+func (b *Binding) AddUser(user thor.Address, blockTime uint64) bool {
 	userKey := b.userKey(user)
 	var uo userObject
 	b.getStorage(userKey, &uo)
@@ -82,7 +82,7 @@ func (b *Binding) AddUser(user thor.Address, blockNum uint32) bool {
 
 	b.setStorage(userKey, &userObject{
 		up.Credit,
-		blockNum,
+		blockTime,
 	})
 	return true
 }
@@ -99,7 +99,7 @@ func (b *Binding) RemoveUser(user thor.Address) bool {
 	return true
 }
 
-func (b *Binding) UserCredit(user thor.Address, blockNum uint32) *big.Int {
+func (b *Binding) UserCredit(user thor.Address, blockTime uint64) *big.Int {
 	var uo userObject
 	b.getStorage(b.userKey(user), &uo)
 	if uo.IsEmpty() {
@@ -107,11 +107,11 @@ func (b *Binding) UserCredit(user thor.Address, blockNum uint32) *big.Int {
 	}
 	var up userPlan
 	b.getStorage(b.userPlanKey(), &up)
-	return uo.Credit(&up, blockNum)
+	return uo.Credit(&up, blockTime)
 }
 
-func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockNum uint32) {
-	b.setStorage(b.userKey(user), &userObject{credit, blockNum})
+func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockTime uint64) {
+	b.setStorage(b.userKey(user), &userObject{credit, blockTime})
 }
 
 func (b *Binding) UserPlan() (credit, recoveryRate *big.Int) {

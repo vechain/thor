@@ -35,7 +35,7 @@ func (up *userPlan) Decode(data []byte) error {
 
 type userObject struct {
 	RemainedCredit *big.Int
-	BlockNum       uint32
+	BlockTime      uint64
 }
 
 var (
@@ -59,11 +59,11 @@ func (u *userObject) Decode(data []byte) error {
 }
 
 func (u *userObject) IsEmpty() bool {
-	return u.RemainedCredit.Sign() == 0 && u.BlockNum == 0
+	return u.RemainedCredit.Sign() == 0 && u.BlockTime == 0
 }
 
-func (u *userObject) Credit(plan *userPlan, blockNum uint32) *big.Int {
-	x := new(big.Int).SetUint64(uint64(blockNum - u.BlockNum))
+func (u *userObject) Credit(plan *userPlan, blockTime uint64) *big.Int {
+	x := new(big.Int).SetUint64(blockTime - u.BlockTime)
 	x.Mul(x, plan.RecoveryRate)
 	x.Add(x, u.RemainedCredit)
 	if x.Cmp(plan.Credit) < 0 {
