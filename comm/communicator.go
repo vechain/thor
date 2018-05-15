@@ -242,6 +242,11 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	}
 }
 
+// PeerCount returns count of peers.
+func (c *Communicator) PeerCount() int {
+	return c.peerSet.Len()
+}
+
 // PeersStats returns all peers' stats
 func (c *Communicator) PeersStats() []*PeerStats {
 	var stats []*PeerStats

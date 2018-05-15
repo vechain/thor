@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/beevik/ntp"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
@@ -114,8 +116,13 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	newBlockCh := make(chan *comm.NewBlockEvent)
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 
-	ticker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
-	defer ticker.Stop()
+	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
+	defer futureTicker.Stop()
+
+	connectivityTicker := time.NewTicker(time.Second)
+	defer connectivityTicker.Stop()
+
+	var noPeerTimes int
 
 	futureBlocks := cache.NewRandCache(32)
 
@@ -135,7 +142,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				n.comm.BroadcastBlock(newBlock.Block)
 				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
-		case <-ticker.C:
+		case <-futureTicker.C:
 			// process future blocks
 			var blocks []*block.Block
 			futureBlocks.ForEach(func(ent *cache.Entry) bool {
@@ -158,6 +165,16 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				if stats.processed > 0 && i == len(blocks)-1 {
 					log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 				}
+			}
+		case <-connectivityTicker.C:
+			if n.comm.PeerCount() == 0 {
+				noPeerTimes++
+				if noPeerTimes > 30 {
+					noPeerTimes = 0
+					go checkClockOffset()
+				}
+			} else {
+				noPeerTimes = 0
 			}
 		}
 	}
@@ -248,5 +265,16 @@ branch:   %v  %v`, fork.Ancestor.Header(),
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
+	}
+}
+
+func checkClockOffset() {
+	resp, err := ntp.Query("ap.pool.ntp.org")
+	if err != nil {
+		log.Debug("failed to access NTP", "err", err)
+		return
+	}
+	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
+		log.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }
