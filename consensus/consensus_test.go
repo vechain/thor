@@ -3,6 +3,7 @@ package consensus
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 func TestConsensus(t *testing.T) {
@@ -22,6 +24,74 @@ func TestConsensus(t *testing.T) {
 	tc := newTestConsensus(t)
 	testValidateBlockHeader(tc, assert)
 	testValidateProposer(tc, assert)
+	testValidateBlockBody(tc, assert)
+}
+
+func txBuilder(tag byte) *tx.Builder {
+	address := thor.BytesToAddress([]byte("addr"))
+	return new(tx.Builder).
+		GasPriceCoef(1).
+		Gas(1000000).
+		Expiration(100).
+		Clause(tx.NewClause(&address).WithValue(big.NewInt(10)).WithData(nil)).
+		Nonce(1).
+		ChainTag(tag)
+}
+
+func txSign(builder *tx.Builder) *tx.Transaction {
+	transaction := builder.Build()
+	sig, _ := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	return transaction.WithSignature(sig)
+}
+
+func testValidateBlockBody(tc *testConsensus, assert *assert.Assertions) {
+	triggers := make(map[string]func())
+	triggers["triggerErrSignerUnavailable"] = func() {
+		transaction := txSign(txBuilder(tc.tag))
+		transactions := tx.Transactions{transaction}
+		blk := tc.sign(block.Compose(tc.original.Header(), transactions))
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block txs root mismatch: want %v, have %v",
+				tc.original.Header().TxsRoot(),
+				transactions.RootHash(),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrChainTagMismatch"] = func() {
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(
+					txSign(txBuilder(tc.tag + 1)),
+				).Build(),
+			),
+		)
+		expect := consensusError(
+			fmt.Sprintf(
+				"tx chain tag mismatch: want %v, have %v",
+				tc.tag,
+				tc.tag+1,
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrRefFutureBlock"] = func() {
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(
+					txSign(txBuilder(tc.tag).BlockRef(tx.NewBlockRef(100))),
+				).Build(),
+			),
+		)
+		expect := consensusError("tx ref future block: ref 100, current 1")
+		assert.Equal(err, expect)
+	}
+
+	for _, trigger := range triggers {
+		trigger()
+	}
 }
 
 func testValidateProposer(tc *testConsensus, assert *assert.Assertions) {
@@ -171,6 +241,7 @@ type testConsensus struct {
 	pk       *ecdsa.PrivateKey
 	parent   *block.Block
 	original *block.Block
+	tag      byte
 }
 
 func newTestConsensus(t *testing.T) *testConsensus {
@@ -219,6 +290,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		pk:       proposer.PrivateKey,
 		parent:   parent,
 		original: original,
+		tag:      c.Tag(),
 	}
 }
 
