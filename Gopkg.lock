@@ -8,6 +8,12 @@
   revision = "c41ed3986faaeb0aeed2bd98e92468f8ea317954"
 
 [[projects]]
+  name = "github.com/beevik/ntp"
+  packages = ["."]
+  revision = "62c80a04de2086884d8296004b6d74ee1846c582"
+  version = "v0.2.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/btcsuite/btcd"
   packages = ["btcec"]
@@ -142,7 +148,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["html","html/atom","html/charset"]
+  packages = ["bpf","html","html/atom","html/charset","internal/iana","internal/socket","ipv4"]
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
@@ -172,6 +178,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7fb06ecb45d116a749c63d667c6b4b4d0ebbcdf0aa7204d472ab490bc9d72c9b"
+  inputs-digest = "5c1ce1773e54b59c8f8221d4ef856c5355d7e5564413f4d73d4d3685772a6da5"
   solver-name = "gps-cdcl"
   solver-version = 1
