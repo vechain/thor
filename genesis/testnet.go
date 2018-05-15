@@ -12,14 +12,21 @@ import (
 
 // NewTestnet create genesis for testnet.
 func NewTestnet() (*Genesis, error) {
-	launchTime := uint64(1526054400000)                                // Sat May 12 2018 00:00:00 GMT+0800 (CST)
-	tokenSupply := new(big.Int).Mul(big.NewInt(1e9), big.NewInt(1e18)) // VET 1 billion
-	acccount0, _ := thor.ParseAddress("0xe59d475abe695c7f67a8a2321f33a856b0b4c71d")
+
+	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+
+	builtin.Executor.Address, _ = thor.ParseAddress("0xB5A34b62b63A6f1EE99DFD30b133B657859f8d79")
+	acccount0, _ := thor.ParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
+
+	master0, _ := thor.ParseAddress("0x25AE0ef84dA4a76D5a1DFE80D3789C2c46FeE30a")
+	endorser0, _ := thor.ParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
 
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(thor.InitialGasLimit).
 		State(func(state *state.State) error {
+			tokenSupply := new(big.Int)
+
 			// alloc precompiled contracts
 			for addr := range evm.PrecompiledContractsByzantium {
 				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
@@ -31,8 +38,24 @@ func NewTestnet() (*Genesis, error) {
 			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{})
-			state.SetBalance(acccount0, tokenSupply)
+			// 1 million
+			amount := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1000*1000))
+			state.SetBalance(builtin.Executor.Address, amount)
+			state.SetEnergy(builtin.Executor.Address, &big.Int{}, launchTime)
+			tokenSupply.Add(tokenSupply, amount)
+
+			// 1 billion
+			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(1000*1000*1000))
+			state.SetBalance(acccount0, amount)
+			state.SetEnergy(acccount0, &big.Int{}, launchTime)
+			tokenSupply.Add(tokenSupply, amount)
+
+			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250*1000))
+			state.SetBalance(endorser0, amount)
+			state.SetEnergy(endorser0, &big.Int{}, launchTime)
+			tokenSupply.Add(tokenSupply, amount)
+
+			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{}, launchTime)
 			return nil
 		}).
 		Call(
@@ -46,6 +69,9 @@ func NewTestnet() (*Genesis, error) {
 		Call(
 			tx.NewClause(&builtin.Params.Address).
 				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			builtin.Executor.Address).
+		Call(tx.NewClause(&builtin.Authority.Address).
+			WithData(mustEncodeInput(builtin.Authority.ABI, "add", master0, endorser0, thor.BytesToBytes32([]byte("master0")))),
 			builtin.Executor.Address)
 
 	id, err := builder.ComputeID()

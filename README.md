@@ -14,7 +14,7 @@ In addition, [dep](https://github.com/golang/dep) is required to manage dependen
 
 Clone the Thor repo:
 
-```sh
+```
 git clone https://github.com/vechain/thor.git
 cd thor
 ```
@@ -22,7 +22,7 @@ cd thor
 Install dependencies:
 (*Note that to make `dep` work, you should put Thor's source code at proper position under your $GOPATH.*)
 
-```sh
+```
 dep ensure
 ```
 
@@ -30,13 +30,13 @@ dep ensure
 
 To build the main app `thor`, just run
 
-```sh
+```
 make
 ```
 
 or build the full suite:
 
-```sh
+```
 make all
 ```
 
@@ -44,20 +44,26 @@ If no error reported, all built executable binaries will appear in folder *bin*.
 
 ## Running Thor
 
-Connect to VeChain's mainnet:
+Connect to VeChain's testnet:
 
-```sh
-bin/thor
+```
+bin/thor -network test
+```
+
+or devnet:
+
+```
+bin/thor -network dev
 ```
 
 To find out usages of all command line options:
 
-```sh
+```
 bin/thor -h
 ```
 
 - `--dir value`          main directory for configs and databases
-- `--dev`                develop mode
+- `--network`            the network to join (test|dev) (default: "test")
 - `--beneficiary value`  address for block rewards
 - `--api-addr value`     API service listening address (default: "localhost:8669")
 - `--api-cors value`     comma separated list of domains from which to accept cross origin requests to API

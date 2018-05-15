@@ -25,7 +25,7 @@ contract PrototypeInterface {
 
     function $energy() public view returns(uint256);
     function $transfer_energy(uint256 amount) public;
-    function $transfer_energy_to(address to, uint256 amount) public;
+    function $move_energy_to(address to, uint256 amount) public;
 
     function $user_plan() public view returns(uint256 credit, uint256 recoveryRate);
     function $set_user_plan(uint256 credit, uint256 recoveryRate) public;

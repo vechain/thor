@@ -41,7 +41,7 @@ func main() {
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
 		Flags: []cli.Flag{
 			dirFlag,
-			devFlag,
+			networkFlag,
 			beneficiaryFlag,
 			apiAddrFlag,
 			apiCorsFlag,
@@ -88,12 +88,12 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
-	master := loadNodeMaster(ctx, dataDir)
+	master := loadNodeMaster(ctx)
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom := startP2PComm(ctx, dataDir, chain, txPool)
+	p2pcom := startP2PComm(ctx, chain, txPool)
 	defer p2pcom.Shutdown()
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))

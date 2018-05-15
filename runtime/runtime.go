@@ -101,7 +101,7 @@ func (rt *Runtime) execute(
 			builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
 		},
 		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
-			amount := rt.state.GetEnergy(contractAddr, rt.blockNumber)
+			amount := rt.state.GetEnergy(contractAddr, rt.blockTime)
 			if amount.Sign() == 0 {
 				return
 			}
@@ -109,9 +109,9 @@ func (rt *Runtime) execute(
 			// no need to clear contract's energy, vm will delete the whole contract later.
 			rt.state.SetEnergy(tokenReceiver,
 				new(big.Int).Add(
-					rt.state.GetEnergy(tokenReceiver, rt.blockNumber),
+					rt.state.GetEnergy(tokenReceiver, rt.blockTime),
 					amount),
-				rt.blockNumber)
+				rt.blockTime)
 
 			// see ERC20's Transfer event
 			topics := []common.Hash{
@@ -163,7 +163,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.blockNumber)
+	payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.blockTime)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -229,7 +229,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	builtin.Energy.Native(rt.state).AddBalance(rt.blockBeneficiary, reward, rt.blockNumber)
+	builtin.Energy.Native(rt.state).AddBalance(rt.blockBeneficiary, reward, rt.blockTime)
 
 	receipt.Reward = reward
 

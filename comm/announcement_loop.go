@@ -60,16 +60,17 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 		// already in chain
 		return
 	}
-	result, err := proto.GetBlockByID{ID: newBlockID}.Call(c.ctx, peer)
+
+	result, err := proto.GetBlockByID(c.ctx, peer, newBlockID)
 	if err != nil {
 		peer.logger.Debug("failed to get block by id", "err", err)
 		return
 	}
-	if result.Block == nil {
+	if result == nil {
 		peer.logger.Debug("get nil block by id")
 		return
 	}
 	c.newBlockFeed.Send(&NewBlockEvent{
-		Block: result.Block,
+		Block: result,
 	})
 }

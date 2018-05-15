@@ -28,7 +28,7 @@ func (c *Communicator) txsLoop() {
 				peer := peer
 				peer.MarkTransaction(tx.ID())
 				c.goes.Go(func() {
-					if err := (proto.NewTx{Tx: tx}.Notify(c.ctx, peer)); err != nil {
+					if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {
 						peer.logger.Debug("failed to broadcast tx", "err", err)
 					}
 				})

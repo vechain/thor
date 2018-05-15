@@ -12,7 +12,7 @@ import (
 type Account struct {
 	Balance     *big.Int
 	Energy      *big.Int
-	BlockNum    uint32
+	BlockTime   uint64
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 }
@@ -32,13 +32,12 @@ func emptyAccount() *Account {
 var bigE18 = big.NewInt(1e18)
 
 type EnergyState struct {
-	Energy   *big.Int
-	BlockNum uint32
+	Energy    *big.Int
+	BlockTime uint64
 }
 
-func (es *EnergyState) CalcEnergy(balance *big.Int, blockNum uint32) *big.Int {
-	if blockNum <= es.BlockNum {
-		// never occur in real env.
+func (es *EnergyState) CalcEnergy(balance *big.Int, blockTime uint64) *big.Int {
+	if es.BlockTime == 0 {
 		return es.Energy
 	}
 
@@ -46,11 +45,11 @@ func (es *EnergyState) CalcEnergy(balance *big.Int, blockNum uint32) *big.Int {
 		return es.Energy
 	}
 
-	diff := blockNum - es.BlockNum
+	diff := blockTime - es.BlockTime
 	if diff == 0 {
 		return es.Energy
 	}
-	x := new(big.Int).SetUint64(uint64(diff))
+	x := new(big.Int).SetUint64(diff)
 	x.Mul(x, balance)
 	x.Mul(x, thor.EnergyGrowthRate)
 	x.Div(x, bigE18)

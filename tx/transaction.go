@@ -266,11 +266,14 @@ func (t *Transaction) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder
 func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
+	_, size, _ := s.Kind()
 	var body body
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
 	*t = Transaction{body: body}
+
+	t.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil
 }
 

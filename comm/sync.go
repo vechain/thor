@@ -2,8 +2,8 @@ package comm
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
@@ -35,7 +35,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 	goes.Go(func() {
 		defer close(blockCh)
 		for {
-			result, err := proto.GetBlocksFromNumber{Num: fromNum}.Call(ctx, peer)
+			result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
 			if err != nil {
 				errValue.Store(err)
 				return
@@ -82,7 +82,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 	}
 
 	isOverlapped := func(num uint32) (bool, error) {
-		result, err := proto.GetBlockIDByNumber{Num: num}.Call(c.ctx, peer)
+		result, err := proto.GetBlockIDByNumber(c.ctx, peer, num)
 		if err != nil {
 			return false, err
 		}
@@ -90,7 +90,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 		if err != nil {
 			return false, err
 		}
-		return id == result.ID, nil
+		return id == result, nil
 	}
 
 	var find func(start uint32, end uint32, ancestor uint32) (uint32, error)
@@ -121,10 +121,8 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 	}
 
 	fastSeek := func() (uint32, error) {
-		i := uint32(0)
+		var backward uint32
 		for {
-			backward := uint32(4) << i
-			i++
 			if backward >= headNum {
 				return 0, nil
 			}
@@ -136,33 +134,52 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 			if overlapped {
 				return headNum - backward, nil
 			}
+			if backward == 0 {
+				backward = 1
+			} else {
+				backward <<= 1
+			}
 		}
 	}
 
-	seekedNum, err := fastSeek()
+	seekNum, err := fastSeek()
 	if err != nil {
 		return 0, err
 	}
-
-	return find(seekedNum, headNum, 0)
+	if seekNum == headNum {
+		return headNum, nil
+	}
+	return find(seekNum, headNum, 0)
 }
 
 func (c *Communicator) syncTxs(peer *Peer) {
-	ctx, cancel := context.WithTimeout(c.ctx, 20*time.Second)
-	defer cancel()
-	result, err := proto.GetTxs{}.Call(ctx, peer)
-	if err != nil {
-		peer.logger.Debug("failed to request txs", "err", err)
-		return
-	}
-	for _, tx := range result {
-		c.txPool.Add(tx)
-
-		select {
-		case <-ctx.Done():
+	for i := 0; ; i++ {
+		peer.logger.Debug(fmt.Sprintf("sync txs loop %v", i))
+		result, err := proto.GetTxs(c.ctx, peer)
+		if err != nil {
+			peer.logger.Debug("failed to request txs", "err", err)
 			return
-		default:
+		}
+
+		// no more txs
+		if len(result) == 0 {
+			break
+		}
+
+		for _, tx := range result {
+			peer.MarkTransaction(tx.ID())
+			c.txPool.Add(tx)
+			select {
+			case <-c.ctx.Done():
+				return
+			default:
+			}
+		}
+
+		if i >= 100 {
+			peer.logger.Debug("too many loops to sync txs, break")
+			return
 		}
 	}
-	peer.logger.Debug("tx synced")
+	peer.logger.Debug("sync txs done")
 }

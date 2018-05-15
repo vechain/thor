@@ -22,11 +22,11 @@ func New(addr thor.Address, state *state.State) *Authority {
 }
 
 func (a *Authority) getStorage(key thor.Bytes32, val interface{}) {
-	a.state.GetStructedStorage(a.addr, key, val)
+	a.state.GetStructuredStorage(a.addr, key, val)
 }
 
 func (a *Authority) setStorage(key thor.Bytes32, val interface{}) {
-	a.state.SetStructedStorage(a.addr, key, val)
+	a.state.SetStructuredStorage(a.addr, key, val)
 }
 
 // Get get entry by signer address.
@@ -61,6 +61,7 @@ func (a *Authority) Add(signer thor.Address, endorsor thor.Address, identity tho
 			Endorsor: endorsor,
 			Identity: identity,
 			Prev:     tail.Address,
+			Active:   true,
 		}
 		return true
 	}) {

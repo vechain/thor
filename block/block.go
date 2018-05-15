@@ -67,6 +67,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
+	_, size, _ := s.Kind()
 	payload := struct {
 		Header Header
 		Txs    tx.Transactions
@@ -80,6 +81,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		header: &payload.Header,
 		txs:    payload.Txs,
 	}
+	b.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil
 }
 

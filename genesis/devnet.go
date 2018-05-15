@@ -55,7 +55,7 @@ func DevAccounts() []DevAccount {
 
 // NewDevnet create devnet genesis.
 func NewDevnet() (*Genesis, error) {
-	launchTime := uint64(1519356186)
+	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -78,11 +78,11 @@ func NewDevnet() (*Genesis, error) {
 			for _, a := range DevAccounts() {
 				bal, _ := new(big.Int).SetString("10000000000000000000000000", 10)
 				state.SetBalance(a.Address, bal)
-				state.SetEnergy(a.Address, bal, 0)
+				state.SetEnergy(a.Address, bal, launchTime)
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			energy.SetInitialSupply(tokenSupply, energySupply)
+			energy.SetInitialSupply(tokenSupply, energySupply, launchTime)
 			return nil
 		}).
 		Call(

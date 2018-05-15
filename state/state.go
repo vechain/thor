@@ -59,7 +59,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 		return s.getCachedObject(k).data.Balance, true
 	case energyKey: // get energy
 		data := s.getCachedObject(thor.Address(k)).data
-		return EnergyState{data.Energy, data.BlockNum}, true
+		return EnergyState{data.Energy, data.BlockTime}, true
 	case codeKey: // get code
 		co := s.getCachedObject(thor.Address(k))
 		code, err := co.GetCode()
@@ -103,7 +103,7 @@ func (s *State) changes() map[thor.Address]*changedObject {
 		case energyKey:
 			obj := getOrNewObj(thor.Address(key))
 			es := v.(EnergyState)
-			obj.data.Energy, obj.data.BlockNum = es.Energy, es.BlockNum
+			obj.data.Energy, obj.data.BlockTime = es.Energy, es.BlockTime
 		case codeKey:
 			getOrNewObj(thor.Address(key)).code = v.([]byte)
 		case codeHashKey:
@@ -205,29 +205,29 @@ func (s *State) SetBalance(addr thor.Address, balance *big.Int) {
 }
 
 // GetEnergy get energy for the given address at block number specified.
-func (s *State) GetEnergy(addr thor.Address, blockNum uint32) *big.Int {
+func (s *State) GetEnergy(addr thor.Address, blockTime uint64) *big.Int {
 	v, _ := s.sm.Get(energyKey(addr))
 	es := v.(EnergyState)
-	return es.CalcEnergy(s.GetBalance(addr), blockNum)
+	return es.CalcEnergy(s.GetBalance(addr), blockTime)
 }
 
 // SetEnergy set energy at block number for the given address.
-func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockNum uint32) {
-	s.sm.Put(energyKey(addr), EnergyState{energy, blockNum})
+func (s *State) SetEnergy(addr thor.Address, energy *big.Int, blockTime uint64) {
+	s.sm.Put(energyKey(addr), EnergyState{energy, blockTime})
 }
 
 // GetStorage returns storage value for the given address and key.
 func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) (value thor.Bytes32) {
-	s.GetStructedStorage(addr, key, &value)
+	s.GetStructuredStorage(addr, key, &value)
 	return
 }
 
 // SetStorage set storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
-	s.SetStructedStorage(addr, key, value)
+	s.SetStructuredStorage(addr, key, value)
 }
 
-// GetStructedStorage get and decode raw storage for given address and key.
+// GetStructuredStorage get and decode raw storage for given address and key.
 // 'val' should either implements StorageDecoder, or int type of
 // [
 //   *thor.Bytes32, *thor.Address,
@@ -235,7 +235,7 @@ func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
 //   *uintx
 //   *big.Int
 // ]
-func (s *State) GetStructedStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
+func (s *State) GetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
 	data, _ := s.sm.Get(storageKey{addr, key})
 	if dec, ok := val.(StorageDecoder); ok {
 		s.setError(dec.Decode(data.([]byte)))
@@ -244,7 +244,7 @@ func (s *State) GetStructedStorage(addr thor.Address, key thor.Bytes32, val inte
 	s.setError(decodeStorage(data.([]byte), val))
 }
 
-// SetStructedStorage encode val and set as raw storage value for given address and key.
+// SetStructuredStorage encode val and set as raw storage value for given address and key.
 // 'val' should ether implements StorageEncoder, or in type of
 // [
 //	  thor.Bytes32, thor.Address,
@@ -253,7 +253,7 @@ func (s *State) GetStructedStorage(addr thor.Address, key thor.Bytes32, val inte
 //    *big.Int
 // ]
 // If 'val' is nil, the storage is cleared.
-func (s *State) SetStructedStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
+func (s *State) SetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
 	if val == nil {
 		s.sm.Put(storageKey{addr, key}, []byte(nil))
 		return

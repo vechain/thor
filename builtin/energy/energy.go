@@ -14,8 +14,9 @@ var (
 )
 
 type initialSupply struct {
-	Token  *big.Int
-	Energy *big.Int
+	Token     *big.Int
+	Energy    *big.Int
+	BlockTime uint64
 }
 
 var _ state.StorageDecoder = (*initialSupply)(nil)
@@ -23,7 +24,7 @@ var _ state.StorageEncoder = (*initialSupply)(nil)
 
 // Encode implements state.StorageEncoder.
 func (i *initialSupply) Encode() ([]byte, error) {
-	if i.Token.Sign() == 0 && i.Energy.Sign() == 0 {
+	if i.Token.Sign() == 0 && i.Energy.Sign() == 0 && i.BlockTime == 0 {
 		return nil, nil
 	}
 	return rlp.EncodeToBytes(i)
@@ -35,6 +36,7 @@ func (i *initialSupply) Decode(data []byte) error {
 		*i = initialSupply{
 			&big.Int{},
 			&big.Int{},
+			0,
 		}
 		return nil
 	}
@@ -81,30 +83,31 @@ func New(addr thor.Address, state *state.State) *Energy {
 }
 
 func (e *Energy) getStorage(key thor.Bytes32, val interface{}) {
-	e.state.GetStructedStorage(e.addr, key, val)
+	e.state.GetStructuredStorage(e.addr, key, val)
 }
 
 func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
-	e.state.SetStructedStorage(e.addr, key, val)
+	e.state.SetStructuredStorage(e.addr, key, val)
 }
 
 // SetInitialSupply set initial token and energy supply, to help calculating total energy supply.
-func (e *Energy) SetInitialSupply(token *big.Int, energy *big.Int) {
+func (e *Energy) SetInitialSupply(token *big.Int, energy *big.Int, blockTime uint64) {
 	e.setStorage(initialSupplyKey, &initialSupply{
-		Token:  token,
-		Energy: energy,
+		Token:     token,
+		Energy:    energy,
+		BlockTime: blockTime,
 	})
 }
 
 // GetTotalSupply returns total supply of energy.
-func (e *Energy) GetTotalSupply(blockNum uint32) *big.Int {
+func (e *Energy) GetTotalSupply(blockTime uint64) *big.Int {
 	// that's totalGrown + totalAdd - totalSub
 	var init initialSupply
 	e.getStorage(initialSupplyKey, &init)
 
 	// calc grown energy for total token supply
-	energyState := state.EnergyState{Energy: init.Energy}
-	return energyState.CalcEnergy(init.Token, blockNum)
+	energyState := state.EnergyState{Energy: init.Energy, BlockTime: init.BlockTime}
+	return energyState.CalcEnergy(init.Token, blockTime)
 }
 
 // GetTotalBurned returns energy totally burned.
@@ -115,12 +118,12 @@ func (e *Energy) GetTotalBurned() *big.Int {
 }
 
 // GetBalance returns energy balance of an account at given block time.
-func (e *Energy) GetBalance(addr thor.Address, blockNum uint32) *big.Int {
-	return e.state.GetEnergy(addr, blockNum)
+func (e *Energy) GetBalance(addr thor.Address, blockTime uint64) *big.Int {
+	return e.state.GetEnergy(addr, blockTime)
 }
 
-func (e *Energy) AddBalance(addr thor.Address, amount *big.Int, blockNum uint32) {
-	bal := e.state.GetEnergy(addr, blockNum)
+func (e *Energy) AddBalance(addr thor.Address, amount *big.Int, blockTime uint64) {
+	bal := e.state.GetEnergy(addr, blockTime)
 	if amount.Sign() != 0 {
 		var total totalAddSub
 		e.getStorage(totalAddSubKey, &total)
@@ -129,14 +132,14 @@ func (e *Energy) AddBalance(addr thor.Address, amount *big.Int, blockNum uint32)
 			TotalSub: total.TotalSub,
 		})
 
-		e.state.SetEnergy(addr, new(big.Int).Add(bal, amount), blockNum)
+		e.state.SetEnergy(addr, new(big.Int).Add(bal, amount), blockTime)
 	} else {
-		e.state.SetEnergy(addr, bal, blockNum)
+		e.state.SetEnergy(addr, bal, blockTime)
 	}
 }
 
-func (e *Energy) SubBalance(addr thor.Address, amount *big.Int, blockNum uint32) bool {
-	bal := e.state.GetEnergy(addr, blockNum)
+func (e *Energy) SubBalance(addr thor.Address, amount *big.Int, blockTime uint64) bool {
+	bal := e.state.GetEnergy(addr, blockTime)
 	if amount.Sign() != 0 {
 		if bal.Cmp(amount) < 0 {
 			return false
@@ -149,9 +152,9 @@ func (e *Energy) SubBalance(addr thor.Address, amount *big.Int, blockNum uint32)
 			TotalSub: new(big.Int).Add(total.TotalSub, amount),
 		})
 
-		e.state.SetEnergy(addr, new(big.Int).Sub(bal, amount), blockNum)
+		e.state.SetEnergy(addr, new(big.Int).Sub(bal, amount), blockTime)
 	} else {
-		e.state.SetEnergy(addr, bal, blockNum)
+		e.state.SetEnergy(addr, bal, blockTime)
 	}
 	return true
 }
