@@ -13,7 +13,6 @@ var (
 	}
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Value: "test",
 		Usage: "the network to join (test|dev)",
 	}
 	beneficiaryFlag = cli.StringFlag{

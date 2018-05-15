@@ -58,7 +58,11 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 		return gene
 	default:
 		cli.ShowAppHelp(ctx)
-		fmt.Println("unrecognized value of -network:", network)
+		if network == "" {
+			fmt.Println("network not specified -network")
+		} else {
+			fmt.Println("unrecognized value of -network:", network)
+		}
 		os.Exit(1)
 		return nil
 	}
