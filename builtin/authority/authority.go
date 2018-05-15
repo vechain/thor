@@ -61,6 +61,7 @@ func (a *Authority) Add(signer thor.Address, endorsor thor.Address, identity tho
 			Endorsor: endorsor,
 			Identity: identity,
 			Prev:     tail.Address,
+			Active:   true,
 		}
 		return true
 	}) {
