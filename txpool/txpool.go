@@ -66,7 +66,7 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 		tx := tx // it's for closure
 		txID := tx.ID()
 		if obj := pool.entry.find(txID); obj != nil {
-			return rejectedTx("known transaction")
+			return rejectedTxErr{"known transaction"}
 		}
 
 		// If the transaction fails basic validation, discard it
@@ -114,25 +114,25 @@ func (pool *TxPool) Pending(sort bool) tx.Transactions {
 
 func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 	if tx.Size() > maxTxSize {
-		return thor.Address{}, rejectedTx("tx too large")
+		return thor.Address{}, rejectedTxErr{"tx too large"}
 	}
 
 	if tx.ChainTag() != pool.chain.Tag() {
-		return thor.Address{}, badTx("chain tag mismatched")
+		return thor.Address{}, badTxErr{"chain tag mismatched"}
 	}
 
 	if tx.HasReservedFields() {
-		return thor.Address{}, badTx("reserved fields not empty")
+		return thor.Address{}, badTxErr{"reserved fields not empty"}
 	}
 
 	bestBlock := pool.chain.BestBlock()
 
 	if tx.Gas() > bestBlock.Header().GasLimit() {
-		return thor.Address{}, badTx("tx gas exceeded")
+		return thor.Address{}, badTxErr{"tx gas exceeded"}
 	}
 
 	if tx.IsExpired(bestBlock.Header().Number()) {
-		return thor.Address{}, rejectedTx("tx expired")
+		return thor.Address{}, rejectedTxErr{"tx expired"}
 	}
 
 	st, err := pool.stateC.NewState(bestBlock.Header().StateRoot())
@@ -142,21 +142,21 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 
 	resolvedTx, err := runtime.ResolveTransaction(st, tx)
 	if err != nil {
-		return thor.Address{}, badTx("intrinsic gas exceeds provided gas")
+		return thor.Address{}, badTxErr{"intrinsic gas exceeds provided gas"}
 	}
 
 	if pool.entry.quotaBySinger(resolvedTx.Origin) >= quotaSignerTx {
-		return thor.Address{}, rejectedTx("quota exceeds limit")
+		return thor.Address{}, rejectedTxErr{"quota exceeds limit"}
 	}
 
 	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Number()+1)
 	if err != nil {
-		return thor.Address{}, rejectedTx("insufficient energy")
+		return thor.Address{}, rejectedTxErr{"insufficient energy"}
 	}
 
 	for _, clause := range resolvedTx.Clauses {
 		if clause.Value().Sign() < 0 {
-			return thor.Address{}, badTx("negative clause value")
+			return thor.Address{}, badTxErr{"negative clause value"}
 		}
 	}
 
