@@ -3,7 +3,6 @@ package consensus
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -21,8 +20,57 @@ import (
 func TestConsensus(t *testing.T) {
 	assert := assert.New(t)
 	tc := newTestConsensus(t)
-
 	testValidateBlockHeader(tc, assert)
+	testValidateProposer(tc, assert)
+}
+
+func testValidateProposer(tc *testConsensus, assert *assert.Assertions) {
+	triggers := make(map[string]func())
+	triggers["triggerErrSignerUnavailable"] = func() {
+		blk := tc.originalBuilder().Build()
+		err := tc.consent(blk)
+		expect := consensusError("block signer unavailable: invalid signature length")
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrSignerInvalid"] = func() {
+		blk := tc.originalBuilder().Build()
+		pk, _ := crypto.GenerateKey()
+		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
+		blk = blk.WithSignature(sig)
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block signer invalid: %v unauthorized block proposer",
+				thor.Address(crypto.PubkeyToAddress(pk.PublicKey)),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerErrTimestampUnscheduled"] = func() {
+		blk := tc.originalBuilder().Build()
+		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+		blk = blk.WithSignature(sig)
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block timestamp unscheduled: t %v, s %v",
+				blk.Header().Timestamp(),
+				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey)),
+			),
+		)
+		assert.Equal(err, expect)
+	}
+	triggers["triggerTotalScoreInvalid"] = func() {
+		build := tc.originalBuilder()
+		blk := tc.sign(build.TotalScore(tc.original.Header().TotalScore() + 100).Build())
+		err := tc.consent(blk)
+		expect := consensusError("block total score invalid: want 1, have 101")
+		assert.Equal(err, expect)
+	}
+
+	for _, trigger := range triggers {
+		trigger()
+	}
 }
 
 func testValidateBlockHeader(tc *testConsensus, assert *assert.Assertions) {
@@ -147,18 +195,12 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	proposer := genesis.DevAccounts()[rand.Intn(len(genesis.DevAccounts()))]
+	proposer := genesis.DevAccounts()[0]
 	p := packer.New(c, stateCreator, proposer.Address, proposer.Address)
 	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	dv := flow.When() - uint64(time.Now().Unix())
-	fmt.Println("wait for pack:", dv, "s")
-	timer := time.NewTimer(time.Duration(dv) * time.Second)
-	defer timer.Stop()
-	<-timer.C
 
 	original, _, _, err := flow.Pack(proposer.PrivateKey)
 	if err != nil {
