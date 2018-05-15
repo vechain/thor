@@ -14,12 +14,12 @@ func rejectedTx(err string) errRejectedTx {
 	return errRejectedTx(errors.New(err))
 }
 
-func IsErrBadTx(err error) bool {
+func IsBadTx(err error) bool {
 	_, ok := err.(errBadTx)
 	return ok
 }
 
-func IsErrRejectedTx(err error) bool {
+func IsRejectedTx(err error) bool {
 	_, ok := err.(errRejectedTx)
 	return ok
 }
