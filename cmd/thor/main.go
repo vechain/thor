@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
@@ -22,11 +21,6 @@ var (
 	gitCommit string
 	release   = "dev"
 	log       = log15.New()
-
-	bootstrapNodes = []*discover.Node{
-		discover.MustParseNode("enode://b788e1d863aaea4fecef4aba4be50e59344d64f2db002160309a415ab508977b8bffb7bac3364728f9cdeab00ebdd30e8d02648371faacd0819edc27c18b2aad@106.15.4.191:55555"),
-		discover.MustParseNode("enode://2edf9df89736a646cf4b95921f2cc0cd62779f59e5202163c63134e194215d68fd58050a9fe434942943f07bcc2f088a6eb270d58e7fc29da6b01bd56e103759@139.224.162.220:55555"),
-	}
 )
 
 func fullVersion() string {
