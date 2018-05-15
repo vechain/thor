@@ -142,6 +142,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 				if peer.IsTransactionKnown(tx.ID()) {
 					continue
 				}
+				peer.MarkTransaction(tx.ID())
 				toSend = append(toSend, tx)
 				size += tx.Size()
 				if size >= maxTxSyncSize {

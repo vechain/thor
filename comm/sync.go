@@ -167,6 +167,7 @@ func (c *Communicator) syncTxs(peer *Peer) {
 		}
 
 		for _, tx := range result {
+			peer.MarkTransaction(tx.ID())
 			c.txPool.Add(tx)
 			select {
 			case <-c.ctx.Done():
