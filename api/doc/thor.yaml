@@ -60,7 +60,7 @@ paths:
     post:
       tags:
         - Accounts
-      summary: deploy a contract
+      summary: perform contract call of deploying a contract
       requestBody:
         description: arguments and environment
         required: true
