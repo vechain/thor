@@ -51,6 +51,7 @@ func openLevelDB(stg storage.Storage, cacheSize, openFilesCacheCapacity int) (*L
 	}
 
 	db, err := leveldb.Open(stg, &opt.Options{
+		CompactionTableSize:    64 * opt.MiB,
 		OpenFilesCacheCapacity: openFilesCacheCapacity,
 		BlockCacheCapacity:     cacheSize / 2 * opt.MiB,
 		WriteBuffer:            cacheSize / 4 * opt.MiB, // Two of these are used internally
