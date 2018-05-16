@@ -63,3 +63,9 @@ func (nm *nodeMap) Contains(id discover.NodeID) bool {
 	defer nm.lock.Unlock()
 	return nm.m[id] != nil
 }
+
+func (nm *nodeMap) Len() int {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
+	return len(nm.m)
+}
