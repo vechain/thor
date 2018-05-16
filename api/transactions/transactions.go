@@ -36,9 +36,6 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, er
 	}
 	block, err := t.chain.GetBlock(location.BlockID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	raw, err := rlp.EncodeToBytes(tx)
@@ -69,9 +66,6 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 	}
 	block, err := t.chain.GetBlock(location.BlockID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	tc.Block = BlockContext{
@@ -93,9 +87,6 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, e
 	}
 	block, err := t.chain.GetBlock(location.BlockID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	receipts, err := t.chain.GetBlockReceipts(block.Header().ID())
