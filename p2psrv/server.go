@@ -1,6 +1,7 @@
 package p2psrv
 
 import (
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -52,6 +53,7 @@ func New(opts *Options) *Server {
 				NetRestrict:      opts.NetRestrict,
 				NAT:              opts.NAT,
 				NoDial:           opts.NoDial,
+				DialRatio:        int(math.Sqrt(float64(opts.MaxPeers))),
 			},
 		},
 		done:            make(chan struct{}),
@@ -208,14 +210,20 @@ func (s *Server) dialLoop() {
 	for {
 		select {
 		case <-ticker.C:
+			if s.srv.DialRatio < 1 {
+				continue
+			}
+
+			if s.dialingNodes.Len() >= s.srv.MaxPeers/s.srv.DialRatio {
+				continue
+			}
+
 			entry := s.discoveredNodes.Pick()
 			if entry == nil {
 				continue
 			}
+
 			node := entry.Value.(*discover.Node)
-			if s.srv.PeerCount() >= s.srv.MaxPeers {
-				continue
-			}
 			if s.dialingNodes.Contains(node.ID) {
 				continue
 			}
