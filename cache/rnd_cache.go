@@ -26,8 +26,8 @@ type randEntry struct {
 
 // NewRandCache create a new RandCache.
 func NewRandCache(limit int) *RandCache {
-	if limit < 16 {
-		limit = 16
+	if limit < 1 {
+		panic("invalid limit for RandCache")
 	}
 	return &RandCache{
 		m:     make(map[interface{}]*randEntry),
