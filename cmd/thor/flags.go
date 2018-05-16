@@ -38,7 +38,7 @@ var (
 	maxPeersFlag = cli.IntFlag{
 		Name:  "max-peers",
 		Usage: "maximum number of P2P network peers (P2P network disabled if set to 0)",
-		Value: 10,
+		Value: 25,
 	}
 	p2pPortFlag = cli.IntFlag{
 		Name:  "p2p-port",
