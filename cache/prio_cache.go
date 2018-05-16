@@ -16,8 +16,8 @@ type PrioCache struct {
 
 // NewPrioCache create a new PrioCache.
 func NewPrioCache(limit int) *PrioCache {
-	if limit < 16 {
-		limit = 16
+	if limit < 1 {
+		panic("invalid limit for PrioCache")
 	}
 	return &PrioCache{
 		m:     make(map[interface{}]*prioEntry),
