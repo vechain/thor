@@ -42,12 +42,12 @@ func NewMem() (*LevelDB, error) {
 }
 
 func openLevelDB(stg storage.Storage, cacheSize, openFilesCacheCapacity int) (*LevelDB, error) {
-	if cacheSize < 128 {
-		cacheSize = 128
+	if cacheSize < 16 {
+		cacheSize = 16
 	}
 
-	if openFilesCacheCapacity < 64 {
-		openFilesCacheCapacity = 64
+	if openFilesCacheCapacity < 16 {
+		openFilesCacheCapacity = 16
 	}
 
 	db, err := leveldb.Open(stg, &opt.Options{

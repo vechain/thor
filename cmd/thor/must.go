@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -90,8 +91,24 @@ func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
 }
 
 func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
+	limit, err := fdlimit.Current()
+	if err != nil {
+		fatal("failed to get fd limit:", err)
+	}
+	if limit <= 1024 {
+		log.Warn("low fd limit, increase it if possible", "limit", limit)
+	}
+
+	fileCache := limit / 2
+	if fileCache > 1024 {
+		fileCache = 1024
+	}
+
 	dir := filepath.Join(dataDir, "main.db")
-	db, err := lvldb.New(dir, lvldb.Options{})
+	db, err := lvldb.New(dir, lvldb.Options{
+		CacheSize:              128,
+		OpenFilesCacheCapacity: fileCache,
+	})
 	if err != nil {
 		fatal(fmt.Sprintf("open chain database [%v]: %v", dir, err))
 	}
