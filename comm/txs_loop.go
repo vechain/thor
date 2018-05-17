@@ -6,8 +6,6 @@
 package comm
 
 import (
-	"math"
-
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/tx"
 )
@@ -26,10 +24,8 @@ func (c *Communicator) txsLoop() {
 			peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
 				return !p.IsTransactionKnown(tx.ID())
 			})
-			p := int(math.Sqrt(float64(len(peers))))
-			toPropagate := peers[:p]
 
-			for _, peer := range toPropagate {
+			for _, peer := range peers {
 				peer := peer
 				peer.MarkTransaction(tx.ID())
 				c.goes.Go(func() {
