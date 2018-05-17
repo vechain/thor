@@ -20,7 +20,7 @@ cd thor
 ```
 
 Install dependencies:
-(*Note that to make `dep` work, you should put Thor's source code at proper position under your $GOPATH.*)
+(*Note that to make `dep` work, you should put Thor's source code at proper position under your `$GOPATH`.*)
 
 ```
 dep ensure
@@ -89,4 +89,4 @@ Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. 
 
 VeChain Thor is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
-in *COPYING* file in repository.
+in *LICENSE* file in repository.
