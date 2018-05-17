@@ -128,13 +128,11 @@ func (n *Node) pack(flow *packer.Flow) error {
 		)
 	}
 
-	elapsed := execElapsed + commitElapsed
-
-	if elapsed > 0 {
+	if execElapsed > 0 {
 		gasUsed := newBlock.Header().GasUsed()
 		// calc target gas limit only if gas used above third of gas limit
 		if gasUsed > newBlock.Header().GasLimit()/3 {
-			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(elapsed)
+			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(execElapsed)
 			n.packer.SetTargetGasLimit(targetGasLimit)
 			log.Debug("reset target gas limit", "value", targetGasLimit)
 		}
