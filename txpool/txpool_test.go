@@ -1,10 +1,8 @@
-package txpool_test
+package txpool
 
 import (
-	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -15,7 +13,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
 )
 
 const (
@@ -24,39 +21,50 @@ const (
 )
 
 var (
-	c    *chain.Chain
-	txID thor.Bytes32
+	c     *chain.Chain
+	txID  thor.Bytes32
+	nonce int
 )
 
 func TestTxPool(t *testing.T) {
 	pool := initPool(t)
 	defer pool.Close()
-	count := 100
-	addTx(t, pool, count)
-	pending(t, pool, count)
-	dump(t, pool, count)
 
+	count := 100
+	txs := generateTxs(t, count)
+	txID = txs[0].ID()
+
+	// test add tx
+	if err := pool.Add(txs...); err != nil {
+		t.Fatal(err)
+	}
+	testPending(t, pool, count)
+
+	// test pool quota
+	err := pool.Add(generateTxs(t, 1)...)
+	assert.Equal(t, err, rejectedTxErr{"quota exceeds limit"})
+
+	// test remove tx
 	pool.Remove(txID)
-	dump(t, pool, count-1)
+	testPending(t, pool, count-1)
+
+	// test pool quota
+	if err := pool.Add(generateTxs(t, 1)...); err != nil {
+		t.Fatal(err)
+	}
+	testPending(t, pool, count)
 }
 
-func pending(t *testing.T, pool *txpool.TxPool, count int) {
+func testPending(t *testing.T, pool *TxPool, count int) {
 	txs := pool.Pending(true)
 	assert.Equal(t, len(txs), count)
 }
 
-func dump(t *testing.T, pool *txpool.TxPool, count int) {
-	txs := pool.Pending(false)
-	assert.Equal(t, len(txs), count)
-}
-
-func addTx(t *testing.T, pool *txpool.TxPool, count int) {
-	ch := make(chan *tx.Transaction, count)
-	sub := pool.SubscribeNewTransaction(ch)
-	defer sub.Unsubscribe()
+func generateTxs(t *testing.T, count int) tx.Transactions {
+	txs := make(tx.Transactions, count, count)
 	address := thor.BytesToAddress([]byte("addr"))
 	for i := 0; i < count; i++ {
-		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(i))).WithData(nil)
+		cla := tx.NewClause(&address).WithValue(big.NewInt(10 + int64(nonce))).WithData(nil)
 		tx := new(tx.Builder).
 			GasPriceCoef(1).
 			Gas(1000000).
@@ -69,24 +77,13 @@ func addTx(t *testing.T, pool *txpool.TxPool, count int) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		tx = tx.WithSignature(sig)
-		if err := pool.Add(tx); err != nil {
-			t.Fatal(err)
-		}
-		txID = tx.ID()
+		txs[i] = tx.WithSignature(sig)
+		nonce++
 	}
-
-	for i := 0; i < count; i++ {
-		select {
-		case t1 := <-ch:
-			fmt.Println(i, t1)
-		case <-time.After(time.Second):
-			t.Errorf("event not fired")
-		}
-	}
+	return txs
 }
 
-func initPool(t *testing.T) *txpool.TxPool {
+func initPool(t *testing.T) *TxPool {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gen, err := genesis.NewDevnet()
@@ -106,5 +103,5 @@ func initPool(t *testing.T) *txpool.TxPool {
 	if _, err := c.AddBlock(blk, nil); err != nil {
 		t.Fatal(err)
 	}
-	return txpool.New(c, stateC)
+	return New(c, stateC)
 }
