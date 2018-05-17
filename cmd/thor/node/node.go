@@ -214,7 +214,9 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 
 	fork, err := n.commitBlock(blk, receipts)
 	if err != nil {
-		log.Error("failed to commit block", "err", err)
+		if !n.chain.IsBlockExist(err) {
+			log.Error("failed to commit block", "err", err)
+		}
 		return false, err
 	}
 	commitElapsed := mclock.Now() - startTime - execElapsed
