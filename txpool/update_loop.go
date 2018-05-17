@@ -51,7 +51,10 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 			pool.entry.delete(obj.tx.ID())
 			continue
 		}
-
+		if tx, _, _ := pool.chain.GetTransaction(obj.tx.ID()); tx != nil {
+			pool.entry.delete(tx.ID())
+			continue
+		}
 		if obj.status == Queued {
 			state := obj.currentState(pool.chain, bestBlockNum)
 			if state != Pending {

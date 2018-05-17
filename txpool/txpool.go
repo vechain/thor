@@ -65,6 +65,9 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 	for _, tx := range txs {
 		tx := tx // it's for closure
 		txID := tx.ID()
+		if tx, _, _ := pool.chain.GetTransaction(txID); tx != nil {
+			return rejectedTxErr{"transaction already packed"}
+		}
 		if obj := pool.entry.find(txID); obj != nil {
 			return rejectedTxErr{"known transaction"}
 		}
