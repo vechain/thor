@@ -63,12 +63,12 @@ bin/thor -h
 ```
 
 - `--dir value`          main directory for configs and databases
-- `--network`            the network to join (test|dev) (default: "test")
+- `--network`            the network to join (test|dev) 
 - `--beneficiary value`  address for block rewards
 - `--api-addr value`     API service listening address (default: "localhost:8669")
 - `--api-cors value`     comma separated list of domains from which to accept cross origin requests to API
 - `--verbosity value`    log verbosity (0-9) (default: 3)
-- `--max-peers value`    maximum number of P2P network peers (P2P network disabled if set to 0) (default: 10)
+- `--max-peers value`    maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)
 - `--p2p-port value`     P2P network listening port (default: 11235)
 - `--nat value`          port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
 - `--help, -h`           show help
@@ -88,5 +88,5 @@ Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. 
 ## License
 
 VeChain Thor is licensed under the
-[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html), also included
+[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
 in *COPYING* file in repository.
