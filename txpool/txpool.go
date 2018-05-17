@@ -47,6 +47,7 @@ type TxPool struct {
 
 //New construct a new txpool
 func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
+
 	pool := &TxPool{
 		config: defaultTxPoolConfig,
 		chain:  chain,
@@ -73,6 +74,15 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 		if tx, _, _ := pool.chain.GetTransaction(txID); tx != nil {
 			return rejectedTxErr{"transaction already packed"}
 		}
+
+		repeatedTx, err := pool.isAlreadyInChain(txID)
+		if err != nil {
+			return err
+		}
+		if repeatedTx {
+			return rejectedTxErr{"transaction already packed"}
+		}
+
 		if obj := pool.entry.find(txID); obj != nil {
 			return rejectedTxErr{"known transaction"}
 		}
@@ -169,4 +179,14 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 	}
 
 	return resolvedTx.Origin, nil
+}
+
+func (pool *TxPool) isAlreadyInChain(txID thor.Bytes32) (bool, error) {
+	if _, _, err := pool.chain.GetTransaction(txID); err != nil {
+		if pool.chain.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
