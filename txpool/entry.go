@@ -162,6 +162,9 @@ func (e *entry) isDirty() bool {
 }
 
 func (e *entry) quotaBySinger(signer thor.Address) uint {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
 	if v, ok := e.quota[signer]; ok {
 		return v
 	}
