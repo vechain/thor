@@ -30,6 +30,43 @@ func TestConsensus(t *testing.T) {
 	testValidateBlockHeader(tc, assert)
 	testValidateProposer(tc, assert)
 	testValidateBlockBody(tc, assert)
+	testParentMissing(tc, assert)
+	testKnownBlock(tc, assert)
+	testTxAlreadyExists(tc, assert)
+	testTxDepBroken(tc, assert)
+}
+
+func testTxDepBroken(tc *testConsensus, assert *assert.Assertions) {
+	txID := txSign(txBuilder(tc.tag)).ID()
+	tx := txSign(txBuilder(tc.tag).DependsOn(&txID))
+	err := tc.consent(
+		tc.sign(
+			tc.originalBuilder().Transaction(tx).Build(),
+		),
+	)
+	assert.Equal(err, consensusError("tx dep broken"))
+}
+
+func testKnownBlock(tc *testConsensus, assert *assert.Assertions) {
+	err := tc.consent(tc.parent)
+	assert.Equal(err, errKnownBlock)
+}
+
+func testTxAlreadyExists(tc *testConsensus, assert *assert.Assertions) {
+	tx := txSign(txBuilder(tc.tag))
+	err := tc.consent(
+		tc.sign(
+			tc.originalBuilder().Transaction(tx).Transaction(tx).Build(),
+		),
+	)
+	assert.Equal(err, consensusError("tx already exists"))
+}
+
+func testParentMissing(tc *testConsensus, assert *assert.Assertions) {
+	build := tc.originalBuilder()
+	blk := tc.sign(build.ParentID(tc.original.Header().ID()).Build())
+	err := tc.consent(blk)
+	assert.Equal(err, errParentMissing)
 }
 
 func txBuilder(tag byte) *tx.Builder {
