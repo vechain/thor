@@ -49,7 +49,7 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 		}
 
 		sumValue.Add(sumValue, value)
-		if sumValue.Cmp(math.MaxBig256) >= 0 {
+		if sumValue.Cmp(math.MaxBig256) > 0 {
 			return nil, errors.New("tx value too large")
 		}
 	}
