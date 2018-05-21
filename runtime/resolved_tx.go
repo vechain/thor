@@ -8,6 +8,7 @@ package runtime
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
@@ -15,7 +16,6 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-var big256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) //To restrict tx's value
 // ResolvedTransaction resolve the transaction according to given state.
 type ResolvedTransaction struct {
 	tx           *tx.Transaction
@@ -41,11 +41,16 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 	}
 
 	clauses := tx.Clauses()
-	sum := new(big.Int)
+	sumValue := new(big.Int)
 	for _, clause := range clauses {
-		sum.Add(sum, clause.Value())
-		if sum.Cmp(big256) >= 0 {
-			return nil, errors.New("insufficient value")
+		value := clause.Value()
+		if value.Sign() < 0 {
+			return nil, errors.New("clause with negative value")
+		}
+
+		sumValue.Add(sumValue, value)
+		if sumValue.Cmp(math.MaxBig256) >= 0 {
+			return nil, errors.New("tx value too large")
 		}
 	}
 
