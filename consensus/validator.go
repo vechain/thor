@@ -122,6 +122,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	}
 
 	for _, tx := range txs {
+		if _, err := tx.Signer(); err != nil {
+			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
+		}
+
 		switch {
 		case tx.ChainTag() != c.chain.Tag():
 			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.chain.Tag(), tx.ChainTag()))

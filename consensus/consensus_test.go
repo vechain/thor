@@ -267,7 +267,14 @@ func (tc *testConsensus) TestParentMissing() {
 
 func (tc *testConsensus) TestValidateBlockBody() {
 	triggers := make(map[string]func())
-	triggers["triggerErrSignerUnavailable"] = func() {
+	triggers["triggerErrTxSignerUnavailable"] = func() {
+		blk := tc.sign(tc.originalBuilder().Transaction(txBuilder(tc.tag).Build()).Build())
+		err := tc.consent(blk)
+		expect := consensusError("tx signer unavailable: invalid signature length")
+		tc.assert.Equal(err, expect)
+	}
+
+	triggers["triggerErrTxsRootMismatch"] = func() {
 		transaction := txSign(txBuilder(tc.tag))
 		transactions := tx.Transactions{transaction}
 		blk := tc.sign(block.Compose(tc.original.Header(), transactions))
