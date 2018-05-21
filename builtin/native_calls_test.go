@@ -245,7 +245,7 @@ func TestAuthorityNative(t *testing.T) {
 			Assert(t),
 
 		test.Case("native_get", signer1).
-			ShouldOutput(true, endorsor1, identity1, false).
+			ShouldOutput(true, endorsor1, identity1, true).
 			Assert(t),
 
 		test.Case("native_first").
