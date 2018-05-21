@@ -24,7 +24,7 @@ type badTxErr struct {
 }
 
 func (e badTxErr) Error() string {
-	return fmt.Sprintf("bad tx err: %v", e.msg)
+	return fmt.Sprintf("bad tx: %v", e.msg)
 }
 
 type rejectedTxErr struct {
@@ -32,5 +32,5 @@ type rejectedTxErr struct {
 }
 
 func (e rejectedTxErr) Error() string {
-	return fmt.Sprintf("rejected tx err: %v", e.msg)
+	return fmt.Sprintf("rejected tx: %v", e.msg)
 }

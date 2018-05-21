@@ -126,10 +126,10 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	txID, err := t.sendTx(tx)
 	if err != nil {
 		if txpool.IsBadTx(err) {
-			return utils.BadRequest(err, "bad tx")
+			return utils.BadRequest(err, "")
 		}
 		if txpool.IsRejectedTx(err) {
-			return utils.Forbidden(err, "rejected tx")
+			return utils.Forbidden(err, "")
 		}
 		return err
 	}
