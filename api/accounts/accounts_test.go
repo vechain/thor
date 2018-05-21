@@ -93,15 +93,17 @@ var bytecode = common.Hex2Bytes("608060405234801561001057600080fd5b5061012580610
 
 var runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
 
+var ts *httptest.Server
+
 func TestAccount(t *testing.T) {
-	ts := initAccountServer(t)
+	initAccountServer(t)
 	defer ts.Close()
-	getAccount(t, ts)
-	deployContractWithCall(t, ts)
-	callContract(t, ts)
+	getAccount(t)
+	deployContractWithCall(t)
+	callContract(t)
 }
 
-func getAccount(t *testing.T, ts *httptest.Server) {
+func getAccount(t *testing.T) {
 	res := httpGet(t, ts.URL+"/accounts/"+addr.String())
 	var acc accounts.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
@@ -133,7 +135,7 @@ func getAccount(t *testing.T, ts *httptest.Server) {
 
 }
 
-func initAccountServer(t *testing.T) *httptest.Server {
+func initAccountServer(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gene, err := genesis.NewDevnet()
@@ -164,7 +166,7 @@ func initAccountServer(t *testing.T) *httptest.Server {
 
 	router := mux.NewRouter()
 	accounts.New(chain, stateC).Mount(router, "/accounts")
-	return httptest.NewServer(router)
+	ts = httptest.NewServer(router)
 }
 
 func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.Transaction {
@@ -204,7 +206,7 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 	}
 }
 
-func deployContractWithCall(t *testing.T, ts *httptest.Server) {
+func deployContractWithCall(t *testing.T) {
 	reqBody := &accounts.ContractCall{
 		Gas:    10000000,
 		Caller: thor.Address{},
@@ -223,7 +225,7 @@ func deployContractWithCall(t *testing.T, ts *httptest.Server) {
 
 }
 
-func callContract(t *testing.T, ts *httptest.Server) {
+func callContract(t *testing.T) {
 	a := uint8(1)
 	b := uint8(2)
 

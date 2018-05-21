@@ -33,13 +33,16 @@ const (
 	testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
 )
 
+var blk *block.Block
+var ts *httptest.Server
+
 func TestBlock(t *testing.T) {
 
-	block, ts := initBlockServer(t)
-	raw, _ := blocks.ConvertBlock(block)
+	initBlockServer(t)
 	defer ts.Close()
 
-	res := httpGet(t, ts.URL+"/blocks/"+block.Header().ID().String())
+	raw, _ := blocks.ConvertBlock(blk)
+	res := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(blocks.Block)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
@@ -50,8 +53,8 @@ func TestBlock(t *testing.T) {
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
-
 	checkBlock(t, raw, rb)
+
 	res = httpGet(t, ts.URL+"/blocks/best")
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
@@ -60,7 +63,7 @@ func TestBlock(t *testing.T) {
 
 }
 
-func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
+func initBlockServer(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gene, err := genesis.NewDevnet()
@@ -98,20 +101,20 @@ func initBlockServer(t *testing.T) (*block.Block, *httptest.Server) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := chain.AddBlock(b, receipts); err != nil {
+	if _, err := chain.AddBlock(block, receipts); err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
 	blocks.New(chain).Mount(router, "/blocks")
-	ts := httptest.NewServer(router)
-	return b, ts
+	ts = httptest.NewServer(router)
+	blk = block
 }
 
 func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {

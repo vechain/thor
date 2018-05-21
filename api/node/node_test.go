@@ -22,8 +22,10 @@ import (
 	"github.com/vechain/thor/txpool"
 )
 
+var ts *httptest.Server
+
 func TestNode(t *testing.T) {
-	ts := initCommServer(t)
+	initCommServer(t)
 	res := httpGet(t, ts.URL+"/node/network/peers")
 	var peersStats map[string]string
 	if err := json.Unmarshal(res, &peersStats); err != nil {
@@ -32,7 +34,7 @@ func TestNode(t *testing.T) {
 	assert.Equal(t, 0, len(peersStats), "count should be zero")
 }
 
-func initCommServer(t *testing.T) *httptest.Server {
+func initCommServer(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
 	gene, err := genesis.NewDevnet()
@@ -47,8 +49,7 @@ func initCommServer(t *testing.T) *httptest.Server {
 	comm := comm.New(chain, txpool.New(chain, stateC))
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
-	ts := httptest.NewServer(router)
-	return ts
+	ts = httptest.NewServer(router)
 }
 
 func httpGet(t *testing.T, url string) []byte {

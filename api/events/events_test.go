@@ -23,14 +23,15 @@ import (
 )
 
 var contractAddr = thor.BytesToAddress([]byte("contract"))
+var ts *httptest.Server
 
 func TestEvents(t *testing.T) {
-	ts := initEventServer(t)
+	initEventServer(t)
 	defer ts.Close()
-	getEvents(t, ts)
+	getEvents(t)
 }
 
-func getEvents(t *testing.T, ts *httptest.Server) {
+func getEvents(t *testing.T) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
@@ -67,7 +68,7 @@ func getEvents(t *testing.T, ts *httptest.Server) {
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
-func initEventServer(t *testing.T) *httptest.Server {
+func initEventServer(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
@@ -91,8 +92,7 @@ func initEventServer(t *testing.T) *httptest.Server {
 
 	router := mux.NewRouter()
 	events.New(db).Mount(router, "/events")
-	ts := httptest.NewServer(router)
-	return ts
+	ts = httptest.NewServer(router)
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {

@@ -23,13 +23,15 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+var ts *httptest.Server
+
 func TestTransfers(t *testing.T) {
-	ts := initLogServer(t)
+	initLogServer(t)
 	defer ts.Close()
-	getTransfers(t, ts)
+	getTransfers(t)
 }
 
-func getTransfers(t *testing.T, ts *httptest.Server) {
+func getTransfers(t *testing.T) {
 	limit := 5
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
@@ -63,7 +65,7 @@ func getTransfers(t *testing.T, ts *httptest.Server) {
 	assert.Equal(t, limit, len(tLogs), "should be `limit` transfers")
 }
 
-func initLogServer(t *testing.T) *httptest.Server {
+func initLogServer(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
@@ -89,8 +91,7 @@ func initLogServer(t *testing.T) *httptest.Server {
 
 	router := mux.NewRouter()
 	transfers.New(db).Mount(router, "/transfers")
-	ts := httptest.NewServer(router)
-	return ts
+	ts = httptest.NewServer(router)
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {
