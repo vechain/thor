@@ -160,7 +160,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 
 	resolvedTx, err := runtime.ResolveTransaction(st, tx)
 	if err != nil {
-		return thor.Address{}, badTxErr{"intrinsic gas exceeds provided gas"}
+		return thor.Address{}, badTxErr{err.Error()}
 	}
 
 	if pool.entry.quotaBySinger(resolvedTx.Origin) >= quotaSignerTx {

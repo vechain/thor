@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+var big256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil) //To restrict tx's value
 // ResolvedTransaction resolve the transaction according to given state.
 type ResolvedTransaction struct {
 	tx           *tx.Transaction
@@ -39,9 +40,18 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
 
+	clauses := tx.Clauses()
+	sum := new(big.Int)
+	for _, clause := range clauses {
+		sum.Add(sum, clause.Value())
+		if sum.Cmp(big256) >= 0 {
+			return nil, errors.New("insufficient value")
+		}
+	}
+
 	baseGasPrice := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	gasPrice := tx.GasPrice(baseGasPrice)
-	clauses := tx.Clauses()
+
 	return &ResolvedTransaction{
 		tx,
 		origin,
