@@ -8,6 +8,7 @@ package runtime
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
@@ -39,9 +40,23 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
 
+	clauses := tx.Clauses()
+	sumValue := new(big.Int)
+	for _, clause := range clauses {
+		value := clause.Value()
+		if value.Sign() < 0 {
+			return nil, errors.New("clause with negative value")
+		}
+
+		sumValue.Add(sumValue, value)
+		if sumValue.Cmp(math.MaxBig256) >= 0 {
+			return nil, errors.New("tx value too large")
+		}
+	}
+
 	baseGasPrice := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	gasPrice := tx.GasPrice(baseGasPrice)
-	clauses := tx.Clauses()
+
 	return &ResolvedTransaction{
 		tx,
 		origin,
