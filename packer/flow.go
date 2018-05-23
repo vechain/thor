@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -23,7 +22,6 @@ type Flow struct {
 	packer       *Packer
 	parentHeader *block.Header
 	runtime      *runtime.Runtime
-	traverser    *chain.Traverser
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
 	totalScore   uint64
 	gasUsed      uint64
@@ -36,13 +34,11 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	totalScore uint64,
-	traverser *chain.Traverser,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
-		traverser:    traverser,
 		processedTxs: make(map[thor.Bytes32]bool),
 		totalScore:   totalScore,
 	}
@@ -143,10 +139,6 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.proposer != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
-	}
-
-	if err := f.traverser.Error(); err != nil {
-		return nil, nil, nil, err
 	}
 
 	stage := f.runtime.State().Stage()

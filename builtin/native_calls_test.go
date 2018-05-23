@@ -156,7 +156,7 @@ func TestParamsNative(t *testing.T) {
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
 
 	test := &ctest{
 		rt:     rt,
@@ -209,7 +209,7 @@ func TestAuthorityNative(t *testing.T) {
 	st.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
 	builtin.Params.Native(st).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
 
 	test := &ctest{
 		rt:     rt,
@@ -296,7 +296,7 @@ func TestEnergyNative(t *testing.T) {
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.NativeABI(),
@@ -351,7 +351,7 @@ func TestPrototypeNative(t *testing.T) {
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
 
 	test := &ctest{
 		rt:     rt,
@@ -397,7 +397,7 @@ func TestPrototypeInterface(t *testing.T) {
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
 	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{})
@@ -556,7 +556,7 @@ func TestExtensionNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
 
 	contract := builtin.Extension.Address
 

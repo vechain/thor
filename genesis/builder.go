@@ -82,7 +82,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 		}
 	}
 
-	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit)
 
 	for _, call := range b.calls {
 		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{})

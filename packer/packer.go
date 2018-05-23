@@ -74,20 +74,16 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		authority.Update(u.Address, u.Active)
 	}
 
-	traverser := p.chain.NewTraverser(parent.ID())
 	runtime := runtime.New(
 		state,
 		p.beneficiary,
 		parent.Number()+1,
 		newBlockTime,
-		p.gasLimit(parent.GasLimit()),
-		func(num uint32) thor.Bytes32 {
-			return traverser.Get(num).ID()
-		})
+		p.gasLimit(parent.GasLimit()))
 
 	builtin.Extension.Native(state).SetBlockNumAndID(parent.ID())
 
-	return newFlow(p, parent, runtime, parent.TotalScore()+score, traverser), nil
+	return newFlow(p, parent, runtime, parent.TotalScore()+score), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -98,18 +94,15 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "state")
 	}
-	traverser := p.chain.NewTraverser(parent.ID())
+
 	runtime := runtime.New(
 		state,
 		p.beneficiary,
 		parent.Number()+1,
 		targetTime,
-		p.gasLimit(parent.GasLimit()),
-		func(num uint32) thor.Bytes32 {
-			return traverser.Get(num).ID()
-		})
+		p.gasLimit(parent.GasLimit()))
 
-	return newFlow(p, parent, runtime, parent.TotalScore()+1, traverser), nil
+	return newFlow(p, parent, runtime, parent.TotalScore()+1), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

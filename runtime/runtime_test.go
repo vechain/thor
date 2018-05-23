@@ -33,7 +33,7 @@ func TestCall(t *testing.T) {
 	state, _ := state.New(b0.Header().StateRoot(), kv)
 
 	rt := runtime.New(state,
-		thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+		thor.Address{}, 0, 0, 0)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
