@@ -35,13 +35,12 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		signingHash      atomic.Value
-		signer           atomic.Value
-		id               atomic.Value
-		hashWithoutNonce atomic.Value
-		unprovedWork     atomic.Value
-		size             atomic.Value
-		intrinsicGas     atomic.Value
+		signingHash  atomic.Value
+		signer       atomic.Value
+		id           atomic.Value
+		unprovedWork atomic.Value
+		size         atomic.Value
+		intrinsicGas atomic.Value
 	}
 }
 
@@ -121,17 +120,11 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 	if err != nil {
 		return &big.Int{}
 	}
-	return t.EvaluateWork(signer, t.body.Nonce)
+	return t.EvaluateWork(signer)(t.body.Nonce)
 }
 
-func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
-	if cached := t.cache.hashWithoutNonce.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() {
-		t.cache.hashWithoutNonce.Store(hash)
-	}()
-
+// EvaluateWork try to compute work when tx signer assumed.
+func (t *Transaction) EvaluateWork(signer thor.Address) func(nonce uint64) *big.Int {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
@@ -142,25 +135,19 @@ func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
 		t.body.Gas,
 		t.body.DependsOn,
 		t.body.Reserved,
+		signer,
 	})
-	hw.Sum(hash[:0])
-	return hash
-}
 
-// EvaluateWork try to compute work when tx signer assumed.
-func (t *Transaction) EvaluateWork(signer thor.Address, nonce uint64) *big.Int {
-	hw := thor.NewBlake2b()
-	hw.Write(t.hashWithoutNonce().Bytes())
-	hw.Write(signer.Bytes())
-	var nonceBytes [8]byte
-	binary.BigEndian.PutUint64(nonceBytes[:], nonce)
-	hw.Write(nonceBytes[:])
+	var hashWithoutNonce thor.Bytes32
+	hw.Sum(hashWithoutNonce[:0])
 
-	var hash thor.Bytes32
-	hw.Sum(hash[:0])
-
-	r := new(big.Int).SetBytes(hash[:])
-	return r.Div(math.MaxBig256, r)
+	return func(nonce uint64) *big.Int {
+		var nonceBytes [8]byte
+		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
+		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
+		r := new(big.Int).SetBytes(hash[:])
+		return r.Div(math.MaxBig256, r)
+	}
 }
 
 // SigningHash returns hash of tx excludes signature.
