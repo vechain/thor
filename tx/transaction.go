@@ -324,20 +324,45 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
 	x := big.NewInt(int64(t.body.GasPriceCoef))
 	x.Mul(x, baseGasPrice)
-	x.Div(x, big.NewInt(int64(math.MaxUint8)))
+	x.Div(x, big.NewInt(math.MaxUint8))
 	return x.Add(x, baseGasPrice)
+}
+
+// ProvedWork returns proved work.
+// Unproved work will be considered as proved work if block ref is do the prefix of a block's ID,
+// and tx delay is less equal to MaxTxWorkDelay.
+func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
+	ref := t.BlockRef()
+	refNum := ref.Number()
+	if refNum >= headBlockNum {
+		return &big.Int{}
+	}
+
+	if delay := headBlockNum - refNum; delay > thor.MaxTxWorkDelay {
+		return &big.Int{}
+	}
+
+	id := getBlockID(refNum)
+	if bytes.HasPrefix(id[:], ref[:]) {
+		return t.UnprovedWork()
+	}
+	return &big.Int{}
 }
 
 // OverallGasPrice calculate overall gas price.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
 func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
 	gasPrice := t.GasPrice(baseGasPrice)
-	if t.measureDelay(headBlockNum, getBlockID) > thor.MaxTxWorkDelay {
+
+	provedWork := t.ProvedWork(headBlockNum, getBlockID)
+	if provedWork.Sign() == 0 {
 		return gasPrice
 	}
 
-	work := t.UnprovedWork()
-	wgas := workToGas(work, headBlockNum)
+	wgas := workToGas(provedWork, t.BlockRef().Number())
+	if wgas == 0 {
+		return gasPrice
+	}
 	if wgas > t.body.Gas {
 		wgas = t.body.Gas
 	}
@@ -346,25 +371,6 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 	x.Mul(x, baseGasPrice)
 	x.Div(x, new(big.Int).SetUint64(t.body.Gas))
 	return x.Add(x, gasPrice)
-}
-
-// measureDelay measure tx delay count in blocks, according to head block number.
-func (t *Transaction) measureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) uint32 {
-	ref := t.BlockRef()
-	refNum := ref.Number()
-	if refNum >= headBlockNum {
-		return math.MaxUint32
-	}
-
-	if headBlockNum-refNum > thor.MaxTxWorkDelay {
-		return math.MaxUint32
-	}
-
-	id := getBlockID(refNum)
-	if bytes.HasPrefix(id[:], ref[:]) {
-		return headBlockNum - refNum
-	}
-	return math.MaxUint32
 }
 
 func (t *Transaction) String() string {
