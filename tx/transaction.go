@@ -39,7 +39,7 @@ type Transaction struct {
 		signer           atomic.Value
 		id               atomic.Value
 		hashWithoutNonce atomic.Value
-		provedWork       atomic.Value
+		unprovedWork     atomic.Value
 		size             atomic.Value
 		intrinsicGas     atomic.Value
 	}
@@ -107,14 +107,14 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	return
 }
 
-// ProvedWork returns proved work of this tx.
+// UnprovedWork returns unproved work of this tx.
 // It returns 0, if tx is not signed.
-func (t *Transaction) ProvedWork() (w *big.Int) {
-	if cached := t.cache.provedWork.Load(); cached != nil {
+func (t *Transaction) UnprovedWork() (w *big.Int) {
+	if cached := t.cache.unprovedWork.Load(); cached != nil {
 		return cached.(*big.Int)
 	}
 	defer func() {
-		t.cache.provedWork.Store(w)
+		t.cache.unprovedWork.Store(w)
 	}()
 
 	signer, err := t.Signer()
@@ -349,7 +349,7 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 		return gasPrice
 	}
 
-	work := t.ProvedWork()
+	work := t.UnprovedWork()
 	wgas := workToGas(work, headBlockNum)
 	if wgas > t.body.Gas {
 		wgas = t.body.Gas
@@ -410,11 +410,11 @@ func (t *Transaction) String() string {
 	BlockRef:       %v-%x
 	Expiration:     %v
 	DependsOn:      %v
-	ProvedWork:     %v
 	Nonce:          %v
+	UnprovedWork:   %v	
 	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.ProvedWork(), t.body.Nonce, t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), t.body.Signature)
 }
 
 // see core.IntrinsicGas
