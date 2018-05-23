@@ -481,6 +481,13 @@ func initExtensionMethods() {
 			output := Extension.Native(env.State).Blake2b256(data)
 			return []interface{}{output}
 		}},
+		{"native_getBlockIDByNum", func(env *bridge) []interface{} {
+			var blockNum uint32
+			env.ParseArgs(&blockNum)
+			env.UseGas(ethparams.SloadGas)
+			output := Extension.Native(env.State).GetBlockIDByNum(blockNum)
+			return []interface{}{output}
+		}},
 	}
 
 	nativeABI := Extension.NativeABI()

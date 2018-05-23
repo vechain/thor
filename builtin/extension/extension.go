@@ -6,6 +6,8 @@
 package extension
 
 import (
+	"encoding/binary"
+
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -28,5 +30,19 @@ func (e *Extension) Blake2b256(data ...[]byte) (b32 thor.Bytes32) {
 		hash.Write(b)
 	}
 	hash.Sum(b32[:0])
+	return
+}
+
+// SetBlockNumAndID implements storing block num and id into contract storage.
+func (e *Extension) SetBlockNumAndID(id thor.Bytes32) {
+	key := thor.BytesToBytes32(id[:4])
+	e.state.SetStorage(e.addr, key, id)
+}
+
+// GetBlockIDByNum implements getting block id by num.
+func (e *Extension) GetBlockIDByNum(num uint32) (b32 thor.Bytes32) {
+	var key thor.Bytes32
+	binary.BigEndian.PutUint32(key[28:], num)
+	b32 = e.state.GetStorage(e.addr, key)
 	return
 }

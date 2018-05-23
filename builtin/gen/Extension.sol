@@ -11,8 +11,13 @@ contract Extension {
     function blake2b256(bytes _value) public view returns(bytes32) {
         return ExtensionNative(this).native_blake2b256(_value);
     }
+
+    function blockID(uint32 num) public view returns(bytes32) {
+        return ExtensionNative(this).native_getBlockIDByNum(num);
+    }
 }
 
 contract ExtensionNative {
     function native_blake2b256(bytes _value) public view returns(bytes32);
+    function native_getBlockIDByNum(uint32 num) public view returns(bytes32);
 }

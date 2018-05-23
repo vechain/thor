@@ -172,6 +172,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			return r.Reverted, nil
 		}, nil
 	}
+
+	builtin.Extension.Native(state).SetBlockNumAndID(blk.Header().ParentID())
+
 	for _, tx := range txs {
 		// check if tx existed
 		if found, _, err := findTx(tx.ID()); err != nil {
