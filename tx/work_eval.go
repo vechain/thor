@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	workPerGas = big.NewInt(100)
+	workPerGas = big.NewInt(1000)
 	big100     = big.NewInt(100)
 	big104     = big.NewInt(104) // Moore's law monthly rate (percentage)
 	bigE18     = big.NewInt(1e18)
