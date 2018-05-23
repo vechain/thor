@@ -40,9 +40,8 @@ func (e *Extension) SetBlockNumAndID(id thor.Bytes32) {
 }
 
 // GetBlockIDByNum implements getting block id by num.
-func (e *Extension) GetBlockIDByNum(num uint32) (b32 thor.Bytes32) {
+func (e *Extension) GetBlockIDByNum(num uint32) thor.Bytes32 {
 	var key thor.Bytes32
 	binary.BigEndian.PutUint32(key[28:], num)
-	b32 = e.state.GetStorage(e.addr, key)
-	return
+	return e.state.GetStorage(e.addr, key)
 }
