@@ -88,7 +88,7 @@ func makeMainDir(ctx *cli.Context) string {
 func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
 	mainDir := makeMainDir(ctx)
 
-	dataDir := fmt.Sprintf("%v/instance-%x", mainDir, gene.ID().Bytes()[24:])
+	dataDir := filepath.Join(mainDir, fmt.Sprintf("instance-%x", gene.ID().Bytes()[24:]))
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		fatal(fmt.Sprintf("create data dir [%v]: %v", dataDir, err))
 	}
