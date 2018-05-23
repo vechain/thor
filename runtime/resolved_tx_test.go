@@ -152,27 +152,36 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 
 	targetTime := tr.chain.BestBlock().Header().Timestamp() + thor.BlockInterval
 
-	buyGas := func(tx *tx.Transaction) {
+	buyGas := func(tx *tx.Transaction) thor.Address {
 		resolve, err := runtime.ResolveTransaction(state, tx)
 		if err != nil {
 			tr.t.Fatal(err)
 		}
 		payer, returnGas, err := resolve.BuyGas(state, targetTime)
-		// assert(to)
-		_, _, _ = payer, returnGas, err
+		tr.assert.Nil(err)
 		returnGas(100)
+		return payer
 	}
 
-	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+	tr.assert.Equal(
+		genesis.DevAccounts()[0].Address,
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+	)
 
 	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)
 	bind.SetUserPlan(math.MaxBig256, big.NewInt(1000))
 	bind.AddUser(genesis.DevAccounts()[0].Address, targetTime)
-	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+	tr.assert.Equal(
+		genesis.DevAccounts()[1].Address,
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+	)
 
 	bind.Sponsor(genesis.DevAccounts()[2].Address, true)
 	bind.SelectSponsor(genesis.DevAccounts()[2].Address)
-	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+	tr.assert.Equal(
+		genesis.DevAccounts()[2].Address,
+		buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100))))),
+	)
 }
 
 func clause() *tx.Clause {
