@@ -31,9 +31,8 @@ func init() {
 
 // Runtime is to support transaction execution.
 type Runtime struct {
-	vmConfig   vm.Config
-	getBlockID func(uint32) thor.Bytes32
-	state      *state.State
+	vmConfig vm.Config
+	state    *state.State
 
 	// block env
 	blockBeneficiary thor.Address
@@ -48,10 +47,8 @@ func New(
 	blockBeneficiary thor.Address,
 	blockNumber uint32,
 	blockTime,
-	blockGasLimit uint64,
-	getBlockID func(uint32) thor.Bytes32) *Runtime {
+	blockGasLimit uint64) *Runtime {
 	return &Runtime{
-		getBlockID:       getBlockID,
 		state:            state,
 		blockBeneficiary: blockBeneficiary,
 		blockNumber:      blockNumber,
@@ -96,7 +93,7 @@ func (rt *Runtime) execute(
 		GasPrice: txGasPrice,
 		TxID:     txID,
 
-		GetHash:     rt.getBlockID,
+		GetHash:     builtin.Extension.Native(rt.state).GetBlockIDByNum,
 		ClauseIndex: index,
 		ContractHook: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
 			return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
@@ -229,7 +226,8 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.getBlockID)
+	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, builtin.Extension.Native(rt.state).GetBlockIDByNum)
+
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)

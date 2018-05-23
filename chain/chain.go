@@ -549,8 +549,3 @@ func (c *Chain) IsNotFound(err error) bool {
 func (c *Chain) IsBlockExist(err error) bool {
 	return err == errBlockExist
 }
-
-// NewTraverser create a block traverser to access blocks on the chain defined by headID.
-func (c *Chain) NewTraverser(headID thor.Bytes32) *Traverser {
-	return &Traverser{headID, c, nil}
-}

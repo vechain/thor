@@ -147,13 +147,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receipts := make(tx.Receipts, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
-	traverser := c.chain.NewTraverser(blk.Header().ParentID())
 	rt := runtime.New(state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
-		header.GasLimit(),
-		func(num uint32) thor.Bytes32 { return traverser.Get(num).ID() })
+		header.GasLimit())
 
 	findTx := func(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
 		if reverted, ok := processedTxs[txID]; ok {
@@ -221,10 +219,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receiptsRoot := receipts.RootHash()
 	if header.ReceiptsRoot() != receiptsRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
-	}
-
-	if err := traverser.Error(); err != nil {
-		return nil, nil, err
 	}
 
 	stage := state.Stage()
