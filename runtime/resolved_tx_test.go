@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -139,8 +140,43 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 	commonTo(txSign(txBuild().Clause(clause())), tr.assert.NotNil)
 }
 
+func (tr *testResolvedTransaction) TestBuyGas() {
+	state, err := tr.currentState()
+	if err != nil {
+		tr.t.Fatal(err)
+	}
+
+	txBuild := func() *tx.Builder {
+		return txBuilder(tr.chain.Tag())
+	}
+
+	targetTime := tr.chain.BestBlock().Header().Timestamp() + thor.BlockInterval
+
+	buyGas := func(tx *tx.Transaction) {
+		resolve, err := runtime.ResolveTransaction(state, tx)
+		if err != nil {
+			tr.t.Fatal(err)
+		}
+		payer, returnGas, err := resolve.BuyGas(state, targetTime)
+		// assert(to)
+		_, _, _ = payer, returnGas, err
+		returnGas(100)
+	}
+
+	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+
+	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)
+	bind.SetUserPlan(math.MaxBig256, big.NewInt(1000))
+	bind.AddUser(genesis.DevAccounts()[0].Address, targetTime)
+	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+
+	bind.Sponsor(genesis.DevAccounts()[2].Address, true)
+	bind.SelectSponsor(genesis.DevAccounts()[2].Address)
+	buyGas(txSign(txBuild().Clause(clause().WithValue(big.NewInt(100)))))
+}
+
 func clause() *tx.Clause {
-	address := thor.BytesToAddress([]byte("addr"))
+	address := genesis.DevAccounts()[1].Address
 	return tx.NewClause(&address).WithData(nil)
 }
 
