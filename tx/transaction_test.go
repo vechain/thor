@@ -39,8 +39,9 @@ func BenchmarkTxMining(b *testing.B) {
 	tx := new(tx.Builder).Build()
 	signer := thor.BytesToAddress([]byte("acc1"))
 	maxWork := &big.Int{}
+	eval := tx.EvaluateWork(signer)
 	for i := 0; i < b.N; i++ {
-		work := tx.EvaluateWork(signer, uint64(i))
+		work := eval(uint64(i))
 		if work.Cmp(maxWork) > 0 {
 			maxWork = work
 		}
