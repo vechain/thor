@@ -6,6 +6,7 @@
 package builtin_test
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"math/big"
@@ -566,8 +567,20 @@ func TestExtensionNative(t *testing.T) {
 		abi: builtin.Extension.NativeABI(),
 	}
 
+	var blockNum uint32 = 1234567
+	var blockId thor.Bytes32
+
+	binary.BigEndian.PutUint32(blockId[:4], blockNum)
+
+	builtin.Extension.Native(st).SetBlockNumAndID(blockId)
+
 	test.Case("native_blake2b256", value).
 		To(contract).Caller(contract).
 		ShouldOutput(thor.Blake2b(value)).
 		Assert(t)
+	test.Case("native_getBlockIDByNum", blockNum).
+		To(contract).Caller(contract).
+		ShouldOutput(blockId).
+		Assert(t)
+
 }

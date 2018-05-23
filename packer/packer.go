@@ -85,6 +85,8 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 			return traverser.Get(num).ID()
 		})
 
+	builtin.Extension.Native(state).SetBlockNumAndID(parent.ID())
+
 	return newFlow(p, parent, runtime, parent.TotalScore()+score, traverser), nil
 }
 
