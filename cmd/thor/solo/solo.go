@@ -77,14 +77,16 @@ func (s *Solo) interval(ctx context.Context) {
 	if s.onDemand {
 		return
 	}
+	ticker := time.NewTicker(time.Duration(10) * time.Second)
+	defer ticker.Stop()
+	s.packing()
+
 	for {
-		timeInterval := 10
-		arrive := time.After(time.Duration(timeInterval) * time.Second)
 		select {
 		case <-ctx.Done():
 			log.Info("stopping interval packing service......")
 			return
-		case <-arrive:
+		case <-ticker.C:
 			s.packing()
 		}
 	}
