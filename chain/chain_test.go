@@ -49,28 +49,28 @@ func TestAdd(t *testing.T) {
 	tests := []struct {
 		newBlock *block.Block
 		fork     *chain.Fork
-		best     *block.Block
+		best     *block.Header
 	}{
-		{b1, &chain.Fork{Ancestor: b0, Trunk: []*block.Block{b1}}, b1},
-		{b2, &chain.Fork{Ancestor: b1, Trunk: []*block.Block{b2}}, b2},
-		{b3, &chain.Fork{Ancestor: b2, Trunk: []*block.Block{b3}}, b3},
-		{b4, &chain.Fork{Ancestor: b3, Trunk: []*block.Block{b4}}, b4},
-		{b4x, &chain.Fork{Ancestor: b3, Trunk: []*block.Block{b4x}, Branch: []*block.Block{b4}}, b4x},
+		{b1, &chain.Fork{Ancestor: b0.Header(), Trunk: []*block.Header{b1.Header()}}, b1.Header()},
+		{b2, &chain.Fork{Ancestor: b1.Header(), Trunk: []*block.Header{b2.Header()}}, b2.Header()},
+		{b3, &chain.Fork{Ancestor: b2.Header(), Trunk: []*block.Header{b3.Header()}}, b3.Header()},
+		{b4, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4.Header()}}, b4.Header()},
+		{b4x, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4x.Header()}, Branch: []*block.Header{b4.Header()}}, b4x.Header()},
 	}
 
 	for _, tt := range tests {
 		fork, err := ch.AddBlock(tt.newBlock, nil)
 		assert.Nil(t, err)
-		assert.Equal(t, tt.best.Header().ID(), ch.BestBlock().Header().ID())
+		assert.Equal(t, tt.best.ID(), ch.BestBlock().Header().ID())
 
-		assert.Equal(t, tt.fork.Ancestor.Header().ID(), fork.Ancestor.Header().ID())
+		assert.Equal(t, tt.fork.Ancestor.ID(), fork.Ancestor.ID())
 		assert.Equal(t, len(tt.fork.Branch), len(fork.Branch))
 		assert.Equal(t, len(tt.fork.Trunk), len(fork.Trunk))
 		for i, b := range fork.Branch {
-			assert.Equal(t, tt.fork.Branch[i].Header().ID(), b.Header().ID())
+			assert.Equal(t, tt.fork.Branch[i].ID(), b.ID())
 		}
 		for i, b := range fork.Trunk {
-			assert.Equal(t, tt.fork.Trunk[i].Header().ID(), b.Header().ID())
+			assert.Equal(t, tt.fork.Trunk[i].ID(), b.ID())
 		}
 	}
 }

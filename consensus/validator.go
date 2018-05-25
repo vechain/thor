@@ -153,26 +153,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		header.Timestamp(),
 		header.GasLimit())
 
-	findTx := func(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
-			return true, func() (bool, error) {
-				return reverted, nil
-			}, nil
+			return true, reverted, nil
 		}
-		_, getReceipt, err := c.chain.LookupTransaction(header.ParentID(), txID)
+		meta, err := c.chain.GetTransactionMeta(txID, header.ParentID())
 		if err != nil {
 			if c.chain.IsNotFound(err) {
-				return false, func() (bool, error) { return false, nil }, nil
+				return false, false, nil
 			}
-			return false, nil, err
+			return false, false, err
 		}
-		return true, func() (bool, error) {
-			r, err := getReceipt()
-			if err != nil {
-				return false, err
-			}
-			return r.Reverted, nil
-		}, nil
+		return true, meta.Reverted, nil
 	}
 
 	builtin.Extension.Native(state).SetBlockNumAndID(blk.Header().ParentID())
@@ -187,7 +179,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			found, isReverted, err := findTx(*dep)
+			found, reverted, err := findTx(*dep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -195,9 +187,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 				return nil, nil, consensusError("tx dep broken")
 			}
 
-			if reverted, err := isReverted(); err != nil {
-				return nil, nil, err
-			} else if reverted {
+			if reverted {
 				return nil, nil, consensusError("tx dep reverted")
 			}
 		}
