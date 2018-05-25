@@ -235,8 +235,8 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 	}
 
 	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
-	for _, block := range fork.Branch {
-		forkIDs = append(forkIDs, block.Header().ID())
+	for _, header := range fork.Branch {
+		forkIDs = append(forkIDs, header.ID())
 	}
 
 	batch := n.logDB.Prepare(newBlock.Header())
@@ -262,12 +262,17 @@ func (n *Node) processFork(fork *chain.Fork) {
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 ancestor: %v
 trunk:    %v  %v
-branch:   %v  %v`, fork.Ancestor.Header(),
-			trunkLen, fork.Trunk[trunkLen-1].Header(),
-			branchLen, fork.Branch[branchLen-1].Header()))
+branch:   %v  %v`, fork.Ancestor,
+			trunkLen, fork.Trunk[trunkLen-1],
+			branchLen, fork.Branch[branchLen-1]))
 	}
-	for _, block := range fork.Branch {
-		for _, tx := range block.Transactions() {
+	for _, header := range fork.Branch {
+		body, err := n.chain.GetBlockBody(header.ID())
+		if err != nil {
+			log.Warn("failed to get block body", "err", err, "blockid", header.ID())
+			continue
+		}
+		for _, tx := range body.Txs {
 			if err := n.txPool.Add(tx); err != nil {
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}

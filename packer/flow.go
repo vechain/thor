@@ -54,26 +54,18 @@ func (f *Flow) When() uint64 {
 	return f.runtime.BlockTime()
 }
 
-func (f *Flow) findTx(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
 	if reverted, ok := f.processedTxs[txID]; ok {
-		return true, func() (bool, error) {
-			return reverted, nil
-		}, nil
+		return true, reverted, nil
 	}
-	_, getReceipt, err := f.packer.chain.LookupTransaction(f.parentHeader.ID(), txID)
+	txMeta, err := f.packer.chain.GetTransactionMeta(txID, f.parentHeader.ID())
 	if err != nil {
 		if f.packer.chain.IsNotFound(err) {
-			return false, func() (bool, error) { return false, nil }, nil
+			return false, false, nil
 		}
-		return false, nil, err
+		return false, false, err
 	}
-	return true, func() (bool, error) {
-		r, err := getReceipt()
-		if err != nil {
-			return false, err
-		}
-		return r.Reverted, nil
-	}, nil
+	return true, txMeta.Reverted, nil
 }
 
 // Adopt try to execute the given transaction.
@@ -107,16 +99,14 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		found, isReverted, err := f.findTx(*dependsOn)
+		found, reverted, err := f.findTx(*dependsOn)
 		if err != nil {
 			return err
 		}
 		if !found {
 			return errTxNotAdoptableNow
 		}
-		if reverted, err := isReverted(); err != nil {
-			return err
-		} else if reverted {
+		if reverted {
 			return errTxNotAdoptableForever
 		}
 	}

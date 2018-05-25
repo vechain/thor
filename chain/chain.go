@@ -189,7 +189,9 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 	for i, tx := range newBlock.Transactions() {
 		meta, err := loadTxMeta(c.kv, tx.ID())
 		if err != nil {
-			return nil, err
+			if !c.IsNotFound(err) {
+				return nil, err
+			}
 		}
 		meta = append(meta, TxMeta{
 			BlockID:  newBlockID,
@@ -295,6 +297,13 @@ func (c *Chain) GetTransactionReceipt(blockID thor.Bytes32, index uint64) (*tx.R
 	return receipts[index], nil
 }
 
+// GetTrunkBlockID get block id on trunk by given block number.
+func (c *Chain) GetTrunkBlockID(num uint32) (thor.Bytes32, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
+}
+
 // GetTrunkBlockHeader get block header on trunk by given block number.
 func (c *Chain) GetTrunkBlockHeader(num uint32) (*block.Header, error) {
 	c.rw.RLock()
@@ -330,6 +339,13 @@ func (c *Chain) GetTrunkBlockRaw(num uint32) (block.Raw, error) {
 		return nil, err
 	}
 	return raw.raw, nil
+}
+
+// GetTrunkTransactionMeta get transaction meta info on trunk by given tx id.
+func (c *Chain) GetTrunkTransactionMeta(txID thor.Bytes32) (*TxMeta, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.getTransactionMeta(txID, c.bestBlock.Header().ID())
 }
 
 // GetTrunkTransaction get transaction on trunk by given tx id.

@@ -209,7 +209,7 @@ func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 		if n > math.MaxUint32 {
 			return nil, errors.New("block number exceeded")
 		}
-		return a.chain.GetBlockByNumber(uint32(n))
+		return a.chain.GetTrunkBlock(uint32(n))
 	}
 	return a.chain.GetBlock(blkID)
 }

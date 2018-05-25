@@ -92,7 +92,8 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&num); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		id, err := c.chain.GetBlockIDByNumber(num)
+
+		id, err := c.chain.GetTrunkBlockID(num)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block id by number", "err", err)
@@ -111,7 +112,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		result := make([]rlp.RawValue, 0, maxBlocks)
 		var size metric.StorageSize
 		for size < maxResultSize && len(result) < maxBlocks {
-			raw, err := c.chain.GetBlockRawByNumber(num)
+			raw, err := c.chain.GetTrunkBlockRaw(num)
 			if err != nil {
 				if !c.chain.IsNotFound(err) {
 					log.Error("failed to get block raw by number", "err", err)
