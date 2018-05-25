@@ -176,7 +176,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 }
 
 func (pool *TxPool) isAlreadyInChain(txID thor.Bytes32) (bool, error) {
-	if _, _, err := pool.chain.GetTransaction(txID); err != nil {
+	if _, err := pool.chain.GetTrunkTransactionMeta(txID); err != nil {
 		if pool.chain.IsNotFound(err) {
 			return false, nil
 		}

@@ -54,7 +54,7 @@ func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 		if n > math.MaxUint32 {
 			return nil, errors.New("block number exceeded")
 		}
-		return b.chain.GetBlockByNumber(uint32(n))
+		return b.chain.GetTrunkBlock(uint32(n))
 	}
 	return b.chain.GetBlock(blkID)
 }

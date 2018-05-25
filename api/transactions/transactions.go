@@ -32,7 +32,7 @@ func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
 }
 
 func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, error) {
-	tx, location, err := t.chain.GetTransaction(txID)
+	tx, location, err := t.chain.GetTrunkTransaction(txID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
@@ -58,7 +58,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, er
 }
 
 func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
-	tx, location, err := t.chain.GetTransaction(txID)
+	tx, location, err := t.chain.GetTrunkTransaction(txID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
@@ -83,7 +83,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 
 //GetTransactionReceiptByID get tx's receipt
 func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, error) {
-	tx, location, err := t.chain.GetTransaction(txID)
+	tx, location, err := t.chain.GetTrunkTransaction(txID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
@@ -94,15 +94,14 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, e
 	if err != nil {
 		return nil, err
 	}
-	receipts, err := t.chain.GetBlockReceipts(block.Header().ID())
+	receipt, err := t.chain.GetTransactionReceipt(location.BlockID, location.Index)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	rece := receipts[location.Index]
-	return convertReceipt(rece, block, tx)
+	return convertReceipt(receipt, block, tx)
 }
 
 func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
