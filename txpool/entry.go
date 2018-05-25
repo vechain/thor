@@ -9,44 +9,38 @@ import (
 	Sort "sort"
 	"sync"
 
-	"github.com/vechain/thor/cache"
+	Cache "github.com/vechain/thor/cache"
 	"github.com/vechain/thor/thor"
 )
 
-type quota map[thor.Address]uint
+type mechanism int
 
-func (q quota) inc(signer thor.Address) {
-	if v, ok := q[signer]; ok {
-		q[signer] = v + 1
-	} else {
-		q[signer] = 1
-	}
-}
-
-func (q quota) dec(signer thor.Address) {
-	if v, ok := q[signer]; ok {
-		if v > 1 {
-			q[signer] = v - 1
-		} else {
-			delete(q, signer)
-		}
-	}
-}
+const (
+	random mechanism = iota
+	prior
+)
 
 type entry struct {
 	lock    sync.Mutex
 	dirty   bool
-	all     *cache.RandCache
+	all     cache
 	pending txObjects
 	sorted  bool
 	quota   quota
 }
 
 func newEntry(size int) *entry {
-	return &entry{
-		all:   cache.NewRandCache(size),
+	e := &entry{
+		all:   newPriorCache(size),
 		quota: make(quota),
 	}
+	switch cacheMechanism {
+	case random:
+		e.all = Cache.NewRandCache(size)
+	case prior:
+		e.all = newPriorCache(size)
+	}
+	return e
 }
 
 func (e *entry) find(id thor.Bytes32) *txObject {
@@ -59,23 +53,6 @@ func (e *entry) find(id thor.Bytes32) *txObject {
 		}
 	}
 	return nil
-}
-
-func (e *entry) size() int {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-
-	return e.all.Len()
-}
-
-func (e *entry) pick() {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-
-	if picked, ok := e.all.Pick().Value.(*txObject); ok {
-		e.quota.dec(picked.signer)
-		e.all.Remove(picked.tx.ID())
-	}
 }
 
 func (e *entry) delete(id thor.Bytes32) {
@@ -91,17 +68,20 @@ func (e *entry) delete(id thor.Bytes32) {
 	}
 }
 
-func (e *entry) save(obj *txObject) {
+func (e *entry) save(obj *txObject) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	if _, ok := e.all.Get(obj.tx.ID()); !ok {
+		if e.quota.quota(obj.signer) >= quotaSignerTx {
+			return rejectedTxErr{"quota exceeds limit"}
+		}
 		e.quota.inc(obj.signer)
 	}
 
 	e.all.Set(obj.tx.ID(), obj)
 	e.dirty = true
-
+	return nil
 }
 
 func (e *entry) dumpPending(sort bool) txObjects {
@@ -134,7 +114,7 @@ func (e *entry) dumpAll() txObjects {
 	defer e.lock.Unlock()
 
 	all := make(txObjects, 0, e.all.Len())
-	e.all.ForEach(func(entry *cache.Entry) bool {
+	e.all.ForEach(func(entry *Cache.Entry) bool {
 		if obj, ok := entry.Value.(*txObject); ok {
 			all = append(all, obj)
 			return true
@@ -161,11 +141,28 @@ func (e *entry) isDirty() bool {
 	return e.dirty
 }
 
-func (e *entry) quotaBySinger(signer thor.Address) uint {
-	e.lock.Lock()
-	defer e.lock.Unlock()
+type quota map[thor.Address]uint
 
-	if v, ok := e.quota[signer]; ok {
+func (q quota) inc(signer thor.Address) {
+	if v, ok := q[signer]; ok {
+		q[signer] = v + 1
+	} else {
+		q[signer] = 1
+	}
+}
+
+func (q quota) dec(signer thor.Address) {
+	if v, ok := q[signer]; ok {
+		if v > 1 {
+			q[signer] = v - 1
+		} else {
+			delete(q, signer)
+		}
+	}
+}
+
+func (q quota) quota(signer thor.Address) uint {
+	if v, ok := q[signer]; ok {
 		return v
 	}
 	return 0
