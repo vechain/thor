@@ -271,34 +271,14 @@ func (c *Chain) GetAncestorBlockID(descendantID thor.Bytes32, ancestorNum uint32
 func (c *Chain) GetTransactionMeta(txID thor.Bytes32, headBlockID thor.Bytes32) (*TxMeta, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
-	meta, err := loadTxMeta(c.kv, txID)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range meta {
-		ancestorID, err := c.ancestorTrie.GetAncestor(headBlockID, block.Number(m.BlockID))
-		if err != nil {
-			return nil, err
-		}
-		if ancestorID == m.BlockID {
-			return &m, nil
-		}
-	}
-	return nil, errNotFound
+	return c.getTransactionMeta(txID, headBlockID)
 }
 
 // GetTransaction get transaction for given block and index.
 func (c *Chain) GetTransaction(blockID thor.Bytes32, index uint64) (*tx.Transaction, error) {
 	c.rw.RLock()
 	defer c.rw.RUnlock()
-	body, err := c.getBlockBody(blockID)
-	if err != nil {
-		return nil, err
-	}
-	if index >= uint64(len(body.Txs)) {
-		return nil, errors.New("tx index out of range")
-	}
-	return body.Txs[index], nil
+	return c.getTransaction(blockID, index)
 }
 
 // GetTransactionReceipt get tx receipt for given block and index.
@@ -313,6 +293,58 @@ func (c *Chain) GetTransactionReceipt(blockID thor.Bytes32, index uint64) (*tx.R
 		return nil, errors.New("receipt index out of range")
 	}
 	return receipts[index], nil
+}
+
+// GetTrunkBlockHeader get block header on trunk by given block number.
+func (c *Chain) GetTrunkBlockHeader(num uint32) (*block.Header, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
+	if err != nil {
+		return nil, err
+	}
+	return c.getBlockHeader(id)
+}
+
+// GetTrunkBlock get block on trunk by given block number.
+func (c *Chain) GetTrunkBlock(num uint32) (*block.Block, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
+	if err != nil {
+		return nil, err
+	}
+	return c.getBlock(id)
+}
+
+// GetTrunkBlockRaw get block raw on trunk by given block number.
+func (c *Chain) GetTrunkBlockRaw(num uint32) (block.Raw, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := c.getRawBlock(id)
+	if err != nil {
+		return nil, err
+	}
+	return raw.raw, nil
+}
+
+// GetTrunkTransaction get transaction on trunk by given tx id.
+func (c *Chain) GetTrunkTransaction(txID thor.Bytes32) (*tx.Transaction, *TxMeta, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	meta, err := c.getTransactionMeta(txID, c.bestBlock.Header().ID())
+	if err != nil {
+		return nil, nil, err
+	}
+	tx, err := c.getTransaction(meta.BlockID, meta.Index)
+	if err != nil {
+		return nil, nil, err
+	}
+	return tx, meta, nil
 }
 
 func (c *Chain) isTrunk(header *block.Header) bool {
@@ -428,6 +460,34 @@ func (c *Chain) getBlockReceipts(blockID thor.Bytes32) (tx.Receipts, error) {
 		return nil, err
 	}
 	return receipts.(tx.Receipts), nil
+}
+
+func (c *Chain) getTransactionMeta(txID thor.Bytes32, headBlockID thor.Bytes32) (*TxMeta, error) {
+	meta, err := loadTxMeta(c.kv, txID)
+	if err != nil {
+		return nil, err
+	}
+	for _, m := range meta {
+		ancestorID, err := c.ancestorTrie.GetAncestor(headBlockID, block.Number(m.BlockID))
+		if err != nil {
+			return nil, err
+		}
+		if ancestorID == m.BlockID {
+			return &m, nil
+		}
+	}
+	return nil, errNotFound
+}
+
+func (c *Chain) getTransaction(blockID thor.Bytes32, index uint64) (*tx.Transaction, error) {
+	body, err := c.getBlockBody(blockID)
+	if err != nil {
+		return nil, err
+	}
+	if index >= uint64(len(body.Txs)) {
+		return nil, errors.New("tx index out of range")
+	}
+	return body.Txs[index], nil
 }
 
 // IsNotFound returns if an error means not found.
