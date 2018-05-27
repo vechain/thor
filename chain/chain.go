@@ -486,6 +486,9 @@ func (c *Chain) getTransactionMeta(txID thor.Bytes32, headBlockID thor.Bytes32) 
 	for _, m := range meta {
 		ancestorID, err := c.ancestorTrie.GetAncestor(headBlockID, block.Number(m.BlockID))
 		if err != nil {
+			if c.IsNotFound(err) {
+				continue
+			}
 			return nil, err
 		}
 		if ancestorID == m.BlockID {
