@@ -26,9 +26,9 @@ func newAncestorTrie(kv kv.GetPutter) *ancestorTrie {
 	return &ancestorTrie{kv, rootsCache, newTrieCache()}
 }
 
-func packNum(num uint32) []byte {
+func numberAsKey(num uint32) []byte {
 	var key [4]byte
-	binary.LittleEndian.PutUint32(key[:], num)
+	binary.BigEndian.PutUint32(key[:], num)
 	return key[:]
 }
 
@@ -50,7 +50,7 @@ func (at *ancestorTrie) Update(w kv.Putter, header *block.Header) error {
 		return err
 	}
 
-	if err := tr.TryUpdate(packNum(block.Number(id)), id[:]); err != nil {
+	if err := tr.TryUpdate(numberAsKey(block.Number(id)), id[:]); err != nil {
 		return err
 	}
 
@@ -83,7 +83,7 @@ func (at *ancestorTrie) GetAncestor(descendantID thor.Bytes32, ancestorNum uint3
 		return thor.Bytes32{}, err
 	}
 
-	id, err := tr.TryGet(packNum(ancestorNum))
+	id, err := tr.TryGet(numberAsKey(ancestorNum))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -122,6 +122,7 @@ func (tc *trieCache) Get(root thor.Bytes32, kv kv.GetPutter, copy bool) (*trie.T
 	if err != nil {
 		return nil, err
 	}
+	tr.SetCacheLimit(16)
 	tc.cache.Add(root, &trieCacheEntry{tr, kv})
 	if copy {
 		cpy := *tr
