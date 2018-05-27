@@ -121,17 +121,13 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		// ignore callcode or delegatecall
 		if *contract.CodeAddr == contract.Address() {
 			contract.Input = input
-			if proc := in.evm.ContractHook(
+			if proc := in.evm.InterceptContractCall(
 				in.evm,
 				contract,
 				in.readOnly,
 			); proc != nil {
 				return proc()
 			}
-		}
-		// contractified account actually has zero code size
-		if in.evm.IsContractified(*contract.CodeAddr) {
-			return nil, nil
 		}
 	}
 

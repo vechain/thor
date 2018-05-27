@@ -82,13 +82,13 @@ type Context struct {
 	// The index of clause that generates this message.
 	ClauseIndex uint32
 
-	ContractHook      ContractHook
-	OnCreateContract  OnCreateContract
-	OnSuicideContract OnSuicideContract
+	InterceptContractCall InterceptContractCall
+	OnCreateContract      OnCreateContract
+	OnSuicideContract     OnSuicideContract
 }
 
-// ContractHook hooks contract calls.
-type ContractHook func(evm *EVM, contract *Contract, readonly bool) func() ([]byte, error)
+// InterceptContractCall intercept contract call.
+type InterceptContractCall func(evm *EVM, contract *Contract, readonly bool) func() ([]byte, error)
 
 // OnCreateContract callback when creating contract.
 type OnCreateContract func(evm *EVM, contractAddr thor.Address, caller thor.Address)
@@ -167,11 +167,6 @@ func (evm *EVM) Cancel() {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	defer func() {
-		if evm.depth == 0 {
-			evm.clearContractified()
-		}
-	}()
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -189,27 +184,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
-
-	// Initialise a new contract and set the code that is to be used by the EVM.
-	// The contract is a scoped environment for this execution context only.
-	contract := NewContract(caller, to, value, gas)
-	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-	contract.Input = input
-
 	if !evm.StateDB.Exist(addr) {
 		precompiles := PrecompiledContractsHomestead
 		if evm.ChainConfig().IsByzantium(evm.BlockNumber) {
 			precompiles = PrecompiledContractsByzantium
 		}
 		if precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
-			// check if calling prototype methods, if so, continue execution.
-			if evm.ContractHook(evm, contract, evm.interpreter.readOnly) == nil {
-				return nil, gas, nil
-			}
+			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only.
+	contract := NewContract(caller, to, value, gas)
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Debug && evm.depth == 0 {
@@ -242,11 +232,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	defer func() {
-		if evm.depth == 0 {
-			evm.clearContractified()
-		}
-	}()
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -286,11 +271,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
-	defer func() {
-		if evm.depth == 0 {
-			evm.clearContractified()
-		}
-	}()
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -323,11 +303,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
-	defer func() {
-		if evm.depth == 0 {
-			evm.clearContractified()
-		}
-	}()
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -368,11 +343,6 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	defer func() {
-		if evm.depth == 0 {
-			evm.clearContractified()
-		}
-	}()
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -391,10 +361,6 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// differ with ethereum here!!!
 	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
 	evm.contractCreationCount++
-	if evm.creatingContracts == nil {
-		evm.creatingContracts = make(map[common.Address]bool)
-	}
-	evm.creatingContracts[contractAddr] = true
 
 	//
 	contractHash := evm.StateDB.GetCodeHash(contractAddr)
@@ -468,43 +434,3 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // Interpreter returns the EVM interpreter
 func (evm *EVM) Interpreter() *Interpreter { return evm.interpreter }
-
-// Contractify sets a piece of dummy code into a non-contract account,
-// to let it look like a contract and be responsible to prototype calls.
-func (evm *EVM) Contractify(addr common.Address) bool {
-	if evm.StateDB.GetCodeHash(addr) != (common.Hash{}) {
-		return true
-	}
-
-	if evm.creatingContracts != nil {
-		if evm.creatingContracts[addr] {
-			return false
-		}
-	}
-
-	// here the code is just a placeholder.
-	// interpreter will cutoff execution.
-	evm.StateDB.SetCode(addr, []byte{REVERT})
-	if evm.contractified == nil {
-		evm.contractified = make(map[common.Address]bool)
-	}
-	evm.contractified[addr] = true
-	return true
-}
-
-// IsContractified returns if the given addr is contractified.
-func (evm *EVM) IsContractified(addr common.Address) bool {
-	if evm.contractified == nil {
-		return false
-	}
-	return evm.contractified[addr]
-}
-
-func (evm *EVM) clearContractified() {
-	if evm.contractified != nil {
-		for addr := range evm.contractified {
-			evm.StateDB.SetCode(addr, nil)
-		}
-		evm.contractified = nil
-	}
-}
