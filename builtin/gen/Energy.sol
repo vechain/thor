@@ -5,6 +5,7 @@
 
 pragma solidity ^0.4.18;
 import "./Token.sol";
+import "./Prototype.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -26,11 +27,11 @@ contract Energy is Token {
     }
 
     ///@return ERC20 token total supply
-    function totalSupply() public constant returns (uint256) {
+    function totalSupply() public view returns (uint256) {
         return EnergyNative(this).native_getTotalSupply();
     }
 
-    function totalBurned() public constant returns(uint256) {
+    function totalBurned() public view returns(uint256) {
         return EnergyNative(this).native_getTotalBurned();
     }
 
@@ -40,6 +41,12 @@ contract Energy is Token {
 
     function transfer(address _to, uint256 _amount) public returns (bool success) {
         _transfer(msg.sender, _to, _amount);
+        return true;
+    }
+
+    function move(address _from, address _to, uint256 _amount) public returns (bool success) {
+        require(_from == msg.sender || thor.$master(_from) == msg.sender);
+        _transfer(_from, _to, _amount);
         return true;
     }
 
@@ -57,7 +64,7 @@ contract Energy is Token {
 
     function approve(address _spender, uint256 _value) public returns (bool success){
         allowed[msg.sender][_spender] = _value;
-        Approval(msg.sender, _spender, _value);
+        emit Approval(msg.sender, _spender, _value);
         return true;
     }
 
@@ -67,7 +74,7 @@ contract Energy is Token {
             // believed that will never overflow
             EnergyNative(this).native_addBalance(_to, _amount);
         }
-        Transfer(_from, _to, _amount);
+        emit Transfer(_from, _to, _amount);
     }
 }
 

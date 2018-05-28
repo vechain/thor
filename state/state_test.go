@@ -32,6 +32,9 @@ func TestStateReadWrite(t *testing.T) {
 	state.SetBalance(addr, big.NewInt(1))
 	assert.Equal(t, state.GetBalance(addr), big.NewInt(1))
 
+	state.SetMaster(addr, thor.BytesToAddress([]byte("master")))
+	assert.Equal(t, thor.BytesToAddress([]byte("master")), state.GetMaster(addr))
+
 	state.SetCode(addr, []byte("code"))
 	assert.Equal(t, state.GetCode(addr), []byte("code"))
 	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32(crypto.Keccak256Hash([]byte("code"))))
@@ -46,6 +49,7 @@ func TestStateReadWrite(t *testing.T) {
 	state.Delete(addr)
 	assert.False(t, state.Exists(addr))
 	assert.Equal(t, state.GetBalance(addr), &big.Int{})
+	assert.Equal(t, state.GetMaster(addr), thor.Address{})
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
 	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
 

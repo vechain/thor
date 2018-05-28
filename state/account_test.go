@@ -56,6 +56,7 @@ func TestTrie(t *testing.T) {
 		big.NewInt(1),
 		big.NewInt(0),
 		0,
+		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
 	}

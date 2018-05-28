@@ -23,7 +23,7 @@ contract Authority {
 
         require(AuthorityNative(this).native_add(_signer, _endorsor, _identity));
 
-        Add(_signer, _identity);
+        emit Add(_signer, _identity);
     }
 
     // @notice remove a candidate.
@@ -33,7 +33,7 @@ contract Authority {
 
         require(AuthorityNative(this).native_remove(_signer));
 
-        Remove(_signer);
+        emit Remove(_signer);
     }
 
     function get(address _signer) public view returns(bool listed, address endorsor, bytes32 identity, bool active) {

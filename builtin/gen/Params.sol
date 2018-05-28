@@ -15,7 +15,7 @@ contract Params {
         require(msg.sender == executor());
 
         ParamsNative(this).native_set(_key, _value);
-        Set(_key, _value);
+        emit Set(_key, _value);
     }
 
     function get(bytes32 _key) public view returns(uint256) {

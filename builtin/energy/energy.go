@@ -111,8 +111,8 @@ func (e *Energy) GetTotalSupply(blockTime uint64) *big.Int {
 	e.getStorage(initialSupplyKey, &init)
 
 	// calc grown energy for total token supply
-	energyState := state.EnergyState{Energy: init.Energy, BlockTime: init.BlockTime}
-	return energyState.CalcEnergy(init.Token, blockTime)
+	acc := state.Account{Balance: init.Token, Energy: init.Energy, BlockTime: init.BlockTime}
+	return acc.CalcEnergy(blockTime)
 }
 
 // GetTotalBurned returns energy totally burned.
