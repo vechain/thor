@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -155,9 +157,12 @@ func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.B
 func TestParamsNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 
 	test := &ctest{
 		rt:     rt,
@@ -206,11 +211,14 @@ func TestAuthorityNative(t *testing.T) {
 
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 	st.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
 	builtin.Params.Native(st).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 
 	test := &ctest{
 		rt:     rt,
@@ -295,9 +303,12 @@ func TestEnergyNative(t *testing.T) {
 
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.NativeABI(),
@@ -363,13 +374,16 @@ func TestPrototypeNative(t *testing.T) {
 
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{})
+	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{}, &big.Int{})
 	contract = *out.ContractAddress
 
 	energy := big.NewInt(1000)
@@ -477,8 +491,12 @@ func TestPrototypeNative(t *testing.T) {
 func TestExtensionNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
+
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 
 	contract := builtin.Extension.Address
 
