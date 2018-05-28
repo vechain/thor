@@ -41,7 +41,7 @@ func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, e
 		return nil, err
 	}
 	code := state.GetCode(addr)
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return code, nil
@@ -72,7 +72,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	b := state.GetBalance(addr)
 	code := state.GetCode(addr)
 	energy := state.GetEnergy(addr, header.Timestamp())
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return &Account{
@@ -88,7 +88,7 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 		return thor.Bytes32{}, err
 	}
 	storage := state.GetStorage(addr, key)
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return storage, nil
@@ -129,7 +129,7 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 	if err := rt.Seeker().Err(); err != nil {
 		return nil, err
 	}
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return convertVMOutputWithInputGas(vmout, body.Gas), nil

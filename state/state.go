@@ -17,12 +17,13 @@ import (
 
 // State manages the main accounts trie.
 type State struct {
-	root  thor.Bytes32 // root of initial accounts trie
-	kv    kv.GetPutter
-	trie  trieReader                     // the accounts trie reader
-	cache map[thor.Address]*cachedObject // cache of accounts trie
-	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
-	err   error
+	root     thor.Bytes32 // root of initial accounts trie
+	kv       kv.GetPutter
+	trie     trieReader                     // the accounts trie reader
+	cache    map[thor.Address]*cachedObject // cache of accounts trie
+	sm       *stackedmap.StackedMap         // keeps revisions of accounts state
+	err      error
+	setError func(err error)
 }
 
 // to constrain ability of trie
@@ -50,11 +51,27 @@ func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
 		trie:  trie,
 		cache: make(map[thor.Address]*cachedObject),
 	}
-
+	state.setError = func(err error) {
+		if state.err == nil {
+			state.err = err
+		}
+	}
 	state.sm = stackedmap.New(func(key interface{}) (value interface{}, exist bool) {
 		return state.cacheGetter(key)
 	})
 	return &state, nil
+}
+
+// Spawn create a new state object shares current state's underlying db.
+// Also errors will be reported to current state.
+func (s *State) Spawn(root thor.Bytes32) *State {
+	newState, err := New(root, s.kv)
+	if err != nil {
+		s.setError(err)
+		newState, _ = New(thor.Bytes32{}, s.kv)
+	}
+	newState.setError = s.setError
+	return newState
 }
 
 // implements stackedmap.MapGetter
@@ -187,14 +204,8 @@ func (s *State) getCachedObject(addr thor.Address) *cachedObject {
 // 	}
 // }
 
-func (s *State) setError(err error) {
-	if s.err == nil {
-		s.err = err
-	}
-}
-
-// Error returns first occurred error.
-func (s *State) Error() error {
+// Err returns first occurred error.
+func (s *State) Err() error {
 	return s.err
 }
 

@@ -49,7 +49,7 @@ func TestStateReadWrite(t *testing.T) {
 	assert.Equal(t, state.GetCode(addr), []byte(nil))
 	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
 
-	assert.Nil(t, state.Error(), "error is not expected")
+	assert.Nil(t, state.Err(), "error is not expected")
 
 }
 
@@ -88,7 +88,7 @@ func TestStateRevert(t *testing.T) {
 		chk--
 	}
 	assert.False(t, state.Exists(addr))
-	assert.Nil(t, state.Error(), "error is not expected")
+	assert.Nil(t, state.Err(), "error is not expected")
 
 	//
 	state, _ = New(thor.Bytes32{}, kv)
