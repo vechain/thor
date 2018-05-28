@@ -55,7 +55,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	code, err := a.getCode(addr, b.Header().StateRoot())
 	if err != nil {
@@ -143,7 +143,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	acc, err := a.getAccount(addr, b.Header())
 	if err != nil {
@@ -163,7 +163,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	}
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	storage, err := a.getStorage(addr, key, b.Header().StateRoot())
 	if err != nil {
@@ -180,7 +180,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	req.Body.Close()
 	b, err := a.getBlock(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	address := mux.Vars(req)["address"]
 	var output *VMOutput
@@ -210,7 +210,7 @@ func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 			return nil, err
 		}
 		if n > math.MaxUint32 {
-			return nil, errors.New("block number exceeded")
+			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
 		return a.chain.GetTrunkBlock(uint32(n))
 	}
