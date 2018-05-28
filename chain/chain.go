@@ -363,6 +363,11 @@ func (c *Chain) GetTrunkTransaction(txID thor.Bytes32) (*tx.Transaction, *TxMeta
 	return tx, meta, nil
 }
 
+// NewSeeker returns a new seeker instance.
+func (c *Chain) NewSeeker(headBlockID thor.Bytes32) *Seeker {
+	return newSeeker(c, headBlockID)
+}
+
 func (c *Chain) isTrunk(header *block.Header) bool {
 	bestHeader := c.bestBlock.Header()
 
