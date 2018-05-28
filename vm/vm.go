@@ -88,9 +88,9 @@ type Context struct {
 	ClauseIndex uint32
 	GetHash     func(uint32) thor.Bytes32
 
-	ContractHook      evm.ContractHook
-	OnCreateContract  evm.OnCreateContract
-	OnSuicideContract evm.OnSuicideContract
+	InterceptContractCall evm.InterceptContractCall
+	OnCreateContract      evm.OnCreateContract
+	OnSuicideContract     evm.OnSuicideContract
 }
 
 // The only purpose of this func separate definition is to be compatible with evm.context.
@@ -143,9 +143,9 @@ func New(ctx Context, state State, vmConfig Config) (vm *VM) {
 		TxID:        ctx.TxID,
 		ClauseIndex: ctx.ClauseIndex,
 
-		ContractHook:      ctx.ContractHook,
-		OnCreateContract:  ctx.OnCreateContract,
-		OnSuicideContract: ctx.OnSuicideContract,
+		InterceptContractCall: ctx.InterceptContractCall,
+		OnCreateContract:      ctx.OnCreateContract,
+		OnSuicideContract:     ctx.OnSuicideContract,
 	}
 	return &VM{
 		evm.NewEVM(evmCtx, stateDB, chainConfig, evm.Config(vmConfig)),

@@ -6,11 +6,14 @@
 package builtin
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/abi"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm/evm"
@@ -24,24 +27,30 @@ type nativeMethod struct {
 
 // bridge bridges VM OPCALL to native implementation.
 type bridge struct {
-	Method   *nativeMethod
-	State    *state.State
-	VM       *evm.EVM
-	Contract *evm.Contract
+	Method       *nativeMethod
+	Seeker       *chain.Seeker
+	State        *state.State
+	VM           *evm.EVM
+	Contract     *evm.Contract
+	TxProvedWork *big.Int
 }
 
 // newBridge creates a new birdge instance.
 func newBridge(
 	method *nativeMethod,
+	seeker *chain.Seeker,
 	state *state.State,
 	vm *evm.EVM,
 	contract *evm.Contract,
+	txProvedWork *big.Int,
 ) *bridge {
 	return &bridge{
 		method,
+		seeker,
 		state,
 		vm,
 		contract,
+		txProvedWork,
 	}
 }
 func (b *bridge) UseGas(gas uint64) {

@@ -124,8 +124,11 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	gp := big.Int(*body.GasPrice)
-	rt := runtime.New(state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit())
-	vmout := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{})
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit())
+	vmout := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{}, &big.Int{})
+	if err := rt.Seeker().Err(); err != nil {
+		return nil, err
+	}
 	if err := state.Error(); err != nil {
 		return nil, err
 	}

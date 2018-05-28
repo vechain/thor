@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
@@ -30,9 +31,11 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	ch, _ := chain.New(kv, b0)
+
 	state, _ := state.New(b0.Header().StateRoot(), kv)
 
-	rt := runtime.New(state,
+	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state,
 		thor.Address{}, 0, 0, 0)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
@@ -43,7 +46,7 @@ func TestCall(t *testing.T) {
 
 	out := rt.Call(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
-		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Bytes32{})
+		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Bytes32{}, &big.Int{})
 
 	if out.VMErr != nil {
 		t.Fatal(out.VMErr)

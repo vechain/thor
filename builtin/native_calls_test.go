@@ -90,7 +90,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	assert.Nil(t, err, "should encode input")
 
 	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
-		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{})
+		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{}, &big.Int{})
 
 	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
