@@ -25,7 +25,7 @@ var (
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{
 		mustLoadContract("Prototype"),
-		mustLoadPrototypeInterfaceABI(),
+		mustLoadThorLibABI(),
 	}
 	Extension = &extensionContract{mustLoadContract("Extension")}
 )
@@ -37,7 +37,7 @@ type (
 	executorContract  struct{ *contract }
 	prototypeContract struct {
 		*contract
-		InterfaceABI *abi.ABI
+		ThorLibABI *abi.ABI
 	}
 	extensionContract struct{ *contract }
 )
@@ -62,12 +62,12 @@ func (e *extensionContract) Native(state *state.State) *extension.Extension {
 	return extension.New(e.Address, state)
 }
 
-func mustLoadPrototypeInterfaceABI() *abi.ABI {
-	asset := "compiled/PrototypeInterface.abi"
+func mustLoadThorLibABI() *abi.ABI {
+	asset := "compiled/thor.abi"
 	data := gen.MustAsset(asset)
 	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load native ABI for PrototypeInterface"))
+		panic(errors.Wrap(err, "load native ABI for ThorLib"))
 	}
 	return abi
 }
