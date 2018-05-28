@@ -7,12 +7,15 @@ package transactions
 
 import (
 	"errors"
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -31,15 +34,22 @@ func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, error) {
-	tx, location, err := t.chain.GetTrunkTransaction(txID)
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, blockID thor.Bytes32) (*rawTransaction, error) {
+	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(location.BlockID)
+	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	block, err := t.chain.GetBlock(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +67,15 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32) (*rawTransaction, er
 	}, nil
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, error) {
-	tx, location, err := t.chain.GetTrunkTransaction(txID)
+func (t *Transactions) getTransactionByID(txID thor.Bytes32, blockID thor.Bytes32) (*Transaction, error) {
+	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
@@ -69,7 +86,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 	if err != nil {
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(location.BlockID)
+	block, err := t.chain.GetBlock(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,19 +99,26 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32) (*Transaction, erro
 }
 
 //GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32) (*Receipt, error) {
-	tx, location, err := t.chain.GetTrunkTransaction(txID)
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor.Bytes32) (*Receipt, error) {
+	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(location.BlockID)
+	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
+	if err != nil {
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	block, err := t.chain.GetBlock(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := t.chain.GetTransactionReceipt(location.BlockID, location.Index)
+	receipt, err := t.chain.GetTransactionReceipt(txMeta.BlockID, txMeta.Index)
 	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
@@ -143,18 +167,24 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
+	b, err := t.getBlock(req.URL.Query().Get("revision"))
+	if err != nil {
+		return err
+	} else if b == nil {
+		return utils.WriteJSON(w, nil)
+	}
 	raw := req.URL.Query().Get("raw")
 	if raw != "" && raw != "false" && raw != "true" {
-		return utils.BadRequest(errors.New("raw should be bool"), "raw")
+		return utils.BadRequest(errors.New("should be boolean"), "raw")
 	}
 	if raw == "true" {
-		tx, err := t.getRawTransaction(txID)
+		tx, err := t.getRawTransaction(txID, b.Header().ID())
 		if err != nil {
 			return err
 		}
 		return utils.WriteJSON(w, tx)
 	}
-	tx, err := t.getTransactionByID(txID)
+	tx, err := t.getTransactionByID(txID, b.Header().ID())
 	if err != nil {
 		return err
 	}
@@ -168,17 +198,53 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	receipt, err := t.getTransactionReceiptByID(txID)
+	b, err := t.getBlock(req.URL.Query().Get("revision"))
+	if err != nil {
+		return err
+	} else if b == nil {
+		return utils.WriteJSON(w, nil)
+	}
+	receipt, err := t.getTransactionReceiptByID(txID, b.Header().ID())
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, receipt)
 }
 
+func (t *Transactions) getBlock(revision string) (*block.Block, error) {
+	if revision == "" || revision == "best" {
+		return t.chain.BestBlock(), nil
+	}
+	blkID, err := thor.ParseBytes32(revision)
+	if err != nil {
+		n, err := strconv.ParseUint(revision, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		if n > math.MaxUint32 {
+			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
+		}
+		blk, err := t.chain.GetTrunkBlock(uint32(n))
+		if t.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return blk, err
+	}
+	blk, err := t.chain.GetBlock(blkID)
+	if t.chain.IsNotFound(err) {
+		return nil, nil
+	}
+	return blk, err
+}
+
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
+	sub.Path("/{id}").Methods("GET").Queries("revision", "{revision}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
+
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
+	sub.Path("/{id}/receipt").Methods("GET").Queries("revision", "{revision}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }

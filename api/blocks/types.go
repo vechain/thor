@@ -30,6 +30,9 @@ type Block struct {
 
 //ConvertBlock convert a raw block into a json format block
 func ConvertBlock(b *block.Block) (*Block, error) {
+	if b == nil {
+		return nil, nil
+	}
 	signer, err := b.Header().Signer()
 	if err != nil {
 		return nil, err

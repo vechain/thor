@@ -181,6 +181,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
       - $ref: '#/components/parameters/RawInQuery'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Transactions
@@ -199,6 +200,7 @@ paths:
   '/transactions/{id}/receipt':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Transactions
