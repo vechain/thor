@@ -44,9 +44,6 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, blockID thor.Bytes32
 	}
 	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	block, err := t.chain.GetBlock(txMeta.BlockID)
@@ -77,9 +74,6 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, blockID thor.Bytes3
 	}
 	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	tc, err := ConvertTransaction(tx)
@@ -109,9 +103,6 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	}
 	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	block, err := t.chain.GetBlock(txMeta.BlockID)
@@ -120,9 +111,6 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	}
 	receipt, err := t.chain.GetTransactionReceipt(txMeta.BlockID, txMeta.Index)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return convertReceipt(receipt, block, tx)
