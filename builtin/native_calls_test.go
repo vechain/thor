@@ -111,7 +111,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Equal(t, c.events, vmout.Events, "should match event")
 	}
 
-	assert.Nil(t, c.rt.State().Error(), "should no state error")
+	assert.Nil(t, c.rt.State().Err(), "should no state error")
 
 	c.output = nil
 	c.vmerr = nil

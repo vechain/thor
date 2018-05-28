@@ -8,56 +8,61 @@ package builtin
 import (
 	"math/big"
 
-	"github.com/vechain/thor/chain"
-
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/abi"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm/evm"
 )
 
-type addressAndMethodID struct {
+type nativeMethod struct {
+	abi *abi.Method
+	run func(env *environment) []interface{}
+}
+
+type methodKey struct {
 	thor.Address
 	abi.MethodID
 }
 
-var privateMethods = make(map[addressAndMethodID]*nativeMethod)
+var privateMethods = make(map[methodKey]*nativeMethod)
 
 func initParamsMethods() {
 	defines := []struct {
 		name string
-		run  func(env *bridge) []interface{}
+		run  func(env *environment) []interface{}
 	}{
-		{"native_getExecutor", func(env *bridge) []interface{} {
+		{"native_getExecutor", func(env *environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
 			return []interface{}{Executor.Address}
 		}},
-		{"native_get", func(env *bridge) []interface{} {
+		{"native_get", func(env *environment) []interface{} {
 			var key common.Hash
 			env.ParseArgs(&key)
 			env.UseGas(ethparams.SloadGas)
-			v := Params.Native(env.State).Get(thor.Bytes32(key))
+			v := Params.Native(env.state).Get(thor.Bytes32(key))
 			return []interface{}{v}
 		}},
-		{"native_set", func(env *bridge) []interface{} {
+		{"native_set", func(env *environment) []interface{} {
 			var args struct {
 				Key   common.Hash
 				Value *big.Int
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SstoreSetGas)
-			Params.Native(env.State).Set(thor.Bytes32(args.Key), args.Value)
+			Params.Native(env.state).Set(thor.Bytes32(args.Key), args.Value)
 			return nil
 		}},
 	}
 	nativeABI := Params.NativeABI()
 	for _, def := range defines {
 		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[addressAndMethodID{Params.Address, method.ID()}] = &nativeMethod{
-				ABI: method,
-				Run: def.run,
+			privateMethods[methodKey{Params.Address, method.ID()}] = &nativeMethod{
+				abi: method,
+				run: def.run,
 			}
 		} else {
 			panic("method not found: " + def.name)
@@ -68,13 +73,13 @@ func initParamsMethods() {
 func initAuthorityMethods() {
 	defines := []struct {
 		name string
-		run  func(env *bridge) []interface{}
+		run  func(env *environment) []interface{}
 	}{
-		{"native_getExecutor", func(env *bridge) []interface{} {
+		{"native_getExecutor", func(env *environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
 			return []interface{}{Executor.Address}
 		}},
-		{"native_add", func(env *bridge) []interface{} {
+		{"native_add", func(env *environment) []interface{} {
 			var args struct {
 				Signer   common.Address
 				Endorsor common.Address
@@ -82,64 +87,64 @@ func initAuthorityMethods() {
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Authority.Native(env.State).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
+			ok := Authority.Native(env.state).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
 			if ok {
 				env.UseGas(ethparams.SstoreSetGas + ethparams.SstoreResetGas)
 			}
 			return []interface{}{ok}
 		}},
-		{"native_remove", func(env *bridge) []interface{} {
+		{"native_remove", func(env *environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas)
-			ok := Authority.Native(env.State).Remove(thor.Address(signer))
+			ok := Authority.Native(env.state).Remove(thor.Address(signer))
 			if ok {
 				env.UseGas(ethparams.SstoreClearGas + ethparams.SstoreResetGas*2)
 			}
 			return []interface{}{ok}
 		}},
-		{"native_get", func(env *bridge) []interface{} {
+		{"native_get", func(env *environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 3)
-			p := Authority.Native(env.State).Get(thor.Address(signer))
+			p := Authority.Native(env.state).Get(thor.Address(signer))
 			return []interface{}{!p.IsEmpty(), p.Endorsor, p.Identity, p.Active}
 		}},
-		{"native_first", func(env *bridge) []interface{} {
+		{"native_first", func(env *environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			signer := Authority.Native(env.State).First()
+			signer := Authority.Native(env.state).First()
 			return []interface{}{signer}
 		}},
-		{"native_next", func(env *bridge) []interface{} {
+		{"native_next", func(env *environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 4)
-			p := Authority.Native(env.State).Get(thor.Address(signer))
+			p := Authority.Native(env.state).Get(thor.Address(signer))
 			var next thor.Address
 			if p.Next != nil {
 				next = *p.Next
 			}
 			return []interface{}{next}
 		}},
-		{"native_isEndorsed", func(env *bridge) []interface{} {
+		{"native_isEndorsed", func(env *environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 2)
-			p := Authority.Native(env.State).Get(thor.Address(signer))
+			p := Authority.Native(env.state).Get(thor.Address(signer))
 			if p.IsEmpty() {
 				return []interface{}{false}
 			}
-			bal := env.State.GetBalance(p.Endorsor)
-			endorsement := Params.Native(env.State).Get(thor.KeyProposerEndorsement)
+			bal := env.state.GetBalance(p.Endorsor)
+			endorsement := Params.Native(env.state).Get(thor.KeyProposerEndorsement)
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
 	nativeABI := Authority.NativeABI()
 	for _, def := range defines {
 		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[addressAndMethodID{Authority.Address, method.ID()}] = &nativeMethod{
-				ABI: method,
-				Run: def.run,
+			privateMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{
+				abi: method,
+				run: def.run,
 			}
 		} else {
 			panic("method not found: " + def.name)
@@ -150,47 +155,47 @@ func initAuthorityMethods() {
 func initEnergyMethods() {
 	defines := []struct {
 		name string
-		run  func(env *bridge) []interface{}
+		run  func(env *environment) []interface{}
 	}{
-		{"native_getTotalSupply", func(env *bridge) []interface{} {
+		{"native_getTotalSupply", func(env *environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			supply := Energy.Native(env.State).GetTotalSupply(env.BlockTime())
+			supply := Energy.Native(env.state).GetTotalSupply(env.BlockTime())
 			return []interface{}{supply}
 		}},
-		{"native_getTotalBurned", func(env *bridge) []interface{} {
+		{"native_getTotalBurned", func(env *environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			burned := Energy.Native(env.State).GetTotalBurned()
+			burned := Energy.Native(env.state).GetTotalBurned()
 			return []interface{}{burned}
 		}},
-		{"native_getBalance", func(env *bridge) []interface{} {
+		{"native_getBalance", func(env *environment) []interface{} {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			bal := Energy.Native(env.State).GetBalance(thor.Address(addr), env.BlockTime())
+			bal := Energy.Native(env.state).GetBalance(thor.Address(addr), env.BlockTime())
 			return []interface{}{bal}
 		}},
-		{"native_addBalance", func(env *bridge) []interface{} {
+		{"native_addBalance", func(env *environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
-			if env.State.Exists(thor.Address(args.Addr)) {
+			if env.state.Exists(thor.Address(args.Addr)) {
 				env.UseGas(ethparams.SstoreResetGas)
 			} else {
 				env.UseGas(ethparams.SstoreSetGas)
 			}
-			Energy.Native(env.State).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
+			Energy.Native(env.state).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
 			return nil
 		}},
-		{"native_subBalance", func(env *bridge) []interface{} {
+		{"native_subBalance", func(env *environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Energy.Native(env.State).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
+			ok := Energy.Native(env.state).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
 			if ok {
 				env.UseGas(ethparams.SstoreResetGas)
 			}
@@ -200,9 +205,9 @@ func initEnergyMethods() {
 	nativeABI := Energy.NativeABI()
 	for _, def := range defines {
 		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[addressAndMethodID{Energy.Address, method.ID()}] = &nativeMethod{
-				ABI: method,
-				Run: def.run,
+			privateMethods[methodKey{Energy.Address, method.ID()}] = &nativeMethod{
+				abi: method,
+				run: def.run,
 			}
 		} else {
 			panic("method not found: " + def.name)
@@ -232,25 +237,25 @@ func initPrototypeMethods() {
 
 	defines := []struct {
 		name string
-		run  func(env *bridge) []interface{}
+		run  func(env *environment) []interface{}
 	}{
-		{"native_master", func(env *bridge) []interface{} {
+		{"native_master", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.State).Bind(thor.Address(target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(target))
 
 			master := binding.Master()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{master}
 		}},
-		{"native_setMaster", func(env *bridge) []interface{} {
+		{"native_setMaster", func(env *environment) []interface{} {
 			var args struct {
 				Target    common.Address
 				NewMaster common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			binding.SetMaster(thor.Address(args.NewMaster))
 			env.UseGas(ethparams.SstoreResetGas)
@@ -260,7 +265,7 @@ func initPrototypeMethods() {
 		}},
 		// native_balanceAtBlock
 		// native_energyAtBlock
-		{"native_moveEnergyTo", func(env *bridge) []interface{} {
+		{"native_moveEnergyTo", func(env *environment) []interface{} {
 			var args struct {
 				Target common.Address
 				To     common.Address
@@ -272,48 +277,48 @@ func initPrototypeMethods() {
 			if err != nil {
 				panic(err)
 			}
-			_, leftOverGas, vmerr := env.VM.Call(
+			_, leftOverGas, vmerr := env.evm.Call(
 				evm.AccountRef(thor.Address(args.Target)),
 				common.Address(Energy.Address),
 				transferData,
-				env.Contract.Gas,
+				env.contract.Gas,
 				&big.Int{},
 			)
-			env.UseGas(env.Contract.Gas - leftOverGas)
+			env.UseGas(env.contract.Gas - leftOverGas)
 			if vmerr != nil {
 				env.Stop(vmerr)
 			}
 
 			return nil
 		}},
-		{"native_hasCode", func(env *bridge) []interface{} {
+		{"native_hasCode", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
 
-			hasCode := !env.State.GetCodeHash(thor.Address(target)).IsZero()
+			hasCode := !env.state.GetCodeHash(thor.Address(target)).IsZero()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{hasCode}
 		}},
 		// native_storageAt
-		{"native_userPlan", func(env *bridge) []interface{} {
+		{"native_userPlan", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.State).Bind(thor.Address(target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(target))
 
 			credit, rate := binding.UserPlan()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{credit, rate}
 		}},
-		{"native_setUserPlan", func(env *bridge) []interface{} {
+		{"native_setUserPlan", func(env *environment) []interface{} {
 			var args struct {
 				Target       common.Address
 				Credit       *big.Int
 				RecoveryRate *big.Int
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			binding.SetUserPlan(args.Credit, args.RecoveryRate)
 			env.UseGas(ethparams.SstoreSetGas)
@@ -321,39 +326,39 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_isUser", func(env *bridge) []interface{} {
+		{"native_isUser", func(env *environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			isUser := binding.IsUser(thor.Address(args.User))
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{isUser}
 		}},
-		{"native_userCredit", func(env *bridge) []interface{} {
+		{"native_userCredit", func(env *environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			credit := binding.UserCredit(thor.Address(args.User), env.BlockTime())
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{credit}
 		}},
-		{"native_addUser", func(env *bridge) []interface{} {
+		{"native_addUser", func(env *environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.AddUser(thor.Address(args.User), env.BlockTime()))
@@ -362,13 +367,13 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_removeUser", func(env *bridge) []interface{} {
+		{"native_removeUser", func(env *environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.RemoveUser(thor.Address(args.User)))
@@ -377,14 +382,14 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_sponsor", func(env *bridge) []interface{} {
+		{"native_sponsor", func(env *environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Caller  common.Address
 				YesOrNo bool
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.Sponsor(thor.Address(args.Caller), args.YesOrNo))
@@ -397,26 +402,26 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_isSponsor", func(env *bridge) []interface{} {
+		{"native_isSponsor", func(env *environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Sponsor common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			b := binding.IsSponsor(thor.Address(args.Sponsor))
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{b}
 		}},
-		{"native_selectSponsor", func(env *bridge) []interface{} {
+		{"native_selectSponsor", func(env *environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Sponsor common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.SelectSponsor(thor.Address(args.Sponsor)))
@@ -425,10 +430,10 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_currentSponsor", func(env *bridge) []interface{} {
+		{"native_currentSponsor", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.State).Bind(thor.Address(target))
+			binding := Prototype.Native(env.state).Bind(thor.Address(target))
 
 			addr := binding.CurrentSponsor()
 			env.UseGas(ethparams.SloadGas)
@@ -439,9 +444,9 @@ func initPrototypeMethods() {
 	nativeABI := Prototype.NativeABI()
 	for _, def := range defines {
 		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[addressAndMethodID{Prototype.Address, method.ID()}] = &nativeMethod{
-				ABI: method,
-				Run: def.run,
+			privateMethods[methodKey{Prototype.Address, method.ID()}] = &nativeMethod{
+				abi: method,
+				run: def.run,
 			}
 		} else {
 			panic("method not found: " + def.name)
@@ -457,20 +462,20 @@ const (
 func initExtensionMethods() {
 	defines := []struct {
 		name string
-		run  func(env *bridge) []interface{}
+		run  func(env *environment) []interface{}
 	}{
-		{"native_blake2b256", func(env *bridge) []interface{} {
+		{"native_blake2b256", func(env *environment) []interface{} {
 			var data []byte
 			env.ParseArgs(&data)
 			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
-			output := Extension.Native(env.State).Blake2b256(data)
+			output := Extension.Native(env.state).Blake2b256(data)
 			return []interface{}{output}
 		}},
-		{"native_getBlockIDByNum", func(env *bridge) []interface{} {
+		{"native_getBlockIDByNum", func(env *environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			output := Extension.Native(env.State).GetBlockIDByNum(blockNum)
+			output := Extension.Native(env.state).GetBlockIDByNum(blockNum)
 			return []interface{}{output}
 		}},
 	}
@@ -478,9 +483,9 @@ func initExtensionMethods() {
 	nativeABI := Extension.NativeABI()
 	for _, def := range defines {
 		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[addressAndMethodID{Extension.Address, method.ID()}] = &nativeMethod{
-				ABI: method,
-				Run: def.run,
+			privateMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{
+				abi: method,
+				run: def.run,
 			}
 		} else {
 			panic("method not found: " + def.name)
@@ -496,7 +501,7 @@ func init() {
 	initExtensionMethods()
 }
 
-// HandleNativeCall entry of native methods implementaion.
+// HandleNativeCall entry of native methods implementation.
 func HandleNativeCall(
 	seeker *chain.Seeker,
 	state *state.State,
@@ -513,14 +518,14 @@ func HandleNativeCall(
 	var method *nativeMethod
 	if contract.Address() == contract.Caller() {
 		// private methods require caller == to
-		method = privateMethods[addressAndMethodID{thor.Address(contract.Address()), methodID}]
+		method = privateMethods[methodKey{thor.Address(contract.Address()), methodID}]
 	}
 
 	if method == nil {
 		return nil
 	}
 
-	if readonly && !method.ABI.Const() {
+	if readonly && !method.abi.Const() {
 		return func() ([]byte, error) {
 			return nil, evm.ErrWriteProtection()
 		}
@@ -531,5 +536,23 @@ func HandleNativeCall(
 			return nil, evm.ErrExecutionReverted()
 		}
 	}
-	return newBridge(method, seeker, state, vm, contract, txProvedWork).Call
+
+	env := newEnvironment(method.abi, seeker, state, vm, contract, txProvedWork)
+	return func() (data []byte, err error) {
+		defer func() {
+			if e := recover(); e != nil {
+				if rec, ok := e.(*vmError); ok {
+					err = rec.cause
+				} else {
+					panic(e)
+				}
+			}
+		}()
+		output := method.run(env)
+		data, err = method.abi.EncodeOutput(output...)
+		if err != nil {
+			panic(errors.WithMessage(err, "encode native output"))
+		}
+		return
+	}
 }

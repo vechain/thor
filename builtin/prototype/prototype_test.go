@@ -80,5 +80,5 @@ func TestPrototype(t *testing.T) {
 		assert.Equal(t, tt.expected, tt.fn())
 	}
 
-	assert.Nil(t, st.Error())
+	assert.Nil(t, st.Err())
 }
