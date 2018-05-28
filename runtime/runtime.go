@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	Tx "github.com/vechain/thor/tx"
@@ -32,6 +33,7 @@ func init() {
 // Runtime is to support transaction execution.
 type Runtime struct {
 	vmConfig vm.Config
+	seeker   *chain.Seeker
 	state    *state.State
 
 	// block env
@@ -43,12 +45,14 @@ type Runtime struct {
 
 // New create a Runtime object.
 func New(
+	seeker *chain.Seeker,
 	state *state.State,
 	blockBeneficiary thor.Address,
 	blockNumber uint32,
 	blockTime,
 	blockGasLimit uint64) *Runtime {
 	return &Runtime{
+		seeker:           seeker,
 		state:            state,
 		blockBeneficiary: blockBeneficiary,
 		blockNumber:      blockNumber,
@@ -57,6 +61,7 @@ func New(
 	}
 }
 
+func (rt *Runtime) Seeker() *chain.Seeker          { return rt.seeker }
 func (rt *Runtime) State() *state.State            { return rt.state }
 func (rt *Runtime) BlockBeneficiary() thor.Address { return rt.blockBeneficiary }
 func (rt *Runtime) BlockNumber() uint32            { return rt.blockNumber }
@@ -77,6 +82,7 @@ func (rt *Runtime) execute(
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
+	txProvedWork *big.Int,
 	isStatic bool,
 ) *vm.Output {
 	to := clause.To()
@@ -93,10 +99,10 @@ func (rt *Runtime) execute(
 		GasPrice: txGasPrice,
 		TxID:     txID,
 
-		GetHash:     builtin.Extension.Native(rt.state).GetBlockIDByNum,
+		GetHash:     rt.seeker.GetID,
 		ClauseIndex: index,
-		ContractHook: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
-			return builtin.HandleNativeCall(rt.state, evm, contract, readonly)
+		InterceptContractCall: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
+			return builtin.HandleNativeCall(rt.seeker, rt.state, evm, contract, readonly, txProvedWork)
 		},
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
@@ -153,8 +159,9 @@ func (rt *Runtime) Call(
 	txOrigin thor.Address,
 	txGasPrice *big.Int,
 	txID thor.Bytes32,
+	txProvedWork *big.Int,
 ) *vm.Output {
-	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, false)
+	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, txProvedWork, false)
 }
 
 // ExecuteTransaction executes a transaction.
@@ -178,8 +185,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
 
+	txProvedWork := tx.ProvedWork(rt.blockNumber, rt.seeker.GetID)
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), false)
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), txProvedWork, false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas

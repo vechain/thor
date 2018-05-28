@@ -8,6 +8,8 @@ package builtin
 import (
 	"math/big"
 
+	"github.com/vechain/thor/chain"
+
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
 	"github.com/vechain/thor/abi"
@@ -217,14 +219,14 @@ func initPrototypeMethods() {
 		name string
 		run  func(env *bridge) []interface{}
 	}{
-		{"native_contractify", func(env *bridge) []interface{} {
-			var addr common.Address
-			env.ParseArgs(&addr)
+		// {"native_contractify", func(env *bridge) []interface{} {
+		// 	var addr common.Address
+		// 	env.ParseArgs(&addr)
 
-			env.UseGas(ethparams.SloadGas)
-			env.Require(env.VM.Contractify(addr))
-			return nil
-		}},
+		// 	env.UseGas(ethparams.SloadGas)
+		// 	env.Require(env.VM.Contractify(addr))
+		// 	return nil
+		// }},
 	}
 	nativeABI := Prototype.NativeABI()
 	for _, def := range defines {
@@ -280,9 +282,9 @@ func initPrototypeInterfaceMethods() {
 			return nil
 		}},
 		{"$has_code", func(env *bridge, binding *prototype.Binding) []interface{} {
-			if env.VM.IsContractified(common.Address(env.To())) {
-				return []interface{}{false}
-			}
+			// if env.VM.IsContractified(common.Address(env.To())) {
+			// 	return []interface{}{false}
+			// }
 			hasCode := !env.State.GetCodeHash(env.To()).IsZero()
 			return []interface{}{hasCode}
 		}},
@@ -514,12 +516,13 @@ func init() {
 
 // HandleNativeCall entry of native methods implementaion.
 func HandleNativeCall(
+	seeker *chain.Seeker,
 	state *state.State,
 	vm *evm.EVM,
 	contract *evm.Contract,
 	readonly bool,
+	txProvedWork *big.Int,
 ) func() ([]byte, error) {
-
 	methodID, err := abi.ExtractMethodID(contract.Input)
 	if err != nil {
 		return nil
@@ -550,5 +553,5 @@ func HandleNativeCall(
 			return nil, evm.ErrExecutionReverted()
 		}
 	}
-	return newBridge(method, state, vm, contract).Call
+	return newBridge(method, seeker, state, vm, contract, txProvedWork).Call
 }

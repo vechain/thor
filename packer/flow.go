@@ -131,6 +131,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
+	if err := f.runtime.Seeker().Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
 	stage := f.runtime.State().Stage()
 	stateRoot, err := stage.Hash()
 	if err != nil {

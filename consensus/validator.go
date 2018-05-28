@@ -8,6 +8,7 @@ package consensus
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -147,7 +148,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receipts := make(tx.Receipts, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
-	rt := runtime.New(state,
+	rt := runtime.New(
+		c.chain.NewSeeker(header.ParentID()),
+		state,
 		header.Beneficiary(),
 		header.Number(),
 		header.Timestamp(),
@@ -166,8 +169,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		}
 		return true, meta.Reverted, nil
 	}
-
-	builtin.Extension.Native(state).SetBlockNumAndID(blk.Header().ParentID())
 
 	for _, tx := range txs {
 		// check if tx existed
@@ -209,6 +210,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receiptsRoot := receipts.RootHash()
 	if header.ReceiptsRoot() != receiptsRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
+	}
+
+	if err := rt.Seeker().Err(); err != nil {
+		return nil, nil, errors.WithMessage(err, "chain")
 	}
 
 	stage := state.Stage()

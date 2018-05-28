@@ -82,10 +82,10 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 		}
 	}
 
-	rt := runtime.New(state, thor.Address{}, 0, b.timestamp, b.gasLimit)
+	rt := runtime.New(nil, state, thor.Address{}, 0, b.timestamp, b.gasLimit)
 
 	for _, call := range b.calls {
-		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{})
+		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{}, &big.Int{})
 		if out.VMErr != nil {
 			return nil, nil, errors.Wrap(out.VMErr, "vm")
 		}

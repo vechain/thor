@@ -74,16 +74,15 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		authority.Update(u.Address, u.Active)
 	}
 
-	runtime := runtime.New(
+	rt := runtime.New(
+		p.chain.NewSeeker(parent.ID()),
 		state,
 		p.beneficiary,
 		parent.Number()+1,
 		newBlockTime,
 		p.gasLimit(parent.GasLimit()))
 
-	builtin.Extension.Native(state).SetBlockNumAndID(parent.ID())
-
-	return newFlow(p, parent, runtime, parent.TotalScore()+score), nil
+	return newFlow(p, parent, rt, parent.TotalScore()+score), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -96,6 +95,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 	}
 
 	runtime := runtime.New(
+		p.chain.NewSeeker(parent.ID()),
 		state,
 		p.beneficiary,
 		parent.Number()+1,
