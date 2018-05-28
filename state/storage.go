@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// StorageEncoder implement it to customize enconding process for storage data.
+// StorageEncoder implement it to customize encoding process for storage data.
 type StorageEncoder interface {
 	Encode() ([]byte, error)
 }
@@ -31,18 +31,18 @@ func encodeUint(i uint64) ([]byte, error) {
 	}
 	return rlp.EncodeToBytes(i)
 }
-func encodeBytesTrimed(bs []byte) ([]byte, error) {
+func encodeBytesTrimmed(bs []byte) ([]byte, error) {
 	var i int
 	for ; i < len(bs); i++ {
 		if bs[i] != 0 {
 			break
 		}
 	}
-	trimed := bs[i:]
-	if len(trimed) == 0 {
+	trimmed := bs[i:]
+	if len(trimmed) == 0 {
 		return nil, nil
 	}
-	return rlp.EncodeToBytes(trimed)
+	return rlp.EncodeToBytes(trimmed)
 }
 
 func encodeString(str string) ([]byte, error) {
@@ -55,13 +55,13 @@ func encodeString(str string) ([]byte, error) {
 func encodeStorage(val interface{}) ([]byte, error) {
 	switch v := val.(type) {
 	case thor.Bytes32:
-		return encodeBytesTrimed(v[:])
+		return encodeBytesTrimmed(v[:])
 	case *thor.Bytes32:
-		return encodeBytesTrimed(v[:])
+		return encodeBytesTrimmed(v[:])
 	case thor.Address:
-		return encodeBytesTrimed(v[:])
+		return encodeBytesTrimmed(v[:])
 	case *thor.Address:
-		return encodeBytesTrimed(v[:])
+		return encodeBytesTrimmed(v[:])
 	case string:
 		return encodeString(v)
 	case *string:

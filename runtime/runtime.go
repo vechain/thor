@@ -106,7 +106,7 @@ func (rt *Runtime) execute(
 		},
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
-			builtin.Prototype.Native(rt.state).Bind(contractAddr).SetMaster(caller)
+			rt.state.SetMaster(contractAddr, caller)
 		},
 		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
 			amount := rt.state.GetEnergy(contractAddr, rt.blockTime)
