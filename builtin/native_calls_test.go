@@ -98,6 +98,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Equal(t, stateRoot, newStateRoot)
 	}
 
+	// fmt.Println(vmout)
 	assert.Equal(t, c.vmerr, vmout.VMErr)
 
 	if c.output != nil {
@@ -120,7 +121,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 }
 
 func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*vm.Event {
-	nativeABI := builtin.Prototype.InterfaceABI
+	nativeABI := builtin.Prototype.ThorLibABI
 
 	mustEventByName := func(name string) *abi.Event {
 		if event, found := nativeABI.EventByName(name); found {
@@ -346,45 +347,12 @@ func TestEnergyNative(t *testing.T) {
 }
 
 func TestPrototypeNative(t *testing.T) {
-
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
-
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Prototype.NativeABI(),
-		to:     builtin.Prototype.Address,
-		caller: builtin.Prototype.Address,
-	}
-
-	var addr = thor.BytesToAddress([]byte("addr"))
-
-	test.Case("native_contractify", addr).
-		Assert(t).
-		Caller(thor.BytesToAddress([]byte("other"))).
-		ShouldVMError(evm.ErrExecutionReverted()).
-		Assert(t)
-
-	test.Case("native_contractify", builtin.Prototype.Address).
-		Assert(t).
-		Caller(thor.BytesToAddress([]byte("other"))).
-		ShouldVMError(evm.ErrExecutionReverted()).
-		Assert(t)
-
-	assert.True(t, st.GetCodeHash(addr).IsZero())
-	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
-}
-func TestPrototypeInterface(t *testing.T) {
 	var (
 		acc1     = thor.BytesToAddress([]byte("acc1"))
 		acc2     = thor.BytesToAddress([]byte("acc2"))
 		contract thor.Address
 
-		anyCaller = thor.BytesToAddress([]byte("any"))
-		master    = thor.BytesToAddress([]byte("master"))
+		master = thor.BytesToAddress([]byte("master"))
 
 		user = thor.BytesToAddress([]byte("user"))
 
@@ -397,6 +365,7 @@ func TestPrototypeInterface(t *testing.T) {
 	st, _ := state.New(thor.Bytes32{}, kv)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+
 	rt := runtime.New(st, thor.Address{}, 1, 0, 0)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
@@ -406,150 +375,103 @@ func TestPrototypeInterface(t *testing.T) {
 	energy := big.NewInt(1000)
 	st.SetEnergy(acc1, energy, 0)
 
-	chkpt := st.NewCheckpoint()
-
 	test := &ctest{
-		rt:  rt,
-		abi: builtin.Prototype.InterfaceABI,
+		rt:     rt,
+		abi:    builtin.Prototype.NativeABI(),
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
 	}
 
-	test.Case("$master").
-		To(acc1).Caller(anyCaller).
+	test.Case("native_master", acc1).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("$master").
-		To(contract).Caller(anyCaller).
+	test.Case("native_master", contract).
 		ShouldOutput(master).
 		Assert(t)
 
-	test.Case("$set_master", acc1).
-		To(acc1).Caller(acc1).
+	test.Case("native_setMaster", acc1, acc1).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc1[:])})).
 		Assert(t)
 
-	test.Case("$has_code").
-		To(acc1).Caller(anyCaller).
+	test.Case("native_hasCode", acc1).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$has_code").
-		To(contract).Caller(anyCaller).
+	test.Case("native_hasCode", contract).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(energy).
-		Assert(t)
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
-
-	test.Case("$transfer_energy", big.NewInt(1)).
-		To(acc2).Caller(acc1).
+	test.Case("native_moveEnergyTo", acc1, acc2, big.NewInt(1)).
 		ShouldOutput().
 		Assert(t)
 
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(big.NewInt(1)).
-		Assert(t)
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(new(big.Int).Sub(energy, big.NewInt(1))).
-		Assert(t)
-
-	test.Case("$move_energy_to", acc1, big.NewInt(1)).
-		To(acc2).Caller(acc2).
-		ShouldOutput().
-		Assert(t)
-
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(energy).
-		Assert(t)
-
-	test.Case("$set_user_plan", credit, recoveryRate).
-		To(contract).Caller(master).
+	test.Case("native_setUserPlan", contract, credit, recoveryRate).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$SetUserPlan", contract, nil, credit, recoveryRate)).
 		Assert(t)
 
-	test.Case("$user_plan").
-		To(contract).Caller(anyCaller).
+	test.Case("native_userPlan", contract).
 		ShouldOutput(credit, recoveryRate).
 		Assert(t)
 
-	test.Case("$is_user", user).
-		To(contract).Caller(anyCaller).
+	test.Case("native_isUser", contract, user).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$add_user", user).
-		To(contract).Caller(master).
+
+	test.Case("native_addUser", contract, user).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, true)).
 		Assert(t)
-	test.Case("$is_user", user).
-		To(contract).Caller(anyCaller).
+
+	test.Case("native_isUser", contract, user).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("$user_credit", user).
-		To(contract).Caller(anyCaller).
+	test.Case("native_userCredit", contract, user).
 		ShouldOutput(credit).
 		Assert(t)
-	test.Case("$remove_user", user).
-		To(contract).Caller(master).
+
+	test.Case("native_removeUser", contract, user).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, false)).
 		Assert(t)
-	test.Case("$user_credit", user).
-		To(contract).Caller(anyCaller).
+
+	test.Case("native_userCredit", contract, user).
 		ShouldOutput(&big.Int{}).
 		Assert(t)
 
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+	test.Case("native_isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$sponsor", true).
-		To(contract).Caller(sponsor).
+
+	test.Case("native_sponsor", contract, sponsor, true).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$Sponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor.Bytes())}, true)).
 		Assert(t)
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+
+	test.Case("native_isSponsor", contract, sponsor).
 		ShouldOutput(true).
 		Assert(t)
-	test.Case("$current_sponsor").
-		To(contract).Caller(anyCaller).
+
+	test.Case("native_currentSponsor", contract).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("$select_sponsor", sponsor).
-		To(contract).Caller(master).
+	test.Case("native_selectSponsor", contract, sponsor).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$SelectSponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor[:])})).
 		Assert(t)
-	test.Case("$sponsor", false).
-		To(contract).Caller(sponsor).
+
+	test.Case("native_sponsor", contract, sponsor, false).
 		ShouldOutput().
 		Assert(t)
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+
+	test.Case("native_isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
 
-	// test permission
-	st.RevertTo(chkpt)
-
-	// test log
+	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
 }
 
 func TestExtensionNative(t *testing.T) {

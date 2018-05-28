@@ -58,7 +58,7 @@ func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
 	b.state.SetStructuredStorage(b.selfAddr, key, val)
 }
 
-func (b *Binding) Master() (master thor.Address) {
+func (b *Binding)  Master() (master thor.Address) {
 	b.getStorage(b.masterKey(), &master)
 	return
 }

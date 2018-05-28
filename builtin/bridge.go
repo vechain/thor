@@ -59,7 +59,7 @@ func (b *bridge) UseGas(gas uint64) {
 	}
 }
 
-func (b *bridge) Log(event *abi.Event, topics []thor.Bytes32, args ...interface{}) {
+func (b *bridge) Log(event *abi.Event, address thor.Address, topics []thor.Bytes32, args ...interface{}) {
 	data, err := event.Encode(args...)
 	if err != nil {
 		panic(errors.Wrap(err, "encode native event"))
@@ -72,7 +72,7 @@ func (b *bridge) Log(event *abi.Event, topics []thor.Bytes32, args ...interface{
 		etopics = append(etopics, common.Hash(t))
 	}
 	b.VM.StateDB.AddLog(&types.Log{
-		Address: common.Address(b.Contract.Address()),
+		Address: common.Address(address),
 		Topics:  etopics,
 		Data:    data,
 	})
