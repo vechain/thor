@@ -29,6 +29,8 @@ const (
 	MaxBlockProposers uint64 = 101
 
 	TolerableBlockPackingTime = 100 * time.Millisecond // the indicator to adjust target block gas limit
+
+	MaxBackTrackingBlockNumber = 65535
 )
 
 // Keys of governance params.

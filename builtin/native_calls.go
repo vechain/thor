@@ -28,6 +28,11 @@ type methodKey struct {
 	abi.MethodID
 }
 
+const (
+	blake2b256WordGas uint64 = 3
+	blake2b256Gas     uint64 = 15
+)
+
 var privateMethods = make(map[methodKey]*nativeMethod)
 
 func initParamsMethods() {
@@ -258,8 +263,68 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		// native_balanceAtBlock
-		// native_energyAtBlock
+		{"native_balanceAtBlock", func(env *environment) []interface{} {
+			var args struct {
+				Target      common.Address
+				BlockNumber uint32
+			}
+			env.ParseArgs(&args)
+			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+
+			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
+			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+				return []interface{}{0}
+			}
+
+			// blocknumber == current blocknumber
+			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+				val := env.state.GetBalance(thor.Address(args.Target))
+				env.UseGas(ethparams.SloadGas)
+				return []interface{}{val}
+			}
+
+			blockID := env.seeker.GetID(args.BlockNumber)
+			env.UseGas(ethparams.SloadGas)
+			header := env.seeker.GetHeader(blockID)
+			env.UseGas(3 * ethparams.SloadGas)
+			state := env.state.Spawn(header.StateRoot())
+			env.UseGas(ethparams.SloadGas)
+			val := state.GetBalance(thor.Address(args.Target))
+			env.UseGas(ethparams.SloadGas)
+
+			return []interface{}{val}
+		}},
+		{"native_energyAtBlock", func(env *environment) []interface{} {
+			var args struct {
+				Target      common.Address
+				BlockNumber uint32
+			}
+			env.ParseArgs(&args)
+			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+
+			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
+			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+				return []interface{}{0}
+			}
+
+			// blocknumber == current blocknumber
+			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+				val := env.state.GetEnergy(thor.Address(args.Target), env.BlockTime())
+				env.UseGas(ethparams.SloadGas)
+				return []interface{}{val}
+			}
+
+			blockID := env.seeker.GetID(args.BlockNumber)
+			env.UseGas(ethparams.SloadGas)
+			header := env.seeker.GetHeader(blockID)
+			env.UseGas(3 * ethparams.SloadGas)
+			state := env.state.Spawn(header.StateRoot())
+			env.UseGas(ethparams.SloadGas)
+			val := state.GetEnergy(thor.Address(args.Target), header.Timestamp())
+			env.UseGas(ethparams.SloadGas)
+
+			return []interface{}{val}
+		}},
 		{"native_hasCode", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
@@ -281,7 +346,38 @@ func initPrototypeMethods() {
 
 			return []interface{}{val}
 		}},
-		// native_storageAtBlock
+		{"native_storageAtBlock", func(env *environment) []interface{} {
+			var args struct {
+				Target      common.Address
+				Key         thor.Bytes32
+				BlockNumber uint32
+			}
+			env.ParseArgs(&args)
+			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+
+			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
+			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+				return []interface{}{0}
+			}
+
+			// blocknumber == current blocknumber
+			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+				val := env.state.GetStorage(thor.Address(args.Target), args.Key)
+				env.UseGas(ethparams.SloadGas)
+				return []interface{}{val}
+			}
+
+			blockID := env.seeker.GetID(args.BlockNumber)
+			env.UseGas(ethparams.SloadGas)
+			header := env.seeker.GetHeader(blockID)
+			env.UseGas(3 * ethparams.SloadGas)
+			state := env.state.Spawn(header.StateRoot())
+			env.UseGas(ethparams.SloadGas)
+			val := state.GetStorage(thor.Address(args.Target), args.Key)
+			env.UseGas(ethparams.SloadGas)
+
+			return []interface{}{val}
+		}},
 		{"native_userPlan", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
@@ -434,11 +530,6 @@ func initPrototypeMethods() {
 		}
 	}
 }
-
-const (
-	blake2b256WordGas uint64 = 3
-	blake2b256Gas     uint64 = 15
-)
 
 func initExtensionMethods() {
 	defines := []struct {
