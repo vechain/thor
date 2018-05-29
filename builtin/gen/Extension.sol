@@ -15,9 +15,25 @@ contract Extension {
     function blockID(uint32 num) public view returns(bytes32) {
         return ExtensionNative(this).native_getBlockIDByNum(num);
     }
+
+    function totalsocre(uint32 num) public view returns(bytes32) {
+        return ExtensionNative(this).native_getTotalScoreByNum(num);
+    }
+
+    function time(uint32 num) public view returns(bytes32) {
+        return ExtensionNative(this).native_getTimestampByNum(num);
+    }
+
+    function proposer(uint32 num) public view returns(bytes32) {
+        return ExtensionNative(this).native_getProposerByNum(num);
+    }
 }
 
 contract ExtensionNative {
     function native_blake2b256(bytes _value) public view returns(bytes32);
     function native_getBlockIDByNum(uint32 num) public view returns(bytes32);
+    function native_getTotalScoreByNum(uint32 num) public view returns(bytes32);
+    function native_getTimestampByNum(uint32 num) public view returns(bytes32);
+    function native_getProposerByNum(uint32 num)public view returns(bytes32);
+
 }

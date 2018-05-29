@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 )
 
@@ -58,8 +59,8 @@ func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 	return prototype.New(p.Address, state)
 }
 
-func (e *extensionContract) Native(state *state.State) *extension.Extension {
-	return extension.New(e.Address, state)
+func (e *extensionContract) Native(state *state.State, seeker *chain.Seeker) *extension.Extension {
+	return extension.New(e.Address, state, seeker)
 }
 
 func mustLoadThorLibABI() *abi.ABI {

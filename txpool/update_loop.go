@@ -48,6 +48,7 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 
 	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	bestBlockNum := bestBlock.Header().Number()
+	bestBlockID := bestBlock.Header().ID()
 
 	//can be pendinged txObjects
 	for _, obj := range allObjs {
@@ -73,7 +74,7 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 			}
 
 			obj.status = state
-			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, builtin.Extension.Native(st).GetBlockIDByNum)
+			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, builtin.Extension.Native(st, pool.chain.NewSeeker(bestBlockID)).GetBlockIDByNum)
 			pool.entry.save(obj)
 		}
 
