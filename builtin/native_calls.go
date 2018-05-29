@@ -230,11 +230,6 @@ func initPrototypeMethods() {
 	sponsorEvent := mustEventByName("$Sponsor")
 	selectSponsorEvent := mustEventByName("$SelectSponsor")
 
-	energyTransferMethod, ok := Energy.ABI.MethodByName("transfer")
-	if !ok {
-		panic("transfer method not found")
-	}
-
 	defines := []struct {
 		name string
 		run  func(env *environment) []interface{}
@@ -274,7 +269,18 @@ func initPrototypeMethods() {
 
 			return []interface{}{hasCode}
 		}},
-		// native_storageAt
+		{"native_storage", func(env *environment) []interface{} {
+			var args struct {
+				Target common.Address
+				Key    thor.Bytes32
+			}
+			env.ParseArgs(&args)
+
+			val := env.state.GetStorage(thor.Address(args.Target), args.Key)
+			env.UseGas(ethparams.SloadGas)
+
+			return []interface{}{val}
+		}},
 		// native_storageAtBlock
 		{"native_userPlan", func(env *environment) []interface{} {
 			var target common.Address
