@@ -92,7 +92,11 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	assert.Nil(t, err, "should encode input")
 
 	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
-		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{}, &big.Int{})
+		0, math.MaxUint64, &builtin.TransactionEnv{
+			ID:         thor.Bytes32{},
+			Origin:     c.caller,
+			GasPrice:   &big.Int{},
+			ProvedWork: &big.Int{}})
 
 	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
@@ -360,7 +364,6 @@ func TestEnergyNative(t *testing.T) {
 func TestPrototypeNative(t *testing.T) {
 	var (
 		acc1     = thor.BytesToAddress([]byte("acc1"))
-		acc2     = thor.BytesToAddress([]byte("acc2"))
 		contract thor.Address
 
 		master = thor.BytesToAddress([]byte("master"))
@@ -370,6 +373,9 @@ func TestPrototypeNative(t *testing.T) {
 		credit       = big.NewInt(1000)
 		recoveryRate = big.NewInt(10)
 		sponsor      = thor.BytesToAddress([]byte("sponsor"))
+
+		key   = thor.BytesToBytes32([]byte("account-key"))
+		value = thor.BytesToBytes32([]byte("account-value"))
 	)
 
 	kv, _ := lvldb.NewMem()
@@ -379,11 +385,16 @@ func TestPrototypeNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+	st.SetStorage(thor.Address(acc1), key, value)
 
 	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{}, &big.Int{})
+	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &builtin.TransactionEnv{
+		ID:         thor.Bytes32{},
+		Origin:     master,
+		GasPrice:   &big.Int{},
+		ProvedWork: &big.Int{}})
 	contract = *out.ContractAddress
 
 	energy := big.NewInt(1000)
@@ -409,15 +420,16 @@ func TestPrototypeNative(t *testing.T) {
 		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc1[:])})).
 		Assert(t)
 
+	test.Case("native_master", acc1).
+		ShouldOutput(acc1).
+		Assert(t)
+
 	test.Case("native_hasCode", acc1).
 		ShouldOutput(false).
 		Assert(t)
+
 	test.Case("native_hasCode", contract).
 		ShouldOutput(true).
-		Assert(t)
-
-	test.Case("native_moveEnergyTo", acc1, acc2, big.NewInt(1)).
-		ShouldOutput().
 		Assert(t)
 
 	test.Case("native_setUserPlan", contract, credit, recoveryRate).
@@ -483,6 +495,10 @@ func TestPrototypeNative(t *testing.T) {
 
 	test.Case("native_isSponsor", contract, sponsor).
 		ShouldOutput(false).
+		Assert(t)
+
+	test.Case("native_storage", acc1, key).
+		ShouldOutput(value).
 		Assert(t)
 
 	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())

@@ -31,10 +31,6 @@ type Binding struct {
 	target   thor.Address
 }
 
-func (b *Binding) masterKey() thor.Bytes32 {
-	return thor.Blake2b(b.target.Bytes(), []byte("master"))
-}
-
 func (b *Binding) userKey(user thor.Address) thor.Bytes32 {
 	return thor.Blake2b(b.target.Bytes(), user.Bytes(), []byte("user"))
 }
@@ -58,13 +54,13 @@ func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
 	b.state.SetStructuredStorage(b.selfAddr, key, val)
 }
 
-func (b *Binding)  Master() (master thor.Address) {
-	b.getStorage(b.masterKey(), &master)
+func (b *Binding) Master() (master thor.Address) {
+	master = b.state.GetMaster(b.target)
 	return
 }
 
 func (b *Binding) SetMaster(master thor.Address) {
-	b.setStorage(b.masterKey(), &master)
+	b.state.SetMaster(b.target, master)
 }
 
 func (b *Binding) IsUser(user thor.Address) bool {
