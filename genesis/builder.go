@@ -7,7 +7,6 @@ package genesis
 
 import (
 	"math"
-	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
@@ -85,7 +84,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 	rt := runtime.New(nil, state, thor.Address{}, 0, b.timestamp, b.gasLimit)
 
 	for _, call := range b.calls {
-		out := rt.Call(call.clause, 0, math.MaxUint64, call.caller, &big.Int{}, thor.Bytes32{}, &big.Int{})
+		out := rt.Call(call.clause, 0, math.MaxUint64, nil)
 		if out.VMErr != nil {
 			return nil, nil, errors.Wrap(out.VMErr, "vm")
 		}

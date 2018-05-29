@@ -19,13 +19,21 @@ import (
 	"github.com/vechain/thor/vm/evm"
 )
 
+// TransactionEnv transaction environment.
+type TransactionEnv struct {
+	ID         thor.Bytes32
+	Origin     thor.Address
+	GasPrice   *big.Int
+	ProvedWork *big.Int
+}
+
 type environment struct {
-	abi          *abi.Method
-	seeker       *chain.Seeker
-	state        *state.State
-	evm          *evm.EVM
-	contract     *evm.Contract
-	txProvedWork *big.Int
+	abi      *abi.Method
+	seeker   *chain.Seeker
+	state    *state.State
+	evm      *evm.EVM
+	contract *evm.Contract
+	txEnv    *TransactionEnv
 }
 
 func newEnvironment(
@@ -34,15 +42,15 @@ func newEnvironment(
 	state *state.State,
 	evm *evm.EVM,
 	contract *evm.Contract,
-	txProvedWork *big.Int,
+	txEnv *TransactionEnv,
 ) *environment {
 	return &environment{
-		abi:          abi,
-		seeker:       seeker,
-		state:        state,
-		evm:          evm,
-		contract:     contract,
-		txProvedWork: txProvedWork,
+		abi:      abi,
+		seeker:   seeker,
+		state:    state,
+		evm:      evm,
+		contract: contract,
+		txEnv:    txEnv,
 	}
 }
 

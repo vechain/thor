@@ -131,3 +131,13 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (paye
 	}
 	return thor.Address{}, nil, errors.New("insufficient energy")
 }
+
+// ToEnv create a tx env object.
+func (r *ResolvedTransaction) ToEnv(blockNumber uint32, getID func(uint32) thor.Bytes32) *builtin.TransactionEnv {
+	return &builtin.TransactionEnv{
+		ID:         r.tx.ID(),
+		Origin:     r.Origin,
+		GasPrice:   r.GasPrice,
+		ProvedWork: r.tx.ProvedWork(blockNumber, getID),
+	}
+}
