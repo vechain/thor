@@ -228,7 +228,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, builtin.Extension.Native(rt.state).GetBlockIDByNum)
+	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.Seeker().GetID)
 
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)

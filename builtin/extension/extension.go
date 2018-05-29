@@ -6,21 +6,22 @@
 package extension
 
 import (
-	"encoding/binary"
-
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
 // Extension implements native methods of `Extension` contract.
 type Extension struct {
-	addr  thor.Address
-	state *state.State
+	addr   thor.Address
+	state  *state.State
+	seeker *chain.Seeker
 }
 
 // New create a new instance.
-func New(addr thor.Address, state *state.State) *Extension {
-	return &Extension{addr, state}
+func New(addr thor.Address, state *state.State, seeker *chain.Seeker) *Extension {
+	return &Extension{addr, state, seeker}
 }
 
 // Blake2b256 implemented as a native contract.
@@ -33,15 +34,13 @@ func (e *Extension) Blake2b256(data ...[]byte) (b32 thor.Bytes32) {
 	return
 }
 
-// SetBlockNumAndID implements storing block num and id into contract storage.
-func (e *Extension) SetBlockNumAndID(id thor.Bytes32) {
-	key := thor.BytesToBytes32(id[:4])
-	e.state.SetStorage(e.addr, key, id)
+// GetBlockIDByNum implements getting block id by give num.
+func (e *Extension) GetBlockIDByNum(num uint32) thor.Bytes32 {
+	return e.seeker.GetID(num)
 }
 
-// GetBlockIDByNum implements getting block id by num.
-func (e *Extension) GetBlockIDByNum(num uint32) thor.Bytes32 {
-	var key thor.Bytes32
-	binary.BigEndian.PutUint32(key[28:], num)
-	return e.state.GetStorage(e.addr, key)
+// GetBlockHeaderByNum implements getting block header by given num.
+func (e *Extension) GetBlockHeaderByNum(num uint32) *block.Header {
+	id := e.GetBlockIDByNum(num)
+	return e.seeker.GetHeader(id)
 }

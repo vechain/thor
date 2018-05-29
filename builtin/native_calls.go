@@ -449,15 +449,37 @@ func initExtensionMethods() {
 			var data []byte
 			env.ParseArgs(&data)
 			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
-			output := Extension.Native(env.state).Blake2b256(data)
+			output := Extension.Native(env.state, env.seeker).Blake2b256(data)
 			return []interface{}{output}
 		}},
 		{"native_getBlockIDByNum", func(env *environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			output := Extension.Native(env.state).GetBlockIDByNum(blockNum)
+			output := Extension.Native(env.state, env.seeker).GetBlockIDByNum(blockNum)
 			return []interface{}{output}
+		}},
+		{"native_getTotalScoreByNum", func(env *environment) []interface{} {
+			var blockNum uint32
+			env.ParseArgs(&blockNum)
+			env.UseGas(ethparams.SloadGas)
+			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			return []interface{}{header.TotalScore()}
+		}},
+		{"native_getTimestampByNum", func(env *environment) []interface{} {
+			var blockNum uint32
+			env.ParseArgs(&blockNum)
+			env.UseGas(ethparams.SloadGas)
+			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			return []interface{}{header.Timestamp()}
+		}},
+		{"native_getProposerByNum", func(env *environment) []interface{} {
+			var blockNum uint32
+			env.ParseArgs(&blockNum)
+			env.UseGas(ethparams.SloadGas)
+			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			proposer, _ := header.Signer()
+			return []interface{}{proposer}
 		}},
 	}
 
