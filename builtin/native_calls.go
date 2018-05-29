@@ -265,32 +265,6 @@ func initPrototypeMethods() {
 		}},
 		// native_balanceAtBlock
 		// native_energyAtBlock
-		{"native_moveEnergyTo", func(env *environment) []interface{} {
-			var args struct {
-				Target common.Address
-				To     common.Address
-				Amount *big.Int
-			}
-			env.ParseArgs(&args)
-
-			transferData, err := energyTransferMethod.EncodeInput(args.To, args.Amount)
-			if err != nil {
-				panic(err)
-			}
-			_, leftOverGas, vmerr := env.evm.Call(
-				evm.AccountRef(thor.Address(args.Target)),
-				common.Address(Energy.Address),
-				transferData,
-				env.contract.Gas,
-				&big.Int{},
-			)
-			env.UseGas(env.contract.Gas - leftOverGas)
-			if vmerr != nil {
-				env.Stop(vmerr)
-			}
-
-			return nil
-		}},
 		{"native_hasCode", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
@@ -301,6 +275,7 @@ func initPrototypeMethods() {
 			return []interface{}{hasCode}
 		}},
 		// native_storageAt
+		// native_storageAtBlock
 		{"native_userPlan", func(env *environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)

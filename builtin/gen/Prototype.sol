@@ -21,25 +21,24 @@ contract Prototype {
         PrototypeNative(this).native_setMaster(target, newMaster);
     }
 
-    function $balanceAtBlock(address target, uint32 blockNumber) public view returns(uint256 amount){
+    function $balance(address target, uint32 blockNumber) public view returns(uint256 amount){
         return  PrototypeNative(this).native_balanceAtBlock(target, blockNumber);
     }
 
-    function $energyAtBlock(address target, uint32 blockNumber) public view returns(uint256 amount){
+    function $energy(address target, uint32 blockNumber) public view returns(uint256 amount){
         return  PrototypeNative(this).native_energyAtBlock(target, blockNumber);
-    }
-
-    function $moveEnergyTo(address target, address to, uint256 amount) public{
-        require($master(target) == msg.sender || target == msg.sender);
-        PrototypeNative(this).native_moveEnergyTo(target, to, amount);
     }
 
     function $hasCode(address target) public view returns(bool){
         return PrototypeNative(this).native_hasCode(target);
     }
 
-    function $storageAt(address target, bytes32 key) public view returns(bytes32 value){
-        return PrototypeNative(this).native_storageAt(target, key);
+    function $storage(address target, bytes32 key) public view returns(bytes32 value){
+        return PrototypeNative(this).native_storage(target, key);
+    }
+
+    function $storage(address target, bytes32 key, uint32 blockNumber) public view returns(bytes32 value){
+        return PrototypeNative(this).native_storageAtBlock(target, key, blockNumber);
     }
 
     function $userPlan(address target) public view returns(uint256 credit, uint256 recoveryRate){
@@ -94,9 +93,9 @@ contract PrototypeNative {
 
     function native_balanceAtBlock(address target, uint32 blockNumber) public view returns(uint256 amount);
     function native_energyAtBlock(address target, uint32 blockNumber) public view returns(uint256 amount);
-    function native_moveEnergyTo(address target, address to, uint256 amount) public;
     function native_hasCode(address target) public view returns(bool);
-    function native_storageAt(address target, bytes32 key) public view returns(bytes32 value);
+    function native_storage(address target, bytes32 key) public view returns(bytes32 value);
+    function native_storageAtBlock(address target, bytes32 key, uint32 blockNumber) public view returns(bytes32 value);
 
     function native_userPlan(address target) public view returns(uint256 credit, uint256 recoveryRate);
     function native_setUserPlan(address target, uint256 credit, uint256 recoveryRate) public;
@@ -118,80 +117,84 @@ library thor {
     address constant prototypeContract = uint160(bytes9("Prototype"));
     address constant energyContract = uint160(bytes6("Energy"));
 
-    function $master(address receiver) public view returns(address master){
+    function $master(address receiver) internal view returns(address master){
         return Prototype(prototypeContract).$master(receiver);
     }
 
     /// @param newMaster new master to be set.
-    function $setMaster(address receiver, address newMaster) public {
+    function $setMaster(address receiver, address newMaster) internal {
         Prototype(prototypeContract).$setMaster(receiver, newMaster);
     }
 
-    function $balanceAtBlock(address receiver, uint32 blockNumber) public view returns(uint256 amount){
-        return Prototype(prototypeContract).$balanceAtBlock(receiver, blockNumber);
+    function $balance(address receiver, uint32 blockNumber) internal view returns(uint256 amount){
+        return Prototype(prototypeContract).$balance(receiver, blockNumber);
     }
 
-    function $energy(address receiver) public view returns(uint256 amount){
+    function $energy(address receiver) internal view returns(uint256 amount){
         return Energy(energyContract).balanceOf(receiver);
     }
 
-    function $energyAtBlock(address receiver, uint32 blockNumber) public view returns(uint256 amount){
-        return Prototype(prototypeContract).$energyAtBlock(receiver, blockNumber);
+    function $energy(address receiver, uint32 blockNumber) internal view returns(uint256 amount){
+        return Prototype(prototypeContract).$energy(receiver, blockNumber);
     }
 
-    function $transferEnergy(address receiver, uint256 amount) public{
+    function $transferEnergy(address receiver, uint256 amount) internal{
         Energy(energyContract).transfer(receiver, amount);
     }
 
-    function $moveEnergyTo(address receiver, address to, uint256 amount) public{
-        Prototype(prototypeContract).$moveEnergyTo(receiver, to, amount);
+    function $moveEnergyTo(address receiver, address to, uint256 amount) internal{
+        Energy(energyContract).move(receiver, to, amount);
     }
 
-    function $hasCode(address receiver) public view returns(bool){
+    function $hasCode(address receiver) internal view returns(bool){
         return Prototype(prototypeContract).$hasCode(receiver);
     }
 
-    function $storageAt(address receiver, bytes32 key) public view returns(bytes32 value){
-        return Prototype(prototypeContract).$storageAt(receiver, key);
+    function $storage(address receiver, bytes32 key, uint32 blockNumber) internal view returns(bytes32 value){
+        return Prototype(prototypeContract).$storage(receiver, key, blockNumber);
     }
 
-    function $userPlan(address receiver) public view returns(uint256 credit, uint256 recoveryRate){
+    function $storage(address receiver, bytes32 key) internal view returns(bytes32 value){
+        return Prototype(prototypeContract).$storage(receiver, key);
+    }
+
+    function $userPlan(address receiver) internal view returns(uint256 credit, uint256 recoveryRate){
         return Prototype(prototypeContract).$userPlan(receiver);
     }
 
-    function $setUserPlan(address receiver, uint256 credit, uint256 recoveryRate) public{
+    function $setUserPlan(address receiver, uint256 credit, uint256 recoveryRate) internal{
         Prototype(prototypeContract).$setUserPlan(receiver, credit, recoveryRate);
     }
 
-    function $isUser(address receiver, address user) public view returns(bool){
+    function $isUser(address receiver, address user) internal view returns(bool){
         return Prototype(prototypeContract).$isUser(receiver, user);
     }
 
-    function $userCredit(address receiver, address user) public view returns(uint256 remainedCredit){
+    function $userCredit(address receiver, address user) internal view returns(uint256 remainedCredit){
         return Prototype(prototypeContract).$userCredit(receiver, user);
     }
 
-    function $addUser(address receiver, address user) public{
+    function $addUser(address receiver, address user) internal{
         Prototype(prototypeContract).$addUser(receiver, user);
     }
 
-    function $removeUser(address receiver, address user) public{
+    function $removeUser(address receiver, address user) internal{
         Prototype(prototypeContract).$removeUser(receiver, user);
     }
 
-    function $sponsor(address receiver, bool yesOrNo) public{
+    function $sponsor(address receiver, bool yesOrNo) internal{
         Prototype(prototypeContract).$sponsor(receiver, yesOrNo);
     }
 
-    function $isSponsor(address receiver, address sponsor) public view returns(bool){
+    function $isSponsor(address receiver, address sponsor) internal view returns(bool){
         return Prototype(prototypeContract).$isSponsor(receiver, sponsor);
     }
 
-    function $selectSponsor(address receiver, address sponsor) public{
+    function $selectSponsor(address receiver, address sponsor) internal{
         Prototype(prototypeContract).$selectSponsor(receiver, sponsor);
     }
     
-    function $currentSponsor(address receiver) public view returns(address){
+    function $currentSponsor(address receiver) internal view returns(address){
         return Prototype(prototypeContract).$currentSponsor(receiver);
     }
 
