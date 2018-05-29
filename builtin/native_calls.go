@@ -508,7 +508,7 @@ func HandleNativeCall(
 	vm *evm.EVM,
 	contract *evm.Contract,
 	readonly bool,
-	txProvedWork *big.Int,
+	txEnv *TransactionEnv,
 ) func() ([]byte, error) {
 	methodID, err := abi.ExtractMethodID(contract.Input)
 	if err != nil {
@@ -537,7 +537,7 @@ func HandleNativeCall(
 		}
 	}
 
-	env := newEnvironment(method.abi, seeker, state, vm, contract, txProvedWork)
+	env := newEnvironment(method.abi, seeker, state, vm, contract, txEnv)
 	return func() (data []byte, err error) {
 		defer func() {
 			if e := recover(); e != nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -123,9 +124,13 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 		return nil, err
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
-	gp := big.Int(*body.GasPrice)
+	gp := (*big.Int)(body.GasPrice)
 	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit())
-	vmout := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{}, &big.Int{})
+	vmout := rt.Call(clause, 0, body.Gas, &builtin.TransactionEnv{
+		Origin:     body.Caller,
+		GasPrice:   gp,
+		ProvedWork: &big.Int{}})
+
 	if err := rt.Seeker().Err(); err != nil {
 		return nil, err
 	}

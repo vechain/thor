@@ -79,10 +79,7 @@ func (rt *Runtime) execute(
 	clause *Tx.Clause,
 	index uint32,
 	gas uint64,
-	txOrigin thor.Address,
-	txGasPrice *big.Int,
-	txID thor.Bytes32,
-	txProvedWork *big.Int,
+	txEnv *builtin.TransactionEnv,
 	isStatic bool,
 ) *vm.Output {
 	to := clause.To()
@@ -95,14 +92,14 @@ func (rt *Runtime) execute(
 		Time:        rt.blockTime,
 		GasLimit:    rt.blockGasLimit,
 
-		Origin:   txOrigin,
-		GasPrice: txGasPrice,
-		TxID:     txID,
+		Origin:   txEnv.Origin,
+		GasPrice: txEnv.GasPrice,
+		TxID:     txEnv.ID,
 
 		GetHash:     rt.seeker.GetID,
 		ClauseIndex: index,
 		InterceptContractCall: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
-			return builtin.HandleNativeCall(rt.seeker, rt.state, evm, contract, readonly, txProvedWork)
+			return builtin.HandleNativeCall(rt.seeker, rt.state, evm, contract, readonly, txEnv)
 		},
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
@@ -143,11 +140,11 @@ func (rt *Runtime) execute(
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
 	if to == nil {
-		return env.Create(txOrigin, clause.Data(), gas, clause.Value())
+		return env.Create(txEnv.Origin, clause.Data(), gas, clause.Value())
 	} else if isStatic {
-		return env.StaticCall(txOrigin, *to, clause.Data(), gas)
+		return env.StaticCall(txEnv.Origin, *to, clause.Data(), gas)
 	} else {
-		return env.Call(txOrigin, *to, clause.Data(), gas, clause.Value())
+		return env.Call(txEnv.Origin, *to, clause.Data(), gas, clause.Value())
 	}
 }
 
@@ -156,12 +153,9 @@ func (rt *Runtime) Call(
 	clause *Tx.Clause,
 	index uint32,
 	gas uint64,
-	txOrigin thor.Address,
-	txGasPrice *big.Int,
-	txID thor.Bytes32,
-	txProvedWork *big.Int,
+	txEnv *builtin.TransactionEnv,
 ) *vm.Output {
-	return rt.execute(clause, index, gas, txOrigin, txGasPrice, txID, txProvedWork, false)
+	return rt.execute(clause, index, gas, txEnv, false)
 }
 
 // ExecuteTransaction executes a transaction.
@@ -185,9 +179,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
 
-	txProvedWork := tx.ProvedWork(rt.blockNumber, rt.seeker.GetID)
+	txEnv := resolvedTx.ToEnv(rt.blockNumber, rt.seeker.GetID)
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput := rt.execute(clause, uint32(i), leftOverGas, resolvedTx.Origin, resolvedTx.GasPrice, tx.ID(), txProvedWork, false)
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, txEnv, false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
