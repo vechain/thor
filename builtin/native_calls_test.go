@@ -8,12 +8,14 @@ package builtin_test
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -104,8 +106,6 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Nil(t, err, "should hash state")
 		assert.Equal(t, stateRoot, newStateRoot)
 	}
-
-	// fmt.Println(vmout)
 	assert.Equal(t, c.vmerr, vmout.VMErr)
 
 	if c.output != nil {
@@ -380,15 +380,16 @@ func TestPrototypeNative(t *testing.T) {
 	)
 
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
 	gene, _ := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	c, _ := chain.New(kv, genesisBlock)
-	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 	st.SetStorage(thor.Address(acc1), key, value)
+	st.SetBalance(thor.Address(acc1), big.NewInt(1))
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{
+		Time: genesisBlock.Header().Timestamp(),
+	})
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
 	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
@@ -399,7 +400,7 @@ func TestPrototypeNative(t *testing.T) {
 	contract = *out.ContractAddress
 
 	energy := big.NewInt(1000)
-	st.SetEnergy(acc1, energy, 0)
+	st.SetEnergy(acc1, energy, genesisBlock.Header().Timestamp())
 
 	test := &ctest{
 		rt:     rt,
@@ -506,7 +507,131 @@ func TestPrototypeNative(t *testing.T) {
 		ShouldOutput(value).
 		Assert(t)
 
+	test.Case("native_storageAtBlock", acc1, key, uint32(100)).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_balanceAtBlock", acc1, uint32(0)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("native_balanceAtBlock", acc1, uint32(100)).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_energyAtBlock", acc1, uint32(0)).
+		ShouldOutput(energy).
+		Assert(t)
+
+	test.Case("native_energyAtBlock", acc1, uint32(100)).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
 	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
+
+}
+
+func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
+	var (
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+		key  = thor.BytesToBytes32([]byte("acc1-key"))
+	)
+
+	kv, _ := lvldb.NewMem()
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
+
+	st, _ := state.New(c.BestBlock().Header().StateRoot(), kv)
+	rt := runtime.New(c.NewSeeker(c.BestBlock().Header().ID()), st, &xenv.BlockContext{
+		Number: thor.MaxBackTrackingBlockNumber + 2,
+		Time:   genesisBlock.Header().Timestamp(),
+	})
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Prototype.NativeABI(),
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
+	}
+
+	test.Case("native_storageAtBlock", acc1, key, uint32(0)).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
+
+	test.Case("native_balanceAtBlock", acc1, uint32(0)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	test.Case("native_energyAtBlock", acc1, uint32(0)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+}
+
+func TestPrototypeNativeWithBlockNumber(t *testing.T) {
+	var (
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+		key  = thor.BytesToBytes32([]byte("acc1-key"))
+	)
+
+	kv, _ := lvldb.NewMem()
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
+	c, _ := chain.New(kv, genesisBlock)
+	launchTime := genesisBlock.Header().Timestamp()
+
+	for i := 1; i < 100; i++ {
+		st.SetStorage(acc1, key, thor.BytesToBytes32([]byte(fmt.Sprintf("acc1-value%d", i))))
+		st.SetBalance(acc1, big.NewInt(int64(i)))
+		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
+		stateRoot, _ := st.Stage().Commit()
+		b := new(block.Builder).
+			ParentID(c.BestBlock().Header().ID()).
+			TotalScore(c.BestBlock().Header().TotalScore() + 1).
+			Timestamp(launchTime + uint64(i)*10).
+			StateRoot(stateRoot).
+			Build()
+		c.AddBlock(b, tx.Receipts{})
+	}
+
+	st, _ = state.New(c.BestBlock().Header().StateRoot(), kv)
+	rt := runtime.New(c.NewSeeker(c.BestBlock().Header().ID()), st, &xenv.BlockContext{
+		Number: c.BestBlock().Header().Number(),
+		Time:   c.BestBlock().Header().Timestamp(),
+	})
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Prototype.NativeABI(),
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
+	}
+
+	test.Case("native_storageAtBlock", acc1, key, uint32(10)).
+		ShouldOutput(thor.BytesToBytes32([]byte("acc1-value10"))).
+		Assert(t)
+
+	test.Case("native_storageAtBlock", acc1, key, uint32(99)).
+		ShouldOutput(thor.BytesToBytes32([]byte("acc1-value99"))).
+		Assert(t)
+
+	test.Case("native_balanceAtBlock", acc1, uint32(10)).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("native_balanceAtBlock", acc1, uint32(99)).
+		ShouldOutput(big.NewInt(99)).
+		Assert(t)
+
+	test.Case("native_energyAtBlock", acc1, uint32(10)).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("native_energyAtBlock", acc1, uint32(99)).
+		ShouldOutput(big.NewInt(99)).
+		Assert(t)
+
 }
 
 func TestExtensionNative(t *testing.T) {
@@ -517,7 +642,7 @@ func TestExtensionNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.TransactionContext{})
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 
 	contract := builtin.Extension.Address
 

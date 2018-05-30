@@ -273,7 +273,7 @@ func initPrototypeMethods() {
 			env.Require(args.BlockNumber <= ctx.Number)
 
 			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
-				return []interface{}{0}
+				return []interface{}{big.NewInt(0)}
 			}
 
 			if args.BlockNumber == ctx.Number {
@@ -303,7 +303,7 @@ func initPrototypeMethods() {
 			env.Require(args.BlockNumber <= ctx.Number)
 
 			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
-				return []interface{}{0}
+				return []interface{}{big.NewInt(0)}
 			}
 
 			if args.BlockNumber == ctx.Number {
@@ -355,7 +355,7 @@ func initPrototypeMethods() {
 			env.Require(args.BlockNumber <= ctx.Number)
 
 			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
-				return []interface{}{0}
+				return []interface{}{thor.Bytes32{}}
 			}
 
 			if args.BlockNumber == ctx.Number {
