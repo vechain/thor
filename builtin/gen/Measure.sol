@@ -5,10 +5,10 @@
 
 pragma solidity ^0.4.18;
 
-import "./Authority.sol";
-import "./Energy.sol";
-import "./Executor.sol";
-import "./Params.sol";
-import "./Prototype.sol";
-import "./Extension.sol";
-import "./Measure.sol";
+/// @title to measure basic gas usage for external call.
+contract Measure {
+    function outer() public view {
+        this.inner();
+    }
+    function inner() public pure {}    
+}

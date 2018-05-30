@@ -157,6 +157,11 @@ func (evm *EVM) Cancel() {
 	atomic.StoreInt32(&evm.abort, 1)
 }
 
+// Depth returns call stack depth.
+func (evm *EVM) Depth() int {
+	return evm.depth
+}
+
 // Call executes the contract associated with the addr with the given input as
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
@@ -368,8 +373,11 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
-	// should callback after snapshot
-	evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
+
+	if evm.OnCreateContract != nil {
+		// should callback after snapshot
+		evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
+	}
 
 	evm.Transfer(evm.StateDB, caller.Address(), contractAddr, value)
 
