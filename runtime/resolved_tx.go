@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 // ResolvedTransaction resolve the transaction according to given state.
@@ -132,9 +133,9 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (paye
 	return thor.Address{}, nil, errors.New("insufficient energy")
 }
 
-// ToEnv create a tx env object.
-func (r *ResolvedTransaction) ToEnv(blockNumber uint32, getID func(uint32) thor.Bytes32) *builtin.TransactionEnv {
-	return &builtin.TransactionEnv{
+// ToContext create a tx context object.
+func (r *ResolvedTransaction) ToContext(blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
+	return &xenv.TransactionContext{
 		ID:         r.tx.ID(),
 		Origin:     r.Origin,
 		GasPrice:   r.GasPrice,

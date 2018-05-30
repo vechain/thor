@@ -23,7 +23,6 @@ type Flow struct {
 	parentHeader *block.Header
 	runtime      *runtime.Runtime
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
-	totalScore   uint64
 	gasUsed      uint64
 	txs          tx.Transactions
 	receipts     tx.Receipts
@@ -33,14 +32,12 @@ func newFlow(
 	packer *Packer,
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
-	totalScore uint64,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
-		totalScore:   totalScore,
 	}
 }
 
@@ -51,7 +48,7 @@ func (f *Flow) ParentHeader() *block.Header {
 
 // When the target time to do packing.
 func (f *Flow) When() uint64 {
-	return f.runtime.BlockTime()
+	return f.runtime.Context().Time
 }
 
 func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
@@ -77,13 +74,13 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return badTxError{"chain tag mismatch"}
 	case tx.HasReservedFields():
 		return badTxError{"reserved fields not empty"}
-	case f.runtime.BlockNumber() < tx.BlockRef().Number():
+	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.runtime.BlockNumber()):
+	case tx.IsExpired(f.runtime.Context().Number):
 		return badTxError{"expired"}
-	case f.gasUsed+tx.Gas() > f.runtime.BlockGasLimit():
+	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
 		// gasUsed < 90% gas limit
-		if float64(f.gasUsed)/float64(f.runtime.BlockGasLimit()) < 0.9 {
+		if float64(f.gasUsed)/float64(f.runtime.Context().GasLimit) < 0.9 {
 			// try to find a lower gas tx
 			return errTxNotAdoptableNow
 		}
@@ -143,10 +140,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 
 	builder := new(block.Builder).
 		Beneficiary(f.packer.beneficiary).
-		GasLimit(f.runtime.BlockGasLimit()).
+		GasLimit(f.runtime.Context().GasLimit).
 		ParentID(f.parentHeader.ID()).
-		Timestamp(f.runtime.BlockTime()).
-		TotalScore(f.totalScore).
+		Timestamp(f.runtime.Context().Time).
+		TotalScore(f.runtime.Context().TotalScore).
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot)

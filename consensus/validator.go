@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 func (c *Consensus) validate(
@@ -148,13 +149,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receipts := make(tx.Receipts, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
+	proposer, _ := header.Signer()
 	rt := runtime.New(
 		c.chain.NewSeeker(header.ParentID()),
 		state,
-		header.Beneficiary(),
-		header.Number(),
-		header.Timestamp(),
-		header.GasLimit())
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Proposer:    proposer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore(),
+		})
 
 	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
