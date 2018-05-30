@@ -134,11 +134,6 @@ type EVM struct {
 	// contract created during execution.
 	// this value is important for generating contract address.
 	contractCreationCount uint32
-
-	// addresses are temporarily set codes, to make them responsible to prototype calls
-	contractified map[common.Address]bool
-	// contracts that are being created, which can't be contractified
-	creatingContracts map[common.Address]bool
 }
 
 // NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
