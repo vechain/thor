@@ -16,12 +16,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 type Accounts struct {
@@ -125,8 +125,17 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	gp := (*big.Int)(body.GasPrice)
-	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit())
-	vmout := rt.Call(clause, 0, body.Gas, &builtin.TransactionEnv{
+	proposer, _ := header.Signer()
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Proposer:    proposer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore()})
+
+	vmout := rt.Call(clause, 0, body.Gas, &xenv.TransactionContext{
 		Origin:     body.Caller,
 		GasPrice:   gp,
 		ProvedWork: &big.Int{}})

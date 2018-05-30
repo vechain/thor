@@ -10,12 +10,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 // Builder helper to build genesis block.
@@ -82,10 +82,13 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 		}
 	}
 
-	rt := runtime.New(nil, state, thor.Address{}, 0, b.timestamp, b.gasLimit)
+	rt := runtime.New(nil, state, &xenv.BlockContext{
+		Time:     b.timestamp,
+		GasLimit: b.gasLimit,
+	})
 
 	for _, call := range b.calls {
-		out := rt.Call(call.clause, 0, math.MaxUint64, &builtin.TransactionEnv{
+		out := rt.Call(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
 			Origin: call.caller,
 		})
 		if out.VMErr != nil {

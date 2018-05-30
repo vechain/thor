@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/xenv"
 )
 
 type ctest struct {
@@ -92,7 +93,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	assert.Nil(t, err, "should encode input")
 
 	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
-		0, math.MaxUint64, &builtin.TransactionEnv{
+		0, math.MaxUint64, &xenv.TransactionContext{
 			ID:         thor.Bytes32{},
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
@@ -166,7 +167,7 @@ func TestParamsNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 
 	test := &ctest{
 		rt:     rt,
@@ -222,7 +223,7 @@ func TestAuthorityNative(t *testing.T) {
 	st.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
 	builtin.Params.Native(st).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 
 	test := &ctest{
 		rt:     rt,
@@ -312,7 +313,7 @@ func TestEnergyNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.NativeABI(),
@@ -387,10 +388,10 @@ func TestPrototypeNative(t *testing.T) {
 	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 	st.SetStorage(thor.Address(acc1), key, value)
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &builtin.TransactionEnv{
+	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
 		ID:         thor.Bytes32{},
 		Origin:     master,
 		GasPrice:   &big.Int{},
@@ -516,7 +517,7 @@ func TestExtensionNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, thor.Address{}, 0, 0, 0)
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.TransactionContext{})
 
 	contract := builtin.Extension.Address
 

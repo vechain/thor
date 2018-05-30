@@ -18,6 +18,7 @@ import (
 	Tx "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/xenv"
 )
 
 var energyTransferEvent *abi.Event
@@ -35,38 +36,25 @@ type Runtime struct {
 	vmConfig vm.Config
 	seeker   *chain.Seeker
 	state    *state.State
-
-	// block env
-	blockBeneficiary thor.Address
-	blockNumber      uint32
-	blockTime        uint64
-	blockGasLimit    uint64
+	ctx      *xenv.BlockContext
 }
 
 // New create a Runtime object.
 func New(
 	seeker *chain.Seeker,
 	state *state.State,
-	blockBeneficiary thor.Address,
-	blockNumber uint32,
-	blockTime,
-	blockGasLimit uint64) *Runtime {
+	ctx *xenv.BlockContext,
+) *Runtime {
 	return &Runtime{
-		seeker:           seeker,
-		state:            state,
-		blockBeneficiary: blockBeneficiary,
-		blockNumber:      blockNumber,
-		blockTime:        blockTime,
-		blockGasLimit:    blockGasLimit,
+		seeker: seeker,
+		state:  state,
+		ctx:    ctx,
 	}
 }
 
-func (rt *Runtime) Seeker() *chain.Seeker          { return rt.seeker }
-func (rt *Runtime) State() *state.State            { return rt.state }
-func (rt *Runtime) BlockBeneficiary() thor.Address { return rt.blockBeneficiary }
-func (rt *Runtime) BlockNumber() uint32            { return rt.blockNumber }
-func (rt *Runtime) BlockTime() uint64              { return rt.blockTime }
-func (rt *Runtime) BlockGasLimit() uint64          { return rt.blockGasLimit }
+func (rt *Runtime) Seeker() *chain.Seeker       { return rt.seeker }
+func (rt *Runtime) State() *state.State         { return rt.state }
+func (rt *Runtime) Context() *xenv.BlockContext { return rt.ctx }
 
 // SetVMConfig config VM.
 // Returns this runtime.
@@ -79,7 +67,7 @@ func (rt *Runtime) execute(
 	clause *Tx.Clause,
 	index uint32,
 	gas uint64,
-	txEnv *builtin.TransactionEnv,
+	txCtx *xenv.TransactionContext,
 	isStatic bool,
 ) *vm.Output {
 	to := clause.To()
@@ -87,26 +75,26 @@ func (rt *Runtime) execute(
 		panic("static call requires 'To'")
 	}
 	ctx := vm.Context{
-		Beneficiary: rt.blockBeneficiary,
-		BlockNumber: rt.blockNumber,
-		Time:        rt.blockTime,
-		GasLimit:    rt.blockGasLimit,
+		Beneficiary: rt.ctx.Beneficiary,
+		BlockNumber: rt.ctx.Number,
+		Time:        rt.ctx.Time,
+		GasLimit:    rt.ctx.GasLimit,
 
-		Origin:   txEnv.Origin,
-		GasPrice: txEnv.GasPrice,
-		TxID:     txEnv.ID,
+		Origin:   txCtx.Origin,
+		GasPrice: txCtx.GasPrice,
+		TxID:     txCtx.ID,
 
 		GetHash:     rt.seeker.GetID,
 		ClauseIndex: index,
 		InterceptContractCall: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
-			return builtin.HandleNativeCall(rt.seeker, rt.state, evm, contract, readonly, txEnv)
+			return builtin.HandleNativeCall(rt.seeker, rt.state, (*xenv.BlockContext)(rt.ctx), (*xenv.TransactionContext)(txCtx), evm, contract, readonly)
 		},
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
 			rt.state.SetMaster(contractAddr, caller)
 		},
 		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
-			amount := rt.state.GetEnergy(contractAddr, rt.blockTime)
+			amount := rt.state.GetEnergy(contractAddr, rt.ctx.Time)
 			if amount.Sign() == 0 {
 				return
 			}
@@ -114,9 +102,9 @@ func (rt *Runtime) execute(
 			// no need to clear contract's energy, vm will delete the whole contract later.
 			rt.state.SetEnergy(tokenReceiver,
 				new(big.Int).Add(
-					rt.state.GetEnergy(tokenReceiver, rt.blockTime),
+					rt.state.GetEnergy(tokenReceiver, rt.ctx.Time),
 					amount),
-				rt.blockTime)
+				rt.ctx.Time)
 
 			// see ERC20's Transfer event
 			topics := []common.Hash{
@@ -140,11 +128,11 @@ func (rt *Runtime) execute(
 
 	env := vm.New(ctx, rt.state, rt.vmConfig)
 	if to == nil {
-		return env.Create(txEnv.Origin, clause.Data(), gas, clause.Value())
+		return env.Create(txCtx.Origin, clause.Data(), gas, clause.Value())
 	} else if isStatic {
-		return env.StaticCall(txEnv.Origin, *to, clause.Data(), gas)
+		return env.StaticCall(txCtx.Origin, *to, clause.Data(), gas)
 	} else {
-		return env.Call(txEnv.Origin, *to, clause.Data(), gas, clause.Value())
+		return env.Call(txCtx.Origin, *to, clause.Data(), gas, clause.Value())
 	}
 }
 
@@ -153,9 +141,9 @@ func (rt *Runtime) Call(
 	clause *Tx.Clause,
 	index uint32,
 	gas uint64,
-	txEnv *builtin.TransactionEnv,
+	txCtx *xenv.TransactionContext,
 ) *vm.Output {
-	return rt.execute(clause, index, gas, txEnv, false)
+	return rt.execute(clause, index, gas, txCtx, false)
 }
 
 // ExecuteTransaction executes a transaction.
@@ -166,7 +154,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 		return nil, nil, err
 	}
 
-	payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.blockTime)
+	payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -179,9 +167,9 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
 
-	txEnv := resolvedTx.ToEnv(rt.blockNumber, rt.seeker.GetID)
+	txCtx := resolvedTx.ToContext(rt.ctx.Number, rt.seeker.GetID)
 	for i, clause := range resolvedTx.Clauses {
-		vmOutput := rt.execute(clause, uint32(i), leftOverGas, txEnv, false)
+		vmOutput := rt.execute(clause, uint32(i), leftOverGas, txCtx, false)
 		vmOutputs = append(vmOutputs, vmOutput)
 
 		gasUsed := leftOverGas - vmOutput.LeftOverGas
@@ -228,13 +216,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.blockNumber-1, rt.Seeker().GetID)
+	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
 
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	builtin.Energy.Native(rt.state).AddBalance(rt.blockBeneficiary, reward, rt.blockTime)
+	builtin.Energy.Native(rt.state).AddBalance(rt.ctx.Beneficiary, reward, rt.ctx.Time)
 
 	receipt.Reward = reward
 

@@ -7,7 +7,6 @@ package runtime_test
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -20,6 +19,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 func TestCall(t *testing.T) {
@@ -35,8 +35,7 @@ func TestCall(t *testing.T) {
 
 	state, _ := state.New(b0.Header().StateRoot(), kv)
 
-	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state,
-		thor.Address{}, 0, 0, 0)
+	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{})
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
@@ -46,7 +45,7 @@ func TestCall(t *testing.T) {
 
 	out := rt.Call(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
-		0, math.MaxUint64, thor.Address{}, &big.Int{}, thor.Bytes32{}, &big.Int{})
+		0, math.MaxUint64, &xenv.TransactionContext{})
 
 	if out.VMErr != nil {
 		t.Fatal(out.VMErr)

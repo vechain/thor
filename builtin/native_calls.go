@@ -10,17 +10,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethparams "github.com/ethereum/go-ethereum/params"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/xenv"
 )
 
 type nativeMethod struct {
 	abi *abi.Method
-	run func(env *environment) []interface{}
+	run func(env *xenv.Environment) []interface{}
 }
 
 type methodKey struct {
@@ -38,27 +38,27 @@ var privateMethods = make(map[methodKey]*nativeMethod)
 func initParamsMethods() {
 	defines := []struct {
 		name string
-		run  func(env *environment) []interface{}
+		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_getExecutor", func(env *environment) []interface{} {
+		{"native_getExecutor", func(env *xenv.Environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
 			return []interface{}{Executor.Address}
 		}},
-		{"native_get", func(env *environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []interface{} {
 			var key common.Hash
 			env.ParseArgs(&key)
 			env.UseGas(ethparams.SloadGas)
-			v := Params.Native(env.state).Get(thor.Bytes32(key))
+			v := Params.Native(env.State()).Get(thor.Bytes32(key))
 			return []interface{}{v}
 		}},
-		{"native_set", func(env *environment) []interface{} {
+		{"native_set", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Key   common.Hash
 				Value *big.Int
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SstoreSetGas)
-			Params.Native(env.state).Set(thor.Bytes32(args.Key), args.Value)
+			Params.Native(env.State()).Set(thor.Bytes32(args.Key), args.Value)
 			return nil
 		}},
 	}
@@ -78,13 +78,13 @@ func initParamsMethods() {
 func initAuthorityMethods() {
 	defines := []struct {
 		name string
-		run  func(env *environment) []interface{}
+		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_getExecutor", func(env *environment) []interface{} {
+		{"native_getExecutor", func(env *xenv.Environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
 			return []interface{}{Executor.Address}
 		}},
-		{"native_add", func(env *environment) []interface{} {
+		{"native_add", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Signer   common.Address
 				Endorsor common.Address
@@ -92,55 +92,55 @@ func initAuthorityMethods() {
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Authority.Native(env.state).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
+			ok := Authority.Native(env.State()).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
 			if ok {
 				env.UseGas(ethparams.SstoreSetGas + ethparams.SstoreResetGas)
 			}
 			return []interface{}{ok}
 		}},
-		{"native_remove", func(env *environment) []interface{} {
+		{"native_remove", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas)
-			ok := Authority.Native(env.state).Remove(thor.Address(signer))
+			ok := Authority.Native(env.State()).Remove(thor.Address(signer))
 			if ok {
 				env.UseGas(ethparams.SstoreClearGas + ethparams.SstoreResetGas*2)
 			}
 			return []interface{}{ok}
 		}},
-		{"native_get", func(env *environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 3)
-			p := Authority.Native(env.state).Get(thor.Address(signer))
+			p := Authority.Native(env.State()).Get(thor.Address(signer))
 			return []interface{}{!p.IsEmpty(), p.Endorsor, p.Identity, p.Active}
 		}},
-		{"native_first", func(env *environment) []interface{} {
+		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			signer := Authority.Native(env.state).First()
+			signer := Authority.Native(env.State()).First()
 			return []interface{}{signer}
 		}},
-		{"native_next", func(env *environment) []interface{} {
+		{"native_next", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 4)
-			p := Authority.Native(env.state).Get(thor.Address(signer))
+			p := Authority.Native(env.State()).Get(thor.Address(signer))
 			var next thor.Address
 			if p.Next != nil {
 				next = *p.Next
 			}
 			return []interface{}{next}
 		}},
-		{"native_isEndorsed", func(env *environment) []interface{} {
+		{"native_isEndorsed", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 			env.UseGas(ethparams.SloadGas * 2)
-			p := Authority.Native(env.state).Get(thor.Address(signer))
+			p := Authority.Native(env.State()).Get(thor.Address(signer))
 			if p.IsEmpty() {
 				return []interface{}{false}
 			}
-			bal := env.state.GetBalance(p.Endorsor)
-			endorsement := Params.Native(env.state).Get(thor.KeyProposerEndorsement)
+			bal := env.State().GetBalance(p.Endorsor)
+			endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
@@ -160,47 +160,47 @@ func initAuthorityMethods() {
 func initEnergyMethods() {
 	defines := []struct {
 		name string
-		run  func(env *environment) []interface{}
+		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_getTotalSupply", func(env *environment) []interface{} {
+		{"native_getTotalSupply", func(env *xenv.Environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			supply := Energy.Native(env.state).GetTotalSupply(env.BlockTime())
+			supply := Energy.Native(env.State()).GetTotalSupply(env.BlockContext().Time)
 			return []interface{}{supply}
 		}},
-		{"native_getTotalBurned", func(env *environment) []interface{} {
+		{"native_getTotalBurned", func(env *xenv.Environment) []interface{} {
 			env.UseGas(ethparams.SloadGas)
-			burned := Energy.Native(env.state).GetTotalBurned()
+			burned := Energy.Native(env.State()).GetTotalBurned()
 			return []interface{}{burned}
 		}},
-		{"native_getBalance", func(env *environment) []interface{} {
+		{"native_getBalance", func(env *xenv.Environment) []interface{} {
 			var addr common.Address
 			env.ParseArgs(&addr)
 			env.UseGas(ethparams.SloadGas)
-			bal := Energy.Native(env.state).GetBalance(thor.Address(addr), env.BlockTime())
+			bal := Energy.Native(env.State()).GetBalance(thor.Address(addr), env.BlockContext().Time)
 			return []interface{}{bal}
 		}},
-		{"native_addBalance", func(env *environment) []interface{} {
+		{"native_addBalance", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
-			if env.state.Exists(thor.Address(args.Addr)) {
+			if env.State().Exists(thor.Address(args.Addr)) {
 				env.UseGas(ethparams.SstoreResetGas)
 			} else {
 				env.UseGas(ethparams.SstoreSetGas)
 			}
-			Energy.Native(env.state).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
+			Energy.Native(env.State()).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockContext().Time)
 			return nil
 		}},
-		{"native_subBalance", func(env *environment) []interface{} {
+		{"native_subBalance", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
 			env.UseGas(ethparams.SloadGas)
-			ok := Energy.Native(env.state).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockTime())
+			ok := Energy.Native(env.State()).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockContext().Time)
 			if ok {
 				env.UseGas(ethparams.SstoreResetGas)
 			}
@@ -237,25 +237,25 @@ func initPrototypeMethods() {
 
 	defines := []struct {
 		name string
-		run  func(env *environment) []interface{}
+		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_master", func(env *environment) []interface{} {
+		{"native_master", func(env *xenv.Environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.state).Bind(thor.Address(target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(target))
 
 			master := binding.Master()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{master}
 		}},
-		{"native_setMaster", func(env *environment) []interface{} {
+		{"native_setMaster", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target    common.Address
 				NewMaster common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			binding.SetMaster(thor.Address(args.NewMaster))
 			env.UseGas(ethparams.SstoreResetGas)
@@ -263,133 +263,136 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_balanceAtBlock", func(env *environment) []interface{} {
+		{"native_balanceAtBlock", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target      common.Address
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(args.BlockNumber <= env.BlockNumber())
+			ctx := env.BlockContext()
+			env.Require(args.BlockNumber <= ctx.Number)
 
-			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
 				return []interface{}{0}
 			}
 
-			if args.BlockNumber == env.BlockNumber() {
-				val := env.state.GetBalance(thor.Address(args.Target))
+			if args.BlockNumber == ctx.Number {
+				val := env.State().GetBalance(thor.Address(args.Target))
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}
 			}
 
-			blockID := env.seeker.GetID(args.BlockNumber)
+			blockID := env.Seeker().GetID(args.BlockNumber)
 			env.UseGas(ethparams.SloadGas)
-			header := env.seeker.GetHeader(blockID)
+			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(3 * ethparams.SloadGas)
-			state := env.state.Spawn(header.StateRoot())
+			state := env.State().Spawn(header.StateRoot())
 			env.UseGas(ethparams.SloadGas)
 			val := state.GetBalance(thor.Address(args.Target))
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{val}
 		}},
-		{"native_energyAtBlock", func(env *environment) []interface{} {
+		{"native_energyAtBlock", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target      common.Address
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(args.BlockNumber <= env.BlockNumber())
+			ctx := env.BlockContext()
+			env.Require(args.BlockNumber <= ctx.Number)
 
-			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
 				return []interface{}{0}
 			}
 
-			if args.BlockNumber == env.BlockNumber() {
-				val := env.state.GetEnergy(thor.Address(args.Target), env.BlockTime())
+			if args.BlockNumber == ctx.Number {
+				val := env.State().GetEnergy(thor.Address(args.Target), ctx.Time)
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}
 			}
 
-			blockID := env.seeker.GetID(args.BlockNumber)
+			blockID := env.Seeker().GetID(args.BlockNumber)
 			env.UseGas(ethparams.SloadGas)
-			header := env.seeker.GetHeader(blockID)
+			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(3 * ethparams.SloadGas)
-			state := env.state.Spawn(header.StateRoot())
+			state := env.State().Spawn(header.StateRoot())
 			env.UseGas(ethparams.SloadGas)
 			val := state.GetEnergy(thor.Address(args.Target), header.Timestamp())
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{val}
 		}},
-		{"native_hasCode", func(env *environment) []interface{} {
+		{"native_hasCode", func(env *xenv.Environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
 
-			hasCode := !env.state.GetCodeHash(thor.Address(target)).IsZero()
+			hasCode := !env.State().GetCodeHash(thor.Address(target)).IsZero()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{hasCode}
 		}},
-		{"native_storage", func(env *environment) []interface{} {
+		{"native_storage", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target common.Address
 				Key    thor.Bytes32
 			}
 			env.ParseArgs(&args)
 
-			val := env.state.GetStorage(thor.Address(args.Target), args.Key)
+			val := env.State().GetStorage(thor.Address(args.Target), args.Key)
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{val}
 		}},
-		{"native_storageAtBlock", func(env *environment) []interface{} {
+		{"native_storageAtBlock", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target      common.Address
 				Key         thor.Bytes32
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(args.BlockNumber <= env.BlockNumber())
+			ctx := env.BlockContext()
+			env.Require(args.BlockNumber <= ctx.Number)
 
-			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
 				return []interface{}{0}
 			}
 
-			if args.BlockNumber == env.BlockNumber() {
-				val := env.state.GetStorage(thor.Address(args.Target), args.Key)
+			if args.BlockNumber == ctx.Number {
+				val := env.State().GetStorage(thor.Address(args.Target), args.Key)
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}
 			}
 
-			blockID := env.seeker.GetID(args.BlockNumber)
+			blockID := env.Seeker().GetID(args.BlockNumber)
 			env.UseGas(ethparams.SloadGas)
-			header := env.seeker.GetHeader(blockID)
+			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(3 * ethparams.SloadGas)
-			state := env.state.Spawn(header.StateRoot())
+			state := env.State().Spawn(header.StateRoot())
 			env.UseGas(ethparams.SloadGas)
 			val := state.GetStorage(thor.Address(args.Target), args.Key)
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{val}
 		}},
-		{"native_userPlan", func(env *environment) []interface{} {
+		{"native_userPlan", func(env *xenv.Environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.state).Bind(thor.Address(target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(target))
 
 			credit, rate := binding.UserPlan()
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{credit, rate}
 		}},
-		{"native_setUserPlan", func(env *environment) []interface{} {
+		{"native_setUserPlan", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target       common.Address
 				Credit       *big.Int
 				RecoveryRate *big.Int
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			binding.SetUserPlan(args.Credit, args.RecoveryRate)
 			env.UseGas(ethparams.SstoreSetGas)
@@ -397,54 +400,54 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_isUser", func(env *environment) []interface{} {
+		{"native_isUser", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			isUser := binding.IsUser(thor.Address(args.User))
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{isUser}
 		}},
-		{"native_userCredit", func(env *environment) []interface{} {
+		{"native_userCredit", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
-			credit := binding.UserCredit(thor.Address(args.User), env.BlockTime())
+			credit := binding.UserCredit(thor.Address(args.User), env.BlockContext().Time)
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{credit}
 		}},
-		{"native_addUser", func(env *environment) []interface{} {
+		{"native_addUser", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
-			env.Require(binding.AddUser(thor.Address(args.User), env.BlockTime()))
+			env.Require(binding.AddUser(thor.Address(args.User), env.BlockContext().Time))
 			env.UseGas(ethparams.SstoreSetGas)
 			env.Log(addRemoveUserEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.User[:])}, true)
 
 			return nil
 		}},
-		{"native_removeUser", func(env *environment) []interface{} {
+		{"native_removeUser", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target common.Address
 				User   common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.RemoveUser(thor.Address(args.User)))
@@ -453,14 +456,14 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_sponsor", func(env *environment) []interface{} {
+		{"native_sponsor", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Caller  common.Address
 				YesOrNo bool
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.Sponsor(thor.Address(args.Caller), args.YesOrNo))
@@ -473,26 +476,26 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_isSponsor", func(env *environment) []interface{} {
+		{"native_isSponsor", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Sponsor common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			b := binding.IsSponsor(thor.Address(args.Sponsor))
 			env.UseGas(ethparams.SloadGas)
 
 			return []interface{}{b}
 		}},
-		{"native_selectSponsor", func(env *environment) []interface{} {
+		{"native_selectSponsor", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Target  common.Address
 				Sponsor common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.state).Bind(thor.Address(args.Target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(ethparams.SloadGas)
 			env.Require(binding.SelectSponsor(thor.Address(args.Sponsor)))
@@ -501,10 +504,10 @@ func initPrototypeMethods() {
 
 			return nil
 		}},
-		{"native_currentSponsor", func(env *environment) []interface{} {
+		{"native_currentSponsor", func(env *xenv.Environment) []interface{} {
 			var target common.Address
 			env.ParseArgs(&target)
-			binding := Prototype.Native(env.state).Bind(thor.Address(target))
+			binding := Prototype.Native(env.State()).Bind(thor.Address(target))
 
 			addr := binding.CurrentSponsor()
 			env.UseGas(ethparams.SloadGas)
@@ -528,41 +531,41 @@ func initPrototypeMethods() {
 func initExtensionMethods() {
 	defines := []struct {
 		name string
-		run  func(env *environment) []interface{}
+		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_blake2b256", func(env *environment) []interface{} {
+		{"native_blake2b256", func(env *xenv.Environment) []interface{} {
 			var data []byte
 			env.ParseArgs(&data)
 			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
-			output := Extension.Native(env.state, env.seeker).Blake2b256(data)
+			output := Extension.Native(env.State(), env.Seeker()).Blake2b256(data)
 			return []interface{}{output}
 		}},
-		{"native_getBlockIDByNum", func(env *environment) []interface{} {
+		{"native_getBlockIDByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			output := Extension.Native(env.state, env.seeker).GetBlockIDByNum(blockNum)
+			output := Extension.Native(env.State(), env.Seeker()).GetBlockIDByNum(blockNum)
 			return []interface{}{output}
 		}},
-		{"native_getTotalScoreByNum", func(env *environment) []interface{} {
+		{"native_getTotalScoreByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
 			return []interface{}{header.TotalScore()}
 		}},
-		{"native_getTimestampByNum", func(env *environment) []interface{} {
+		{"native_getTimestampByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
 			return []interface{}{header.Timestamp()}
 		}},
-		{"native_getProposerByNum", func(env *environment) []interface{} {
+		{"native_getProposerByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.state, env.seeker).GetBlockHeaderByNum(blockNum)
+			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
 			proposer, _ := header.Signer()
 			return []interface{}{proposer}
 		}},
@@ -593,10 +596,11 @@ func init() {
 func HandleNativeCall(
 	seeker *chain.Seeker,
 	state *state.State,
-	vm *evm.EVM,
+	blockCtx *xenv.BlockContext,
+	txCtx *xenv.TransactionContext,
+	evm *evm.EVM,
 	contract *evm.Contract,
 	readonly bool,
-	txEnv *TransactionEnv,
 ) func() ([]byte, error) {
 	methodID, err := abi.ExtractMethodID(contract.Input)
 	if err != nil {
@@ -613,34 +617,5 @@ func HandleNativeCall(
 		return nil
 	}
 
-	if readonly && !method.abi.Const() {
-		return func() ([]byte, error) {
-			return nil, evm.ErrWriteProtection()
-		}
-	}
-	if contract.Value().Sign() != 0 {
-		// all private and prototype methods are not payable
-		return func() ([]byte, error) {
-			return nil, evm.ErrExecutionReverted()
-		}
-	}
-
-	env := newEnvironment(method.abi, seeker, state, vm, contract, txEnv)
-	return func() (data []byte, err error) {
-		defer func() {
-			if e := recover(); e != nil {
-				if rec, ok := e.(*vmError); ok {
-					err = rec.cause
-				} else {
-					panic(e)
-				}
-			}
-		}()
-		output := method.run(env)
-		data, err = method.abi.EncodeOutput(output...)
-		if err != nil {
-			panic(errors.WithMessage(err, "encode native output"))
-		}
-		return
-	}
+	return xenv.New(method.abi, seeker, state, blockCtx, txCtx, evm, contract).Call(method.run, readonly)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/xenv"
 )
 
 // Packer to pack txs and build new blocks.
@@ -77,12 +78,16 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	rt := runtime.New(
 		p.chain.NewSeeker(parent.ID()),
 		state,
-		p.beneficiary,
-		parent.Number()+1,
-		newBlockTime,
-		p.gasLimit(parent.GasLimit()))
+		&xenv.BlockContext{
+			Beneficiary: p.beneficiary,
+			Proposer:    p.proposer,
+			Number:      parent.Number() + 1,
+			Time:        newBlockTime,
+			GasLimit:    p.gasLimit(parent.GasLimit()),
+			TotalScore:  parent.TotalScore() + score,
+		})
 
-	return newFlow(p, parent, rt, parent.TotalScore()+score), nil
+	return newFlow(p, parent, rt), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -94,15 +99,19 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 		return nil, errors.Wrap(err, "state")
 	}
 
-	runtime := runtime.New(
+	rt := runtime.New(
 		p.chain.NewSeeker(parent.ID()),
 		state,
-		p.beneficiary,
-		parent.Number()+1,
-		targetTime,
-		p.gasLimit(parent.GasLimit()))
+		&xenv.BlockContext{
+			Beneficiary: p.beneficiary,
+			Proposer:    p.proposer,
+			Number:      parent.Number() + 1,
+			Time:        targetTime,
+			GasLimit:    p.gasLimit(parent.GasLimit()),
+			TotalScore:  parent.TotalScore() + 1,
+		})
 
-	return newFlow(p, parent, runtime, parent.TotalScore()+1), nil
+	return newFlow(p, parent, rt), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
