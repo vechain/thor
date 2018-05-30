@@ -501,6 +501,10 @@ func TestPrototypeNative(t *testing.T) {
 		ShouldOutput(value).
 		Assert(t)
 
+	test.Case("native_storageAtBlock", acc1, key, uint32(0)).
+		ShouldOutput(value).
+		Assert(t)
+
 	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
 }
 

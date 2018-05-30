@@ -269,15 +269,13 @@ func initPrototypeMethods() {
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+			env.Require(args.BlockNumber <= env.BlockNumber())
 
-			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
-			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
 				return []interface{}{0}
 			}
 
-			// blocknumber == current blocknumber
-			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+			if args.BlockNumber == env.BlockNumber() {
 				val := env.state.GetBalance(thor.Address(args.Target))
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}
@@ -300,15 +298,13 @@ func initPrototypeMethods() {
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+			env.Require(args.BlockNumber <= env.BlockNumber())
 
-			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
-			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
 				return []interface{}{0}
 			}
 
-			// blocknumber == current blocknumber
-			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+			if args.BlockNumber == env.BlockNumber() {
 				val := env.state.GetEnergy(thor.Address(args.Target), env.BlockTime())
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}
@@ -353,15 +349,13 @@ func initPrototypeMethods() {
 				BlockNumber uint32
 			}
 			env.ParseArgs(&args)
-			env.Require(big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) < 1)
+			env.Require(args.BlockNumber <= env.BlockNumber())
 
-			// BlockNumber + MaxBackTrackingBlockNumber < current blocknumber
-			if big.NewInt(int64(args.BlockNumber)+thor.MaxBackTrackingBlockNumber).Cmp(env.evm.BlockNumber) == -1 {
+			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < env.BlockNumber() {
 				return []interface{}{0}
 			}
 
-			// blocknumber == current blocknumber
-			if big.NewInt(int64(args.BlockNumber)).Cmp(env.evm.BlockNumber) == 0 {
+			if args.BlockNumber == env.BlockNumber() {
 				val := env.state.GetStorage(thor.Address(args.Target), args.Key)
 				env.UseGas(ethparams.SloadGas)
 				return []interface{}{val}

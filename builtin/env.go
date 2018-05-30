@@ -96,6 +96,10 @@ func (env *environment) BlockTime() uint64 {
 	return env.evm.Time.Uint64()
 }
 
+func (env *environment) BlockNumber() uint32 {
+	return uint32(env.evm.BlockNumber.Uint64())
+}
+
 func (env *environment) Caller() thor.Address {
 	return thor.Address(env.contract.Caller())
 }
