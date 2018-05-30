@@ -21,7 +21,10 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
-var energyTransferEvent *abi.Event
+var (
+	energyTransferEvent *abi.Event
+	nativeCallReturnGas uint64 = 1692 // see test case for calculation
+)
 
 func init() {
 	ev, found := builtin.Energy.ABI.EventByName("Transfer")
@@ -74,6 +77,9 @@ func (rt *Runtime) execute(
 	if isStatic && to == nil {
 		panic("static call requires 'To'")
 	}
+
+	var lastNonNativeCallGas uint64
+
 	ctx := vm.Context{
 		Beneficiary: rt.ctx.Beneficiary,
 		BlockNumber: rt.ctx.Number,
@@ -87,7 +93,20 @@ func (rt *Runtime) execute(
 		GetHash:     rt.seeker.GetID,
 		ClauseIndex: index,
 		InterceptContractCall: func(evm *evm.EVM, contract *evm.Contract, readonly bool) func() ([]byte, error) {
-			return builtin.HandleNativeCall(rt.seeker, rt.state, (*xenv.BlockContext)(rt.ctx), (*xenv.TransactionContext)(txCtx), evm, contract, readonly)
+			if native := builtin.HandleNativeCall(rt.seeker, rt.state, rt.ctx, txCtx, evm, contract, readonly); native != nil {
+				// here we return call gas and extcodeSize gas for native calls, to make
+				// builtin contract cheap.
+				if evm.Depth() > 1 {
+					// check stack depth to ensure returning gas only when not called directly (happens in non-tx calls)
+					contract.Gas += nativeCallReturnGas
+					if contract.Gas > lastNonNativeCallGas {
+						panic("serious bug: native call returned gas over consumed")
+					}
+				}
+				return native
+			}
+			lastNonNativeCallGas = contract.Gas
+			return nil
 		},
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
