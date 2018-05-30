@@ -23,6 +23,11 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
+	SloadGas             uint64 = 200
+	SstoreSetGas         uint64 = params.SstoreSetGas
+	SstoreResetGas       uint64 = params.SstoreResetGas
+	CallsGas             uint64 = 700 // params.GasTableEIP158.Calls
+	ExtcodeSizeGas       uint64 = 700 // params.GasTableEIP158.ExtcodeSize
 
 	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
 
