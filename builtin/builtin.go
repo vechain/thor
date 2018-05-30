@@ -29,6 +29,7 @@ var (
 		mustLoadThorLibABI(),
 	}
 	Extension = &extensionContract{mustLoadContract("Extension")}
+	Measure   = mustLoadContract("Measure")
 )
 
 type (
