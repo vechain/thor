@@ -537,35 +537,52 @@ func initExtensionMethods() {
 			var data []byte
 			env.ParseArgs(&data)
 			env.UseGas(uint64(len(data)+31)/32*blake2b256WordGas + blake2b256Gas)
-			output := Extension.Native(env.State(), env.Seeker()).Blake2b256(data)
+			output := thor.Blake2b(data)
 			return []interface{}{output}
 		}},
 		{"native_getBlockIDByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			output := Extension.Native(env.State(), env.Seeker()).GetBlockIDByNum(blockNum)
+			env.Require(blockNum >= 0 && blockNum < env.BlockContext().Number)
+			output := env.Seeker().GetID(blockNum)
 			return []interface{}{output}
 		}},
 		{"native_getTotalScoreByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
+			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			if blockNum == env.BlockContext().Number {
+				return []interface{}{env.BlockContext().TotalScore}
+			}
+
+			header := env.Seeker().GetHeader(env.Seeker().GetID(blockNum))
 			return []interface{}{header.TotalScore()}
 		}},
 		{"native_getTimestampByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
+			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			if blockNum == env.BlockContext().Number {
+				return []interface{}{env.BlockContext().Time}
+			}
+
+			header := env.Seeker().GetHeader(env.Seeker().GetID(blockNum))
 			return []interface{}{header.Timestamp()}
 		}},
 		{"native_getProposerByNum", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(ethparams.SloadGas)
-			header := Extension.Native(env.State(), env.Seeker()).GetBlockHeaderByNum(blockNum)
+			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			if blockNum == env.BlockContext().Number {
+				return []interface{}{env.BlockContext().Proposer}
+			}
+
+			header := env.Seeker().GetHeader(env.Seeker().GetID(blockNum))
+
 			proposer, _ := header.Signer()
 			return []interface{}{proposer}
 		}},

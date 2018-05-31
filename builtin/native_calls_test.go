@@ -6,13 +6,14 @@
 package builtin_test
 
 import (
-	"encoding/binary"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/block"
@@ -634,6 +635,12 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 
 }
 
+func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *ecdsa.PrivateKey) *block.Block {
+	b := new(block.Builder).ParentID(parent.Header().ID()).TotalScore(parent.Header().TotalScore() + score).Timestamp(timestamp).Build()
+	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
+	return b.WithSignature(sig)
+}
+
 func TestExtensionNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
@@ -642,7 +649,26 @@ func TestExtensionNative(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
+	privKeys := make([]*ecdsa.PrivateKey, 2)
+
+	for i := 0; i < 2; i++ {
+		privateKey, _ := crypto.GenerateKey()
+		privKeys[i] = privateKey
+	}
+
+	b0 := genesisBlock
+	b1 := newBlock(b0, 123, 456, privKeys[0])
+	b2 := newBlock(b1, 789, 321, privKeys[1])
+
+	b1_singer, _ := b1.Header().Signer()
+	b2_singer, _ := b2.Header().Signer()
+
+	_, err := c.AddBlock(b1, nil)
+	assert.Equal(t, err, nil)
+	_, err = c.AddBlock(b2, nil)
+	assert.Equal(t, err, nil)
+
+	rt := runtime.New(c.NewSeeker(b2.Header().ID()), st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Proposer: b2_singer})
 
 	contract := builtin.Extension.Address
 
@@ -653,20 +679,83 @@ func TestExtensionNative(t *testing.T) {
 		abi: builtin.Extension.NativeABI(),
 	}
 
-	var blockNum uint32 = 1234567
-	var blockId thor.Bytes32
-
-	binary.BigEndian.PutUint32(blockId[:4], blockNum)
-
-	builtin.Extension.Native(st).SetBlockNumAndID(blockId)
-
 	test.Case("native_blake2b256", value).
 		To(contract).Caller(contract).
 		ShouldOutput(thor.Blake2b(value)).
 		Assert(t)
-	test.Case("native_getBlockIDByNum", blockNum).
+
+	test.Case("native_getBlockIDByNum", uint32(3)).
 		To(contract).Caller(contract).
-		ShouldOutput(blockId).
+		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
+	test.Case("native_getBlockIDByNum", uint32(2)).
+		To(contract).Caller(contract).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_getBlockIDByNum", uint32(1)).
+		To(contract).Caller(contract).
+		ShouldOutput(b1.Header().ID()).
+		Assert(t)
+
+	test.Case("native_getBlockIDByNum", uint32(0)).
+		To(contract).Caller(contract).
+		ShouldOutput(b0.Header().ID()).
+		Assert(t)
+
+	test.Case("native_getTotalScoreByNum", uint32(3)).
+		To(contract).Caller(contract).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_getTotalScoreByNum", uint32(2)).
+		To(contract).Caller(contract).
+		ShouldOutput(b2.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("native_getTotalScoreByNum", uint32(1)).
+		To(contract).Caller(contract).
+		ShouldOutput(b1.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("native_getTotalScoreByNum", uint32(0)).
+		To(contract).Caller(contract).
+		ShouldOutput(b0.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("native_getTimestampByNum", uint32(3)).
+		To(contract).Caller(contract).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_getTimestampByNum", uint32(2)).
+		To(contract).Caller(contract).
+		ShouldOutput(b2.Header().Timestamp()).
+		Assert(t)
+
+	test.Case("native_getTimestampByNum", uint32(1)).
+		To(contract).Caller(contract).
+		ShouldOutput(b1.Header().Timestamp()).
+		Assert(t)
+
+	test.Case("native_getTimestampByNum", uint32(0)).
+		To(contract).Caller(contract).
+		ShouldOutput(b0.Header().Timestamp()).
+		Assert(t)
+
+	test.Case("native_getProposerByNum", uint32(3)).
+		To(contract).Caller(contract).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_getProposerByNum", uint32(2)).
+		To(contract).Caller(contract).
+		ShouldOutput(b2_singer).
+		Assert(t)
+
+	test.Case("native_getProposerByNum", uint32(1)).
+		To(contract).Caller(contract).
+		ShouldOutput(b1_singer).
+		Assert(t)
 }
