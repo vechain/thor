@@ -695,7 +695,7 @@ func TestExtensionNative(t *testing.T) {
 		ShouldOutput(builtin.Energy.Native(st).GetTokenTotalSupply()).
 		Assert(t)
 
-	test.Case("native_getTransactionProvedWrok").
+	test.Case("native_getTransactionProvedWork").
 		To(contract).Caller(contract).
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
