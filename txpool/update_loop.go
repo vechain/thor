@@ -74,7 +74,7 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 			}
 
 			obj.status = state
-			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, builtin.Extension.Native(st, pool.chain.NewSeeker(bestBlockID)).GetBlockIDByNum)
+			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, pool.chain.NewSeeker(bestBlockID).GetID)
 			pool.entry.save(obj)
 		}
 
