@@ -74,7 +74,7 @@ func init() {
 			output := Energy.Native(env.State()).GetTokenTotalSupply()
 			return []interface{}{output}
 		}},
-		{"native_getTransactionProvedWrok", func(env *xenv.Environment) []interface{} {
+		{"native_getTransactionProvedWork", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
 			output := env.TransactionContext().ProvedWork
 			return []interface{}{output}
