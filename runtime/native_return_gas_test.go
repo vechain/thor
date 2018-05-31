@@ -45,5 +45,7 @@ func TestNativeCallReturnGas(t *testing.T) {
 	innerGasUsed := math.MaxUint64 - innerOutput.LeftOverGas
 	outerGasUsed := math.MaxUint64 - outerOutput.LeftOverGas
 
-	assert.Equal(t, uint64(1692), outerGasUsed-innerGasUsed)
+	// gas = enter1 + prepare2 + enter2 + leave2 + leave1
+	// here returns prepare2
+	assert.Equal(t, uint64(1562), outerGasUsed-innerGasUsed*2)
 }

@@ -23,7 +23,7 @@ import (
 
 var (
 	energyTransferEvent *abi.Event
-	nativeCallReturnGas uint64 = 1692 // see test case for calculation
+	nativeCallReturnGas uint64 = 1562 // see test case for calculation
 )
 
 func init() {
