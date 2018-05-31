@@ -31,6 +31,10 @@ contract Extension {
     function totalSupply() public view returns(uint256) {
         return ExtensionNative(this).native_getTokenTotalSupply();
     }
+
+    function txProvedWork() public view returns(uint256) {
+        return ExtensionNative(this).native_getTransactionProvedWrok();
+    }
 }
 
 contract ExtensionNative {
@@ -40,4 +44,5 @@ contract ExtensionNative {
     function native_getTimestampByNum(uint32 num) public view returns(uint64);
     function native_getProposerByNum(uint32 num)public view returns(address);
     function native_getTokenTotalSupply()public view returns(uint256);
+    function native_getTransactionProvedWrok()public view returns(uint256);    
 }

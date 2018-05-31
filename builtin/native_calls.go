@@ -405,6 +405,10 @@ func initExtensionMethods() {
 			output := Energy.Native(env.State()).GetTokenTotalSupply()
 			return []interface{}{output}
 		}},
+		{"native_getTransactionProvedWrok", func(env *xenv.Environment) []interface{} {
+			output := env.TransactionContext().ProvedWork
+			return []interface{}{output}
+		}},
 	}
 
 	nativeABI := Extension.NativeABI()

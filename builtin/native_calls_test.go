@@ -43,6 +43,7 @@ type ccase struct {
 	name       string
 	args       []interface{}
 	events     []*vm.Event
+	provedWork *big.Int
 
 	output *[]interface{}
 	vmerr  error
@@ -66,6 +67,11 @@ func (c *ccase) To(to thor.Address) *ccase {
 
 func (c *ccase) Caller(caller thor.Address) *ccase {
 	c.caller = caller
+	return c
+}
+
+func (c *ccase) ProvedWork(provedWork *big.Int) *ccase {
+	c.provedWork = provedWork
 	return c
 }
 
@@ -100,7 +106,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			ID:         thor.Bytes32{},
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
-			ProvedWork: &big.Int{}})
+			ProvedWork: c.provedWork})
 
 	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
@@ -687,6 +693,12 @@ func TestExtensionNative(t *testing.T) {
 	test.Case("native_getTokenTotalSupply").
 		To(contract).Caller(contract).
 		ShouldOutput(builtin.Energy.Native(st).GetTokenTotalSupply()).
+		Assert(t)
+
+	test.Case("native_getTransactionProvedWrok").
+		To(contract).Caller(contract).
+		ProvedWork(big.NewInt(1e12)).
+		ShouldOutput(big.NewInt(1e12)).
 		Assert(t)
 
 	test.Case("native_getBlockIDByNum", uint32(3)).
