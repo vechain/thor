@@ -27,6 +27,10 @@ contract Extension {
     function blockProposer(uint32 num) public view returns(address) {
         return ExtensionNative(this).native_getProposerByNum(num);
     }
+
+    function totalSupply() public view returns(uint256) {
+        return ExtensionNative(this).native_getTokenTotalSupply();
+    }
 }
 
 contract ExtensionNative {
@@ -35,4 +39,5 @@ contract ExtensionNative {
     function native_getTotalScoreByNum(uint32 num) public view returns(uint64);
     function native_getTimestampByNum(uint32 num) public view returns(uint64);
     function native_getProposerByNum(uint32 num)public view returns(address);
+    function native_getTokenTotalSupply()public view returns(uint256);
 }

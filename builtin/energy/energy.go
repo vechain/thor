@@ -104,6 +104,15 @@ func (e *Energy) SetInitialSupply(token *big.Int, energy *big.Int, blockTime uin
 	})
 }
 
+// GetTokenTotalSupply returns total supply of VET.
+func (e *Energy) GetTokenTotalSupply() *big.Int {
+	// that's totalGrown + totalAdd - totalSub
+	var init initialSupply
+	e.getStorage(initialSupplyKey, &init)
+
+	return init.Token
+}
+
 // GetTotalSupply returns total supply of energy.
 func (e *Energy) GetTotalSupply(blockTime uint64) *big.Int {
 	// that's totalGrown + totalAdd - totalSub
