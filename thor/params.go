@@ -23,7 +23,8 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
-	SloadGas             uint64 = 200
+	GetBalanceGas        uint64 = 400              //EIP158 gas table
+	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
