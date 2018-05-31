@@ -684,6 +684,11 @@ func TestExtensionNative(t *testing.T) {
 		ShouldOutput(thor.Blake2b(value)).
 		Assert(t)
 
+	test.Case("native_getTokenTotalSupply").
+		To(contract).Caller(contract).
+		ShouldOutput(builtin.Energy.Native(st).GetTokenTotalSupply()).
+		Assert(t)
+
 	test.Case("native_getBlockIDByNum", uint32(3)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).

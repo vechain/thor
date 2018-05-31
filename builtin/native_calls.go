@@ -586,6 +586,10 @@ func initExtensionMethods() {
 			proposer, _ := header.Signer()
 			return []interface{}{proposer}
 		}},
+		{"native_getTokenTotalSupply", func(env *xenv.Environment) []interface{} {
+			output := Energy.Native(env.State()).GetTokenTotalSupply()
+			return []interface{}{output}
+		}},
 	}
 
 	nativeABI := Extension.NativeABI()
