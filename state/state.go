@@ -272,12 +272,16 @@ func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
 //   *big.Int
 // ]
 func (s *State) GetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
-	data, _ := s.sm.Get(storageKey{addr, key})
+	data := s.GetRawStorage(addr, key)
 	if dec, ok := val.(StorageDecoder); ok {
-		s.setError(dec.Decode(data.([]byte)))
+		if err := dec.Decode(data); err != nil {
+			panic(err)
+		}
 		return
 	}
-	s.setError(decodeStorage(data.([]byte), val))
+	if err := decodeStorage(data, val); err != nil {
+		panic(err)
+	}
 }
 
 // SetStructuredStorage encode val and set as raw storage value for given address and key.
@@ -291,25 +295,35 @@ func (s *State) GetStructuredStorage(addr thor.Address, key thor.Bytes32, val in
 // If 'val' is nil, the storage is cleared.
 func (s *State) SetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
 	if val == nil {
-		s.sm.Put(storageKey{addr, key}, []byte(nil))
+		s.setRawStorage(addr, key, nil)
 		return
 	}
 	if enc, ok := val.(StorageEncoder); ok {
 		data, err := enc.Encode()
 		if err != nil {
-			s.setError(err)
-			return
+			panic(err)
 		}
-		s.sm.Put(storageKey{addr, key}, data)
+		s.setRawStorage(addr, key, data)
 		return
 	}
 
 	data, err := encodeStorage(val)
 	if err != nil {
-		s.setError(err)
-		return
+		panic(err)
 	}
-	s.sm.Put(storageKey{addr, key}, data)
+	s.setRawStorage(addr, key, data)
+}
+
+// GetRawStorage returns raw storage in byte slice.
+func (s *State) GetRawStorage(addr thor.Address, key thor.Bytes32) []byte {
+	data, _ := s.sm.Get(storageKey{addr, key})
+	return data.([]byte)
+}
+
+// setRawStorage set raw storage in byte slice.
+// The value MUST be rlp encoded.
+func (s *State) setRawStorage(addr thor.Address, key thor.Bytes32, value []byte) {
+	s.sm.Put(storageKey{addr, key}, value)
 }
 
 // GetCode returns code for the given address.
