@@ -94,10 +94,10 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
 func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (payer thor.Address, returnGas func(uint64), err error) {
-	energy := builtin.Energy.Native(state)
+	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) *big.Int {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
-		energy.AddBalance(payer, returnedEnergy, blockTime)
+		energy.Add(payer, returnedEnergy)
 		return returnedEnergy
 	}
 
@@ -115,19 +115,19 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (paye
 			// has enough credit
 			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
 				// deduct from sponsor, if any
-				if energy.SubBalance(sponsor, prepaid, blockTime) {
+				if energy.Sub(sponsor, prepaid) {
 					return sponsor, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
-			if energy.SubBalance(*commonTo, prepaid, blockTime) {
+			if energy.Sub(*commonTo, prepaid) {
 				return *commonTo, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
-	if energy.SubBalance(r.Origin, prepaid, blockTime) {
+	if energy.Sub(r.Origin, prepaid) {
 		return r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
 	}
 	return thor.Address{}, nil, errors.New("insufficient energy")

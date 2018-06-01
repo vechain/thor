@@ -77,7 +77,6 @@ func NewDevnet() (*Genesis, error) {
 			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-			energy := builtin.Energy.Native(state)
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range DevAccounts() {
@@ -87,7 +86,7 @@ func NewDevnet() (*Genesis, error) {
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			energy.SetInitialSupply(tokenSupply, energySupply, launchTime)
+			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 			return nil
 		}).
 		Call(

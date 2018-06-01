@@ -21,16 +21,16 @@ func TestEnergy(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	eng := New(thor.BytesToAddress([]byte("eng")), st)
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 	tests := []struct {
 		ret      interface{}
 		expected interface{}
 	}{
-		{eng.GetBalance(acc, 0), &big.Int{}},
-		{func() bool { eng.AddBalance(acc, big.NewInt(10), 0); return true }(), true},
-		{eng.GetBalance(acc, 0), big.NewInt(10)},
-		{eng.SubBalance(acc, big.NewInt(5), 0), true},
-		{eng.SubBalance(acc, big.NewInt(6), 0), false},
+		{eng.Get(acc), &big.Int{}},
+		{func() bool { eng.Add(acc, big.NewInt(10)); return true }(), true},
+		{eng.Get(acc), big.NewInt(10)},
+		{eng.Sub(acc, big.NewInt(5)), true},
+		{eng.Sub(acc, big.NewInt(6)), false},
 	}
 
 	for _, tt := range tests {
@@ -44,18 +44,17 @@ func TestEnergyGrowth(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	time1 := uint64(1000)
-
-	eng := New(thor.BytesToAddress([]byte("eng")), st)
-
-	eng.AddBalance(acc, &big.Int{}, 10)
+	New(thor.BytesToAddress([]byte("eng")), st, 10).
+		Add(acc, &big.Int{})
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1 := eng.GetBalance(acc, time1)
+	bal1 := New(thor.BytesToAddress([]byte("eng")), st, 1000).
+		Get(acc)
+
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
-	x.Mul(x, new(big.Int).SetUint64(time1-10))
+	x.Mul(x, new(big.Int).SetUint64(1000-10))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)

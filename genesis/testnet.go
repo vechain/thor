@@ -60,7 +60,7 @@ func NewTestnet() (*Genesis, error) {
 			state.SetEnergy(endorser0, &big.Int{}, launchTime)
 			tokenSupply.Add(tokenSupply, amount)
 
-			builtin.Energy.Native(state).SetInitialSupply(tokenSupply, &big.Int{}, launchTime)
+			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, &big.Int{})
 			return nil
 		}).
 		Call(

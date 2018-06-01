@@ -335,34 +335,34 @@ func TestEnergyNative(t *testing.T) {
 
 	cases := []*ccase{
 
-		test.Case("native_getBalance", addr).
+		test.Case("native_get", addr).
 			ShouldOutput(&big.Int{}).
 			Assert(t),
 
-		test.Case("native_addBalance", addr, valueAdd).
+		test.Case("native_add", addr, valueAdd).
 			Assert(t),
 
-		test.Case("native_getBalance", addr).
+		test.Case("native_get", addr).
 			ShouldOutput(valueAdd).
 			Assert(t),
 
-		test.Case("native_subBalance", addr, valueSub).
+		test.Case("native_sub", addr, valueSub).
 			ShouldOutput(true).
 			Assert(t),
 
-		test.Case("native_subBalance", addr, valueAdd).
+		test.Case("native_sub", addr, valueAdd).
 			ShouldOutput(false).
 			Assert(t),
 
-		test.Case("native_getBalance", addr).
+		test.Case("native_get", addr).
 			ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
 			Assert(t),
 
-		test.Case("native_getTotalSupply").
+		test.Case("native_totalSupply").
 			ShouldOutput(new(big.Int)).
 			Assert(t),
 
-		test.Case("native_getTotalBurned").
+		test.Case("native_totalBurned").
 			ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
 			Assert(t),
 	}
@@ -697,7 +697,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test.Case("native_getTokenTotalSupply").
 		To(contract).Caller(contract).
-		ShouldOutput(builtin.Energy.Native(st).GetTokenTotalSupply()).
+		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
 		Assert(t)
 
 	test.Case("native_getTransactionProvedWork").
