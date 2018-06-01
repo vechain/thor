@@ -79,6 +79,11 @@ func init() {
 			output := env.TransactionContext().ProvedWork
 			return []interface{}{output}
 		}},
+		{"native_getTransactionID", func(env *xenv.Environment) []interface{} {
+			env.UseGas(thor.SloadGas)
+			output := env.TransactionContext().ID
+			return []interface{}{output}
+		}},
 	}
 
 	nativeABI := Extension.NativeABI()
