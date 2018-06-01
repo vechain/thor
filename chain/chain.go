@@ -69,11 +69,11 @@ func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
 			return nil, err
 		}
 
-		if err := saveBestBlockID(batch, genesisBlock.Header().ID()); err != nil {
+		if err := saveBestBlockID(batch, genesisID); err != nil {
 			return nil, err
 		}
 
-		if err := ancestorTrie.Update(batch, genesisBlock.Header()); err != nil {
+		if err := ancestorTrie.Update(batch, genesisID, genesisBlock.Header().ParentID()); err != nil {
 			return nil, err
 		}
 
@@ -182,7 +182,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 		return nil, err
 	}
 
-	if err := c.ancestorTrie.Update(batch, newBlock.Header()); err != nil {
+	if err := c.ancestorTrie.Update(batch, newBlockID, newBlock.Header().ParentID()); err != nil {
 		return nil, err
 	}
 

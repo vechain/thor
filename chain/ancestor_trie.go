@@ -37,9 +37,7 @@ func numberAsKey(num uint32) []byte {
 	return key[:]
 }
 
-func (at *ancestorTrie) Update(w kv.Putter, header *block.Header) error {
-	id, parentID := header.ID(), header.ParentID()
-
+func (at *ancestorTrie) Update(w kv.Putter, id, parentID thor.Bytes32) error {
 	var parentRoot thor.Bytes32
 	if block.Number(id) > 0 {
 		// non-genesis
