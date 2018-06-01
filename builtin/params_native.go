@@ -44,7 +44,7 @@ func init() {
 	abi := Params.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
-			privateMethods[methodKey{Params.Address, method.ID()}] = &nativeMethod{
+			nativeMethods[methodKey{Params.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}

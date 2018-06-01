@@ -70,7 +70,7 @@ func init() {
 	abi := Energy.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
-			privateMethods[methodKey{Energy.Address, method.ID()}] = &nativeMethod{
+			nativeMethods[methodKey{Energy.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}

@@ -89,10 +89,10 @@ func init() {
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
-	nativeABI := Authority.NativeABI()
+	abi := Authority.NativeABI()
 	for _, def := range defines {
-		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{
+		if method, found := abi.MethodByName(def.name); found {
+			nativeMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}
