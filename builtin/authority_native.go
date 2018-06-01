@@ -7,6 +7,7 @@ package builtin
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/xenv"
 )
@@ -28,7 +29,12 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Add(thor.Address(args.Signer), thor.Address(args.Endorsor), thor.Bytes32(args.Identity))
+			ok := Authority.Native(env.State()).Add(&authority.Candidate{
+				Signer:   thor.Address(args.Signer),
+				Endorsor: thor.Address(args.Endorsor),
+				Identity: thor.Bytes32(args.Identity),
+				Active:   true, // set to active by default
+			})
 			if ok {
 				env.UseGas(thor.SstoreSetGas)
 				env.UseGas(thor.SstoreResetGas)
@@ -42,7 +48,7 @@ func init() {
 			env.UseGas(thor.SloadGas)
 			ok := Authority.Native(env.State()).Remove(thor.Address(signer))
 			if ok {
-				env.UseGas(thor.SstoreResetGas * 2)
+				env.UseGas(thor.SstoreResetGas * 3)
 			}
 			return []interface{}{ok}
 		}},
@@ -51,42 +57,42 @@ func init() {
 			env.ParseArgs(&signer)
 
 			env.UseGas(thor.SloadGas)
-			p := Authority.Native(env.State()).Get(thor.Address(signer))
-			return []interface{}{!p.IsEmpty(), p.Endorsor, p.Identity, p.Active}
+			if candidate, ok := Authority.Native(env.State()).Get(thor.Address(signer)); ok {
+				return []interface{}{true, candidate.Endorsor, candidate.Identity, candidate.Active}
+			}
+			return []interface{}{false, thor.Address{}, thor.Bytes32{}, false}
 		}},
 		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			signer := Authority.Native(env.State()).First()
-			return []interface{}{signer}
+			if signer := Authority.Native(env.State()).First(); signer != nil {
+				return []interface{}{*signer}
+			}
+			return []interface{}{thor.Address{}}
 		}},
 		{"native_next", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 
 			env.UseGas(thor.SloadGas)
-			p := Authority.Native(env.State()).Get(thor.Address(signer))
-			var next thor.Address
-			if p.Next != nil {
-				next = *p.Next
+			if next := Authority.Native(env.State()).Next(thor.Address(signer)); next != nil {
+				return []interface{}{*next}
 			}
-			return []interface{}{next}
+			return []interface{}{thor.Address{}}
 		}},
 		{"native_isEndorsed", func(env *xenv.Environment) []interface{} {
 			var signer common.Address
 			env.ParseArgs(&signer)
 
 			env.UseGas(thor.SloadGas)
-			p := Authority.Native(env.State()).Get(thor.Address(signer))
-			if p.IsEmpty() {
-				return []interface{}{false}
+			if candidate, ok := Authority.Native(env.State()).Get(thor.Address(signer)); ok {
+				env.UseGas(thor.GetBalanceGas)
+				bal := env.State().GetBalance(candidate.Endorsor)
+
+				env.UseGas(thor.SloadGas)
+				endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
+				return []interface{}{bal.Cmp(endorsement) >= 0}
 			}
-
-			env.UseGas(thor.GetBalanceGas)
-			bal := env.State().GetBalance(p.Endorsor)
-
-			env.UseGas(thor.SloadGas)
-			endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
-			return []interface{}{bal.Cmp(endorsement) >= 0}
+			return []interface{}{false}
 		}},
 	}
 	abi := Authority.NativeABI()

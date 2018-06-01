@@ -31,15 +31,15 @@ func TestAuthority(t *testing.T) {
 		ret      interface{}
 		expected interface{}
 	}{
-		{aut.Add(p1, p1, thor.Bytes32{}), true},
-		{aut.Add(p2, p2, thor.Bytes32{}), true},
-		{aut.Add(p3, p3, thor.Bytes32{}), true},
+		{aut.Add(&Candidate{p1, p1, thor.Bytes32{}, true}), true},
+		{aut.Add(&Candidate{p2, p2, thor.Bytes32{}, true}), true},
+		{aut.Add(&Candidate{p3, p3, thor.Bytes32{}, true}), true},
 		{M(aut.Candidates()), []interface{}{
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
 		}},
-		{aut.Get(p1), &Entry{p1, thor.Bytes32{}, true, nil, &p2}},
+		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, true}, true)},
 		{aut.Update(p1, false), true},
-		{aut.Get(p1), &Entry{p1, thor.Bytes32{}, false, nil, &p2}},
+		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, false}, true)},
 		{aut.Remove(p1), true},
 		{M(aut.Candidates()), []interface{}{
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
