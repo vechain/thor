@@ -60,15 +60,22 @@ contract Prototype {
 
     function $addUser(address target, address user) public{
         require($master(target) == msg.sender || target == msg.sender);
+        require(!PrototypeNative(this).native_isUser(target, user));
         PrototypeNative(this).native_addUser(target, user);
     }
 
     function $removeUser(address target, address user) public{
         require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_isUser(target, user));
         PrototypeNative(this).native_removeUser(target, user);
     }
 
     function $sponsor(address target, bool yesOrNo) public{
+        if(yesOrNo) {
+            require(!PrototypeNative(this).native_isSponsor(target, msg.sender));
+        } else {
+            require(PrototypeNative(this).native_isSponsor(target, msg.sender));
+        }
         PrototypeNative(this).native_sponsor(target, msg.sender, yesOrNo);
     }
 
@@ -78,6 +85,7 @@ contract Prototype {
 
     function $selectSponsor(address target, address sponsor) public{
         require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_isSponsor(target, sponsor));
         PrototypeNative(this).native_selectSponsor(target, sponsor);
     }
     

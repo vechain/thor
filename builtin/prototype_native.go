@@ -229,8 +229,8 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(thor.SloadGas)
-			env.Require(binding.AddUser(thor.Address(args.User), env.BlockContext().Time))
 			env.UseGas(thor.SstoreSetGas)
+			binding.AddUser(thor.Address(args.User), env.BlockContext().Time)
 			env.Log(addRemoveUserEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.User[:])}, true)
 
 			return nil
@@ -243,9 +243,8 @@ func init() {
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
-			env.UseGas(thor.SloadGas)
-			env.Require(binding.RemoveUser(thor.Address(args.User)))
 			env.UseGas(thor.SstoreResetGas)
+			binding.RemoveUser(thor.Address(args.User))
 			env.Log(addRemoveUserEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.User[:])}, false)
 
 			return nil
@@ -259,13 +258,12 @@ func init() {
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
-			env.UseGas(thor.SloadGas)
-			env.Require(binding.Sponsor(thor.Address(args.Caller), args.YesOrNo))
 			if args.YesOrNo {
 				env.UseGas(thor.SstoreSetGas)
 			} else {
 				env.UseGas(thor.SstoreResetGas)
 			}
+			binding.Sponsor(thor.Address(args.Caller), args.YesOrNo)
 			env.Log(sponsorEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.Caller.Bytes())}, args.YesOrNo)
 
 			return nil
@@ -291,9 +289,8 @@ func init() {
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
-			env.UseGas(thor.SloadGas)
-			env.Require(binding.SelectSponsor(thor.Address(args.Sponsor)))
 			env.UseGas(thor.SstoreResetGas)
+			binding.SelectSponsor(thor.Address(args.Sponsor))
 			env.Log(selectSponsorEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.Sponsor[:])})
 
 			return nil

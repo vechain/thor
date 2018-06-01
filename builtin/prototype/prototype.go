@@ -69,35 +69,18 @@ func (b *Binding) IsUser(user thor.Address) bool {
 	return !uo.IsEmpty()
 }
 
-func (b *Binding) AddUser(user thor.Address, blockTime uint64) bool {
-	userKey := b.userKey(user)
-	var uo userObject
-	b.getStorage(userKey, &uo)
-
-	if !uo.IsEmpty() {
-		return false
-	}
-
+func (b *Binding) AddUser(user thor.Address, blockTime uint64) {
 	var up userPlan
 	b.getStorage(b.userPlanKey(), &up)
-
-	b.setStorage(userKey, &userObject{
+	b.setStorage(b.userKey(user), &userObject{
 		up.Credit,
 		blockTime,
 	})
-	return true
 }
 
-func (b *Binding) RemoveUser(user thor.Address) bool {
+func (b *Binding) RemoveUser(user thor.Address) {
 	userKey := b.userKey(user)
-	var uo userObject
-	b.getStorage(userKey, &uo)
-	if uo.IsEmpty() {
-		return false
-	}
-	// clear storage
 	b.setStorage(userKey, uint8(0))
-	return true
 }
 
 func (b *Binding) UserCredit(user thor.Address, blockTime uint64) *big.Int {
@@ -125,25 +108,16 @@ func (b *Binding) SetUserPlan(credit, recoveryRate *big.Int) {
 	b.setStorage(b.userPlanKey(), &userPlan{credit, recoveryRate})
 }
 
-func (b *Binding) Sponsor(sponsor thor.Address, yesOrNo bool) bool {
+func (b *Binding) Sponsor(sponsor thor.Address, yesOrNo bool) {
 	sponsorKey := b.sponsorKey(sponsor)
-	var flag uint8
-	b.getStorage(sponsorKey, &flag)
 	if yesOrNo {
-		if flag != 0 {
-			return false
-		}
 		b.setStorage(sponsorKey, uint8(1))
 	} else {
-		if flag == 0 {
-			return false
-		}
 		b.setStorage(sponsorKey, uint8(0))
 		if b.CurrentSponsor() == sponsor {
 			b.setStorage(b.curSponsorKey(), thor.Address{})
 		}
 	}
-	return true
 }
 
 func (b *Binding) IsSponsor(sponsor thor.Address) bool {
@@ -152,18 +126,8 @@ func (b *Binding) IsSponsor(sponsor thor.Address) bool {
 	return flag != 0
 }
 
-func (b *Binding) SelectSponsor(sponsor thor.Address) bool {
-	if sponsor.IsZero() {
-		// allow select zero sponsor to clear current
-		b.setStorage(b.curSponsorKey(), sponsor)
-		return true
-	}
-
-	if !b.IsSponsor(sponsor) {
-		return false
-	}
+func (b *Binding) SelectSponsor(sponsor thor.Address) {
 	b.setStorage(b.curSponsorKey(), sponsor)
-	return true
 }
 
 func (b *Binding) CurrentSponsor() (addr thor.Address) {
