@@ -37,6 +37,9 @@ func (s *Seeker) Err() error {
 
 // GetID returns block ID by the given number.
 func (s *Seeker) GetID(num uint32) thor.Bytes32 {
+	if num > block.Number(s.headBlockID) {
+		panic("num exceeds head block")
+	}
 	id, err := s.chain.GetAncestorBlockID(s.headBlockID, num)
 	s.setError(err)
 	return id
