@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/xenv"
@@ -39,7 +40,6 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(target))
 
 			env.UseGas(thor.GetBalanceGas)
-
 			master := binding.Master()
 
 			return []interface{}{master}
@@ -136,9 +136,10 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			val := env.State().GetStorage(thor.Address(args.Target), args.Key)
-
-			return []interface{}{val}
+			var val []byte
+			data := env.State().GetRawStorage(thor.Address(args.Target), args.Key)
+			env.Require(decodeBytes(data, &val) == nil)
+			return []interface{}{thor.BytesToBytes32(val)}
 		}},
 		{"native_storageAtBlock", func(env *xenv.Environment) []interface{} {
 			var args struct {
@@ -156,8 +157,10 @@ func init() {
 
 			if args.BlockNumber == ctx.Number {
 				env.UseGas(thor.SloadGas)
-				val := env.State().GetStorage(thor.Address(args.Target), args.Key)
-				return []interface{}{val}
+				var val []byte
+				data := env.State().GetRawStorage(thor.Address(args.Target), args.Key)
+				env.Require(decodeBytes(data, &val) == nil)
+				return []interface{}{thor.BytesToBytes32(val)}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -167,9 +170,10 @@ func init() {
 			env.UseGas(thor.SloadGas)
 			state := env.State().Spawn(header.StateRoot())
 			env.UseGas(thor.SloadGas)
-			val := state.GetStorage(thor.Address(args.Target), args.Key)
-
-			return []interface{}{val}
+			var val []byte
+			data := state.GetRawStorage(thor.Address(args.Target), args.Key)
+			env.Require(decodeBytes(data, &val) == nil)
+			return []interface{}{thor.BytesToBytes32(val)}
 		}},
 		{"native_userPlan", func(env *xenv.Environment) []interface{} {
 			var target common.Address
@@ -319,4 +323,12 @@ func init() {
 			panic("method not found: " + def.name)
 		}
 	}
+}
+
+func decodeBytes(data []byte, val *[]byte) error {
+	if len(data) == 0 {
+		*val = nil
+		return nil
+	}
+	return rlp.DecodeBytes(data, val)
 }

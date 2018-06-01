@@ -400,7 +400,8 @@ func TestPrototypeNative(t *testing.T) {
 	st.SetBalance(thor.Address(acc1), big.NewInt(1))
 
 	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{
-		Time: genesisBlock.Header().Timestamp(),
+		Time:   genesisBlock.Header().Timestamp(),
+		Number: genesisBlock.Header().Number(),
 	})
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
@@ -515,6 +516,14 @@ func TestPrototypeNative(t *testing.T) {
 		ShouldOutput(value).
 		Assert(t)
 
+	test.Case("native_storage", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
+	test.Case("native_storageAtBlock", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan")), uint32(0)).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
+
 	test.Case("native_storageAtBlock", acc1, key, uint32(0)).
 		ShouldOutput(value).
 		Assert(t)
@@ -582,8 +591,10 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 
 func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	var (
-		acc1 = thor.BytesToAddress([]byte("acc1"))
-		key  = thor.BytesToBytes32([]byte("acc1-key"))
+		acc1         = thor.BytesToAddress([]byte("acc1"))
+		key          = thor.BytesToBytes32([]byte("acc1-key"))
+		credit       = big.NewInt(1000)
+		recoveryRate = big.NewInt(10)
 	)
 
 	kv, _ := lvldb.NewMem()
@@ -620,6 +631,11 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 		caller: builtin.Prototype.Address,
 	}
 
+	test.Case("native_setUserPlan", acc1, credit, recoveryRate).
+		ShouldOutput().
+		ShouldLog(buildTestLogs("$SetUserPlan", acc1, nil, credit, recoveryRate)).
+		Assert(t)
+
 	test.Case("native_storageAtBlock", acc1, key, uint32(10)).
 		ShouldOutput(thor.BytesToBytes32([]byte("acc1-value10"))).
 		Assert(t)
@@ -644,6 +660,9 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 		ShouldOutput(big.NewInt(99)).
 		Assert(t)
 
+	test.Case("native_storageAtBlock", builtin.Prototype.Address, thor.Blake2b(acc1.Bytes(), []byte("user-plan")), uint32(99)).
+		ShouldVMError(evm.ErrExecutionReverted()).
+		Assert(t)
 }
 
 func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *ecdsa.PrivateKey) *block.Block {
