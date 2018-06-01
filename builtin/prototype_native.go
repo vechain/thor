@@ -38,7 +38,8 @@ func init() {
 			env.ParseArgs(&target)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(target))
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
+
 			master := binding.Master()
 
 			return []interface{}{master}
@@ -52,6 +53,7 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
 			env.UseGas(thor.SstoreResetGas)
+
 			binding.SetMaster(thor.Address(args.NewMaster))
 			env.Log(setMasterEvent, thor.Address(args.Target), []thor.Bytes32{thor.BytesToBytes32(args.NewMaster[:])})
 
@@ -78,7 +80,7 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			blockID := env.Seeker().GetID(args.BlockNumber)
-			env.UseGas(3 * thor.SloadGas)
+			env.UseGas(thor.SloadGas)
 			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(thor.SloadGas)
 			state := env.State().Spawn(header.StateRoot())
@@ -108,7 +110,7 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			blockID := env.Seeker().GetID(args.BlockNumber)
-			env.UseGas(3 * thor.SloadGas)
+			env.UseGas(thor.SloadGas)
 			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(thor.SloadGas)
 			state := env.State().Spawn(header.StateRoot())
@@ -121,7 +123,7 @@ func init() {
 			var target common.Address
 			env.ParseArgs(&target)
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.GetBalanceGas)
 			hasCode := !env.State().GetCodeHash(thor.Address(target)).IsZero()
 
 			return []interface{}{hasCode}
@@ -160,7 +162,7 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			blockID := env.Seeker().GetID(args.BlockNumber)
-			env.UseGas(3 * thor.SloadGas)
+			env.UseGas(thor.SloadGas)
 			header := env.Seeker().GetHeader(blockID)
 			env.UseGas(thor.SloadGas)
 			state := env.State().Spawn(header.StateRoot())
@@ -215,7 +217,7 @@ func init() {
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Target))
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(2 * thor.SloadGas)
 			credit := binding.UserCredit(thor.Address(args.User), env.BlockContext().Time)
 
 			return []interface{}{credit}
