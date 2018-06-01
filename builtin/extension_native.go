@@ -26,7 +26,7 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(thor.SloadGas)
-			env.Require(blockNum >= 0 && blockNum < env.BlockContext().Number)
+			env.Require(blockNum < env.BlockContext().Number)
 			output := env.Seeker().GetID(blockNum)
 			return []interface{}{output}
 		}},
@@ -34,7 +34,7 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(thor.SloadGas)
-			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			env.Require(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().TotalScore}
 			}
@@ -48,7 +48,7 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(thor.SloadGas)
-			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			env.Require(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Time}
 			}
@@ -62,7 +62,7 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.UseGas(thor.SloadGas)
-			env.Require(blockNum >= 0 && blockNum <= env.BlockContext().Number)
+			env.Require(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Proposer}
 			}
@@ -80,12 +80,10 @@ func init() {
 			return []interface{}{output}
 		}},
 		{"native_getTransactionProvedWork", func(env *xenv.Environment) []interface{} {
-			env.UseGas(thor.SloadGas)
 			output := env.TransactionContext().ProvedWork
 			return []interface{}{output}
 		}},
 		{"native_getTransactionID", func(env *xenv.Environment) []interface{} {
-			env.UseGas(thor.SloadGas)
 			output := env.TransactionContext().ID
 			return []interface{}{output}
 		}},
