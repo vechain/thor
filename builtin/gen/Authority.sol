@@ -23,7 +23,7 @@ contract Authority {
 
         require(AuthorityNative(this).native_add(_signer, _endorsor, _identity));
 
-        emit Add(_signer, _identity);
+        emit Add(_signer, _endorsor, _identity);
     }
 
     // @notice remove a candidate.
@@ -49,7 +49,7 @@ contract Authority {
     }
 
     // fired when an address authorized to be a proposer.
-    event Add(address indexed signer, bytes32 identity);
+    event Add(address indexed signer, address endorsor, bytes32 identity);
     // fired when an address deauthorized.
     event Remove(address indexed signer);    
 }

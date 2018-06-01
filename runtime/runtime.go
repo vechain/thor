@@ -241,7 +241,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	reward.Mul(reward, overallGasPrice)
 	reward.Mul(reward, rewardRatio)
 	reward.Div(reward, big.NewInt(1e18))
-	builtin.Energy.Native(rt.state).AddBalance(rt.ctx.Beneficiary, reward, rt.ctx.Time)
+	builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward)
 
 	receipt.Reward = reward
 

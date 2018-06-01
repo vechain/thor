@@ -55,8 +55,8 @@ func (a *authorityContract) Native(state *state.State) *authority.Authority {
 	return authority.New(a.Address, state)
 }
 
-func (e *energyContract) Native(state *state.State) *energy.Energy {
-	return energy.New(e.Address, state)
+func (e *energyContract) Native(state *state.State, blockTime uint64) *energy.Energy {
+	return energy.New(e.Address, state, blockTime)
 }
 
 func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {

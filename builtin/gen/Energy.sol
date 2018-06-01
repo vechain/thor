@@ -28,15 +28,15 @@ contract Energy is Token {
 
     ///@return ERC20 token total supply
     function totalSupply() public view returns (uint256) {
-        return EnergyNative(this).native_getTotalSupply();
+        return EnergyNative(this).native_totalSupply();
     }
 
     function totalBurned() public view returns(uint256) {
-        return EnergyNative(this).native_getTotalBurned();
+        return EnergyNative(this).native_totalBurned();
     }
 
     function balanceOf(address _owner) public view returns (uint256 balance) {
-        return EnergyNative(this).native_getBalance(_owner);
+        return EnergyNative(this).native_get(_owner);
     }
 
     function transfer(address _to, uint256 _amount) public returns (bool success) {
@@ -70,19 +70,19 @@ contract Energy is Token {
 
     function _transfer(address _from, address _to, uint256 _amount) internal {
         if (_amount > 0) {
-            require(EnergyNative(this).native_subBalance(_from, _amount));
+            require(EnergyNative(this).native_sub(_from, _amount));
             // believed that will never overflow
-            EnergyNative(this).native_addBalance(_to, _amount);
+            EnergyNative(this).native_add(_to, _amount);
         }
         emit Transfer(_from, _to, _amount);
     }
 }
 
 contract EnergyNative {
-    function native_getTotalSupply() public view returns(uint256);
-    function native_getTotalBurned() public view returns(uint256);
+    function native_totalSupply() public view returns(uint256);
+    function native_totalBurned() public view returns(uint256);
     
-    function native_getBalance(address addr) public view returns(uint256);
-    function native_addBalance(address addr, uint256 amount) public;
-    function native_subBalance(address addr, uint256 amount) public returns(bool);
+    function native_get(address addr) public view returns(uint256);
+    function native_add(address addr, uint256 amount) public;
+    function native_sub(address addr, uint256 amount) public returns(bool);
 }

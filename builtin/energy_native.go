@@ -18,25 +18,25 @@ func init() {
 		name string
 		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_getTotalSupply", func(env *xenv.Environment) []interface{} {
+		{"native_totalSupply", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			supply := Energy.Native(env.State()).GetTotalSupply(env.BlockContext().Time)
+			supply := Energy.Native(env.State(), env.BlockContext().Time).TotalSupply()
 			return []interface{}{supply}
 		}},
-		{"native_getTotalBurned", func(env *xenv.Environment) []interface{} {
+		{"native_totalBurned", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			burned := Energy.Native(env.State()).GetTotalBurned()
+			burned := Energy.Native(env.State(), env.BlockContext().Time).TotalBurned()
 			return []interface{}{burned}
 		}},
-		{"native_getBalance", func(env *xenv.Environment) []interface{} {
+		{"native_get", func(env *xenv.Environment) []interface{} {
 			var addr common.Address
 			env.ParseArgs(&addr)
 
 			env.UseGas(thor.GetBalanceGas)
-			bal := Energy.Native(env.State()).GetBalance(thor.Address(addr), env.BlockContext().Time)
+			bal := Energy.Native(env.State(), env.BlockContext().Time).Get(thor.Address(addr))
 			return []interface{}{bal}
 		}},
-		{"native_addBalance", func(env *xenv.Environment) []interface{} {
+		{"native_add", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
@@ -49,10 +49,10 @@ func init() {
 			} else {
 				env.UseGas(thor.SstoreSetGas - thor.GetBalanceGas)
 			}
-			Energy.Native(env.State()).AddBalance(thor.Address(args.Addr), args.Amount, env.BlockContext().Time)
+			Energy.Native(env.State(), env.BlockContext().Time).Add(thor.Address(args.Addr), args.Amount)
 			return nil
 		}},
-		{"native_subBalance", func(env *xenv.Environment) []interface{} {
+		{"native_sub", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Addr   common.Address
 				Amount *big.Int
@@ -60,7 +60,7 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.GetBalanceGas)
-			ok := Energy.Native(env.State()).SubBalance(thor.Address(args.Addr), args.Amount, env.BlockContext().Time)
+			ok := Energy.Native(env.State(), env.BlockContext().Time).Sub(thor.Address(args.Addr), args.Amount)
 			if ok {
 				env.UseGas(thor.SstoreResetGas - thor.GetBalanceGas)
 			}
