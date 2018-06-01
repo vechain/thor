@@ -6,5 +6,5 @@
 package gen
 
 //go:generate rm -rf ./compiled/
-//go:generate solc --optimize --overwrite --bin-runtime --abi -o ./compiled All.sol
+//go:generate solc --optimize-runs 200 --overwrite --bin-runtime --abi -o ./compiled All.sol
 //go:generate go-bindata -nometadata -pkg gen -o bindata.go compiled/
