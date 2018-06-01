@@ -44,6 +44,7 @@ type ccase struct {
 	args       []interface{}
 	events     []*vm.Event
 	provedWork *big.Int
+	txID       thor.Bytes32
 
 	output *[]interface{}
 	vmerr  error
@@ -75,6 +76,10 @@ func (c *ccase) ProvedWork(provedWork *big.Int) *ccase {
 	return c
 }
 
+func (c *ccase) TxID(txID thor.Bytes32) *ccase {
+	c.txID = txID
+	return c
+}
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
 	return c
@@ -103,7 +108,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 
 	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
 		0, math.MaxUint64, &xenv.TransactionContext{
-			ID:         thor.Bytes32{},
+			ID:         c.txID,
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
 			ProvedWork: c.provedWork})
@@ -699,6 +704,12 @@ func TestExtensionNative(t *testing.T) {
 		To(contract).Caller(contract).
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
+		Assert(t)
+
+	test.Case("native_getTransactionID").
+		To(contract).Caller(contract).
+		TxID(thor.BytesToBytes32([]byte("txID"))).
+		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
 		Assert(t)
 
 	test.Case("native_getBlockIDByNum", uint32(3)).
