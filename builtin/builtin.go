@@ -14,7 +14,11 @@ import (
 	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/xenv"
 )
 
 // Builtin contracts binding.
@@ -71,4 +75,44 @@ func mustLoadThorLibABI() *abi.ABI {
 		panic(errors.Wrap(err, "load native ABI for ThorLib"))
 	}
 	return abi
+}
+
+type nativeMethod struct {
+	abi *abi.Method
+	run func(env *xenv.Environment) []interface{}
+}
+
+type methodKey struct {
+	thor.Address
+	abi.MethodID
+}
+
+var nativeMethods = make(map[methodKey]*nativeMethod)
+
+// HandleNativeCall entry of native methods implementation.
+func HandleNativeCall(
+	seeker *chain.Seeker,
+	state *state.State,
+	blockCtx *xenv.BlockContext,
+	txCtx *xenv.TransactionContext,
+	evm *evm.EVM,
+	contract *evm.Contract,
+	readonly bool,
+) func() ([]byte, error) {
+	methodID, err := abi.ExtractMethodID(contract.Input)
+	if err != nil {
+		return nil
+	}
+
+	var method *nativeMethod
+	if contract.Address() == contract.Caller() {
+		// private methods require caller == to
+		method = nativeMethods[methodKey{thor.Address(contract.Address()), methodID}]
+	}
+
+	if method == nil {
+		return nil
+	}
+
+	return xenv.New(method.abi, seeker, state, blockCtx, txCtx, evm, contract).Call(method.run, readonly)
 }

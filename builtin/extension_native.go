@@ -5,6 +5,11 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
+const (
+	blake2b256WordGas uint64 = 3
+	blake2b256Gas     uint64 = 15
+)
+
 func init() {
 	defines := []struct {
 		name string
@@ -86,10 +91,10 @@ func init() {
 		}},
 	}
 
-	nativeABI := Extension.NativeABI()
+	abi := Extension.NativeABI()
 	for _, def := range defines {
-		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{
+		if method, found := abi.MethodByName(def.name); found {
+			nativeMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}

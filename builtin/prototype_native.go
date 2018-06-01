@@ -306,10 +306,10 @@ func init() {
 			return []interface{}{addr}
 		}},
 	}
-	nativeABI := Prototype.NativeABI()
+	abi := Prototype.NativeABI()
 	for _, def := range defines {
-		if method, found := nativeABI.MethodByName(def.name); found {
-			privateMethods[methodKey{Prototype.Address, method.ID()}] = &nativeMethod{
+		if method, found := abi.MethodByName(def.name); found {
+			nativeMethods[methodKey{Prototype.Address, method.ID()}] = &nativeMethod{
 				abi: method,
 				run: def.run,
 			}
