@@ -698,7 +698,7 @@ func TestExtensionNative(t *testing.T) {
 	_, err = c.AddBlock(b2, nil)
 	assert.Equal(t, err, nil)
 
-	rt := runtime.New(c.NewSeeker(b2.Header().ID()), st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Proposer: b2_singer})
+	rt := runtime.New(c.NewSeeker(b2.Header().ID()), st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
 
 	contract := builtin.Extension.Address
 
@@ -714,94 +714,94 @@ func TestExtensionNative(t *testing.T) {
 		ShouldOutput(thor.Blake2b(value)).
 		Assert(t)
 
-	test.Case("native_getTokenTotalSupply").
+	test.Case("native_tokenTotalSupply").
 		To(contract).Caller(contract).
 		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
 		Assert(t)
 
-	test.Case("native_getTransactionProvedWork").
+	test.Case("native_transactionProvedWork").
 		To(contract).Caller(contract).
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
 		Assert(t)
 
-	test.Case("native_getTransactionID").
+	test.Case("native_transactionID").
 		To(contract).Caller(contract).
 		TxID(thor.BytesToBytes32([]byte("txID"))).
 		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
 		Assert(t)
 
-	test.Case("native_getBlockIDByNum", uint32(3)).
+	test.Case("native_blockID", uint32(3)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
-	test.Case("native_getBlockIDByNum", uint32(2)).
+	test.Case("native_blockID", uint32(2)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
-	test.Case("native_getBlockIDByNum", uint32(1)).
+	test.Case("native_blockID", uint32(1)).
 		To(contract).Caller(contract).
 		ShouldOutput(b1.Header().ID()).
 		Assert(t)
 
-	test.Case("native_getBlockIDByNum", uint32(0)).
+	test.Case("native_blockID", uint32(0)).
 		To(contract).Caller(contract).
 		ShouldOutput(b0.Header().ID()).
 		Assert(t)
 
-	test.Case("native_getTotalScoreByNum", uint32(3)).
+	test.Case("native_blockTotalScore", uint32(3)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
-	test.Case("native_getTotalScoreByNum", uint32(2)).
+	test.Case("native_blockTotalScore", uint32(2)).
 		To(contract).Caller(contract).
 		ShouldOutput(b2.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_getTotalScoreByNum", uint32(1)).
+	test.Case("native_blockTotalScore", uint32(1)).
 		To(contract).Caller(contract).
 		ShouldOutput(b1.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_getTotalScoreByNum", uint32(0)).
+	test.Case("native_blockTotalScore", uint32(0)).
 		To(contract).Caller(contract).
 		ShouldOutput(b0.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_getTimestampByNum", uint32(3)).
+	test.Case("native_blockTimestamp", uint32(3)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
-	test.Case("native_getTimestampByNum", uint32(2)).
+	test.Case("native_blockTimestamp", uint32(2)).
 		To(contract).Caller(contract).
 		ShouldOutput(b2.Header().Timestamp()).
 		Assert(t)
 
-	test.Case("native_getTimestampByNum", uint32(1)).
+	test.Case("native_blockTimestamp", uint32(1)).
 		To(contract).Caller(contract).
 		ShouldOutput(b1.Header().Timestamp()).
 		Assert(t)
 
-	test.Case("native_getTimestampByNum", uint32(0)).
+	test.Case("native_blockTimestamp", uint32(0)).
 		To(contract).Caller(contract).
 		ShouldOutput(b0.Header().Timestamp()).
 		Assert(t)
 
-	test.Case("native_getProposerByNum", uint32(3)).
+	test.Case("native_blockSigner", uint32(3)).
 		To(contract).Caller(contract).
 		ShouldVMError(evm.ErrExecutionReverted()).
 		Assert(t)
 
-	test.Case("native_getProposerByNum", uint32(2)).
+	test.Case("native_blockSigner", uint32(2)).
 		To(contract).Caller(contract).
 		ShouldOutput(b2_singer).
 		Assert(t)
 
-	test.Case("native_getProposerByNum", uint32(1)).
+	test.Case("native_blockSigner", uint32(1)).
 		To(contract).Caller(contract).
 		ShouldOutput(b1_singer).
 		Assert(t)

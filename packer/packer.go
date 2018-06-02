@@ -80,7 +80,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		state,
 		&xenv.BlockContext{
 			Beneficiary: p.beneficiary,
-			Proposer:    p.proposer,
+			Signer:      p.proposer,
 			Number:      parent.Number() + 1,
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.GasLimit()),
@@ -104,7 +104,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 		state,
 		&xenv.BlockContext{
 			Beneficiary: p.beneficiary,
-			Proposer:    p.proposer,
+			Signer:      p.proposer,
 			Number:      parent.Number() + 1,
 			Time:        targetTime,
 			GasLimit:    p.gasLimit(parent.GasLimit()),
