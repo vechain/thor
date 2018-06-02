@@ -5,7 +5,7 @@
 
 pragma solidity ^0.4.18;
 
-/// @title Evmlib implements evm lib functions.
+/// @title Extension extends EVM functions.
 
 contract Extension {
     function blake2b256(bytes _value) public view returns(bytes32) {
@@ -13,41 +13,41 @@ contract Extension {
     }
 
     function blockID(uint32 num) public view returns(bytes32) {
-        return ExtensionNative(this).native_getBlockIDByNum(num);
+        return ExtensionNative(this).native_blockID(num);
     }
 
     function blockTotalScore(uint32 num) public view returns(uint64) {
-        return ExtensionNative(this).native_getTotalScoreByNum(num);
+        return ExtensionNative(this).native_blockTotalScore(num);
     }
 
     function blockTime(uint32 num) public view returns(uint64) {
-        return ExtensionNative(this).native_getTimestampByNum(num);
+        return ExtensionNative(this).native_blockTimestamp(num);
     }
 
-    function blockProposer(uint32 num) public view returns(address) {
-        return ExtensionNative(this).native_getProposerByNum(num);
+    function blockSigner(uint32 num) public view returns(address) {
+        return ExtensionNative(this).native_blockSigner(num);
     }
 
     function totalSupply() public view returns(uint256) {
-        return ExtensionNative(this).native_getTokenTotalSupply();
+        return ExtensionNative(this).native_tokenTotalSupply();
     }
 
     function txProvedWork() public view returns(uint256) {
-        return ExtensionNative(this).native_getTransactionProvedWork();
+        return ExtensionNative(this).native_transactionProvedWork();
     }
 
     function txID() public view returns(bytes32) {
-        return ExtensionNative(this).native_getTransactionID();
+        return ExtensionNative(this).native_transactionID();
     }
 }
 
 contract ExtensionNative {
     function native_blake2b256(bytes _value) public view returns(bytes32);
-    function native_getBlockIDByNum(uint32 num) public view returns(bytes32);
-    function native_getTotalScoreByNum(uint32 num) public view returns(uint64);
-    function native_getTimestampByNum(uint32 num) public view returns(uint64);
-    function native_getProposerByNum(uint32 num)public view returns(address);
-    function native_getTokenTotalSupply()public view returns(uint256);
-    function native_getTransactionProvedWork()public view returns(uint256);    
-    function native_getTransactionID()public view returns(bytes32);    
+    function native_blockID(uint32 num) public view returns(bytes32);
+    function native_blockTotalScore(uint32 num) public view returns(uint64);
+    function native_blockTimestamp(uint32 num) public view returns(uint64);
+    function native_blockSigner(uint32 num)public view returns(address);
+    function native_tokenTotalSupply()public view returns(uint256);
+    function native_transactionProvedWork()public view returns(uint256);    
+    function native_transactionID()public view returns(bytes32);    
 }

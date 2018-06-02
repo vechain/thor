@@ -125,11 +125,11 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
 	gp := (*big.Int)(body.GasPrice)
-	proposer, _ := header.Signer()
+	signer, _ := header.Signer()
 	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
-			Proposer:    proposer,
+			Signer:      signer,
 			Number:      header.Number(),
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),

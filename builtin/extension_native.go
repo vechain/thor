@@ -22,7 +22,7 @@ func init() {
 			output := thor.Blake2b(data)
 			return []interface{}{output}
 		}},
-		{"native_getBlockIDByNum", func(env *xenv.Environment) []interface{} {
+		{"native_blockID", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.Require(blockNum < env.BlockContext().Number)
@@ -31,7 +31,7 @@ func init() {
 			output := env.Seeker().GetID(blockNum)
 			return []interface{}{output}
 		}},
-		{"native_getTotalScoreByNum", func(env *xenv.Environment) []interface{} {
+		{"native_blockTotalScore", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.Require(blockNum <= env.BlockContext().Number)
@@ -45,7 +45,7 @@ func init() {
 			header := env.Seeker().GetHeader(id)
 			return []interface{}{header.TotalScore()}
 		}},
-		{"native_getTimestampByNum", func(env *xenv.Environment) []interface{} {
+		{"native_blockTimestamp", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
@@ -60,12 +60,12 @@ func init() {
 			header := env.Seeker().GetHeader(id)
 			return []interface{}{header.Timestamp()}
 		}},
-		{"native_getProposerByNum", func(env *xenv.Environment) []interface{} {
+		{"native_blockSigner", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 			env.Require(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
-				return []interface{}{env.BlockContext().Proposer}
+				return []interface{}{env.BlockContext().Signer}
 			}
 
 			env.UseGas(thor.SloadGas)
@@ -73,19 +73,19 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			header := env.Seeker().GetHeader(id)
-			proposer, _ := header.Signer()
-			return []interface{}{proposer}
+			signer, _ := header.Signer()
+			return []interface{}{signer}
 		}},
-		{"native_getTokenTotalSupply", func(env *xenv.Environment) []interface{} {
+		{"native_tokenTotalSupply", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
 			output := Energy.Native(env.State(), env.BlockContext().Time).TokenTotalSupply()
 			return []interface{}{output}
 		}},
-		{"native_getTransactionProvedWork", func(env *xenv.Environment) []interface{} {
+		{"native_transactionProvedWork", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().ProvedWork
 			return []interface{}{output}
 		}},
-		{"native_getTransactionID", func(env *xenv.Environment) []interface{} {
+		{"native_transactionID", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().ID
 			return []interface{}{output}
 		}},

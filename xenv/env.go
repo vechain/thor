@@ -22,7 +22,7 @@ import (
 // BlockContext block context.
 type BlockContext struct {
 	Beneficiary thor.Address
-	Proposer    thor.Address
+	Signer      thor.Address
 	Number      uint32
 	Time        uint64
 	GasLimit    uint64

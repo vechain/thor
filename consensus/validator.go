@@ -149,13 +149,13 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receipts := make(tx.Receipts, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
-	proposer, _ := header.Signer()
+	signer, _ := header.Signer()
 	rt := runtime.New(
 		c.chain.NewSeeker(header.ParentID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
-			Proposer:    proposer,
+			Signer:      signer,
 			Number:      header.Number(),
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
