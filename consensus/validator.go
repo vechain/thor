@@ -84,15 +84,13 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	authority := builtin.Authority.Native(st)
 	endorsement := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
 
-	candidates := authority.Candidates()
+	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
 	proposers := make([]poa.Proposer, 0, len(candidates))
 	for _, c := range candidates {
-		if st.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
-			proposers = append(proposers, poa.Proposer{
-				Address: c.Signer,
-				Active:  c.Active,
-			})
-		}
+		proposers = append(proposers, poa.Proposer{
+			Address: c.Signer,
+			Active:  c.Active,
+		})
 	}
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())

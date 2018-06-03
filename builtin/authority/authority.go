@@ -6,6 +6,8 @@
 package authority
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -130,20 +132,22 @@ func (a *Authority) Update(signer thor.Address, active bool) bool {
 	})
 }
 
-// Candidates picks candidates up to thor.MaxBlockProposers.
-func (a *Authority) Candidates() []*Candidate {
+// Candidates picks a batch of candidates up to limit, that satisfy given endorsement.
+func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate {
 	var ptr addressPtr
 	a.getStorage(headKey, &ptr)
-	candidates := make([]*Candidate, 0, thor.MaxBlockProposers)
-	for ptr.Address != nil && uint64(len(candidates)) < thor.MaxBlockProposers {
+	candidates := make([]*Candidate, 0, limit)
+	for ptr.Address != nil && uint64(len(candidates)) < limit {
 		var entry entry
 		a.getStorage(thor.BytesToBytes32(ptr.Address[:]), &entry)
-		candidates = append(candidates, &Candidate{
-			Signer:   *ptr.Address,
-			Endorsor: entry.Endorsor,
-			Identity: entry.Identity,
-			Active:   entry.Active,
-		})
+		if bal := a.state.GetBalance(entry.Endorsor); bal.Cmp(endorsement) >= 0 {
+			candidates = append(candidates, &Candidate{
+				Signer:   *ptr.Address,
+				Endorsor: entry.Endorsor,
+				Identity: entry.Identity,
+				Active:   entry.Active,
+			})
+		}
 		ptr.Address = entry.Next
 	}
 	return candidates
