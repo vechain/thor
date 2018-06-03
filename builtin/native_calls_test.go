@@ -314,6 +314,7 @@ func TestAuthorityNative(t *testing.T) {
 func TestEnergyNative(t *testing.T) {
 	var (
 		addr     = thor.BytesToAddress([]byte("addr"))
+		master   = thor.BytesToAddress([]byte("master"))
 		valueAdd = big.NewInt(100)
 		valueSub = big.NewInt(10)
 	)
@@ -324,6 +325,7 @@ func TestEnergyNative(t *testing.T) {
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+	st.SetMaster(addr, master)
 
 	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
 	test := &ctest{
@@ -364,6 +366,10 @@ func TestEnergyNative(t *testing.T) {
 
 		test.Case("native_totalBurned").
 			ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
+			Assert(t),
+
+		test.Case("native_master", addr).
+			ShouldOutput(master).
 			Assert(t),
 	}
 
