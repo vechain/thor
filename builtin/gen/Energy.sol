@@ -5,7 +5,6 @@
 
 pragma solidity ^0.4.18;
 import "./Token.sol";
-import "./Prototype.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
@@ -45,7 +44,7 @@ contract Energy is Token {
     }
 
     function move(address _from, address _to, uint256 _amount) public returns (bool success) {
-        require(_from == msg.sender || thor.$master(_from) == msg.sender);
+        require(_from == msg.sender || EnergyNative(this).native_master(_from) == msg.sender);
         _transfer(_from, _to, _amount);
         return true;
     }
@@ -85,4 +84,6 @@ contract EnergyNative {
     function native_get(address addr) public view returns(uint256);
     function native_add(address addr, uint256 amount) public;
     function native_sub(address addr, uint256 amount) public returns(bool);
+
+    function native_master(address addr) public view returns(address);
 }

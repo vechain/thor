@@ -66,6 +66,14 @@ func init() {
 			}
 			return []interface{}{ok}
 		}},
+		{"native_master", func(env *xenv.Environment) []interface{} {
+			var addr common.Address
+			env.ParseArgs(&addr)
+
+			env.UseGas(thor.GetBalanceGas)
+			master := env.State().GetMaster(thor.Address(addr))
+			return []interface{}{master}
+		}},
 	}
 	abi := Energy.NativeABI()
 	for _, def := range defines {
