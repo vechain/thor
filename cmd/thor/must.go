@@ -65,34 +65,45 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	default:
 		cli.ShowAppHelp(ctx)
 		if network == "" {
-			fmt.Println("network not specified -network")
+			fmt.Printf("network flag not specified: -%s\n", networkFlag.Name)
 		} else {
-			fmt.Println("unrecognized value of -network:", network)
+			fmt.Printf("unrecognized value '%s' for flag -%s\n", network, networkFlag.Name)
 		}
 		os.Exit(1)
 		return nil
 	}
 }
 
-func makeMainDir(ctx *cli.Context) string {
-	mainDir := ctx.String(dirFlag.Name)
-	if mainDir == "" {
-		fatal(fmt.Sprintf("unable to infer default main dir, use -%s to specify one", dirFlag.Name))
+func makeConfigDir(ctx *cli.Context) string {
+	configDir := ctx.String(configDirFlag.Name)
+	if configDir == "" {
+		fatal(fmt.Sprintf("unable to infer default config dir, use -%s to specify", configDirFlag.Name))
 	}
-	if err := os.MkdirAll(mainDir, 0700); err != nil {
-		fatal(fmt.Sprintf("create main dir [%v]: %v", mainDir, err))
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		fatal(fmt.Sprintf("create config dir [%v]: %v", configDir, err))
 	}
-	return mainDir
+	return configDir
 }
 
-func makeDataDir(ctx *cli.Context, gene *genesis.Genesis) string {
-	mainDir := makeMainDir(ctx)
-
-	dataDir := filepath.Join(mainDir, fmt.Sprintf("instance-%x", gene.ID().Bytes()[24:]))
+func makeDataDir(ctx *cli.Context) string {
+	dataDir := ctx.String(dataDirFlag.Name)
+	if dataDir == "" {
+		fatal(fmt.Sprintf("unable to infer default data dir, use -%s to specify", dataDirFlag.Name))
+	}
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		fatal(fmt.Sprintf("create data dir [%v]: %v", dataDir, err))
 	}
 	return dataDir
+}
+
+func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) string {
+	dataDir := makeDataDir(ctx)
+
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x", gene.ID().Bytes()[24:]))
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		fatal(fmt.Sprintf("create data dir [%v]: %v", instanceDir, err))
+	}
+	return instanceDir
 }
 
 func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
@@ -149,7 +160,7 @@ func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB)
 }
 
 func loadNodeMaster(ctx *cli.Context) *node.Master {
-	mainDir := makeMainDir(ctx)
+	configDir := makeConfigDir(ctx)
 	bene := func(master thor.Address) thor.Address {
 		beneStr := ctx.String(beneficiaryFlag.Name)
 		if beneStr == "" {
@@ -170,7 +181,7 @@ func loadNodeMaster(ctx *cli.Context) *node.Master {
 			Beneficiary: bene(acc.Address),
 		}
 	}
-	key, err := loadOrGeneratePrivateKey(filepath.Join(mainDir, "master.key"))
+	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "master.key"))
 	if err != nil {
 		fatal("load or generate master key:", err)
 	}
@@ -185,9 +196,9 @@ type p2pComm struct {
 	savePeers func()
 }
 
-func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool) *p2pComm {
-	mainDir := makeMainDir(ctx)
-	key, err := loadOrGeneratePrivateKey(filepath.Join(mainDir, "p2p.key"))
+func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, instanceDir string) *p2pComm {
+	configDir := makeConfigDir(ctx)
+	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
 		fatal("load or generate P2P key:", err)
 	}
@@ -207,7 +218,7 @@ func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool) *
 		NAT:            nat,
 	}
 
-	peersCachePath := filepath.Join(mainDir, "peers.cache")
+	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
 	if data, err := ioutil.ReadFile(peersCachePath); err != nil {
 		if !os.IsNotExist(err) {
@@ -282,12 +293,12 @@ func printStartupMessage(
 	bestBlock := chain.BestBlock()
 
 	fmt.Printf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Master      [ %v ]
-    Beneficiary [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
+    Network      [ %v %v ]    
+    Best block   [ %v #%v @%v ]
+    Master       [ %v ]
+    Beneficiary  [ %v ]
+    Instance dir [ %v ]
+    API portal   [ %v ]
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
