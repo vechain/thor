@@ -51,15 +51,13 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
 	authority := builtin.Authority.Native(state)
 
-	candidates := authority.Candidates()
+	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
 	proposers := make([]poa.Proposer, 0, len(candidates))
 	for _, c := range candidates {
-		if state.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
-			proposers = append(proposers, poa.Proposer{
-				Address: c.Signer,
-				Active:  c.Active,
-			})
-		}
+		proposers = append(proposers, poa.Proposer{
+			Address: c.Signer,
+			Active:  c.Active,
+		})
 	}
 
 	// calc the time when it's turn to produce block
