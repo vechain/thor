@@ -39,8 +39,9 @@ func main() {
 		Usage:     "Node of VeChain Thor Network",
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
 		Flags: []cli.Flag{
-			dirFlag,
 			networkFlag,
+			configDirFlag,
+			dataDirFlag,
 			beneficiaryFlag,
 			apiAddrFlag,
 			apiCorsFlag,
@@ -55,7 +56,7 @@ func main() {
 				Name:  "solo",
 				Usage: "VeChain Thor client for test & dev",
 				Flags: []cli.Flag{
-					dirFlag,
+					dataDirFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					onDemandFlag,
@@ -78,12 +79,12 @@ func defaultAction(ctx *cli.Context) error {
 
 	initLogger(ctx)
 	gene := selectGenesis(ctx)
-	dataDir := makeDataDir(ctx, gene)
+	instanceDir := makeInstanceDir(ctx, gene)
 
-	mainDB := openMainDB(ctx, dataDir)
+	mainDB := openMainDB(ctx, instanceDir)
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-	logDB := openLogDB(ctx, dataDir)
+	logDB := openLogDB(ctx, instanceDir)
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
@@ -92,13 +93,13 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB))
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom := startP2PComm(ctx, chain, txPool)
+	p2pcom := startP2PComm(ctx, chain, txPool, instanceDir)
 	defer p2pcom.Shutdown()
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
 	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
 
-	printStartupMessage(gene, chain, master, dataDir, apiURL)
+	printStartupMessage(gene, chain, master, instanceDir, apiURL)
 
 	return node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, p2pcom.comm).
 		Run(handleExitSignal())
@@ -112,14 +113,14 @@ func soloAction(ctx *cli.Context) error {
 
 	var mainDB *lvldb.LevelDB
 	var logDB *logdb.LogDB
-	var dataDir string
+	var instanceDir string
 
 	if ctx.Bool("persist") {
-		dataDir = makeDataDir(ctx, gene)
-		mainDB = openMainDB(ctx, dataDir)
-		logDB = openLogDB(ctx, dataDir)
+		instanceDir = makeInstanceDir(ctx, gene)
+		mainDB = openMainDB(ctx, instanceDir)
+		logDB = openLogDB(ctx, instanceDir)
 	} else {
-		dataDir = "Memory"
+		instanceDir = "Memory"
 		mainDB = openMemMainDB()
 		logDB = openMemLogDB()
 	}
@@ -137,7 +138,7 @@ func soloAction(ctx *cli.Context) error {
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
 	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
 
-	printSoloStartupMessage(gene, chain, dataDir, apiURL)
+	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
 
 	return soloContext.Run(handleExitSignal())
 }

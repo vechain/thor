@@ -60,8 +60,15 @@ func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	return key, nil
 }
 
+func defaultConfigDir() string {
+	if home := homeDir(); home != "" {
+		return filepath.Join(home, ".org.vechain.thor")
+	}
+	return ""
+}
+
 // copy from go-ethereum
-func defaultMainDir() string {
+func defaultDataDir() string {
 	// Try to place the data folder in the user's home dir
 	if home := homeDir(); home != "" {
 		if runtime.GOOS == "darwin" {
