@@ -62,8 +62,8 @@ To find out usages of all command line options:
 bin/thor -h
 ```
 
-- `--dir value`          main directory for configs and databases
-- `--network`            the network to join (test|dev) 
+- `--network value`      the network to join (test|dev)
+- `--data-dir value`     directory for block-chain databases
 - `--beneficiary value`  address for block rewards
 - `--api-addr value`     API service listening address (default: "localhost:8669")
 - `--api-cors value`     comma separated list of domains from which to accept cross origin requests to API
