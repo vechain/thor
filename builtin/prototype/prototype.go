@@ -21,46 +21,45 @@ func New(addr thor.Address, state *state.State) *Prototype {
 	return &Prototype{addr, state}
 }
 
-func (p *Prototype) Bind(target thor.Address) *Binding {
-	return &Binding{p.addr, p.state, target}
+func (p *Prototype) Bind(self thor.Address) *Binding {
+	return &Binding{p, self}
 }
 
 type Binding struct {
-	selfAddr thor.Address
-	state    *state.State
-	target   thor.Address
+	prototype *Prototype
+	self      thor.Address
 }
 
 func (b *Binding) userKey(user thor.Address) thor.Bytes32 {
-	return thor.Blake2b(b.target.Bytes(), user.Bytes(), []byte("user"))
+	return thor.Blake2b(b.self.Bytes(), user.Bytes(), []byte("user"))
 }
 func (b *Binding) userPlanKey() thor.Bytes32 {
-	return thor.Blake2b(b.target.Bytes(), []byte("user-plan"))
+	return thor.Blake2b(b.self.Bytes(), []byte("user-plan"))
 }
 
 func (b *Binding) sponsorKey(sponsor thor.Address) thor.Bytes32 {
-	return thor.Blake2b(b.target.Bytes(), sponsor.Bytes(), []byte("sponsor"))
+	return thor.Blake2b(b.self.Bytes(), sponsor.Bytes(), []byte("sponsor"))
 }
 
 func (b *Binding) curSponsorKey() thor.Bytes32 {
-	return thor.Blake2b(b.target.Bytes(), []byte("cur-sponsor"))
+	return thor.Blake2b(b.self.Bytes(), []byte("cur-sponsor"))
 }
 
 func (b *Binding) getStorage(key thor.Bytes32, val interface{}) {
-	b.state.GetStructuredStorage(b.selfAddr, key, val)
+	b.prototype.state.GetStructuredStorage(b.prototype.addr, key, val)
 }
 
 func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
-	b.state.SetStructuredStorage(b.selfAddr, key, val)
+	b.prototype.state.SetStructuredStorage(b.prototype.addr, key, val)
 }
 
 func (b *Binding) Master() (master thor.Address) {
-	master = b.state.GetMaster(b.target)
+	master = b.prototype.state.GetMaster(b.self)
 	return
 }
 
 func (b *Binding) SetMaster(master thor.Address) {
-	b.state.SetMaster(b.target, master)
+	b.prototype.state.SetMaster(b.self, master)
 }
 
 func (b *Binding) IsUser(user thor.Address) bool {
