@@ -18,15 +18,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
 )
 
-const signerCacheSize = 1024
-
 var (
-	signerCache, _          = lru.New(signerCacheSize)
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 )
 
@@ -214,19 +210,6 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, &t)
-	var hash thor.Bytes32
-	hw.Sum(hash[:0])
-
-	if v, ok := signerCache.Get(hash); ok {
-		return v.(thor.Address), nil
-	}
-	defer func() {
-		if err == nil {
-			signerCache.Add(hash, signer)
-		}
-	}()
 	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature)
 	if err != nil {
 		return thor.Address{}, err
