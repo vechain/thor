@@ -156,12 +156,12 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 		return thor.Address{}, err
 	}
 
-	resolvedTx, err := runtime.ResolveTransaction(st, tx)
+	resolvedTx, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return thor.Address{}, badTxErr{err.Error()}
 	}
 
-	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Timestamp()+thor.BlockInterval)
+	_, _, _, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Timestamp()+thor.BlockInterval)
 	if err != nil {
 		return thor.Address{}, rejectedTxErr{"insufficient energy"}
 	}

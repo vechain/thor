@@ -22,13 +22,11 @@ type ResolvedTransaction struct {
 	tx           *tx.Transaction
 	Origin       thor.Address
 	IntrinsicGas uint64
-	BaseGasPrice *big.Int
-	GasPrice     *big.Int
 	Clauses      []*tx.Clause
 }
 
 // ResolveTransaction resolves the transaction and performs basic validation.
-func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransaction, error) {
+func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 	origin, err := tx.Signer()
 	if err != nil {
 		return nil, err
@@ -55,15 +53,10 @@ func ResolveTransaction(state *state.State, tx *tx.Transaction) (*ResolvedTransa
 		}
 	}
 
-	baseGasPrice := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
-	gasPrice := tx.GasPrice(baseGasPrice)
-
 	return &ResolvedTransaction{
 		tx,
 		origin,
 		intrinsicGas,
-		baseGasPrice,
-		gasPrice,
 		clauses,
 	}, nil
 }
@@ -93,15 +86,23 @@ func (r *ResolvedTransaction) CommonTo() *thor.Address {
 }
 
 // BuyGas consumes energy to buy gas, to prepare for execution.
-func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (payer thor.Address, returnGas func(uint64), err error) {
+func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
+	baseGasPrice *big.Int,
+	gasPrice *big.Int,
+	payer thor.Address,
+	returnGas func(uint64), err error) {
+
+	baseGasPrice = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	gasPrice = r.tx.GasPrice(baseGasPrice)
+
 	energy := builtin.Energy.Native(state, blockTime)
 	doReturnGas := func(rgas uint64) *big.Int {
-		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), r.GasPrice)
+		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), gasPrice)
 		energy.Add(payer, returnedEnergy)
 		return returnedEnergy
 	}
 
-	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), r.GasPrice)
+	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
 	commonTo := r.CommonTo()
 	if commonTo != nil {
 		binding := builtin.Prototype.Native(state).Bind(*commonTo)
@@ -116,29 +117,29 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (paye
 			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
 				// deduct from sponsor, if any
 				if energy.Sub(sponsor, prepaid) {
-					return sponsor, doReturnGasAndSetCredit, nil
+					return baseGasPrice, gasPrice, sponsor, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
 			if energy.Sub(*commonTo, prepaid) {
-				return *commonTo, doReturnGasAndSetCredit, nil
+				return baseGasPrice, gasPrice, *commonTo, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
 	if energy.Sub(r.Origin, prepaid) {
-		return r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
+		return baseGasPrice, gasPrice, r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
 	}
-	return thor.Address{}, nil, errors.New("insufficient energy")
+	return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
 }
 
 // ToContext create a tx context object.
-func (r *ResolvedTransaction) ToContext(blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
+func (r *ResolvedTransaction) ToContext(gasPrice *big.Int, blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
 	return &xenv.TransactionContext{
 		ID:         r.tx.ID(),
 		Origin:     r.Origin,
-		GasPrice:   r.GasPrice,
+		GasPrice:   gasPrice,
 		ProvedWork: r.tx.ProvedWork(blockNumber, getID),
 	}
 }
