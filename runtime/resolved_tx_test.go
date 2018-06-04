@@ -77,47 +77,39 @@ func (tr *testResolvedTransaction) currentState() (*state.State, error) {
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
-	state, err := tr.currentState()
-	if err != nil {
-		tr.t.Fatal(err)
-	}
 
 	txBuild := func() *tx.Builder {
 		return txBuilder(tr.chain.Tag())
 	}
 
-	_, err = runtime.ResolveTransaction(state, txBuild().Build())
+	_, err := runtime.ResolveTransaction(txBuild().Build())
 	tr.assert.Equal(secp256k1.ErrInvalidSignatureLen, err)
 
-	_, err = runtime.ResolveTransaction(state, txSign(txBuild().Gas(21000-1)))
+	_, err = runtime.ResolveTransaction(txSign(txBuild().Gas(21000 - 1)))
 	tr.assert.NotNil(err)
 
 	address := thor.BytesToAddress([]byte("addr"))
-	_, err = runtime.ResolveTransaction(state, txSign(txBuild().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil))))
+	_, err = runtime.ResolveTransaction(txSign(txBuild().Clause(tx.NewClause(&address).WithValue(big.NewInt(-10)).WithData(nil))))
 	tr.assert.NotNil(err)
 
-	_, err = runtime.ResolveTransaction(state, txSign(txBuild().
+	_, err = runtime.ResolveTransaction(txSign(txBuild().
 		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)).
 		Clause(tx.NewClause(&address).WithValue(math.MaxBig256).WithData(nil)),
 	))
 	tr.assert.NotNil(err)
 
-	_, err = runtime.ResolveTransaction(state, txSign(txBuild()))
+	_, err = runtime.ResolveTransaction(txSign(txBuild()))
 	tr.assert.Nil(err)
 }
 
 func (tr *testResolvedTransaction) TestCommonTo() {
-	state, err := tr.currentState()
-	if err != nil {
-		tr.t.Fatal(err)
-	}
 
 	txBuild := func() *tx.Builder {
 		return txBuilder(tr.chain.Tag())
 	}
 
 	commonTo := func(tx *tx.Transaction, assert func(interface{}, ...interface{}) bool) {
-		resolve, err := runtime.ResolveTransaction(state, tx)
+		resolve, err := runtime.ResolveTransaction(tx)
 		if err != nil {
 			tr.t.Fatal(err)
 		}
@@ -153,11 +145,11 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 	targetTime := tr.chain.BestBlock().Header().Timestamp() + thor.BlockInterval
 
 	buyGas := func(tx *tx.Transaction) thor.Address {
-		resolve, err := runtime.ResolveTransaction(state, tx)
+		resolve, err := runtime.ResolveTransaction(tx)
 		if err != nil {
 			tr.t.Fatal(err)
 		}
-		payer, returnGas, err := resolve.BuyGas(state, targetTime)
+		_, _, payer, returnGas, err := resolve.BuyGas(state, targetTime)
 		tr.assert.Nil(err)
 		returnGas(100)
 		return payer

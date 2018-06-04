@@ -168,12 +168,12 @@ func (rt *Runtime) Call(
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
 func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, vmOutputs []*vm.Output, err error) {
-	resolvedTx, err := ResolveTransaction(rt.state, tx)
+	resolvedTx, err := ResolveTransaction(tx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
+	baseGasPrice, gasPrice, payer, returnGas, err := resolvedTx.BuyGas(rt.state, rt.ctx.Time)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -186,7 +186,7 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
 	vmOutputs = make([]*vm.Output, 0, len(resolvedTx.Clauses))
 
-	txCtx := resolvedTx.ToContext(rt.ctx.Number, rt.seeker.GetID)
+	txCtx := resolvedTx.ToContext(gasPrice, rt.ctx.Number, rt.seeker.GetID)
 	for i, clause := range resolvedTx.Clauses {
 		vmOutput := rt.execute(clause, uint32(i), leftOverGas, txCtx, false)
 		vmOutputs = append(vmOutputs, vmOutput)
@@ -229,13 +229,13 @@ func (rt *Runtime) ExecuteTransaction(tx *Tx.Transaction) (receipt *Tx.Receipt, 
 
 	receipt.GasUsed = tx.Gas() - leftOverGas
 	receipt.GasPayer = payer
-	receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), resolvedTx.GasPrice)
+	receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
 
 	returnGas(leftOverGas)
 
 	// reward
 	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(resolvedTx.BaseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
 
 	reward := new(big.Int).SetUint64(receipt.GasUsed)
 	reward.Mul(reward, overallGasPrice)
