@@ -128,6 +128,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		)
 	}
 
+	n.packer.SetTargetGasLimit(0)
 	if execElapsed > 0 {
 		gasUsed := newBlock.Header().GasUsed()
 		// calc target gas limit only if gas used above third of gas limit
