@@ -206,10 +206,4 @@ library thor {
         return Prototype(prototypeContract).$currentSponsor(receiver);
     }
 
-    event $SetMaster(address indexed newMaster);
-    event $AddRemoveUser(address indexed user, bool addOrRemove);
-    event $SetUserPlan(uint256 credit, uint256 recoveryRate);
-    event $Sponsor(address indexed sponsor, bool yesOrNo);
-    event $SelectSponsor(address indexed sponsor);
-
 }

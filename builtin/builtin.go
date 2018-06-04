@@ -11,7 +11,6 @@ import (
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/builtin/energy"
 	"github.com/vechain/thor/builtin/extension"
-	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
 	"github.com/vechain/thor/chain"
@@ -29,7 +28,7 @@ var (
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{
 		mustLoadContract("Prototype"),
-		mustLoadThorLibABI(),
+		mustLoadPrototypeEventABI(),
 	}
 	Extension = &extensionContract{mustLoadContract("Extension")}
 	Measure   = mustLoadContract("Measure")
@@ -42,7 +41,7 @@ type (
 	executorContract  struct{ *contract }
 	prototypeContract struct {
 		*contract
-		ThorLibABI *abi.ABI
+		EventABI *abi.ABI
 	}
 	extensionContract struct{ *contract }
 )
@@ -67,10 +66,9 @@ func (e *extensionContract) Native(state *state.State) *extension.Extension {
 	return extension.New(e.Address, state)
 }
 
-func mustLoadThorLibABI() *abi.ABI {
-	asset := "compiled/thor.abi"
-	data := gen.MustAsset(asset)
-	abi, err := abi.New(data)
+func mustLoadPrototypeEventABI() *abi.ABI {
+	abiDef := []byte(`[{"anonymous":false,"inputs":[{"indexed":true,"name":"newMaster","type":"address"}],"name":"$SetMaster","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"addOrRemove","type":"bool"}],"name":"$AddRemoveUser","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"credit","type":"uint256"},{"indexed":false,"name":"recoveryRate","type":"uint256"}],"name":"$SetUserPlan","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sponsor","type":"address"},{"indexed":false,"name":"yesOrNo","type":"bool"}],"name":"$Sponsor","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sponsor","type":"address"}],"name":"$SelectSponsor","type":"event"}]`)
+	abi, err := abi.New(abiDef)
 	if err != nil {
 		panic(errors.Wrap(err, "load native ABI for ThorLib"))
 	}

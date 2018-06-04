@@ -16,10 +16,10 @@ import (
 )
 
 func init() {
-	thorLibABI := Prototype.ThorLibABI
+	eventLibABI := Prototype.EventABI
 
 	mustEventByName := func(name string) *abi.Event {
-		if event, found := thorLibABI.EventByName(name); found {
+		if event, found := eventLibABI.EventByName(name); found {
 			return event
 		}
 		panic("event not found")

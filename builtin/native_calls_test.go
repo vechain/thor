@@ -140,7 +140,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 }
 
 func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*vm.Event {
-	nativeABI := builtin.Prototype.ThorLibABI
+	nativeABI := builtin.Prototype.EventABI
 
 	mustEventByName := func(name string) *abi.Event {
 		if event, found := nativeABI.EventByName(name); found {
