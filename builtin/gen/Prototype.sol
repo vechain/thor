@@ -17,7 +17,7 @@ contract Prototype {
 
     /// @param newMaster new master to be set.
     function $setMaster(address target, address newMaster) public {
-        require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_master(target) == msg.sender || target == msg.sender);
         PrototypeNative(this).native_setMaster(target, newMaster);
     }
 
@@ -46,7 +46,7 @@ contract Prototype {
     }
 
     function $setUserPlan(address target, uint256 credit, uint256 recoveryRate) public{
-        require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_master(target) == msg.sender || target == msg.sender);
         PrototypeNative(this).native_setUserPlan(target, credit, recoveryRate);
     }
 
@@ -59,13 +59,13 @@ contract Prototype {
     }
 
     function $addUser(address target, address user) public{
-        require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_master(target) == msg.sender || target == msg.sender);
         require(!PrototypeNative(this).native_isUser(target, user));
         PrototypeNative(this).native_addUser(target, user);
     }
 
     function $removeUser(address target, address user) public{
-        require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_master(target) == msg.sender || target == msg.sender);
         require(PrototypeNative(this).native_isUser(target, user));
         PrototypeNative(this).native_removeUser(target, user);
     }
@@ -84,7 +84,7 @@ contract Prototype {
     }
 
     function $selectSponsor(address target, address sponsor) public{
-        require($master(target) == msg.sender || target == msg.sender);
+        require(PrototypeNative(this).native_master(target) == msg.sender || target == msg.sender);
         require(PrototypeNative(this).native_isSponsor(target, sponsor));
         PrototypeNative(this).native_selectSponsor(target, sponsor);
     }
