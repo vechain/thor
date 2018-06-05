@@ -26,13 +26,3 @@ var (
 	ErrInsufficientBalance      = errors.New("insufficient balance for transfer")
 	ErrContractAddressCollision = errors.New("contract address collision")
 )
-
-// ErrExecutionReverted exported for native impl.
-func ErrExecutionReverted() error {
-	return errExecutionReverted
-}
-
-// ErrWriteProtection exported for native impl.
-func ErrWriteProtection() error {
-	return errWriteProtection
-}

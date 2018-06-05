@@ -88,7 +88,7 @@ type Context struct {
 }
 
 // InterceptContractCall intercept contract call.
-type InterceptContractCall func(evm *EVM, contract *Contract, readonly bool) func() ([]byte, error)
+type InterceptContractCall func(evm *EVM, contract *Contract, readonly bool) ([]byte, error, bool)
 
 // OnCreateContract callback when creating contract.
 type OnCreateContract func(evm *EVM, contractAddr thor.Address, caller thor.Address)
