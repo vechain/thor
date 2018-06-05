@@ -317,14 +317,14 @@ func TestEnergyNative(t *testing.T) {
 	)
 
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
+
 	gene, _ := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
-	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	st.SetMaster(addr, master)
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{})
+	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{Time: genesisBlock.Header().Timestamp()})
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.ABI,
@@ -340,17 +340,45 @@ func TestEnergyNative(t *testing.T) {
 		ShouldOutput(uint8(18)).
 		Assert(t)
 
-	// test.Case("totalSupply").
-	// 	ShouldOutput(&big.Int{}).
-	// 	Assert(t)
+	test.Case("symbol").
+		ShouldOutput("VTHO").
+		Assert(t)
 
-	// test.Case("native_totalSupply").
-	// 	ShouldOutput(new(big.Int)).
-	// 	Assert(t)
+	eng, _ := new(big.Int).SetString("10000000000000000000000000", 10)
+	test.Case("totalSupply").
+		ShouldOutput(new(big.Int).Mul(eng, big.NewInt(10))).
+		Assert(t)
 
-	// test.Case("totalBurned").
-	// 	ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
-	// 	Assert(t)
+	test.Case("totalBurned").
+		ShouldOutput(&big.Int{}).
+		Assert(t)
+
+	test.Case("balanceOf", genesis.DevAccounts()[0].Address).
+		ShouldOutput(eng).
+		Assert(t)
+
+	test.Case("transfer", addr, big.NewInt(10)).
+		Caller(genesis.DevAccounts()[0].Address).
+		ShouldOutput(true).
+		Assert(t)
+
+	test.Case("move", genesis.DevAccounts()[0].Address, addr, big.NewInt(10)).
+		Caller(genesis.DevAccounts()[0].Address).
+		ShouldOutput(true).
+		Assert(t)
+
+	test.Case("approve", addr, big.NewInt(10)).
+		Caller(genesis.DevAccounts()[0].Address).
+		ShouldOutput(true).
+		Assert(t)
+
+	test.Case("allowance", genesis.DevAccounts()[0].Address, addr).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("transferFrom", genesis.DevAccounts()[0].Address, addr, big.NewInt(10)).
+		ShouldOutput(true).
+		Assert(t)
 
 	// test.Case("native_master", addr).
 	// 	ShouldOutput(master).
