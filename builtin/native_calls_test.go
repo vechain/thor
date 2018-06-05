@@ -199,9 +199,11 @@ func buildGenesis(kv kv.GetPutter, proc func(state *state.State) error) *block.B
 }
 
 func TestParamsNative(t *testing.T) {
+	executor := thor.BytesToAddress([]byte("e"))
 	kv, _ := lvldb.NewMem()
 	b0 := buildGenesis(kv, func(state *state.State) error {
 		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 		return nil
 	})
 	c, _ := chain.New(kv, b0)
@@ -210,10 +212,9 @@ func TestParamsNative(t *testing.T) {
 	rt := runtime.New(c.NewSeeker(b0.Header().ID()), st, &xenv.BlockContext{})
 
 	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Params.ABI,
-		to:     builtin.Params.Address,
-		caller: builtin.Executor.Address,
+		rt:  rt,
+		abi: builtin.Params.ABI,
+		to:  builtin.Params.Address,
 	}
 
 	key := thor.BytesToBytes32([]byte("key"))
@@ -229,15 +230,15 @@ func TestParamsNative(t *testing.T) {
 	}
 
 	test.Case("executor").
-		ShouldOutput(builtin.Executor.Address).
+		ShouldOutput(executor).
 		Assert(t)
 
 	test.Case("set", key, value).
+		Caller(executor).
 		ShouldLog(setEvent(key, value)).
 		Assert(t)
 
 	test.Case("set", key, value).
-		Caller(thor.BytesToAddress([]byte("other"))).
 		ShouldVMError(errReverted).
 		Assert(t)
 
@@ -260,12 +261,15 @@ func TestAuthorityNative(t *testing.T) {
 		signer3   = thor.BytesToAddress([]byte("signer3"))
 		endorsor3 = thor.BytesToAddress([]byte("endorsor3"))
 		identity3 = thor.BytesToBytes32([]byte("identity3"))
+		executor  = thor.BytesToAddress([]byte("e"))
 	)
 
 	kv, _ := lvldb.NewMem()
 	b0 := buildGenesis(kv, func(state *state.State) error {
 		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
+		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 		return nil
 	})
 	c, _ := chain.New(kv, b0)
@@ -296,11 +300,11 @@ func TestAuthorityNative(t *testing.T) {
 		rt:     rt,
 		abi:    builtin.Authority.ABI,
 		to:     builtin.Authority.Address,
-		caller: builtin.Executor.Address,
+		caller: executor,
 	}
 
 	test.Case("executor").
-		ShouldOutput(builtin.Executor.Address).
+		ShouldOutput(executor).
 		Assert(t)
 
 	test.Case("add", signer1, endorsor1, identity1).
@@ -308,7 +312,7 @@ func TestAuthorityNative(t *testing.T) {
 		Assert(t)
 
 	test.Case("add", signer1, endorsor1, identity1).
-		Caller(thor.BytesToAddress([]byte("some one"))).
+		Caller(thor.BytesToAddress([]byte("other"))).
 		ShouldVMError(errReverted).
 		Assert(t)
 

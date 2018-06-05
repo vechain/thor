@@ -13,7 +13,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (test|dev)",
+		Usage: "the network to join (test)",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",

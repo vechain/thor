@@ -56,7 +56,7 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, thor.Address(addr), builtin.Executor.Address)
+	assert.Equal(t, thor.Address(addr), genesis.DevAccounts()[0].Address)
 }
 
 func TestExecuteTransaction(t *testing.T) {

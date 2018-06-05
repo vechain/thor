@@ -27,7 +27,7 @@ type DevAccount struct {
 
 var devAccounts atomic.Value
 
-// DevAccounts returns pre-alloced accounts on devnet.
+// DevAccounts returns pre-alloced accounts for solo mode.
 func DevAccounts() []DevAccount {
 	if accs := devAccounts.Load(); accs != nil {
 		return accs.([]DevAccount)
@@ -58,9 +58,11 @@ func DevAccounts() []DevAccount {
 	return accs
 }
 
-// NewDevnet create devnet genesis.
+// NewDevnet create genesis for solo mode.
 func NewDevnet() (*Genesis, error) {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+
+	executor := DevAccounts()[0].Address
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -70,6 +72,8 @@ func NewDevnet() (*Genesis, error) {
 			for addr := range evm.PrecompiledContractsByzantium {
 				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
 			}
+
+			// setup builtin contracts
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
@@ -80,7 +84,7 @@ func NewDevnet() (*Genesis, error) {
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range DevAccounts() {
-				bal, _ := new(big.Int).SetString("10000000000000000000000000", 10)
+				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 				state.SetBalance(a.Address, bal)
 				state.SetEnergy(a.Address, bal, launchTime)
 				tokenSupply.Add(tokenSupply, bal)
@@ -90,23 +94,22 @@ func NewDevnet() (*Genesis, error) {
 			return nil
 		}).
 		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
-			builtin.Executor.Address).
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
+			thor.Address{}).
 		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
-			builtin.Executor.Address).
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).
-				WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
-			builtin.Executor.Address)
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			executor).
+		Call(
+			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			executor)
 
 	for i, a := range DevAccounts() {
 		builder.Call(
-			tx.NewClause(&builtin.Authority.Address).
-				WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", i))))),
-			builtin.Executor.Address)
+			tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", i))))),
+			executor)
 	}
 
 	id, err := builder.ComputeID()
