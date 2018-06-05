@@ -117,12 +117,8 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		// ignore callcode or delegatecall
 		if *contract.CodeAddr == contract.Address() {
 			contract.Input = input
-			if proc := in.evm.InterceptContractCall(
-				in.evm,
-				contract,
-				in.readOnly,
-			); proc != nil {
-				return proc()
+			if out, err, handled := in.evm.InterceptContractCall(in.evm, contract, in.readOnly); handled {
+				return out, err
 			}
 		}
 	}

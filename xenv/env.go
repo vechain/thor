@@ -40,10 +40,6 @@ type TransactionContext struct {
 	Expiration uint32
 }
 
-type vmError struct {
-	cause error
-}
-
 // Environment an env to execute native method.
 type Environment struct {
 	abi      *abi.Method
@@ -85,20 +81,20 @@ func (env *Environment) To() thor.Address                        { return thor.A
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {
-		panic(&vmError{evm.ErrOutOfGas})
+		panic(evm.ErrOutOfGas)
 	}
 }
 
 func (env *Environment) ParseArgs(val interface{}) {
 	if err := env.abi.DecodeInput(env.contract.Input, val); err != nil {
 		// as vm error
-		panic(&vmError{errors.WithMessage(err, "decode native input")})
+		panic(errors.WithMessage(err, "decode native input"))
 	}
 }
 
-func (env *Environment) Require(cond bool) {
+func (env *Environment) Must(cond bool) {
 	if !cond {
-		panic(&vmError{evm.ErrExecutionReverted()})
+		panic("false condition")
 	}
 }
 
@@ -121,35 +117,19 @@ func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.
 	})
 }
 
-func (env *Environment) Stop(vmerr error) {
-	panic(&vmError{vmerr})
-}
-
-func (env *Environment) Call(proc func(env *Environment) []interface{}, readonly bool) func() ([]byte, error) {
-	return func() (data []byte, err error) {
-		if readonly && !env.abi.Const() {
-			return nil, evm.ErrWriteProtection()
-		}
-
-		if env.contract.Value().Sign() != 0 {
-			// reject value transfer on call
-			return nil, evm.ErrExecutionReverted()
-		}
-
-		defer func() {
-			if e := recover(); e != nil {
-				if rec, ok := e.(*vmError); ok {
-					err = rec.cause
-				} else {
-					panic(e)
-				}
+func (env *Environment) Call(proc func(env *Environment) []interface{}) (output []byte, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			if e == evm.ErrOutOfGas {
+				err = evm.ErrOutOfGas
+			} else {
+				panic(e)
 			}
-		}()
-		output := proc(env)
-		data, err = env.abi.EncodeOutput(output...)
-		if err != nil {
-			panic(errors.WithMessage(err, "encode native output"))
 		}
-		return
+	}()
+	data, err := env.abi.EncodeOutput(proc(env)...)
+	if err != nil {
+		panic(errors.WithMessage(err, "encode native output"))
 	}
+	return data, nil
 }

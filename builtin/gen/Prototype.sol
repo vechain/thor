@@ -21,12 +21,16 @@ contract Prototype {
         PrototypeNative(this).native_setMaster(self, newMaster);
     }
 
-    function $balance(address self, uint32 blockNumber) public view returns(uint256 amount){
-        return  PrototypeNative(this).native_balanceAtBlock(self, blockNumber);
+    function $balance(address self, uint blockNumber) public view returns(uint256 amount){
+        if(blockNumber > block.number)
+            return;
+        return  PrototypeNative(this).native_balanceAtBlock(self, uint32(blockNumber));
     }
 
-    function $energy(address self, uint32 blockNumber) public view returns(uint256 amount){
-        return  PrototypeNative(this).native_energyAtBlock(self, blockNumber);
+    function $energy(address self, uint blockNumber) public view returns(uint256 amount){
+        if(blockNumber > block.number)
+            return;
+        return  PrototypeNative(this).native_energyAtBlock(self, uint32(blockNumber));
     }
 
     function $hasCode(address self) public view returns(bool){
@@ -35,10 +39,6 @@ contract Prototype {
 
     function $storage(address self, bytes32 key) public view returns(bytes32 value){
         return PrototypeNative(this).native_storage(self, key);
-    }
-
-    function $storage(address self, bytes32 key, uint32 blockNumber) public view returns(bytes32 value){
-        return PrototypeNative(this).native_storageAtBlock(self, key, blockNumber);
     }
 
     function $userPlan(address self) public view returns(uint256 credit, uint256 recoveryRate){
@@ -103,7 +103,6 @@ contract PrototypeNative {
     function native_energyAtBlock(address self, uint32 blockNumber) public view returns(uint256 amount);
     function native_hasCode(address self) public view returns(bool);
     function native_storage(address self, bytes32 key) public view returns(bytes32 value);
-    function native_storageAtBlock(address self, bytes32 key, uint32 blockNumber) public view returns(bytes32 value);
 
     function native_userPlan(address self) public view returns(uint256 credit, uint256 recoveryRate);
     function native_setUserPlan(address self, uint256 credit, uint256 recoveryRate) public;

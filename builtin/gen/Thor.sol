@@ -21,7 +21,7 @@ library thor {
         Prototype(prototypeContract).$setMaster(self, newMaster);
     }
 
-    function $balance(address self, uint32 blockNumber) internal view returns(uint256 amount){
+    function $balance(address self, uint blockNumber) internal view returns(uint256 amount){
         return Prototype(prototypeContract).$balance(self, blockNumber);
     }
 
@@ -29,7 +29,7 @@ library thor {
         return Energy(energyContract).balanceOf(self);
     }
 
-    function $energy(address self, uint32 blockNumber) internal view returns(uint256 amount){
+    function $energy(address self, uint blockNumber) internal view returns(uint256 amount){
         return Prototype(prototypeContract).$energy(self, blockNumber);
     }
 
@@ -43,10 +43,6 @@ library thor {
 
     function $hasCode(address self) internal view returns(bool){
         return Prototype(prototypeContract).$hasCode(self);
-    }
-
-    function $storage(address self, bytes32 key, uint32 blockNumber) internal view returns(bytes32 value){
-        return Prototype(prototypeContract).$storage(self, key, blockNumber);
     }
 
     function $storage(address self, bytes32 key) internal view returns(bytes32 value){

@@ -16,6 +16,19 @@ import (
 )
 
 func init() {
+
+	decodeBytes32 := func(data []byte) thor.Bytes32 {
+		if len(data) == 0 {
+			return thor.Bytes32{}
+		}
+		var b []byte
+
+		if err := rlp.DecodeBytes(data, &b); err != nil {
+			return thor.Bytes32{}
+		}
+		return thor.BytesToBytes32(b)
+	}
+
 	eventLibABI := Prototype.EventABI
 
 	mustEventByName := func(name string) *abi.Event {
@@ -66,7 +79,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			ctx := env.BlockContext()
-			env.Require(args.BlockNumber <= ctx.Number)
+			env.Must(args.BlockNumber <= ctx.Number)
 
 			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
 				return []interface{}{big.NewInt(0)}
@@ -96,7 +109,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			ctx := env.BlockContext()
-			env.Require(args.BlockNumber <= ctx.Number)
+			env.Must(args.BlockNumber <= ctx.Number)
 
 			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
 				return []interface{}{big.NewInt(0)}
@@ -136,45 +149,9 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			var val []byte
 			data := env.State().GetRawStorage(thor.Address(args.Self), args.Key)
-			env.Require(decodeBytes(data, &val) == nil)
-			return []interface{}{thor.BytesToBytes32(val)}
-		}},
-		{"native_storageAtBlock", func(env *xenv.Environment) []interface{} {
-			var args struct {
-				Self        common.Address
-				Key         thor.Bytes32
-				BlockNumber uint32
-			}
-			env.ParseArgs(&args)
-			ctx := env.BlockContext()
-			env.Require(args.BlockNumber <= ctx.Number)
-
-			if args.BlockNumber+thor.MaxBackTrackingBlockNumber < ctx.Number {
-				return []interface{}{thor.Bytes32{}}
-			}
-
-			if args.BlockNumber == ctx.Number {
-				env.UseGas(thor.SloadGas)
-				var val []byte
-				data := env.State().GetRawStorage(thor.Address(args.Self), args.Key)
-				env.Require(decodeBytes(data, &val) == nil)
-				return []interface{}{thor.BytesToBytes32(val)}
-			}
-
-			env.UseGas(thor.SloadGas)
-			blockID := env.Seeker().GetID(args.BlockNumber)
-			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(blockID)
-			env.UseGas(thor.SloadGas)
-			state := env.State().Spawn(header.StateRoot())
-			env.UseGas(thor.SloadGas)
-			var val []byte
-			data := state.GetRawStorage(thor.Address(args.Self), args.Key)
-			env.Require(decodeBytes(data, &val) == nil)
-			return []interface{}{thor.BytesToBytes32(val)}
-		}},
+			return []interface{}{decodeBytes32(data)}
+		}},		
 		{"native_userPlan", func(env *xenv.Environment) []interface{} {
 			var self common.Address
 			env.ParseArgs(&self)
@@ -323,12 +300,4 @@ func init() {
 			panic("method not found: " + def.name)
 		}
 	}
-}
-
-func decodeBytes(data []byte, val *[]byte) error {
-	if len(data) == 0 {
-		*val = nil
-		return nil
-	}
-	return rlp.DecodeBytes(data, val)
 }
