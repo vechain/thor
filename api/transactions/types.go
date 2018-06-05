@@ -155,7 +155,7 @@ type Transfer struct {
 }
 
 //ConvertReceipt convert a raw clause into a jason format clause
-func convertReceipt(txReceipt *tx.Receipt, block *block.Block, tx *tx.Transaction) (*Receipt, error) {
+func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)
 	signer, err := tx.Signer()
@@ -173,9 +173,9 @@ func convertReceipt(txReceipt *tx.Receipt, block *block.Block, tx *tx.Transactio
 			signer,
 		},
 		Block: BlockContext{
-			block.Header().ID(),
-			block.Header().Number(),
-			block.Header().Timestamp(),
+			header.ID(),
+			header.Number(),
+			header.Timestamp(),
 		},
 	}
 	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))
