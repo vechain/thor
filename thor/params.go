@@ -39,13 +39,14 @@ const (
 
 // Keys of governance params.
 var (
+	KeyExecutorAddress     = BytesToBytes32([]byte("executor"))
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e13)
-	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(250000))
+	InitialBaseGasPrice        = big.NewInt(1e15)
+	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )
