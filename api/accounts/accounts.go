@@ -54,11 +54,11 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(err, "address")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	code, err := a.getCode(addr, b.Header().StateRoot())
+	code, err := a.getCode(addr, h.StateRoot())
 	if err != nil {
 		return err
 	}
@@ -155,11 +155,11 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(err, "address")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	acc, err := a.getAccount(addr, b.Header())
+	acc, err := a.getAccount(addr, h)
 	if err != nil {
 		return err
 	}
@@ -175,11 +175,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(err, "key")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	storage, err := a.getStorage(addr, key, b.Header().StateRoot())
+	storage, err := a.getStorage(addr, key, h.StateRoot())
 	if err != nil {
 		return err
 	}
@@ -192,20 +192,20 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	req.Body.Close()
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
 	address := mux.Vars(req)["address"]
 	var output *VMOutput
 	if address == "" {
-		output, err = a.Call(nil, callBody, b.Header())
+		output, err = a.Call(nil, callBody, h)
 	} else {
 		addr, err := thor.ParseAddress(address)
 		if err != nil {
 			return utils.BadRequest(err, "address")
 		}
-		output, err = a.Call(&addr, callBody, b.Header())
+		output, err = a.Call(&addr, callBody, h)
 	}
 	if err != nil {
 		return err
@@ -213,9 +213,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, output)
 }
 
-func (a *Accounts) getBlock(revision string) (*block.Block, error) {
+func (a *Accounts) getBlockHeader(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
-		return a.chain.BestBlock(), nil
+		return a.chain.BestBlock().Header(), nil
 	}
 	blkID, err := thor.ParseBytes32(revision)
 	if err != nil {
@@ -226,9 +226,9 @@ func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 		if n > math.MaxUint32 {
 			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
-		return a.chain.GetTrunkBlock(uint32(n))
+		return a.chain.GetTrunkBlockHeader(uint32(n))
 	}
-	return a.chain.GetBlock(blkID)
+	return a.chain.GetBlockHeader(blkID)
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
