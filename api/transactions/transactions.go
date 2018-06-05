@@ -80,14 +80,14 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, blockID thor.Bytes3
 	if err != nil {
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(txMeta.BlockID)
+	h, err := t.chain.GetBlockHeader(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
 	tc.Block = BlockContext{
-		ID:        block.Header().ID(),
-		Number:    block.Header().Number(),
-		Timestamp: block.Header().Timestamp(),
+		ID:        h.ID(),
+		Number:    h.Number(),
+		Timestamp: h.Timestamp(),
 	}
 	return tc, nil
 }
@@ -105,7 +105,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	if err != nil {
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(txMeta.BlockID)
+	h, err := t.chain.GetBlockHeader(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	if err != nil {
 		return nil, err
 	}
-	return convertReceipt(receipt, block, tx)
+	return convertReceipt(receipt, h, tx)
 }
 
 func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
@@ -155,10 +155,10 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	b, err := t.getBlock(req.URL.Query().Get("revision"))
+	h, err := t.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
-	} else if b == nil {
+	} else if h == nil {
 		return utils.WriteJSON(w, nil)
 	}
 	raw := req.URL.Query().Get("raw")
@@ -166,13 +166,13 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 		return utils.BadRequest(errors.New("should be boolean"), "raw")
 	}
 	if raw == "true" {
-		tx, err := t.getRawTransaction(txID, b.Header().ID())
+		tx, err := t.getRawTransaction(txID, h.ID())
 		if err != nil {
 			return err
 		}
 		return utils.WriteJSON(w, tx)
 	}
-	tx, err := t.getTransactionByID(txID, b.Header().ID())
+	tx, err := t.getTransactionByID(txID, h.ID())
 	if err != nil {
 		return err
 	}
@@ -186,22 +186,22 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	b, err := t.getBlock(req.URL.Query().Get("revision"))
+	h, err := t.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
-	} else if b == nil {
+	} else if h == nil {
 		return utils.WriteJSON(w, nil)
 	}
-	receipt, err := t.getTransactionReceiptByID(txID, b.Header().ID())
+	receipt, err := t.getTransactionReceiptByID(txID, h.ID())
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, receipt)
 }
 
-func (t *Transactions) getBlock(revision string) (*block.Block, error) {
+func (t *Transactions) getBlockHeader(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
-		return t.chain.BestBlock(), nil
+		return t.chain.BestBlock().Header(), nil
 	}
 	blkID, err := thor.ParseBytes32(revision)
 	if err != nil {
@@ -212,17 +212,23 @@ func (t *Transactions) getBlock(revision string) (*block.Block, error) {
 		if n > math.MaxUint32 {
 			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
-		blk, err := t.chain.GetTrunkBlock(uint32(n))
+		b, err := t.chain.GetTrunkBlock(uint32(n))
+		if err != nil {
+			if t.chain.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return b.Header(), nil
+	}
+	b, err := t.chain.GetBlock(blkID)
+	if err != nil {
 		if t.chain.IsNotFound(err) {
 			return nil, nil
 		}
-		return blk, err
+		return nil, err
 	}
-	blk, err := t.chain.GetBlock(blkID)
-	if t.chain.IsNotFound(err) {
-		return nil, nil
-	}
-	return blk, err
+	return b.Header(), nil
 }
 
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
