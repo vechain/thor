@@ -12,20 +12,28 @@ contract Extension {
         return ExtensionNative(this).native_blake2b256(_value);
     }
 
-    function blockID(uint32 num) public view returns(bytes32) {
-        return ExtensionNative(this).native_blockID(num);
+    function blockID(uint num) public view returns(bytes32) {
+        if(num >= block.number)
+            return;
+        return ExtensionNative(this).native_blockID(uint32(num));
     }
 
-    function blockTotalScore(uint32 num) public view returns(uint64) {
-        return ExtensionNative(this).native_blockTotalScore(num);
+    function blockTotalScore(uint num) public view returns(uint64) {
+        if(num > block.number)
+            return;
+        return ExtensionNative(this).native_blockTotalScore(uint32(num));
     }
 
-    function blockTime(uint32 num) public view returns(uint64) {
-        return ExtensionNative(this).native_blockTimestamp(num);
+    function blockTime(uint num) public view returns(uint) {
+        if(num > block.number)
+            return;
+        return ExtensionNative(this).native_blockTimestamp(uint32(num));
     }
 
-    function blockSigner(uint32 num) public view returns(address) {
-        return ExtensionNative(this).native_blockSigner(num);
+    function blockSigner(uint num) public view returns(address) {
+        if(num > block.number)
+            return;
+        return ExtensionNative(this).native_blockSigner(uint32(num));
     }
 
     function totalSupply() public view returns(uint256) {
@@ -40,11 +48,11 @@ contract Extension {
         return ExtensionNative(this).native_transactionID();
     }
 
-    function txBlockRef() public view returns(uint32) {
+    function txBlockRef() public view returns(bytes8) {
         return ExtensionNative(this).native_transactionBlockRef();
     }
 
-    function txExpiration() public view returns(uint32) {
+    function txExpiration() public view returns(uint) {
         return ExtensionNative(this).native_transactionExpiration();
     }
 }
@@ -58,6 +66,6 @@ contract ExtensionNative {
     function native_tokenTotalSupply()public view returns(uint256);
     function native_transactionProvedWork()public view returns(uint256);    
     function native_transactionID()public view returns(bytes32);    
-    function native_transactionBlockRef()public view returns(uint32);
+    function native_transactionBlockRef()public view returns(bytes8);
     function native_transactionExpiration()public view returns(uint32);
 }

@@ -13,10 +13,8 @@ import (
 	"github.com/vechain/thor/builtin/extension"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm/evm"
 	"github.com/vechain/thor/xenv"
 )
 
@@ -87,30 +85,16 @@ type methodKey struct {
 
 var nativeMethods = make(map[methodKey]*nativeMethod)
 
-// HandleNativeCall entry of native methods implementation.
-func HandleNativeCall(
-	seeker *chain.Seeker,
-	state *state.State,
-	blockCtx *xenv.BlockContext,
-	txCtx *xenv.TransactionContext,
-	evm *evm.EVM,
-	contract *evm.Contract,
-	readonly bool,
-) func() ([]byte, error) {
-	methodID, err := abi.ExtractMethodID(contract.Input)
+// FindNativeCall find native calls.
+func FindNativeCall(to thor.Address, input []byte) (*abi.Method, func(*xenv.Environment) []interface{}, bool) {
+	methodID, err := abi.ExtractMethodID(input)
 	if err != nil {
-		return nil
+		return nil, nil, false
 	}
 
-	var method *nativeMethod
-	if contract.Address() == contract.Caller() {
-		// private methods require caller == to
-		method = nativeMethods[methodKey{thor.Address(contract.Address()), methodID}]
-	}
-
+	method := nativeMethods[methodKey{to, methodID}]
 	if method == nil {
-		return nil
+		return nil, nil, false
 	}
-
-	return xenv.New(method.abi, seeker, state, blockCtx, txCtx, evm, contract).Call(method.run, readonly)
+	return method.abi, method.run, true
 }

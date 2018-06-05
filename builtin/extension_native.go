@@ -25,7 +25,7 @@ func init() {
 		{"native_blockID", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Require(blockNum < env.BlockContext().Number)
+			env.Must(blockNum < env.BlockContext().Number)
 
 			env.UseGas(thor.SloadGas)
 			output := env.Seeker().GetID(blockNum)
@@ -34,7 +34,7 @@ func init() {
 		{"native_blockTotalScore", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Require(blockNum <= env.BlockContext().Number)
+			env.Must(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().TotalScore}
 			}
@@ -49,7 +49,7 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
-			env.Require(blockNum <= env.BlockContext().Number)
+			env.Must(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Time}
 			}
@@ -63,7 +63,7 @@ func init() {
 		{"native_blockSigner", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Require(blockNum <= env.BlockContext().Number)
+			env.Must(blockNum <= env.BlockContext().Number)
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Signer}
 			}
@@ -91,7 +91,7 @@ func init() {
 		}},
 
 		{"native_transactionBlockRef", func(env *xenv.Environment) []interface{} {
-			output := env.TransactionContext().BlockRef.Number()
+			output := env.TransactionContext().BlockRef
 			return []interface{}{output}
 		}},
 		{"native_transactionExpiration", func(env *xenv.Environment) []interface{} {
