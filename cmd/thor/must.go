@@ -56,12 +56,6 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 			fatal(err)
 		}
 		return gene
-	case "dev":
-		gene, err := genesis.NewDevnet()
-		if err != nil {
-			fatal(err)
-		}
-		return gene
 	default:
 		cli.ShowAppHelp(ctx)
 		if network == "" {
