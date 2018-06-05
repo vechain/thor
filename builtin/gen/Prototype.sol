@@ -4,7 +4,6 @@
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
 pragma solidity ^0.4.18;
-import "./Energy.sol";
 
 contract Prototype {
 
