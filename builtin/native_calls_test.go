@@ -739,13 +739,13 @@ func TestExtensionNative(t *testing.T) {
 		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
 		Assert(t)
 
-	test.Case("native_blockRef").
+	test.Case("native_transactionBlockRef").
 		To(contract).Caller(contract).
 		BlockRef(tx.NewBlockRef(1)).
 		ShouldOutput(tx.NewBlockRef(1).Number()).
 		Assert(t)
 
-	test.Case("native_txExpiration").
+	test.Case("native_transactionExpiration").
 		To(contract).Caller(contract).
 		Expiration(uint32(100)).
 		ShouldOutput(uint32(100)).

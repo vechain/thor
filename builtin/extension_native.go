@@ -90,11 +90,11 @@ func init() {
 			return []interface{}{output}
 		}},
 
-		{"native_blockRef", func(env *xenv.Environment) []interface{} {
+		{"native_transactionBlockRef", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().BlockRef.Number()
 			return []interface{}{output}
 		}},
-		{"native_txExpiration", func(env *xenv.Environment) []interface{} {
+		{"native_transactionExpiration", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().Expiration
 			return []interface{}{output}
 		}},
