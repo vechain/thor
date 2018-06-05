@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm/evm"
 )
 
@@ -35,6 +36,8 @@ type TransactionContext struct {
 	Origin     thor.Address
 	GasPrice   *big.Int
 	ProvedWork *big.Int
+	BlockRef   tx.BlockRef
+	Expiration uint32
 }
 
 type vmError struct {

@@ -89,6 +89,15 @@ func init() {
 			output := env.TransactionContext().ID
 			return []interface{}{output}
 		}},
+
+		{"native_transactionBlockRef", func(env *xenv.Environment) []interface{} {
+			output := env.TransactionContext().BlockRef.Number()
+			return []interface{}{output}
+		}},
+		{"native_transactionExpiration", func(env *xenv.Environment) []interface{} {
+			output := env.TransactionContext().Expiration
+			return []interface{}{output}
+		}},
 	}
 
 	abi := Extension.NativeABI()

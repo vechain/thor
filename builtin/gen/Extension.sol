@@ -39,6 +39,14 @@ contract Extension {
     function txID() public view returns(bytes32) {
         return ExtensionNative(this).native_transactionID();
     }
+
+    function txBlockRef() public view returns(uint32) {
+        return ExtensionNative(this).native_transactionBlockRef();
+    }
+
+    function txExpiration() public view returns(uint32) {
+        return ExtensionNative(this).native_transactionExpiration();
+    }
 }
 
 contract ExtensionNative {
@@ -50,4 +58,6 @@ contract ExtensionNative {
     function native_tokenTotalSupply()public view returns(uint256);
     function native_transactionProvedWork()public view returns(uint256);    
     function native_transactionID()public view returns(bytes32);    
+    function native_transactionBlockRef()public view returns(uint32);
+    function native_transactionExpiration()public view returns(uint32);
 }

@@ -45,6 +45,8 @@ type ccase struct {
 	events     []*vm.Event
 	provedWork *big.Int
 	txID       thor.Bytes32
+	blockRef   tx.BlockRef
+	expiration uint32
 
 	output *[]interface{}
 	vmerr  error
@@ -80,6 +82,16 @@ func (c *ccase) TxID(txID thor.Bytes32) *ccase {
 	c.txID = txID
 	return c
 }
+
+func (c *ccase) BlockRef(blockRef tx.BlockRef) *ccase {
+	c.blockRef = blockRef
+	return c
+}
+
+func (c *ccase) Expiration(expiration uint32) *ccase {
+	c.expiration = expiration
+	return c
+}
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
 	return c
@@ -111,7 +123,9 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			ID:         c.txID,
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
-			ProvedWork: c.provedWork})
+			ProvedWork: c.provedWork,
+			BlockRef:   c.blockRef,
+			Expiration: c.expiration})
 
 	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
@@ -723,6 +737,18 @@ func TestExtensionNative(t *testing.T) {
 	test.Case("native_tokenTotalSupply").
 		To(contract).Caller(contract).
 		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
+		Assert(t)
+
+	test.Case("native_transactionBlockRef").
+		To(contract).Caller(contract).
+		BlockRef(tx.NewBlockRef(1)).
+		ShouldOutput(tx.NewBlockRef(1).Number()).
+		Assert(t)
+
+	test.Case("native_transactionExpiration").
+		To(contract).Caller(contract).
+		Expiration(uint32(100)).
+		ShouldOutput(uint32(100)).
 		Assert(t)
 
 	test.Case("native_transactionProvedWork").
