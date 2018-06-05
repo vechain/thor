@@ -57,7 +57,6 @@ func (e *Energy) TokenTotalSupply() *big.Int {
 
 // TotalSupply returns total supply of energy.
 func (e *Energy) TotalSupply() *big.Int {
-	// that's totalGrown + totalAdd - totalSub
 	var init initialSupply
 	e.getStorage(initialSupplyKey, &init)
 
