@@ -12,25 +12,25 @@ library thor {
     address constant prototypeContract = uint160(bytes9("Prototype"));
     address constant energyContract = uint160(bytes6("Energy"));
 
-    function $master(address self) internal view returns(address master){
-        return Prototype(prototypeContract).$master(self);
+    function $master(address self) internal view returns(address){
+        return Prototype(prototypeContract).master(self);
     }
 
     /// @param newMaster new master to be set.
     function $setMaster(address self, address newMaster) internal {
-        Prototype(prototypeContract).$setMaster(self, newMaster);
+        Prototype(prototypeContract).setMaster(self, newMaster);
     }
 
-    function $balance(address self, uint blockNumber) internal view returns(uint256 amount){
-        return Prototype(prototypeContract).$balance(self, blockNumber);
+    function $balance(address self, uint blockNumber) internal view returns(uint256){
+        return Prototype(prototypeContract).balance(self, blockNumber);
     }
 
     function $energy(address self) internal view returns(uint256 amount){
         return Energy(energyContract).balanceOf(self);
     }
 
-    function $energy(address self, uint blockNumber) internal view returns(uint256 amount){
-        return Prototype(prototypeContract).$energy(self, blockNumber);
+    function $energy(address self, uint blockNumber) internal view returns(uint256){
+        return Prototype(prototypeContract).energy(self, blockNumber);
     }
 
     function $transferEnergy(address self, uint256 amount) internal{
@@ -42,51 +42,51 @@ library thor {
     }
 
     function $hasCode(address self) internal view returns(bool){
-        return Prototype(prototypeContract).$hasCode(self);
+        return Prototype(prototypeContract).hasCode(self);
     }
 
-    function $storage(address self, bytes32 key) internal view returns(bytes32 value){
-        return Prototype(prototypeContract).$storage(self, key);
+    function $storage(address self, bytes32 key) internal view returns(bytes32){
+        return Prototype(prototypeContract).storageFor(self, key);
     }
 
     function $userPlan(address self) internal view returns(uint256 credit, uint256 recoveryRate){
-        return Prototype(prototypeContract).$userPlan(self);
+        return Prototype(prototypeContract).userPlan(self);
     }
 
     function $setUserPlan(address self, uint256 credit, uint256 recoveryRate) internal{
-        Prototype(prototypeContract).$setUserPlan(self, credit, recoveryRate);
+        Prototype(prototypeContract).setUserPlan(self, credit, recoveryRate);
     }
 
     function $isUser(address self, address user) internal view returns(bool){
-        return Prototype(prototypeContract).$isUser(self, user);
+        return Prototype(prototypeContract).isUser(self, user);
     }
 
-    function $userCredit(address self, address user) internal view returns(uint256 remainedCredit){
-        return Prototype(prototypeContract).$userCredit(self, user);
+    function $userCredit(address self, address user) internal view returns(uint256){
+        return Prototype(prototypeContract).userCredit(self, user);
     }
 
     function $addUser(address self, address user) internal{
-        Prototype(prototypeContract).$addUser(self, user);
+        Prototype(prototypeContract).addUser(self, user);
     }
 
     function $removeUser(address self, address user) internal{
-        Prototype(prototypeContract).$removeUser(self, user);
+        Prototype(prototypeContract).removeUser(self, user);
     }
 
     function $sponsor(address self, bool yesOrNo) internal{
-        Prototype(prototypeContract).$sponsor(self, yesOrNo);
+        Prototype(prototypeContract).sponsor(self, yesOrNo);
     }
 
     function $isSponsor(address self, address sponsor) internal view returns(bool){
-        return Prototype(prototypeContract).$isSponsor(self, sponsor);
+        return Prototype(prototypeContract).isSponsor(self, sponsor);
     }
 
     function $selectSponsor(address self, address sponsor) internal{
-        Prototype(prototypeContract).$selectSponsor(self, sponsor);
+        Prototype(prototypeContract).selectSponsor(self, sponsor);
     }
     
     function $currentSponsor(address self) internal view returns(address){
-        return Prototype(prototypeContract).$currentSponsor(self);
+        return Prototype(prototypeContract).currentSponsor(self);
     }
 
 }
