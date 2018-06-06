@@ -15,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/kv"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
@@ -24,6 +22,7 @@ import (
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -208,8 +207,13 @@ func TestParamsNative(t *testing.T) {
 	})
 	c, _ := chain.New(kv, b0)
 	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
 
-	rt := runtime.New(c.NewSeeker(b0.Header().ID()), st, &xenv.BlockContext{})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{})
 
 	test := &ctest{
 		rt:  rt,
@@ -274,8 +278,13 @@ func TestAuthorityNative(t *testing.T) {
 	})
 	c, _ := chain.New(kv, b0)
 	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
 
-	rt := runtime.New(c.NewSeeker(b0.Header().ID()), st, &xenv.BlockContext{})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{})
 
 	addEvent := func(signer, endorsor thor.Address, identity thor.Bytes32) *vm.Event {
 		ev, _ := builtin.Authority.ABI.EventByName("Add")
@@ -375,6 +384,11 @@ func TestEnergyNative(t *testing.T) {
 
 	c, _ := chain.New(kv, b0)
 	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
 
 	st.SetEnergy(addr, eng, b0.Header().Timestamp())
 	builtin.Energy.Native(st, b0.Header().Timestamp()).SetInitialSupply(&big.Int{}, eng)
@@ -398,7 +412,7 @@ func TestEnergyNative(t *testing.T) {
 		}
 	}
 
-	rt := runtime.New(c.NewSeeker(b0.Header().ID()), st, &xenv.BlockContext{Time: b0.Header().Timestamp()})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: b0.Header().Timestamp()})
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.ABI,
@@ -494,12 +508,18 @@ func TestPrototypeNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	gene, _ := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
-	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	c, _ := chain.New(kv, genesisBlock)
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(genesisBlock.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+
 	st.SetStorage(thor.Address(acc1), key, value)
 	st.SetBalance(thor.Address(acc1), big.NewInt(1))
 
-	rt := runtime.New(c.NewSeeker(genesisBlock.Header().ID()), st, &xenv.BlockContext{
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Time:   genesisBlock.Header().Timestamp(),
 		Number: genesisBlock.Header().Number(),
 	})
@@ -664,7 +684,12 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	c, _ := chain.New(kv, genesisBlock)
 
 	st, _ := state.New(c.BestBlock().Header().StateRoot(), kv)
-	rt := runtime.New(c.NewSeeker(c.BestBlock().Header().ID()), st, &xenv.BlockContext{
+	seeker := c.NewSeeker(c.BestBlock().Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Number: thor.MaxBackTrackingBlockNumber + 2,
 		Time:   genesisBlock.Header().Timestamp(),
 	})
@@ -719,7 +744,12 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	}
 
 	st, _ = state.New(c.BestBlock().Header().StateRoot(), kv)
-	rt := runtime.New(c.NewSeeker(c.BestBlock().Header().ID()), st, &xenv.BlockContext{
+	seeker := c.NewSeeker(c.BestBlock().Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Number: c.BestBlock().Header().Number(),
 		Time:   c.BestBlock().Header().Timestamp(),
 	})
@@ -798,7 +828,12 @@ func TestExtensionNative(t *testing.T) {
 	_, err = c.AddBlock(b2, nil)
 	assert.Equal(t, err, nil)
 
-	rt := runtime.New(c.NewSeeker(b2.Header().ID()), st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
+	seeker := c.NewSeeker(b2.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
 
 	test := &ctest{
 		rt:  rt,
