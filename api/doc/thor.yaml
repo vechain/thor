@@ -58,6 +58,8 @@ paths:
                 $ref: '#/components/schemas/ContractCallResult'
   '/accounts':
     post:
+      parameters:
+        - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
       summary: perform contract call of deploying a contract
