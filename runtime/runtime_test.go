@@ -6,11 +6,16 @@
 package runtime_test
 
 import (
+	"encoding/hex"
 	"math"
+	"math/big"
 	"testing"
+
+	"github.com/vechain/thor/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -21,6 +26,83 @@ import (
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
 )
+
+func TestContractSuicide(t *testing.T) {
+	assert := assert.New(t)
+	kv, _ := lvldb.NewMem()
+
+	g, _ := genesis.NewDevnet()
+	stateCreator := state.NewCreator(kv)
+	b0, _, err := g.Build(stateCreator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch, _ := chain.New(kv, b0)
+
+	// contract:
+	//
+	// pragma solidity ^0.4.18;
+
+	// contract TestSuicide {
+	// 	function testSuicide() public {
+	// 		selfdestruct(msg.sender);
+	// 	}
+	// }
+	data, _ := hex.DecodeString("608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063085da1b3146044575b600080fd5b348015604f57600080fd5b5060566058565b005b3373ffffffffffffffffffffffffffffffffffffffff16ff00a165627a7a723058204cb70b653a3d1821e00e6ade869638e80fa99719931c9fa045cec2189d94086f0029")
+	time := b0.Header().Timestamp()
+	addr := thor.BytesToAddress([]byte("acc01"))
+	state, _ := stateCreator.NewState(b0.Header().StateRoot())
+	state.SetCode(addr, data)
+	state.SetEnergy(addr, big.NewInt(100), time)
+	state.SetBalance(addr, big.NewInt(200))
+
+	abi, _ := abi.New([]byte(`[{
+			"constant": false,
+			"inputs": [],
+			"name": "testSuicide",
+			"outputs": [],
+			"payable": false,
+			"stateMutability": "nonpayable",
+			"type": "function"
+		}
+	]`))
+	suicide, _ := abi.MethodByName("testSuicide")
+	methodData, err := suicide.EncodeInput()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	origin := genesis.DevAccounts()[0].Address
+	out := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{Time: time}).
+		Call(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+	if out.VMErr != nil {
+		t.Fatal(out.VMErr)
+	}
+
+	expectedTransfer := &vm.Transfer{
+		Sender:    addr,
+		Recipient: origin,
+		Amount:    big.NewInt(200),
+	}
+	assert.Equal(1, len(out.Transfers))
+	assert.Equal(expectedTransfer, out.Transfers[0])
+
+	event, _ := builtin.Energy.ABI.EventByName("Transfer")
+	expectedEvent := &vm.Event{
+		Address: builtin.Energy.Address,
+		Topics:  []thor.Bytes32{event.ID(), thor.BytesToBytes32(addr.Bytes()), thor.BytesToBytes32(origin.Bytes())},
+		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100},
+	}
+	assert.Equal(1, len(out.Events))
+	assert.Equal(expectedEvent, out.Events[0])
+
+	assert.Equal(big.NewInt(0), state.GetBalance(addr))
+	assert.Equal(big.NewInt(0), state.GetEnergy(addr, time))
+
+	bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+	assert.Equal(new(big.Int).Add(bal, big.NewInt(200)), state.GetBalance(origin))
+	assert.Equal(new(big.Int).Add(bal, big.NewInt(100)), state.GetEnergy(origin, time))
+}
 
 func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
