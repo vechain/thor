@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/thor"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -37,6 +36,17 @@ type (
 	// GetHashFunc returns the nth block hash in the blockchain
 	// and is used by the BLOCKHASH EVM op code.
 	GetHashFunc func(uint64) common.Hash
+
+	// NewContractAddressFunc create a new contract according to current evm context and creation counter.
+	NewContractAddressFunc func(evm *EVM, counter uint32) common.Address
+	// InterceptContractCallFunc intercept contract call.
+	InterceptContractCallFunc func(evm *EVM, contract *Contract, readonly bool) ([]byte, error, bool)
+
+	// OnCreateContractFunc callback when creating contract.
+	OnCreateContractFunc func(evm *EVM, contractAddr common.Address, caller common.Address)
+
+	// OnSuicideContractFunc callback when suicide contract.
+	OnSuicideContractFunc func(evm *EVM, contractAddr common.Address, tokenReceiver common.Address)
 )
 
 // run runs the given contract and takes care of running precompiles with a fallback to the byte code interpreter.
@@ -64,6 +74,11 @@ type Context struct {
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
 
+	NewContractAddress    NewContractAddressFunc
+	InterceptContractCall InterceptContractCallFunc
+	OnCreateContract      OnCreateContractFunc
+	OnSuicideContract     OnSuicideContractFunc
+
 	// Message information
 	Origin   common.Address // Provides information for ORIGIN
 	GasPrice *big.Int       // Provides information for GASPRICE
@@ -78,23 +93,10 @@ type Context struct {
 	/// The following two vars are required to generating contract address.
 
 	// The transaction where the message contained.
-	TxID thor.Bytes32
+	TxID common.Hash
 	// The index of clause that generates this message.
 	ClauseIndex uint32
-
-	InterceptContractCall InterceptContractCall
-	OnCreateContract      OnCreateContract
-	OnSuicideContract     OnSuicideContract
 }
-
-// InterceptContractCall intercept contract call.
-type InterceptContractCall func(evm *EVM, contract *Contract, readonly bool) ([]byte, error, bool)
-
-// OnCreateContract callback when creating contract.
-type OnCreateContract func(evm *EVM, contractAddr thor.Address, caller thor.Address)
-
-// OnSuicideContract callback when suicide contract.
-type OnSuicideContract func(evm *EVM, contractAddr thor.Address, tokenReceiver thor.Address)
 
 // EVM is the Ethereum Virtual Machine base object and provides
 // the necessary tools to run a contract on the given state with
@@ -364,7 +366,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	//contractAddr = crypto.CreateAddress(caller.Address(), nonce)
 
 	// differ with ethereum here!!!
-	contractAddr = common.Address(thor.CreateContractAddress(evm.TxID, evm.ClauseIndex, evm.contractCreationCount))
+	// let runtime make new contract address
+	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
 	evm.contractCreationCount++
 
 	//
@@ -381,7 +384,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	if evm.OnCreateContract != nil {
 		// should callback after snapshot
-		evm.OnCreateContract(evm, thor.Address(contractAddr), thor.Address(caller.Address()))
+		evm.OnCreateContract(evm, contractAddr, caller.Address())
 	}
 
 	evm.Transfer(evm.StateDB, caller.Address(), contractAddr, value)

@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/thor"
 )
 
 var (
@@ -797,13 +796,10 @@ func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	receiver := common.BigToAddress(stack.pop())
 	if evm.OnSuicideContract != nil {
-		evm.OnSuicideContract(evm, thor.Address(contract.Address()), thor.Address(receiver))
+		// let runtime do transfer things
+		evm.OnSuicideContract(evm, contract.Address(), receiver)
 	}
 
-	balance := evm.StateDB.GetBalance(contract.Address())
-	// use Transfer to ensure transfer log recorded
-	evm.Transfer(evm.StateDB, contract.Address(), receiver, balance)
-	
 	evm.StateDB.Suicide(contract.Address())
 	return nil, nil
 }
