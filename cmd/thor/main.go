@@ -24,12 +24,16 @@ import (
 var (
 	version   string
 	gitCommit string
-	release   = "dev"
+	gitTag    string
 	log       = log15.New()
 )
 
 func fullVersion() string {
-	return fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit)
+	versionMeta := "release"
+	if gitTag == "" {
+		versionMeta = "dev"
+	}
+	return fmt.Sprintf("v%s-%s-%s", version, gitCommit, versionMeta)
 }
 
 func main() {
