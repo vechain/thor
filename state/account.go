@@ -44,11 +44,11 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 		return a.Energy
 	}
 
-	diff := blockTime - a.BlockTime
-	if diff == 0 {
+	if blockTime <= a.BlockTime {
 		return a.Energy
 	}
-	x := new(big.Int).SetUint64(diff)
+
+	x := new(big.Int).SetUint64(blockTime - a.BlockTime)
 	x.Mul(x, a.Balance)
 	x.Mul(x, thor.EnergyGrowthRate)
 	x.Div(x, bigE18)
