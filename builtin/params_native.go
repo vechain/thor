@@ -18,7 +18,7 @@ func init() {
 		name string
 		run  func(env *xenv.Environment) []interface{}
 	}{
-		{"native_getExecutor", func(env *xenv.Environment) []interface{} {
+		{"native_executor", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
 			addr := thor.BytesToAddress(Params.Native(env.State()).Get(thor.KeyExecutorAddress).Bytes())
 			return []interface{}{addr}
