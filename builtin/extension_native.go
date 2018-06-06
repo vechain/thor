@@ -45,7 +45,7 @@ func init() {
 			header := env.Seeker().GetHeader(id)
 			return []interface{}{header.TotalScore()}
 		}},
-		{"native_blockTimestamp", func(env *xenv.Environment) []interface{} {
+		{"native_blockTime", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
@@ -76,25 +76,25 @@ func init() {
 			signer, _ := header.Signer()
 			return []interface{}{signer}
 		}},
-		{"native_tokenTotalSupply", func(env *xenv.Environment) []interface{} {
+		{"native_totalSupply", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
 			output := Energy.Native(env.State(), env.BlockContext().Time).TokenTotalSupply()
 			return []interface{}{output}
 		}},
-		{"native_transactionProvedWork", func(env *xenv.Environment) []interface{} {
+		{"native_txProvedWork", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().ProvedWork
 			return []interface{}{output}
 		}},
-		{"native_transactionID", func(env *xenv.Environment) []interface{} {
+		{"native_txID", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().ID
 			return []interface{}{output}
 		}},
 
-		{"native_transactionBlockRef", func(env *xenv.Environment) []interface{} {
+		{"native_txBlockRef", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().BlockRef
 			return []interface{}{output}
 		}},
-		{"native_transactionExpiration", func(env *xenv.Environment) []interface{} {
+		{"native_txExpiration", func(env *xenv.Environment) []interface{} {
 			output := env.TransactionContext().Expiration
 			return []interface{}{output}
 		}},

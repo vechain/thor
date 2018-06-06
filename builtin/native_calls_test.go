@@ -800,121 +800,97 @@ func TestExtensionNative(t *testing.T) {
 
 	rt := runtime.New(c.NewSeeker(b2.Header().ID()), st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
 
-	contract := builtin.Extension.Address
-
-	value := []byte("extension")
-
 	test := &ctest{
 		rt:  rt,
-		abi: builtin.Extension.NativeABI(),
+		abi: builtin.Extension.ABI,
+		to:  builtin.Extension.Address,
 	}
 
-	test.Case("native_blake2b256", value).
-		To(contract).Caller(contract).
-		ShouldOutput(thor.Blake2b(value)).
+	test.Case("blake2b256", []byte("hello world")).
+		ShouldOutput(thor.Blake2b([]byte("hello world"))).
 		Assert(t)
 
-	test.Case("native_tokenTotalSupply").
-		To(contract).Caller(contract).
+	test.Case("totalSupply").
 		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
 		Assert(t)
 
-	test.Case("native_transactionBlockRef").
-		To(contract).Caller(contract).
+	test.Case("txBlockRef").
 		BlockRef(tx.NewBlockRef(1)).
-		ShouldOutput(tx.NewBlockRef(1).Number()).
+		ShouldOutput(tx.NewBlockRef(1)).
 		Assert(t)
 
-	test.Case("native_transactionExpiration").
-		To(contract).Caller(contract).
-		Expiration(uint32(100)).
-		ShouldOutput(uint32(100)).
+	test.Case("txExpiration").
+		Expiration(100).
+		ShouldOutput(big.NewInt(100)).
 		Assert(t)
 
-	test.Case("native_transactionProvedWork").
-		To(contract).Caller(contract).
+	test.Case("txProvedWork").
 		ProvedWork(big.NewInt(1e12)).
 		ShouldOutput(big.NewInt(1e12)).
 		Assert(t)
 
-	test.Case("native_transactionID").
-		To(contract).Caller(contract).
+	test.Case("txID").
 		TxID(thor.BytesToBytes32([]byte("txID"))).
 		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
 		Assert(t)
 
-	test.Case("native_blockID", uint32(3)).
-		To(contract).Caller(contract).
-		ShouldVMError(errReverted).
+	test.Case("blockID", big.NewInt(3)).
+		ShouldOutput(thor.Bytes32{}).
 		Assert(t)
 
-	test.Case("native_blockID", uint32(2)).
-		To(contract).Caller(contract).
-		ShouldVMError(errReverted).
+	test.Case("blockID", big.NewInt(2)).
+		ShouldOutput(thor.Bytes32{}).
 		Assert(t)
 
-	test.Case("native_blockID", uint32(1)).
-		To(contract).Caller(contract).
+	test.Case("blockID", big.NewInt(1)).
 		ShouldOutput(b1.Header().ID()).
 		Assert(t)
 
-	test.Case("native_blockID", uint32(0)).
-		To(contract).Caller(contract).
+	test.Case("blockID", big.NewInt(0)).
 		ShouldOutput(b0.Header().ID()).
 		Assert(t)
 
-	test.Case("native_blockTotalScore", uint32(3)).
-		To(contract).Caller(contract).
-		ShouldVMError(errReverted).
+	test.Case("blockTotalScore", big.NewInt(3)).
+		ShouldOutput(uint64(0)).
 		Assert(t)
 
-	test.Case("native_blockTotalScore", uint32(2)).
-		To(contract).Caller(contract).
+	test.Case("blockTotalScore", big.NewInt(2)).
 		ShouldOutput(b2.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_blockTotalScore", uint32(1)).
-		To(contract).Caller(contract).
+	test.Case("blockTotalScore", big.NewInt(1)).
 		ShouldOutput(b1.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_blockTotalScore", uint32(0)).
-		To(contract).Caller(contract).
+	test.Case("blockTotalScore", big.NewInt(0)).
 		ShouldOutput(b0.Header().TotalScore()).
 		Assert(t)
 
-	test.Case("native_blockTimestamp", uint32(3)).
-		To(contract).Caller(contract).
-		ShouldVMError(errReverted).
+	test.Case("blockTime", big.NewInt(3)).
+		ShouldOutput(&big.Int{}).
 		Assert(t)
 
-	test.Case("native_blockTimestamp", uint32(2)).
-		To(contract).Caller(contract).
-		ShouldOutput(b2.Header().Timestamp()).
+	test.Case("blockTime", big.NewInt(2)).
+		ShouldOutput(new(big.Int).SetUint64(b2.Header().Timestamp())).
 		Assert(t)
 
-	test.Case("native_blockTimestamp", uint32(1)).
-		To(contract).Caller(contract).
-		ShouldOutput(b1.Header().Timestamp()).
+	test.Case("blockTime", big.NewInt(1)).
+		ShouldOutput(new(big.Int).SetUint64(b1.Header().Timestamp())).
 		Assert(t)
 
-	test.Case("native_blockTimestamp", uint32(0)).
-		To(contract).Caller(contract).
-		ShouldOutput(b0.Header().Timestamp()).
+	test.Case("blockTime", big.NewInt(0)).
+		ShouldOutput(new(big.Int).SetUint64(b0.Header().Timestamp())).
 		Assert(t)
 
-	test.Case("native_blockSigner", uint32(3)).
-		To(contract).Caller(contract).
-		ShouldVMError(errReverted).
+	test.Case("blockSigner", big.NewInt(3)).
+		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("native_blockSigner", uint32(2)).
-		To(contract).Caller(contract).
+	test.Case("blockSigner", big.NewInt(2)).
 		ShouldOutput(b2_singer).
 		Assert(t)
 
-	test.Case("native_blockSigner", uint32(1)).
-		To(contract).Caller(contract).
+	test.Case("blockSigner", big.NewInt(1)).
 		ShouldOutput(b1_singer).
 		Assert(t)
 }
