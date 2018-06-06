@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-pragma solidity ^0.4.18;
+pragma solidity 0.4.24;
 import "./Token.sol";
 
 /// @title Energy an token that represents fuel for VET.
