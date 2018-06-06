@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -490,19 +489,22 @@ func TestEnergyNative(t *testing.T) {
 
 func TestPrototypeNative(t *testing.T) {
 	var (
-		acc1     = thor.BytesToAddress([]byte("acc1"))
-		contract thor.Address
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+		acc2 = thor.BytesToAddress([]byte("acc2"))
 
-		master = thor.BytesToAddress([]byte("master"))
-
-		user = thor.BytesToAddress([]byte("user"))
+		master    = thor.BytesToAddress([]byte("master"))
+		notmaster = thor.BytesToAddress([]byte("notmaster"))
+		user      = thor.BytesToAddress([]byte("user"))
+		notuser   = thor.BytesToAddress([]byte("notuser"))
 
 		credit       = big.NewInt(1000)
 		recoveryRate = big.NewInt(10)
 		sponsor      = thor.BytesToAddress([]byte("sponsor"))
+		notsponsor   = thor.BytesToAddress([]byte("notsponsor"))
 
-		key   = thor.BytesToBytes32([]byte("account-key"))
-		value = thor.BytesToBytes32([]byte("account-value"))
+		key      = thor.BytesToBytes32([]byte("account-key"))
+		value    = thor.BytesToBytes32([]byte("account-value"))
+		contract thor.Address
 	)
 
 	kv, _ := lvldb.NewMem()
@@ -537,135 +539,180 @@ func TestPrototypeNative(t *testing.T) {
 
 	test := &ctest{
 		rt:     rt,
-		abi:    builtin.Prototype.NativeABI(),
+		abi:    builtin.Prototype.ABI,
 		to:     builtin.Prototype.Address,
 		caller: builtin.Prototype.Address,
 	}
 
-	test.Case("native_master", acc1).
+	test.Case("master", acc1).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("native_master", contract).
+	test.Case("master", contract).
 		ShouldOutput(master).
 		Assert(t)
 
-	test.Case("native_setMaster", acc1, acc1).
+	test.Case("setMaster", acc1, acc2).
+		Caller(acc1).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc1[:])})...).
+		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc2[:])})...).
 		Assert(t)
 
-	test.Case("native_master", acc1).
-		ShouldOutput(acc1).
+	test.Case("setMaster", acc1, acc2).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
 		Assert(t)
 
-	test.Case("native_hasCode", acc1).
+	test.Case("master", acc1).
+		ShouldOutput(acc2).
+		Assert(t)
+
+	test.Case("hasCode", acc1).
 		ShouldOutput(false).
 		Assert(t)
 
-	test.Case("native_hasCode", contract).
+	test.Case("hasCode", contract).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("native_setUserPlan", contract, credit, recoveryRate).
+	test.Case("setUserPlan", contract, credit, recoveryRate).
+		Caller(master).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$SetUserPlan", contract, nil, credit, recoveryRate)...).
 		Assert(t)
 
-	test.Case("native_userPlan", contract).
+	test.Case("setUserPlan", contract, credit, recoveryRate).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("userPlan", contract).
 		ShouldOutput(credit, recoveryRate).
 		Assert(t)
 
-	test.Case("native_isUser", contract, user).
+	test.Case("isUser", contract, user).
 		ShouldOutput(false).
 		Assert(t)
 
-	test.Case("native_addUser", contract, user).
+	test.Case("addUser", contract, user).
+		Caller(master).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, true)...).
 		Assert(t)
 
-	test.Case("native_isUser", contract, user).
+	test.Case("addUser", contract, user).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("addUser", contract, user).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isUser", contract, user).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("native_userCredit", contract, user).
+	test.Case("userCredit", contract, user).
 		ShouldOutput(credit).
 		Assert(t)
 
-	test.Case("native_removeUser", contract, user).
+	test.Case("removeUser", contract, user).
+		Caller(master).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, false)...).
 		Assert(t)
 
-	test.Case("native_userCredit", contract, user).
+	test.Case("removeUser", contract, user).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("removeUser", contract, notuser).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("userCredit", contract, user).
 		ShouldOutput(&big.Int{}).
 		Assert(t)
 
-	test.Case("native_isSponsor", contract, sponsor).
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
 
-	test.Case("native_sponsor", contract, sponsor, true).
+	test.Case("sponsor", contract, true).
+		Caller(sponsor).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$Sponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor.Bytes())}, true)...).
 		Assert(t)
 
-	test.Case("native_isSponsor", contract, sponsor).
+	test.Case("sponsor", contract, true).
+		Caller(sponsor).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("native_currentSponsor", contract).
+	test.Case("currentSponsor", contract).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("native_selectSponsor", contract, sponsor).
+	test.Case("selectSponsor", contract, sponsor).
+		Caller(master).
 		ShouldOutput().
 		ShouldLog(buildTestLogs("$SelectSponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor[:])})...).
 		Assert(t)
 
-	test.Case("native_sponsor", contract, sponsor, false).
+	test.Case("selectSponsor", contract, notsponsor).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("selectSponsor", contract, notsponsor).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("sponsor", contract, false).
+		Caller(sponsor).
 		ShouldOutput().
 		Assert(t)
 
-	test.Case("native_isSponsor", contract, sponsor).
+	test.Case("sponsor", contract, false).
+		Caller(sponsor).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
 
-	test.Case("native_storage", acc1, key).
+	test.Case("storageFor", acc1, key).
 		ShouldOutput(value).
 		Assert(t)
 
-	test.Case("native_storage", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
-		ShouldVMError(errReverted).
+	test.Case("storageFor", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
+		ShouldOutput(thor.Bytes32{}).
 		Assert(t)
 
-	test.Case("native_storageAtBlock", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan")), uint32(0)).
-		ShouldVMError(errReverted).
-		Assert(t)
-
-	test.Case("native_storageAtBlock", acc1, key, uint32(0)).
-		ShouldOutput(value).
-		Assert(t)
-
-	test.Case("native_storageAtBlock", acc1, key, uint32(100)).
-		ShouldVMError(errReverted).
-		Assert(t)
-
-	test.Case("native_balanceAtBlock", acc1, uint32(0)).
+	test.Case("balance", acc1, big.NewInt(0)).
 		ShouldOutput(big.NewInt(1)).
 		Assert(t)
 
-	test.Case("native_balanceAtBlock", acc1, uint32(100)).
-		ShouldVMError(errReverted).
+	test.Case("balance", acc1, big.NewInt(100)).
+		ShouldOutput(big.NewInt(0)).
 		Assert(t)
 
-	test.Case("native_energyAtBlock", acc1, uint32(0)).
+	test.Case("energy", acc1, big.NewInt(0)).
 		ShouldOutput(energy).
 		Assert(t)
 
-	test.Case("native_energyAtBlock", acc1, uint32(100)).
-		ShouldVMError(errReverted).
+	test.Case("energy", acc1, big.NewInt(100)).
+		ShouldOutput(big.NewInt(0)).
 		Assert(t)
 
 	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
@@ -675,7 +722,6 @@ func TestPrototypeNative(t *testing.T) {
 func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	var (
 		acc1 = thor.BytesToAddress([]byte("acc1"))
-		key  = thor.BytesToBytes32([]byte("acc1-key"))
 	)
 
 	kv, _ := lvldb.NewMem()
@@ -696,30 +742,23 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 
 	test := &ctest{
 		rt:     rt,
-		abi:    builtin.Prototype.NativeABI(),
+		abi:    builtin.Prototype.ABI,
 		to:     builtin.Prototype.Address,
 		caller: builtin.Prototype.Address,
 	}
 
-	test.Case("native_storageAtBlock", acc1, key, uint32(0)).
-		ShouldOutput(thor.Bytes32{}).
-		Assert(t)
-
-	test.Case("native_balanceAtBlock", acc1, uint32(0)).
+	test.Case("balance", acc1, big.NewInt(0)).
 		ShouldOutput(big.NewInt(0)).
 		Assert(t)
 
-	test.Case("native_energyAtBlock", acc1, uint32(0)).
+	test.Case("energy", acc1, big.NewInt(0)).
 		ShouldOutput(big.NewInt(0)).
 		Assert(t)
 }
 
 func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	var (
-		acc1         = thor.BytesToAddress([]byte("acc1"))
-		key          = thor.BytesToBytes32([]byte("acc1-key"))
-		credit       = big.NewInt(1000)
-		recoveryRate = big.NewInt(10)
+		acc1 = thor.BytesToAddress([]byte("acc1"))
 	)
 
 	kv, _ := lvldb.NewMem()
@@ -730,7 +769,6 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	launchTime := genesisBlock.Header().Timestamp()
 
 	for i := 1; i < 100; i++ {
-		st.SetStorage(acc1, key, thor.BytesToBytes32([]byte(fmt.Sprintf("acc1-value%d", i))))
 		st.SetBalance(acc1, big.NewInt(int64(i)))
 		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
 		stateRoot, _ := st.Stage().Commit()
@@ -756,42 +794,25 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 
 	test := &ctest{
 		rt:     rt,
-		abi:    builtin.Prototype.NativeABI(),
+		abi:    builtin.Prototype.ABI,
 		to:     builtin.Prototype.Address,
 		caller: builtin.Prototype.Address,
 	}
 
-	test.Case("native_setUserPlan", acc1, credit, recoveryRate).
-		ShouldOutput().
-		ShouldLog(buildTestLogs("$SetUserPlan", acc1, nil, credit, recoveryRate)...).
-		Assert(t)
-
-	test.Case("native_storageAtBlock", acc1, key, uint32(10)).
-		ShouldOutput(thor.BytesToBytes32([]byte("acc1-value10"))).
-		Assert(t)
-
-	test.Case("native_storageAtBlock", acc1, key, uint32(99)).
-		ShouldOutput(thor.BytesToBytes32([]byte("acc1-value99"))).
-		Assert(t)
-
-	test.Case("native_balanceAtBlock", acc1, uint32(10)).
+	test.Case("balance", acc1, big.NewInt(10)).
 		ShouldOutput(big.NewInt(10)).
 		Assert(t)
 
-	test.Case("native_balanceAtBlock", acc1, uint32(99)).
+	test.Case("energy", acc1, big.NewInt(99)).
 		ShouldOutput(big.NewInt(99)).
 		Assert(t)
 
-	test.Case("native_energyAtBlock", acc1, uint32(10)).
+	test.Case("balance", acc1, big.NewInt(10)).
 		ShouldOutput(big.NewInt(10)).
 		Assert(t)
 
-	test.Case("native_energyAtBlock", acc1, uint32(99)).
+	test.Case("energy", acc1, big.NewInt(99)).
 		ShouldOutput(big.NewInt(99)).
-		Assert(t)
-
-	test.Case("native_storageAtBlock", builtin.Prototype.Address, thor.Blake2b(acc1.Bytes(), []byte("user-plan")), uint32(99)).
-		ShouldVMError(errReverted).
 		Assert(t)
 }
 
