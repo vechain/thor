@@ -141,7 +141,7 @@ func init() {
 
 			return []interface{}{hasCode}
 		}},
-		{"native_storage", func(env *xenv.Environment) []interface{} {
+		{"native_storageFor", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				Self common.Address
 				Key  thor.Bytes32
@@ -151,7 +151,7 @@ func init() {
 			env.UseGas(thor.SloadGas)
 			data := env.State().GetRawStorage(thor.Address(args.Self), args.Key)
 			return []interface{}{decodeBytes32(data)}
-		}},		
+		}},
 		{"native_userPlan", func(env *xenv.Environment) []interface{} {
 			var self common.Address
 			env.ParseArgs(&self)
