@@ -69,10 +69,8 @@ func (b *Binding) IsUser(user thor.Address) bool {
 }
 
 func (b *Binding) AddUser(user thor.Address, blockTime uint64) {
-	var up userPlan
-	b.getStorage(b.userPlanKey(), &up)
 	b.setStorage(b.userKey(user), &userObject{
-		up.Credit,
+		&big.Int{},
 		blockTime,
 	})
 }
@@ -94,7 +92,13 @@ func (b *Binding) UserCredit(user thor.Address, blockTime uint64) *big.Int {
 }
 
 func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockTime uint64) {
-	b.setStorage(b.userKey(user), &userObject{credit, blockTime})
+	var up userPlan
+	b.getStorage(b.userPlanKey(), &up)
+	used := new(big.Int).Sub(up.Credit, credit)
+	if used.Sign() < 0 {
+		used = &big.Int{}
+	}
+	b.setStorage(b.userKey(user), &userObject{used, blockTime})
 }
 
 func (b *Binding) UserPlan() (credit, recoveryRate *big.Int) {
