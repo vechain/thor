@@ -8,7 +8,7 @@ pragma solidity ^0.4.18;
 contract Params {
 
     function executor() public view returns(address) {
-        return ParamsNative(this).native_getExecutor();
+        return ParamsNative(this).native_executor();
     }
 
     function set(bytes32 _key, uint256 _value) public {
@@ -26,7 +26,7 @@ contract Params {
 }
 
 contract ParamsNative {
-    function native_getExecutor() public view returns(address);
+    function native_executor() public view returns(address);
 
     function native_set(bytes32 key, uint256 value) public;
     function native_get(bytes32 key) public view returns(uint256);

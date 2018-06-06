@@ -9,7 +9,7 @@ pragma solidity ^0.4.18;
 contract Authority {
 
     function executor() public view returns(address) {
-        return AuthorityNative(this).native_getExecutor();
+        return AuthorityNative(this).native_executor();
     }
     
     // @notice add a candidate of block proposer.
@@ -56,7 +56,7 @@ contract Authority {
 
 
 contract AuthorityNative {
-    function native_getExecutor() public view returns(address);
+    function native_executor() public view returns(address);
     function native_add(address signer, address endorsor, bytes32 identity) public returns(bool);
     function native_remove(address signer) public returns(bool);
     function native_get(address signer) public view returns(bool, address, bytes32, bool);
