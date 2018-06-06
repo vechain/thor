@@ -68,11 +68,17 @@ func (u *userObject) IsEmpty() bool {
 }
 
 func (u *userObject) Credit(plan *userPlan, blockTime uint64) *big.Int {
-	x := new(big.Int).SetUint64(blockTime - u.BlockTime)
-	x.Mul(x, plan.RecoveryRate)
-	x.Add(x, u.RemainedCredit)
-	if x.Cmp(plan.Credit) < 0 {
-		return x
+	var remained *big.Int
+	if blockTime <= u.BlockTime {
+		remained = u.RemainedCredit
+	} else {
+		x := new(big.Int).SetUint64(blockTime - u.BlockTime)
+		x.Mul(x, plan.RecoveryRate)
+		remained = x.Add(x, u.RemainedCredit)
+	}
+
+	if remained.Cmp(plan.Credit) <= 0 {
+		return remained
 	}
 	return plan.Credit
 }
