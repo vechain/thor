@@ -22,16 +22,19 @@ import (
 )
 
 var (
-	energyTransferEvent *abi.Event
-	nativeCallReturnGas uint64 = 1562 // see test case for calculation
+	energyTransferEvent     *abi.Event
+	prototypeSetMasterEvent *abi.Event
+	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
 )
 
 func init() {
-	ev, found := builtin.Energy.ABI.EventByName("Transfer")
-	if !found {
+	var found bool
+	if energyTransferEvent, found = builtin.Energy.ABI.EventByName("Transfer"); !found {
 		panic("transfer event not found")
 	}
-	energyTransferEvent = ev
+	if prototypeSetMasterEvent, found = builtin.Prototype.EventABI.EventByName("$SetMaster"); !found {
+		panic("$setMaster event not found")
+	}
 }
 
 // Runtime is to support transaction execution.
@@ -132,6 +135,16 @@ func (rt *Runtime) execute(
 		OnCreateContract: func(evm *evm.EVM, contractAddr thor.Address, caller thor.Address) {
 			// set master for created contract
 			rt.state.SetMaster(contractAddr, caller)
+
+			topics := []common.Hash{
+				common.Hash(prototypeSetMasterEvent.ID()),
+				common.BytesToHash(caller[:]),
+			}
+			evm.StateDB.AddLog(&types.Log{
+				Address: common.Address(contractAddr),
+				Topics:  topics,
+				Data:    nil,
+			})
 		},
 		OnSuicideContract: func(evm *evm.EVM, contractAddr thor.Address, tokenReceiver thor.Address) {
 			amount := rt.state.GetEnergy(contractAddr, rt.ctx.Time)
