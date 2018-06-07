@@ -770,9 +770,9 @@ components:
       schema:
         type: string
         enum:
-          - ASC
-          - DESC
-      example: ASC
+          - asc
+          - desc
+      example: asc
     TxIDInPath:
       in: path
       description: ID of transaction
