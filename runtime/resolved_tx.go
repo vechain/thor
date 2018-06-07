@@ -114,7 +114,7 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 				binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
 			}
 			// has enough credit
-			if sponsor := binding.CurrentSponsor(); !sponsor.IsZero() {
+			if sponsor := binding.CurrentSponsor(); binding.IsSponsor(sponsor) {
 				// deduct from sponsor, if any
 				if energy.Sub(sponsor, prepaid) {
 					return baseGasPrice, gasPrice, sponsor, doReturnGasAndSetCredit, nil
