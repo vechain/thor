@@ -740,17 +740,32 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	gene, _ := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	c, _ := chain.New(kv, genesisBlock)
+	launchTime := genesisBlock.Header().Timestamp()
 
-	st, _ := state.New(c.BestBlock().Header().StateRoot(), kv)
+	for i := 1; i < 100; i++ {
+		st.SetBalance(acc1, big.NewInt(int64(i)))
+		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
+		stateRoot, _ := st.Stage().Commit()
+		b := new(block.Builder).
+			ParentID(c.BestBlock().Header().ID()).
+			TotalScore(c.BestBlock().Header().TotalScore() + 1).
+			Timestamp(launchTime + uint64(i)*10).
+			StateRoot(stateRoot).
+			Build()
+		c.AddBlock(b, tx.Receipts{})
+	}
+
+	st, _ = state.New(c.BestBlock().Header().StateRoot(), kv)
 	seeker := c.NewSeeker(c.BestBlock().Header().ID())
 	defer func() {
 		assert.Nil(t, st.Err())
 		assert.Nil(t, seeker.Err())
 	}()
 	rt := runtime.New(seeker, st, &xenv.BlockContext{
-		Number: thor.MaxBackTrackingBlockNumber + 2,
-		Time:   genesisBlock.Header().Timestamp(),
+		Number: thor.MaxBackTrackingBlockNumber + 1,
+		Time:   c.BestBlock().Header().Timestamp(),
 	})
 
 	test := &ctest{
@@ -766,6 +781,22 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 
 	test.Case("energy", acc1, big.NewInt(0)).
 		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(1)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(1)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(2)).
+		ShouldOutput(big.NewInt(2)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(2)).
+		ShouldOutput(big.NewInt(2)).
 		Assert(t)
 }
 
@@ -816,15 +847,12 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 		ShouldOutput(big.NewInt(10)).
 		Assert(t)
 
-	test.Case("energy", acc1, big.NewInt(99)).
-		ShouldOutput(big.NewInt(99)).
-		Assert(t)
-	test.Case("energy", acc1, big.NewInt(98)).
-		ShouldOutput(big.NewInt(98)).
+	test.Case("energy", acc1, big.NewInt(10)).
+		ShouldOutput(big.NewInt(10)).
 		Assert(t)
 
-	test.Case("balance", acc1, big.NewInt(10)).
-		ShouldOutput(big.NewInt(10)).
+	test.Case("balance", acc1, big.NewInt(99)).
+		ShouldOutput(big.NewInt(99)).
 		Assert(t)
 
 	test.Case("energy", acc1, big.NewInt(99)).
