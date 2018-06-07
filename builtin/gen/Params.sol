@@ -12,7 +12,7 @@ contract Params {
     }
 
     function set(bytes32 _key, uint256 _value) public {
-        require(msg.sender == executor());
+        require(msg.sender == executor(), "builtin: executor required");
 
         ParamsNative(this).native_set(_key, _value);
         emit Set(_key, _value);

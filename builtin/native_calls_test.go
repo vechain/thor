@@ -272,6 +272,7 @@ func TestAuthorityNative(t *testing.T) {
 		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
 		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
 		return nil
 	})
 	c, _ := chain.New(kv, b0)
@@ -361,6 +362,16 @@ func TestAuthorityNative(t *testing.T) {
 
 	test.Case("next", signer3).
 		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("remove", signer1).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	st.SetBalance(endorsor1, big.NewInt(1))
+	test.Case("remove", signer1).
+		Caller(thor.BytesToAddress([]byte("some one"))).
 		Assert(t)
 
 }
@@ -693,6 +704,9 @@ func TestPrototypeNative(t *testing.T) {
 	test.Case("storageFor", acc1, key).
 		ShouldOutput(value).
 		Assert(t)
+	test.Case("storageFor", acc1, thor.BytesToBytes32([]byte("some-key"))).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
 
 	test.Case("storageFor", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
 		ShouldOutput(thor.Bytes32{}).
@@ -804,6 +818,9 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 
 	test.Case("energy", acc1, big.NewInt(99)).
 		ShouldOutput(big.NewInt(99)).
+		Assert(t)
+	test.Case("energy", acc1, big.NewInt(98)).
+		ShouldOutput(big.NewInt(98)).
 		Assert(t)
 
 	test.Case("balance", acc1, big.NewInt(10)).

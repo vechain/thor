@@ -52,6 +52,13 @@ func encodeString(str string) ([]byte, error) {
 	return rlp.EncodeToBytes(str)
 }
 
+func encodeBool(b bool) ([]byte, error) {
+	if !b {
+		return nil, nil
+	}
+	return rlp.EncodeToBytes(&b)
+}
+
 func encodeStorage(val interface{}) ([]byte, error) {
 	switch v := val.(type) {
 	case thor.Bytes32:
@@ -86,6 +93,10 @@ func encodeStorage(val interface{}) ([]byte, error) {
 		return encodeUint(v)
 	case *uint64:
 		return encodeUint(*v)
+	case bool:
+		return encodeBool(v)
+	case *bool:
+		return encodeBool(*v)
 	case *big.Int:
 		if v.Sign() == 0 {
 			return nil, nil
@@ -152,6 +163,12 @@ func decodeStorage(data []byte, val interface{}) error {
 	case *uint64:
 		if len(data) == 0 {
 			*v = 0
+			return nil
+		}
+		return rlp.DecodeBytes(data, v)
+	case *bool:
+		if len(data) == 0 {
+			*v = false
 			return nil
 		}
 		return rlp.DecodeBytes(data, v)

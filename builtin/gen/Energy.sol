@@ -44,13 +44,13 @@ contract Energy is Token {
     }
 
     function move(address _from, address _to, uint256 _amount) public returns (bool success) {
-        require(_from == msg.sender || EnergyNative(this).native_master(_from) == msg.sender);
+        require(_from == msg.sender || EnergyNative(this).native_master(_from) == msg.sender, "builtin: self or master required");
         _transfer(_from, _to, _amount);
         return true;
     }
 
     function transferFrom(address _from, address _to, uint256 _amount) public returns(bool success) {
-        require(allowed[_from][_to] >= _amount);
+        require(allowed[_from][_to] >= _amount, "builtin: insufficient allowance");
         allowed[_from][_to] -= _amount;
 
         _transfer(_from, _to, _amount);
@@ -69,7 +69,7 @@ contract Energy is Token {
 
     function _transfer(address _from, address _to, uint256 _amount) internal {
         if (_amount > 0) {
-            require(EnergyNative(this).native_sub(_from, _amount));
+            require(EnergyNative(this).native_sub(_from, _amount), "builtin: insufficient balance");
             // believed that will never overflow
             EnergyNative(this).native_add(_to, _amount);
         }

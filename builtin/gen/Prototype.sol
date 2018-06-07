@@ -16,7 +16,7 @@ contract Prototype {
 
     /// @param newMaster new master to be set.
     function setMaster(address self, address newMaster) public {
-        require(PrototypeNative(this).native_master(self) == msg.sender || self == msg.sender);
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
         PrototypeNative(this).native_setMaster(self, newMaster);
     }
 
@@ -45,7 +45,7 @@ contract Prototype {
     }
 
     function setUserPlan(address self, uint256 credit, uint256 recoveryRate) public{
-        require(PrototypeNative(this).native_master(self) == msg.sender || self == msg.sender);
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
         PrototypeNative(this).native_setUserPlan(self, credit, recoveryRate);
     }
 
@@ -58,22 +58,22 @@ contract Prototype {
     }
 
     function addUser(address self, address user) public{
-        require(PrototypeNative(this).native_master(self) == msg.sender || self == msg.sender);
-        require(!PrototypeNative(this).native_isUser(self, user));
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(!PrototypeNative(this).native_isUser(self, user), "builtin: already added");
         PrototypeNative(this).native_addUser(self, user);
     }
 
     function removeUser(address self, address user) public{
-        require(PrototypeNative(this).native_master(self) == msg.sender || self == msg.sender);
-        require(PrototypeNative(this).native_isUser(self, user));
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(PrototypeNative(this).native_isUser(self, user), "builtin: not a user");
         PrototypeNative(this).native_removeUser(self, user);
     }
 
     function sponsor(address self, bool yesOrNo) public{
         if(yesOrNo) {
-            require(!PrototypeNative(this).native_isSponsor(self, msg.sender));
+            require(!PrototypeNative(this).native_isSponsor(self, msg.sender), "builtin: already sponsored");
         } else {
-            require(PrototypeNative(this).native_isSponsor(self, msg.sender));
+            require(PrototypeNative(this).native_isSponsor(self, msg.sender), "builtin: not sponsored");
         }
         PrototypeNative(this).native_sponsor(self, msg.sender, yesOrNo);
     }
@@ -83,8 +83,8 @@ contract Prototype {
     }
 
     function selectSponsor(address self, address sponsorAddress) public{
-        require(PrototypeNative(this).native_master(self) == msg.sender || self == msg.sender);
-        require(PrototypeNative(this).native_isSponsor(self, sponsorAddress));
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(PrototypeNative(this).native_isSponsor(self, sponsorAddress), "builtin: not a sponsor");
         PrototypeNative(this).native_selectSponsor(self, sponsorAddress);
     }
     
