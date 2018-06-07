@@ -197,7 +197,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			}
 		}
 
-		receipt, _, err := rt.ExecuteTransaction(tx)
+		receipt, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			return nil, nil, err
 		}

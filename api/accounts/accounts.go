@@ -135,7 +135,7 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore()})
 
-	vmout := rt.Call(clause, 0, body.Gas, &xenv.TransactionContext{
+	vmout := rt.ExecuteClause(clause, 0, body.Gas, &xenv.TransactionContext{
 		Origin:     body.Caller,
 		GasPrice:   gp,
 		ProvedWork: &big.Int{}})

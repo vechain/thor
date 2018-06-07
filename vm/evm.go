@@ -89,13 +89,6 @@ type Context struct {
 	BlockNumber *big.Int       // Provides information for NUMBER
 	Time        *big.Int       // Provides information for TIME
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
-
-	/// The following two vars are required to generating contract address.
-
-	// The transaction where the message contained.
-	TxID common.Hash
-	// The index of clause that generates this message.
-	ClauseIndex uint32
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides

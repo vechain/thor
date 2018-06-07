@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/vm"
 )
 
 // BlockContext block context.
@@ -47,8 +47,8 @@ type Environment struct {
 	state    *state.State
 	blockCtx *BlockContext
 	txCtx    *TransactionContext
-	evm      *evm.EVM
-	contract *evm.Contract
+	evm      *vm.EVM
+	contract *vm.Contract
 }
 
 // New create a new env.
@@ -58,8 +58,8 @@ func New(
 	state *state.State,
 	blockCtx *BlockContext,
 	txCtx *TransactionContext,
-	evm *evm.EVM,
-	contract *evm.Contract,
+	evm *vm.EVM,
+	contract *vm.Contract,
 ) *Environment {
 	return &Environment{
 		abi:      abi,
@@ -81,7 +81,7 @@ func (env *Environment) To() thor.Address                        { return thor.A
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {
-		panic(evm.ErrOutOfGas)
+		panic(vm.ErrOutOfGas)
 	}
 }
 
@@ -120,8 +120,8 @@ func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.
 func (env *Environment) Call(proc func(env *Environment) []interface{}) (output []byte, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			if e == evm.ErrOutOfGas {
-				err = evm.ErrOutOfGas
+			if e == vm.ErrOutOfGas {
+				err = vm.ErrOutOfGas
 			} else {
 				panic(e)
 			}

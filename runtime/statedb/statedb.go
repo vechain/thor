@@ -30,7 +30,7 @@ type (
 	suicideFlagKey common.Address
 	refundKey      struct{}
 	preimageKey    common.Hash
-	logKey         struct{}
+	eventKey       struct{}
 	transferKey    struct{}
 	stateRevKey    struct{}
 )
@@ -60,24 +60,22 @@ func (s *StateDB) GetRefund() uint64 {
 	return v.(uint64)
 }
 
-// GetOutputs callback ouputs include logs, new addresses and preimages.
-// Merge callbacks for performance reasons.
-func (s *StateDB) GetOutputs(
-	logCallback func(*types.Log) bool,
-	transferCallback func(*tx.Transfer) bool,
-	preimagesCallback func(common.Hash, []byte) bool,
-) {
+// GetLogs returns collected event and transfer logs.
+func (s *StateDB) GetLogs() (tx.Events, tx.Transfers) {
+	var (
+		events    tx.Events
+		transfers tx.Transfers
+	)
 	s.repo.Journal(func(k, v interface{}) bool {
-		switch key := k.(type) {
-		case logKey:
-			return logCallback(v.(*types.Log))
+		switch k.(type) {
+		case eventKey:
+			events = append(events, ethlogToEvent(v.(*types.Log)))
 		case transferKey:
-			return transferCallback(v.(*tx.Transfer))
-		case preimageKey:
-			return preimagesCallback(common.Hash(key), v.([]byte))
+			transfers = append(transfers, v.(*tx.Transfer))
 		}
 		return true
 	})
+	return events, transfers
 }
 
 // ForEachStorage see state.State.ForEachStorage.
@@ -203,7 +201,7 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 
 // AddLog stub.
 func (s *StateDB) AddLog(vmlog *types.Log) {
-	s.repo.Put(logKey{}, vmlog)
+	s.repo.Put(eventKey{}, vmlog)
 }
 
 func (s *StateDB) AddTransfer(transfer *tx.Transfer) {
@@ -224,5 +222,20 @@ func (s *StateDB) RevertToSnapshot(rev int) {
 		s.state.RevertTo(srev.(int))
 	} else {
 		panic("state checkpoint missing")
+	}
+}
+
+func ethlogToEvent(ethlog *types.Log) *tx.Event {
+	var topics []thor.Bytes32
+	if len(ethlog.Topics) > 0 {
+		topics = make([]thor.Bytes32, 0, len(ethlog.Topics))
+		for _, t := range ethlog.Topics {
+			topics = append(topics, thor.Bytes32(t))
+		}
+	}
+	return &tx.Event{
+		thor.Address(ethlog.Address),
+		topics,
+		ethlog.Data,
 	}
 }

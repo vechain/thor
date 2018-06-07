@@ -109,7 +109,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	checkpoint := f.runtime.State().NewCheckpoint()
-	receipt, _, err := f.runtime.ExecuteTransaction(tx)
+	receipt, err := f.runtime.ExecuteTransaction(tx)
 	if err != nil {
 		// skip and revert state
 		f.runtime.State().RevertTo(checkpoint)
