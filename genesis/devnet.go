@@ -16,7 +16,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/vm"
 )
 
 // DevAccount account for development.
@@ -69,7 +69,7 @@ func NewDevnet() (*Genesis, error) {
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
-			for addr := range evm.PrecompiledContractsByzantium {
+			for addr := range vm.PrecompiledContractsByzantium {
 				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
 			}
 

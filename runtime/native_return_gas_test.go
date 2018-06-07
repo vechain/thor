@@ -2,7 +2,6 @@ package runtime
 
 import (
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +9,8 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 func TestNativeCallReturnGas(t *testing.T) {
@@ -23,23 +23,18 @@ func TestNativeCallReturnGas(t *testing.T) {
 	outer, _ := builtin.Measure.ABI.MethodByName("outer")
 	outerData, _ := outer.EncodeInput()
 
-	ctx := vm.Context{}
-	cfg := vm.Config{}
-
-	innerOutput := vm.New(ctx, state, cfg).Call(
-		thor.Address{},
-		builtin.Measure.Address,
-		innerData,
+	innerOutput := New(nil, state, &xenv.BlockContext{}).ExecuteClause(
+		tx.NewClause(&builtin.Measure.Address).WithData(innerData),
+		0,
 		math.MaxUint64,
-		&big.Int{})
+		&xenv.TransactionContext{})
 	assert.Nil(t, innerOutput.VMErr)
 
-	outerOutput := vm.New(ctx, state, vm.Config{}).Call(
-		thor.Address{},
-		builtin.Measure.Address,
-		outerData,
+	outerOutput := New(nil, state, &xenv.BlockContext{}).ExecuteClause(
+		tx.NewClause(&builtin.Measure.Address).WithData(outerData),
+		0,
 		math.MaxUint64,
-		&big.Int{})
+		&xenv.TransactionContext{})
 	assert.Nil(t, outerOutput.VMErr)
 
 	innerGasUsed := math.MaxUint64 - innerOutput.LeftOverGas

@@ -88,7 +88,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 	})
 
 	for _, call := range b.calls {
-		out := rt.Call(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
+		out := rt.ExecuteClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
 			Origin: call.caller,
 		})
 		if out.VMErr != nil {

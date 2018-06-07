@@ -11,8 +11,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/vechain/thor/vm"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
@@ -74,12 +72,12 @@ func TestContractSuicide(t *testing.T) {
 
 	origin := genesis.DevAccounts()[0].Address
 	out := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{Time: time}).
-		Call(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+		ExecuteClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
 	if out.VMErr != nil {
 		t.Fatal(out.VMErr)
 	}
 
-	expectedTransfer := &vm.Transfer{
+	expectedTransfer := &tx.Transfer{
 		Sender:    addr,
 		Recipient: origin,
 		Amount:    big.NewInt(200),
@@ -88,7 +86,7 @@ func TestContractSuicide(t *testing.T) {
 	assert.Equal(expectedTransfer, out.Transfers[0])
 
 	event, _ := builtin.Energy.ABI.EventByName("Transfer")
-	expectedEvent := &vm.Event{
+	expectedEvent := &tx.Event{
 		Address: builtin.Energy.Address,
 		Topics:  []thor.Bytes32{event.ID(), thor.BytesToBytes32(addr.Bytes()), thor.BytesToBytes32(origin.Bytes())},
 		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100},
@@ -125,7 +123,7 @@ func TestCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out := rt.Call(
+	out := rt.ExecuteClause(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
 		0, math.MaxUint64, &xenv.TransactionContext{})
 

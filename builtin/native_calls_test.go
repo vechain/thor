@@ -27,7 +27,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/xenv"
 )
 
@@ -45,7 +44,7 @@ type ccase struct {
 	to, caller thor.Address
 	name       string
 	args       []interface{}
-	events     []*vm.Event
+	events     tx.Events
 	provedWork *big.Int
 	txID       thor.Bytes32
 	blockRef   tx.BlockRef
@@ -100,7 +99,7 @@ func (c *ccase) ShouldVMError(err error) *ccase {
 	return c
 }
 
-func (c *ccase) ShouldLog(events ...*vm.Event) *ccase {
+func (c *ccase) ShouldLog(events ...*tx.Event) *ccase {
 	c.events = events
 	return c
 }
@@ -121,7 +120,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	data, err := method.EncodeInput(c.args...)
 	assert.Nil(t, err, "should encode input")
 
-	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
+	vmout := c.rt.ExecuteClause(tx.NewClause(&c.to).WithData(data),
 		0, math.MaxUint64, &xenv.TransactionContext{
 			ID:         c.txID,
 			Origin:     c.caller,
@@ -156,7 +155,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	return c
 }
 
-func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*vm.Event {
+func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*tx.Event {
 	nativeABI := builtin.Prototype.EventABI
 
 	mustEventByName := func(name string) *abi.Event {
@@ -177,8 +176,8 @@ func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.B
 
 	data, _ := methodEvent.Encode(args...)
 
-	testLogs := []*vm.Event{
-		&vm.Event{
+	testLogs := []*tx.Event{
+		&tx.Event{
 			Address: contractAddr,
 			Topics:  etopics,
 			Data:    data,
@@ -222,10 +221,10 @@ func TestParamsNative(t *testing.T) {
 
 	key := thor.BytesToBytes32([]byte("key"))
 	value := big.NewInt(999)
-	setEvent := func(key thor.Bytes32, value *big.Int) *vm.Event {
+	setEvent := func(key thor.Bytes32, value *big.Int) *tx.Event {
 		ev, _ := builtin.Params.ABI.EventByName("Set")
 		data, _ := ev.Encode(value)
-		return &vm.Event{
+		return &tx.Event{
 			Address: builtin.Params.Address,
 			Topics:  []thor.Bytes32{ev.ID(), key},
 			Data:    data,
@@ -285,19 +284,19 @@ func TestAuthorityNative(t *testing.T) {
 
 	rt := runtime.New(seeker, st, &xenv.BlockContext{})
 
-	addEvent := func(signer, endorsor thor.Address, identity thor.Bytes32) *vm.Event {
+	addEvent := func(signer, endorsor thor.Address, identity thor.Bytes32) *tx.Event {
 		ev, _ := builtin.Authority.ABI.EventByName("Add")
 		data, _ := ev.Encode(endorsor, identity)
-		return &vm.Event{
+		return &tx.Event{
 			Address: builtin.Authority.Address,
 			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(signer[:])},
 			Data:    data,
 		}
 	}
-	removeEvent := func(signer thor.Address) *vm.Event {
+	removeEvent := func(signer thor.Address) *tx.Event {
 		ev, _ := builtin.Authority.ABI.EventByName("Remove")
 		data, _ := ev.Encode()
-		return &vm.Event{
+		return &tx.Event{
 			Address: builtin.Authority.Address,
 			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(signer[:])},
 			Data:    data,
@@ -392,19 +391,19 @@ func TestEnergyNative(t *testing.T) {
 	st.SetEnergy(addr, eng, b0.Header().Timestamp())
 	builtin.Energy.Native(st, b0.Header().Timestamp()).SetInitialSupply(&big.Int{}, eng)
 
-	transferEvent := func(from, to thor.Address, value *big.Int) *vm.Event {
+	transferEvent := func(from, to thor.Address, value *big.Int) *tx.Event {
 		ev, _ := builtin.Energy.ABI.EventByName("Transfer")
 		data, _ := ev.Encode(value)
-		return &vm.Event{
+		return &tx.Event{
 			Address: builtin.Energy.Address,
 			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(from[:]), thor.BytesToBytes32(to[:])},
 			Data:    data,
 		}
 	}
-	approvalEvent := func(owner, spender thor.Address, value *big.Int) *vm.Event {
+	approvalEvent := func(owner, spender thor.Address, value *big.Int) *tx.Event {
 		ev, _ := builtin.Energy.ABI.EventByName("Approval")
 		data, _ := ev.Encode(value)
-		return &vm.Event{
+		return &tx.Event{
 			Address: builtin.Energy.Address,
 			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(owner[:]), thor.BytesToBytes32(spender[:])},
 			Data:    data,
@@ -527,7 +526,7 @@ func TestPrototypeNative(t *testing.T) {
 	})
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
+	out := rt.ExecuteClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
 		ID:         thor.Bytes32{},
 		Origin:     master,
 		GasPrice:   &big.Int{},
