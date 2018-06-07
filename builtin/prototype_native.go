@@ -50,10 +50,9 @@ func init() {
 		{"native_master", func(env *xenv.Environment) []interface{} {
 			var self common.Address
 			env.ParseArgs(&self)
-			binding := Prototype.Native(env.State()).Bind(thor.Address(self))
 
 			env.UseGas(thor.GetBalanceGas)
-			master := binding.Master()
+			master := env.State().GetMaster(thor.Address(self))
 
 			return []interface{}{master}
 		}},
@@ -63,11 +62,9 @@ func init() {
 				NewMaster common.Address
 			}
 			env.ParseArgs(&args)
-			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SstoreResetGas)
-
-			binding.SetMaster(thor.Address(args.NewMaster))
+			env.State().SetMaster(thor.Address(args.Self), thor.Address(args.NewMaster))
 			env.Log(setMasterEvent, thor.Address(args.Self), []thor.Bytes32{thor.BytesToBytes32(args.NewMaster[:])})
 
 			return nil
@@ -210,6 +207,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
+			env.Must(!binding.IsUser(thor.Address(args.User)))
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SstoreSetGas)
@@ -225,6 +223,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
+			env.Must(binding.IsUser(thor.Address(args.User)))
 
 			env.UseGas(thor.SstoreResetGas)
 			binding.RemoveUser(thor.Address(args.User))
@@ -242,8 +241,15 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			if args.YesOrNo {
+				env.Must(!binding.IsSponsor(thor.Address(args.Caller)))
 				env.UseGas(thor.SstoreSetGas)
 			} else {
+				env.Must(binding.IsSponsor(thor.Address(args.Caller)))
+				env.UseGas(thor.SloadGas)
+				if binding.CurrentSponsor() == thor.Address(args.Caller) {
+					env.UseGas(thor.SstoreResetGas)
+					binding.SelectSponsor(thor.Address{})
+				}
 				env.UseGas(thor.SstoreResetGas)
 			}
 			binding.Sponsor(thor.Address(args.Caller), args.YesOrNo)
@@ -271,6 +277,7 @@ func init() {
 			}
 			env.ParseArgs(&args)
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
+			env.Must(binding.IsSponsor(thor.Address(args.Sponsor)))
 
 			env.UseGas(thor.SstoreResetGas)
 			binding.SelectSponsor(thor.Address(args.Sponsor))

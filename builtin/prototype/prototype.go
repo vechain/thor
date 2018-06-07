@@ -53,15 +53,6 @@ func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
 	b.prototype.state.SetStructuredStorage(b.prototype.addr, key, val)
 }
 
-func (b *Binding) Master() (master thor.Address) {
-	master = b.prototype.state.GetMaster(b.self)
-	return
-}
-
-func (b *Binding) SetMaster(master thor.Address) {
-	b.prototype.state.SetMaster(b.self, master)
-}
-
 func (b *Binding) IsUser(user thor.Address) bool {
 	var uo userObject
 	b.getStorage(b.userKey(user), &uo)
@@ -113,20 +104,13 @@ func (b *Binding) SetUserPlan(credit, recoveryRate *big.Int) {
 
 func (b *Binding) Sponsor(sponsor thor.Address, yesOrNo bool) {
 	sponsorKey := b.sponsorKey(sponsor)
-	if yesOrNo {
-		b.setStorage(sponsorKey, uint8(1))
-	} else {
-		b.setStorage(sponsorKey, uint8(0))
-		if b.CurrentSponsor() == sponsor {
-			b.setStorage(b.curSponsorKey(), thor.Address{})
-		}
-	}
+	b.setStorage(sponsorKey, yesOrNo)
 }
 
 func (b *Binding) IsSponsor(sponsor thor.Address) bool {
-	var flag uint8
-	b.getStorage(b.sponsorKey(sponsor), &flag)
-	return flag != 0
+	var yesOrNo bool
+	b.getStorage(b.sponsorKey(sponsor), &yesOrNo)
+	return yesOrNo
 }
 
 func (b *Binding) SelectSponsor(sponsor thor.Address) {
