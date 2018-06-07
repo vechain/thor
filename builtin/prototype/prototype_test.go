@@ -27,7 +27,6 @@ func TestPrototype(t *testing.T) {
 	proto := prototype.New(thor.BytesToAddress([]byte("proto")), st)
 	binding := proto.Bind(thor.BytesToAddress([]byte("binding")))
 
-	master := thor.BytesToAddress([]byte("master"))
 	user := thor.BytesToAddress([]byte("user"))
 	planCredit := big.NewInt(100000)
 	planRecRate := big.NewInt(2222)
@@ -38,9 +37,6 @@ func TestPrototype(t *testing.T) {
 		expected interface{}
 		msg      string
 	}{
-		{func() interface{} { return binding.Master() }, thor.Address{}, "should be empty master"},
-		{func() interface{} { binding.SetMaster(master); return nil }, nil, ""},
-		{func() interface{} { return binding.Master() }, master, "should set master"},
 
 		{func() interface{} { return binding.IsUser(user) }, false, "should not be user"},
 		{func() interface{} { binding.AddUser(user, 1); return nil }, nil, ""},
@@ -69,11 +65,10 @@ func TestPrototype(t *testing.T) {
 		{func() interface{} { binding.SelectSponsor(sponsor); return nil }, nil, ""},
 		{func() interface{} { return binding.CurrentSponsor() }, sponsor, "should be current sponsor"},
 		{func() interface{} { binding.Sponsor(sponsor, false); return nil }, nil, ""},
-		{func() interface{} { return binding.CurrentSponsor() }, thor.Address{}, "should be empty current sponsor"},
 	}
 
 	for _, tt := range tests {
-		assert.Equal(t, tt.expected, tt.fn())
+		assert.Equal(t, tt.expected, tt.fn(), tt.msg)
 	}
 
 	assert.Nil(t, st.Err())
