@@ -7,7 +7,6 @@ package proto
 
 import (
 	"context"
-	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -24,8 +23,6 @@ type (
 		BestBlockID    thor.Bytes32
 		TotalScore     uint64
 	}
-
-	nilableBlock struct{ *block.Block }
 )
 
 // RPC defines RPC interface.
@@ -60,12 +57,15 @@ func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 
 // GetBlockByID query block from remote peer by given block ID.
 // It may return nil block even no error.
-func GetBlockByID(ctx context.Context, rpc RPC, id thor.Bytes32) (*block.Block, error) {
-	var result nilableBlock
+func GetBlockByID(ctx context.Context, rpc RPC, id thor.Bytes32) (rlp.RawValue, error) {
+	var result []rlp.RawValue
 	if err := rpc.Call(ctx, MsgGetBlockByID, id, &result); err != nil {
 		return nil, err
 	}
-	return result.Block, nil
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result[0], nil
 }
 
 // GetBlockIDByNumber query block ID from remote peer by given number.
@@ -94,33 +94,3 @@ func GetTxs(ctx context.Context, rpc RPC) (tx.Transactions, error) {
 	}
 	return txs, nil
 }
-
-// EncodeRLP implements rlp.Encoder.
-func (m *nilableBlock) EncodeRLP(w io.Writer) error {
-	if m.Block == nil {
-		return rlp.Encode(w, &struct{}{})
-	}
-	return rlp.Encode(w, m.Block)
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (m *nilableBlock) DecodeRLP(s *rlp.Stream) error {
-	kind, size, err := s.Kind()
-	if err != nil {
-		return err
-	}
-	if kind != rlp.List {
-		return rlp.ErrExpectedList
-	}
-	if size > 0 {
-		return s.Decode(&m.Block)
-	}
-	if err := s.Decode(&struct{}{}); err != nil {
-		return err
-	}
-	m.Block = nil
-	return nil
-}
-
-var _ rlp.Encoder = (*nilableBlock)(nil)
-var _ rlp.Decoder = (*nilableBlock)(nil)

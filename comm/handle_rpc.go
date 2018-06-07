@@ -78,21 +78,23 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&blockID); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		blk, err := c.chain.GetBlock(blockID)
+		var result []rlp.RawValue
+		raw, err := c.chain.GetBlockRaw(blockID)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block", "err", err)
 			}
-			write(&struct{}{})
 		} else {
-			write(blk)
+			result = append(result, rlp.RawValue(raw))
 		}
+		write(result)
 	case proto.MsgGetBlockIDByNumber:
 		var num uint32
 		if err := msg.Decode(&num); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		id, err := c.chain.GetBlockIDByNumber(num)
+
+		id, err := c.chain.GetTrunkBlockID(num)
 		if err != nil {
 			if !c.chain.IsNotFound(err) {
 				log.Error("failed to get block id by number", "err", err)
@@ -111,7 +113,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		result := make([]rlp.RawValue, 0, maxBlocks)
 		var size metric.StorageSize
 		for size < maxResultSize && len(result) < maxBlocks {
-			raw, err := c.chain.GetBlockRawByNumber(num)
+			raw, err := c.chain.GetTrunkBlockRaw(num)
 			if err != nil {
 				if !c.chain.IsNotFound(err) {
 					log.Error("failed to get block raw by number", "err", err)

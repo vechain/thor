@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/xenv"
 )
 
 // Packer to pack txs and build new blocks.
@@ -50,15 +51,13 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
 	authority := builtin.Authority.Native(state)
 
-	candidates := authority.Candidates()
+	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
 	proposers := make([]poa.Proposer, 0, len(candidates))
 	for _, c := range candidates {
-		if state.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
-			proposers = append(proposers, poa.Proposer{
-				Address: c.Signer,
-				Active:  c.Active,
-			})
-		}
+		proposers = append(proposers, poa.Proposer{
+			Address: c.Signer,
+			Active:  c.Active,
+		})
 	}
 
 	// calc the time when it's turn to produce block
@@ -74,18 +73,19 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		authority.Update(u.Address, u.Active)
 	}
 
-	traverser := p.chain.NewTraverser(parent.ID())
-	runtime := runtime.New(
+	rt := runtime.New(
+		p.chain.NewSeeker(parent.ID()),
 		state,
-		p.beneficiary,
-		parent.Number()+1,
-		newBlockTime,
-		p.gasLimit(parent.GasLimit()),
-		func(num uint32) thor.Bytes32 {
-			return traverser.Get(num).ID()
+		&xenv.BlockContext{
+			Beneficiary: p.beneficiary,
+			Signer:      p.proposer,
+			Number:      parent.Number() + 1,
+			Time:        newBlockTime,
+			GasLimit:    p.gasLimit(parent.GasLimit()),
+			TotalScore:  parent.TotalScore() + score,
 		})
 
-	return newFlow(p, parent, runtime, parent.TotalScore()+score, traverser), nil
+	return newFlow(p, parent, rt), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -96,18 +96,20 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "state")
 	}
-	traverser := p.chain.NewTraverser(parent.ID())
-	runtime := runtime.New(
+
+	rt := runtime.New(
+		p.chain.NewSeeker(parent.ID()),
 		state,
-		p.beneficiary,
-		parent.Number()+1,
-		targetTime,
-		p.gasLimit(parent.GasLimit()),
-		func(num uint32) thor.Bytes32 {
-			return traverser.Get(num).ID()
+		&xenv.BlockContext{
+			Beneficiary: p.beneficiary,
+			Signer:      p.proposer,
+			Number:      parent.Number() + 1,
+			Time:        targetTime,
+			GasLimit:    p.gasLimit(parent.GasLimit()),
+			TotalScore:  parent.TotalScore() + 1,
 		})
 
-	return newFlow(p, parent, runtime, parent.TotalScore()+1, traverser), nil
+	return newFlow(p, parent, rt), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

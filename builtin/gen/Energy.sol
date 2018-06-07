@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-pragma solidity ^0.4.18;
+pragma solidity 0.4.24;
 import "./Token.sol";
 
 /// @title Energy an token that represents fuel for VET.
@@ -26,16 +26,16 @@ contract Energy is Token {
     }
 
     ///@return ERC20 token total supply
-    function totalSupply() public constant returns (uint256) {
-        return EnergyNative(this).native_getTotalSupply();
+    function totalSupply() public view returns (uint256) {
+        return EnergyNative(this).native_totalSupply();
     }
 
-    function totalBurned() public constant returns(uint256) {
-        return EnergyNative(this).native_getTotalBurned();
+    function totalBurned() public view returns(uint256) {
+        return EnergyNative(this).native_totalBurned();
     }
 
     function balanceOf(address _owner) public view returns (uint256 balance) {
-        return EnergyNative(this).native_getBalance(_owner);
+        return EnergyNative(this).native_get(_owner);
     }
 
     function transfer(address _to, uint256 _amount) public returns (bool success) {
@@ -43,8 +43,14 @@ contract Energy is Token {
         return true;
     }
 
+    function move(address _from, address _to, uint256 _amount) public returns (bool success) {
+        require(_from == msg.sender || EnergyNative(this).native_master(_from) == msg.sender, "builtin: self or master required");
+        _transfer(_from, _to, _amount);
+        return true;
+    }
+
     function transferFrom(address _from, address _to, uint256 _amount) public returns(bool success) {
-        require(allowed[_from][_to] >= _amount);
+        require(allowed[_from][_to] >= _amount, "builtin: insufficient allowance");
         allowed[_from][_to] -= _amount;
 
         _transfer(_from, _to, _amount);
@@ -57,25 +63,27 @@ contract Energy is Token {
 
     function approve(address _spender, uint256 _value) public returns (bool success){
         allowed[msg.sender][_spender] = _value;
-        Approval(msg.sender, _spender, _value);
+        emit Approval(msg.sender, _spender, _value);
         return true;
     }
 
     function _transfer(address _from, address _to, uint256 _amount) internal {
         if (_amount > 0) {
-            require(EnergyNative(this).native_subBalance(_from, _amount));
+            require(EnergyNative(this).native_sub(_from, _amount), "builtin: insufficient balance");
             // believed that will never overflow
-            EnergyNative(this).native_addBalance(_to, _amount);
+            EnergyNative(this).native_add(_to, _amount);
         }
-        Transfer(_from, _to, _amount);
+        emit Transfer(_from, _to, _amount);
     }
 }
 
 contract EnergyNative {
-    function native_getTotalSupply() public view returns(uint256);
-    function native_getTotalBurned() public view returns(uint256);
+    function native_totalSupply() public view returns(uint256);
+    function native_totalBurned() public view returns(uint256);
     
-    function native_getBalance(address addr) public view returns(uint256);
-    function native_addBalance(address addr, uint256 amount) public;
-    function native_subBalance(address addr, uint256 amount) public returns(bool);
+    function native_get(address addr) public view returns(uint256);
+    function native_add(address addr, uint256 amount) public;
+    function native_sub(address addr, uint256 amount) public returns(bool);
+
+    function native_master(address addr) public view returns(address);
 }

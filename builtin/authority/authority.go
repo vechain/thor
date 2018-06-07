@@ -6,6 +6,8 @@
 package authority
 
 import (
+	"math/big"
+
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -34,89 +36,94 @@ func (a *Authority) setStorage(key thor.Bytes32, val interface{}) {
 	a.state.SetStructuredStorage(a.addr, key, val)
 }
 
-// Get get entry by signer address.
-func (a *Authority) Get(signer thor.Address) *Entry {
-	var entry Entry
-	a.getStorage(thor.BytesToBytes32(signer.Bytes()), &entry)
-	return &entry
+// Get get candidate by signer address.
+func (a *Authority) Get(signer thor.Address) (*Candidate, bool) {
+	var entry entry
+	a.getStorage(thor.BytesToBytes32(signer[:]), &entry)
+	if entry.IsEmpty() {
+		return nil, false
+	}
+	return &Candidate{
+		Signer:   signer,
+		Endorsor: entry.Endorsor,
+		Identity: entry.Identity,
+		Active:   entry.Active,
+	}, true
 }
 
-func (a *Authority) getAndSet(signer thor.Address, cb func(*Entry) bool) bool {
-	key := thor.BytesToBytes32(signer.Bytes())
-	var entry Entry
+func (a *Authority) getAndSet(signer thor.Address, f func(entry *entry) bool) bool {
+	key := thor.BytesToBytes32(signer[:])
+	var entry entry
 	a.getStorage(key, &entry)
-	if !cb(&entry) {
+	if !f(&entry) {
 		return false
 	}
 	a.setStorage(key, &entry)
 	return true
 }
 
-// Add add a new entry.
-// Returns false if already exists.
-func (a *Authority) Add(signer thor.Address, endorsor thor.Address, identity thor.Bytes32) bool {
+// Add add a new candidate.
+func (a *Authority) Add(candidate *Candidate) bool {
 	var tail addressPtr
 	a.getStorage(tailKey, &tail)
 
-	if !a.getAndSet(signer, func(entry *Entry) bool {
+	if !a.getAndSet(candidate.Signer, func(entry *entry) bool {
 		if !entry.IsEmpty() {
 			return false
 		}
-		*entry = Entry{
-			Endorsor: endorsor,
-			Identity: identity,
-			Prev:     tail.Address,
-			Active:   true,
-		}
+		entry.Endorsor = candidate.Endorsor
+		entry.Identity = candidate.Identity
+		entry.Active = candidate.Active
+		entry.Prev = tail.Address
 		return true
 	}) {
 		return false
 	}
 
+	a.setStorage(tailKey, &addressPtr{&candidate.Signer})
 	if tail.Address == nil {
-		a.setStorage(headKey, &addressPtr{&signer})
+		a.setStorage(headKey, &addressPtr{&candidate.Signer})
 	} else {
-		a.getAndSet(*tail.Address, func(entry *Entry) bool {
-			entry.Next = &signer
+		a.getAndSet(*tail.Address, func(entry *entry) bool {
+			entry.Next = &candidate.Signer
 			return true
 		})
 	}
-	a.setStorage(tailKey, &addressPtr{&signer})
 	return true
 }
 
-// Remove remove an entry by given signer address.
+// Remove remove an candidate by given signer address.
 func (a *Authority) Remove(signer thor.Address) bool {
-	return a.getAndSet(signer, func(entry *Entry) bool {
-		if entry.IsEmpty() {
+	return a.getAndSet(signer, func(ent *entry) bool {
+		if ent.IsEmpty() {
 			return false
 		}
-		if entry.Prev == nil {
-			a.setStorage(headKey, &addressPtr{entry.Next})
+		if ent.Prev == nil {
+			a.setStorage(headKey, &addressPtr{ent.Next})
 		} else {
-			a.getAndSet(*entry.Prev, func(prev *Entry) bool {
-				prev.Next = entry.Next
+			a.getAndSet(*ent.Prev, func(prev *entry) bool {
+				prev.Next = ent.Next
 				return true
 			})
 		}
 
-		if entry.Next == nil {
-			a.setStorage(tailKey, &addressPtr{entry.Prev})
+		if ent.Next == nil {
+			a.setStorage(tailKey, &addressPtr{ent.Prev})
 		} else {
-			a.getAndSet(*entry.Next, func(next *Entry) bool {
-				next.Prev = entry.Prev
+			a.getAndSet(*ent.Next, func(next *entry) bool {
+				next.Prev = ent.Prev
 				return true
 			})
 		}
 
-		*entry = Entry{}
+		*ent = entry{}
 		return true
 	})
 }
 
-// Update update entry status.
+// Update update candidate's status.
 func (a *Authority) Update(signer thor.Address, active bool) bool {
-	return a.getAndSet(signer, func(entry *Entry) bool {
+	return a.getAndSet(signer, func(entry *entry) bool {
 		if entry.IsEmpty() {
 			return false
 		}
@@ -125,25 +132,37 @@ func (a *Authority) Update(signer thor.Address, active bool) bool {
 	})
 }
 
-// Candidates picks candidates up to thor.MaxBlockProposers.
-func (a *Authority) Candidates() []*Candidate {
+// Candidates picks a batch of candidates up to limit, that satisfy given endorsement.
+func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate {
 	var ptr addressPtr
 	a.getStorage(headKey, &ptr)
-	candidates := make([]*Candidate, 0, thor.MaxBlockProposers)
-	for ptr.Address != nil && uint64(len(candidates)) < thor.MaxBlockProposers {
-		p := a.Get(*ptr.Address)
-		candidates = append(candidates, &Candidate{*ptr.Address, p.Endorsor, p.Identity, p.Active})
-		ptr.Address = p.Next
+	candidates := make([]*Candidate, 0, limit)
+	for ptr.Address != nil && uint64(len(candidates)) < limit {
+		var entry entry
+		a.getStorage(thor.BytesToBytes32(ptr.Address[:]), &entry)
+		if bal := a.state.GetBalance(entry.Endorsor); bal.Cmp(endorsement) >= 0 {
+			candidates = append(candidates, &Candidate{
+				Signer:   *ptr.Address,
+				Endorsor: entry.Endorsor,
+				Identity: entry.Identity,
+				Active:   entry.Active,
+			})
+		}
+		ptr.Address = entry.Next
 	}
 	return candidates
 }
 
 // First returns signer address of first entry.
-func (a *Authority) First() thor.Address {
+func (a *Authority) First() *thor.Address {
 	var ptr addressPtr
 	a.getStorage(headKey, &ptr)
-	if ptr.Address == nil {
-		return thor.Address{}
-	}
-	return *ptr.Address
+	return ptr.Address
+}
+
+// Next returns address of next signer after given signer.
+func (a *Authority) Next(signer thor.Address) *thor.Address {
+	var entry entry
+	a.getStorage(thor.BytesToBytes32(signer[:]), &entry)
+	return entry.Next
 }

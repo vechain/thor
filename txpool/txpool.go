@@ -18,8 +18,11 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-const maxTxSize = 32 * 1024 // Reject transactions over 32KB to prevent DOS attacks
-const quotaSignerTx = 100   // Each signer saves up to 100 txs
+const (
+	maxTxSize      = 32 * 1024 // Reject transactions over 32KB to prevent DOS attacks
+	quotaSignerTx  = 100       // Each signer saves up to 100 txs
+	cacheMechanism = prior
+)
 
 //PoolConfig PoolConfig
 type PoolConfig struct {
@@ -47,7 +50,6 @@ type TxPool struct {
 
 //New construct a new txpool
 func New(chain *chain.Chain, stateC *state.Creator) *TxPool {
-
 	pool := &TxPool{
 		config: defaultTxPoolConfig,
 		chain:  chain,
@@ -71,9 +73,6 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 	for _, tx := range txs {
 		tx := tx // it's for closure
 		txID := tx.ID()
-		if tx, _, _ := pool.chain.GetTransaction(txID); tx != nil {
-			return rejectedTxErr{"transaction already packed"}
-		}
 
 		repeatedTx, err := pool.isAlreadyInChain(txID)
 		if err != nil {
@@ -93,17 +92,16 @@ func (pool *TxPool) Add(txs ...*tx.Transaction) error {
 			return err
 		}
 
-		if pool.entry.size() > pool.config.PoolSize {
-			pool.entry.pick()
-		}
-
-		pool.entry.save(&txObject{
+		if err := pool.entry.save(&txObject{
 			tx:           tx,
 			signer:       signer,
 			overallGP:    new(big.Int),
 			creationTime: time.Now().Unix(),
 			status:       Queued,
-		})
+		}); err != nil {
+			return err
+		}
+
 		pool.goes.Go(func() { pool.txFeed.Send(tx) })
 	}
 
@@ -158,16 +156,12 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 		return thor.Address{}, err
 	}
 
-	resolvedTx, err := runtime.ResolveTransaction(st, tx)
+	resolvedTx, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return thor.Address{}, badTxErr{err.Error()}
 	}
 
-	if pool.entry.quotaBySinger(resolvedTx.Origin) >= quotaSignerTx {
-		return thor.Address{}, rejectedTxErr{"quota exceeds limit"}
-	}
-
-	_, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Timestamp()+thor.BlockInterval)
+	_, _, _, _, err = resolvedTx.BuyGas(st, bestBlock.Header().Timestamp()+thor.BlockInterval)
 	if err != nil {
 		return thor.Address{}, rejectedTxErr{"insufficient energy"}
 	}
@@ -182,7 +176,7 @@ func (pool *TxPool) validateTx(tx *tx.Transaction) (thor.Address, error) {
 }
 
 func (pool *TxPool) isAlreadyInChain(txID thor.Bytes32) (bool, error) {
-	if _, _, err := pool.chain.GetTransaction(txID); err != nil {
+	if _, err := pool.chain.GetTrunkTransactionMeta(txID); err != nil {
 		if pool.chain.IsNotFound(err) {
 			return false, nil
 		}

@@ -11,7 +11,7 @@ import (
 
 // Fork describes forked chain.
 type Fork struct {
-	Ancestor *block.Block
-	Trunk    []*block.Block
-	Branch   []*block.Block
+	Ancestor *block.Header
+	Trunk    []*block.Header
+	Branch   []*block.Header
 }

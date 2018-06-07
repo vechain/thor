@@ -18,6 +18,7 @@ type Account struct {
 	Balance     *big.Int
 	Energy      *big.Int
 	BlockTime   uint64
+	Master      []byte // master address
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 }
@@ -27,38 +28,35 @@ type Account struct {
 func (a *Account) IsEmpty() bool {
 	return a.Balance.Sign() == 0 &&
 		a.Energy.Sign() == 0 &&
+		len(a.Master) == 0 &&
 		len(a.CodeHash) == 0
-}
-
-func emptyAccount() *Account {
-	return &Account{Balance: &big.Int{}, Energy: &big.Int{}}
 }
 
 var bigE18 = big.NewInt(1e18)
 
-type EnergyState struct {
-	Energy    *big.Int
-	BlockTime uint64
-}
-
-func (es *EnergyState) CalcEnergy(balance *big.Int, blockTime uint64) *big.Int {
-	if es.BlockTime == 0 {
-		return es.Energy
+// CalcEnergy calculates energy based on current block time.
+func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
+	if a.BlockTime == 0 {
+		return a.Energy
 	}
 
-	if balance.Sign() == 0 {
-		return es.Energy
+	if a.Balance.Sign() == 0 {
+		return a.Energy
 	}
 
-	diff := blockTime - es.BlockTime
-	if diff == 0 {
-		return es.Energy
+	if blockTime <= a.BlockTime {
+		return a.Energy
 	}
-	x := new(big.Int).SetUint64(diff)
-	x.Mul(x, balance)
+
+	x := new(big.Int).SetUint64(blockTime - a.BlockTime)
+	x.Mul(x, a.Balance)
 	x.Mul(x, thor.EnergyGrowthRate)
 	x.Div(x, bigE18)
-	return new(big.Int).Add(es.Energy, x)
+	return new(big.Int).Add(a.Energy, x)
+}
+
+func emptyAccount() *Account {
+	return &Account{Balance: &big.Int{}, Energy: &big.Int{}}
 }
 
 // loadAccount load an account object by address in trie.

@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 type Accounts struct {
@@ -41,7 +42,7 @@ func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, e
 		return nil, err
 	}
 	code := state.GetCode(addr)
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return code, nil
@@ -53,11 +54,11 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(err, "address")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
-	code, err := a.getCode(addr, b.Header().StateRoot())
+	code, err := a.getCode(addr, h.StateRoot())
 	if err != nil {
 		return err
 	}
@@ -72,7 +73,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	b := state.GetBalance(addr)
 	code := state.GetCode(addr)
 	energy := state.GetEnergy(addr, header.Timestamp())
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return &Account{
@@ -88,7 +89,7 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 		return thor.Bytes32{}, err
 	}
 	storage := state.GetStorage(addr, key)
-	if err := state.Error(); err != nil {
+	if err := state.Err(); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return storage, nil
@@ -123,10 +124,26 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 		return nil, err
 	}
 	clause := tx.NewClause(to).WithData(data).WithValue(&v)
-	gp := big.Int(*body.GasPrice)
-	rt := runtime.New(state, header.Beneficiary(), header.Number(), header.Timestamp(), header.GasLimit(), nil)
-	vmout := rt.Call(clause, 0, body.Gas, body.Caller, &gp, thor.Bytes32{})
-	if err := state.Error(); err != nil {
+	gp := (*big.Int)(body.GasPrice)
+	signer, _ := header.Signer()
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore()})
+
+	vmout := rt.ExecuteClause(clause, 0, body.Gas, &xenv.TransactionContext{
+		Origin:     body.Caller,
+		GasPrice:   gp,
+		ProvedWork: &big.Int{}})
+
+	if err := rt.Seeker().Err(); err != nil {
+		return nil, err
+	}
+	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return convertVMOutputWithInputGas(vmout, body.Gas), nil
@@ -138,11 +155,11 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(err, "address")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
-	acc, err := a.getAccount(addr, b.Header())
+	acc, err := a.getAccount(addr, h)
 	if err != nil {
 		return err
 	}
@@ -158,11 +175,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(err, "key")
 	}
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
-	storage, err := a.getStorage(addr, key, b.Header().StateRoot())
+	storage, err := a.getStorage(addr, key, h.StateRoot())
 	if err != nil {
 		return err
 	}
@@ -175,20 +192,20 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	req.Body.Close()
-	b, err := a.getBlock(req.URL.Query().Get("revision"))
+	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	address := mux.Vars(req)["address"]
 	var output *VMOutput
 	if address == "" {
-		output, err = a.Call(nil, callBody, b.Header())
+		output, err = a.Call(nil, callBody, h)
 	} else {
 		addr, err := thor.ParseAddress(address)
 		if err != nil {
 			return utils.BadRequest(err, "address")
 		}
-		output, err = a.Call(&addr, callBody, b.Header())
+		output, err = a.Call(&addr, callBody, h)
 	}
 	if err != nil {
 		return err
@@ -196,9 +213,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, output)
 }
 
-func (a *Accounts) getBlock(revision string) (*block.Block, error) {
+func (a *Accounts) getBlockHeader(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
-		return a.chain.BestBlock(), nil
+		return a.chain.BestBlock().Header(), nil
 	}
 	blkID, err := thor.ParseBytes32(revision)
 	if err != nil {
@@ -207,11 +224,11 @@ func (a *Accounts) getBlock(revision string) (*block.Block, error) {
 			return nil, err
 		}
 		if n > math.MaxUint32 {
-			return nil, errors.New("block number exceeded")
+			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
-		return a.chain.GetBlockByNumber(uint32(n))
+		return a.chain.GetTrunkBlockHeader(uint32(n))
 	}
-	return a.chain.GetBlock(blkID)
+	return a.chain.GetBlockHeader(blkID)
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {

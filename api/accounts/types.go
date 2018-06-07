@@ -9,8 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/api/transactions"
+	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vm"
 )
 
 //Account for marshal account
@@ -38,7 +38,7 @@ type VMOutput struct {
 	VMError   string                   `json:"vmError"`
 }
 
-func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
+func convertVMOutputWithInputGas(vo *runtime.Output, inputGas uint64) *VMOutput {
 	gasUsed := inputGas - vo.LeftOverGas
 	var (
 		vmError  string
@@ -72,8 +72,16 @@ func convertVMOutputWithInputGas(vo *vm.Output, inputGas uint64) *VMOutput {
 		}
 		transfers[j] = transfer
 	}
+
+	var data string
+	if reverted {
+		data = string(vo.Data)
+	} else {
+		data = hexutil.Encode(vo.Data)
+	}
+
 	return &VMOutput{
-		Data:      hexutil.Encode(vo.Data),
+		Data:      data,
 		Events:    events,
 		Transfers: transfers,
 		GasUsed:   gasUsed,

@@ -58,6 +58,8 @@ paths:
                 $ref: '#/components/schemas/ContractCallResult'
   '/accounts':
     post:
+      parameters:
+        - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
       summary: perform contract call of deploying a contract
@@ -181,6 +183,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
       - $ref: '#/components/parameters/RawInQuery'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Transactions
@@ -199,6 +202,7 @@ paths:
   '/transactions/{id}/receipt':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
+      - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
         - Transactions
@@ -766,9 +770,9 @@ components:
       schema:
         type: string
         enum:
-          - ASC
-          - DESC
-      example: ASC
+          - asc
+          - desc
+      example: asc
     TxIDInPath:
       in: path
       description: ID of transaction

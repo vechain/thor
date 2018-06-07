@@ -20,13 +20,3 @@ type Extension struct {
 func New(addr thor.Address, state *state.State) *Extension {
 	return &Extension{addr, state}
 }
-
-// Blake2b256 implemented as a native contract.
-func (e *Extension) Blake2b256(data ...[]byte) (b32 thor.Bytes32) {
-	hash := thor.NewBlake2b()
-	for _, b := range data {
-		hash.Write(b)
-	}
-	hash.Sum(b32[:0])
-	return
-}

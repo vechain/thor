@@ -24,7 +24,7 @@ import (
 var (
 	version   string
 	gitCommit string
-	release   = "dev"
+	gitTag    string
 
 	flags = []cli.Flag{
 		cli.StringFlag{
@@ -118,8 +118,12 @@ func run(ctx *cli.Context) error {
 }
 
 func main() {
+	versionMeta := "release"
+	if gitTag == "" {
+		versionMeta = "dev"
+	}
 	app := cli.App{
-		Version:   fmt.Sprintf("%s-%s-commit%s", release, version, gitCommit),
+		Version:   fmt.Sprintf("v%s-%s-%s", version, gitCommit, versionMeta),
 		Name:      "Disco",
 		Usage:     "VeChain Thor bootstrap node",
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",

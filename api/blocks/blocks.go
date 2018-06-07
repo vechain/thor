@@ -32,7 +32,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	revision := mux.Vars(req)["revision"]
 	block, err := b.getBlock(revision)
 	if err != nil {
-		return utils.BadRequest(err, "revision")
+		return err
 	}
 	blk, err := ConvertBlock(block)
 	if err != nil {
@@ -52,11 +52,19 @@ func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 			return nil, err
 		}
 		if n > math.MaxUint32 {
-			return nil, errors.New("block number exceeded")
+			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
-		return b.chain.GetBlockByNumber(uint32(n))
+		blk, err := b.chain.GetTrunkBlock(uint32(n))
+		if b.chain.IsNotFound(err) {
+			return nil, nil
+		}
+		return blk, err
 	}
-	return b.chain.GetBlock(blkID)
+	blk, err := b.chain.GetBlock(blkID)
+	if b.chain.IsNotFound(err) {
+		return nil, nil
+	}
+	return blk, err
 }
 
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {

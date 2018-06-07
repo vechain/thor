@@ -18,15 +18,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
 )
 
-const signerCacheSize = 1024
-
 var (
-	signerCache, _          = lru.New(signerCacheSize)
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 )
 
@@ -35,13 +31,12 @@ type Transaction struct {
 	body body
 
 	cache struct {
-		signingHash      atomic.Value
-		signer           atomic.Value
-		id               atomic.Value
-		hashWithoutNonce atomic.Value
-		provedWork       atomic.Value
-		size             atomic.Value
-		intrinsicGas     atomic.Value
+		signingHash  atomic.Value
+		signer       atomic.Value
+		id           atomic.Value
+		unprovedWork atomic.Value
+		size         atomic.Value
+		intrinsicGas atomic.Value
 	}
 }
 
@@ -107,31 +102,25 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	return
 }
 
-// ProvedWork returns proved work of this tx.
+// UnprovedWork returns unproved work of this tx.
 // It returns 0, if tx is not signed.
-func (t *Transaction) ProvedWork() (w *big.Int) {
-	if cached := t.cache.provedWork.Load(); cached != nil {
+func (t *Transaction) UnprovedWork() (w *big.Int) {
+	if cached := t.cache.unprovedWork.Load(); cached != nil {
 		return cached.(*big.Int)
 	}
 	defer func() {
-		t.cache.provedWork.Store(w)
+		t.cache.unprovedWork.Store(w)
 	}()
 
 	signer, err := t.Signer()
 	if err != nil {
 		return &big.Int{}
 	}
-	return t.EvaluateWork(signer, t.body.Nonce)
+	return t.EvaluateWork(signer)(t.body.Nonce)
 }
 
-func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
-	if cached := t.cache.hashWithoutNonce.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() {
-		t.cache.hashWithoutNonce.Store(hash)
-	}()
-
+// EvaluateWork try to compute work when tx signer assumed.
+func (t *Transaction) EvaluateWork(signer thor.Address) func(nonce uint64) *big.Int {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
@@ -142,25 +131,19 @@ func (t *Transaction) hashWithoutNonce() (hash thor.Bytes32) {
 		t.body.Gas,
 		t.body.DependsOn,
 		t.body.Reserved,
+		signer,
 	})
-	hw.Sum(hash[:0])
-	return hash
-}
 
-// EvaluateWork try to compute work when tx signer assumed.
-func (t *Transaction) EvaluateWork(signer thor.Address, nonce uint64) *big.Int {
-	hw := thor.NewBlake2b()
-	hw.Write(t.hashWithoutNonce().Bytes())
-	hw.Write(signer.Bytes())
-	var nonceBytes [8]byte
-	binary.BigEndian.PutUint64(nonceBytes[:], nonce)
-	hw.Write(nonceBytes[:])
+	var hashWithoutNonce thor.Bytes32
+	hw.Sum(hashWithoutNonce[:0])
 
-	var hash thor.Bytes32
-	hw.Sum(hash[:0])
-
-	r := new(big.Int).SetBytes(hash[:])
-	return r.Div(math.MaxBig256, r)
+	return func(nonce uint64) *big.Int {
+		var nonceBytes [8]byte
+		binary.BigEndian.PutUint64(nonceBytes[:], nonce)
+		hash := thor.Blake2b(hashWithoutNonce[:], nonceBytes[:])
+		r := new(big.Int).SetBytes(hash[:])
+		return r.Div(math.MaxBig256, r)
+	}
 }
 
 // SigningHash returns hash of tx excludes signature.
@@ -227,19 +210,6 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, &t)
-	var hash thor.Bytes32
-	hw.Sum(hash[:0])
-
-	if v, ok := signerCache.Get(hash); ok {
-		return v.(thor.Address), nil
-	}
-	defer func() {
-		if err == nil {
-			signerCache.Add(hash, signer)
-		}
-	}()
 	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature)
 	if err != nil {
 		return thor.Address{}, err
@@ -337,20 +307,45 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
 	x := big.NewInt(int64(t.body.GasPriceCoef))
 	x.Mul(x, baseGasPrice)
-	x.Div(x, big.NewInt(int64(math.MaxUint8)))
+	x.Div(x, big.NewInt(math.MaxUint8))
 	return x.Add(x, baseGasPrice)
+}
+
+// ProvedWork returns proved work.
+// Unproved work will be considered as proved work if block ref is do the prefix of a block's ID,
+// and tx delay is less equal to MaxTxWorkDelay.
+func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
+	ref := t.BlockRef()
+	refNum := ref.Number()
+	if refNum >= headBlockNum {
+		return &big.Int{}
+	}
+
+	if delay := headBlockNum - refNum; delay > thor.MaxTxWorkDelay {
+		return &big.Int{}
+	}
+
+	id := getBlockID(refNum)
+	if bytes.HasPrefix(id[:], ref[:]) {
+		return t.UnprovedWork()
+	}
+	return &big.Int{}
 }
 
 // OverallGasPrice calculate overall gas price.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
 func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
 	gasPrice := t.GasPrice(baseGasPrice)
-	if t.measureDelay(headBlockNum, getBlockID) > thor.MaxTxWorkDelay {
+
+	provedWork := t.ProvedWork(headBlockNum, getBlockID)
+	if provedWork.Sign() == 0 {
 		return gasPrice
 	}
 
-	work := t.ProvedWork()
-	wgas := workToGas(work, headBlockNum)
+	wgas := workToGas(provedWork, t.BlockRef().Number())
+	if wgas == 0 {
+		return gasPrice
+	}
 	if wgas > t.body.Gas {
 		wgas = t.body.Gas
 	}
@@ -359,25 +354,6 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 	x.Mul(x, baseGasPrice)
 	x.Div(x, new(big.Int).SetUint64(t.body.Gas))
 	return x.Add(x, gasPrice)
-}
-
-// measureDelay measure tx delay count in blocks, according to head block number.
-func (t *Transaction) measureDelay(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) uint32 {
-	ref := t.BlockRef()
-	refNum := ref.Number()
-	if refNum >= headBlockNum {
-		return math.MaxUint32
-	}
-
-	if headBlockNum-refNum > thor.MaxTxWorkDelay {
-		return math.MaxUint32
-	}
-
-	id := getBlockID(refNum)
-	if bytes.HasPrefix(id[:], ref[:]) {
-		return headBlockNum - refNum
-	}
-	return math.MaxUint32
 }
 
 func (t *Transaction) String() string {
@@ -410,11 +386,11 @@ func (t *Transaction) String() string {
 	BlockRef:       %v-%x
 	Expiration:     %v
 	DependsOn:      %v
-	ProvedWork:     %v
 	Nonce:          %v
+	UnprovedWork:   %v	
 	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.ProvedWork(), t.body.Nonce, t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), t.body.Signature)
 }
 
 // see core.IntrinsicGas

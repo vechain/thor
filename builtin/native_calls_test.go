@@ -6,22 +6,31 @@
 package builtin_test
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/abi"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
-	"github.com/vechain/thor/vm/evm"
+	"github.com/vechain/thor/xenv"
 )
+
+var errReverted = errors.New("evm: execution reverted")
 
 type ctest struct {
 	rt         *runtime.Runtime
@@ -35,7 +44,11 @@ type ccase struct {
 	to, caller thor.Address
 	name       string
 	args       []interface{}
-	events     []*vm.Event
+	events     tx.Events
+	provedWork *big.Int
+	txID       thor.Bytes32
+	blockRef   tx.BlockRef
+	expiration uint32
 
 	output *[]interface{}
 	vmerr  error
@@ -62,12 +75,31 @@ func (c *ccase) Caller(caller thor.Address) *ccase {
 	return c
 }
 
+func (c *ccase) ProvedWork(provedWork *big.Int) *ccase {
+	c.provedWork = provedWork
+	return c
+}
+
+func (c *ccase) TxID(txID thor.Bytes32) *ccase {
+	c.txID = txID
+	return c
+}
+
+func (c *ccase) BlockRef(blockRef tx.BlockRef) *ccase {
+	c.blockRef = blockRef
+	return c
+}
+
+func (c *ccase) Expiration(expiration uint32) *ccase {
+	c.expiration = expiration
+	return c
+}
 func (c *ccase) ShouldVMError(err error) *ccase {
 	c.vmerr = err
 	return c
 }
 
-func (c *ccase) ShouldLog(events []*vm.Event) *ccase {
+func (c *ccase) ShouldLog(events ...*tx.Event) *ccase {
 	c.events = events
 	return c
 }
@@ -88,15 +120,20 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	data, err := method.EncodeInput(c.args...)
 	assert.Nil(t, err, "should encode input")
 
-	vmout := c.rt.Call(tx.NewClause(&c.to).WithData(data),
-		0, math.MaxUint64, c.caller, &big.Int{}, thor.Bytes32{})
+	vmout := c.rt.ExecuteClause(tx.NewClause(&c.to).WithData(data),
+		0, math.MaxUint64, &xenv.TransactionContext{
+			ID:         c.txID,
+			Origin:     c.caller,
+			GasPrice:   &big.Int{},
+			ProvedWork: c.provedWork,
+			BlockRef:   c.blockRef,
+			Expiration: c.expiration})
 
 	if constant || vmout.VMErr != nil {
 		newStateRoot, err := c.rt.State().Stage().Hash()
 		assert.Nil(t, err, "should hash state")
 		assert.Equal(t, stateRoot, newStateRoot)
 	}
-
 	assert.Equal(t, c.vmerr, vmout.VMErr)
 
 	if c.output != nil {
@@ -109,7 +146,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 		assert.Equal(t, c.events, vmout.Events, "should match event")
 	}
 
-	assert.Nil(t, c.rt.State().Error(), "should no state error")
+	assert.Nil(t, c.rt.State().Err(), "should no state error")
 
 	c.output = nil
 	c.vmerr = nil
@@ -118,8 +155,8 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	return c
 }
 
-func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*vm.Event {
-	nativeABI := builtin.Prototype.InterfaceABI
+func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.Bytes32, args ...interface{}) []*tx.Event {
+	nativeABI := builtin.Prototype.EventABI
 
 	mustEventByName := func(name string) *abi.Event {
 		if event, found := nativeABI.EventByName(name); found {
@@ -139,8 +176,8 @@ func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.B
 
 	data, _ := methodEvent.Encode(args...)
 
-	testLogs := []*vm.Event{
-		&vm.Event{
+	testLogs := []*tx.Event{
+		&tx.Event{
 			Address: contractAddr,
 			Topics:  etopics,
 			Data:    data,
@@ -150,41 +187,67 @@ func buildTestLogs(methodName string, contractAddr thor.Address, topics []thor.B
 	return testLogs
 }
 
-func TestParamsNative(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+func buildGenesis(kv kv.GetPutter, proc func(state *state.State) error) *block.Block {
+	blk, _, _ := new(genesis.Builder).
+		Timestamp(uint64(time.Now().Unix())).
+		State(proc).
+		Build(state.NewCreator(kv))
+	return blk
+}
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+func TestParamsNative(t *testing.T) {
+	executor := thor.BytesToAddress([]byte("e"))
+	kv, _ := lvldb.NewMem()
+	b0 := buildGenesis(kv, func(state *state.State) error {
+		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+		return nil
+	})
+	c, _ := chain.New(kv, b0)
+	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+
+	rt := runtime.New(seeker, st, &xenv.BlockContext{})
 
 	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Params.NativeABI(),
-		to:     builtin.Params.Address,
-		caller: builtin.Params.Address,
+		rt:  rt,
+		abi: builtin.Params.ABI,
+		to:  builtin.Params.Address,
 	}
 
 	key := thor.BytesToBytes32([]byte("key"))
 	value := big.NewInt(999)
-
-	cases := []*ccase{
-		test.Case("native_getExecutor").
-			ShouldOutput(builtin.Executor.Address).
-			Assert(t),
-
-		test.Case("native_set", key, value).
-			Assert(t),
-
-		test.Case("native_get", key).
-			ShouldOutput(value).
-			Assert(t),
+	setEvent := func(key thor.Bytes32, value *big.Int) *tx.Event {
+		ev, _ := builtin.Params.ABI.EventByName("Set")
+		data, _ := ev.Encode(value)
+		return &tx.Event{
+			Address: builtin.Params.Address,
+			Topics:  []thor.Bytes32{ev.ID(), key},
+			Data:    data,
+		}
 	}
 
-	for _, c := range cases {
-		c.Caller(thor.BytesToAddress([]byte("other"))).
-			ShouldVMError(evm.ErrExecutionReverted()).
-			Assert(t)
-	}
+	test.Case("executor").
+		ShouldOutput(executor).
+		Assert(t)
+
+	test.Case("set", key, value).
+		Caller(executor).
+		ShouldLog(setEvent(key, value)).
+		Assert(t)
+
+	test.Case("set", key, value).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("get", key).
+		ShouldOutput(value).
+		Assert(t)
+
 }
 
 func TestAuthorityNative(t *testing.T) {
@@ -200,374 +263,734 @@ func TestAuthorityNative(t *testing.T) {
 		signer3   = thor.BytesToAddress([]byte("signer3"))
 		endorsor3 = thor.BytesToAddress([]byte("endorsor3"))
 		identity3 = thor.BytesToBytes32([]byte("identity3"))
+		executor  = thor.BytesToAddress([]byte("e"))
 	)
 
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-	st.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
-	builtin.Params.Native(st).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
+	b0 := buildGenesis(kv, func(state *state.State) error {
+		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
+		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
+		return nil
+	})
+	c, _ := chain.New(kv, b0)
+	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	rt := runtime.New(seeker, st, &xenv.BlockContext{})
+
+	addEvent := func(signer, endorsor thor.Address, identity thor.Bytes32) *tx.Event {
+		ev, _ := builtin.Authority.ABI.EventByName("Add")
+		data, _ := ev.Encode(endorsor, identity)
+		return &tx.Event{
+			Address: builtin.Authority.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(signer[:])},
+			Data:    data,
+		}
+	}
+	removeEvent := func(signer thor.Address) *tx.Event {
+		ev, _ := builtin.Authority.ABI.EventByName("Remove")
+		data, _ := ev.Encode()
+		return &tx.Event{
+			Address: builtin.Authority.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(signer[:])},
+			Data:    data,
+		}
+	}
 
 	test := &ctest{
 		rt:     rt,
-		abi:    builtin.Authority.NativeABI(),
+		abi:    builtin.Authority.ABI,
 		to:     builtin.Authority.Address,
-		caller: builtin.Authority.Address,
-	}
-	cases := []*ccase{
-		test.Case("native_getExecutor").
-			ShouldOutput(builtin.Executor.Address).
-			Assert(t),
-
-		test.Case("native_add", signer1, endorsor1, identity1).
-			ShouldOutput(true).
-			Assert(t),
-		test.Case("native_add", signer1, endorsor1, identity1).
-			ShouldOutput(false).
-			Assert(t),
-
-		test.Case("native_remove", signer1).
-			ShouldOutput(true).
-			Assert(t),
-
-		test.Case("native_add", signer1, endorsor1, identity1).
-			ShouldOutput(true).
-			Assert(t),
-
-		test.Case("native_add", signer2, endorsor2, identity2).
-			ShouldOutput(true).
-			Assert(t),
-
-		test.Case("native_add", signer3, endorsor3, identity3).
-			ShouldOutput(true).
-			Assert(t),
-
-		test.Case("native_get", signer1).
-			ShouldOutput(true, endorsor1, identity1, true).
-			Assert(t),
-
-		test.Case("native_first").
-			ShouldOutput(signer1).
-			Assert(t),
-
-		test.Case("native_next", signer1).
-			ShouldOutput(signer2).
-			Assert(t),
-
-		test.Case("native_next", signer2).
-			ShouldOutput(signer3).
-			Assert(t),
-
-		test.Case("native_next", signer3).
-			ShouldOutput(thor.Address{}).
-			Assert(t),
-
-		test.Case("native_isEndorsed", signer1).
-			ShouldOutput(true).
-			Assert(t),
-
-		test.Case("native_isEndorsed", signer2).
-			ShouldOutput(false).
-			Assert(t),
-
-		test.Case("native_isEndorsed", thor.BytesToAddress([]byte("not a signer"))).
-			ShouldOutput(false).
-			Assert(t),
+		caller: executor,
 	}
 
-	for _, c := range cases {
-		c.Caller(thor.BytesToAddress([]byte("other"))).
-			ShouldVMError(evm.ErrExecutionReverted()).
-			Assert(t)
-	}
+	test.Case("executor").
+		ShouldOutput(executor).
+		Assert(t)
+
+	test.Case("add", signer1, endorsor1, identity1).
+		ShouldLog(addEvent(signer1, endorsor1, identity1)).
+		Assert(t)
+
+	test.Case("add", signer1, endorsor1, identity1).
+		Caller(thor.BytesToAddress([]byte("other"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("add", signer1, endorsor1, identity1).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("remove", signer1).
+		ShouldLog(removeEvent(signer1)).
+		Assert(t)
+
+	test.Case("add", signer1, endorsor1, identity1).
+		ShouldLog(addEvent(signer1, endorsor1, identity1)).
+		Assert(t)
+
+	test.Case("add", signer2, endorsor2, identity2).
+		ShouldLog(addEvent(signer2, endorsor2, identity2)).
+		Assert(t)
+
+	test.Case("add", signer3, endorsor3, identity3).
+		ShouldLog(addEvent(signer3, endorsor3, identity3)).
+		Assert(t)
+
+	test.Case("get", signer1).
+		ShouldOutput(true, endorsor1, identity1, true).
+		Assert(t)
+
+	test.Case("first").
+		ShouldOutput(signer1).
+		Assert(t)
+
+	test.Case("next", signer1).
+		ShouldOutput(signer2).
+		Assert(t)
+
+	test.Case("next", signer2).
+		ShouldOutput(signer3).
+		Assert(t)
+
+	test.Case("next", signer3).
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("remove", signer1).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	st.SetBalance(endorsor1, big.NewInt(1))
+	test.Case("remove", signer1).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		Assert(t)
+
 }
 
 func TestEnergyNative(t *testing.T) {
 	var (
-		addr     = thor.BytesToAddress([]byte("addr"))
-		valueAdd = big.NewInt(100)
-		valueSub = big.NewInt(10)
+		addr   = thor.BytesToAddress([]byte("addr"))
+		to     = thor.BytesToAddress([]byte("to"))
+		master = thor.BytesToAddress([]byte("master"))
+		eng    = big.NewInt(1000)
 	)
 
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+	b0 := buildGenesis(kv, func(state *state.State) error {
+		state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
+		state.SetMaster(addr, master)
+		return nil
+	})
 
-	rt := runtime.New(st, thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	c, _ := chain.New(kv, b0)
+	st, _ := state.New(b0.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(b0.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+
+	st.SetEnergy(addr, eng, b0.Header().Timestamp())
+	builtin.Energy.Native(st, b0.Header().Timestamp()).SetInitialSupply(&big.Int{}, eng)
+
+	transferEvent := func(from, to thor.Address, value *big.Int) *tx.Event {
+		ev, _ := builtin.Energy.ABI.EventByName("Transfer")
+		data, _ := ev.Encode(value)
+		return &tx.Event{
+			Address: builtin.Energy.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(from[:]), thor.BytesToBytes32(to[:])},
+			Data:    data,
+		}
+	}
+	approvalEvent := func(owner, spender thor.Address, value *big.Int) *tx.Event {
+		ev, _ := builtin.Energy.ABI.EventByName("Approval")
+		data, _ := ev.Encode(value)
+		return &tx.Event{
+			Address: builtin.Energy.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(owner[:]), thor.BytesToBytes32(spender[:])},
+			Data:    data,
+		}
+	}
+
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: b0.Header().Timestamp()})
 	test := &ctest{
 		rt:     rt,
-		abi:    builtin.Energy.NativeABI(),
+		abi:    builtin.Energy.ABI,
 		to:     builtin.Energy.Address,
 		caller: builtin.Energy.Address,
 	}
 
-	cases := []*ccase{
+	test.Case("name").
+		ShouldOutput("VeThor").
+		Assert(t)
 
-		test.Case("native_getBalance", addr).
-			ShouldOutput(&big.Int{}).
-			Assert(t),
+	test.Case("decimals").
+		ShouldOutput(uint8(18)).
+		Assert(t)
 
-		test.Case("native_addBalance", addr, valueAdd).
-			Assert(t),
+	test.Case("symbol").
+		ShouldOutput("VTHO").
+		Assert(t)
 
-		test.Case("native_getBalance", addr).
-			ShouldOutput(valueAdd).
-			Assert(t),
+	test.Case("totalSupply").
+		ShouldOutput(eng).
+		Assert(t)
 
-		test.Case("native_subBalance", addr, valueSub).
-			ShouldOutput(true).
-			Assert(t),
+	test.Case("totalBurned").
+		ShouldOutput(&big.Int{}).
+		Assert(t)
 
-		test.Case("native_subBalance", addr, valueAdd).
-			ShouldOutput(false).
-			Assert(t),
+	test.Case("balanceOf", addr).
+		ShouldOutput(eng).
+		Assert(t)
 
-		test.Case("native_getBalance", addr).
-			ShouldOutput(new(big.Int).Sub(valueAdd, valueSub)).
-			Assert(t),
+	test.Case("transfer", to, big.NewInt(10)).
+		Caller(addr).
+		ShouldLog(transferEvent(addr, to, big.NewInt(10))).
+		ShouldOutput(true).
+		Assert(t)
 
-		test.Case("native_getTotalSupply").
-			ShouldOutput(new(big.Int)).
-			Assert(t),
+	test.Case("transfer", to, big.NewInt(10)).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		ShouldVMError(errReverted).
+		Assert(t)
 
-		test.Case("native_getTotalBurned").
-			ShouldOutput(new(big.Int).Sub(valueSub, valueAdd)).
-			Assert(t),
-	}
+	test.Case("move", addr, to, big.NewInt(10)).
+		Caller(addr).
+		ShouldLog(transferEvent(addr, to, big.NewInt(10))).
+		ShouldOutput(true).
+		Assert(t)
 
-	for _, c := range cases {
-		c.Caller(thor.BytesToAddress([]byte("other"))).
-			ShouldVMError(evm.ErrExecutionReverted()).
-			Assert(t)
-	}
+	test.Case("move", addr, to, big.NewInt(10)).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("approve", to, big.NewInt(10)).
+		Caller(addr).
+		ShouldLog(approvalEvent(addr, to, big.NewInt(10))).
+		ShouldOutput(true).
+		Assert(t)
+
+	test.Case("allowance", addr, to).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("transferFrom", addr, to, big.NewInt(10)).
+		ShouldLog(transferEvent(addr, to, big.NewInt(10))).
+		ShouldOutput(true).
+		Assert(t)
+
+	test.Case("transferFrom", addr, to, big.NewInt(10)).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
 }
 
 func TestPrototypeNative(t *testing.T) {
-
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
-
-	test := &ctest{
-		rt:     rt,
-		abi:    builtin.Prototype.NativeABI(),
-		to:     builtin.Prototype.Address,
-		caller: builtin.Prototype.Address,
-	}
-
-	var addr = thor.BytesToAddress([]byte("addr"))
-
-	test.Case("native_contractify", addr).
-		Assert(t).
-		Caller(thor.BytesToAddress([]byte("other"))).
-		ShouldVMError(evm.ErrExecutionReverted()).
-		Assert(t)
-
-	test.Case("native_contractify", builtin.Prototype.Address).
-		Assert(t).
-		Caller(thor.BytesToAddress([]byte("other"))).
-		ShouldVMError(evm.ErrExecutionReverted()).
-		Assert(t)
-
-	assert.True(t, st.GetCodeHash(addr).IsZero())
-	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
-}
-func TestPrototypeInterface(t *testing.T) {
 	var (
-		acc1     = thor.BytesToAddress([]byte("acc1"))
-		acc2     = thor.BytesToAddress([]byte("acc2"))
-		contract thor.Address
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+		acc2 = thor.BytesToAddress([]byte("acc2"))
 
-		anyCaller = thor.BytesToAddress([]byte("any"))
 		master    = thor.BytesToAddress([]byte("master"))
-
-		user = thor.BytesToAddress([]byte("user"))
+		notmaster = thor.BytesToAddress([]byte("notmaster"))
+		user      = thor.BytesToAddress([]byte("user"))
+		notuser   = thor.BytesToAddress([]byte("notuser"))
 
 		credit       = big.NewInt(1000)
 		recoveryRate = big.NewInt(10)
 		sponsor      = thor.BytesToAddress([]byte("sponsor"))
+		notsponsor   = thor.BytesToAddress([]byte("notsponsor"))
+
+		key      = thor.BytesToBytes32([]byte("account-key"))
+		value    = thor.BytesToBytes32([]byte("account-value"))
+		contract thor.Address
 	)
 
 	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
-	st.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-	st.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
+	seeker := c.NewSeeker(genesisBlock.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+
+	st.SetStorage(thor.Address(acc1), key, value)
+	st.SetBalance(thor.Address(acc1), big.NewInt(1))
+
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
+		Time:   genesisBlock.Header().Timestamp(),
+		Number: genesisBlock.Header().Number(),
+	})
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
-	out := rt.Call(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, master, &big.Int{}, thor.Bytes32{})
+	out := rt.ExecuteClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
+		ID:         thor.Bytes32{},
+		Origin:     master,
+		GasPrice:   &big.Int{},
+		ProvedWork: &big.Int{}})
 	contract = *out.ContractAddress
 
 	energy := big.NewInt(1000)
-	st.SetEnergy(acc1, energy, 0)
-
-	chkpt := st.NewCheckpoint()
+	st.SetEnergy(acc1, energy, genesisBlock.Header().Timestamp())
 
 	test := &ctest{
-		rt:  rt,
-		abi: builtin.Prototype.InterfaceABI,
+		rt:     rt,
+		abi:    builtin.Prototype.ABI,
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
 	}
 
-	test.Case("$master").
-		To(acc1).Caller(anyCaller).
+	test.Case("master", acc1).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("$master").
-		To(contract).Caller(anyCaller).
+	test.Case("master", contract).
 		ShouldOutput(master).
 		Assert(t)
 
-	test.Case("$set_master", acc1).
-		To(acc1).Caller(acc1).
+	test.Case("setMaster", acc1, acc2).
+		Caller(acc1).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc1[:])})).
+		ShouldLog(buildTestLogs("$SetMaster", acc1, []thor.Bytes32{thor.BytesToBytes32(acc2[:])})...).
 		Assert(t)
 
-	test.Case("$has_code").
-		To(acc1).Caller(anyCaller).
+	test.Case("setMaster", acc1, acc2).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("master", acc1).
+		ShouldOutput(acc2).
+		Assert(t)
+
+	test.Case("hasCode", acc1).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$has_code").
-		To(contract).Caller(anyCaller).
+
+	test.Case("hasCode", contract).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(energy).
-		Assert(t)
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
-
-	test.Case("$transfer_energy", big.NewInt(1)).
-		To(acc2).Caller(acc1).
+	test.Case("setUserPlan", contract, credit, recoveryRate).
+		Caller(master).
 		ShouldOutput().
+		ShouldLog(buildTestLogs("$SetUserPlan", contract, nil, credit, recoveryRate)...).
 		Assert(t)
 
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(big.NewInt(1)).
-		Assert(t)
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(new(big.Int).Sub(energy, big.NewInt(1))).
+	test.Case("setUserPlan", contract, credit, recoveryRate).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
 		Assert(t)
 
-	test.Case("$move_energy_to", acc1, big.NewInt(1)).
-		To(acc2).Caller(acc2).
-		ShouldOutput().
-		Assert(t)
-
-	test.Case("$energy").
-		To(acc2).Caller(anyCaller).
-		ShouldOutput(&big.Int{}).
-		Assert(t)
-	test.Case("$energy").
-		To(acc1).Caller(anyCaller).
-		ShouldOutput(energy).
-		Assert(t)
-
-	test.Case("$set_user_plan", credit, recoveryRate).
-		To(contract).Caller(master).
-		ShouldOutput().
-		ShouldLog(buildTestLogs("$SetUserPlan", contract, nil, credit, recoveryRate)).
-		Assert(t)
-
-	test.Case("$user_plan").
-		To(contract).Caller(anyCaller).
+	test.Case("userPlan", contract).
 		ShouldOutput(credit, recoveryRate).
 		Assert(t)
 
-	test.Case("$is_user", user).
-		To(contract).Caller(anyCaller).
+	test.Case("isUser", contract, user).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$add_user", user).
-		To(contract).Caller(master).
+
+	test.Case("addUser", contract, user).
+		Caller(master).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, true)).
+		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, true)...).
 		Assert(t)
-	test.Case("$is_user", user).
-		To(contract).Caller(anyCaller).
+
+	test.Case("addUser", contract, user).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("addUser", contract, user).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isUser", contract, user).
 		ShouldOutput(true).
 		Assert(t)
 
-	test.Case("$user_credit", user).
-		To(contract).Caller(anyCaller).
+	test.Case("userCredit", contract, user).
 		ShouldOutput(credit).
 		Assert(t)
-	test.Case("$remove_user", user).
-		To(contract).Caller(master).
+
+	test.Case("removeUser", contract, user).
+		Caller(master).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, false)).
+		ShouldLog(buildTestLogs("$AddRemoveUser", contract, []thor.Bytes32{thor.BytesToBytes32(user[:])}, false)...).
 		Assert(t)
-	test.Case("$user_credit", user).
-		To(contract).Caller(anyCaller).
+
+	test.Case("removeUser", contract, user).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("removeUser", contract, notuser).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("userCredit", contract, user).
 		ShouldOutput(&big.Int{}).
 		Assert(t)
 
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
-	test.Case("$sponsor", true).
-		To(contract).Caller(sponsor).
+
+	test.Case("sponsor", contract, true).
+		Caller(sponsor).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$Sponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor.Bytes())}, true)).
+		ShouldLog(buildTestLogs("$Sponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor.Bytes())}, true)...).
 		Assert(t)
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+
+	test.Case("sponsor", contract, true).
+		Caller(sponsor).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(true).
 		Assert(t)
-	test.Case("$current_sponsor").
-		To(contract).Caller(anyCaller).
+
+	test.Case("currentSponsor", contract).
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("$select_sponsor", sponsor).
-		To(contract).Caller(master).
+	test.Case("selectSponsor", contract, sponsor).
+		Caller(master).
 		ShouldOutput().
-		ShouldLog(buildTestLogs("$SelectSponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor[:])})).
+		ShouldLog(buildTestLogs("$SelectSponsor", contract, []thor.Bytes32{thor.BytesToBytes32(sponsor[:])})...).
 		Assert(t)
-	test.Case("$sponsor", false).
-		To(contract).Caller(sponsor).
+
+	test.Case("selectSponsor", contract, notsponsor).
+		Caller(master).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("selectSponsor", contract, notsponsor).
+		Caller(notmaster).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("sponsor", contract, false).
+		Caller(sponsor).
 		ShouldOutput().
 		Assert(t)
-	test.Case("$is_sponsor", sponsor).
-		To(contract).Caller(anyCaller).
+
+	test.Case("sponsor", contract, false).
+		Caller(sponsor).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("isSponsor", contract, sponsor).
 		ShouldOutput(false).
 		Assert(t)
 
-	// test permission
-	st.RevertTo(chkpt)
+	test.Case("storageFor", acc1, key).
+		ShouldOutput(value).
+		Assert(t)
+	test.Case("storageFor", acc1, thor.BytesToBytes32([]byte("some-key"))).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
 
-	// test log
+	test.Case("storageFor", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(0)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(100)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(0)).
+		ShouldOutput(energy).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(100)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	assert.False(t, st.GetCodeHash(builtin.Prototype.Address).IsZero())
+
+}
+
+func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
+	var (
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+	)
+
+	kv, _ := lvldb.NewMem()
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
+	c, _ := chain.New(kv, genesisBlock)
+	launchTime := genesisBlock.Header().Timestamp()
+
+	for i := 1; i < 100; i++ {
+		st.SetBalance(acc1, big.NewInt(int64(i)))
+		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
+		stateRoot, _ := st.Stage().Commit()
+		b := new(block.Builder).
+			ParentID(c.BestBlock().Header().ID()).
+			TotalScore(c.BestBlock().Header().TotalScore() + 1).
+			Timestamp(launchTime + uint64(i)*10).
+			StateRoot(stateRoot).
+			Build()
+		c.AddBlock(b, tx.Receipts{})
+	}
+
+	st, _ = state.New(c.BestBlock().Header().StateRoot(), kv)
+	seeker := c.NewSeeker(c.BestBlock().Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
+		Number: thor.MaxBackTrackingBlockNumber + 1,
+		Time:   c.BestBlock().Header().Timestamp(),
+	})
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Prototype.ABI,
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
+	}
+
+	test.Case("balance", acc1, big.NewInt(0)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(0)).
+		ShouldOutput(big.NewInt(0)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(1)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(1)).
+		ShouldOutput(big.NewInt(1)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(2)).
+		ShouldOutput(big.NewInt(2)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(2)).
+		ShouldOutput(big.NewInt(2)).
+		Assert(t)
+}
+
+func TestPrototypeNativeWithBlockNumber(t *testing.T) {
+	var (
+		acc1 = thor.BytesToAddress([]byte("acc1"))
+	)
+
+	kv, _ := lvldb.NewMem()
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
+	c, _ := chain.New(kv, genesisBlock)
+	launchTime := genesisBlock.Header().Timestamp()
+
+	for i := 1; i < 100; i++ {
+		st.SetBalance(acc1, big.NewInt(int64(i)))
+		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
+		stateRoot, _ := st.Stage().Commit()
+		b := new(block.Builder).
+			ParentID(c.BestBlock().Header().ID()).
+			TotalScore(c.BestBlock().Header().TotalScore() + 1).
+			Timestamp(launchTime + uint64(i)*10).
+			StateRoot(stateRoot).
+			Build()
+		c.AddBlock(b, tx.Receipts{})
+	}
+
+	st, _ = state.New(c.BestBlock().Header().StateRoot(), kv)
+	seeker := c.NewSeeker(c.BestBlock().Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{
+		Number: c.BestBlock().Header().Number(),
+		Time:   c.BestBlock().Header().Timestamp(),
+	})
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Prototype.ABI,
+		to:     builtin.Prototype.Address,
+		caller: builtin.Prototype.Address,
+	}
+
+	test.Case("balance", acc1, big.NewInt(10)).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(10)).
+		ShouldOutput(big.NewInt(10)).
+		Assert(t)
+
+	test.Case("balance", acc1, big.NewInt(99)).
+		ShouldOutput(big.NewInt(99)).
+		Assert(t)
+
+	test.Case("energy", acc1, big.NewInt(99)).
+		ShouldOutput(big.NewInt(99)).
+		Assert(t)
+}
+
+func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *ecdsa.PrivateKey) *block.Block {
+	b := new(block.Builder).ParentID(parent.Header().ID()).TotalScore(parent.Header().TotalScore() + score).Timestamp(timestamp).Build()
+	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
+	return b.WithSignature(sig)
 }
 
 func TestExtensionNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
+	gene, _ := genesis.NewDevnet()
+	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
+	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-	rt := runtime.New(st, thor.Address{}, 1, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
 
-	contract := builtin.Extension.Address
+	privKeys := make([]*ecdsa.PrivateKey, 2)
 
-	value := []byte("extension")
+	for i := 0; i < 2; i++ {
+		privateKey, _ := crypto.GenerateKey()
+		privKeys[i] = privateKey
+	}
+
+	b0 := genesisBlock
+	b1 := newBlock(b0, 123, 456, privKeys[0])
+	b2 := newBlock(b1, 789, 321, privKeys[1])
+
+	b1_singer, _ := b1.Header().Signer()
+	b2_singer, _ := b2.Header().Signer()
+
+	_, err := c.AddBlock(b1, nil)
+	assert.Equal(t, err, nil)
+	_, err = c.AddBlock(b2, nil)
+	assert.Equal(t, err, nil)
+
+	seeker := c.NewSeeker(b2.Header().ID())
+	defer func() {
+		assert.Nil(t, st.Err())
+		assert.Nil(t, seeker.Err())
+	}()
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
 
 	test := &ctest{
 		rt:  rt,
-		abi: builtin.Extension.NativeABI(),
+		abi: builtin.Extension.ABI,
+		to:  builtin.Extension.Address,
 	}
 
-	test.Case("native_blake2b256", value).
-		To(contract).Caller(contract).
-		ShouldOutput(thor.Blake2b(value)).
+	test.Case("blake2b256", []byte("hello world")).
+		ShouldOutput(thor.Blake2b([]byte("hello world"))).
+		Assert(t)
+
+	test.Case("totalSupply").
+		ShouldOutput(builtin.Energy.Native(st, 0).TokenTotalSupply()).
+		Assert(t)
+
+	test.Case("txBlockRef").
+		BlockRef(tx.NewBlockRef(1)).
+		ShouldOutput(tx.NewBlockRef(1)).
+		Assert(t)
+
+	test.Case("txExpiration").
+		Expiration(100).
+		ShouldOutput(big.NewInt(100)).
+		Assert(t)
+
+	test.Case("txProvedWork").
+		ProvedWork(big.NewInt(1e12)).
+		ShouldOutput(big.NewInt(1e12)).
+		Assert(t)
+
+	test.Case("txID").
+		TxID(thor.BytesToBytes32([]byte("txID"))).
+		ShouldOutput(thor.BytesToBytes32([]byte("txID"))).
+		Assert(t)
+
+	test.Case("blockID", big.NewInt(3)).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
+
+	test.Case("blockID", big.NewInt(2)).
+		ShouldOutput(thor.Bytes32{}).
+		Assert(t)
+
+	test.Case("blockID", big.NewInt(1)).
+		ShouldOutput(b1.Header().ID()).
+		Assert(t)
+
+	test.Case("blockID", big.NewInt(0)).
+		ShouldOutput(b0.Header().ID()).
+		Assert(t)
+
+	test.Case("blockTotalScore", big.NewInt(3)).
+		ShouldOutput(uint64(0)).
+		Assert(t)
+
+	test.Case("blockTotalScore", big.NewInt(2)).
+		ShouldOutput(b2.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("blockTotalScore", big.NewInt(1)).
+		ShouldOutput(b1.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("blockTotalScore", big.NewInt(0)).
+		ShouldOutput(b0.Header().TotalScore()).
+		Assert(t)
+
+	test.Case("blockTime", big.NewInt(3)).
+		ShouldOutput(&big.Int{}).
+		Assert(t)
+
+	test.Case("blockTime", big.NewInt(2)).
+		ShouldOutput(new(big.Int).SetUint64(b2.Header().Timestamp())).
+		Assert(t)
+
+	test.Case("blockTime", big.NewInt(1)).
+		ShouldOutput(new(big.Int).SetUint64(b1.Header().Timestamp())).
+		Assert(t)
+
+	test.Case("blockTime", big.NewInt(0)).
+		ShouldOutput(new(big.Int).SetUint64(b0.Header().Timestamp())).
+		Assert(t)
+
+	test.Case("blockSigner", big.NewInt(3)).
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("blockSigner", big.NewInt(2)).
+		ShouldOutput(b2_singer).
+		Assert(t)
+
+	test.Case("blockSigner", big.NewInt(1)).
+		ShouldOutput(b1_singer).
 		Assert(t)
 }

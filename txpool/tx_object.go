@@ -34,7 +34,7 @@ type txObject struct {
 func (txObjs *txObject) currentState(chain *chain.Chain, bestBlockNum uint32) objectStatus {
 	dependsOn := txObjs.tx.DependsOn()
 	if dependsOn != nil {
-		if _, _, err := chain.GetTransaction(*dependsOn); err != nil {
+		if _, err := chain.GetTrunkTransactionMeta(*dependsOn); err != nil {
 			if !chain.IsNotFound(err) {
 				log.Error("err", err)
 			}

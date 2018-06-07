@@ -11,14 +11,20 @@ import (
 )
 
 var (
-	dirFlag = cli.StringFlag{
-		Name:  "dir",
-		Value: defaultMainDir(),
-		Usage: "main directory for configs and databases",
-	}
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (test|dev)",
+		Usage: "the network to join (test)",
+	}
+	configDirFlag = cli.StringFlag{
+		Name:   "config-dir",
+		Value:  defaultConfigDir(),
+		Hidden: true,
+		Usage:  "directory for user global configurations",
+	}
+	dataDirFlag = cli.StringFlag{
+		Name:  "data-dir",
+		Value: defaultDataDir(),
+		Usage: "directory for block-chain databases",
 	}
 	beneficiaryFlag = cli.StringFlag{
 		Name:  "beneficiary",

@@ -7,6 +7,8 @@ package comm
 
 import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/thor"
 )
@@ -71,11 +73,18 @@ func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
 		peer.logger.Debug("failed to get block by id", "err", err)
 		return
 	}
-	if result == nil {
+	if len(result) == 0 {
 		peer.logger.Debug("get nil block by id")
 		return
 	}
+
+	var blk block.Block
+	if err := rlp.DecodeBytes(result, &blk); err != nil {
+		peer.logger.Debug("failed to decode block got by id", "err", err)
+		return
+	}
+
 	c.newBlockFeed.Send(&NewBlockEvent{
-		Block: result,
+		Block: &blk,
 	})
 }

@@ -6,6 +6,7 @@
 package authority
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,22 +27,35 @@ func TestAuthority(t *testing.T) {
 	p2 := thor.BytesToAddress([]byte("p2"))
 	p3 := thor.BytesToAddress([]byte("p3"))
 
+	st.SetBalance(p1, big.NewInt(10))
+	st.SetBalance(p2, big.NewInt(20))
+	st.SetBalance(p3, big.NewInt(30))
+
 	aut := New(thor.BytesToAddress([]byte("aut")), st)
 	tests := []struct {
 		ret      interface{}
 		expected interface{}
 	}{
-		{aut.Add(p1, p1, thor.Bytes32{}), true},
-		{aut.Add(p2, p2, thor.Bytes32{}), true},
-		{aut.Add(p3, p3, thor.Bytes32{}), true},
-		{M(aut.Candidates()), []interface{}{
+		{aut.Add(&Candidate{p1, p1, thor.Bytes32{}, true}), true},
+		{aut.Add(&Candidate{p2, p2, thor.Bytes32{}, true}), true},
+		{aut.Add(&Candidate{p3, p3, thor.Bytes32{}, true}), true},
+		{M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)), []interface{}{
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
 		}},
-		{aut.Get(p1), &Entry{p1, thor.Bytes32{}, true, nil, &p2}},
+		{M(aut.Candidates(big.NewInt(20), thor.MaxBlockProposers)), []interface{}{
+			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
+		}},
+		{M(aut.Candidates(big.NewInt(30), thor.MaxBlockProposers)), []interface{}{
+			[]*Candidate{{p3, p3, thor.Bytes32{}, true}},
+		}},
+		{M(aut.Candidates(big.NewInt(10), 2)), []interface{}{
+			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}},
+		}},
+		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, true}, true)},
 		{aut.Update(p1, false), true},
-		{aut.Get(p1), &Entry{p1, thor.Bytes32{}, false, nil, &p2}},
+		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, false}, true)},
 		{aut.Remove(p1), true},
-		{M(aut.Candidates()), []interface{}{
+		{M(aut.Candidates(&big.Int{}, thor.MaxBlockProposers)), []interface{}{
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
 		}},
 	}

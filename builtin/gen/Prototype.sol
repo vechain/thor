@@ -3,58 +3,116 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-pragma solidity ^0.4.18;
+pragma solidity 0.4.24;
 
 contract Prototype {
-    function Of(address addr) public view returns(PrototypeInterface) {
-        PrototypeNative(this).native_contractify(addr);
-        return PrototypeInterface(addr);
-    }
-}
-
-contract PrototypeNative {
-    function native_contractify(address addr) public view;
-}
-
-contract PrototypeInterface {
 
     /// @return master of account.
     /// For an external account, its master is initially zero.
     /// For a contract, its master is the msg sender of deployment.
-    function $master() public view returns(address master);
+    function master(address self) public view returns(address){
+        return PrototypeNative(this).native_master(self);
+    }
 
     /// @param newMaster new master to be set.
-    function $set_master(address newMaster) public;
+    function setMaster(address self, address newMaster) public {
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        PrototypeNative(this).native_setMaster(self, newMaster);
+    }
 
-    function $has_code() public view returns(bool);
+    function balance(address self, uint blockNumber) public view returns(uint256){
+        if(blockNumber > block.number)
+            return;
+        return  PrototypeNative(this).native_balanceAtBlock(self, uint32(blockNumber));
+    }
 
-    function $energy() public view returns(uint256);
-    function $transfer_energy(uint256 amount) public;
-    function $move_energy_to(address to, uint256 amount) public;
+    function energy(address self, uint blockNumber) public view returns(uint256){
+        if(blockNumber > block.number)
+            return;
+        return  PrototypeNative(this).native_energyAtBlock(self, uint32(blockNumber));
+    }
 
-    function $user_plan() public view returns(uint256 credit, uint256 recoveryRate);
-    function $set_user_plan(uint256 credit, uint256 recoveryRate) public;
+    function hasCode(address self) public view returns(bool){
+        return PrototypeNative(this).native_hasCode(self);
+    }
 
-    function $is_user(address user) public view returns(bool);
-    function $user_credit(address user) public view returns(uint256 remainedCredit);
-    function $add_user(address user) public;
-    function $remove_user(address user) public;
+    function storageFor(address self, bytes32 key) public view returns(bytes32){
+        return PrototypeNative(this).native_storageFor(self, key);
+    }
 
-    function $sponsor(bool yesOrNo) public;
-    function $is_sponsor(address sponsor) public view returns(bool);
-    function $select_sponsor(address sponsor) public;
-    function $current_sponsor() public view returns(address);
+    function userPlan(address self) public view returns(uint256 credit, uint256 recoveryRate){
+        return PrototypeNative(this).native_userPlan(self);
+    }
 
-    event $SetMaster(address indexed newMaster);
-    event $AddRemoveUser(address indexed user, bool addOrRemove);
-    event $SetUserPlan(uint256 credit, uint256 recoveryRate);
-    event $Sponsor(address indexed sponsor, bool yesOrNo);
-    event $SelectSponsor(address indexed sponsor);
+    function setUserPlan(address self, uint256 credit, uint256 recoveryRate) public{
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        PrototypeNative(this).native_setUserPlan(self, credit, recoveryRate);
+    }
+
+    function isUser(address self, address user) public view returns(bool){
+        return PrototypeNative(this).native_isUser(self, user);
+    }
+
+    function userCredit(address self, address user) public view returns(uint256){
+        return PrototypeNative(this).native_userCredit(self, user);
+    }
+
+    function addUser(address self, address user) public{
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(!PrototypeNative(this).native_isUser(self, user), "builtin: already added");
+        PrototypeNative(this).native_addUser(self, user);
+    }
+
+    function removeUser(address self, address user) public{
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(PrototypeNative(this).native_isUser(self, user), "builtin: not a user");
+        PrototypeNative(this).native_removeUser(self, user);
+    }
+
+    function sponsor(address self, bool yesOrNo) public{
+        if(yesOrNo) {
+            require(!PrototypeNative(this).native_isSponsor(self, msg.sender), "builtin: already sponsored");
+        } else {
+            require(PrototypeNative(this).native_isSponsor(self, msg.sender), "builtin: not sponsored");
+        }
+        PrototypeNative(this).native_sponsor(self, msg.sender, yesOrNo);
+    }
+
+    function isSponsor(address self, address sponsorAddress) public view returns(bool){
+        return PrototypeNative(this).native_isSponsor(self, sponsorAddress);
+    }
+
+    function selectSponsor(address self, address sponsorAddress) public{
+        require(self == msg.sender || PrototypeNative(this).native_master(self) == msg.sender, "builtin: self or master required");
+        require(PrototypeNative(this).native_isSponsor(self, sponsorAddress), "builtin: not a sponsor");
+        PrototypeNative(this).native_selectSponsor(self, sponsorAddress);
+    }
+    
+    function currentSponsor(address self) public view returns(address){
+        return PrototypeNative(this).native_currentSponsor(self);
+    }
+
 }
 
+contract PrototypeNative {
+    function native_master(address self) public view returns(address master);
+    function native_setMaster(address self, address newMaster) public;
 
-library proto {
-    function Of(address addr) internal view returns(PrototypeInterface) {
-        return Prototype(uint160(bytes9("Prototype"))).Of(addr);
-    }
+    function native_balanceAtBlock(address self, uint32 blockNumber) public view returns(uint256 amount);
+    function native_energyAtBlock(address self, uint32 blockNumber) public view returns(uint256 amount);
+    function native_hasCode(address self) public view returns(bool);
+    function native_storageFor(address self, bytes32 key) public view returns(bytes32 value);
+
+    function native_userPlan(address self) public view returns(uint256 credit, uint256 recoveryRate);
+    function native_setUserPlan(address self, uint256 credit, uint256 recoveryRate) public;
+
+    function native_isUser(address self, address user) public view returns(bool);
+    function native_userCredit(address self, address user) public view returns(uint256 remainedCredit);
+    function native_addUser(address self, address user) public;
+    function native_removeUser(address self, address user) public;
+
+    function native_sponsor(address self, address caller, bool yesOrNo) public;
+    function native_isSponsor(address self, address sponsor) public view returns(bool);
+    function native_selectSponsor(address self, address sponsor) public;
+    function native_currentSponsor(address self) public view returns(address);
 }

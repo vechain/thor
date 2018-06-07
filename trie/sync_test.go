@@ -28,7 +28,7 @@ import (
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
 func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
-	db, _ := ethdb.NewMemDatabase()
+	db := ethdb.NewMemDatabase()
 	trie, _ := New(thor.Bytes32{}, db)
 
 	// Fill it with some arbitrary data
@@ -93,7 +93,7 @@ func TestEmptyTrieSync(t *testing.T) {
 	emptyB, _ := New(emptyRoot, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
-		db, _ := ethdb.NewMemDatabase()
+		db := ethdb.NewMemDatabase()
 		if req := NewTrieSync(thor.BytesToBytes32(trie.Root()), db, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
@@ -110,7 +110,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]thor.Bytes32{}, sched.Missing(batch)...)
@@ -142,7 +142,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]thor.Bytes32{}, sched.Missing(10000)...)
@@ -179,7 +179,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[thor.Bytes32]struct{})
@@ -219,7 +219,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	queue := make(map[thor.Bytes32]struct{})
@@ -265,7 +265,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 	srcDb, srcTrie, srcData := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	queue := append([]thor.Bytes32{}, sched.Missing(0)...)
@@ -304,7 +304,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 	srcDb, srcTrie, _ := makeTestTrie()
 
 	// Create a destination trie and sync with the scheduler
-	dstDb, _ := ethdb.NewMemDatabase()
+	dstDb := ethdb.NewMemDatabase()
 	sched := NewTrieSync(thor.BytesToBytes32(srcTrie.Root()), dstDb, nil)
 
 	added := []thor.Bytes32{}

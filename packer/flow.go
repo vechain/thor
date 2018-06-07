@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -23,9 +22,7 @@ type Flow struct {
 	packer       *Packer
 	parentHeader *block.Header
 	runtime      *runtime.Runtime
-	traverser    *chain.Traverser
 	processedTxs map[thor.Bytes32]bool // txID -> reverted
-	totalScore   uint64
 	gasUsed      uint64
 	txs          tx.Transactions
 	receipts     tx.Receipts
@@ -35,16 +32,12 @@ func newFlow(
 	packer *Packer,
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
-	totalScore uint64,
-	traverser *chain.Traverser,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
-		traverser:    traverser,
 		processedTxs: make(map[thor.Bytes32]bool),
-		totalScore:   totalScore,
 	}
 }
 
@@ -55,29 +48,21 @@ func (f *Flow) ParentHeader() *block.Header {
 
 // When the target time to do packing.
 func (f *Flow) When() uint64 {
-	return f.runtime.BlockTime()
+	return f.runtime.Context().Time
 }
 
-func (f *Flow) findTx(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
 	if reverted, ok := f.processedTxs[txID]; ok {
-		return true, func() (bool, error) {
-			return reverted, nil
-		}, nil
+		return true, reverted, nil
 	}
-	_, getReceipt, err := f.packer.chain.LookupTransaction(f.parentHeader.ID(), txID)
+	txMeta, err := f.packer.chain.GetTransactionMeta(txID, f.parentHeader.ID())
 	if err != nil {
 		if f.packer.chain.IsNotFound(err) {
-			return false, func() (bool, error) { return false, nil }, nil
+			return false, false, nil
 		}
-		return false, nil, err
+		return false, false, err
 	}
-	return true, func() (bool, error) {
-		r, err := getReceipt()
-		if err != nil {
-			return false, err
-		}
-		return r.Reverted, nil
-	}, nil
+	return true, txMeta.Reverted, nil
 }
 
 // Adopt try to execute the given transaction.
@@ -89,13 +74,13 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 		return badTxError{"chain tag mismatch"}
 	case tx.HasReservedFields():
 		return badTxError{"reserved fields not empty"}
-	case f.runtime.BlockNumber() < tx.BlockRef().Number():
+	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.runtime.BlockNumber()):
+	case tx.IsExpired(f.runtime.Context().Number):
 		return badTxError{"expired"}
-	case f.gasUsed+tx.Gas() > f.runtime.BlockGasLimit():
+	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
 		// gasUsed < 90% gas limit
-		if float64(f.gasUsed)/float64(f.runtime.BlockGasLimit()) < 0.9 {
+		if float64(f.gasUsed)/float64(f.runtime.Context().GasLimit) < 0.9 {
 			// try to find a lower gas tx
 			return errTxNotAdoptableNow
 		}
@@ -111,22 +96,20 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		found, isReverted, err := f.findTx(*dependsOn)
+		found, reverted, err := f.findTx(*dependsOn)
 		if err != nil {
 			return err
 		}
 		if !found {
 			return errTxNotAdoptableNow
 		}
-		if reverted, err := isReverted(); err != nil {
-			return err
-		} else if reverted {
+		if reverted {
 			return errTxNotAdoptableForever
 		}
 	}
 
 	checkpoint := f.runtime.State().NewCheckpoint()
-	receipt, _, err := f.runtime.ExecuteTransaction(tx)
+	receipt, err := f.runtime.ExecuteTransaction(tx)
 	if err != nil {
 		// skip and revert state
 		f.runtime.State().RevertTo(checkpoint)
@@ -145,7 +128,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	if err := f.traverser.Error(); err != nil {
+	if err := f.runtime.Seeker().Err(); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -157,10 +140,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 
 	builder := new(block.Builder).
 		Beneficiary(f.packer.beneficiary).
-		GasLimit(f.runtime.BlockGasLimit()).
+		GasLimit(f.runtime.Context().GasLimit).
 		ParentID(f.parentHeader.ID()).
-		Timestamp(f.runtime.BlockTime()).
-		TotalScore(f.totalScore).
+		Timestamp(f.runtime.Context().Time).
+		TotalScore(f.runtime.Context().TotalScore).
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot)

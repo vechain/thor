@@ -47,8 +47,8 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 	}
 
 	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
-	traverser := pool.chain.NewTraverser(bestBlock.Header().ID())
 	bestBlockNum := bestBlock.Header().Number()
+	bestBlockID := bestBlock.Header().ID()
 
 	//can be pendinged txObjects
 	for _, obj := range allObjs {
@@ -74,9 +74,7 @@ func (pool *TxPool) updateData(bestBlock *block.Block) {
 			}
 
 			obj.status = state
-			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, func(num uint32) thor.Bytes32 {
-				return traverser.Get(num).ID()
-			})
+			obj.overallGP = obj.tx.OverallGasPrice(baseGasPrice, bestBlockNum, pool.chain.NewSeeker(bestBlockID).GetID)
 			pool.entry.save(obj)
 		}
 

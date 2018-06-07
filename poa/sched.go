@@ -100,19 +100,19 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 // Updates returns proposers whose status are change, and the score when new block time is assumed to be newBlockTime.
 func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 
-	toDeactive := make(map[thor.Address]Proposer)
+	toDeactivate := make(map[thor.Address]Proposer)
 
 	t := newBlockTime - thor.BlockInterval
 	for i := uint64(0); i < thor.MaxBlockProposers && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
-			toDeactive[p.Address] = p
+			toDeactivate[p.Address] = p
 		}
 		t -= thor.BlockInterval
 	}
 
-	updates = make([]Proposer, 0, len(toDeactive)+1)
-	for _, p := range toDeactive {
+	updates = make([]Proposer, 0, len(toDeactivate)+1)
+	for _, p := range toDeactivate {
 		p.Active = false
 		updates = append(updates, p)
 	}
@@ -123,7 +123,7 @@ func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint
 		updates = append(updates, cpy)
 	}
 
-	score = uint64(len(s.actives)) - uint64(len(toDeactive))
+	score = uint64(len(s.actives)) - uint64(len(toDeactivate))
 	return
 }
 

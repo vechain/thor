@@ -3,13 +3,13 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-pragma solidity ^0.4.18;
+pragma solidity 0.4.24;
 
 /// @title Authority manages a candidates list of block proposers.
 contract Authority {
 
     function executor() public view returns(address) {
-        return AuthorityNative(this).native_getExecutor();
+        return AuthorityNative(this).native_executor();
     }
     
     // @notice add a candidate of block proposer.
@@ -18,22 +18,22 @@ contract Authority {
     // @param _endorsor address of endorsor that keeps certain amount of tokens. 
     // @param _identity identity of the candidate. Must be non-empty. 
     function add(address _signer, address _endorsor, bytes32 _identity) public {
-        require(msg.sender == executor());
-        require(_signer != 0 && _endorsor != 0 && _identity != 0);
+        require(msg.sender == executor(), "builtin: executor required");
+        require(_signer != 0 && _endorsor != 0 && _identity != 0, "builtin: bad args");
 
-        require(AuthorityNative(this).native_add(_signer, _endorsor, _identity));
+        require(AuthorityNative(this).native_add(_signer, _endorsor, _identity), "builtin: already exists");
 
-        Add(_signer, _identity);
+        emit Add(_signer, _endorsor, _identity);
     }
 
     // @notice remove a candidate.
     // @param _signer address of the signer.
     function remove(address _signer) public {
-        require(msg.sender == executor() || !AuthorityNative(this).native_isEndorsed(_signer));
+        require(msg.sender == executor() || !AuthorityNative(this).native_isEndorsed(_signer), "builtin: requires executor, or signer out of endorsed");
 
-        require(AuthorityNative(this).native_remove(_signer));
+        require(AuthorityNative(this).native_remove(_signer), "builtin: not exists");
 
-        Remove(_signer);
+        emit Remove(_signer);
     }
 
     function get(address _signer) public view returns(bool listed, address endorsor, bytes32 identity, bool active) {
@@ -49,14 +49,14 @@ contract Authority {
     }
 
     // fired when an address authorized to be a proposer.
-    event Add(address indexed signer, bytes32 identity);
+    event Add(address indexed signer, address endorsor, bytes32 identity);
     // fired when an address deauthorized.
     event Remove(address indexed signer);    
 }
 
 
 contract AuthorityNative {
-    function native_getExecutor() public view returns(address);
+    function native_executor() public view returns(address);
     function native_add(address signer, address endorsor, bytes32 identity) public returns(bool);
     function native_remove(address signer) public returns(bool);
     function native_get(address signer) public view returns(bool, address, bytes32, bool);

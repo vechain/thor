@@ -8,6 +8,7 @@ package consensus
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -15,6 +16,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/xenv"
 )
 
 func (c *Consensus) validate(
@@ -82,15 +84,13 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	authority := builtin.Authority.Native(st)
 	endorsement := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
 
-	candidates := authority.Candidates()
+	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
 	proposers := make([]poa.Proposer, 0, len(candidates))
 	for _, c := range candidates {
-		if st.GetBalance(c.Endorsor).Cmp(endorsement) >= 0 {
-			proposers = append(proposers, poa.Proposer{
-				Address: c.Signer,
-				Active:  c.Active,
-			})
-		}
+		proposers = append(proposers, poa.Proposer{
+			Address: c.Signer,
+			Active:  c.Active,
+		})
 	}
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
@@ -147,35 +147,33 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	receipts := make(tx.Receipts, 0, len(txs))
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
-	traverser := c.chain.NewTraverser(blk.Header().ParentID())
-	rt := runtime.New(state,
-		header.Beneficiary(),
-		header.Number(),
-		header.Timestamp(),
-		header.GasLimit(),
-		func(num uint32) thor.Bytes32 { return traverser.Get(num).ID() })
+	signer, _ := header.Signer()
+	rt := runtime.New(
+		c.chain.NewSeeker(header.ParentID()),
+		state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore(),
+		})
 
-	findTx := func(txID thor.Bytes32) (found bool, isReverted func() (bool, error), err error) {
+	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
-			return true, func() (bool, error) {
-				return reverted, nil
-			}, nil
+			return true, reverted, nil
 		}
-		_, getReceipt, err := c.chain.LookupTransaction(header.ParentID(), txID)
+		meta, err := c.chain.GetTransactionMeta(txID, header.ParentID())
 		if err != nil {
 			if c.chain.IsNotFound(err) {
-				return false, func() (bool, error) { return false, nil }, nil
+				return false, false, nil
 			}
-			return false, nil, err
+			return false, false, err
 		}
-		return true, func() (bool, error) {
-			r, err := getReceipt()
-			if err != nil {
-				return false, err
-			}
-			return r.Reverted, nil
-		}, nil
+		return true, meta.Reverted, nil
 	}
+
 	for _, tx := range txs {
 		// check if tx existed
 		if found, _, err := findTx(tx.ID()); err != nil {
@@ -186,7 +184,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			found, isReverted, err := findTx(*dep)
+			found, reverted, err := findTx(*dep)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -194,14 +192,12 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 				return nil, nil, consensusError("tx dep broken")
 			}
 
-			if reverted, err := isReverted(); err != nil {
-				return nil, nil, err
-			} else if reverted {
+			if reverted {
 				return nil, nil, consensusError("tx dep reverted")
 			}
 		}
 
-		receipt, _, err := rt.ExecuteTransaction(tx)
+		receipt, err := rt.ExecuteTransaction(tx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -220,8 +216,8 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
 	}
 
-	if err := traverser.Error(); err != nil {
-		return nil, nil, err
+	if err := rt.Seeker().Err(); err != nil {
+		return nil, nil, errors.WithMessage(err, "chain")
 	}
 
 	stage := state.Stage()
