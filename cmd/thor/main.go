@@ -33,7 +33,7 @@ func fullVersion() string {
 	if gitTag == "" {
 		versionMeta = "dev"
 	}
-	return fmt.Sprintf("v%s-%s-%s", version, gitCommit, versionMeta)
+	return fmt.Sprintf("%s-%s-%s", version, gitCommit, versionMeta)
 }
 
 func main() {
