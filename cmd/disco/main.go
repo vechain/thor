@@ -123,7 +123,7 @@ func main() {
 		versionMeta = "dev"
 	}
 	app := cli.App{
-		Version:   fmt.Sprintf("v%s-%s-%s", version, gitCommit, versionMeta),
+		Version:   fmt.Sprintf("%s-%s-%s", version, gitCommit, versionMeta),
 		Name:      "Disco",
 		Usage:     "VeChain Thor bootstrap node",
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
