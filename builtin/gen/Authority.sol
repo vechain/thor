@@ -18,10 +18,10 @@ contract Authority {
     // @param _endorsor address of endorsor that keeps certain amount of tokens. 
     // @param _identity identity of the candidate. Must be non-empty. 
     function add(address _signer, address _endorsor, bytes32 _identity) public {
-        require(msg.sender == executor());
-        require(_signer != 0 && _endorsor != 0 && _identity != 0);
+        require(msg.sender == executor(), "builtin: executor required");
+        require(_signer != 0 && _endorsor != 0 && _identity != 0, "builtin: bad args");
 
-        require(AuthorityNative(this).native_add(_signer, _endorsor, _identity));
+        require(AuthorityNative(this).native_add(_signer, _endorsor, _identity), "builtin: already exists");
 
         emit Add(_signer, _endorsor, _identity);
     }
@@ -29,9 +29,9 @@ contract Authority {
     // @notice remove a candidate.
     // @param _signer address of the signer.
     function remove(address _signer) public {
-        require(msg.sender == executor() || !AuthorityNative(this).native_isEndorsed(_signer));
+        require(msg.sender == executor() || !AuthorityNative(this).native_isEndorsed(_signer), "builtin: requires executor, or signer out of endorsed");
 
-        require(AuthorityNative(this).native_remove(_signer));
+        require(AuthorityNative(this).native_remove(_signer), "builtin: not exists");
 
         emit Remove(_signer);
     }
