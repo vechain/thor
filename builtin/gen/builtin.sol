@@ -4,10 +4,10 @@
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
 pragma solidity 0.4.24;
-import "./Prototype.sol";
-import "./Energy.sol";
+import "./prototype.sol";
+import "./energy.sol";
 
-library thor {
+library Builtin {
 
     address constant prototypeContract = uint160(bytes9("Prototype"));
     address constant energyContract = uint160(bytes6("Energy"));

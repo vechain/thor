@@ -4,7 +4,7 @@
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
 pragma solidity 0.4.24;
-import "./Token.sol";
+import "./token.sol";
 
 /// @title Energy an token that represents fuel for VET.
 contract Energy is Token {
