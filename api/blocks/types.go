@@ -25,11 +25,12 @@ type Block struct {
 	StateRoot    thor.Bytes32   `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
 	Signer       thor.Address   `json:"signer"`
+	IsTrunk      bool           `json:"isTrunk"`
 	Transactions []thor.Bytes32 `json:"transactions,string"`
 }
 
 //ConvertBlock convert a raw block into a json format block
-func ConvertBlock(b *block.Block) (*Block, error) {
+func ConvertBlock(b *block.Block, isTrunk bool) (*Block, error) {
 	if b == nil {
 		return nil, nil
 	}
@@ -58,7 +59,7 @@ func ConvertBlock(b *block.Block) (*Block, error) {
 		StateRoot:    header.StateRoot(),
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
-
+		IsTrunk:      isTrunk,
 		Transactions: txIds,
 	}, nil
 }

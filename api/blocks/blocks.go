@@ -34,7 +34,11 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return err
 	}
-	blk, err := ConvertBlock(block)
+	isTrunk, err := b.isTrunk(block.Header().ID(), block.Header().Number())
+	if err != nil {
+		return err
+	}
+	blk, err := ConvertBlock(block, isTrunk)
 	if err != nil {
 		return err
 	}
@@ -65,6 +69,15 @@ func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 		return nil, nil
 	}
 	return blk, err
+}
+
+func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
+	best := b.chain.BestBlock()
+	ancestorID, err := b.chain.GetAncestorBlockID(best.Header().ID(), blkNum)
+	if err != nil {
+		return false, err
+	}
+	return ancestorID == blkID, nil
 }
 
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {

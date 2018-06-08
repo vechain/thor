@@ -41,7 +41,7 @@ func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 
-	raw, _ := blocks.ConvertBlock(blk)
+	raw, _ := blocks.ConvertBlock(blk, true)
 	res := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(blocks.Block)
 	if err := json.Unmarshal(res, &rb); err != nil {

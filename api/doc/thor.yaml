@@ -332,6 +332,9 @@ components:
         signer:
           type: string
           description: the one who signed this block (bytes20)
+        isTrunk:
+          type: boolean
+          description: whether block is trunk
         transactions:
           type: array
           description: IDs of transactions
@@ -352,6 +355,7 @@ components:
         stateRoot: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
         receiptsRoot: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
         signer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        isTrunk: true
         transactions:
           - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
     RawTx:
