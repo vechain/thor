@@ -23,7 +23,7 @@ var (
 	Params    = &paramsContract{mustLoadContract("Params")}
 	Authority = &authorityContract{mustLoadContract("Authority")}
 	Energy    = &energyContract{mustLoadContract("Energy")}
-	Executor  = &executorContract{mustLoadContract("Executor")}
+	//Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{
 		mustLoadContract("Prototype"),
 		mustLoadPrototypeEventABI(),
