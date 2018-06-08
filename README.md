@@ -1,4 +1,4 @@
-## VeChain Thor
+## VeChainThor
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
@@ -50,11 +50,6 @@ Connect to VeChain's testnet:
 bin/thor -network test
 ```
 
-or devnet:
-
-```
-bin/thor -network dev
-```
 
 To find out usages of all command line options:
 
@@ -62,7 +57,7 @@ To find out usages of all command line options:
 bin/thor -h
 ```
 
-- `--network value`      the network to join (test|dev)
+- `--network value`      the network to join (test)
 - `--data-dir value`     directory for block-chain databases
 - `--beneficiary value`  address for block rewards
 - `--api-addr value`     API service listening address (default: "localhost:8669")
@@ -81,12 +76,14 @@ Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. 
 
 ## FAQ
 
+## Acknowledgement
+
 ## Community
 
 ## Contributing
 
 ## License
 
-VeChain Thor is licensed under the
+VeChainThor is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
 in *LICENSE* file in repository.
