@@ -1,0 +1,14 @@
+language: go
+go_import_path: github.com/vechain/thor
+sudo: false
+matrix:
+  include:
+    - os: linux
+      dist: trusty
+      go: 1.10.x
+before_install:
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+install:
+  - dep ensure
+script:
+  - make test
