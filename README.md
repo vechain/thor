@@ -69,6 +69,12 @@ bin/thor -h
 - `--help, -h`           show help
 - `--version, -v`        print the version
 
+## Testnet faucet
+
+``` 
+curl -X POST -d '{"to":"Your_Address"}' -H "Content-Type: application/json" https://faucet.outofgas.io/requests
+```
+
 ## API
 
 Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. http://localhost:8669/ by default.
