@@ -9,10 +9,10 @@ Windows/Linux/OSX
 
 ## Commit hash : (if develop)
  
-## Expected behaviour
+## Expected behavior
 Tell us what should happen.
 
-## Actual behaviour
+## Actual behavior
 Tell us what happens instead. Provide a log message if relevant.
 
 ## Steps to reproduce the behaviour
