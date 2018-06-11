@@ -15,4 +15,4 @@ Tell us what should happen.
 ## Actual behavior
 Tell us what happens instead. Provide a log message if relevant.
 
-## Steps to reproduce the behaviour
+## Steps to reproduce the behavior
