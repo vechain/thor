@@ -269,7 +269,8 @@ func startAPIServer(ctx *cli.Context, handler http.Handler) (*http.Server, strin
 			handlers.AllowedHeaders([]string{"content-type"}),
 		)(handler)
 	}
-	srv := &http.Server{Handler: handler}
+
+	srv := &http.Server{Handler: requestBodyLimit(handler)}
 	go func() {
 		srv.Serve(listener)
 	}()

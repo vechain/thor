@@ -191,7 +191,6 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
 		return err
 	}
-	req.Body.Close()
 	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err

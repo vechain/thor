@@ -44,7 +44,6 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return err
 	}
-	req.Body.Close()
 	query := req.URL.Query()
 	if query.Get("address") != "" {
 		addr, err := thor.ParseAddress(query.Get("address"))
