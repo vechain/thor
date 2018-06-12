@@ -17,6 +17,7 @@ import (
 
 // PeerStats records stats of a peer.
 type PeerStats struct {
+	Name        string
 	BestBlockID thor.Bytes32
 	TotalScore  uint64
 	PeerID      string
