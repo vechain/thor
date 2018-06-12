@@ -15,6 +15,7 @@ type Network interface {
 }
 
 type PeerStats struct {
+	Name        string       `json:"name"`
 	BestBlockID thor.Bytes32 `json:"bestBlockID"`
 	TotalScore  uint64       `json:"totalScore"`
 	PeerID      string       `json:"peerID"`
@@ -30,6 +31,7 @@ func ConvertPeersStats(ss []*comm.PeerStats) []*PeerStats {
 	peersStats := make([]*PeerStats, len(ss))
 	for i, peerStats := range ss {
 		peersStats[i] = &PeerStats{
+			Name:        peerStats.Name,
 			BestBlockID: peerStats.BestBlockID,
 			TotalScore:  peerStats.TotalScore,
 			PeerID:      peerStats.PeerID,
