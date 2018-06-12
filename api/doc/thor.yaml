@@ -701,6 +701,8 @@ components:
           origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     PeerStats:
       properties:
+        name:
+          type: string
         bestBlockID:
           type: string
         totalScore:
@@ -714,12 +716,13 @@ components:
         duration:
           type: integer
       example: 
-        bestBlockID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        totalScore: 0
-        peerID: ''
-        netAddr: ''
-        inbound: true
-        duration: 0
+        name: 'thor/v1.0.0-6680b98-dev/linux/go1.10.3'
+        bestBlockID: '0x000087b3a4d4cdf1cc52d56b9704f4c18f020e1b48dbbf4a23d1ee4f1fa5ff94'
+        totalScore: 68497
+        peerID: '50e122a505ee55b84331068acfd857e37ad58f463a0fab9aaff2c1e4b2e2d22ae71dc14fdaf6eead74bd3f60594644aa35c588f9ca6be3341e2ce18ddc413321'
+        netAddr: '128.1.39.120:11235'
+        inbound: false
+        duration: 28
   parameters:
     AddressInPath:
       name: address
