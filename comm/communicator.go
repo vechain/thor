@@ -268,6 +268,7 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	for _, peer := range c.peerSet.Slice() {
 		bestID, totalScore := peer.Head()
 		stats = append(stats, &PeerStats{
+			Name:        peer.Name(),
 			BestBlockID: bestID,
 			TotalScore:  totalScore,
 			PeerID:      peer.ID().String(),
@@ -277,7 +278,7 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		})
 	}
 	sort.Slice(stats, func(i, j int) bool {
-		return stats[i].PeerID < stats[j].PeerID
+		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
 }
