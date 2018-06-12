@@ -42,7 +42,6 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return err
 	}
-	req.Body.Close()
 	order := req.URL.Query().Get("order")
 	if order != string(logdb.DESC) {
 		filter.Order = logdb.ASC

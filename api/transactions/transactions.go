@@ -128,7 +128,6 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err := utils.ParseJSON(req.Body, &raw); err != nil {
 		return err
 	}
-	req.Body.Close()
 	tx, err := raw.decode()
 	if err != nil {
 		return err

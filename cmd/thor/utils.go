@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -106,4 +107,11 @@ func handleExitSignal() context.Context {
 		}
 	}()
 	return ctx
+}
+
+func requestBodyLimit(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 96*1000)
+		h.ServeHTTP(w, r)
+	})
 }
