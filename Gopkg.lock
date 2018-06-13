@@ -33,7 +33,38 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = ["accounts/abi","common","common/fdlimit","common/hexutil","common/math","common/mclock","core/types","crypto","crypto/bn256","crypto/bn256/cloudflare","crypto/bn256/google","crypto/ecies","crypto/secp256k1","crypto/sha3","ethdb","event","log","metrics","p2p","p2p/discover","p2p/discv5","p2p/nat","p2p/netutil","params","rlp","trie"]
+  packages = [
+    ".",
+    "accounts",
+    "accounts/abi",
+    "accounts/keystore",
+    "common",
+    "common/fdlimit",
+    "common/hexutil",
+    "common/math",
+    "common/mclock",
+    "core/types",
+    "crypto",
+    "crypto/bn256",
+    "crypto/bn256/cloudflare",
+    "crypto/bn256/google",
+    "crypto/ecies",
+    "crypto/randentropy",
+    "crypto/secp256k1",
+    "crypto/sha3",
+    "ethdb",
+    "event",
+    "log",
+    "metrics",
+    "p2p",
+    "p2p/discover",
+    "p2p/discv5",
+    "p2p/nat",
+    "p2p/netutil",
+    "params",
+    "rlp",
+    "trie"
+  ]
   revision = "eae63c511ceafab14b92e274c1b18bf1700e2d3d"
   version = "v1.8.10"
 
@@ -70,13 +101,24 @@
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/golang-lru"
-  packages = [".","simplelru"]
+  packages = [
+    ".",
+    "simplelru"
+  ]
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
   branch = "master"
   name = "github.com/huin/goupnp"
-  packages = [".","dcps/internetgateway1","dcps/internetgateway2","httpu","scpd","soap","ssdp"]
+  packages = [
+    ".",
+    "dcps/internetgateway1",
+    "dcps/internetgateway2",
+    "httpu",
+    "scpd",
+    "soap",
+    "ssdp"
+  ]
   revision = "dceda08e705b2acee36aab47d765ed801f64cfc7"
 
 [[projects]]
@@ -110,6 +152,18 @@
   version = "v1.6.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/mattn/go-tty"
+  packages = ["."]
+  revision = "931426f7535ac39720c8909d70ece5a41a2502a6"
+
+[[projects]]
+  name = "github.com/pborman/uuid"
+  packages = ["."]
+  revision = "e790cca94e6cc75c7064b1332e63811d4aae1a53"
+  version = "v1.1"
+
+[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
@@ -128,6 +182,12 @@
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/rjeczalik/notify"
+  packages = ["."]
+  revision = "d152f3ce359a5464dc41e84a8919fc67e55bbbf0"
+
+[[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert"]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
@@ -136,19 +196,45 @@
 [[projects]]
   branch = "master"
   name = "github.com/syndtr/goleveldb"
-  packages = ["leveldb","leveldb/cache","leveldb/comparer","leveldb/errors","leveldb/filter","leveldb/iterator","leveldb/journal","leveldb/memdb","leveldb/opt","leveldb/storage","leveldb/table","leveldb/util"]
+  packages = [
+    "leveldb",
+    "leveldb/cache",
+    "leveldb/comparer",
+    "leveldb/errors",
+    "leveldb/filter",
+    "leveldb/iterator",
+    "leveldb/journal",
+    "leveldb/memdb",
+    "leveldb/opt",
+    "leveldb/storage",
+    "leveldb/table",
+    "leveldb/util"
+  ]
   revision = "3d8f4155ffd9029d32e5cf03853b58759b6e3710"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["blake2b","ripemd160"]
+  packages = [
+    "blake2b",
+    "pbkdf2",
+    "ripemd160",
+    "scrypt"
+  ]
   revision = "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["bpf","html","html/atom","html/charset","internal/iana","internal/socket","ipv4"]
+  packages = [
+    "bpf",
+    "html",
+    "html/atom",
+    "html/charset",
+    "internal/iana",
+    "internal/socket",
+    "ipv4"
+  ]
   revision = "dc871a5d77e227f5bbf6545176ef3eeebf87e76e"
 
 [[projects]]
@@ -159,9 +245,33 @@
 
 [[projects]]
   name = "golang.org/x/text"
-  packages = ["encoding","encoding/charmap","encoding/htmlindex","encoding/internal","encoding/internal/identifier","encoding/japanese","encoding/korean","encoding/simplifiedchinese","encoding/traditionalchinese","encoding/unicode","internal/gen","internal/tag","internal/utf8internal","language","runes","transform","unicode/cldr"]
+  packages = [
+    "encoding",
+    "encoding/charmap",
+    "encoding/htmlindex",
+    "encoding/internal",
+    "encoding/internal/identifier",
+    "encoding/japanese",
+    "encoding/korean",
+    "encoding/simplifiedchinese",
+    "encoding/traditionalchinese",
+    "encoding/unicode",
+    "internal/gen",
+    "internal/tag",
+    "internal/utf8internal",
+    "language",
+    "runes",
+    "transform",
+    "unicode/cldr"
+  ]
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
+
+[[projects]]
+  name = "gopkg.in/fatih/set.v0"
+  packages = ["."]
+  revision = "57907de300222151a123d29255ed17f5ed43fad3"
+  version = "v0.1.0"
 
 [[projects]]
   branch = "v2"
@@ -178,6 +288,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b1a4ba477f9995875b232fd93f1e1fd040085d49d9d1bb146c83d65d76730d5c"
+  inputs-digest = "a07bebe6d9c7057e1167774432ef3481223899e811fc617cd5ea479b0bf09f4c"
   solver-name = "gps-cdcl"
   solver-version = 1
