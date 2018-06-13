@@ -32,6 +32,9 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	revision := mux.Vars(req)["revision"]
 	block, err := b.getBlock(revision)
 	if err != nil {
+		if b.chain.IsNotFound(err) {
+			return utils.WriteJSON(w, nil)
+		}
 		return err
 	}
 	isTrunk, err := b.isTrunk(block.Header().ID(), block.Header().Number())
@@ -58,17 +61,9 @@ func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 		if n > math.MaxUint32 {
 			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
 		}
-		blk, err := b.chain.GetTrunkBlock(uint32(n))
-		if b.chain.IsNotFound(err) {
-			return nil, nil
-		}
-		return blk, err
+		return b.chain.GetTrunkBlock(uint32(n))
 	}
-	blk, err := b.chain.GetBlock(blkID)
-	if b.chain.IsNotFound(err) {
-		return nil, nil
-	}
-	return blk, err
+	return b.chain.GetBlock(blkID)
 }
 
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
