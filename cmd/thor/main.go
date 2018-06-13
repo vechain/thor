@@ -8,9 +8,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
+	tty "github.com/mattn/go-tty"
+	"github.com/pborman/uuid"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -58,7 +64,7 @@ func main() {
 		Commands: []cli.Command{
 			{
 				Name:  "solo",
-				Usage: "VeChain Thor client for test & dev",
+				Usage: "client runs in solo mode for test & dev",
 				Flags: []cli.Flag{
 					dataDirFlag,
 					apiAddrFlag,
@@ -68,6 +74,16 @@ func main() {
 					verbosityFlag,
 				},
 				Action: soloAction,
+			},
+			{
+				Name:  "master-key",
+				Usage: "import and export master key",
+				Flags: []cli.Flag{
+					configDirFlag,
+					importMasterKeyFlag,
+					exportMasterKeyFlag,
+				},
+				Action: masterKeyAction,
 			},
 		},
 	}
@@ -145,4 +161,82 @@ func soloAction(ctx *cli.Context) error {
 	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
 
 	return soloContext.Run(handleExitSignal())
+}
+
+func masterKeyAction(ctx *cli.Context) error {
+	hasImportFlag := ctx.Bool(importMasterKeyFlag.Name)
+	hasExportFlag := ctx.Bool(exportMasterKeyFlag.Name)
+	if hasImportFlag && hasExportFlag {
+		return fmt.Errorf("flag %s and %s are exclusive", importMasterKeyFlag.Name, exportMasterKeyFlag.Name)
+	}
+
+	if !hasImportFlag && !hasExportFlag {
+		return fmt.Errorf("missing flag, either %s or %s", importMasterKeyFlag.Name, exportMasterKeyFlag.Name)
+	}
+
+	configDir := makeConfigDir(ctx)
+	if hasImportFlag {
+		var keyjson string
+		for {
+			if _, err := fmt.Fscanln(os.Stdin, &keyjson); err != nil {
+				if err == io.EOF {
+					break
+				}
+				return err
+			}
+		}
+
+		t, err := tty.Open()
+		if err != nil {
+			return err
+		}
+		defer t.Close()
+
+		fmt.Printf("Enter passphrase:")
+		passwd, err := t.ReadPassword()
+		if err != nil {
+			return err
+		}
+
+		key, err := keystore.DecryptKey([]byte(keyjson), passwd)
+		if err != nil {
+			return err
+		}
+
+		return crypto.SaveECDSA(filepath.Join(configDir, "master.key"), key.PrivateKey)
+	}
+
+	if hasExportFlag {
+		masterKey, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "master.key"))
+		if err != nil {
+			return err
+		}
+
+		t, err := tty.Open()
+		if err != nil {
+			return err
+		}
+		defer t.Close()
+
+		fmt.Printf("Enter passphrase: ")
+		passwd, err := t.ReadPassword()
+
+		if err != nil {
+			return err
+		}
+
+		keyjson, err := keystore.EncryptKey(&keystore.Key{
+			PrivateKey: masterKey,
+			Address:    crypto.PubkeyToAddress(masterKey.PublicKey),
+			Id:         uuid.NewRandom()},
+			passwd, keystore.StandardScryptN, keystore.StandardScryptP)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(keyjson))
+
+		return nil
+	}
+
+	return nil
 }
