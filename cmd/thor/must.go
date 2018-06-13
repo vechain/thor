@@ -179,7 +179,7 @@ func loadNodeMaster(ctx *cli.Context) *node.Master {
 		fatal("load or generate master key:", err)
 	}
 	master := &node.Master{PrivateKey: key}
-	master.Beneficiary = master.Address()
+	master.Beneficiary = bene(master.Address())
 	return master
 }
 
