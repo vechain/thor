@@ -8,7 +8,22 @@ Thor is VeChain's new generation blockchain project.  It's the official implemen
 
 Thor requires `Go` 1.10+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install). 
 
-In addition, [dep](https://github.com/golang/dep) is required to manage dependencies. 
+### Dependency management
+
+[dep](https://github.com/golang/dep) is a tool to manage go dependencies:
+
+(*Note that to make `dep` work, you should put Thor's source code at proper position under your `$GOPATH`.*)
+
+```
+dep ensure
+```
+
+There is also an alternative way to update dependencies: `git submodule`, we have uploaded the dependencies to the [repo](https://github.com/vechain/thor-go-vendor), run the following command after you clone thor: 
+
+```
+git submodule init
+git submodule update
+```
 
 ### Getting the source
 
@@ -19,12 +34,7 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
-Install dependencies:
-(*Note that to make `dep` work, you should put Thor's source code at proper position under your `$GOPATH`.*)
-
-```
-dep ensure
-```
+Choose the way you like to update depencencies: `dep` or `git submodule`
 
 ### Building
 
@@ -68,6 +78,20 @@ bin/thor -h
 - `--nat value`          port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
 - `--help, -h`           show help
 - `--version, -v`        print the version
+
+### Sub-commands
+
+- `solo`                client runs in solo mode for test & dev
+- `master-key`          import and export master key
+
+```
+bin/thor solo --on-demand               # create new block when there is pending transaction
+bin/thor solo --persist                 # save blockchain data to disk(default to memory)
+bin/thor solo --persist --on-demand     # two options can work together
+
+bin/thor master-key --export            # export master key in keystore format, you'll need to enter passphase
+bin/thor master-key --import            # import master key in keystore format, you'll need to enter passphase
+```
 
 ## Testnet faucet
 
