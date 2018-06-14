@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	tty "github.com/mattn/go-tty"
 )
 
 func fatal(args ...interface{}) {
@@ -114,4 +115,18 @@ func requestBodyLimit(h http.Handler) http.Handler {
 		r.Body = http.MaxBytesReader(w, r.Body, 96*1000)
 		h.ServeHTTP(w, r)
 	})
+}
+
+func readPasswordFromNewTTY(prompt string) (string, error) {
+	t, err := tty.Open()
+	if err != nil {
+		return "", err
+	}
+	defer t.Close()
+	fmt.Fprint(t.Output(), prompt)
+	pass, err := t.ReadPasswordNoEcho()
+	if err != nil {
+		return "", err
+	}
+	return pass, err
 }

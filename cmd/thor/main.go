@@ -7,16 +7,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"os"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
-	tty "github.com/mattn/go-tty"
+	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -174,69 +175,66 @@ func masterKeyAction(ctx *cli.Context) error {
 		return fmt.Errorf("missing flag, either %s or %s", importMasterKeyFlag.Name, exportMasterKeyFlag.Name)
 	}
 
-	configDir := makeConfigDir(ctx)
 	if hasImportFlag {
-		var keyjson string
-		for {
-			if _, err := fmt.Fscanln(os.Stdin, &keyjson); err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
+		if isatty.IsTerminal(os.Stdin.Fd()) {
+			fmt.Println("Input JSON keystore (end with ^d):")
 		}
-
-		t, err := tty.Open()
-		if err != nil {
-			return err
-		}
-		defer t.Close()
-
-		fmt.Printf("Enter passphrase:")
-		passwd, err := t.ReadPassword()
+		keyjson, err := ioutil.ReadAll(os.Stdin)
 		if err != nil {
 			return err
 		}
 
-		key, err := keystore.DecryptKey([]byte(keyjson), passwd)
+		if err := json.Unmarshal(keyjson, &map[string]interface{}{}); err != nil {
+			return errors.WithMessage(err, "unmarshal")
+		}
+		password, err := readPasswordFromNewTTY("Enter passphrase: ")
 		if err != nil {
 			return err
 		}
 
-		return crypto.SaveECDSA(filepath.Join(configDir, "master.key"), key.PrivateKey)
+		key, err := keystore.DecryptKey(keyjson, password)
+		if err != nil {
+			return errors.WithMessage(err, "decrypt")
+		}
+
+		return crypto.SaveECDSA(masterKeyPath(ctx), key.PrivateKey)
 	}
 
 	if hasExportFlag {
-		masterKey, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "master.key"))
+		masterKey, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
 		if err != nil {
 			return err
 		}
 
-		t, err := tty.Open()
+		password, err := readPasswordFromNewTTY("Enter passphrase: ")
 		if err != nil {
 			return err
 		}
-		defer t.Close()
-
-		fmt.Printf("Enter passphrase: ")
-		passwd, err := t.ReadPassword()
-
+		if password == "" {
+			return errors.New("non-empty passphrase required")
+		}
+		confirm, err := readPasswordFromNewTTY("Confirm passphrase: ")
 		if err != nil {
 			return err
+		}
+
+		if password != confirm {
+			return errors.New("passphrase confirmation mismatch")
 		}
 
 		keyjson, err := keystore.EncryptKey(&keystore.Key{
 			PrivateKey: masterKey,
 			Address:    crypto.PubkeyToAddress(masterKey.PublicKey),
 			Id:         uuid.NewRandom()},
-			passwd, keystore.StandardScryptN, keystore.StandardScryptP)
+			password, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(keyjson))
-
-		return nil
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			fmt.Println("=== JSON keystore ===")
+		}
+		_, err = fmt.Println(string(keyjson))
+		return err
 	}
-
 	return nil
 }

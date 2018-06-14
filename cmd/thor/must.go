@@ -152,8 +152,12 @@ func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB)
 	return chain
 }
 
-func loadNodeMaster(ctx *cli.Context) *node.Master {
+func masterKeyPath(ctx *cli.Context) string {
 	configDir := makeConfigDir(ctx)
+	return filepath.Join(configDir, "master.key")
+}
+
+func loadNodeMaster(ctx *cli.Context) *node.Master {
 	bene := func(master thor.Address) thor.Address {
 		beneStr := ctx.String(beneficiaryFlag.Name)
 		if beneStr == "" {
@@ -174,7 +178,7 @@ func loadNodeMaster(ctx *cli.Context) *node.Master {
 			Beneficiary: bene(acc.Address),
 		}
 	}
-	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "master.key"))
+	key, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
 	if err != nil {
 		fatal("load or generate master key:", err)
 	}
