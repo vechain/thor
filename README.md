@@ -82,16 +82,24 @@ bin/thor -h
 ### Sub-commands
 
 - `solo`                client runs in solo mode for test & dev
-- `master-key`          import and export master key
 
 ```
 bin/thor solo --on-demand               # create new block when there is pending transaction
 bin/thor solo --persist                 # save blockchain data to disk(default to memory)
 bin/thor solo --persist --on-demand     # two options can work together
-
-bin/thor master-key --export            # export master key in keystore format, you'll need to enter passphase
-bin/thor master-key --import            # import master key in keystore format, you'll need to enter passphase
 ```
+
+- `master-key`          import and export master key
+
+```
+# export master key to keystore
+bin/thor master-key --export > keystore.json
+
+
+# import master key from keystore
+cat keystore.json | bin/thor master-key --import
+```
+
 
 ## Testnet faucet
 
