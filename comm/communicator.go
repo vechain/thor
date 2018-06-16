@@ -189,12 +189,14 @@ func (c *Communicator) runPeer(peer *Peer) {
 		peer.logger.Debug("failed to handshake", "err", "genesis id mismatch")
 		return
 	}
-	now := uint64(time.Now().Unix())
-	diff := now - status.SysTimestamp
-	if now < status.SysTimestamp {
-		diff = status.SysTimestamp
+	localClock := uint64(time.Now().Unix())
+	remoteClock := status.SysTimestamp
+
+	diff := localClock - remoteClock
+	if localClock < remoteClock {
+		diff = remoteClock - localClock
 	}
-	if diff > thor.BlockInterval {
+	if diff > thor.BlockInterval*2 {
 		peer.logger.Debug("failed to handshake", "err", "sys time diff too large")
 		return
 	}
