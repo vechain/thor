@@ -59,7 +59,7 @@ func DevAccounts() []DevAccount {
 }
 
 // NewDevnet create genesis for solo mode.
-func NewDevnet() (*Genesis, error) {
+func NewDevnet() *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 
 	executor := DevAccounts()[0].Address
@@ -113,8 +113,8 @@ func NewDevnet() (*Genesis, error) {
 
 	id, err := builder.ComputeID()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	return &Genesis{builder, id, "devnet"}, nil
+	return &Genesis{builder, id, "devnet"}
 }

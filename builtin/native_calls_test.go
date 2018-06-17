@@ -518,7 +518,7 @@ func TestPrototypeNative(t *testing.T) {
 	)
 
 	kv, _ := lvldb.NewMem()
-	gene, _ := genesis.NewDevnet()
+	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
 	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
@@ -738,7 +738,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	)
 
 	kv, _ := lvldb.NewMem()
-	gene, _ := genesis.NewDevnet()
+	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	c, _ := chain.New(kv, genesisBlock)
@@ -806,7 +806,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	)
 
 	kv, _ := lvldb.NewMem()
-	gene, _ := genesis.NewDevnet()
+	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	st, _ := state.New(genesisBlock.Header().StateRoot(), kv)
 	c, _ := chain.New(kv, genesisBlock)
@@ -869,7 +869,7 @@ func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *e
 func TestExtensionNative(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	st, _ := state.New(thor.Bytes32{}, kv)
-	gene, _ := genesis.NewDevnet()
+	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())

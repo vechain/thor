@@ -19,7 +19,7 @@ import (
 
 func initChain() *chain.Chain {
 	kv, _ := lvldb.NewMem()
-	g, _ := genesis.NewDevnet()
+	g := genesis.NewDevnet()
 	b0, _, _ := g.Build(state.NewCreator(kv))
 
 	chain, err := chain.New(kv, b0)

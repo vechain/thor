@@ -50,11 +50,7 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	network := ctx.String(networkFlag.Name)
 	switch network {
 	case "test":
-		gene, err := genesis.NewTestnet()
-		if err != nil {
-			fatal(err)
-		}
-		return gene
+		return genesis.NewTestnet()
 	default:
 		cli.ShowAppHelp(ctx)
 		if network == "" {
@@ -304,14 +300,6 @@ func printStartupMessage(
 		master.Address(), master.Beneficiary,
 		dataDir,
 		apiURL)
-}
-
-func soloGenesis(ctx *cli.Context) *genesis.Genesis {
-	gene, err := genesis.NewDevnet()
-	if err != nil {
-		fatal(err)
-	}
-	return gene
 }
 
 func openMemMainDB() *lvldb.LevelDB {

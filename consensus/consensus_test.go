@@ -70,10 +70,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	gen, err := genesis.NewDevnet()
-	if err != nil {
-		t.Fatal(err)
-	}
+	gen := genesis.NewDevnet()
 
 	stateCreator := state.NewCreator(db)
 	parent, _, err := gen.Build(stateCreator)

@@ -16,8 +16,7 @@ import (
 
 func TestTestnetGenesis(t *testing.T) {
 	kv, _ := lvldb.NewMem()
-	gene, err := genesis.NewTestnet()
-	assert.Nil(t, err)
+	gene := genesis.NewTestnet()
 
 	b0, _, err := gene.Build(state.NewCreator(kv))
 	assert.Nil(t, err)

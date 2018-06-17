@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/api"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
@@ -130,7 +131,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
-	gene := soloGenesis(ctx)
+	gene := genesis.NewDevnet()
 
 	var mainDB *lvldb.LevelDB
 	var logDB *logdb.LogDB

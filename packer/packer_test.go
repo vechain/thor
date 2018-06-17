@@ -65,7 +65,7 @@ func TestP(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	defer kv.Close()
 
-	g, _ := genesis.NewDevnet()
+	g := genesis.NewDevnet()
 	b0, _, _ := g.Build(state.NewCreator(kv))
 
 	c, _ := chain.New(kv, b0)

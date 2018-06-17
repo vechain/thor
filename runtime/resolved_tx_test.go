@@ -48,10 +48,7 @@ func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) 
 		return nil, err
 	}
 
-	gen, err := genesis.NewDevnet()
-	if err != nil {
-		return nil, err
-	}
+	gen := genesis.NewDevnet()
 
 	stateCreator := state.NewCreator(db)
 	parent, _, err := gen.Build(stateCreator)
