@@ -265,41 +265,16 @@ func (t *Transaction) Size() metric.StorageSize {
 
 // IntrinsicGas returns intrinsic gas of tx.
 func (t *Transaction) IntrinsicGas() (uint64, error) {
-	if len(t.body.Clauses) == 0 {
-		return thor.TxGas + thor.ClauseGas, nil
-	}
-
 	if cached := t.cache.intrinsicGas.Load(); cached != nil {
 		return cached.(uint64), nil
 	}
 
-	var total = thor.TxGas
-	var overflow bool
-	for _, c := range t.body.Clauses {
-		gas, err := dataGas(c.body.Data)
-		if err != nil {
-			return 0, err
-		}
-		total, overflow = math.SafeAdd(total, gas)
-		if overflow {
-			return 0, errIntrinsicGasOverflow
-		}
-
-		var cgas uint64
-		if c.IsCreatingContract() {
-			// contract creation
-			cgas = thor.ClauseGasContractCreation
-		} else {
-			cgas = thor.ClauseGas
-		}
-
-		total, overflow = math.SafeAdd(total, cgas)
-		if overflow {
-			return 0, errIntrinsicGasOverflow
-		}
+	gas, err := IntrinsicGas(t.body.Clauses)
+	if err != nil {
+		return 0, err
 	}
-	t.cache.intrinsicGas.Store(total)
-	return total, nil
+	t.cache.intrinsicGas.Store(gas)
+	return gas, nil
 }
 
 // GasPrice returns gas price.
@@ -391,6 +366,40 @@ func (t *Transaction) String() string {
 	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
 		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), t.body.Signature)
+}
+
+// IntrinsicGas calculate intrinsic gas cost for tx with such clauses.
+func IntrinsicGas(clauses []*Clause) (uint64, error) {
+	if len(clauses) == 0 {
+		return thor.TxGas + thor.ClauseGas, nil
+	}
+
+	var total = thor.TxGas
+	var overflow bool
+	for _, c := range clauses {
+		gas, err := dataGas(c.body.Data)
+		if err != nil {
+			return 0, err
+		}
+		total, overflow = math.SafeAdd(total, gas)
+		if overflow {
+			return 0, errIntrinsicGasOverflow
+		}
+
+		var cgas uint64
+		if c.IsCreatingContract() {
+			// contract creation
+			cgas = thor.ClauseGasContractCreation
+		} else {
+			cgas = thor.ClauseGas
+		}
+
+		total, overflow = math.SafeAdd(total, cgas)
+		if overflow {
+			return 0, errIntrinsicGasOverflow
+		}
+	}
+	return total, nil
 }
 
 // see core.IntrinsicGas
