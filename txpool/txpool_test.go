@@ -91,10 +91,7 @@ func generateTxs(t *testing.T, count int) tx.Transactions {
 func initPool(t *testing.T) *TxPool {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
-	gen, err := genesis.NewDevnet()
-	if err != nil {
-		t.Fatal(err)
-	}
+	gen := genesis.NewDevnet()
 	b, _, err := gen.Build(stateC)
 	if err != nil {
 		t.Fatal(err)

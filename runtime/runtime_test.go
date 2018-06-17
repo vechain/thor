@@ -29,7 +29,7 @@ func TestContractSuicide(t *testing.T) {
 	assert := assert.New(t)
 	kv, _ := lvldb.NewMem()
 
-	g, _ := genesis.NewDevnet()
+	g := genesis.NewDevnet()
 	stateCreator := state.NewCreator(kv)
 	b0, _, err := g.Build(stateCreator)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestContractSuicide(t *testing.T) {
 func TestCall(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 
-	g, _ := genesis.NewDevnet()
+	g := genesis.NewDevnet()
 	b0, _, err := g.Build(state.NewCreator(kv))
 	if err != nil {
 		t.Fatal(err)

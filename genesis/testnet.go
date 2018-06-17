@@ -16,7 +16,7 @@ import (
 )
 
 // NewTestnet create genesis for testnet.
-func NewTestnet() (*Genesis, error) {
+func NewTestnet() *Genesis {
 	launchTime := uint64(1528387200) // 'Fri Jun 08 2018 00:00:00 GMT+0800 (CST)'
 
 	// use this address as executor instead of builtin one, for test purpose
@@ -79,7 +79,7 @@ func NewTestnet() (*Genesis, error) {
 
 	id, err := builder.ComputeID()
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
-	return &Genesis{builder, id, "testnet"}, nil
+	return &Genesis{builder, id, "testnet"}
 }

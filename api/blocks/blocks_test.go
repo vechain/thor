@@ -66,10 +66,8 @@ func TestBlock(t *testing.T) {
 func initBlockServer(t *testing.T) {
 	db, _ := lvldb.NewMem()
 	stateC := state.NewCreator(db)
-	gene, err := genesis.NewDevnet()
-	if err != nil {
-		t.Fatal(err)
-	}
+	gene := genesis.NewDevnet()
+
 	b, _, err := gene.Build(stateC)
 	if err != nil {
 		t.Fatal(err)
