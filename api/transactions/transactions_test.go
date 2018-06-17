@@ -183,7 +183,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	transactions.New(c, txpool.New(c, stateC)).Mount(router, "/transactions")
+	transactions.New(c, txpool.New(c, stateC, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})).Mount(router, "/transactions")
 	ts = httptest.NewServer(router)
 
 }

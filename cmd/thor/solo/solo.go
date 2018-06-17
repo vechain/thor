@@ -19,7 +19,6 @@ import (
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -94,22 +93,24 @@ func (s *Solo) interval(ctx context.Context) {
 
 func (s *Solo) watcher(ctx context.Context) {
 
-	ch := make(chan *tx.Transaction, 10)
-	sub := s.txPool.SubscribeNewTransaction(ch)
+	txEvCh := make(chan *txpool.TxEvent, 10)
+	sub := s.txPool.SubscribeTxEvent(txEvCh)
 	defer sub.Unsubscribe()
 
 	for {
 		select {
-		case tx := <-ch:
-			singer, err := tx.Signer()
-			if err != nil {
-				singer = thor.Address{}
+		case txEv := <-txEvCh:
+			if txEv.Executable {
+				tx := txEv.Tx
+				singer, err := tx.Signer()
+				if err != nil {
+					singer = thor.Address{}
+				}
+				log.Info("new Tx", "id", tx.ID(), "signer", singer)
+				if s.onDemand {
+					s.packing()
+				}
 			}
-			log.Info("new Tx", "id", tx.ID(), "signer", singer)
-			if s.onDemand {
-				s.packing()
-			}
-			continue
 		case <-ctx.Done():
 			log.Info("stopping watcher service......")
 			return
@@ -126,7 +127,7 @@ func (s *Solo) packing() {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
 
-	pendingTxs := s.txPool.Pending(true)
+	pendingTxs := s.txPool.Executables()
 
 	for _, tx := range pendingTxs {
 		err := flow.Adopt(tx)

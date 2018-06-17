@@ -135,7 +135,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			write(tx.Transactions(nil))
 		} else {
 			if len(txsToSync.txs) == 0 {
-				txsToSync.txs = c.txPool.Pending(false)
+				txsToSync.txs = c.txPool.Executables()
 			}
 
 			var (

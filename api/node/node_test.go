@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +45,11 @@ func initCommServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	chain, _ := chain.New(db, b)
-	comm := comm.New(chain, txpool.New(chain, stateC))
+	comm := comm.New(chain, txpool.New(chain, stateC, txpool.Options{
+		Limit:           10000,
+		LimitPerAccount: 16,
+		MaxLifetime:     10 * time.Minute,
+	}))
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")
 	ts = httptest.NewServer(router)

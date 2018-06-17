@@ -5,28 +5,27 @@
 
 package txpool
 
+type (
+	badTxError      struct{ msg string }
+	txRejectedError struct{ msg string }
+)
+
+func (e badTxError) Error() string {
+	return "bad tx: " + e.msg
+}
+
+func (e txRejectedError) Error() string {
+	return "tx rejected: " + e.msg
+}
+
+// IsBadTx returns whether the given error indicates that tx is bad.
 func IsBadTx(err error) bool {
-	_, ok := err.(badTxErr)
+	_, ok := err.(badTxError)
 	return ok
 }
 
-func IsRejectedTx(err error) bool {
-	_, ok := err.(rejectedTxErr)
+// IsTxRejected returns whether the given error indicates tx is rejected.
+func IsTxRejected(err error) bool {
+	_, ok := err.(txRejectedError)
 	return ok
-}
-
-type badTxErr struct {
-	msg string
-}
-
-func (e badTxErr) Error() string {
-	return e.msg
-}
-
-type rejectedTxErr struct {
-	msg string
-}
-
-func (e rejectedTxErr) Error() string {
-	return e.msg
 }
