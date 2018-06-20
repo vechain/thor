@@ -11,7 +11,7 @@ GIT_TAG = $(shell git tag -l --points-at HEAD)
 THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
-PACKAGES = $(shell cd $(SRC_BASE) && go list ./... | grep -v '/vendor/')
+PACKAGES = `cd $(SRC_BASE) && go list ./... | grep -v '/vendor/'`
 
 .PHONY: thor disco all clean test
 
