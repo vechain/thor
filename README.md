@@ -2,28 +2,15 @@
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
+[![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
+
 ## Installation
 
 ### Requirements
 
 Thor requires `Go` 1.10+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install). 
 
-### Dependency management
-
-[dep](https://github.com/golang/dep) is a tool to manage go dependencies:
-
-(*Note that to make `dep` work, you should put Thor's source code at proper position under your `$GOPATH`.*)
-
-```
-dep ensure
-```
-
-There is also an alternative way to update dependencies: `git submodule`, we have uploaded the dependencies to the [repo](https://github.com/vechain/thor-go-vendor), run the following command after you clone thor: 
-
-```
-git submodule init
-git submodule update
-```
 
 ### Getting the source
 
@@ -34,7 +21,28 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
-Choose the way you like to update depencencies: `dep` or `git submodule`
+
+### Dependency management
+
+Simply run:
+```
+make dep
+```
+
+To manually install dependencies, choices are
+
+- [dep](https://github.com/golang/dep), Golang's official dependency management tool 
+
+    ```
+    dep ensure
+    ```
+    (*Note that to make `dep` work, you should put the source code at `$GOPATH/src/github.com/vechain/thor`*)
+
+- git submodule
+
+    ```
+    git submodule update --init
+    ```
 
 ### Building
 
