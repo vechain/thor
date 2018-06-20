@@ -24,3 +24,5 @@ package.json
 
 /.vscode/
 /vendor/
+
+.fake_gopath_suffix
