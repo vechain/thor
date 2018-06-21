@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -130,7 +131,14 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
 
-	return node.New(master, chain, state.NewCreator(mainDB), logDB, txPool, p2pcom.comm).
+	return node.New(
+		master,
+		chain,
+		state.NewCreator(mainDB),
+		logDB,
+		txPool,
+		filepath.Join(instanceDir, "tx.stash"),
+		p2pcom.comm).
 		Run(handleExitSignal())
 }
 
