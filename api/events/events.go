@@ -42,7 +42,7 @@ func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	var filter Filter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return err
+		return utils.BadRequest(err, "body")
 	}
 	query := req.URL.Query()
 	if query.Get("address") != "" {

@@ -189,7 +189,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
 	callBody := &ContractCall{}
 	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
-		return err
+		return utils.BadRequest(err, "body")
 	}
 	h, err := a.getBlockHeader(req.URL.Query().Get("revision"))
 	if err != nil {

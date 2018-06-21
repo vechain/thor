@@ -40,7 +40,7 @@ func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
 	var filter logdb.TransferFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return err
+		return utils.BadRequest(err, "body")
 	}
 	order := req.URL.Query().Get("order")
 	if order != string(logdb.DESC) {
