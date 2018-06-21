@@ -126,11 +126,11 @@ func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var raw *RawTx
 	if err := utils.ParseJSON(req.Body, &raw); err != nil {
-		return err
+		return utils.BadRequest(err, "body")
 	}
 	tx, err := raw.decode()
 	if err != nil {
-		return err
+		return utils.BadRequest(err, "raw")
 	}
 
 	txID, err := t.sendTx(tx)
