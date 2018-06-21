@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -39,12 +40,13 @@ type Node struct {
 	packer *packer.Packer
 	cons   *consensus.Consensus
 
-	master     *Master
-	chain      *chain.Chain
-	logDB      *logdb.LogDB
-	txPool     *txpool.TxPool
-	comm       *comm.Communicator
-	commitLock sync.Mutex
+	master      *Master
+	chain       *chain.Chain
+	logDB       *logdb.LogDB
+	txPool      *txpool.TxPool
+	txStashPath string
+	comm        *comm.Communicator
+	commitLock  sync.Mutex
 }
 
 func New(
@@ -53,16 +55,18 @@ func New(
 	stateCreator *state.Creator,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
+	txStashPath string,
 	comm *comm.Communicator,
 ) *Node {
 	return &Node{
-		packer: packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:   consensus.New(chain, stateCreator),
-		master: master,
-		chain:  chain,
-		logDB:  logDB,
-		txPool: txPool,
-		comm:   comm,
+		packer:      packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
+		cons:        consensus.New(chain, stateCreator),
+		master:      master,
+		chain:       chain,
+		logDB:       logDB,
+		txPool:      txPool,
+		txStashPath: txStashPath,
+		comm:        comm,
 	}
 }
 
@@ -70,6 +74,7 @@ func (n *Node) Run(ctx context.Context) error {
 	n.comm.Sync(n.handleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
+	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
 
 	n.goes.Wait()
@@ -180,6 +185,47 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				}
 			} else {
 				noPeerTimes = 0
+			}
+		}
+	}
+}
+
+func (n *Node) txStashLoop(ctx context.Context) {
+	log.Debug("enter tx stash loop")
+	defer log.Debug("leave tx stash loop")
+
+	db, err := lvldb.New(n.txStashPath, lvldb.Options{})
+	if err != nil {
+		log.Error("create tx stash", "err", err)
+		return
+	}
+	defer db.Close()
+
+	stash := newTxStash(db, 1000)
+
+	{
+		txs := stash.LoadAll()
+		n.txPool.Fill(txs)
+		log.Debug("loaded txs from stash", "count", len(txs))
+	}
+
+	var scope event.SubscriptionScope
+	defer scope.Close()
+
+	txCh := make(chan *txpool.TxEvent)
+	scope.Track(n.txPool.SubscribeTxEvent(txCh))
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case txEv := <-txCh:
+			// stash non-executable txs
+			if !txEv.Executable {
+				if err := stash.Save(txEv.Tx); err != nil {
+					log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
+				} else {
+					log.Debug("stashed tx", "id", txEv.Tx.ID())
+				}
 			}
 		}
 	}
