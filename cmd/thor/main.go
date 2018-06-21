@@ -27,6 +27,7 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -213,7 +214,11 @@ func masterKeyAction(ctx *cli.Context) error {
 			return errors.WithMessage(err, "decrypt")
 		}
 
-		return crypto.SaveECDSA(masterKeyPath(ctx), key.PrivateKey)
+		if err := crypto.SaveECDSA(masterKeyPath(ctx), key.PrivateKey); err != nil {
+			return err
+		}
+		fmt.Println("Master key imported:", thor.Address(key.Address))
+		return nil
 	}
 
 	if hasExportFlag {
