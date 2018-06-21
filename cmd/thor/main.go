@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,6 +35,12 @@ var (
 	gitCommit string
 	gitTag    string
 	log       = log15.New()
+
+	defaultTxPoolOptions = txpool.Options{
+		Limit:           10000,
+		LimitPerAccount: 16,
+		MaxLifetime:     20 * time.Minute,
+	}
 )
 
 func fullVersion() string {
@@ -112,7 +119,7 @@ func defaultAction(ctx *cli.Context) error {
 	chain := initChain(gene, mainDB, logDB)
 	master := loadNodeMaster(ctx)
 
-	txPool := txpool.New(chain, state.NewCreator(mainDB))
+	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := startP2PComm(ctx, chain, txPool, instanceDir)
@@ -152,7 +159,7 @@ func soloAction(ctx *cli.Context) error {
 
 	chain := initChain(gene, mainDB, logDB)
 
-	txPool := txpool.New(chain, state.NewCreator(mainDB))
+	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))

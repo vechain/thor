@@ -7,32 +7,35 @@ package comm
 
 import (
 	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
 
 func (c *Communicator) txsLoop() {
 
-	txCh := make(chan *tx.Transaction)
-	sub := c.txPool.SubscribeNewTransaction(txCh)
+	txEvCh := make(chan *txpool.TxEvent, 10)
+	sub := c.txPool.SubscribeTxEvent(txEvCh)
 	defer sub.Unsubscribe()
 
 	for {
 		select {
 		case <-c.ctx.Done():
 			return
-		case tx := <-txCh:
-			peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
-				return !p.IsTransactionKnown(tx.ID())
-			})
-
-			for _, peer := range peers {
-				peer := peer
-				peer.MarkTransaction(tx.ID())
-				c.goes.Go(func() {
-					if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {
-						peer.logger.Debug("failed to broadcast tx", "err", err)
-					}
+		case txEv := <-txEvCh:
+			if txEv.Executable {
+				tx := txEv.Tx
+				peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+					return !p.IsTransactionKnown(tx.ID())
 				})
+
+				for _, peer := range peers {
+					peer := peer
+					peer.MarkTransaction(tx.ID())
+					c.goes.Go(func() {
+						if err := proto.NotifyNewTx(c.ctx, peer, tx); err != nil {
+							peer.logger.Debug("failed to broadcast tx", "err", err)
+						}
+					})
+				}
 			}
 		}
 	}
