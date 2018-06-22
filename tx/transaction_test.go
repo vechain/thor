@@ -51,6 +51,24 @@ func TestTx(t *testing.T) {
 	)
 }
 
+func TestIntrinsicGas(t *testing.T) {
+	gas, err := tx.IntrinsicGas()
+	assert.Nil(t, err)
+	assert.Equal(t, thor.TxGas+thor.ClauseGas, gas)
+
+	gas, err = tx.IntrinsicGas(tx.NewClause(&thor.Address{}))
+	assert.Nil(t, err)
+	assert.Equal(t, thor.TxGas+thor.ClauseGas, gas)
+
+	gas, err = tx.IntrinsicGas(tx.NewClause(nil))
+	assert.Nil(t, err)
+	assert.Equal(t, thor.TxGas+thor.ClauseGasContractCreation, gas)
+
+	gas, err = tx.IntrinsicGas(tx.NewClause(&thor.Address{}), tx.NewClause(&thor.Address{}))
+	assert.Nil(t, err)
+	assert.Equal(t, thor.TxGas+thor.ClauseGas*2, gas)
+}
+
 func BenchmarkTxMining(b *testing.B) {
 	tx := new(tx.Builder).Build()
 	signer := thor.BytesToAddress([]byte("acc1"))

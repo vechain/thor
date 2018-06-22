@@ -269,7 +269,7 @@ func (t *Transaction) IntrinsicGas() (uint64, error) {
 		return cached.(uint64), nil
 	}
 
-	gas, err := IntrinsicGas(t.body.Clauses)
+	gas, err := IntrinsicGas(t.body.Clauses...)
 	if err != nil {
 		return 0, err
 	}
@@ -369,7 +369,7 @@ func (t *Transaction) String() string {
 }
 
 // IntrinsicGas calculate intrinsic gas cost for tx with such clauses.
-func IntrinsicGas(clauses []*Clause) (uint64, error) {
+func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 	if len(clauses) == 0 {
 		return thor.TxGas + thor.ClauseGas, nil
 	}
