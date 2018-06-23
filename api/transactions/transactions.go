@@ -7,9 +7,7 @@ package transactions
 
 import (
 	"errors"
-	"math"
 	"net/http"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -154,7 +152,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	h, err := t.getBlockHeader(req.URL.Query().Get("revision"))
+	h, err := t.getBlockHeader(req.URL.Query().Get("head"))
 	if err != nil {
 		return err
 	} else if h == nil {
@@ -185,7 +183,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	if err != nil {
 		return utils.BadRequest(err, "id")
 	}
-	h, err := t.getBlockHeader(req.URL.Query().Get("revision"))
+	h, err := t.getBlockHeader(req.URL.Query().Get("head"))
 	if err != nil {
 		return err
 	} else if h == nil {
@@ -198,27 +196,13 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	return utils.WriteJSON(w, receipt)
 }
 
-func (t *Transactions) getBlockHeader(revision string) (*block.Header, error) {
-	if revision == "" || revision == "best" {
+func (t *Transactions) getBlockHeader(head string) (*block.Header, error) {
+	if head == "" {
 		return t.chain.BestBlock().Header(), nil
 	}
-	blkID, err := thor.ParseBytes32(revision)
+	blkID, err := thor.ParseBytes32(head)
 	if err != nil {
-		n, err := strconv.ParseUint(revision, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		if n > math.MaxUint32 {
-			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
-		}
-		b, err := t.chain.GetTrunkBlock(uint32(n))
-		if err != nil {
-			if t.chain.IsNotFound(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		return b.Header(), nil
+		return nil, utils.BadRequest(err, "head")
 	}
 	b, err := t.chain.GetBlock(blkID)
 	if err != nil {
@@ -236,8 +220,8 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
 
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
-	sub.Path("/{id}").Methods("GET").Queries("revision", "{revision}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
+	sub.Path("/{id}").Methods("GET").Queries("head", "{head}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
-	sub.Path("/{id}/receipt").Methods("GET").Queries("revision", "{revision}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
+	sub.Path("/{id}/receipt").Methods("GET").Queries("head", "{head}").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }
