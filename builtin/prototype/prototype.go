@@ -8,6 +8,7 @@ package prototype
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -22,12 +23,13 @@ func New(addr thor.Address, state *state.State) *Prototype {
 }
 
 func (p *Prototype) Bind(self thor.Address) *Binding {
-	return &Binding{p, self}
+	return &Binding{p.addr, p.state, self}
 }
 
 type Binding struct {
-	prototype *Prototype
-	self      thor.Address
+	addr  thor.Address
+	state *state.State
+	self  thor.Address
 }
 
 func (b *Binding) userKey(user thor.Address) thor.Bytes32 {
@@ -45,79 +47,111 @@ func (b *Binding) curSponsorKey() thor.Bytes32 {
 	return thor.Blake2b(b.self.Bytes(), []byte("cur-sponsor"))
 }
 
-func (b *Binding) getStorage(key thor.Bytes32, val interface{}) {
-	b.prototype.state.GetStructuredStorage(b.prototype.addr, key, val)
-}
-
-func (b *Binding) setStorage(key thor.Bytes32, val interface{}) {
-	b.prototype.state.SetStructuredStorage(b.prototype.addr, key, val)
-}
-
-func (b *Binding) IsUser(user thor.Address) bool {
+func (b *Binding) getUserObject(user thor.Address) *userObject {
 	var uo userObject
-	b.getStorage(b.userKey(user), &uo)
-	return !uo.IsEmpty()
+	b.state.DecodeStorage(b.addr, b.userKey(user), func(raw []byte) error {
+		if len(raw) == 0 {
+			uo = userObject{&big.Int{}, 0}
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &uo)
+	})
+	return &uo
 }
 
-func (b *Binding) AddUser(user thor.Address, blockTime uint64) {
-	b.setStorage(b.userKey(user), &userObject{
-		&big.Int{},
-		blockTime,
+func (b *Binding) setUserObject(user thor.Address, uo *userObject) {
+	b.state.EncodeStorage(b.addr, b.userKey(user), func() ([]byte, error) {
+		if uo.IsEmpty() {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(uo)
 	})
 }
 
+func (b *Binding) getUserPlan() *userPlan {
+	var up userPlan
+	b.state.DecodeStorage(b.addr, b.userPlanKey(), func(raw []byte) error {
+		if len(raw) == 0 {
+			up = userPlan{&big.Int{}, &big.Int{}}
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &up)
+	})
+	return &up
+}
+
+func (b *Binding) setUserPlan(up *userPlan) {
+	b.state.EncodeStorage(b.addr, b.userPlanKey(), func() ([]byte, error) {
+		if up.IsEmpty() {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(up)
+	})
+}
+
+func (b *Binding) IsUser(user thor.Address) bool {
+	return !b.getUserObject(user).IsEmpty()
+}
+
+func (b *Binding) AddUser(user thor.Address, blockTime uint64) {
+	b.setUserObject(user, &userObject{&big.Int{}, blockTime})
+}
+
 func (b *Binding) RemoveUser(user thor.Address) {
-	userKey := b.userKey(user)
-	b.setStorage(userKey, uint8(0))
+	// set to empty
+	b.setUserObject(user, &userObject{&big.Int{}, 0})
 }
 
 func (b *Binding) UserCredit(user thor.Address, blockTime uint64) *big.Int {
-	var uo userObject
-	b.getStorage(b.userKey(user), &uo)
+	uo := b.getUserObject(user)
 	if uo.IsEmpty() {
 		return &big.Int{}
 	}
-	var up userPlan
-	b.getStorage(b.userPlanKey(), &up)
-	return uo.Credit(&up, blockTime)
+	return uo.Credit(b.getUserPlan(), blockTime)
 }
 
 func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockTime uint64) {
-	var up userPlan
-	b.getStorage(b.userPlanKey(), &up)
+	up := b.getUserPlan()
 	used := new(big.Int).Sub(up.Credit, credit)
 	if used.Sign() < 0 {
 		used = &big.Int{}
 	}
-	b.setStorage(b.userKey(user), &userObject{used, blockTime})
+	b.setUserObject(user, &userObject{used, blockTime})
 }
 
 func (b *Binding) UserPlan() (credit, recoveryRate *big.Int) {
-	var up userPlan
-	b.getStorage(b.userPlanKey(), &up)
+	up := b.getUserPlan()
 	return up.Credit, up.RecoveryRate
 }
 
 func (b *Binding) SetUserPlan(credit, recoveryRate *big.Int) {
-	b.setStorage(b.userPlanKey(), &userPlan{credit, recoveryRate})
+	b.setUserPlan(&userPlan{credit, recoveryRate})
 }
 
 func (b *Binding) Sponsor(sponsor thor.Address, yesOrNo bool) {
-	sponsorKey := b.sponsorKey(sponsor)
-	b.setStorage(sponsorKey, yesOrNo)
+	b.state.EncodeStorage(b.addr, b.sponsorKey(sponsor), func() ([]byte, error) {
+		if !yesOrNo {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(&yesOrNo)
+	})
 }
 
 func (b *Binding) IsSponsor(sponsor thor.Address) bool {
 	var yesOrNo bool
-	b.getStorage(b.sponsorKey(sponsor), &yesOrNo)
+	b.state.DecodeStorage(b.addr, b.sponsorKey(sponsor), func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &yesOrNo)
+	})
 	return yesOrNo
 }
 
 func (b *Binding) SelectSponsor(sponsor thor.Address) {
-	b.setStorage(b.curSponsorKey(), sponsor)
+	b.state.SetStorage(b.addr, b.curSponsorKey(), thor.BytesToBytes32(sponsor.Bytes()))
 }
 
-func (b *Binding) CurrentSponsor() (addr thor.Address) {
-	b.getStorage(b.curSponsorKey(), &addr)
-	return
+func (b *Binding) CurrentSponsor() thor.Address {
+	return thor.BytesToAddress(b.state.GetStorage(b.addr, b.curSponsorKey()).Bytes())
 }
