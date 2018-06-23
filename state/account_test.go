@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
@@ -78,9 +79,9 @@ func TestStorageTrie(t *testing.T) {
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
-		[]interface{}{[]byte(nil), nil})
+		[]interface{}{rlp.RawValue(nil), nil})
 
-	value := []byte("value")
+	value := rlp.RawValue("value")
 	saveStorage(trie, key, value)
 	assert.Equal(t,
 		M(loadStorage(trie, key)),

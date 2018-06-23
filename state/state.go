@@ -6,10 +6,12 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
@@ -90,7 +92,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool) {
 		v, err := s.getCachedObject(k.addr).GetStorage(k.key)
 		if err != nil {
 			s.setError(err)
-			return []byte(nil), true
+			return rlp.RawValue(nil), true
 		}
 		return v, true
 	}
@@ -121,9 +123,9 @@ func (s *State) changes() map[thor.Address]*changedObject {
 		case storageKey:
 			o := getOrNewObj(key.addr)
 			if o.storage == nil {
-				o.storage = make(map[thor.Bytes32][]byte)
+				o.storage = make(map[thor.Bytes32]rlp.RawValue)
 			}
-			o.storage[key.key] = v.([]byte)
+			o.storage[key.key] = v.(rlp.RawValue)
 		}
 		// abort if error occurred
 		return s.err == nil
@@ -253,77 +255,63 @@ func (s *State) SetMaster(addr thor.Address, master thor.Address) {
 }
 
 // GetStorage returns storage value for the given address and key.
-func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) (value thor.Bytes32) {
-	s.GetStructuredStorage(addr, key, &value)
-	return
+func (s *State) GetStorage(addr thor.Address, key thor.Bytes32) thor.Bytes32 {
+	raw := s.GetRawStorage(addr, key)
+	if len(raw) == 0 {
+		return thor.Bytes32{}
+	}
+	kind, content, _, err := rlp.Split(raw)
+	if err != nil {
+		s.setError(err)
+		return thor.Bytes32{}
+	}
+	if kind == rlp.List {
+		// special case for rlp list, it should be customized storage value
+		// return hash of raw data
+		return thor.Blake2b(raw)
+	}
+	return thor.BytesToBytes32(content)
 }
 
 // SetStorage set storage value for the given address and key.
 func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
-	s.SetStructuredStorage(addr, key, value)
-}
-
-// GetStructuredStorage get and decode raw storage for given address and key.
-// 'val' should either implements StorageDecoder, or int type of
-// [
-//   *thor.Bytes32, *thor.Address,
-//   *string
-//   *uintx
-//   *big.Int
-// ]
-func (s *State) GetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
-	data := s.GetRawStorage(addr, key)
-	if dec, ok := val.(StorageDecoder); ok {
-		if err := dec.Decode(data); err != nil {
-			panic(err)
-		}
+	if value.IsZero() {
+		s.SetRawStorage(addr, key, nil)
 		return
 	}
-	if err := decodeStorage(data, val); err != nil {
-		panic(err)
-	}
+	v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+	s.SetRawStorage(addr, key, v)
 }
 
-// SetStructuredStorage encode val and set as raw storage value for given address and key.
-// 'val' should ether implements StorageEncoder, or in type of
-// [
-//	  thor.Bytes32, thor.Address,
-//    string
-//    uintx
-//    *big.Int
-// ]
-// If 'val' is nil, the storage is cleared.
-func (s *State) SetStructuredStorage(addr thor.Address, key thor.Bytes32, val interface{}) {
-	if val == nil {
-		s.setRawStorage(addr, key, nil)
-		return
-	}
-	if enc, ok := val.(StorageEncoder); ok {
-		data, err := enc.Encode()
-		if err != nil {
-			panic(err)
-		}
-		s.setRawStorage(addr, key, data)
-		return
-	}
-
-	data, err := encodeStorage(val)
-	if err != nil {
-		panic(err)
-	}
-	s.setRawStorage(addr, key, data)
-}
-
-// GetRawStorage returns raw storage in byte slice.
-func (s *State) GetRawStorage(addr thor.Address, key thor.Bytes32) []byte {
+// GetRawStorage returns storage value in rlp raw for given address and key.
+func (s *State) GetRawStorage(addr thor.Address, key thor.Bytes32) rlp.RawValue {
 	data, _ := s.sm.Get(storageKey{addr, key})
-	return data.([]byte)
+	return data.(rlp.RawValue)
 }
 
-// setRawStorage set raw storage in byte slice.
-// The value MUST be rlp encoded.
-func (s *State) setRawStorage(addr thor.Address, key thor.Bytes32, value []byte) {
-	s.sm.Put(storageKey{addr, key}, value)
+// SetRawStorage set storage value in rlp raw.
+func (s *State) SetRawStorage(addr thor.Address, key thor.Bytes32, raw rlp.RawValue) {
+	s.sm.Put(storageKey{addr, key}, raw)
+}
+
+// EncodeStorage set storage value encoded by given enc method.
+// Error returned by end will be absorbed by State instance.
+func (s *State) EncodeStorage(addr thor.Address, key thor.Bytes32, enc func() ([]byte, error)) {
+	raw, err := enc()
+	if err != nil {
+		s.setError(err)
+		return
+	}
+	s.SetRawStorage(addr, key, raw)
+}
+
+// DecodeStorage get and decode storage value.
+// Error returned by dec will be absorbed by State instance.
+func (s *State) DecodeStorage(addr thor.Address, key thor.Bytes32, dec func([]byte) error) {
+	raw := s.GetRawStorage(addr, key)
+	if err := dec(raw); err != nil {
+		s.setError(err)
+	}
 }
 
 // GetCode returns code for the given address.
@@ -395,7 +383,7 @@ type (
 	codeKey       thor.Address
 	changedObject struct {
 		data    Account
-		storage map[thor.Bytes32][]byte
+		storage map[thor.Bytes32]rlp.RawValue
 		code    []byte
 	}
 )

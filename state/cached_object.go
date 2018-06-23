@@ -6,6 +6,7 @@
 package state
 
 import (
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 )
@@ -18,7 +19,7 @@ type cachedObject struct {
 	cache struct {
 		code        []byte
 		storageTrie trieReader
-		storage     map[thor.Bytes32][]byte
+		storage     map[thor.Bytes32]rlp.RawValue
 	}
 }
 
@@ -42,11 +43,11 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Bytes32) ([]byte, error) {
+func (co *cachedObject) GetStorage(key thor.Bytes32) (rlp.RawValue, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage == nil {
-		cache.storage = make(map[thor.Bytes32][]byte)
+		cache.storage = make(map[thor.Bytes32]rlp.RawValue)
 	} else {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil

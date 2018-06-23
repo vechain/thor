@@ -92,13 +92,13 @@ func saveAccount(trie trieWriter, addr thor.Address, a *Account) error {
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie trieReader, key thor.Bytes32) ([]byte, error) {
+func loadStorage(trie trieReader, key thor.Bytes32) (rlp.RawValue, error) {
 	return trie.TryGet(key[:])
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
-func saveStorage(trie trieWriter, key thor.Bytes32, data []byte) error {
+func saveStorage(trie trieWriter, key thor.Bytes32, data rlp.RawValue) error {
 	if len(data) == 0 {
 		// release storage if data is zero length
 		return trie.TryDelete(key[:])
