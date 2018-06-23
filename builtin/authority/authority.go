@@ -8,6 +8,7 @@ package authority
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -28,21 +29,48 @@ func New(addr thor.Address, state *state.State) *Authority {
 	return &Authority{addr, state}
 }
 
-func (a *Authority) getStorage(key thor.Bytes32, val interface{}) {
-	a.state.GetStructuredStorage(a.addr, key, val)
+func (a *Authority) getEntry(addr thor.Address) *entry {
+	var entry entry
+	a.state.DecodeStorage(a.addr, thor.BytesToBytes32(addr[:]), func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &entry)
+	})
+	return &entry
 }
 
-func (a *Authority) setStorage(key thor.Bytes32, val interface{}) {
-	a.state.SetStructuredStorage(a.addr, key, val)
+func (a *Authority) setEntry(addr thor.Address, entry *entry) {
+	a.state.EncodeStorage(a.addr, thor.BytesToBytes32(addr[:]), func() ([]byte, error) {
+		if entry.IsEmpty() {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(entry)
+	})
+}
+
+func (a *Authority) getAddressPtr(key thor.Bytes32) (ptr *thor.Address) {
+	a.state.DecodeStorage(a.addr, key, func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &ptr)
+	})
+	return
+}
+
+func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) {
+	a.state.EncodeStorage(a.addr, key, func() ([]byte, error) {
+		if addr == nil {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(addr)
+	})
 }
 
 // Get get candidate by signer address.
 func (a *Authority) Get(signer thor.Address) (*Candidate, bool) {
-	var entry entry
-	a.getStorage(thor.BytesToBytes32(signer[:]), &entry)
-	if entry.IsEmpty() {
-		return nil, false
-	}
+	entry := a.getEntry(signer)
 	return &Candidate{
 		Signer:   signer,
 		Endorsor: entry.Endorsor,
@@ -52,20 +80,17 @@ func (a *Authority) Get(signer thor.Address) (*Candidate, bool) {
 }
 
 func (a *Authority) getAndSet(signer thor.Address, f func(entry *entry) bool) bool {
-	key := thor.BytesToBytes32(signer[:])
-	var entry entry
-	a.getStorage(key, &entry)
-	if !f(&entry) {
+	entry := a.getEntry(signer)
+	if !f(entry) {
 		return false
 	}
-	a.setStorage(key, &entry)
+	a.setEntry(signer, entry)
 	return true
 }
 
 // Add add a new candidate.
 func (a *Authority) Add(candidate *Candidate) bool {
-	var tail addressPtr
-	a.getStorage(tailKey, &tail)
+	tailPtr := a.getAddressPtr(tailKey)
 
 	if !a.getAndSet(candidate.Signer, func(entry *entry) bool {
 		if !entry.IsEmpty() {
@@ -74,17 +99,17 @@ func (a *Authority) Add(candidate *Candidate) bool {
 		entry.Endorsor = candidate.Endorsor
 		entry.Identity = candidate.Identity
 		entry.Active = candidate.Active
-		entry.Prev = tail.Address
+		entry.Prev = tailPtr
 		return true
 	}) {
 		return false
 	}
+	a.setAddressPtr(tailKey, &candidate.Signer)
 
-	a.setStorage(tailKey, &addressPtr{&candidate.Signer})
-	if tail.Address == nil {
-		a.setStorage(headKey, &addressPtr{&candidate.Signer})
+	if tailPtr == nil {
+		a.setAddressPtr(headKey, &candidate.Signer)
 	} else {
-		a.getAndSet(*tail.Address, func(entry *entry) bool {
+		a.getAndSet(*tailPtr, func(entry *entry) bool {
 			entry.Next = &candidate.Signer
 			return true
 		})
@@ -99,7 +124,7 @@ func (a *Authority) Remove(signer thor.Address) bool {
 			return false
 		}
 		if ent.Prev == nil {
-			a.setStorage(headKey, &addressPtr{ent.Next})
+			a.setAddressPtr(headKey, ent.Next)
 		} else {
 			a.getAndSet(*ent.Prev, func(prev *entry) bool {
 				prev.Next = ent.Next
@@ -108,7 +133,7 @@ func (a *Authority) Remove(signer thor.Address) bool {
 		}
 
 		if ent.Next == nil {
-			a.setStorage(tailKey, &addressPtr{ent.Prev})
+			a.setAddressPtr(tailKey, ent.Prev)
 		} else {
 			a.getAndSet(*ent.Next, func(next *entry) bool {
 				next.Prev = ent.Prev
@@ -134,35 +159,29 @@ func (a *Authority) Update(signer thor.Address, active bool) bool {
 
 // Candidates picks a batch of candidates up to limit, that satisfy given endorsement.
 func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate {
-	var ptr addressPtr
-	a.getStorage(headKey, &ptr)
+	ptr := a.getAddressPtr(headKey)
 	candidates := make([]*Candidate, 0, limit)
-	for ptr.Address != nil && uint64(len(candidates)) < limit {
-		var entry entry
-		a.getStorage(thor.BytesToBytes32(ptr.Address[:]), &entry)
+	for ptr != nil && uint64(len(candidates)) < limit {
+		entry := a.getEntry(*ptr)
 		if bal := a.state.GetBalance(entry.Endorsor); bal.Cmp(endorsement) >= 0 {
 			candidates = append(candidates, &Candidate{
-				Signer:   *ptr.Address,
+				Signer:   *ptr,
 				Endorsor: entry.Endorsor,
 				Identity: entry.Identity,
 				Active:   entry.Active,
 			})
 		}
-		ptr.Address = entry.Next
+		ptr = entry.Next
 	}
 	return candidates
 }
 
 // First returns signer address of first entry.
 func (a *Authority) First() *thor.Address {
-	var ptr addressPtr
-	a.getStorage(headKey, &ptr)
-	return ptr.Address
+	return a.getAddressPtr(headKey)
 }
 
 // Next returns address of next signer after given signer.
 func (a *Authority) Next(signer thor.Address) *thor.Address {
-	var entry entry
-	a.getStorage(thor.BytesToBytes32(signer[:]), &entry)
-	return entry.Next
+	return a.getEntry(signer).Next
 }

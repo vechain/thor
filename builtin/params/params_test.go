@@ -25,4 +25,6 @@ func TestParamsGetSet(t *testing.T) {
 
 	getv := p.Get(key)
 	assert.Equal(t, setv, getv)
+
+	assert.Nil(t, st.Err())
 }

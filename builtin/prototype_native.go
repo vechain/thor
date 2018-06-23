@@ -9,25 +9,12 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/xenv"
 )
 
 func init() {
-
-	decodeBytes32 := func(data []byte) thor.Bytes32 {
-		if len(data) == 0 {
-			return thor.Bytes32{}
-		}
-		var b []byte
-
-		if err := rlp.DecodeBytes(data, &b); err != nil {
-			return thor.Bytes32{}
-		}
-		return thor.BytesToBytes32(b)
-	}
 
 	eventLibABI := Prototype.EventABI
 
@@ -146,8 +133,8 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			data := env.State().GetRawStorage(thor.Address(args.Self), args.Key)
-			return []interface{}{decodeBytes32(data)}
+			storage := env.State().GetStorage(thor.Address(args.Self), args.Key)
+			return []interface{}{storage}
 		}},
 		{"native_userPlan", func(env *xenv.Environment) []interface{} {
 			var self common.Address

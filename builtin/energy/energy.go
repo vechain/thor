@@ -8,6 +8,7 @@ package energy
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
@@ -29,46 +30,69 @@ func New(addr thor.Address, state *state.State, blockTime uint64) *Energy {
 	return &Energy{addr, state, blockTime}
 }
 
-func (e *Energy) getStorage(key thor.Bytes32, val interface{}) {
-	e.state.GetStructuredStorage(e.addr, key, val)
+func (e *Energy) getInitialSupply() initialSupply {
+	var init initialSupply
+	e.state.DecodeStorage(e.addr, initialSupplyKey, func(raw []byte) error {
+		if len(raw) == 0 {
+			init = initialSupply{&big.Int{}, &big.Int{}, 0}
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &init)
+	})
+	return init
 }
 
-func (e *Energy) setStorage(key thor.Bytes32, val interface{}) {
-	e.state.SetStructuredStorage(e.addr, key, val)
+func (e *Energy) getTotalAddSub() totalAddSub {
+	var total totalAddSub
+	e.state.DecodeStorage(e.addr, totalAddSubKey, func(raw []byte) error {
+		if len(raw) == 0 {
+			total = totalAddSub{&big.Int{}, &big.Int{}}
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &total)
+	})
+	return total
+}
+func (e *Energy) setTotalAddSub(total totalAddSub) {
+	e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
+		if total.TotalAdd.Sign() == 0 && total.TotalSub.Sign() == 0 {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(&total)
+	})
 }
 
 // SetInitialSupply set initial token and energy supply, to help calculating total energy supply.
 func (e *Energy) SetInitialSupply(token *big.Int, energy *big.Int) {
-	e.setStorage(initialSupplyKey, &initialSupply{
-		Token:     token,
-		Energy:    energy,
-		BlockTime: e.blockTime,
+	e.state.EncodeStorage(e.addr, initialSupplyKey, func() ([]byte, error) {
+		return rlp.EncodeToBytes(&initialSupply{
+			Token:     token,
+			Energy:    energy,
+			BlockTime: e.blockTime,
+		})
 	})
 }
 
 // TokenTotalSupply returns total supply of VET.
 func (e *Energy) TokenTotalSupply() *big.Int {
-	// that's totalGrown + totalAdd - totalSub
-	var init initialSupply
-	e.getStorage(initialSupplyKey, &init)
-
-	return init.Token
+	return e.getInitialSupply().Token
 }
 
 // TotalSupply returns total supply of energy.
 func (e *Energy) TotalSupply() *big.Int {
-	var init initialSupply
-	e.getStorage(initialSupplyKey, &init)
+	initialSupply := e.getInitialSupply()
 
 	// calc grown energy for total token supply
-	acc := state.Account{Balance: init.Token, Energy: init.Energy, BlockTime: init.BlockTime}
+	acc := state.Account{
+		Balance:   initialSupply.Token,
+		Energy:    initialSupply.Energy,
+		BlockTime: initialSupply.BlockTime}
 	return acc.CalcEnergy(e.blockTime)
 }
 
 // TotalBurned returns energy totally burned.
 func (e *Energy) TotalBurned() *big.Int {
-	var total totalAddSub
-	e.getStorage(totalAddSubKey, &total)
+	total := e.getTotalAddSub()
 	return new(big.Int).Sub(total.TotalSub, total.TotalAdd)
 }
 
@@ -81,12 +105,9 @@ func (e *Energy) Get(addr thor.Address) *big.Int {
 func (e *Energy) Add(addr thor.Address, amount *big.Int) {
 	eng := e.state.GetEnergy(addr, e.blockTime)
 	if amount.Sign() != 0 {
-		var total totalAddSub
-		e.getStorage(totalAddSubKey, &total)
-		e.setStorage(totalAddSubKey, &totalAddSub{
-			TotalAdd: new(big.Int).Add(total.TotalAdd, amount),
-			TotalSub: total.TotalSub,
-		})
+		total := e.getTotalAddSub()
+		total.TotalAdd = new(big.Int).Add(total.TotalAdd, amount)
+		e.setTotalAddSub(total)
 
 		e.state.SetEnergy(addr, new(big.Int).Add(eng, amount), e.blockTime)
 	} else {
@@ -102,13 +123,9 @@ func (e *Energy) Sub(addr thor.Address, amount *big.Int) bool {
 		if eng.Cmp(amount) < 0 {
 			return false
 		}
-
-		var total totalAddSub
-		e.getStorage(totalAddSubKey, &total)
-		e.setStorage(totalAddSubKey, &totalAddSub{
-			TotalAdd: total.TotalAdd,
-			TotalSub: new(big.Int).Add(total.TotalSub, amount),
-		})
+		total := e.getTotalAddSub()
+		total.TotalSub = new(big.Int).Add(total.TotalSub, amount)
+		e.setTotalAddSub(total)
 
 		e.state.SetEnergy(addr, new(big.Int).Sub(eng, amount), e.blockTime)
 	} else {

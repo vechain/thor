@@ -10,7 +10,6 @@ import (
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/builtin/energy"
-	"github.com/vechain/thor/builtin/extension"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
 	"github.com/vechain/thor/state"
@@ -58,10 +57,6 @@ func (e *energyContract) Native(state *state.State, blockTime uint64) *energy.En
 
 func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 	return prototype.New(p.Address, state)
-}
-
-func (e *extensionContract) Native(state *state.State) *extension.Extension {
-	return extension.New(e.Address, state)
 }
 
 func mustLoadPrototypeEventABI() *abi.ABI {

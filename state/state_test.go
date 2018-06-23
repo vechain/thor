@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
@@ -120,4 +121,31 @@ func TestEnergy(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
+}
+
+func TestStorage(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	st, _ := New(thor.Bytes32{}, kv)
+
+	addr := thor.BytesToAddress([]byte("addr"))
+	key := thor.BytesToBytes32([]byte("key"))
+
+	st.SetStorage(addr, key, thor.BytesToBytes32([]byte{1}))
+	data, _ := rlp.EncodeToBytes([]byte{1})
+	assert.Equal(t, rlp.RawValue(data), st.GetRawStorage(addr, key))
+
+	st.SetRawStorage(addr, key, data)
+	assert.Equal(t, thor.BytesToBytes32([]byte{1}), st.GetStorage(addr, key))
+
+	st.SetStorage(addr, key, thor.Bytes32{})
+	assert.Zero(t, len(st.GetRawStorage(addr, key)))
+
+	v := struct {
+		V1 uint
+	}{313123}
+
+	data, _ = rlp.EncodeToBytes(&v)
+	st.SetRawStorage(addr, key, data)
+
+	assert.Equal(t, thor.Blake2b(data), st.GetStorage(addr, key))
 }

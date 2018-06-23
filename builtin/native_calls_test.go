@@ -708,8 +708,9 @@ func TestPrototypeNative(t *testing.T) {
 		ShouldOutput(thor.Bytes32{}).
 		Assert(t)
 
+	// should be hash of rlp raw
 	test.Case("storageFor", builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan"))).
-		ShouldOutput(thor.Bytes32{}).
+		ShouldOutput(st.GetStorage(builtin.Prototype.Address, thor.Blake2b(contract.Bytes(), []byte("user-plan")))).
 		Assert(t)
 
 	test.Case("balance", acc1, big.NewInt(0)).

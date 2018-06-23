@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/thor"
@@ -23,7 +24,7 @@ func TestCachedObject(t *testing.T) {
 	stgTrie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
 	storages := []struct {
 		k thor.Bytes32
-		v []byte
+		v rlp.RawValue
 	}{
 		{thor.BytesToBytes32([]byte("key1")), []byte("value1")},
 		{thor.BytesToBytes32([]byte("key2")), []byte("value2")},

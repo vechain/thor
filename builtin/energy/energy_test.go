@@ -36,6 +36,8 @@ func TestEnergy(t *testing.T) {
 	for _, tt := range tests {
 		assert.Equal(t, tt.expected, tt.ret)
 	}
+
+	assert.Nil(t, st.Err())
 }
 
 func TestEnergyGrowth(t *testing.T) {
@@ -58,5 +60,7 @@ func TestEnergyGrowth(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
+
+	assert.Nil(t, st.Err())
 
 }
