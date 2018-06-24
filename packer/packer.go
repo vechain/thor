@@ -21,22 +21,23 @@ import (
 type Packer struct {
 	chain          *chain.Chain
 	stateCreator   *state.Creator
-	proposer       thor.Address
-	beneficiary    thor.Address
+	nodeMaster     thor.Address
+	beneficiary    *thor.Address
 	targetGasLimit uint64
 }
 
 // New create a new Packer instance.
+// The beneficiary is optional, it defaults to endorsor if not set.
 func New(
 	chain *chain.Chain,
 	stateCreator *state.Creator,
-	proposer thor.Address,
-	beneficiary thor.Address) *Packer {
+	nodeMaster thor.Address,
+	beneficiary *thor.Address) *Packer {
 
 	return &Packer{
 		chain,
 		stateCreator,
-		proposer,
+		nodeMaster,
 		beneficiary,
 		0,
 	}
@@ -48,12 +49,23 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	if err != nil {
 		return nil, errors.Wrap(err, "state")
 	}
-	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
-	authority := builtin.Authority.Native(state)
 
-	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
-	proposers := make([]poa.Proposer, 0, len(candidates))
+	var (
+		endorsement = builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+		authority   = builtin.Authority.Native(state)
+		candidates  = authority.Candidates(endorsement, thor.MaxBlockProposers)
+		proposers   = make([]poa.Proposer, 0, len(candidates))
+		beneficiary thor.Address
+	)
+	if p.beneficiary != nil {
+		beneficiary = *p.beneficiary
+	}
+
 	for _, c := range candidates {
+		if p.beneficiary == nil && c.Signer == p.nodeMaster {
+			// not beneficiary not set, set it to endorsor
+			beneficiary = c.Endorsor
+		}
 		proposers = append(proposers, poa.Proposer{
 			Address: c.Signer,
 			Active:  c.Active,
@@ -61,7 +73,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	// calc the time when it's turn to produce block
-	sched, err := poa.NewScheduler(p.proposer, proposers, parent.Number(), parent.Timestamp())
+	sched, err := poa.NewScheduler(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +89,8 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		p.chain.NewSeeker(parent.ID()),
 		state,
 		&xenv.BlockContext{
-			Beneficiary: p.beneficiary,
-			Signer:      p.proposer,
+			Beneficiary: beneficiary,
+			Signer:      p.nodeMaster,
 			Number:      parent.Number() + 1,
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.GasLimit()),
@@ -101,8 +113,8 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 		p.chain.NewSeeker(parent.ID()),
 		state,
 		&xenv.BlockContext{
-			Beneficiary: p.beneficiary,
-			Signer:      p.proposer,
+			Beneficiary: p.nodeMaster,
+			Signer:      p.nodeMaster,
 			Number:      parent.Number() + 1,
 			Time:        targetTime,
 			GasLimit:    p.gasLimit(parent.GasLimit()),
