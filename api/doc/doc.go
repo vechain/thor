@@ -5,4 +5,4 @@
 
 package doc
 
-//go:generate go-bindata -nometadata -pkg doc -o bindata.go swagger-ui/... thor.yaml
+//go:generate go-bindata -nometadata -ignore=.DS_Store -pkg doc -o bindata.go swagger-ui/... thor.yaml

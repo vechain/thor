@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
-  version: 0.1.0
-  title: VeChain Thor API
+  version: 1.0.0
+  title: Thorest
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
@@ -183,7 +183,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
       - $ref: '#/components/parameters/RawInQuery'
-      - $ref: '#/components/parameters/RevisionInQuery'
+      - $ref: '#/components/parameters/HeadInQuery'
     get:
       tags:
         - Transactions
@@ -202,7 +202,7 @@ paths:
   '/transactions/{id}/receipt':
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
-      - $ref: '#/components/parameters/RevisionInQuery'
+      - $ref: '#/components/parameters/HeadInQuery'
     get:
       tags:
         - Transactions
@@ -753,6 +753,12 @@ components:
       schema:
         type: string
       example: best
+    HeadInQuery:
+      name: head
+      in: query
+      description: ID of head block. best block is assumed if omitted
+      schema:
+        type: string
     StorageKeyInPath:
       in: path
       description: the key(position) to access account storage
