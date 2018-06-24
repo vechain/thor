@@ -45,7 +45,7 @@ func New(
 	return &Solo{
 		chain:    chain,
 		txPool:   txPool,
-		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, genesis.DevAccounts()[0].Address),
+		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address),
 		logDB:    logDB,
 		onDemand: onDemand,
 	}

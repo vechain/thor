@@ -14,7 +14,7 @@ import (
 
 type Master struct {
 	PrivateKey  *ecdsa.PrivateKey
-	Beneficiary thor.Address
+	Beneficiary *thor.Address
 }
 
 func (m *Master) Address() thor.Address {

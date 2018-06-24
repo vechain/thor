@@ -153,25 +153,25 @@ func masterKeyPath(ctx *cli.Context) string {
 	return filepath.Join(configDir, "master.key")
 }
 
-func loadNodeMaster(ctx *cli.Context) *node.Master {
-	bene := func(master thor.Address) thor.Address {
-		beneStr := ctx.String(beneficiaryFlag.Name)
-		if beneStr == "" {
-			return master
-		}
-		bene, err := thor.ParseAddress(beneStr)
-		if err != nil {
-			fatal("invalid beneficiary:", err)
-		}
-		return bene
+func beneficiary(ctx *cli.Context) *thor.Address {
+	value := ctx.String(beneficiaryFlag.Name)
+	if value == "" {
+		return nil
 	}
+	addr, err := thor.ParseAddress(value)
+	if err != nil {
+		fatal("invalid beneficiary:", err)
+	}
+	return &addr
+}
 
+func loadNodeMaster(ctx *cli.Context) *node.Master {
 	if ctx.String(networkFlag.Name) == "dev" {
 		i := rand.Intn(len(genesis.DevAccounts()))
 		acc := genesis.DevAccounts()[i]
 		return &node.Master{
 			PrivateKey:  acc.PrivateKey,
-			Beneficiary: bene(acc.Address),
+			Beneficiary: beneficiary(ctx),
 		}
 	}
 	key, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
@@ -179,7 +179,7 @@ func loadNodeMaster(ctx *cli.Context) *node.Master {
 		fatal("load or generate master key:", err)
 	}
 	master := &node.Master{PrivateKey: key}
-	master.Beneficiary = bene(master.Address())
+	master.Beneficiary = beneficiary(ctx)
 	return master
 }
 
@@ -297,7 +297,13 @@ func printStartupMessage(
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
-		master.Address(), master.Beneficiary,
+		master.Address(),
+		func() string {
+			if master.Beneficiary == nil {
+				return "not set, defaults to endorsor"
+			}
+			return master.Beneficiary.String()
+		}(),
 		dataDir,
 		apiURL)
 }

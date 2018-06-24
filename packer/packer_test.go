@@ -83,7 +83,7 @@ func TestP(t *testing.T) {
 
 	for {
 		best := c.BestBlock()
-		p := packer.New(c, stateCreator, a1.Address, a1.Address)
+		p := packer.New(c, stateCreator, a1.Address, &a1.Address)
 		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
