@@ -124,7 +124,7 @@ func (p *TxPool) housekeeping() {
 					p.executables.Store(executables)
 				}
 
-				log.Debug("wash done", ctx)
+				log.Debug("wash done", ctx...)
 			}
 		}
 	}
