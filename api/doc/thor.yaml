@@ -682,7 +682,7 @@ components:
           type: string
         recipient:
           type: string
-        value:
+        amount:
           type: string
         block:
           $ref: '#/components/schemas/BlockContext'
@@ -691,7 +691,7 @@ components:
       example:
         sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        value: '0x9fad'
+        amount: '0x9fad'
         block:
           id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
           number: 1
