@@ -32,10 +32,9 @@ type Server struct {
 
 // New create a p2p server.
 func New(opts *Options) *Server {
-
-	v5nodes := make([]*discv5.Node, 0, len(opts.BootstrapNodes))
-	for _, n := range opts.BootstrapNodes {
-		v5nodes = append(v5nodes, discv5.NewNode(discv5.NodeID(n.ID), n.IP, n.UDP, n.TCP))
+	bootstrapsV5 := make([]*discv5.Node, 0, len(opts.BootstrapNodes))
+	for _, node := range opts.BootstrapNodes {
+		bootstrapsV5 = append(bootstrapsV5, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
 
 	knownNodes := cache.NewPrioCache(5)
@@ -43,6 +42,8 @@ func New(opts *Options) *Server {
 	for _, node := range opts.KnownNodes {
 		knownNodes.Set(node.ID, node, 0)
 		discoveredNodes.Set(node.ID, node)
+
+		bootstrapsV5 = append(bootstrapsV5, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
 
 	return &Server{
@@ -54,7 +55,7 @@ func New(opts *Options) *Server {
 				NoDiscovery:      true,
 				DiscoveryV5:      !opts.NoDiscovery,
 				ListenAddr:       opts.ListenAddr,
-				BootstrapNodesV5: v5nodes,
+				BootstrapNodesV5: bootstrapsV5,
 				NetRestrict:      opts.NetRestrict,
 				NAT:              opts.NAT,
 				NoDial:           opts.NoDial,
