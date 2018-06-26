@@ -88,7 +88,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	proposers := make([]poa.Proposer, 0, len(candidates))
 	for _, c := range candidates {
 		proposers = append(proposers, poa.Proposer{
-			Address: c.Signer,
+			Address: c.NodeMaster,
 			Active:  c.Active,
 		})
 	}
