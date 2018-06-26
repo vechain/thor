@@ -9,8 +9,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-
-	"github.com/pkg/errors"
 )
 
 type httpError struct {
@@ -31,17 +29,17 @@ func HTTPError(cause error, status int) error {
 }
 
 // BadRequest convenience method to create http bad request error.
-func BadRequest(cause error, msg string) error {
+func BadRequest(cause error) error {
 	return &httpError{
-		cause:  errors.Wrap(cause, msg),
+		cause:  cause,
 		status: http.StatusBadRequest,
 	}
 }
 
 // Forbidden convenience method to create http forbidden error.
-func Forbidden(cause error, msg string) error {
+func Forbidden(cause error) error {
 	return &httpError{
-		cause:  errors.Wrap(cause, msg),
+		cause:  cause,
 		status: http.StatusForbidden,
 	}
 }
