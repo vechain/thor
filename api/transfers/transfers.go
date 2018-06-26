@@ -10,7 +10,6 @@ import (
 	"net/http"
 
 	"github.com/pkg/errors"
-
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
