@@ -44,9 +44,9 @@ func TestPrototype(t *testing.T) {
 		{func() interface{} { binding.RemoveUser(user); return nil }, nil, ""},
 		{func() interface{} { return binding.IsUser(user) }, false, "removed user should not a user"},
 
-		{func() interface{} { return M(binding.UserPlan()) }, []interface{}{&big.Int{}, &big.Int{}}, "should be zero plan"},
-		{func() interface{} { binding.SetUserPlan(planCredit, planRecRate); return nil }, nil, ""},
-		{func() interface{} { return M(binding.UserPlan()) }, []interface{}{planCredit, planRecRate}, "should set plan"},
+		{func() interface{} { return M(binding.CreditPlan()) }, []interface{}{&big.Int{}, &big.Int{}}, "should be zero plan"},
+		{func() interface{} { binding.SetCreditPlan(planCredit, planRecRate); return nil }, nil, ""},
+		{func() interface{} { return M(binding.CreditPlan()) }, []interface{}{planCredit, planRecRate}, "should set plan"},
 
 		{func() interface{} { binding.AddUser(user, 1); return nil }, nil, ""},
 		{func() interface{} { return binding.UserCredit(user, 1) }, planCredit, "should have credit"},
