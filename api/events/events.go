@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -42,13 +43,13 @@ func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	var filter Filter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
-		return utils.BadRequest(err, "body")
+		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	query := req.URL.Query()
 	if query.Get("address") != "" {
 		addr, err := thor.ParseAddress(query.Get("address"))
 		if err != nil {
-			return utils.BadRequest(err, "address")
+			return utils.BadRequest(errors.WithMessage(err, "address"))
 		}
 		filter.Address = &addr
 	}

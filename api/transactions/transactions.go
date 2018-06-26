@@ -6,12 +6,12 @@
 package transactions
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -124,20 +124,20 @@ func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var raw *RawTx
 	if err := utils.ParseJSON(req.Body, &raw); err != nil {
-		return utils.BadRequest(err, "body")
+		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	tx, err := raw.decode()
 	if err != nil {
-		return utils.BadRequest(err, "raw")
+		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 
 	txID, err := t.sendTx(tx)
 	if err != nil {
 		if txpool.IsBadTx(err) {
-			return utils.BadRequest(err, "bad tx")
+			return utils.BadRequest(err)
 		}
 		if txpool.IsTxRejected(err) {
-			return utils.Forbidden(err, "rejected tx")
+			return utils.Forbidden(err)
 		}
 		return err
 	}
@@ -150,7 +150,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.BadRequest(err, "id")
+		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 	h, err := t.getBlockHeader(req.URL.Query().Get("head"))
 	if err != nil {
@@ -160,7 +160,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	}
 	raw := req.URL.Query().Get("raw")
 	if raw != "" && raw != "false" && raw != "true" {
-		return utils.BadRequest(errors.New("should be boolean"), "raw")
+		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
 	}
 	if raw == "true" {
 		tx, err := t.getRawTransaction(txID, h.ID())
@@ -181,7 +181,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
 	if err != nil {
-		return utils.BadRequest(err, "id")
+		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 	h, err := t.getBlockHeader(req.URL.Query().Get("head"))
 	if err != nil {
@@ -202,7 +202,7 @@ func (t *Transactions) getBlockHeader(head string) (*block.Header, error) {
 	}
 	blkID, err := thor.ParseBytes32(head)
 	if err != nil {
-		return nil, utils.BadRequest(err, "head")
+		return nil, utils.BadRequest(errors.WithMessage(err, "head"))
 	}
 	b, err := t.chain.GetBlock(blkID)
 	if err != nil {
