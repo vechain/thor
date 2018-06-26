@@ -56,10 +56,10 @@ func (b *Blocks) getBlock(revision string) (*block.Block, error) {
 	if err != nil {
 		n, err := strconv.ParseUint(revision, 0, 0)
 		if err != nil {
-			return nil, err
+			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		if n > math.MaxUint32 {
-			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
+			return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
 		}
 		return b.chain.GetTrunkBlock(uint32(n))
 	}
