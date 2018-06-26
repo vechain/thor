@@ -25,7 +25,9 @@ func init() {
 		{"native_blockID", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Must(blockNum < env.BlockContext().Number)
+			if blockNum >= env.BlockContext().Number {
+				return []interface{}{thor.Bytes32{}}
+			}
 
 			env.UseGas(thor.SloadGas)
 			output := env.Seeker().GetID(blockNum)
@@ -34,10 +36,15 @@ func init() {
 		{"native_blockTotalScore", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Must(blockNum <= env.BlockContext().Number)
+
+			if blockNum > env.BlockContext().Number {
+				return []interface{}{uint64(0)}
+			}
+
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().TotalScore}
 			}
+
 			env.UseGas(thor.SloadGas)
 			id := env.Seeker().GetID(blockNum)
 
@@ -49,10 +56,14 @@ func init() {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
 
-			env.Must(blockNum <= env.BlockContext().Number)
+			if blockNum > env.BlockContext().Number {
+				return []interface{}{uint64(0)}
+			}
+
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Time}
 			}
+
 			env.UseGas(thor.SloadGas)
 			id := env.Seeker().GetID(blockNum)
 
@@ -63,7 +74,11 @@ func init() {
 		{"native_blockSigner", func(env *xenv.Environment) []interface{} {
 			var blockNum uint32
 			env.ParseArgs(&blockNum)
-			env.Must(blockNum <= env.BlockContext().Number)
+
+			if blockNum > env.BlockContext().Number {
+				return []interface{}{thor.Address{}}
+			}
+
 			if blockNum == env.BlockContext().Number {
 				return []interface{}{env.BlockContext().Signer}
 			}

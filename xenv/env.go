@@ -92,12 +92,6 @@ func (env *Environment) ParseArgs(val interface{}) {
 	}
 }
 
-func (env *Environment) Must(cond bool) {
-	if !cond {
-		panic("false condition")
-	}
-}
-
 func (env *Environment) Log(abi *abi.Event, address thor.Address, topics []thor.Bytes32, args ...interface{}) {
 	data, err := abi.Encode(args...)
 	if err != nil {
