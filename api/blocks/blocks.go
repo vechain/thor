@@ -29,7 +29,10 @@ func New(chain *chain.Chain) *Blocks {
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
-	revision := mux.Vars(req)["revision"]
+	revision, err := b.parseRevision(mux.Vars(req)["revision"])
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
 	block, err := b.getBlock(revision)
 	if err != nil {
 		if b.chain.IsNotFound(err) {
@@ -48,22 +51,36 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	return utils.WriteJSON(w, blk)
 }
 
-func (b *Blocks) getBlock(revision string) (*block.Block, error) {
+func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 	if revision == "" || revision == "best" {
-		return b.chain.BestBlock(), nil
+		return nil, nil
 	}
-	blkID, err := thor.ParseBytes32(revision)
-	if err != nil {
-		n, err := strconv.ParseUint(revision, 0, 0)
+	if len(revision) == 66 || len(revision) == 64 {
+		blockID, err := thor.ParseBytes32(revision)
 		if err != nil {
 			return nil, err
 		}
-		if n > math.MaxUint32 {
-			return nil, utils.BadRequest(errors.New("block number exceeded"), "revision")
-		}
-		return b.chain.GetTrunkBlock(uint32(n))
+		return blockID, nil
 	}
-	return b.chain.GetBlock(blkID)
+	n, err := strconv.ParseUint(revision, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	if n > math.MaxUint32 {
+		return nil, errors.New("block number out of max uint32")
+	}
+	return uint32(n), err
+}
+
+func (b *Blocks) getBlock(revision interface{}) (*block.Block, error) {
+	switch revision.(type) {
+	case thor.Bytes32:
+		return b.chain.GetBlock(revision.(thor.Bytes32))
+	case uint32:
+		return b.chain.GetTrunkBlock(revision.(uint32))
+	default:
+		return b.chain.BestBlock(), nil
+	}
 }
 
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
