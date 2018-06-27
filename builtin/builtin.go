@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/builtin/energy"
+	"github.com/vechain/thor/builtin/gen"
 	"github.com/vechain/thor/builtin/params"
 	"github.com/vechain/thor/builtin/prototype"
 	"github.com/vechain/thor/state"
@@ -22,11 +23,8 @@ var (
 	Params    = &paramsContract{mustLoadContract("Params")}
 	Authority = &authorityContract{mustLoadContract("Authority")}
 	Energy    = &energyContract{mustLoadContract("Energy")}
-	//Executor  = &executorContract{mustLoadContract("Executor")}
-	Prototype = &prototypeContract{
-		mustLoadContract("Prototype"),
-		mustLoadPrototypeEventABI(),
-	}
+	Executor  = &executorContract{mustLoadContract("Executor")}
+	Prototype = &prototypeContract{mustLoadContract("Prototype")}
 	Extension = &extensionContract{mustLoadContract("Extension")}
 	Measure   = mustLoadContract("Measure")
 )
@@ -36,10 +34,7 @@ type (
 	authorityContract struct{ *contract }
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
-	prototypeContract struct {
-		*contract
-		EventABI *abi.ABI
-	}
+	prototypeContract struct{ *contract }
 	extensionContract struct{ *contract }
 )
 
@@ -59,11 +54,12 @@ func (p *prototypeContract) Native(state *state.State) *prototype.Prototype {
 	return prototype.New(p.Address, state)
 }
 
-func mustLoadPrototypeEventABI() *abi.ABI {
-	abiDef := []byte(`[{"anonymous":false,"inputs":[{"indexed":true,"name":"newMaster","type":"address"}],"name":"$SetMaster","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"addOrRemove","type":"bool"}],"name":"$AddRemoveUser","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"name":"credit","type":"uint256"},{"indexed":false,"name":"recoveryRate","type":"uint256"}],"name":"$SetUserPlan","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sponsor","type":"address"},{"indexed":false,"name":"yesOrNo","type":"bool"}],"name":"$Sponsor","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sponsor","type":"address"}],"name":"$SelectSponsor","type":"event"}]`)
-	abi, err := abi.New(abiDef)
+func (p *prototypeContract) Events() *abi.ABI {
+	asset := "compiled/PrototypeEvent.abi"
+	data := gen.MustAsset(asset)
+	abi, err := abi.New(data)
 	if err != nil {
-		panic(errors.Wrap(err, "load native ABI for ThorLib"))
+		panic(errors.Wrap(err, "load ABI for "+asset))
 	}
 	return abi
 }

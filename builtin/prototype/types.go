@@ -9,12 +9,12 @@ import (
 	"math/big"
 )
 
-type userPlan struct {
+type creditPlan struct {
 	Credit       *big.Int
 	RecoveryRate *big.Int
 }
 
-func (u *userPlan) IsEmpty() bool {
+func (u *creditPlan) IsEmpty() bool {
 	return u.Credit.Sign() == 0 && u.RecoveryRate.Sign() == 0
 }
 
@@ -27,7 +27,7 @@ func (u *userObject) IsEmpty() bool {
 	return u.UsedCredit.Sign() == 0 && u.BlockTime == 0
 }
 
-func (u *userObject) Credit(plan *userPlan, blockTime uint64) *big.Int {
+func (u *userObject) Credit(plan *creditPlan, blockTime uint64) *big.Int {
 	if u.UsedCredit.Sign() == 0 {
 		return plan.Credit
 	}

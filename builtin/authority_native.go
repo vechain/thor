@@ -7,7 +7,6 @@ package builtin
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/xenv"
 )
@@ -24,77 +23,77 @@ func init() {
 		}},
 		{"native_add", func(env *xenv.Environment) []interface{} {
 			var args struct {
-				Signer   common.Address
-				Endorsor common.Address
-				Identity common.Hash
+				NodeMaster common.Address
+				Endorsor   common.Address
+				Identity   common.Hash
 			}
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Add(&authority.Candidate{
-				Signer:   thor.Address(args.Signer),
-				Endorsor: thor.Address(args.Endorsor),
-				Identity: thor.Bytes32(args.Identity),
-				Active:   true, // set to active by default
-			})
+			ok := Authority.Native(env.State()).Add(
+				thor.Address(args.NodeMaster),
+				thor.Address(args.Endorsor),
+				thor.Bytes32(args.Identity))
+
 			if ok {
 				env.UseGas(thor.SstoreSetGas)
 				env.UseGas(thor.SstoreResetGas)
 			}
 			return []interface{}{ok}
 		}},
-		{"native_remove", func(env *xenv.Environment) []interface{} {
-			var signer common.Address
-			env.ParseArgs(&signer)
+		{"native_revoke", func(env *xenv.Environment) []interface{} {
+			var nodeMaster common.Address
+			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Remove(thor.Address(signer))
+			ok := Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
 			if ok {
 				env.UseGas(thor.SstoreResetGas * 3)
 			}
 			return []interface{}{ok}
 		}},
 		{"native_get", func(env *xenv.Environment) []interface{} {
-			var signer common.Address
-			env.ParseArgs(&signer)
+			var nodeMaster common.Address
+			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			if candidate, ok := Authority.Native(env.State()).Get(thor.Address(signer)); ok {
-				return []interface{}{true, candidate.Endorsor, candidate.Identity, candidate.Active}
-			}
-			return []interface{}{false, thor.Address{}, thor.Bytes32{}, false}
+			listed, endorsor, identity, active := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+
+			return []interface{}{listed, endorsor, identity, active}
 		}},
 		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			if signer := Authority.Native(env.State()).First(); signer != nil {
-				return []interface{}{*signer}
+			if nodeMaster := Authority.Native(env.State()).First(); nodeMaster != nil {
+				return []interface{}{*nodeMaster}
 			}
 			return []interface{}{thor.Address{}}
 		}},
 		{"native_next", func(env *xenv.Environment) []interface{} {
-			var signer common.Address
-			env.ParseArgs(&signer)
+			var nodeMaster common.Address
+			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			if next := Authority.Native(env.State()).Next(thor.Address(signer)); next != nil {
+			if next := Authority.Native(env.State()).Next(thor.Address(nodeMaster)); next != nil {
 				return []interface{}{*next}
 			}
 			return []interface{}{thor.Address{}}
 		}},
 		{"native_isEndorsed", func(env *xenv.Environment) []interface{} {
-			var signer common.Address
-			env.ParseArgs(&signer)
+			var nodeMaster common.Address
+			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			if candidate, ok := Authority.Native(env.State()).Get(thor.Address(signer)); ok {
-				env.UseGas(thor.GetBalanceGas)
-				bal := env.State().GetBalance(candidate.Endorsor)
-
-				env.UseGas(thor.SloadGas)
-				endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
-				return []interface{}{bal.Cmp(endorsement) >= 0}
+			listed, endorsor, _, _ := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if !listed {
+				return []interface{}{false}
 			}
-			return []interface{}{false}
+
+			env.UseGas(thor.GetBalanceGas)
+			bal := env.State().GetBalance(endorsor)
+
+			env.UseGas(thor.SloadGas)
+			endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
+			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
 	abi := Authority.NativeABI()

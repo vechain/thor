@@ -30,8 +30,7 @@ func New(addr thor.Address, state *state.State, blockTime uint64) *Energy {
 	return &Energy{addr, state, blockTime}
 }
 
-func (e *Energy) getInitialSupply() initialSupply {
-	var init initialSupply
+func (e *Energy) getInitialSupply() (init initialSupply) {
 	e.state.DecodeStorage(e.addr, initialSupplyKey, func(raw []byte) error {
 		if len(raw) == 0 {
 			init = initialSupply{&big.Int{}, &big.Int{}, 0}
@@ -39,11 +38,10 @@ func (e *Energy) getInitialSupply() initialSupply {
 		}
 		return rlp.DecodeBytes(raw, &init)
 	})
-	return init
+	return
 }
 
-func (e *Energy) getTotalAddSub() totalAddSub {
-	var total totalAddSub
+func (e *Energy) getTotalAddSub() (total totalAddSub) {
 	e.state.DecodeStorage(e.addr, totalAddSubKey, func(raw []byte) error {
 		if len(raw) == 0 {
 			total = totalAddSub{&big.Int{}, &big.Int{}}
@@ -51,13 +49,10 @@ func (e *Energy) getTotalAddSub() totalAddSub {
 		}
 		return rlp.DecodeBytes(raw, &total)
 	})
-	return total
+	return
 }
 func (e *Energy) setTotalAddSub(total totalAddSub) {
 	e.state.EncodeStorage(e.addr, totalAddSubKey, func() ([]byte, error) {
-		if total.TotalAdd.Sign() == 0 && total.TotalSub.Sign() == 0 {
-			return nil, nil
-		}
 		return rlp.EncodeToBytes(&total)
 	})
 }
@@ -103,33 +98,32 @@ func (e *Energy) Get(addr thor.Address) *big.Int {
 
 // Add add amount of energy to given address.
 func (e *Energy) Add(addr thor.Address, amount *big.Int) {
-	eng := e.state.GetEnergy(addr, e.blockTime)
-	if amount.Sign() != 0 {
-		total := e.getTotalAddSub()
-		total.TotalAdd = new(big.Int).Add(total.TotalAdd, amount)
-		e.setTotalAddSub(total)
-
-		e.state.SetEnergy(addr, new(big.Int).Add(eng, amount), e.blockTime)
-	} else {
-		e.state.SetEnergy(addr, eng, e.blockTime)
+	if amount.Sign() == 0 {
+		return
 	}
+	eng := e.state.GetEnergy(addr, e.blockTime)
+
+	total := e.getTotalAddSub()
+	total.TotalAdd = new(big.Int).Add(total.TotalAdd, amount)
+	e.setTotalAddSub(total)
+
+	e.state.SetEnergy(addr, new(big.Int).Add(eng, amount), e.blockTime)
 }
 
 // Sub sub amount of energy from given address.
 // False is returned if no enough energy.
 func (e *Energy) Sub(addr thor.Address, amount *big.Int) bool {
-	eng := e.state.GetEnergy(addr, e.blockTime)
-	if amount.Sign() != 0 {
-		if eng.Cmp(amount) < 0 {
-			return false
-		}
-		total := e.getTotalAddSub()
-		total.TotalSub = new(big.Int).Add(total.TotalSub, amount)
-		e.setTotalAddSub(total)
-
-		e.state.SetEnergy(addr, new(big.Int).Sub(eng, amount), e.blockTime)
-	} else {
-		e.state.SetEnergy(addr, eng, e.blockTime)
+	if amount.Sign() == 0 {
+		return true
 	}
+	eng := e.state.GetEnergy(addr, e.blockTime)
+	if eng.Cmp(amount) < 0 {
+		return false
+	}
+	total := e.getTotalAddSub()
+	total.TotalSub = new(big.Int).Add(total.TotalSub, amount)
+	e.setTotalAddSub(total)
+
+	e.state.SetEnergy(addr, new(big.Int).Sub(eng, amount), e.blockTime)
 	return true
 }

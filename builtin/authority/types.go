@@ -20,10 +20,10 @@ type (
 
 	// Candidate candidate of block proposer.
 	Candidate struct {
-		Signer   thor.Address
-		Endorsor thor.Address
-		Identity thor.Bytes32
-		Active   bool
+		NodeMaster thor.Address
+		Endorsor   thor.Address
+		Identity   thor.Bytes32
+		Active     bool
 	}
 )
 
@@ -34,4 +34,8 @@ func (e *entry) IsEmpty() bool {
 		!e.Active &&
 		e.Prev == nil &&
 		e.Next == nil
+}
+
+func (e *entry) IsListed() bool {
+	return e.Prev != nil || e.Next != nil
 }
