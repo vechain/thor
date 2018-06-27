@@ -6,8 +6,8 @@
 package lvldb
 
 import (
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
@@ -34,37 +34,37 @@ type LevelDB struct {
 // New create a persistent level db instance.
 // Create an empty one if not exists, or open if already there.
 func New(path string, opts Options) (*LevelDB, error) {
-	stg, err := storage.OpenFile(path, false)
-	if err != nil {
-		return nil, errors.Wrap(err, "new persistent level db")
+	if opts.CacheSize < 16 {
+		opts.CacheSize = 16
 	}
-	return openLevelDB(stg, opts.CacheSize, opts.OpenFilesCacheCapacity)
+
+	if opts.OpenFilesCacheCapacity < 16 {
+		opts.OpenFilesCacheCapacity = 16
+	}
+
+	db, err := leveldb.OpenFile(path, &opt.Options{
+		CompactionTableSize:    64 * opt.MiB,
+		OpenFilesCacheCapacity: opts.OpenFilesCacheCapacity,
+		BlockCacheCapacity:     opts.CacheSize / 2 * opt.MiB,
+		WriteBuffer:            opts.CacheSize / 4 * opt.MiB, // Two of these are used internally
+		Filter:                 filter.NewBloomFilter(10),
+	})
+
+	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
+		db, err = leveldb.RecoverFile(path, nil)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return &LevelDB{db: db}, nil
 }
 
 // NewMem create a level db in memory.
 func NewMem() (*LevelDB, error) {
-	return openLevelDB(storage.NewMemStorage(), 0, 0)
-}
-
-func openLevelDB(stg storage.Storage, cacheSize, openFilesCacheCapacity int) (*LevelDB, error) {
-	if cacheSize < 16 {
-		cacheSize = 16
-	}
-
-	if openFilesCacheCapacity < 16 {
-		openFilesCacheCapacity = 16
-	}
-
-	db, err := leveldb.Open(stg, &opt.Options{
-		CompactionTableSize:    64 * opt.MiB,
-		OpenFilesCacheCapacity: openFilesCacheCapacity,
-		BlockCacheCapacity:     cacheSize / 2 * opt.MiB,
-		WriteBuffer:            cacheSize / 4 * opt.MiB, // Two of these are used internally
-		Filter:                 filter.NewBloomFilter(10),
-	})
-
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "open level db")
+		return nil, err
 	}
 	return &LevelDB{db: db}, nil
 }
