@@ -13,27 +13,24 @@ import (
 )
 
 type FilteredTransfer struct {
-	Sender    thor.Address              `json:"sender"`
-	Recipient thor.Address              `json:"recipient"`
-	Amount    *math.HexOrDecimal256     `json:"amount"`
-	Block     transactions.BlockContext `json:"block"`
-	Tx        transactions.TxContext    `json:"tx"`
+	Sender    thor.Address          `json:"sender"`
+	Recipient thor.Address          `json:"recipient"`
+	Amount    *math.HexOrDecimal256 `json:"amount"`
+	Meta      transactions.LogMeta  `json:"meta"`
 }
 
-func ConvertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
+func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 	v := math.HexOrDecimal256(*transfer.Amount)
 	return &FilteredTransfer{
 		Sender:    transfer.Sender,
 		Recipient: transfer.Recipient,
 		Amount:    &v,
-		Block: transactions.BlockContext{
-			ID:        transfer.BlockID,
-			Number:    transfer.BlockNumber,
-			Timestamp: transfer.BlockTime,
-		},
-		Tx: transactions.TxContext{
-			ID:     transfer.TxID,
-			Origin: transfer.TxOrigin,
+		Meta: transactions.LogMeta{
+			BlockID:        transfer.BlockID,
+			BlockNumber:    transfer.BlockNumber,
+			BlockTimestamp: transfer.BlockTime,
+			TxID:           transfer.TxID,
+			TxOrigin:       transfer.TxOrigin,
 		},
 	}
 }

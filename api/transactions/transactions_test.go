@@ -46,16 +46,12 @@ func TestTransaction(t *testing.T) {
 }
 
 func getTx(t *testing.T) {
-	raw, err := transactions.ConvertTransaction(transaction)
-	if err != nil {
-		t.Fatal(err)
-	}
 	res := httpGet(t, ts.URL+"/transactions/"+transaction.ID().String())
 	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
-	checkTx(t, raw, rtx)
+	checkTx(t, transaction, rtx)
 
 	res = httpGet(t, ts.URL+"/transactions/"+transaction.ID().String()+"?raw=true")
 	var rawTx map[string]interface{}
@@ -188,15 +184,19 @@ func initTransactionServer(t *testing.T) {
 
 }
 
-func checkTx(t *testing.T, expectedTx *transactions.Transaction, actualTx *transactions.Transaction) {
-	assert.Equal(t, expectedTx.Origin, actualTx.Origin)
-	assert.Equal(t, expectedTx.ID, actualTx.ID)
-	assert.Equal(t, expectedTx.GasPriceCoef, actualTx.GasPriceCoef)
-	assert.Equal(t, expectedTx.Gas, actualTx.Gas)
-	for i, c := range expectedTx.Clauses {
-		assert.Equal(t, string(c.Data), string(actualTx.Clauses[i].Data))
-		assert.Equal(t, c.Value, actualTx.Clauses[i].Value)
-		assert.Equal(t, c.To, actualTx.Clauses[i].To)
+func checkTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
+	origin, err := expectedTx.Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, origin, actualTx.Origin)
+	assert.Equal(t, expectedTx.ID(), actualTx.ID)
+	assert.Equal(t, expectedTx.GasPriceCoef(), actualTx.GasPriceCoef)
+	assert.Equal(t, expectedTx.Gas(), actualTx.Gas)
+	for i, c := range expectedTx.Clauses() {
+		assert.Equal(t, hexutil.Encode(c.Data()), actualTx.Clauses[i].Data)
+		assert.Equal(t, *c.Value(), big.Int(actualTx.Clauses[i].Value))
+		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
 	}
 
 }
