@@ -51,6 +51,8 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	switch network {
 	case "test":
 		return genesis.NewTestnet()
+	case "main":
+		return genesis.NewMainnet()
 	default:
 		cli.ShowAppHelp(ctx)
 		if network == "" {
