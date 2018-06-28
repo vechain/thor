@@ -2,9 +2,10 @@
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)&nbsp;&nbsp;
+[![Go](https://img.shields.io/badge/golang-%3E%3D1.10.0-orange.svg?style=flat-square")](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)
 
 ## Installation
 
@@ -73,7 +74,7 @@ bin/thor --network main
 Connect to VeChain's testnet:
 
 ```
-bin/thor -network test
+bin/thor --network test
 ```
 
 
