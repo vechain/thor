@@ -4,6 +4,7 @@ Thor is VeChain's new generation blockchain project.  It's the official implemen
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)
 
 ## Installation
 
