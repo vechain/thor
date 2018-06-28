@@ -1,4 +1,4 @@
-## VeChainThor
+## VeChainThor 
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
