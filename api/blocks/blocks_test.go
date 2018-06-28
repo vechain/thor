@@ -40,26 +40,24 @@ func TestBlock(t *testing.T) {
 
 	initBlockServer(t)
 	defer ts.Close()
-
-	raw, _ := blocks.ConvertBlock(blk, true)
 	res := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(blocks.Block)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
-	checkBlock(t, raw, rb)
+	checkBlock(t, blk, rb)
 	// get block info with blocknumber
 	res = httpGet(t, ts.URL+"/blocks/1")
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
-	checkBlock(t, raw, rb)
+	checkBlock(t, blk, rb)
 
 	res = httpGet(t, ts.URL+"/blocks/best")
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
-	checkBlock(t, raw, rb)
+	checkBlock(t, blk, rb)
 
 }
 
@@ -115,20 +113,21 @@ func initBlockServer(t *testing.T) {
 	blk = block
 }
 
-func checkBlock(t *testing.T, expBl *blocks.Block, actBl *blocks.Block) {
-	assert.Equal(t, expBl.Number, actBl.Number, "Number should be equal")
-	assert.Equal(t, expBl.ID, actBl.ID, "Hash should be equal")
-	assert.Equal(t, expBl.ParentID, actBl.ParentID, "ParentID should be equal")
-	assert.Equal(t, expBl.Timestamp, actBl.Timestamp, "Timestamp should be equal")
-	assert.Equal(t, expBl.TotalScore, actBl.TotalScore, "TotalScore should be equal")
-	assert.Equal(t, expBl.GasLimit, actBl.GasLimit, "GasLimit should be equal")
-	assert.Equal(t, expBl.GasUsed, actBl.GasUsed, "GasUsed should be equal")
-	assert.Equal(t, expBl.Beneficiary, actBl.Beneficiary, "Beneficiary should be equal")
-	assert.Equal(t, expBl.TxsRoot, actBl.TxsRoot, "TxsRoot should be equal")
-	assert.Equal(t, expBl.StateRoot, actBl.StateRoot, "StateRoot should be equal")
-	assert.Equal(t, expBl.ReceiptsRoot, actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
-	for i, txhash := range expBl.Transactions {
-		assert.Equal(t, txhash, actBl.Transactions[i], "tx hash should be equal")
+func checkBlock(t *testing.T, expBl *block.Block, actBl *blocks.Block) {
+	header := expBl.Header()
+	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
+	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
+	assert.Equal(t, header.ParentID(), actBl.ParentID, "ParentID should be equal")
+	assert.Equal(t, header.Timestamp(), actBl.Timestamp, "Timestamp should be equal")
+	assert.Equal(t, header.TotalScore(), actBl.TotalScore, "TotalScore should be equal")
+	assert.Equal(t, header.GasLimit(), actBl.GasLimit, "GasLimit should be equal")
+	assert.Equal(t, header.GasUsed(), actBl.GasUsed, "GasUsed should be equal")
+	assert.Equal(t, header.Beneficiary(), actBl.Beneficiary, "Beneficiary should be equal")
+	assert.Equal(t, header.TxsRoot(), actBl.TxsRoot, "TxsRoot should be equal")
+	assert.Equal(t, header.StateRoot(), actBl.StateRoot, "StateRoot should be equal")
+	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
+	for i, tx := range expBl.Transactions() {
+		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
 	}
 
 }
