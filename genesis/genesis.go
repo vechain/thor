@@ -64,4 +64,20 @@ func mustDecodeHex(str string) []byte {
 	return data
 }
 
+func mustParseAddress(str string) thor.Address {
+	addr, err := thor.ParseAddress(str)
+	if err != nil {
+		panic(err)
+	}
+	return addr
+}
+
+func mustParseBytes32(str string) thor.Bytes32 {
+	b32, err := thor.ParseBytes32(str)
+	if err != nil {
+		panic(err)
+	}
+	return b32
+}
+
 var emptyRuntimeBytecode = mustDecodeHex("6060604052600256")

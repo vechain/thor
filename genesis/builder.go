@@ -25,6 +25,7 @@ type Builder struct {
 
 	stateProcs []func(state *state.State) error
 	calls      []call
+	extraData  [28]byte
 }
 
 type call struct {
@@ -53,6 +54,12 @@ func (b *Builder) State(proc func(state *state.State) error) *Builder {
 // Call add a contrct call.
 func (b *Builder) Call(clause *tx.Clause, caller thor.Address) *Builder {
 	b.calls = append(b.calls, call{clause, caller})
+	return b
+}
+
+// ExtraData set extra data, which will be put into last 28 bytes of genesis parent id.
+func (b *Builder) ExtraData(data [28]byte) *Builder {
+	b.extraData = data
 	return b
 }
 
@@ -105,8 +112,11 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 		return nil, nil, errors.Wrap(err, "commit state")
 	}
 
+	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
+	copy(parentID[4:], b.extraData[:])
+
 	return new(block.Builder).
-		ParentID(thor.Bytes32{0xff, 0xff, 0xff, 0xff}). //so, genesis number is 0
+		ParentID(parentID).
 		Timestamp(b.timestamp).
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).
