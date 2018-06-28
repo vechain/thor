@@ -52,12 +52,12 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, blockID thor.Bytes32
 		return nil, err
 	}
 	return &rawTransaction{
-		Block: BlockContext{
-			ID:        block.Header().ID(),
-			Number:    block.Header().Number(),
-			Timestamp: block.Header().Timestamp(),
-		},
 		RawTx: RawTx{hexutil.Encode(raw)},
+		Meta: TxMeta{
+			BlockID:        block.Header().ID(),
+			BlockNumber:    block.Header().Number(),
+			BlockTimestamp: block.Header().Timestamp(),
+		},
 	}, nil
 }
 
@@ -73,20 +73,11 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, blockID thor.Bytes3
 	if err != nil {
 		return nil, err
 	}
-	tc, err := ConvertTransaction(tx)
-	if err != nil {
-		return nil, err
-	}
 	h, err := t.chain.GetBlockHeader(txMeta.BlockID)
 	if err != nil {
 		return nil, err
 	}
-	tc.Block = BlockContext{
-		ID:        h.ID(),
-		Number:    h.Number(),
-		Timestamp: h.Timestamp(),
-	}
-	return tc, nil
+	return convertTransaction(tx, h, txMeta.Index)
 }
 
 //GetTransactionReceiptByID get tx's receipt

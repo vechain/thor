@@ -44,7 +44,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return err
 	}
-	blk, err := ConvertBlock(block, isTrunk)
+	blk, err := convertBlock(block, isTrunk)
 	if err != nil {
 		return err
 	}

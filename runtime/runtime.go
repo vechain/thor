@@ -34,8 +34,8 @@ func init() {
 	if energyTransferEvent, found = builtin.Energy.ABI.EventByName("Transfer"); !found {
 		panic("transfer event not found")
 	}
-	if prototypeSetMasterEvent, found = builtin.Prototype.EventABI.EventByName("$SetMaster"); !found {
-		panic("$setMaster event not found")
+	if prototypeSetMasterEvent, found = builtin.Prototype.Events().EventByName("$Master"); !found {
+		panic("$Master event not found")
 	}
 }
 
@@ -171,14 +171,15 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			// set master for created contract
 			rt.state.SetMaster(thor.Address(contractAddr), thor.Address(caller))
 
-			topics := []common.Hash{
-				common.Hash(prototypeSetMasterEvent.ID()),
-				common.BytesToHash(caller[:]),
+			data, err := prototypeSetMasterEvent.Encode(caller)
+			if err != nil {
+				panic(err)
 			}
+
 			stateDB.AddLog(&types.Log{
 				Address: common.Address(contractAddr),
-				Topics:  topics,
-				Data:    nil,
+				Topics:  []common.Hash{common.Hash(prototypeSetMasterEvent.ID())},
+				Data:    data,
 			})
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
@@ -288,6 +289,9 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 	for i, clause := range resolvedTx.Clauses {
 		output := rt.ExecuteClause(clause, uint32(i), leftOverGas, txCtx)
 
+		if leftOverGas < output.LeftOverGas {
+			panic("serious bug: negative used gas!!!")
+		}
 		gasUsed := leftOverGas - output.LeftOverGas
 		leftOverGas = output.LeftOverGas
 

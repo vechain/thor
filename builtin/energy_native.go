@@ -42,12 +42,15 @@ func init() {
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
+			if args.Amount.Sign() == 0 {
+				return nil
+			}
 
 			env.UseGas(thor.GetBalanceGas)
 			if env.State().Exists(thor.Address(args.Addr)) {
-				env.UseGas(thor.SstoreResetGas - thor.GetBalanceGas)
+				env.UseGas(thor.SstoreResetGas)
 			} else {
-				env.UseGas(thor.SstoreSetGas - thor.GetBalanceGas)
+				env.UseGas(thor.SstoreSetGas)
 			}
 			Energy.Native(env.State(), env.BlockContext().Time).Add(thor.Address(args.Addr), args.Amount)
 			return nil
@@ -58,11 +61,14 @@ func init() {
 				Amount *big.Int
 			}
 			env.ParseArgs(&args)
+			if args.Amount.Sign() == 0 {
+				return []interface{}{true}
+			}
 
 			env.UseGas(thor.GetBalanceGas)
 			ok := Energy.Native(env.State(), env.BlockContext().Time).Sub(thor.Address(args.Addr), args.Amount)
 			if ok {
-				env.UseGas(thor.SstoreResetGas - thor.GetBalanceGas)
+				env.UseGas(thor.SstoreResetGas)
 			}
 			return []interface{}{ok}
 		}},

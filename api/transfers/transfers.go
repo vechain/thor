@@ -9,8 +9,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/pkg/errors"
 	"github.com/gorilla/mux"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
 )
@@ -33,7 +33,7 @@ func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([
 	}
 	tLogs := make([]*FilteredTransfer, len(transfers))
 	for i, trans := range transfers {
-		tLogs[i] = ConvertTransfer(trans)
+		tLogs[i] = convertTransfer(trans)
 	}
 	return tLogs, nil
 }

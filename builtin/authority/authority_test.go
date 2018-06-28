@@ -36,9 +36,9 @@ func TestAuthority(t *testing.T) {
 		ret      interface{}
 		expected interface{}
 	}{
-		{aut.Add(&Candidate{p1, p1, thor.Bytes32{}, true}), true},
-		{aut.Add(&Candidate{p2, p2, thor.Bytes32{}, true}), true},
-		{aut.Add(&Candidate{p3, p3, thor.Bytes32{}, true}), true},
+		{aut.Add(p1, p1, thor.Bytes32{}), true},
+		{aut.Add(p2, p2, thor.Bytes32{}), true},
+		{aut.Add(p3, p3, thor.Bytes32{}), true},
 		{M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)), []interface{}{
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
 		}},
@@ -51,10 +51,13 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Candidates(big.NewInt(10), 2)), []interface{}{
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}},
 		}},
-		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, true}, true)},
+		{M(aut.Get(p1)), []interface{}{true, p1, thor.Bytes32{}, true}},
 		{aut.Update(p1, false), true},
-		{M(aut.Get(p1)), M(&Candidate{p1, p1, thor.Bytes32{}, false}, true)},
-		{aut.Remove(p1), true},
+		{M(aut.Get(p1)), []interface{}{true, p1, thor.Bytes32{}, false}},
+		{aut.Update(p1, true), true},
+		{M(aut.Get(p1)), []interface{}{true, p1, thor.Bytes32{}, true}},
+		{aut.Revoke(p1), true},
+		{M(aut.Get(p1)), []interface{}{false, p1, thor.Bytes32{}, false}},
 		{M(aut.Candidates(&big.Int{}, thor.MaxBlockProposers)), []interface{}{
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}},
 		}},

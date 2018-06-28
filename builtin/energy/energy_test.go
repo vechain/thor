@@ -46,13 +46,12 @@ func TestEnergyGrowth(t *testing.T) {
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
-	New(thor.BytesToAddress([]byte("eng")), st, 10).
-		Add(acc, &big.Int{})
+	st.SetEnergy(acc, &big.Int{}, 10)
 
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1 := New(thor.BytesToAddress([]byte("eng")), st, 1000).
+	bal1 := New(thor.Address{}, st, 1000).
 		Get(acc)
 
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)

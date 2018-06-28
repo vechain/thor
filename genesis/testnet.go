@@ -17,7 +17,7 @@ import (
 
 // NewTestnet create genesis for testnet.
 func NewTestnet() *Genesis {
-	launchTime := uint64(1528387200) // 'Fri Jun 08 2018 00:00:00 GMT+0800 (CST)'
+	launchTime := uint64(1530014400) // 'Tue Jun 26 2018 20:00:00 GMT+0800 (CST)'
 
 	// use this address as executor instead of builtin one, for test purpose
 	executor, _ := thor.ParseAddress("0xB5A34b62b63A6f1EE99DFD30b133B657859f8d79")

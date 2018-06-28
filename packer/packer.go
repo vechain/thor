@@ -62,12 +62,12 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	for _, c := range candidates {
-		if p.beneficiary == nil && c.Signer == p.nodeMaster {
+		if p.beneficiary == nil && c.NodeMaster == p.nodeMaster {
 			// not beneficiary not set, set it to endorsor
 			beneficiary = c.Endorsor
 		}
 		proposers = append(proposers, poa.Proposer{
-			Address: c.Signer,
+			Address: c.NodeMaster,
 			Active:  c.Active,
 		})
 	}

@@ -29,8 +29,7 @@ type Block struct {
 	Transactions []thor.Bytes32 `json:"transactions,string"`
 }
 
-//ConvertBlock convert a raw block into a json format block
-func ConvertBlock(b *block.Block, isTrunk bool) (*Block, error) {
+func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
 	if b == nil {
 		return nil, nil
 	}

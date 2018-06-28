@@ -158,7 +158,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 	)
 
 	bind := builtin.Prototype.Native(state).Bind(genesis.DevAccounts()[1].Address)
-	bind.SetUserPlan(math.MaxBig256, big.NewInt(1000))
+	bind.SetCreditPlan(math.MaxBig256, big.NewInt(1000))
 	bind.AddUser(genesis.DevAccounts()[0].Address, targetTime)
 	tr.assert.Equal(
 		genesis.DevAccounts()[1].Address,

@@ -266,25 +266,36 @@ components:
         balance: '0xde0b6b3a7640000'
         energy: '0xde0b6b3a7640000'
         hasCode: false
-    BlockContext:
+    TxMeta:
       properties:
-        id:
+        blockID:
           type: string
           description: identifier of the block (bytes32)
-        number:
+        blockNumber:
           type: integer
           format: uint32
           description: number(height) of the block
-        timestamp:
+        blockTimestamp:
           type: integer
           format: uint64
           description: unix timestamp of the block
-    TxContext:
+    LogMeta:
       properties:
-        id:
+        blockID:
+          type: string
+          description: identifier of the block (bytes32)
+        blockNumber:
+          type: integer
+          format: uint32
+          description: number(height) of the block
+        blockTimestamp:
+          type: integer
+          format: uint64
+          description: unix timestamp of the block
+        txID:
           type: string
           description: identifier of the transaction
-        origin:
+        txOrigin:
           type: string
           description: the one who signed the transaction
     Block:
@@ -386,10 +397,6 @@ components:
         id:
           type: string
           description: identifier of the transaction
-        size:
-          type: integer
-          format: uint32
-          description: byte size of the transaction that is RLP encoded
         chainTag:
           type: integer
           format: uint8
@@ -413,34 +420,38 @@ components:
           type: integer
           format: uint64
           description: max amount of gas can be consumed to execute this transaction
+        origin:
+          type: string
+          description: the one who signed the transaction
+        nonce:
+          type: string
         dependsOn:
           type: string
           description: >-
             ID of the transaction on which the current transaction depends
             (bytes32)
-        nonce:
-          type: string
-        origin:
-          type: string
-          description: the one who signed the transaction
-        block:
-          $ref: '#/components/schemas/BlockContext'
+        size:
+          type: integer
+          format: uint32
+          description: byte size of the transaction that is RLP encoded
+        meta:
+          $ref: '#/components/schemas/TxMeta'
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        size: 180
         chainTag: 1
         blockRef: '0x00000001511fc0be'
         expiration: 30
         clauses: []
         gasPriceCoef: 128
         gas: 21000
-        dependsOn: 'null'
-        nonce: '0xd92966da424d9939'
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        block:
-          id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          number: 1
-          timestamp: 1523156271
+        nonce: '0xd92966da424d9939'
+        dependsOn: 'null'
+        size: 180
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
     Event:
       properties:
         address:
@@ -489,10 +500,6 @@ components:
         reverted:
           type: boolean
           description: true means the transaction was reverted
-        block:
-          $ref: '#/components/schemas/BlockContext'
-        tx:
-          $ref: '#/components/schemas/TxContext'
         outputs:
           type: array
           items:
@@ -510,19 +517,14 @@ components:
                 type: array
                 items:
                   $ref: '#/components/schemas/Transfer'
+        meta:
+          $ref: '#/components/schemas/LogMeta'
       example:
         gasUsed: 21000
         gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         paid: '0x723daf2'
         reward: '0x723daf2'
         reverted: false
-        block:
-          id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          number: 1
-          timestamp: 1523156271
-        tx:
-          id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         outputs:
           - 'contractAddress:''0x7567d83b7b8d80addcb281a71d54fc7b3364ffed''': null
             events:
@@ -535,6 +537,12 @@ components:
               - sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
                 recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
                 amount: '0x123f'
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
+          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     ContractCall:
       properties:
         value:
@@ -639,21 +647,18 @@ components:
             type: string
         data:
           type: string
-        block:
-          $ref: '#/components/schemas/BlockContext'
-        tx:
-          $ref: '#/components/schemas/TxContext'
+        meta:
+          $ref: '#/components/schemas/LogMeta'
       example:
         topics:
           - '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
         data: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        block:
-          id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          number: 1
-          timestamp: 1523156271
-        tx:
-          id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
+          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     AddressSet:
       properties:
         txOrigin:
@@ -684,21 +689,18 @@ components:
           type: string
         amount:
           type: string
-        block:
-          $ref: '#/components/schemas/BlockContext'
-        tx:
-          $ref: '#/components/schemas/TxContext'
+        meta:
+          $ref: '#/components/schemas/LogMeta'
       example:
         sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         amount: '0x9fad'
-        block:
-          id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          number: 1
-          timestamp: 1523156271
-        tx:
-          id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
+          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
     PeerStats:
       properties:
         name:

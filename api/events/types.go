@@ -55,24 +55,21 @@ func convertFilter(filter *Filter) *logdb.EventFilter {
 
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
-	Topics []*thor.Bytes32           `json:"topics"`
-	Data   string                    `json:"data"`
-	Block  transactions.BlockContext `json:"block"`
-	Tx     transactions.TxContext    `json:"tx"`
+	Topics []*thor.Bytes32      `json:"topics"`
+	Data   string               `json:"data"`
+	Meta   transactions.LogMeta `json:"meta"`
 }
 
 //convert a logdb.Event into a json format Event
 func convertEvent(event *logdb.Event) *FilteredEvent {
 	fe := FilteredEvent{
 		Data: hexutil.Encode(event.Data),
-		Block: transactions.BlockContext{
-			ID:        event.BlockID,
-			Number:    event.BlockNumber,
-			Timestamp: event.BlockTime,
-		},
-		Tx: transactions.TxContext{
-			ID:     event.TxID,
-			Origin: event.TxOrigin,
+		Meta: transactions.LogMeta{
+			BlockID:        event.BlockID,
+			BlockNumber:    event.BlockNumber,
+			BlockTimestamp: event.BlockTime,
+			TxID:           event.TxID,
+			TxOrigin:       event.TxOrigin,
 		},
 	}
 	fe.Topics = make([]*thor.Bytes32, 0)
@@ -89,18 +86,18 @@ func (e *FilteredEvent) String() string {
 		Event(
 			topics:        %v,
 			data:          %v,
-			block: (id     %v,
-					num    %v,
-					time   %v),
-			tx:    (id     %v,
-					origin %v)
+			meta: (blockID     %v,
+				blockNumber    %v,
+				blockTimestamp %v),
+				txID     %v,
+				txOrigin %v)
 			)`,
 		e.Topics,
 		e.Data,
-		e.Block.ID,
-		e.Block.Number,
-		e.Block.Timestamp,
-		e.Tx.ID,
-		e.Tx.Origin,
+		e.Meta.BlockID,
+		e.Meta.BlockNumber,
+		e.Meta.BlockTimestamp,
+		e.Meta.TxID,
+		e.Meta.TxOrigin,
 	)
 }
