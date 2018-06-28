@@ -1,11 +1,11 @@
-## VeChainThor
+## VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)&nbsp;&nbsp;
-[![Go](https://img.shields.io/badge/golang-%3E%3D1.10.0-orange.svg?style=flat-square")](https://golang.org)
+[![Go](https://img.shields.io/badge/golang-%3E%3D1.10-orange.svg?style=flat-square")](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
+[![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
 
 ## Installation
 
@@ -134,8 +134,9 @@ Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. 
 
 A Special shout out to following projects:
 
-- go-ethereum
-- swagger-ui
+- [Ethereum](https://github.com/ethereum)
+
+- [Swagger](https://github.com/swagger-api)
 
 ## Contributing
 
