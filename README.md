@@ -73,7 +73,7 @@ bin/thor --network main
 Connect to VeChain's testnet:
 
 ```
-bin/thor -network test
+bin/thor ---network test
 ```
 
 
