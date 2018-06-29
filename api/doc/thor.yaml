@@ -374,9 +374,15 @@ components:
         raw:
           type: string
           description: hex form of encoded transaction
+        meta:
+          $ref: '#/components/schemas/TxMeta'
       example:
         raw: >-
           0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
     Clause:
       properties:
         to:
