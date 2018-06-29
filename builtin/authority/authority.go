@@ -71,7 +71,14 @@ func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) {
 // Get get candidate by node master address.
 func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool) {
 	entry := a.getEntry(nodeMaster)
-	return entry.IsListed(), entry.Endorsor, entry.Identity, entry.Active
+	if entry.IsLinked() {
+		return true, entry.Endorsor, entry.Identity, entry.Active
+	}
+	// if it's the only node, IsLinked will be false.
+	// check whether it's the head.
+	ptr := a.getAddressPtr(headKey)
+	listed = ptr != nil && *ptr == nodeMaster
+	return listed, entry.Endorsor, entry.Identity, entry.Active
 }
 
 // Add add a new candidate.
@@ -105,7 +112,7 @@ func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity
 // The entry is not removed, but set unlisted and inactive.
 func (a *Authority) Revoke(nodeMaster thor.Address) bool {
 	entry := a.getEntry(nodeMaster)
-	if !entry.IsListed() {
+	if !entry.IsLinked() {
 		return false
 	}
 
@@ -135,7 +142,7 @@ func (a *Authority) Revoke(nodeMaster thor.Address) bool {
 // Update update candidate's status.
 func (a *Authority) Update(nodeMaster thor.Address, active bool) bool {
 	entry := a.getEntry(nodeMaster)
-	if !entry.IsListed() {
+	if !entry.IsLinked() {
 		return false
 	}
 	entry.Active = active

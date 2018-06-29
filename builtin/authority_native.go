@@ -56,7 +56,7 @@ func init() {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas * 2)
 			listed, endorsor, identity, active := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
 
 			return []interface{}{listed, endorsor, identity, active}
@@ -82,7 +82,7 @@ func init() {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
 
-			env.UseGas(thor.SloadGas)
+			env.UseGas(thor.SloadGas * 2)
 			listed, endorsor, _, _ := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
 			if !listed {
 				return []interface{}{false}
