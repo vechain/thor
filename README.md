@@ -1,4 +1,4 @@
-## VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/vechain-thor/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=badge)
+## VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/vechain/thor.svg)](https://gitter.im/vechain/thor?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
