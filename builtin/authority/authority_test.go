@@ -37,6 +37,7 @@ func TestAuthority(t *testing.T) {
 		expected interface{}
 	}{
 		{aut.Add(p1, p1, thor.Bytes32{}), true},
+		{M(aut.Get(p1)), []interface{}{true, p1, thor.Bytes32{}, true}},
 		{aut.Add(p2, p2, thor.Bytes32{}), true},
 		{aut.Add(p3, p3, thor.Bytes32{}), true},
 		{M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)), []interface{}{

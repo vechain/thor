@@ -36,6 +36,6 @@ func (e *entry) IsEmpty() bool {
 		e.Next == nil
 }
 
-func (e *entry) IsListed() bool {
+func (e *entry) IsLinked() bool {
 	return e.Prev != nil || e.Next != nil
 }
