@@ -6,7 +6,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -128,7 +127,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pcom.Shutdown()
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
-	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
+	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
 
@@ -174,7 +173,7 @@ func soloAction(ctx *cli.Context) error {
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
-	defer func() { log.Info("stopping API server..."); apiSrv.Shutdown(context.Background()) }()
+	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
 
