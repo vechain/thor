@@ -137,6 +137,23 @@ func TestCall(t *testing.T) {
 	}
 
 	assert.Equal(t, thor.Address(addr), genesis.DevAccounts()[0].Address)
+
+	// contract NeverStop {
+	// 	constructor() public {
+	// 		while(true) {
+	// 		}
+	// 	}
+	// }
+	data, _ = hex.DecodeString("6080604052348015600f57600080fd5b505b600115601b576011565b60358060286000396000f3006080604052600080fd00a165627a7a7230582026c386600e61384b3a93bf45760f3207b5cac072cec31c9cea1bc7099bda49b00029")
+	exec, interrupt := rt.PrepareClause(tx.NewClause(nil).WithData(data), 0, math.MaxUint64, &xenv.TransactionContext{})
+
+	go func() {
+		interrupt()
+	}()
+
+	out, interrupted := exec()
+	assert.NotNil(t, out)
+	assert.True(t, interrupted)
 }
 
 func TestExecuteTransaction(t *testing.T) {
