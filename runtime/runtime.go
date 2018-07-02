@@ -7,6 +7,7 @@ package runtime
 
 import (
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -238,31 +239,55 @@ func (rt *Runtime) ExecuteClause(
 	gas uint64,
 	txCtx *xenv.TransactionContext,
 ) *Output {
+	exec, _ := rt.PrepareClause(clause, clauseIndex, gas, txCtx)
+	output, _ := exec()
+	return output
+}
+
+// PrepareClause prepare to execute clause.
+// It allows to interrupt execution.
+func (rt *Runtime) PrepareClause(
+	clause *tx.Clause,
+	clauseIndex uint32,
+	gas uint64,
+	txCtx *xenv.TransactionContext,
+) (exec func() (output *Output, interrupted bool), interrupt func()) {
 	var (
-		stateDB      = statedb.New(rt.state)
-		evm          = rt.newEVM(stateDB, clauseIndex, txCtx)
-		data         []byte
-		leftOverGas  uint64
-		vmErr        error
-		contractAddr *thor.Address
+		stateDB       = statedb.New(rt.state)
+		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
+		data          []byte
+		leftOverGas   uint64
+		vmErr         error
+		contractAddr  *thor.Address
+		interruptFlag uint32
 	)
-	if clause.To() == nil {
-		var caddr common.Address
-		data, caddr, leftOverGas, vmErr = evm.Create(vm.AccountRef(txCtx.Origin), clause.Data(), gas, clause.Value())
-		contractAddr = (*thor.Address)(&caddr)
-	} else {
-		data, leftOverGas, vmErr = evm.Call(vm.AccountRef(txCtx.Origin), common.Address(*clause.To()), clause.Data(), gas, clause.Value())
+
+	exec = func() (*Output, bool) {
+		if clause.To() == nil {
+			var caddr common.Address
+			data, caddr, leftOverGas, vmErr = evm.Create(vm.AccountRef(txCtx.Origin), clause.Data(), gas, clause.Value())
+			contractAddr = (*thor.Address)(&caddr)
+		} else {
+			data, leftOverGas, vmErr = evm.Call(vm.AccountRef(txCtx.Origin), common.Address(*clause.To()), clause.Data(), gas, clause.Value())
+		}
+
+		interrupted := atomic.LoadUint32(&interruptFlag) != 0
+		output := &Output{
+			Data:            data,
+			LeftOverGas:     leftOverGas,
+			RefundGas:       stateDB.GetRefund(),
+			VMErr:           vmErr,
+			ContractAddress: contractAddr,
+		}
+		output.Events, output.Transfers = stateDB.GetLogs()
+		return output, interrupted
 	}
 
-	output := &Output{
-		Data:            data,
-		LeftOverGas:     leftOverGas,
-		RefundGas:       stateDB.GetRefund(),
-		VMErr:           vmErr,
-		ContractAddress: contractAddr,
+	interrupt = func() {
+		atomic.StoreUint32(&interruptFlag, 1)
+		evm.Cancel()
 	}
-	output.Events, output.Transfers = stateDB.GetLogs()
-	return output
+	return
 }
 
 // ExecuteTransaction executes a transaction.
