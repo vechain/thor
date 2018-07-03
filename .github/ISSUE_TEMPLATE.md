@@ -4,6 +4,12 @@ about: Create a report to help us improve
 
 ---
 
+Hi there,
+
+Please notice that this is an issue tracker reserved for bug reports and feature requests.
+
+For general questions please use the gitter channel.
+
 ## OS Version: 
 Windows/Linux/OSX 
 
