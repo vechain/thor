@@ -186,12 +186,12 @@ func loadNodeMaster(ctx *cli.Context) *node.Master {
 }
 
 type p2pComm struct {
-	comm      *comm.Communicator
-	p2pSrv    *p2psrv.Server
-	savePeers func()
+	comm           *comm.Communicator
+	p2pSrv         *p2psrv.Server
+	peersCachePath string
 }
 
-func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, instanceDir string) *p2pComm {
+func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, instanceDir string) *p2pComm {
 	configDir := makeConfigDir(ctx)
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
@@ -222,40 +222,39 @@ func startP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, i
 	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
 	}
-	srv := p2psrv.New(opts)
-
-	comm := comm.New(chain, txPool)
-	if err := srv.Start(comm.Protocols()); err != nil {
-		fatal("start P2P server:", err)
-	}
-	comm.Start()
 
 	return &p2pComm{
-		comm:   comm,
-		p2pSrv: srv,
-		savePeers: func() {
-			nodes := srv.KnownNodes()
-			data, err := rlp.EncodeToBytes(nodes)
-			if err != nil {
-				log.Warn("failed to encode cached peers", "err", err)
-				return
-			}
-			if err := ioutil.WriteFile(peersCachePath, data, 0600); err != nil {
-				log.Warn("failed to write peers cache", "err", err)
-			}
-		},
+		comm:           comm.New(chain, txPool),
+		p2pSrv:         p2psrv.New(opts),
+		peersCachePath: peersCachePath,
 	}
 }
 
-func (c *p2pComm) Shutdown() {
-	c.comm.Stop()
+func (p *p2pComm) Start() {
+	log.Info("starting P2P networking")
+	if err := p.p2pSrv.Start(p.comm.Protocols()); err != nil {
+		fatal("start P2P server:", err)
+	}
+	p.comm.Start()
+}
+
+func (p *p2pComm) Stop() {
 	log.Info("stopping communicator...")
+	p.comm.Stop()
 
-	c.p2pSrv.Stop()
 	log.Info("stopping P2P server...")
+	p.p2pSrv.Stop()
 
-	c.savePeers()
 	log.Info("saving peers cache...")
+	nodes := p.p2pSrv.KnownNodes()
+	data, err := rlp.EncodeToBytes(nodes)
+	if err != nil {
+		log.Warn("failed to encode cached peers", "err", err)
+		return
+	}
+	if err := ioutil.WriteFile(p.peersCachePath, data, 0600); err != nil {
+		log.Warn("failed to write peers cache", "err", err)
+	}
 }
 
 func startAPIServer(ctx *cli.Context, handler http.Handler) (*http.Server, string) {

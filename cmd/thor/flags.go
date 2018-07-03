@@ -58,7 +58,7 @@ var (
 	}
 	natFlag = cli.StringFlag{
 		Name:  "nat",
-		Value: "none",
+		Value: "any",
 		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 	}
 	onDemandFlag = cli.BoolFlag{

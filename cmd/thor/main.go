@@ -105,6 +105,8 @@ func main() {
 }
 
 func defaultAction(ctx *cli.Context) error {
+	exitSignal := handleExitSignal()
+
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
@@ -123,13 +125,15 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom := startP2PComm(ctx, chain, txPool, instanceDir)
-	defer p2pcom.Shutdown()
+	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
+
+	p2pcom.Start()
+	defer p2pcom.Stop()
 
 	return node.New(
 		master,
@@ -139,7 +143,7 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pcom.comm).
-		Run(handleExitSignal())
+		Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
