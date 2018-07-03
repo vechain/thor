@@ -6,9 +6,11 @@
 package accounts
 
 import (
+	"context"
 	"math/big"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -119,7 +121,7 @@ func (a *Accounts) sterilizeOptions(options *ContractCall) {
 }
 
 //Call a contract with input
-func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
+func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
 	a.sterilizeOptions(body)
 	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
@@ -142,19 +144,28 @@ func (a *Accounts) Call(to *thor.Address, body *ContractCall, header *block.Head
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore()})
 
-	vmout := rt.ExecuteClause(clause, 0, body.Gas, &xenv.TransactionContext{
+	exec, interrupt := rt.PrepareClause(clause, 0, body.Gas, &xenv.TransactionContext{
 		Origin:     body.Caller,
 		GasPrice:   gp,
 		ProvedWork: &big.Int{}})
-
-	if err := rt.Seeker().Err(); err != nil {
-		return nil, err
+	vmout := make(chan *runtime.Output, 1)
+	go func() {
+		o, _ := exec()
+		vmout <- o
+	}()
+	select {
+	case <-ctx.Done():
+		interrupt()
+		return nil, ctx.Err()
+	case vo := <-vmout:
+		if err := rt.Seeker().Err(); err != nil {
+			return nil, err
+		}
+		if err := state.Err(); err != nil {
+			return nil, err
+		}
+		return convertVMOutputWithInputGas(vo, body.Gas), nil
 	}
-	if err := state.Err(); err != nil {
-		return nil, err
-	}
-	return convertVMOutputWithInputGas(vmout, body.Gas), nil
-
 }
 
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
@@ -225,14 +236,16 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	}
 	address := mux.Vars(req)["address"]
 	var output *VMOutput
+	ctx, cancel := context.WithTimeout(req.Context(), time.Second*10)
+	defer cancel()
 	if address == "" {
-		output, err = a.Call(nil, callBody, h)
+		output, err = a.Call(ctx, nil, callBody, h)
 	} else {
 		addr, err := thor.ParseAddress(address)
 		if err != nil {
 			return utils.BadRequest(errors.WithMessage(err, "address"))
 		}
-		output, err = a.Call(&addr, callBody, h)
+		output, err = a.Call(ctx, &addr, callBody, h)
 	}
 	if err != nil {
 		return err
