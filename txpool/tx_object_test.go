@@ -92,7 +92,7 @@ func TestExecutable(t *testing.T) {
 	}{
 		{newTx(0, nil, 21000, tx.BlockRef{}, 100, nil, acc), true, ""},
 		{newTx(0, nil, math.MaxUint64, tx.BlockRef{}, 100, nil, acc), false, "gas too large"},
-		{newTx(0, nil, 21000, tx.BlockRef{1}, 100, nil, acc), true, "ref future block"},
+		{newTx(0, nil, 21000, tx.BlockRef{1}, 100, nil, acc), true, "block ref out of schedule"},
 		{newTx(0, nil, 21000, tx.BlockRef{0}, 0, nil, acc), true, "expired"},
 		{newTx(0, nil, 21000, tx.BlockRef{0}, 100, &thor.Bytes32{}, acc), false, ""},
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	Tx "github.com/vechain/thor/tx"
 )
@@ -91,6 +92,14 @@ func TestWashTxs(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool()
 	defer pool.Close()
+	b1 := new(block.Builder).
+		ParentID(pool.chain.GenesisBlock().Header().ID()).
+		Timestamp(uint64(time.Now().Unix())).
+		TotalScore(100).
+		GasLimit(10000000).
+		StateRoot(pool.chain.GenesisBlock().Header().StateRoot()).
+		Build()
+	pool.chain.AddBlock(b1, nil)
 	acc := genesis.DevAccounts()[0]
 
 	dupTx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, acc)
@@ -106,6 +115,23 @@ func TestAdd(t *testing.T) {
 
 	for _, tt := range tests {
 		err := pool.Add(tt.tx)
+		if tt.errStr == "" {
+			assert.Nil(t, err)
+		} else {
+			assert.Equal(t, tt.errStr, err.Error())
+		}
+	}
+
+	tests = []struct {
+		tx     *tx.Transaction
+		errStr string
+	}{
+		{newTx(pool.chain.Tag(), nil, 21000, tx.NewBlockRef(200), 100, nil, acc), "tx rejected: tx is not executable"},
+		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, acc), "tx rejected: tx is not executable"},
+	}
+
+	for _, tt := range tests {
+		err := pool.StrictlyAdd(tt.tx)
 		if tt.errStr == "" {
 			assert.Nil(t, err)
 		} else {
