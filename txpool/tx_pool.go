@@ -143,9 +143,7 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-// Add add new tx into pool.
-// It's not assumed as an error if the tx to be added is already in the pool,
-func (p *TxPool) Add(newTx *tx.Transaction) error {
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 	if p.all.Contains(newTx.ID()) {
 		// tx already in the pool
 		return nil
@@ -178,6 +176,10 @@ func (p *TxPool) Add(newTx *tx.Transaction) error {
 			return txRejectedError{err.Error()}
 		}
 
+		if rejectNonexecutable && !executable {
+			return txRejectedError{"tx is not executable"}
+		}
+
 		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -201,6 +203,17 @@ func (p *TxPool) Add(newTx *tx.Transaction) error {
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	return nil
+}
+
+// Add add new tx into pool.
+// It's not assumed as an error if the tx to be added is already in the pool,
+func (p *TxPool) Add(newTx *tx.Transaction) error {
+	return p.add(newTx, false)
+}
+
+// StrictlyAdd add new tx into pool. A rejection error will be returned, if tx is not executable at this time.
+func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
+	return p.add(newTx, true)
 }
 
 // Remove removes tx from pool by its ID.

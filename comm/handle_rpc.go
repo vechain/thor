@@ -71,7 +71,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(newTx.ID())
-		c.txPool.Add(newTx)
+		c.txPool.StrictlyAdd(newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
