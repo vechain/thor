@@ -117,6 +117,20 @@ bin/thor master-key --export > keystore.json
 cat keystore.json | bin/thor master-key --import
 ```
 
+## Docker
+
+Docker is one quick way for running a vechain node:
+
+```
+docker run -d\
+  -v {path-to-your-data-directory}/.org.vechain.thor:/root/.org.vechain.thor\
+  -p 127.0.0.1:8669:8669 -p 11235:11235 -p 11235:11235/udp\
+  --name thor-node vechain/thor --network test
+```
+
+Do not forget `--api-addr 0.0.0.0:8669`, if you want to access RESTful API from other containers and/or hosts. Since `thor` just bind to `localhost` by default and it won't accept requests outside the container itself.
+
+The [Dockerfile](Dockerfile) is designed to build the last release of the source code and will publish docker images to [dockerhub](https://hub.docker.com/r/vechain/thor/) by release, feel free to fork and build Dockerfile for your own purpose.
 
 ## Testnet faucet
 
