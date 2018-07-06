@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -18,7 +19,7 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -60,11 +61,7 @@ func (s *Solo) Run(ctx context.Context) error {
 	}()
 
 	goes.Go(func() {
-		s.interval(ctx)
-	})
-
-	goes.Go(func() {
-		s.watcher(ctx)
+		s.loop(ctx)
 	})
 
 	log.Info("prepared to pack block")
@@ -72,53 +69,43 @@ func (s *Solo) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Solo) interval(ctx context.Context) {
-	if s.onDemand {
-		return
-	}
+func (s *Solo) loop(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(10) * time.Second)
 	defer ticker.Stop()
-	s.packing()
+
+	var scope event.SubscriptionScope
+	defer scope.Close()
+
+	txEvCh := make(chan *txpool.TxEvent, 10)
+	scope.Track(s.txPool.SubscribeTxEvent(txEvCh))
+
+	s.packing(nil)
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("stopping interval packing service......")
 			return
-		case <-ticker.C:
-			s.packing()
-		}
-	}
-}
-
-func (s *Solo) watcher(ctx context.Context) {
-
-	txEvCh := make(chan *txpool.TxEvent, 10)
-	sub := s.txPool.SubscribeTxEvent(txEvCh)
-	defer sub.Unsubscribe()
-
-	for {
-		select {
 		case txEv := <-txEvCh:
-			if txEv.Executable != nil && *txEv.Executable {
-				tx := txEv.Tx
-				singer, err := tx.Signer()
-				if err != nil {
-					singer = thor.Address{}
-				}
-				log.Info("new Tx", "id", tx.ID(), "signer", singer)
-				if s.onDemand {
-					s.packing()
-				}
+			newTx := txEv.Tx
+			singer, err := newTx.Signer()
+			if err != nil {
+				continue
 			}
-		case <-ctx.Done():
-			log.Info("stopping watcher service......")
-			return
+			log.Info("new Tx", "id", newTx.ID(), "signer", singer)
+			if s.onDemand {
+				s.packing(tx.Transactions{newTx})
+			}
+		case <-ticker.C:
+			if s.onDemand {
+				continue
+			}
+			s.packing(s.txPool.Executables())
 		}
 	}
 }
 
-func (s *Solo) packing() {
+func (s *Solo) packing(pendingTxs tx.Transactions) {
 
 	best := s.chain.BestBlock()
 
@@ -126,8 +113,6 @@ func (s *Solo) packing() {
 	if err != nil {
 		log.Error(fmt.Sprintf("%+v", err))
 	}
-
-	pendingTxs := s.txPool.Executables()
 
 	for _, tx := range pendingTxs {
 		err := flow.Adopt(tx)
