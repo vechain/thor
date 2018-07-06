@@ -219,13 +219,14 @@ func (n *Node) txStashLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case txEv := <-txCh:
-			// stash non-executable txs
-			if !txEv.Executable {
-				if err := stash.Save(txEv.Tx); err != nil {
-					log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
-				} else {
-					log.Debug("stashed tx", "id", txEv.Tx.ID())
-				}
+			// only stash non-executable txs
+			if txEv.Executable != nil || *txEv.Executable {
+				continue
+			}
+			if err := stash.Save(txEv.Tx); err != nil {
+				log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
+			} else {
+				log.Debug("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
 	}

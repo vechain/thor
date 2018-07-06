@@ -100,7 +100,7 @@ func (s *Solo) watcher(ctx context.Context) {
 	for {
 		select {
 		case txEv := <-txEvCh:
-			if txEv.Executable {
+			if txEv.Executable != nil && *txEv.Executable {
 				tx := txEv.Tx
 				singer, err := tx.Signer()
 				if err != nil {

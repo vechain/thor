@@ -39,10 +39,10 @@ type Options struct {
 	MaxLifetime     time.Duration
 }
 
-// TxEvent will be posted when tx is added or becomes executable.
+// TxEvent will be posted when tx is added or status changed.
 type TxEvent struct {
 	Tx         *tx.Transaction
-	Executable bool
+	Executable *bool
 }
 
 // TxPool maintains unprocessed transactions.
@@ -186,7 +186,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 
 		txObj.executable = executable
 		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, executable})
+			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
 		log.Debug("tx added", "id", newTx.ID(), "executable", executable)
 	} else {
@@ -200,6 +200,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 			return txRejectedError{err.Error()}
 		}
 		log.Debug("tx added", "id", newTx.ID())
+		p.txFeed.Send(&TxEvent{newTx, nil})
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	return nil
@@ -355,7 +356,8 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 
 	p.goes.Go(func() {
 		for _, tx := range toBroadcast {
-			p.txFeed.Send(&TxEvent{tx, true})
+			executable := true
+			p.txFeed.Send(&TxEvent{tx, &executable})
 		}
 	})
 	return executables, 0, nil
