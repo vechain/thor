@@ -1,4 +1,4 @@
-## VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/vechain/thor.svg)](https://gitter.im/vechain/thor?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/vechain/thor.svg)](https://gitter.im/vechain/thor?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
 
@@ -6,6 +6,21 @@ Thor is VeChain's new generation blockchain project.  It's the official implemen
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
 [![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
+
+## Table of contents
+
+* [Installation](#installation)
+    * [Requirements](#requirements)
+    * [Getting the source](#getting-the-source)
+    * [Dependency management](#dependency-management)
+    * [Building](#building)
+* [Running Thor](#running-thor)
+    * [Sub-commands](#sub-commands)
+* [Docker](#docker)
+* [Faucet](#testnet-faucet)
+* [RESTful API](#api)
+* [Acknowledgement](#acknowledgement)
+* [Contributing](#contributing)
 
 ## Installation
 
@@ -142,7 +157,7 @@ curl -X POST -d '{"to":"Your_Address"}' -H "Content-Type: application/json" http
 
 Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. http://localhost:8669/ by default.
 
-
+![Thorest](thorest.png)
 
 ## Acknowledgement
 
