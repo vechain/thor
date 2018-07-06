@@ -57,7 +57,9 @@ func TestSubscribeNewTx(t *testing.T) {
 
 	tx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0])
 	assert.Nil(t, pool.Add(tx))
-	assert.Equal(t, &TxEvent{tx, true}, <-txCh)
+
+	v := true
+	assert.Equal(t, &TxEvent{tx, &v}, <-txCh)
 }
 
 func TestWashTxs(t *testing.T) {

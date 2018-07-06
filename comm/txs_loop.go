@@ -21,7 +21,7 @@ func (c *Communicator) txsLoop() {
 		case <-c.ctx.Done():
 			return
 		case txEv := <-txEvCh:
-			if txEv.Executable {
+			if txEv.Executable != nil && *txEv.Executable {
 				tx := txEv.Tx
 				peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
 					return !p.IsTransactionKnown(tx.ID())
