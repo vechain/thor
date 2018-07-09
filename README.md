@@ -157,7 +157,7 @@ curl -X POST -d '{"to":"Your_Address"}' -H "Content-Type: application/json" http
 
 Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. http://localhost:8669/ by default.
 
-![Thorest](thorest.png)
+[![Thorest](thorest.png)](http://localhost:8669/)
 
 ## Acknowledgement
 
