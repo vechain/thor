@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+// contract implements native methods of `contract` contract.
 type contract struct {
 	name    string
 	Address thor.Address
