@@ -1,6 +1,8 @@
-# VeChainThor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/vechain/thor.svg)](https://gitter.im/vechain/thor?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+# VeChain Thor &nbsp;&nbsp; [![Gitter](https://badges.gitter.im/vechain/thor.svg)](https://gitter.im/vechain/thor?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-Thor is VeChain's new generation blockchain project.  It's the official implementation written in golang.
+A general purpose blockchain highly compatible with Ethereum's ecosystem.
+
+This is the first implementation written in golang.
 
 [![Go](https://img.shields.io/badge/golang-%3E%3D1.10-orange.svg?style=flat-square")](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
@@ -191,6 +193,6 @@ Please check the following:
 
 ## License
 
-VeChainThor is licensed under the
+VeChain Thor is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
 in *LICENSE* file in repository.
