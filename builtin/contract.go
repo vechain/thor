@@ -14,7 +14,8 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// contract implements native methods of `contract` contract. It uses ABI and thor.Address
+// contract implements native methods of `contract` contract. 
+// Points to Application Binary Interface and uses thor.Address
 type contract struct {
 	name    string
 	Address thor.Address
