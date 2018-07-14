@@ -235,18 +235,20 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	address := mux.Vars(req)["address"]
-	var output *VMOutput
 	ctx, cancel := context.WithTimeout(req.Context(), time.Second*10)
 	defer cancel()
 	if address == "" {
-		output, err = a.Call(ctx, nil, callBody, h)
-	} else {
-		addr, err := thor.ParseAddress(address)
+		output, err := a.Call(ctx, nil, callBody, h)
 		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "address"))
+			return err
 		}
-		output, err = a.Call(ctx, &addr, callBody, h)
+		return utils.WriteJSON(w, output)
 	}
+	addr, err := thor.ParseAddress(address)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "address"))
+	}
+	output, err := a.Call(ctx, &addr, callBody, h)
 	if err != nil {
 		return err
 	}
