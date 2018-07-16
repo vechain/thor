@@ -7,37 +7,30 @@ package co
 
 import (
 	"runtime"
+	"sync/atomic"
 )
 
 var numCPU = runtime.NumCPU()
 
-// Enqueue function to enqueue parallel works.
-type Enqueue func(work func())
-
 // Parallel to run a batch of work using as many CPU as it can.
-func Parallel(cb func(Enqueue)) {
-	if numCPU < 2 {
-		cb(func(work func()) {
-			work()
-		})
-	}
+func Parallel(cb func(chan<- func())) <-chan struct{} {
+	queue := make(chan func(), numCPU*16)
+	defer close(queue)
 
-	var goes Goes
-	defer goes.Wait()
-	ch := make(chan func(), numCPU*2)
-	defer close(ch)
+	done := make(chan struct{})
+
+	nGo := int32(numCPU)
 	for i := 0; i < numCPU; i++ {
-		goes.Go(func() {
-			for {
-				select {
-				case work := <-ch:
-					if work == nil {
-						return
-					}
-					work()
-				}
+		go func() {
+			for work := range queue {
+				work()
 			}
-		})
+
+			if atomic.AddInt32(&nGo, -1) == 0 {
+				close(done)
+			}
+		}()
 	}
-	cb(func(work func()) { ch <- work })
+	cb(queue)
+	return done
 }
