@@ -41,6 +41,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 	})
 	goes.Go(func() {
 		defer close(blockCh)
+		var blocks []*block.Block
 		for {
 			result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
 			if err != nil {
@@ -51,13 +52,10 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 				return
 			}
 
+			blocks = blocks[:0]
 			for _, raw := range result {
 				var blk block.Block
 				if err := rlp.DecodeBytes(raw, &blk); err != nil {
-					errCh <- errors.Wrap(err, "invalid block")
-					return
-				}
-				if _, err := blk.Header().Signer(); err != nil {
 					errCh <- errors.Wrap(err, "invalid block")
 					return
 				}
@@ -65,13 +63,31 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 					errCh <- errors.New("broken sequence")
 					return
 				}
-				peer.MarkBlock(blk.Header().ID())
 				fromNum++
+				blocks = append(blocks, &blk)
+			}
 
+			<-co.Parallel(func(queue chan<- func()) {
+				for _, blk := range blocks {
+					h := blk.Header()
+					queue <- func() { h.ID() }
+					for _, tx := range blk.Transactions() {
+						tx := tx
+						queue <- func() {
+							tx.ID()
+							tx.UnprovedWork()
+							tx.IntrinsicGas()
+						}
+					}
+				}
+			})
+
+			for _, blk := range blocks {
+				peer.MarkBlock(blk.Header().ID())
 				select {
 				case <-ctx.Done():
 					return
-				case blockCh <- &blk:
+				case blockCh <- blk:
 				}
 			}
 		}

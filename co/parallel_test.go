@@ -25,9 +25,9 @@ func TestParallel(t *testing.T) {
 	t.Log("non-parallel", time.Duration(time.Now().UnixNano()-startTime))
 
 	startTime = time.Now().UnixNano()
-	co.Parallel(func(en co.Enqueue) {
+	<-co.Parallel(func(queue chan<- func()) {
 		for i := 0; i < n; i++ {
-			en(fn)
+			queue <- fn
 		}
 	})
 	t.Log("parallel", time.Duration(time.Now().UnixNano()-startTime))
