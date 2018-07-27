@@ -146,7 +146,7 @@ docker run -d\
   --name thor-node vechain/thor --network test
 ```
 
-Do not forget `--api-addr 0.0.0.0:8669`, if you want to access RESTful API from other containers and/or hosts. Since `thor` just bind to `localhost` by default and it won't accept requests outside the container itself.
+Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor`binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
 
 The [Dockerfile](Dockerfile) is designed to build the last release of the source code and will publish docker images to [dockerhub](https://hub.docker.com/r/vechain/thor/) by release, feel free to fork and build Dockerfile for your own purpose.
 
