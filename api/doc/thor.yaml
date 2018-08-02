@@ -111,12 +111,8 @@ paths:
           content:
             application/json:
               schema:
-                properties:
-                  code:
-                    type: string
-                example:
-                  code: >-
-                    0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029
+                $ref: '#/components/schemas/Code'
+                
   /accounts/{address}/storage/{key}:
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -134,12 +130,7 @@ paths:
           content:
             application/json:
               schema:
-                properties:
-                  value:
-                    type: string
-                example:
-                  value: >-
-                    0x0000000000000000000000000000000000000000000000000000000000000001
+                $ref: '#/components/schemas/Storage'
 
   /transactions/{id}:
     parameters:
@@ -158,26 +149,8 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                oneOf:
-                  - $ref: '#/components/schemas/TxWithMeta'
-                  - $ref: '#/components/schemas/RawTxWithMeta'
-                example:
-                  id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-                  chainTag: 1
-                  blockRef: '0x00000001511fc0be'
-                  expiration: 30
-                  clauses: []
-                  gasPriceCoef: 128
-                  gas: 21000
-                  origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-                  nonce: '0xd92966da424d9939'
-                  dependsOn: 'null'
-                  size: 180
-                  meta:
-                    blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-                    blockNumber: 1
-                    blockTimestamp: 1523156271
+                $ref: '#/components/schemas/TxOrRawTxWithMeta'
+                
   /transactions/{id}/receipt:
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
@@ -208,32 +181,14 @@ paths:
         content:
           application/json:
             schema:
-              oneOf:
-                - $ref: '#/components/schemas/RawTx'
-                - $ref: '#/components/schemas/SignedTx'
-                - $ref: '#/components/schemas/TxBody'
-              example:
-                raw: >-
-                  0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400
-              
+              $ref: '#/components/schemas/RawOrSignedOrUnsignedTx'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                oneOf:
-                  - type: object
-                    properties:
-                      id:
-                        type: string
-                  - type: object
-                    properties:
-                      signingHash:
-                        type: string
-                example:
-                  id: >-
-                    0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8
+                $ref: '#/components/schemas/IDOrSigningHash'
 
   /blocks/{revision}:
     parameters:
@@ -384,6 +339,18 @@ components:
         balance: '0xde0b6b3a7640000'
         energy: '0xde0b6b3a7640000'
         hasCode: false
+    Code:
+      properties:
+        code:
+          type: string
+      example:
+        code: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
+    Storage:
+      properties:
+        value:
+          type: string
+      example:
+        value: '0x0000000000000000000000000000000000000000000000000000000000000001'
     TxMeta:
       description: transaction meta info
       properties:
@@ -544,8 +511,7 @@ components:
         dependsOn:
           type: string
           format: bytes32
-          description: >-
-            ID of the transaction on which the current transaction depends on. can be null.
+          description: ID of the transaction on which the current transaction depends on. can be null.
         nonce:
           type: string
     
@@ -585,7 +551,7 @@ components:
         gas: 21000
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         nonce: '0xd92966da424d9939'
-        dependsOn: 'null'
+        dependsOn: null
         size: 180
         meta:
           blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
@@ -606,8 +572,7 @@ components:
         meta:
           $ref: '#/components/schemas/TxMeta'
       example:
-        raw: >-
-          0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400
+        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
         meta:
           blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
           blockNumber: 1
@@ -667,7 +632,7 @@ components:
             properties:
               contractAddress:
                 type: string
-                description: >-
+                description: |
                   deployed contract address, if the corresponding clause is a
                   contract deployment clause
               events:
@@ -687,7 +652,7 @@ components:
         reward: '0x723daf2'
         reverted: false
         outputs:
-          - 'contractAddress:''0x7567d83b7b8d80addcb281a71d54fc7b3364ffed''': null
+          - contractAddress: null
             events:
               - address: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
                 topics: 
@@ -886,6 +851,46 @@ components:
         netAddr: '128.1.39.120:11235'
         inbound: false
         duration: 28
+    TxOrRawTxWithMeta:
+      oneOf:
+        - $ref: '#/components/schemas/TxWithMeta'
+        - $ref: '#/components/schemas/RawTxWithMeta'
+      example:
+        id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+        chainTag: 1
+        blockRef: '0x00000001511fc0be'
+        expiration: 30
+        clauses: []
+        gasPriceCoef: 128
+        gas: 21000
+        origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        nonce: '0xd92966da424d9939'
+        dependsOn: null
+        size: 180
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
+    RawOrSignedOrUnsignedTx:
+      oneOf:
+        - $ref: '#/components/schemas/RawTx'
+        - $ref: '#/components/schemas/SignedTx'
+        - $ref: '#/components/schemas/TxBody'
+      example:
+        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
+    IDOrSigningHash:
+      oneOf:
+        - type: object
+          properties:
+            id:
+              type: string
+        - type: object
+          properties:
+            signingHash:
+              type: string
+      example:
+        id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+
   parameters:
     AddressInPath:
       name: address
