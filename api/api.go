@@ -47,6 +47,10 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/events")
 	transfers.New(logDB).
 		Mount(router, "/transfers")
+	events.New(logDB).
+		Mount(router, "/logs/events")
+	transfers.New(logDB).
+		Mount(router, "/logs/transfers")
 	blocks.New(chain).
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).

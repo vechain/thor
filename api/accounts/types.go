@@ -15,17 +15,17 @@ import (
 
 //Account for marshal account
 type Account struct {
-	Balance math.HexOrDecimal256 `json:"balance,string"`
-	Energy  math.HexOrDecimal256 `json:"energy,string"`
+	Balance math.HexOrDecimal256 `json:"balance"`
+	Energy  math.HexOrDecimal256 `json:"energy"`
 	HasCode bool                 `json:"hasCode"`
 }
 
 //ContractCall represents contract-call body
 type ContractCall struct {
-	Value    *math.HexOrDecimal256 `json:"value,string"`
+	Value    *math.HexOrDecimal256 `json:"value"`
 	Data     string                `json:"data"`
 	Gas      uint64                `json:"gas"`
-	GasPrice *math.HexOrDecimal256 `json:"gasPrice,string"`
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice"`
 	Caller   thor.Address          `json:"caller"`
 }
 
