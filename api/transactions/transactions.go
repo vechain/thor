@@ -6,6 +6,9 @@
 package transactions
 
 import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -103,37 +106,63 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	}
 	return convertReceipt(receipt, h, tx)
 }
-
-func (t *Transactions) sendTx(tx *tx.Transaction) (thor.Bytes32, error) {
-	if err := t.pool.Add(tx); err != nil {
-		return thor.Bytes32{}, err
-	}
-	return tx.ID(), nil
-}
-
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	var raw *RawTx
-	if err := utils.ParseJSON(req.Body, &raw); err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
-	}
-	tx, err := raw.decode()
+	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "body"))
-	}
-
-	txID, err := t.sendTx(tx)
-	if err != nil {
-		if txpool.IsBadTx(err) {
-			return utils.BadRequest(err)
-		}
-		if txpool.IsTxRejected(err) {
-			return utils.Forbidden(err)
-		}
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{
-		"id": txID.String(),
-	})
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	var sendTx = func(tx *tx.Transaction) error {
+		if err := t.pool.Add(tx); err != nil {
+			if txpool.IsBadTx(err) {
+				return utils.BadRequest(err)
+			}
+			if txpool.IsTxRejected(err) {
+				return utils.Forbidden(err)
+			}
+			return err
+		}
+		return utils.WriteJSON(w, map[string]string{
+			"id": tx.ID().String(),
+		})
+	}
+	reader := bytes.NewReader(data)
+	if hasKey(m, "raw") {
+		var rawTx *RawTx
+		if err := utils.ParseJSON(reader, &rawTx); err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "body"))
+		}
+		tx, err := rawTx.decode()
+		if err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "raw"))
+		}
+		return sendTx(tx)
+	} else if hasKey(m, "signature") {
+		var stx *SignedTx
+		if err := utils.ParseJSON(reader, &stx); err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "body"))
+		}
+		tx, err := stx.decode()
+		if err != nil {
+			return utils.BadRequest(err)
+		}
+		return sendTx(tx)
+	} else {
+		var ustx *UnSignedTx
+		if err := utils.ParseJSON(reader, &ustx); err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "body"))
+		}
+		tx, err := ustx.decode()
+		if err != nil {
+			return utils.BadRequest(err)
+		}
+		return utils.WriteJSON(w, map[string]string{
+			"signingHash": tx.SigningHash().String(),
+		})
+	}
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
