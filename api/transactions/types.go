@@ -21,8 +21,8 @@ import (
 
 // Clause for json marshal
 type Clause struct {
-	To    *thor.Address        `json:"to,string"`
-	Value math.HexOrDecimal256 `json:"value,string"`
+	To    *thor.Address        `json:"to"`
+	Value math.HexOrDecimal256 `json:"value"`
 	Data  string               `json:"data"`
 }
 
@@ -59,16 +59,16 @@ func hasKey(m map[string]interface{}, key string) bool {
 
 //Transaction transaction
 type Transaction struct {
-	ID           thor.Bytes32        `json:"id,string"`
+	ID           thor.Bytes32        `json:"id"`
 	ChainTag     byte                `json:"chainTag"`
 	BlockRef     string              `json:"blockRef"`
 	Expiration   uint32              `json:"expiration"`
 	Clauses      Clauses             `json:"clauses"`
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
 	Gas          uint64              `json:"gas"`
-	Origin       thor.Address        `json:"origin,string"`
+	Origin       thor.Address        `json:"origin"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn"`
 	Size         uint32              `json:"size"`
 	Meta         TxMeta              `json:"meta"`
 }
@@ -199,8 +199,8 @@ type LogMeta struct {
 type Receipt struct {
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer"`
-	Paid     *math.HexOrDecimal256 `json:"paid,string"`
-	Reward   *math.HexOrDecimal256 `json:"reward,string"`
+	Paid     *math.HexOrDecimal256 `json:"paid"`
+	Reward   *math.HexOrDecimal256 `json:"reward"`
 	Reverted bool                  `json:"reverted"`
 	Meta     LogMeta               `json:"meta"`
 	Outputs  []*Output             `json:"outputs"`

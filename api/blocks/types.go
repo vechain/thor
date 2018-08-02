@@ -26,7 +26,7 @@ type Block struct {
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
 	Signer       thor.Address   `json:"signer"`
 	IsTrunk      bool           `json:"isTrunk"`
-	Transactions []thor.Bytes32 `json:"transactions,string"`
+	Transactions []thor.Bytes32 `json:"transactions"`
 }
 
 func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
