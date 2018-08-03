@@ -258,7 +258,12 @@ paths:
         - Logs
       summary: Filter event logs
       description: |
-        Event logs are produced by OP_LOG in EVM.
+        Event logs are produced by OP_LOG in EVM. e.g
+        ```
+        curl -X POST "http://localhost:8669/logs/events?order=asc&address=0x0000000000000000000000000000456e65726779" -H "accept: application/json" -H "Content-Type: application/json" -d "{\"range\":{\"unit\":\"block\",\"from\":20000,\"to\":30000},\"options\":{\"offset\":0,\"limit\":10},\"topicSets\":[{\"topic0\":\"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef\"}]}"
+        
+        the above refers to querying the logs which are produced by `0x0000000000000000000000000000456e65726779` from block 20000 to block 30000，the limit is 10. 
+        ```
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
         - $ref: '#/components/parameters/FilterAddressInQuery'
@@ -284,7 +289,12 @@ paths:
         - Logs
       summary: Filter transfer logs
       description: |
-        Transfer logs are recorded on VET transferring.
+        Transfer logs are recorded on VET transferring. e.g.
+        ```
+        curl -X POST "http://localhost:8669/logs/transfers?order=asc" -H "accept: application/json" -H "Content-Type: application/json" -d "{\"range\":{\"unit\":\"block\",\"from\":20000,\"to\":300000},\"options\":{\"offset\":0,\"limit\":10},\"AddressSets\":[{\"txOrigin\":\"0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\"}]}"
+        
+        the above refers to querying the transfer logs which are sent by `0x7567d83b7b8d80addcb281a71d54fc7b3364ffed` from block 20000 to block 30000 and the limit is 10.
+        ```
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
@@ -759,6 +769,18 @@ components:
           type: integer
         limit:
           type: integer
+      description: |
+        pass these parameters if you need filtered results paged. e.g. 
+        ```
+        {
+          options: {
+            offset: 0,
+            limit:10   
+          }
+        }
+        ```
+        the above refers that page offset is 0,and the page size is 10.
+        pass options `nil` if you don't need to demand paging.
     Range:
       properties:
         unit:
@@ -766,12 +788,30 @@ components:
           enum:
             - block
             - time
+          description: |
+            block means `BlockNumber`,time means `BlockTimestamp` using UTC timestamp, default using block
         from:
           type: integer
           format: uint64
+          description: |
+            `fromBlockNumber` or `fromBlockTimestamp`
         to:
           type: integer
           format: uint64
+          description: |
+            `toBlockNumber` or `toBlockTimestamp`
+      description: |
+        the scope is [from,to].e.g.
+        ```
+        {
+          range: {
+            from:10,
+            to:1000
+          }
+        }
+        ```
+        the above refers to requesting the results from block 10 to block 1000,
+        pass this range `nil` if you want to filter results in all scope
       example:
         unit: block
         from: 100
@@ -788,8 +828,19 @@ components:
           type: string
         topic4:
           type: string
+      description: |
+        An object of values which must each appear in the log entries. if you want to leave the topic out use null or ignore the properties, e.g. 
+        ```
+        {
+          topicSet: {
+            topic1: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5',
+            topic2: 'null'   
+          }
+        }
+        ```
+        in this way. topic0,topic2,topic3 and topic4 are all null
       example:
-        topic0: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
+        topic1: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
     EventFilter:
       properties:
         range:
@@ -939,7 +990,7 @@ components:
       required: false
       schema:
         type: string
-      example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+      example: '0x0000000000000000000000000000456e65726779'
     FilterOrderInQuery:
       name: order
       in: query
