@@ -13,6 +13,7 @@ info:
 servers:
   - url: '/'
     description: local thor node
+
 tags:
   - name: Accounts
     description: Access to account objects
@@ -24,6 +25,7 @@ tags:
     description: Access to event & transfer logs
   - name: Node
     description: Access to node status info
+    
 paths:
   /accounts/{address}:
     parameters:
@@ -44,10 +46,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+
     post:
       tags:
         - Accounts
-      summary: Call account code
+      summary: Execute account code
       description: |
         to simulate contract method call, without sending transaction to block chain.
         
@@ -66,13 +69,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CallResult'
+
   /accounts:
     post:
       parameters:
         - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
-      summary: Call bytecodes
+      summary: Execute bytecodes
       description: |
         to simulate contract deployment without sending transaction to block chain.
         
@@ -95,6 +99,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CallResult'
+
   /accounts/{address}/code:
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -112,7 +117,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Code'
-                
+
   /accounts/{address}/storage/{key}:
     parameters:
       - $ref: '#/components/parameters/AddressInPath'
@@ -150,7 +155,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TxOrRawTxWithMeta'
-                
+
   /transactions/{id}/receipt:
     parameters:
       - $ref: '#/components/parameters/TxIDInPath'
@@ -168,6 +173,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Receipt'
+
   /transactions:
     post:
       tags:
@@ -233,6 +239,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredEvent'
+
   /logs/transfers:
     post:
       tags:
@@ -258,6 +265,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredTransfer'
+
   /events:
     post:
       deprecated: true
@@ -283,6 +291,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/FilteredEvent'
+
   /transfers:
     post:
       deprecated: true
@@ -329,119 +338,143 @@ components:
         balance:
           type: string
           description: balance in unit WEI, presented with hex string
+          example: '0x47ff1f90327aa0f8e'
         energy:
           type: string
           description: energy in uint WEI, presented with hex string
+          example: '0xcf624158d591398'
         hasCode:
           type: boolean
           description: whether the account has code
-      example:
-        balance: '0xde0b6b3a7640000'
-        energy: '0xde0b6b3a7640000'
-        hasCode: false
+          example: false
+
     Code:
       properties:
         code:
           type: string
-      example:
-        code: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
+          example: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
+
     Storage:
       properties:
         value:
           type: string
-      example:
-        value: '0x0000000000000000000000000000000000000000000000000000000000000001'
+          example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+
     TxMeta:
       description: transaction meta info
       properties:
         blockID:
           type: string
           description: block identifier (bytes32)
+          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         blockNumber:
           type: integer
           format: uint32
           description: block number (height)
+          example: 325324
         blockTimestamp:
           type: integer
           format: uint64
           description: block unix timestamp
+          example: 1533267900
+
     LogMeta:
       description: event or transfer log meta info
       properties:
         blockID:
           type: string
           description: block identifier (bytes32)
+          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         blockNumber:
           type: integer
           format: uint32
           description: block number (height)
+          example: 325324
         blockTimestamp:
           type: integer
           format: uint64
           description: block unix timestamp
+          example: 1533267900
         txID:
           type: string
           description: transaction identifier
+          example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
         txOrigin:
           type: string
           description: transaction origin (signer)
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+
     Block:
       properties:
         number:
           type: integer
           format: uint32
           description: block number (height)
+          example: 325324
         id:
           type: string
           format: bytes32
           description: block identifier
+          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         size:
           type: integer
           format: uint32
           description: RLP encoded block size in bytes
+          example: 373
         parentID:
           type: string
           format: bytes32
           description: parent block ID
+          example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
         timestamp:
           type: integer
           format: uint64
           description: block unix timestamp
+          example: 1533267900
         gasLimit:
           type: integer
           format: uint64
           description: block gas limit (max allowed accumulative gas usage of transactions)
+          example: 11253579
         beneficiary:
           type: string
           format: bytes32
           description: address of account to receive block reward
+          example: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
         gasUsed:
           type: integer
           format: uint64
           description: accumulative gas usage of transactions
+          example: 21000
         totalScore:
           type: integer
           format: uint64
           description: sum of all ancestral blocks' score
+          example: 1029988
         txsRoot:
           type: string
           format: bytes32
           description: root hash of transactions in the block 
+          example: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
         stateRoot:
           type: string
           format: bytes32
           description: root hash of accounts state
+          example: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
         receiptsRoot:
           type: string
           format: bytes32
           description: root hash of transaction receipts
+          example: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
         signer:
           type: string
           format: bytes20
           description: the one who signed this block
+          example: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
         isTrunk:
           type: boolean
           description: whether block is trunk
+          example: true
         transactions:
           type: array
           description: transactions IDs
@@ -449,39 +482,22 @@ components:
             type: string
             format: bytes32
             description: transaction ID
-      example:
-        number: 1
-        id: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-        size: 238
-        parentID: '0x00000002a0c772179aa43cb6bb55d0b31369f9e92014c88a50b2cb99f9be1c5d'
-        timestamp: 1523156271
-        gasLimit: 10000000
-        beneficiary: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        gasUsed: 0
-        totalScore: 101
-        txsRoot: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
-        stateRoot: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
-        receiptsRoot: '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
-        signer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        isTrunk: true
-        transactions:
-          - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        
+            example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+
     Clause:
       properties:
         to:
           type: string
           description: 'recipient of clause, null for contract deployment (bytes32)'
+          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
         value:
           type: string
           description: hex form of token to be transferred
+          example: '0x47fdb3c3f456c0000'
         data:
           type: string
           description: input data (bytes)
-      example:
-        to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        value: '0x10'
-        data: null
+          example: '0x'
 
     TxBody:
       properties:
@@ -489,13 +505,16 @@ components:
           type: integer
           format: uint8
           description: last byte of genesis block ID
+          example: 39
         blockRef:
           type: string
           description: 8 bytes prefix of some block ID
+          example: '0x0004f6cb730dbd90'
         expiration:
           type: integer
           format: uint32
           description: 'expiration relative to blockRef, in unit block'
+          example: 720
         clauses:
           type: array
           items:
@@ -504,17 +523,21 @@ components:
           type: integer
           format: uint8
           description: coefficient used to calculate the final gas price
+          example: 0
         gas:
           type: integer
           format: uint64
-          description: max amount of gas can be consumed to execute this transaction        
+          description: max amount of gas can be consumed to execute this transaction
+          example: 21000
         dependsOn:
           type: string
           format: bytes32
           description: ID of the transaction on which the current transaction depends on. can be null.
+          example: null
         nonce:
           type: string
-    
+          example: '0x29c257e36ea6e72a'
+
     SignedTx:
       allOf:
         - $ref: '#/components/schemas/TxBody'
@@ -523,6 +546,7 @@ components:
             signature:
               type: string
               description: signature hex string
+              example: '0x67cd851b90fb016457bb30ccbdaa3405f3db667daeb95258e1859c545be30c10f1780476f7c6ba24c75d26c8f1a9df59fe89b105c6f86733c1d5c1c74f14cd9201'
 
     TxWithMeta:
       allOf:
@@ -531,101 +555,88 @@ components:
           properties:
             id:
               type: string
-              description: identifier of the transaction            
+              description: identifier of the transaction
+              example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
             origin:
               type: string
               description: the one who signed the transaction
+              example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
             size:
               type: integer
               format: uint32
               description: byte size of the transaction that is RLP encoded
+              example: 130
             meta:
               $ref: '#/components/schemas/TxMeta'
-      example:
-        id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        chainTag: 1
-        blockRef: '0x00000001511fc0be'
-        expiration: 30
-        clauses: []
-        gasPriceCoef: 128
-        gas: 21000
-        origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        nonce: '0xd92966da424d9939'
-        dependsOn: null
-        size: 180
-        meta:
-          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          blockNumber: 1
-          blockTimestamp: 1523156271
-    
+
     RawTx:
       properties:
         raw:
           type: string
           description: hex form of encoded transaction
-    
+          example: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
+
     RawTxWithMeta:
       properties:
         raw:
           type: string
           description: hex form of encoded transaction
+          example: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
         meta:
           $ref: '#/components/schemas/TxMeta'
-      example:
-        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
-        meta:
-          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          blockNumber: 1
-          blockTimestamp: 1523156271
 
     Event:
       properties:
         address:
           type: string
           description: the address of contract which produces the event (bytes20)
+          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         topics:
           type: array
           items:
             type: string
+            example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         data:
           type: string
-      example:
-        address: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        topics:
-          - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        data: '0xddff'
+          example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+
     Transfer:
       properties:
         sender:
           type: string
           description: address that sends tokens
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         recipient:
           type: string
           description: address that receives tokens
+          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
         amount:
           type: string
           description: amount of tokens
-      example:
-        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        recipient: '0x733b7269443c70de16bbf9b0615307884bcc5636'
-        amount: '0xde0b6b3a7640000'
+          example: '0x47fdb3c3f456c0000'
+
     Receipt:
       properties:
         gasUsed:
           type: integer
           format: uint64
+          example: 21000
         gasPayer:
           type: string
           description: address of account who paid used gas
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         paid:
           type: string
           description: hex form of amount of paid energy
+          example: '0x1236efcbcbb340000'
         reward:
           type: string
           description: hex form of amount of reward
+          example: '0x576e189f04f60000'
         reverted:
           type: boolean
           description: true means the transaction was reverted
+          example: false
         outputs:
           type: array
           items:
@@ -635,6 +646,7 @@ components:
                 description: |
                   deployed contract address, if the corresponding clause is a
                   contract deployment clause
+                example: null
               events:
                 type: array
                 items:
@@ -645,30 +657,7 @@ components:
                   $ref: '#/components/schemas/Transfer'
         meta:
           $ref: '#/components/schemas/LogMeta'
-      example:
-        gasUsed: 21000
-        gasPayer: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        paid: '0x723daf2'
-        reward: '0x723daf2'
-        reverted: false
-        outputs:
-          - contractAddress: null
-            events:
-              - address: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-                topics: 
-                  - '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-                data: 
-                  '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-            transfers:
-              - sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-                recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-                amount: '0x123f'
-        meta:
-          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          blockNumber: 1
-          blockTimestamp: 1523156271
-          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+
     CallData:
       properties:
         value:
@@ -688,13 +677,15 @@ components:
           type: string
           description: 'optional, to specify the caller'
       example:
-        value: '0x0'
+        value: '0xde0b6b3a7640000'
         data: '0x5665436861696e2054686f72'
+
     CallResult:
       properties:
         data:
           type: string
           description: the output data
+          example: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
         events:
           type: array
           items:
@@ -707,40 +698,40 @@ components:
           type: integer
           format: uint64
           description: gas used during execution
+          example: 21000
         reverted:
           type: boolean
+          example: false
         vmError:
           type: string
-      example:
-        data: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
-        events: []
-        transfers: []
-        gasUsed: 21000
-        reverted: false
-        vmError: ''
-    Options:
+          example: ''
+
+    FilterOptions:
       properties:
         offset:
           type: integer
+          example: 0
         limit:
           type: integer
-    Range:
+          example: 10
+
+    FilterRange:
       properties:
         unit:
           type: string
           enum:
             - block
             - time
+          example: block
         from:
           type: integer
           format: uint64
+          example: 0
         to:
           type: integer
           format: uint64
-      example:
-        unit: block
-        from: 100
-        to: 1000
+          example: 1000
+
     TopicSet:
       properties:
         topic0:
@@ -755,102 +746,92 @@ components:
           type: string
       example:
         topic0: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
+
     EventFilter:
       properties:
         range:
-          $ref: '#/components/schemas/Range'
+          $ref: '#/components/schemas/FilterRange'
         options:
-          $ref: '#/components/schemas/Options'
+          $ref: '#/components/schemas/FilterOptions'
         topicSets:
           type: array
           items:
             $ref: '#/components/schemas/TopicSet'
+
     FilteredEvent:
       properties:
         topics:
           type: array
           items:
             type: string
+            example: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
         data:
           type: string
+          example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         meta:
           $ref: '#/components/schemas/LogMeta'
-      example:
-        topics:
-          - '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
-        data: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        meta:
-          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          blockNumber: 1
-          blockTimestamp: 1523156271
-          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+
     AddressSet:
       properties:
         txOrigin:
           type: string
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         sender:
           type: string
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         recipient:
           type: string
-      example:
-        txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+
     TransferFilter:
       properties:
         range:
-          $ref: '#/components/schemas/Range'
+          $ref: '#/components/schemas/FilterRange'
         options:
-          $ref: '#/components/schemas/Options'
+          $ref: '#/components/schemas/FilterOptions'
         AddressSets:
           type: array
           items:
             $ref: '#/components/schemas/AddressSet'
+
     FilteredTransfer:
       properties:
         sender:
           type: string
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         recipient:
           type: string
+          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
         amount:
           type: string
+          example: '0x47fdb3c3f456c0000'
         meta:
           $ref: '#/components/schemas/LogMeta'
-      example:
-        sender: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        recipient: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        amount: '0x9fad'
-        meta:
-          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-          blockNumber: 1
-          blockTimestamp: 1523156271
-          txID: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          txOrigin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+
     PeerStats:
       properties:
         name:
           type: string
+          example: 'thor/v1.0.0-6680b98-dev/linux/go1.10.3'
         bestBlockID:
           type: string
+          example: '0x000087b3a4d4cdf1cc52d56b9704f4c18f020e1b48dbbf4a23d1ee4f1fa5ff94'
         totalScore:
           type: integer
+          example: 68497
         peerID:
           type: string
+          example: '50e122a505ee55b84331068acfd857e37ad58f463a0fab9aaff2c1e4b2e2d22ae71dc14fdaf6eead74bd3f60594644aa35c588f9ca6be3341e2ce18ddc413321'
         netAddr:
           type: string
+          example: '128.1.39.120:11235'
         inbound:
           type: boolean
+          example: false
         duration:
           type: integer
-      example: 
-        name: 'thor/v1.0.0-6680b98-dev/linux/go1.10.3'
-        bestBlockID: '0x000087b3a4d4cdf1cc52d56b9704f4c18f020e1b48dbbf4a23d1ee4f1fa5ff94'
-        totalScore: 68497
-        peerID: '50e122a505ee55b84331068acfd857e37ad58f463a0fab9aaff2c1e4b2e2d22ae71dc14fdaf6eead74bd3f60594644aa35c588f9ca6be3341e2ce18ddc413321'
-        netAddr: '128.1.39.120:11235'
-        inbound: false
-        duration: 28
+          example: 28
+
     TxOrRawTxWithMeta:
       oneOf:
         - $ref: '#/components/schemas/TxWithMeta'
@@ -871,6 +852,7 @@ components:
           blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
           blockNumber: 1
           blockTimestamp: 1523156271
+
     RawOrSignedOrUnsignedTx:
       oneOf:
         - $ref: '#/components/schemas/RawTx'
@@ -878,6 +860,7 @@ components:
         - $ref: '#/components/schemas/TxBody'
       example:
         raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
+
     IDOrSigningHash:
       oneOf:
         - type: object
@@ -900,7 +883,8 @@ components:
       schema:
         type: string
         format: bytes20
-      example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+      example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+
     RawInQuery:
       name: raw
       in: query
@@ -908,12 +892,14 @@ components:
       required: false
       schema:
         type: boolean
+
     RevisionInQuery:
       name: revision
       in: query
       description: can be block number or ID. best block is assumed if omitted.
       schema:
         type: string
+
     RevisionInPath:
       name: revision
       in: path
@@ -923,12 +909,14 @@ components:
       schema:
         type: string
       example: best
+
     HeadInQuery:
       name: head
       in: query
       description: ID of head block. best block is assumed if omitted
       schema:
         type: string
+
     StorageKeyInPath:
       in: path
       description: the key(position) to access account storage
@@ -937,6 +925,7 @@ components:
       schema:
         type: string
       example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+
     FilterAddressInQuery:
       name: address
       in: query
@@ -945,6 +934,7 @@ components:
       schema:
         type: string
       example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+
     FilterOrderInQuery:
       name: order
       in: query
@@ -956,6 +946,7 @@ components:
           - asc
           - desc
       example: asc
+
     TxIDInPath:
       in: path
       description: ID of transaction
