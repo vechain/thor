@@ -75,10 +75,16 @@ func getTxReceipt(t *testing.T) {
 }
 
 func senTx(t *testing.T) {
+	var blockRef = tx.NewBlockRef(0)
+	var chainTag = c.Tag()
+	var expiration = uint32(10)
+	var gas = uint64(21000)
+
 	tx := new(tx.Builder).
-		ChainTag(c.Tag()).
-		Expiration(10).
-		Gas(21000).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
 		Build()
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -89,19 +95,42 @@ func senTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := json.Marshal(transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := httpPost(t, ts.URL+"/transactions", raw)
+
+	res := httpPost(t, ts.URL+"/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, tx.ID().String(), txObj["id"], "shoudl be the same transaction")
+	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
+
+	unsignedTx := transactions.UnSignedTx{
+		ChainTag:   chainTag,
+		BlockRef:   hexutil.Encode(blockRef[:]),
+		Expiration: expiration,
+		Gas:        gas,
+	}
+	res = httpPost(t, ts.URL+"/transactions", unsignedTx)
+	if err = json.Unmarshal(res, &txObj); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, tx.SigningHash().String(), txObj["signingHash"], "should be the same transaction signingHash")
+
+	signedTx := transactions.SignedTx{
+		UnSignedTx: unsignedTx,
+		Signature:  hexutil.Encode(sig),
+	}
+	res = httpPost(t, ts.URL+"/transactions", signedTx)
+	if err = json.Unmarshal(res, &txObj); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
-func httpPost(t *testing.T, url string, data []byte) []byte {
+func httpPost(t *testing.T, url string, obj interface{}) []byte {
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)

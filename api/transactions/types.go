@@ -7,10 +7,13 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -18,8 +21,8 @@ import (
 
 // Clause for json marshal
 type Clause struct {
-	To    *thor.Address        `json:"to,string"`
-	Value math.HexOrDecimal256 `json:"value,string"`
+	To    *thor.Address        `json:"to"`
+	Value math.HexOrDecimal256 `json:"value"`
 	Data  string               `json:"data"`
 }
 
@@ -45,12 +48,91 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
-type RawTx struct {
-	Raw string `json:"raw"` //hex of transaction which rlp encoded
+func hasKey(m map[string]interface{}, key string) bool {
+	for k := range m {
+		if strings.ToLower(k) == strings.ToLower(key) {
+			return true
+		}
+	}
+	return false
 }
 
-func (r *RawTx) decode() (*tx.Transaction, error) {
-	data, err := hexutil.Decode(r.Raw)
+//Transaction transaction
+type Transaction struct {
+	ID           thor.Bytes32        `json:"id"`
+	ChainTag     byte                `json:"chainTag"`
+	BlockRef     string              `json:"blockRef"`
+	Expiration   uint32              `json:"expiration"`
+	Clauses      Clauses             `json:"clauses"`
+	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	Gas          uint64              `json:"gas"`
+	Origin       thor.Address        `json:"origin"`
+	Nonce        math.HexOrDecimal64 `json:"nonce"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn"`
+	Size         uint32              `json:"size"`
+	Meta         TxMeta              `json:"meta"`
+}
+type UnSignedTx struct {
+	ChainTag     uint8               `json:"chainTag"`
+	BlockRef     string              `json:"blockRef"`
+	Expiration   uint32              `json:"expiration"`
+	Clauses      Clauses             `json:"clauses"`
+	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	Gas          uint64              `json:"gas"`
+	DependsOn    *thor.Bytes32       `json:"dependsOn"`
+	Nonce        math.HexOrDecimal64 `json:"nonce"`
+}
+
+func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
+	txBuilder := new(tx.Builder)
+	for _, clause := range ustx.Clauses {
+		data, err := hexutil.Decode(clause.Data)
+		if err != nil {
+			return nil, errors.WithMessage(err, "data")
+		}
+		v := big.Int(clause.Value)
+		txBuilder.Clause(tx.NewClause(clause.To).WithData(data).WithValue(&v))
+	}
+	blockRef, err := hexutil.Decode(ustx.BlockRef)
+	if err != nil {
+		return nil, errors.WithMessage(err, "blockRef")
+	}
+	var bf tx.BlockRef
+	copy(bf[:], blockRef[:])
+
+	return txBuilder.ChainTag(ustx.ChainTag).
+		BlockRef(bf).
+		Expiration(ustx.Expiration).
+		Gas(ustx.Gas).
+		GasPriceCoef(ustx.GasPriceCoef).
+		DependsOn(ustx.DependsOn).
+		Nonce(uint64(ustx.Nonce)).
+		Build(), nil
+}
+
+type SignedTx struct {
+	UnSignedTx
+	Signature string `json:"signature"`
+}
+
+func (stx *SignedTx) decode() (*tx.Transaction, error) {
+	tx, err := stx.UnSignedTx.decode()
+	if err != nil {
+		return nil, err
+	}
+	sig, err := hexutil.Decode(stx.Signature)
+	if err != nil {
+		return nil, errors.WithMessage(err, "signature")
+	}
+	return tx.WithSignature(sig), nil
+}
+
+type RawTx struct {
+	Raw string `json:"raw"`
+}
+
+func (rtx *RawTx) decode() (*tx.Transaction, error) {
+	data, err := hexutil.Decode(rtx.Raw)
 	if err != nil {
 		return nil, err
 	}
@@ -59,22 +141,6 @@ func (r *RawTx) decode() (*tx.Transaction, error) {
 		return nil, err
 	}
 	return tx, nil
-}
-
-//Transaction transaction
-type Transaction struct {
-	ID           thor.Bytes32        `json:"id,string"`
-	ChainTag     byte                `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      Clauses             `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	Origin       thor.Address        `json:"origin,string"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn,string"`
-	Size         uint32              `json:"size"`
-	Meta         TxMeta              `json:"meta"`
 }
 
 type rawTransaction struct {
@@ -133,8 +199,8 @@ type LogMeta struct {
 type Receipt struct {
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer"`
-	Paid     *math.HexOrDecimal256 `json:"paid,string"`
-	Reward   *math.HexOrDecimal256 `json:"reward,string"`
+	Paid     *math.HexOrDecimal256 `json:"paid"`
+	Reward   *math.HexOrDecimal256 `json:"reward"`
 	Reverted bool                  `json:"reverted"`
 	Meta     LogMeta               `json:"meta"`
 	Outputs  []*Output             `json:"outputs"`

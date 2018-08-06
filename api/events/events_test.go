@@ -56,11 +56,7 @@ func getEvents(t *testing.T) {
 			},
 		},
 	}
-	f, err := json.Marshal(&filter)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := httpPost(t, ts.URL+"/events?address="+contractAddr.String(), f)
+	res := httpPost(t, ts.URL+"/logs/events?address="+contractAddr.String(), filter)
 	var logs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
@@ -91,11 +87,15 @@ func initEventServer(t *testing.T) {
 	}
 
 	router := mux.NewRouter()
-	events.New(db).Mount(router, "/events")
+	events.New(db).Mount(router, "/logs/events")
 	ts = httptest.NewServer(router)
 }
 
-func httpPost(t *testing.T, url string, data []byte) []byte {
+func httpPost(t *testing.T, url string, obj interface{}) []byte {
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
