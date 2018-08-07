@@ -752,7 +752,7 @@ components:
         to:
           type: integer
           format: uint64
-          example: 1000
+          example: 100000
 
       description: |
         defines the range to filter in. e.g.
@@ -785,13 +785,13 @@ components:
         a set of topics joined with `and` operand. `null` topics are ignored. e.g. 
         ```
         {
-          "topic1": "0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5",
-          "topic2": null
+          "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+          "topic1": null
         }
         ```
-        matches events whose `topic1` equlas `0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5`.
+        matches events whose `topic0` equals `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`.
       example:
-        topic1: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
+        topic0: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 
     EventFilter:
       properties:
@@ -810,10 +810,10 @@ components:
           type: array
           items:
             type: string
-            example: '0x103556a73c10e38ffe2fc4aa50fc9d46ad0148f07e26417e117bd1ece9d948b5'
+            example: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
         data:
           type: string
-          example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          example: '0x00000000000000000000000000000000000000000000d3c21bcecceda1000000'
         meta:
           $ref: '#/components/schemas/LogMeta'
 
@@ -821,13 +821,13 @@ components:
       properties:
         txOrigin:
           type: string
-          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
         sender:
           type: string
-          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
         recipient:
           type: string
-          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
 
     TransferFilter:
       properties:
@@ -844,10 +844,10 @@ components:
       properties:
         sender:
           type: string
-          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
         recipient:
           type: string
-          example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
         amount:
           type: string
           example: '0x47fdb3c3f456c0000'
