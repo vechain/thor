@@ -25,6 +25,8 @@ tags:
     description: Access to event & transfer logs
   - name: Node
     description: Access to node status info
+  - name: Subscriptions
+    description: Subscribe interested topics
     
 paths:
   /accounts/{address}:
@@ -246,7 +248,7 @@ paths:
         - Logs
       summary: Filter transfer logs
       description: |
-        Transfer logs are recorded on VET transferring. e.g.
+        Transfer logs are recorded on VET transferring.
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
@@ -330,6 +332,79 @@ paths:
               schema:
                 items:
                   $ref: '#/components/schemas/PeerStats'
+
+  /subscriptions/block:
+    servers:
+      - url: ws://127.0.0.1:8669/
+    get:
+      tags:
+        - Subscriptions
+      parameters:
+        - $ref: '#/components/parameters/FromBlockIDInQuery'
+      
+      responses:
+        '200':
+          description: OK
+          
+  /subscriptions/event:
+    servers:
+      - url: ws://127.0.0.1:8669/
+    get:
+      tags:
+        - Subscriptions
+      parameters:
+        - $ref: '#/components/parameters/FromBlockIDInQuery'
+        - name: addr
+          in: query
+          schema:
+            type: string
+        - name: t0
+          in: query
+          schema:
+            type: string
+        - name: t1
+          in: query
+          schema:
+            type: string
+        - name: t2
+          in: query
+          schema:
+            type: string
+        - name: t3
+          in: query
+          schema:
+            type: string
+        - name: t4
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK     
+          
+  /subscriptions/transfer:
+    servers:
+      - url: ws://127.0.0.1:8669/
+    get:
+      tags:
+        - Subscriptions
+      parameters:
+        - $ref: '#/components/parameters/FromBlockIDInQuery'
+        - name: txOrigin
+          in: query
+          schema:
+            type: string
+        - name: sender
+          in: query
+          schema:
+            type: string
+        - name: recipient
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
 
 components:
   schemas:
@@ -919,6 +994,7 @@ components:
               type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+    
 
   parameters:
     AddressInPath:
@@ -975,7 +1051,7 @@ components:
     FilterAddressInQuery:
       name: address
       in: query
-      description: address of account
+      description: address of account which is the events emitter
       required: false
       schema:
         type: string
@@ -1002,3 +1078,12 @@ components:
       schema:
         type: string
       example: '0x9bcc6526a76ae560244f698805cc001977246cb92c2b4f1e2b7a204e445409ea'
+      
+    FromBlockIDInQuery:
+      name: bid
+      in: query
+      description: |
+        a saved block ID for resuming the subscription
+      schema:
+        type: string
+      
