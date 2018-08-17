@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	tty "github.com/mattn/go-tty"
+	"github.com/vechain/thor/thor"
 )
 
 func fatal(args ...interface{}) {
@@ -113,6 +115,20 @@ func handleExitSignal() context.Context {
 func requestBodyLimit(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 96*1000)
+		h.ServeHTTP(w, r)
+	})
+}
+
+func matchGenesisMiddleWare(h http.Handler, genesisID thor.Bytes32) http.Handler {
+	genesisIDStr := genesisID.String()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gid := r.Header.Get("x-genesis-id")
+		w.Header().Set("x-genesis-id", genesisIDStr)
+		if gid != "" && gid != genesisIDStr {
+			io.Copy(ioutil.Discard, r.Body)
+			http.Error(w, "genesisID mismatched", http.StatusForbidden)
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
 }

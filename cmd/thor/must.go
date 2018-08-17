@@ -257,7 +257,7 @@ func (p *p2pComm) Stop() {
 	}
 }
 
-func startAPIServer(ctx *cli.Context, handler http.Handler) (*http.Server, string) {
+func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes32) (*http.Server, string) {
 	addr := ctx.String(apiAddrFlag.Name)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -270,7 +270,7 @@ func startAPIServer(ctx *cli.Context, handler http.Handler) (*http.Server, strin
 			handlers.AllowedHeaders([]string{"content-type"}),
 		)(handler)
 	}
-
+	handler = matchGenesisMiddleWare(handler, genesisID)
 	srv := &http.Server{Handler: requestBodyLimit(handler)}
 	go func() {
 		srv.Serve(listener)
