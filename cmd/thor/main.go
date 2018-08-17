@@ -127,7 +127,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
 
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm), chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
@@ -176,7 +176,7 @@ func soloAction(ctx *cli.Context) error {
 
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
 
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}), chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printSoloStartupMessage(gene, chain, instanceDir, apiURL)

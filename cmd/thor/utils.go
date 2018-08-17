@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	tty "github.com/mattn/go-tty"
+	"github.com/vechain/thor/thor"
 )
 
 func fatal(args ...interface{}) {
@@ -110,9 +112,26 @@ func handleExitSignal() context.Context {
 	return ctx
 }
 
+// middleware to limit request body size.
 func requestBodyLimit(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 96*1000)
+		h.ServeHTTP(w, r)
+	})
+}
+
+// middleware to verify 'x-genesis-id' header in request, and set to response headers.
+func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
+	const headerKey = "x-genesis-id"
+	expectedID := genesisID.String()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actualID := r.Header.Get(headerKey)
+		w.Header().Set(headerKey, expectedID)
+		if actualID != "" && actualID != expectedID {
+			io.Copy(ioutil.Discard, r.Body)
+			http.Error(w, "genesis id mismatch", http.StatusForbidden)
+			return
+		}
 		h.ServeHTTP(w, r)
 	})
 }
