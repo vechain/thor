@@ -270,8 +270,9 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 			handlers.AllowedHeaders([]string{"content-type"}),
 		)(handler)
 	}
-	handler = matchGenesisMiddleWare(handler, genesisID)
-	srv := &http.Server{Handler: requestBodyLimit(handler)}
+	handler = handleXGenesisID(handler, genesisID)
+	handler = requestBodyLimit(handler)
+	srv := &http.Server{Handler: handler}
 	go func() {
 		srv.Serve(listener)
 	}()

@@ -112,6 +112,7 @@ func handleExitSignal() context.Context {
 	return ctx
 }
 
+// middleware to limit request body size.
 func requestBodyLimit(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 96*1000)
@@ -119,14 +120,16 @@ func requestBodyLimit(h http.Handler) http.Handler {
 	})
 }
 
-func matchGenesisMiddleWare(h http.Handler, genesisID thor.Bytes32) http.Handler {
-	genesisIDStr := genesisID.String()
+// middleware to verify 'x-genesis-id' header in request, and set to response headers.
+func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
+	const headerKey = "x-genesis-id"
+	expectedID := genesisID.String()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gid := r.Header.Get("x-genesis-id")
-		w.Header().Set("x-genesis-id", genesisIDStr)
-		if gid != "" && gid != genesisIDStr {
+		actualID := r.Header.Get(headerKey)
+		w.Header().Set(headerKey, expectedID)
+		if actualID != "" && actualID != expectedID {
 			io.Copy(ioutil.Discard, r.Body)
-			http.Error(w, "genesisID mismatched", http.StatusForbidden)
+			http.Error(w, "genesis id mismatch", http.StatusForbidden)
 			return
 		}
 		h.ServeHTTP(w, r)
