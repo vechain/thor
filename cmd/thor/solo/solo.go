@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -52,6 +53,7 @@ func New(
 	}
 }
 
+// Run runs the packer for solo
 func (s *Solo) Run(ctx context.Context) error {
 	goes := &co.Goes{}
 
@@ -79,7 +81,9 @@ func (s *Solo) loop(ctx context.Context) {
 	txEvCh := make(chan *txpool.TxEvent, 10)
 	scope.Track(s.txPool.SubscribeTxEvent(txEvCh))
 
-	s.packing(nil)
+	if err := s.packing(nil); err != nil {
+		log.Error("failed to pack block", "err", err)
+	}
 
 	for {
 		select {
@@ -88,30 +92,31 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 		case txEv := <-txEvCh:
 			newTx := txEv.Tx
-			singer, err := newTx.Signer()
-			if err != nil {
-				continue
-			}
+			singer, _ := newTx.Signer()
 			log.Info("new Tx", "id", newTx.ID(), "signer", singer)
 			if s.onDemand {
-				s.packing(tx.Transactions{newTx})
+				if err := s.packing(tx.Transactions{newTx}); err != nil {
+					log.Error("failed to pack block", "err", err)
+				}
 			}
 		case <-ticker.C:
 			if s.onDemand {
 				continue
 			}
-			s.packing(s.txPool.Executables())
+			if err := s.packing(s.txPool.Executables()); err != nil {
+				log.Error("failed to pack block", "err", err)
+			}
 		}
 	}
 }
 
-func (s *Solo) packing(pendingTxs tx.Transactions) {
+func (s *Solo) packing(pendingTxs tx.Transactions) error {
 
 	best := s.chain.BestBlock()
 
 	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
+		return errors.WithMessage(err, "mock packer")
 	}
 
 	for _, tx := range pendingTxs {
@@ -120,8 +125,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions) {
 			log.Error("executing transaction", "error", fmt.Sprintf("%+v", err.Error()))
 		}
 		switch {
-		case packer.IsKnownTx(err) || packer.IsBadTx(err):
-			s.txPool.Remove(tx.ID())
 		case packer.IsGasLimitReached(err):
 			break
 		case packer.IsTxNotAdoptableNow(err):
@@ -133,15 +136,15 @@ func (s *Solo) packing(pendingTxs tx.Transactions) {
 
 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
+		return errors.WithMessage(err, "pack")
 	}
 	if _, err := stage.Commit(); err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
+		return errors.WithMessage(err, "commit state")
 	}
 
 	// If there is no tx packed in the on-demand mode then skip
 	if s.onDemand && len(b.Transactions()) == 0 {
-		return
+		return nil
 	}
 
 	blockID := b.Header().ID()
@@ -162,12 +165,14 @@ func (s *Solo) packing(pendingTxs tx.Transactions) {
 		}
 	}
 	if err := batch.Commit(); err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
+		return errors.WithMessage(err, "commit log")
 	}
 
-	// ignore fork when s
+	// ignore fork when solo
 	_, err = s.chain.AddBlock(b, receipts)
 	if err != nil {
-		log.Error(fmt.Sprintf("%+v", err))
+		return errors.WithMessage(err, "commit block")
 	}
+
+	return nil
 }
