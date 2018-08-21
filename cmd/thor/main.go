@@ -81,6 +81,7 @@ func main() {
 					apiCorsFlag,
 					onDemandFlag,
 					persistFlag,
+					gasLimitFlag,
 					verbosityFlag,
 				},
 				Action: soloAction,
@@ -174,7 +175,7 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
+	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, uint64(ctx.Int("gas-limit")), ctx.Bool("on-demand"))
 
 	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}), chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()

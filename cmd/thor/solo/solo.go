@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
@@ -20,6 +22,7 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -33,6 +36,7 @@ type Solo struct {
 	packer      *packer.Packer
 	logDB       *logdb.LogDB
 	bestBlockCh chan *block.Block
+	gasLimit    uint64
 	onDemand    bool
 }
 
@@ -42,6 +46,7 @@ func New(
 	stateCreator *state.Creator,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
+	gasLimit uint64,
 	onDemand bool,
 ) *Solo {
 	return &Solo{
@@ -49,6 +54,7 @@ func New(
 		txPool:   txPool,
 		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address),
 		logDB:    logDB,
+		gasLimit: gasLimit,
 		onDemand: onDemand,
 	}
 }
@@ -111,14 +117,20 @@ func (s *Solo) loop(ctx context.Context) {
 }
 
 func (s *Solo) packing(pendingTxs tx.Transactions) error {
-
 	best := s.chain.BestBlock()
+	var txsToRemove []thor.Bytes32
+	defer func() {
+		for _, id := range txsToRemove {
+			s.txPool.Remove(id)
+		}
+	}()
 
-	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()))
+	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
 
+	startTime := mclock.Now()
 	for _, tx := range pendingTxs {
 		err := flow.Adopt(tx)
 		if err != nil {
@@ -130,7 +142,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		case packer.IsTxNotAdoptableNow(err):
 			continue
 		default:
-			s.txPool.Remove(tx.ID())
+			txsToRemove = append(txsToRemove, tx.ID())
 		}
 	}
 
@@ -138,22 +150,22 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	if err != nil {
 		return errors.WithMessage(err, "pack")
 	}
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
-	}
+	execElapsed := mclock.Now() - startTime
 
 	// If there is no tx packed in the on-demand mode then skip
 	if s.onDemand && len(b.Transactions()) == 0 {
 		return nil
 	}
 
-	blockID := b.Header().ID()
-	log.Info("📦 new block packed",
-		"txs", len(receipts),
-		"mgas", float64(b.Header().GasUsed())/1000/1000,
-		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
-	)
-	log.Debug(b.String())
+	if _, err := stage.Commit(); err != nil {
+		return errors.WithMessage(err, "commit state")
+	}
+
+	// ignore fork when solo
+	_, err = s.chain.AddBlock(b, receipts)
+	if err != nil {
+		return errors.WithMessage(err, "commit block")
+	}
 
 	batch := s.logDB.Prepare(b.Header())
 	for i, tx := range b.Transactions() {
@@ -168,11 +180,16 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		return errors.WithMessage(err, "commit log")
 	}
 
-	// ignore fork when solo
-	_, err = s.chain.AddBlock(b, receipts)
-	if err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
+	commitElapsed := mclock.Now() - startTime - execElapsed
+
+	blockID := b.Header().ID()
+	log.Info("📦 new block packed",
+		"txs", len(receipts),
+		"mgas", float64(b.Header().GasUsed())/1000/1000,
+		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
+	)
+	log.Debug(b.String())
 
 	return nil
 }
