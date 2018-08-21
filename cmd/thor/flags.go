@@ -69,6 +69,11 @@ var (
 		Name:  "persist",
 		Usage: "blockchain data storage option, if setted data will be saved to disk",
 	}
+	gasLimitFlag = cli.IntFlag{
+		Name:  "gas-limit",
+		Value: 10000000,
+		Usage: "block gas limit",
+	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",
 		Usage: "import master key from keystore",

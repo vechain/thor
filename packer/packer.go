@@ -103,7 +103,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 // Mock create a packing flow upon given parent, but with a designated timestamp.
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
-func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
+func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) (*Flow, error) {
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "state")
@@ -117,7 +117,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64) (*Flow, error) {
 			Signer:      p.nodeMaster,
 			Number:      parent.Number() + 1,
 			Time:        targetTime,
-			GasLimit:    p.gasLimit(parent.GasLimit()),
+			GasLimit:    gasLimit,
 			TotalScore:  parent.TotalScore() + 1,
 		})
 
