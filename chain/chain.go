@@ -266,6 +266,13 @@ func (c *Chain) GetBlockRaw(id thor.Bytes32) (block.Raw, error) {
 	return raw.raw, nil
 }
 
+// GetBlockReceipts get all tx receipts in the block for given block id.
+func (c *Chain) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
+	c.rw.RLock()
+	defer c.rw.RUnlock()
+	return c.getBlockReceipts(id)
+}
+
 // GetAncestorBlockID get ancestor block ID of descendant for given ancestor block.
 func (c *Chain) GetAncestorBlockID(descendantID thor.Bytes32, ancestorNum uint32) (thor.Bytes32, error) {
 	c.rw.RLock()
