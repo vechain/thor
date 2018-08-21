@@ -30,7 +30,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 	errCh := make(chan error, 2)
 
 	ctx, cancel := context.WithCancel(c.ctx)
-	blockCh := make(chan *block.Block, 32)
+	blockCh := make(chan *block.Block, 2048)
 
 	var goes co.Goes
 	goes.Go(func() {
