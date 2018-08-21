@@ -2,11 +2,10 @@ package subscriptions
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vechain/thor/block"
-
 	"github.com/vechain/thor/chain"
-
 	"github.com/vechain/thor/thor"
 )
 
@@ -24,7 +23,7 @@ func NewBlockSub(ch chan struct{}, chain *chain.Chain, fromBlock thor.Bytes32) *
 	}
 }
 
-func (bs *BlockSub) Read(ctx context.Context) ([]*block.Header, []*block.Header, error) {
+func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -43,25 +42,26 @@ func (bs *BlockSub) Read(ctx context.Context) ([]*block.Header, []*block.Header,
 			}
 
 			if ancestor == bs.fromBlock {
-				blks, err := blockHeaders(ancestor, bestID, bs.chain)
+				blks, err := sliceChain(ancestor, bestID, bs.chain)
 				if err != nil {
 					return nil, nil, err
 				}
+
 				bs.fromBlock = bestID
 				return blks, nil, nil
 			}
 
-			sa, err := lookingForSameAncestor(bs.fromBlock, ancestor, bs.chain)
+			sa, err := lookForSameAncestor(bs.fromBlock, ancestor, bs.chain)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			removes, err := blockHeaders(sa, bs.fromBlock, bs.chain)
+			removes, err := sliceChain(sa, bs.fromBlock, bs.chain)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			blks, err := blockHeaders(sa, bestID, bs.chain)
+			blks, err := sliceChain(sa, bestID, bs.chain)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -72,37 +72,44 @@ func (bs *BlockSub) Read(ctx context.Context) ([]*block.Header, []*block.Header,
 	}
 }
 
-func lookingForSameAncestor(src, tar thor.Bytes32, chain *chain.Chain) (thor.Bytes32, error) {
-	if src == tar {
-		return src, nil
-	}
+// src and tar must have the same num
+func lookForSameAncestor(src, tar thor.Bytes32, chain *chain.Chain) (thor.Bytes32, error) {
+	for {
+		if src == tar {
+			return src, nil
+		}
 
-	srcHeader, err := chain.GetBlockHeader(src)
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
+		srcHeader, err := chain.GetBlockHeader(src)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+		src = srcHeader.ParentID()
 
-	tarHeader, err := chain.GetBlockHeader(tar)
-	if err != nil {
-		return thor.Bytes32{}, err
+		tarHeader, err := chain.GetBlockHeader(tar)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+		tar = tarHeader.ParentID()
 	}
-
-	return lookingForSameAncestor(srcHeader.ParentID(), tarHeader.ParentID(), chain)
 }
 
-// 左开右闭
-func blockHeaders(from thor.Bytes32, to thor.Bytes32, chain *chain.Chain) ([]*block.Header, error) {
+// from open, to closed
+func sliceChain(from thor.Bytes32, to thor.Bytes32, chain *chain.Chain) ([]*block.Block, error) {
+	if block.Number(to) <= block.Number(from) {
+		return nil, errors.New("to must be greater than from")
+	}
+
 	length := block.Number(to) - block.Number(from)
-	blockHeaders := make([]*block.Header, length)
+	blks := make([]*block.Block, length)
 
 	for i := length - 1; i >= 0; i-- {
-		blkHeader, err := chain.GetBlockHeader(to)
+		blk, err := chain.GetBlock(to)
 		if err != nil {
 			return nil, err
 		}
-		blockHeaders[i] = blkHeader
-		to = blkHeader.ParentID()
+		blks[i] = blk
+		to = blk.Header().ParentID()
 	}
 
-	return blockHeaders, nil
+	return blks, nil
 }
