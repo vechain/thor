@@ -29,13 +29,23 @@ func (bs *BlockSub) Chain() *chain.Chain { return bs.chain }
 
 func (bs *BlockSub) FromBlock() thor.Bytes32 { return bs.fromBlock }
 
-func (bs *BlockSub) Read(ctx context.Context) (BlockIter, BlockIter, error) {
+func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, error) {
 	changes, removes, err := Read(ctx, bs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return BlockIter(changes), BlockIter(removes), err
+	convertBlock := func(slice []interface{}) []*block.Block {
+		blocks := make([]*block.Block, len(slice))
+		for i, v := range slice {
+			if blk, ok := v.(*block.Block); ok {
+				blocks[i] = blk
+			}
+		}
+		return blocks
+	}
+
+	return convertBlock(changes), convertBlock(removes), err
 }
 
 func (bs *BlockSub) UpdateFilter(bestID thor.Bytes32) {
@@ -61,19 +71,4 @@ func (bs *BlockSub) SliceChain(from thor.Bytes32, to thor.Bytes32) ([]interface{
 	}
 
 	return blks, nil
-}
-
-type BlockIter []interface{}
-
-func (bi BlockIter) Iterator() <-chan *block.Block {
-	c := make(chan *block.Block)
-	go func() {
-		for _, v := range bi {
-			if blk, ok := v.(*block.Block); ok {
-				c <- blk
-			}
-		}
-		close(c)
-	}()
-	return c
 }
