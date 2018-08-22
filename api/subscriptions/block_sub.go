@@ -17,7 +17,7 @@ type BlockSub struct {
 
 func NewBlockSub(ch chan struct{}, chain *chain.Chain, fromBlock thor.Bytes32) *BlockSub {
 	return &BlockSub{
-		ch:        make(chan struct{}, 2),
+		ch:        ch,
 		chain:     chain,
 		fromBlock: fromBlock,
 	}

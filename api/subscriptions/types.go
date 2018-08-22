@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
 
@@ -21,6 +22,40 @@ type Block struct {
 	IsTrunk      bool           `json:"isTrunk"`
 	Transactions []thor.Bytes32 `json:"transactions"`
 	Removed      bool           `json:"removed"`
+}
+
+func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
+	if b == nil {
+		return nil, nil
+	}
+	signer, err := b.Header().Signer()
+	if err != nil {
+		return nil, err
+	}
+	txs := b.Transactions()
+	txIds := make([]thor.Bytes32, len(txs))
+	for i, tx := range txs {
+		txIds[i] = tx.ID()
+	}
+
+	header := b.Header()
+	return &Block{
+		Number:       header.Number(),
+		ID:           header.ID(),
+		ParentID:     header.ParentID(),
+		Timestamp:    header.Timestamp(),
+		TotalScore:   header.TotalScore(),
+		GasLimit:     header.GasLimit(),
+		GasUsed:      header.GasUsed(),
+		Beneficiary:  header.Beneficiary(),
+		Signer:       signer,
+		Size:         uint32(b.Size()),
+		StateRoot:    header.StateRoot(),
+		ReceiptsRoot: header.ReceiptsRoot(),
+		TxsRoot:      header.TxsRoot(),
+		IsTrunk:      isTrunk,
+		Transactions: txIds,
+	}, nil
 }
 
 // FilterQuery contains options for contract log filtering.
