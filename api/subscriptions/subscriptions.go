@@ -1,20 +1,13 @@
 package subscriptions
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"time"
-
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-
-	"github.com/pkg/errors"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
@@ -28,12 +21,9 @@ func New(ch chan struct{}, chain *chain.Chain) *Subscriptions {
 }
 
 func (s *Subscriptions) handleSubscribeBlocks(w http.ResponseWriter, req *http.Request) error {
-	ctx, cancel := context.WithTimeout(req.Context(), time.Second*30)
-	defer cancel()
-	upgrader := websocket.Upgrader{}
+	var upgrader = websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		fmt.Println("upgrade:", err)
 		return err
 	}
 	defer conn.Close()
@@ -42,28 +32,23 @@ func (s *Subscriptions) handleSubscribeBlocks(w http.ResponseWriter, req *http.R
 		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
 	blockSub := NewBlockSub(s.ch, s.chain, bid)
-	remained := make(chan []*block.Block, 1)
-	removed := make(chan []*block.Block, 1)
-	readErr := make(chan error, 1)
-	go func() {
-		remains, removes, err := blockSub.Read(ctx)
-		remained <- remains
-		removed <- removes
-		readErr <- err
-	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-readErr:
+	for {
+		remains, removes, err := blockSub.Read(req.Context())
 		if err != nil {
 			return err
 		}
-		// TODO
-		b, err := json.Marshal(<-remained)
-		if err != nil {
-			return err
+		for removed := range removes {
+			err := conn.WriteJSON(removed)
+			if err != nil {
+				return err
+			}
 		}
-		return conn.WriteMessage(websocket.BinaryMessage, b)
+		for remained := range remains {
+			err := conn.WriteJSON(remained)
+			if err != nil {
+				return err
+			}
+		}
 	}
 }
 
