@@ -207,7 +207,7 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 func deployContractWithCall(t *testing.T) {
 	reqBody := &accounts.ContractCall{
 		Gas:    10000000,
-		Caller: thor.Address{},
+		Caller: nil,
 		Data:   hexutil.Encode(bytecode),
 	}
 	reqBodyBytes, err := json.Marshal(reqBody)

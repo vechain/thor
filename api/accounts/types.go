@@ -26,7 +26,7 @@ type ContractCall struct {
 	Data     string                `json:"data"`
 	Gas      uint64                `json:"gas"`
 	GasPrice *math.HexOrDecimal256 `json:"gasPrice"`
-	Caller   thor.Address          `json:"caller"`
+	Caller   *thor.Address         `json:"caller"`
 }
 
 type VMOutput struct {

@@ -118,6 +118,9 @@ func (a *Accounts) sterilizeOptions(options *ContractCall) {
 		dv := math.HexOrDecimal256(*v)
 		options.Value = &dv
 	}
+	if options.Caller == nil {
+		options.Caller = &thor.Address{}
+	}
 }
 
 //Call a contract with input
@@ -145,7 +148,7 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 			TotalScore:  header.TotalScore()})
 
 	exec, interrupt := rt.PrepareClause(clause, 0, body.Gas, &xenv.TransactionContext{
-		Origin:     body.Caller,
+		Origin:     *body.Caller,
 		GasPrice:   gp,
 		ProvedWork: &big.Int{}})
 	vmout := make(chan *runtime.Output, 1)
