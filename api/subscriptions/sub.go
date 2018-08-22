@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -9,27 +10,25 @@ import (
 )
 
 type Sub interface {
-	Ch() chan struct{} // When chain changed, this channel will be readable
-	Chain() *chain.Chain
 	FromBlock() thor.Bytes32
 	SliceChain(thor.Bytes32, thor.Bytes32) ([]interface{}, error)
 	UpdateFilter(thor.Bytes32)
 }
 
-func Read(ctx context.Context, sub Sub) ([]interface{}, []interface{}, error) {
+func read(ctx context.Context, ch chan struct{}, chain *chain.Chain, sub Sub) ([]interface{}, []interface{}, error) {
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
-		case <-sub.Ch():
-			best := sub.Chain().BestBlock()
+		case <-ch:
+			best := chain.BestBlock()
 			bestID := best.Header().ID()
 
 			if bestID == sub.FromBlock() {
 				continue
 			}
 
-			ancestor, err := sub.Chain().GetAncestorBlockID(bestID, block.Number(sub.FromBlock()))
+			ancestor, err := chain.GetAncestorBlockID(bestID, block.Number(sub.FromBlock()))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -44,7 +43,7 @@ func Read(ctx context.Context, sub Sub) ([]interface{}, []interface{}, error) {
 				return changes, nil, nil
 			}
 
-			sa, err := lookForSameAncestor(sub.FromBlock(), ancestor, sub.Chain())
+			sa, err := lookForSameAncestor(sub.FromBlock(), ancestor, chain)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -84,4 +83,31 @@ func lookForSameAncestor(src, tar thor.Bytes32, chain *chain.Chain) (thor.Bytes3
 		}
 		tar = tarHeader.ParentID()
 	}
+}
+
+// from open, to closed
+func sliceChain(from, to thor.Bytes32, chain *chain.Chain, f func(*block.Block) (interface{}, error)) ([]interface{}, error) {
+	if block.Number(to) <= block.Number(from) {
+		return nil, errors.New("to must be greater than from")
+	}
+
+	length := int64(block.Number(to) - block.Number(from))
+	slice := make([]interface{}, length)
+
+	for i := length - 1; i >= 0; i-- {
+		blk, err := chain.GetBlock(to)
+		if err != nil {
+			return nil, err
+		}
+
+		v, err := f(blk)
+		if err != nil {
+			return nil, err
+		}
+
+		slice[i] = v
+		to = blk.Header().ParentID()
+	}
+
+	return slice, nil
 }
