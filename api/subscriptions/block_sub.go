@@ -17,93 +17,42 @@ type BlockSub struct {
 
 func NewBlockSub(ch chan struct{}, chain *chain.Chain, fromBlock thor.Bytes32) *BlockSub {
 	return &BlockSub{
-		ch:        make(chan struct{}, 2),
+		ch:        ch,
 		chain:     chain,
 		fromBlock: fromBlock,
 	}
 }
 
-func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, error) {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case <-bs.ch:
-			best := bs.chain.BestBlock()
-			bestID := best.Header().ID()
+func (bs *BlockSub) Ch() chan struct{} { return bs.ch }
 
-			if bestID == bs.fromBlock {
-				continue
-			}
+func (bs *BlockSub) Chain() *chain.Chain { return bs.chain }
 
-			ancestor, err := bs.chain.GetAncestorBlockID(bestID, block.Number(bs.fromBlock))
-			if err != nil {
-				return nil, nil, err
-			}
+func (bs *BlockSub) FromBlock() thor.Bytes32 { return bs.fromBlock }
 
-			if ancestor == bs.fromBlock {
-				blks, err := sliceChain(ancestor, bestID, bs.chain)
-				if err != nil {
-					return nil, nil, err
-				}
-
-				bs.fromBlock = bestID
-				return blks, nil, nil
-			}
-
-			sa, err := lookForSameAncestor(bs.fromBlock, ancestor, bs.chain)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			removes, err := sliceChain(sa, bs.fromBlock, bs.chain)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			blks, err := sliceChain(sa, bestID, bs.chain)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			bs.fromBlock = bestID
-			return blks, removes, nil
-		}
+func (bs *BlockSub) Read(ctx context.Context) (BlockIter, BlockIter, error) {
+	changes, removes, err := Read(ctx, bs)
+	if err != nil {
+		return nil, nil, err
 	}
+
+	return BlockIter(changes), BlockIter(removes), err
 }
 
-// src and tar must have the same num
-func lookForSameAncestor(src, tar thor.Bytes32, chain *chain.Chain) (thor.Bytes32, error) {
-	for {
-		if src == tar {
-			return src, nil
-		}
-
-		srcHeader, err := chain.GetBlockHeader(src)
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-		src = srcHeader.ParentID()
-
-		tarHeader, err := chain.GetBlockHeader(tar)
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-		tar = tarHeader.ParentID()
-	}
+func (bs *BlockSub) UpdateFilter(bestID thor.Bytes32) {
+	bs.fromBlock = bestID
 }
 
 // from open, to closed
-func sliceChain(from thor.Bytes32, to thor.Bytes32, chain *chain.Chain) ([]*block.Block, error) {
+func (bs *BlockSub) SliceChain(from thor.Bytes32, to thor.Bytes32) ([]interface{}, error) {
 	if block.Number(to) <= block.Number(from) {
 		return nil, errors.New("to must be greater than from")
 	}
 
-	length := block.Number(to) - block.Number(from)
-	blks := make([]*block.Block, length)
+	length := int64(block.Number(to) - block.Number(from))
+	blks := make([]interface{}, length)
 
 	for i := length - 1; i >= 0; i-- {
-		blk, err := chain.GetBlock(to)
+		blk, err := bs.chain.GetBlock(to)
 		if err != nil {
 			return nil, err
 		}
@@ -112,4 +61,19 @@ func sliceChain(from thor.Bytes32, to thor.Bytes32, chain *chain.Chain) ([]*bloc
 	}
 
 	return blks, nil
+}
+
+type BlockIter []interface{}
+
+func (bi BlockIter) Iterator() <-chan *block.Block {
+	c := make(chan *block.Block)
+	go func() {
+		for _, v := range bi {
+			if blk, ok := v.(*block.Block); ok {
+				c <- blk
+			}
+		}
+		close(c)
+	}()
+	return c
 }
