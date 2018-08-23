@@ -23,14 +23,21 @@ type Block struct {
 	Removed      bool           `json:"removed"`
 }
 
-// FilterQuery contains options for contract log filtering.
-type FilterQuery struct {
-	FromBlock thor.Bytes32   // beginning of the queried range, nil means genesis block
-	Addresses []thor.Address // restricts matches to events created by specific contracts
+// EventFilter contains options for contract event filtering.
+type EventFilter struct {
+	FromBlock thor.Bytes32 // beginning of the queried range, nil means genesis block
+	Addresses thor.Address // restricts matches to events created by specific contracts
 
 	Topic0 thor.Bytes32
 	Topic1 thor.Bytes32
 	Topic2 thor.Bytes32
 	Topic3 thor.Bytes32
 	Topic4 thor.Bytes32
+}
+
+// TransferFilter contains options for contract transfer filtering.
+type TransferFilter struct {
+	TxOrigin  *thor.Address // who send transaction
+	Sender    *thor.Address // who transferred tokens
+	Recipient *thor.Address // who recieved tokens
 }
