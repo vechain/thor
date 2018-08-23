@@ -1,6 +1,7 @@
 package subscriptions
 
 import (
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -85,6 +86,40 @@ func newEvent(header *block.Header, tx *tx.Transaction, event *tx.Event) (*Event
 		event.Topics,
 		event.Data,
 	}, nil
+}
+
+type LogMeta struct {
+	BlockID        thor.Bytes32 `json:"blockID"`
+	BlockNumber    uint32       `json:"blockNumber"`
+	BlockTimestamp uint64       `json:"blockTimestamp"`
+	TxID           thor.Bytes32 `json:"txID"`
+	TxOrigin       thor.Address `json:"txOrigin"`
+}
+
+// FilteredEvent only comes from one contract
+type FilteredEvent struct {
+	Address thor.Address   `json:"address"`
+	Topics  []thor.Bytes32 `json:"topics"`
+	Data    string         `json:"data"`
+	Meta    LogMeta        `json:"meta"`
+	Removed bool           `json:"removed"`
+}
+
+//convert a logdb.Event into a json format Event
+func convertEvent(event *Event, removed bool) *FilteredEvent {
+	return &FilteredEvent{
+		Address: event.Address,
+		Data:    hexutil.Encode(event.Data),
+		Meta: LogMeta{
+			BlockID:        event.BlockID,
+			BlockNumber:    event.BlockNumber,
+			BlockTimestamp: event.BlockTime,
+			TxID:           event.TxID,
+			TxOrigin:       event.TxOrigin,
+		},
+		Topics:  event.Topics,
+		Removed: removed,
+	}
 }
 
 // EventFilter contains options for contract event filtering.
