@@ -135,11 +135,28 @@ type EventFilter struct {
 }
 
 func (ef *EventFilter) match(event *tx.Event) bool {
-	// if ef.Address&ef.Address != event.Address {
-	// 	return false
-	// }
+	if (ef.Address != nil) && (*ef.Address != event.Address) {
+		return false
+	}
 
-	return true
+	matchTopic := func(topic *thor.Bytes32, index int) bool {
+		if topic != nil {
+			if len(event.Topics) <= index {
+				return false
+			}
+
+			if *topic != event.Topics[index] {
+				return false
+			}
+		}
+		return true
+	}
+
+	return matchTopic(ef.Topic0, 0) &&
+		matchTopic(ef.Topic0, 1) &&
+		matchTopic(ef.Topic0, 2) &&
+		matchTopic(ef.Topic0, 3) &&
+		matchTopic(ef.Topic0, 4)
 }
 
 // TransferFilter contains options for contract transfer filtering.
