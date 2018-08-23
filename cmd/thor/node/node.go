@@ -47,7 +47,6 @@ type Node struct {
 	txStashPath string
 	comm        *comm.Communicator
 	commitLock  sync.Mutex
-	ch          chan struct{}
 }
 
 func New(
@@ -58,7 +57,6 @@ func New(
 	txPool *txpool.TxPool,
 	txStashPath string,
 	comm *comm.Communicator,
-	ch chan struct{},
 ) *Node {
 	return &Node{
 		packer:      packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
@@ -69,7 +67,6 @@ func New(
 		txPool:      txPool,
 		txStashPath: txStashPath,
 		comm:        comm,
-		ch:          ch,
 	}
 }
 
@@ -301,9 +298,6 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 
 	if err := batch.Commit(forkIDs...); err != nil {
 		return nil, errors.Wrap(err, "commit logs")
-	}
-	if len(n.ch) < 1 {
-		n.ch <- struct{}{}
 	}
 	return fork, nil
 }

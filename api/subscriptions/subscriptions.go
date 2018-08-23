@@ -12,12 +12,11 @@ import (
 )
 
 type Subscriptions struct {
-	ch    chan struct{}
 	chain *chain.Chain
 }
 
-func New(ch chan struct{}, chain *chain.Chain) *Subscriptions {
-	return &Subscriptions{ch, chain}
+func New(chain *chain.Chain) *Subscriptions {
+	return &Subscriptions{chain}
 }
 
 func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Request) error {
@@ -31,7 +30,7 @@ func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
-	blockSub := NewBlockSub(s.ch, s.chain, bid)
+	blockSub := NewBlockSub(s.chain, bid)
 	for {
 		remains, removes, err := blockSub.Read(req.Context())
 		if err != nil {
@@ -102,7 +101,7 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 		Topic3:    t3,
 		Topic4:    t4,
 	}
-	eventSub := NewEventSub(s.ch, s.chain, eventFilter)
+	eventSub := NewEventSub(s.chain, eventFilter)
 	for {
 		remains, removes, err := eventSub.Read(req.Context())
 		if err != nil {
@@ -179,7 +178,7 @@ func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http
 		Sender:    sender,
 		Recipient: recipient,
 	}
-	transferSub := NewTransferSub(s.ch, s.chain, transferFilter)
+	transferSub := NewTransferSub(s.chain, transferFilter)
 	for {
 		remains, removes, err := transferSub.Read(req.Context())
 		if err != nil {
