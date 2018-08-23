@@ -54,7 +54,7 @@ To manually install dependencies, choices are
 - [dep](https://github.com/golang/dep), Golang's official dependency management tool 
 
     ```
-    dep ensure
+    dep ensure -vendor-only
     ```
     (*Note that to make `dep` work, you should put the source code at `$GOPATH/src/github.com/vechain/thor`*)
 

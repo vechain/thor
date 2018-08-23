@@ -9,6 +9,6 @@ matrix:
 before_install:
   - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
 install:
-  - dep ensure
+  - dep ensure -vendor-only
 script:
   - make all test
