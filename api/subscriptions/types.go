@@ -1,6 +1,8 @@
 package subscriptions
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -88,6 +90,30 @@ func newEvent(header *block.Header, tx *tx.Transaction, event *tx.Event) (*Event
 	}, nil
 }
 
+type Transfer struct {
+	BlockID     thor.Bytes32
+	BlockNumber uint32
+	BlockTime   uint64
+	TxID        thor.Bytes32
+	TxOrigin    thor.Address
+	Sender      thor.Address
+	Recipient   thor.Address
+	Amount      *big.Int
+}
+
+func newTransfer(header *block.Header, origin thor.Address, tx *tx.Transaction, transfer *tx.Transfer) *Transfer {
+	return &Transfer{
+		header.ID(),
+		header.Number(),
+		header.Timestamp(),
+		tx.ID(),
+		origin,
+		transfer.Sender,
+		transfer.Recipient,
+		transfer.Amount,
+	}
+}
+
 type LogMeta struct {
 	BlockID        thor.Bytes32 `json:"blockID"`
 	BlockNumber    uint32       `json:"blockNumber"`
@@ -153,15 +179,31 @@ func (ef *EventFilter) match(event *tx.Event) bool {
 	}
 
 	return matchTopic(ef.Topic0, 0) &&
-		matchTopic(ef.Topic0, 1) &&
-		matchTopic(ef.Topic0, 2) &&
-		matchTopic(ef.Topic0, 3) &&
-		matchTopic(ef.Topic0, 4)
+		matchTopic(ef.Topic1, 1) &&
+		matchTopic(ef.Topic2, 2) &&
+		matchTopic(ef.Topic3, 3) &&
+		matchTopic(ef.Topic4, 4)
 }
 
 // TransferFilter contains options for contract transfer filtering.
 type TransferFilter struct {
+	FromBlock thor.Bytes32  // beginning of the queried range, nil means best block
 	TxOrigin  *thor.Address // who send transaction
 	Sender    *thor.Address // who transferred tokens
 	Recipient *thor.Address // who recieved tokens
+}
+
+func (tf *TransferFilter) match(transfer *tx.Transfer, origin thor.Address) bool {
+	if (tf.TxOrigin != nil) && (*tf.TxOrigin != origin) {
+		return false
+	}
+
+	if (tf.Sender != nil) && (*tf.Sender != transfer.Sender) {
+		return false
+	}
+
+	if (tf.Recipient != nil) && (*tf.Recipient != transfer.Recipient) {
+		return false
+	}
+	return true
 }
