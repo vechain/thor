@@ -5,7 +5,6 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/tx"
 )
 
 type EventSub struct {
@@ -22,23 +21,7 @@ func NewEventSub(ch chan struct{}, chain *chain.Chain, filter *EventFilter) *Eve
 	}
 }
 
-// func (es *EventSub) FromBlock() thor.Bytes32 { return es.filter.FromBlock }
-
-// func (es *EventSub) UpdateFilter(bestID thor.Bytes32) {
-// 	es.filter.FromBlock = bestID
-// }
-
-// // from open, to closed
-// func (es *EventSub) SliceChain(from, to thor.Bytes32) ([]interface{}, error) {
-// 	return sliceChain(from, to, es.chain, makeAnalyse(es.filterEvent))
-// }
-
-// func (es *EventSub) filterEvent(output *tx.Output) []interface{} {
-// 	// TODO
-// 	return nil
-// }
-
-func (es *EventSub) Read(ctx context.Context) (tx.Events, tx.Events, error) {
+func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
 	bs := NewBlockSub(es.ch, es.chain, es.filter.FromBlock)
 	blkChanges, blkRemoves, err := bs.Read(ctx)
 	if err != nil {
@@ -59,16 +42,26 @@ func (es *EventSub) Read(ctx context.Context) (tx.Events, tx.Events, error) {
 	return eventChanges, eventRemoves, nil
 }
 
-func (es *EventSub) filterEvent(blks []*block.Block) (tx.Events, error) {
-	outputs, err := outputs(es.chain, blks)
-	if err != nil {
-		return nil, err
-	}
+func (es *EventSub) filterEvent(blks []*block.Block) ([]*Event, error) {
+	result := []*Event{}
+	for _, blk := range blks {
+		receipts, err := es.chain.GetBlockReceipts(blk.Header().ID())
+		if err != nil {
+			return nil, err
+		}
 
-	result := tx.Events{}
-	for _, output := range outputs {
-		for _, event := range output.Events {
-			result = append(result, event)
+		for i, receipt := range receipts {
+			for _, output := range receipt.Outputs {
+				for _, event := range output.Events {
+					if es.filter.match(event) {
+						v, err := newEvent(blk.Header(), blk.Transactions()[i], event)
+						if err != nil {
+							return nil, err
+						}
+						result = append(result, v)
+					}
+				}
+			}
 		}
 	}
 	return result, nil
