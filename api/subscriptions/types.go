@@ -153,10 +153,10 @@ func (ef *EventFilter) match(event *tx.Event) bool {
 	}
 
 	return matchTopic(ef.Topic0, 0) &&
-		matchTopic(ef.Topic0, 1) &&
-		matchTopic(ef.Topic0, 2) &&
-		matchTopic(ef.Topic0, 3) &&
-		matchTopic(ef.Topic0, 4)
+		matchTopic(ef.Topic1, 1) &&
+		matchTopic(ef.Topic2, 2) &&
+		matchTopic(ef.Topic3, 3) &&
+		matchTopic(ef.Topic4, 4)
 }
 
 // TransferFilter contains options for contract transfer filtering.
