@@ -30,7 +30,10 @@ func (bs *BlockSub) UpdateFilter(bestID thor.Bytes32) {
 
 // from open, to closed
 func (bs *BlockSub) SliceChain(from, to thor.Bytes32) ([]interface{}, error) {
-	return sliceChain(from, to, bs.chain, func(blk *block.Block) (interface{}, error) { return blk, nil })
+	analyseF := func(chain *chain.Chain, blk *block.Block) (interface{}, error) {
+		return blk, nil
+	}
+	return sliceChain(from, to, bs.chain, analyseF)
 }
 
 func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, error) {

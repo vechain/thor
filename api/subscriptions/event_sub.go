@@ -3,7 +3,6 @@ package subscriptions
 import (
 	"context"
 
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -31,25 +30,11 @@ func (es *EventSub) UpdateFilter(bestID thor.Bytes32) {
 
 // from open, to closed
 func (es *EventSub) SliceChain(from, to thor.Bytes32) ([]interface{}, error) {
-	analyse := func(blk *block.Block) (interface{}, error) {
-		receipts, err := es.chain.GetBlockReceipts(blk.Header().ID())
-		if err != nil {
-			return nil, err
-		}
-
-		events := tx.Events{}
-		for _, receipt := range receipts {
-			for _, output := range receipt.Outputs {
-				events = append(events, es.filterEvent(output.Events)...)
-			}
-		}
-		return events, nil
-	}
-
-	return sliceChain(from, to, es.chain, analyse)
+	return sliceChain(from, to, es.chain, makeAnalyse(es.filterEvent))
 }
 
-func (es *EventSub) filterEvent(events tx.Events) tx.Events {
+func (es *EventSub) filterEvent(output *tx.Output) []interface{} {
+	// TODO
 	return nil
 }
 

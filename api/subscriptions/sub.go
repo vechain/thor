@@ -7,6 +7,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 type Sub interface {
@@ -85,8 +86,10 @@ func lookForSameAncestor(src, tar thor.Bytes32, chain *chain.Chain) (thor.Bytes3
 	}
 }
 
+type analyseF func(*chain.Chain, *block.Block) (interface{}, error)
+
 // from open, to closed
-func sliceChain(from, to thor.Bytes32, chain *chain.Chain, f func(*block.Block) (interface{}, error)) ([]interface{}, error) {
+func sliceChain(from, to thor.Bytes32, chain *chain.Chain, analyse analyseF) ([]interface{}, error) {
 	if block.Number(to) <= block.Number(from) {
 		return nil, errors.New("to must be greater than from")
 	}
@@ -100,7 +103,7 @@ func sliceChain(from, to thor.Bytes32, chain *chain.Chain, f func(*block.Block) 
 			return nil, err
 		}
 
-		v, err := f(blk)
+		v, err := analyse(chain, blk)
 		if err != nil {
 			return nil, err
 		}
@@ -110,4 +113,21 @@ func sliceChain(from, to thor.Bytes32, chain *chain.Chain, f func(*block.Block) 
 	}
 
 	return slice, nil
+}
+
+func makeAnalyse(filter func(*tx.Output) []interface{}) analyseF {
+	return func(chain *chain.Chain, blk *block.Block) (interface{}, error) {
+		receipts, err := chain.GetBlockReceipts(blk.Header().ID())
+		if err != nil {
+			return nil, err
+		}
+
+		result := []interface{}{}
+		for _, receipt := range receipts {
+			for _, output := range receipt.Outputs {
+				result = append(result, filter(output)...)
+			}
+		}
+		return result, nil
+	}
 }
