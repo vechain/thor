@@ -126,8 +126,8 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
-
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm))
+	ch := make(chan struct{}, 1)
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm, ch))
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
@@ -142,7 +142,8 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
-		p2pcom.comm).
+		p2pcom.comm,
+		ch).
 		Run(exitSignal)
 }
 
@@ -176,7 +177,8 @@ func soloAction(ctx *cli.Context) error {
 
 	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, ctx.Bool("on-demand"))
 
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}))
+	ch := make(chan struct{}, 1)
+	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}, ch))
 	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
 
 	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
