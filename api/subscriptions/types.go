@@ -3,6 +3,7 @@ package subscriptions
 import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 type Block struct {
@@ -57,16 +58,53 @@ func convertBlock(b *block.Block, removed bool) (*Block, error) {
 	}, nil
 }
 
+type Event struct {
+	BlockID     thor.Bytes32
+	BlockNumber uint32
+	BlockTime   uint64
+	TxID        thor.Bytes32
+	TxOrigin    thor.Address //contract caller
+	Address     thor.Address // always a contract address
+	Topics      []thor.Bytes32
+	Data        []byte
+}
+
+func newEvent(header *block.Header, tx *tx.Transaction, event *tx.Event) (*Event, error) {
+	origin, err := tx.Signer()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Event{
+		header.ID(),
+		header.Number(),
+		header.Timestamp(),
+		tx.ID(),
+		origin,
+		event.Address,
+		event.Topics,
+		event.Data,
+	}, nil
+}
+
 // EventFilter contains options for contract event filtering.
 type EventFilter struct {
-	FromBlock thor.Bytes32 // beginning of the queried range, nil means genesis block
-	Addresses thor.Address // restricts matches to events created by specific contracts
+	FromBlock thor.Bytes32  // beginning of the queried range, nil means best block
+	Address   *thor.Address // restricts matches to events created by specific contracts
 
-	Topic0 thor.Bytes32
-	Topic1 thor.Bytes32
-	Topic2 thor.Bytes32
-	Topic3 thor.Bytes32
-	Topic4 thor.Bytes32
+	Topic0 *thor.Bytes32
+	Topic1 *thor.Bytes32
+	Topic2 *thor.Bytes32
+	Topic3 *thor.Bytes32
+	Topic4 *thor.Bytes32
+}
+
+func (ef *EventFilter) match(event *tx.Event) bool {
+	// if ef.Address&ef.Address != event.Address {
+	// 	return false
+	// }
+
+	return true
 }
 
 // TransferFilter contains options for contract transfer filtering.
