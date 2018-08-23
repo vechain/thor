@@ -4,12 +4,13 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
-type Block struct {
+type SubscriptionBlock struct {
 	Number       uint32         `json:"number"`
 	ID           thor.Bytes32   `json:"id"`
 	Size         uint32         `json:"size"`
@@ -27,7 +28,7 @@ type Block struct {
 	Removed      bool           `json:"removed"`
 }
 
-func convertBlock(b *block.Block, removed bool) (*Block, error) {
+func convertBlock(b *block.Block, removed bool) (*SubscriptionBlock, error) {
 	if b == nil {
 		return nil, nil
 	}
@@ -42,7 +43,7 @@ func convertBlock(b *block.Block, removed bool) (*Block, error) {
 	}
 
 	header := b.Header()
-	return &Block{
+	return &SubscriptionBlock{
 		Number:       header.Number(),
 		ID:           header.ID(),
 		ParentID:     header.ParentID(),
@@ -121,9 +122,32 @@ type LogMeta struct {
 	TxID           thor.Bytes32 `json:"txID"`
 	TxOrigin       thor.Address `json:"txOrigin"`
 }
+type SubscriptionTransfer struct {
+	Sender    thor.Address          `json:"sender"`
+	Recipient thor.Address          `json:"recipient"`
+	Amount    *math.HexOrDecimal256 `json:"amount"`
+	Meta      LogMeta               `json:"meta"`
+	Removed   bool                  `json:"removed"`
+}
 
-// FilteredEvent only comes from one contract
-type FilteredEvent struct {
+func convertTransfer(transfer *Transfer, removed bool) *SubscriptionTransfer {
+	v := math.HexOrDecimal256(*transfer.Amount)
+	return &SubscriptionTransfer{
+		Sender:    transfer.Sender,
+		Recipient: transfer.Recipient,
+		Amount:    &v,
+		Meta: LogMeta{
+			BlockID:        transfer.BlockID,
+			BlockNumber:    transfer.BlockNumber,
+			BlockTimestamp: transfer.BlockTime,
+			TxID:           transfer.TxID,
+			TxOrigin:       transfer.TxOrigin,
+		},
+		Removed: removed,
+	}
+}
+
+type SubscriptionEvent struct {
 	Address thor.Address   `json:"address"`
 	Topics  []thor.Bytes32 `json:"topics"`
 	Data    string         `json:"data"`
@@ -131,9 +155,8 @@ type FilteredEvent struct {
 	Removed bool           `json:"removed"`
 }
 
-//convert a logdb.Event into a json format Event
-func convertEvent(event *Event, removed bool) *FilteredEvent {
-	return &FilteredEvent{
+func convertEvent(event *Event, removed bool) *SubscriptionEvent {
+	return &SubscriptionEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
 		Meta: LogMeta{
