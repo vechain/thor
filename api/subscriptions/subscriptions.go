@@ -27,15 +27,9 @@ func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	defer conn.Close()
-	var bid thor.Bytes32
-	if req.URL.Query().Get("bid") == "" {
-		bid = s.chain.BestBlock().Header().ID()
-	} else {
-		fbid, err := thor.ParseBytes32(req.URL.Query().Get("bid"))
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "bid"))
-		}
-		bid = fbid
+	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
 	blockSub := NewBlockSub(s.ch, s.chain, bid)
 	for {
@@ -71,23 +65,13 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 		return err
 	}
 	defer conn.Close()
-	var bid thor.Bytes32
-	if req.URL.Query().Get("bid") == "" {
-		bid = s.chain.BestBlock().Header().ID()
-	} else {
-		fbid, err := thor.ParseBytes32(req.URL.Query().Get("bid"))
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "bid"))
-		}
-		bid = fbid
+	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
-	var address *thor.Address
-	if req.URL.Query().Get("addr") != "" {
-		addr, err := thor.ParseAddress(req.URL.Query().Get("addr"))
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "addr"))
-		}
-		address = &addr
+	address, err := parseAddress(req.URL.Query().Get("addr"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "addr"))
 	}
 	t0, err := parseTopic(req.URL.Query().Get("t0"))
 	if err != nil {
@@ -137,6 +121,13 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 	}
 }
 
+func (s *Subscriptions) parseBlockID(bid string) (thor.Bytes32, error) {
+	if bid == "" {
+		return s.chain.BestBlock().Header().ID(), nil
+	}
+	return thor.ParseBytes32(bid)
+}
+
 func parseTopic(t string) (*thor.Bytes32, error) {
 	if t == "" {
 		return nil, nil
@@ -148,10 +139,70 @@ func parseTopic(t string) (*thor.Bytes32, error) {
 	return &topic, nil
 }
 
+func parseAddress(addr string) (*thor.Address, error) {
+	if addr == "" {
+		return nil, nil
+	}
+	address, err := thor.ParseAddress(addr)
+	if err != nil {
+		return nil, err
+	}
+	return &address, nil
+}
+
+func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http.Request) error {
+	var upgrader = websocket.Upgrader{}
+	conn, err := upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "bid"))
+	}
+	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "txOrigin"))
+	}
+	sender, err := parseAddress(req.URL.Query().Get("sender"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "sender"))
+	}
+	recipient, err := parseAddress(req.URL.Query().Get("recipient"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "recipient"))
+	}
+	transferFilter := &TransferFilter{
+		FromBlock: bid,
+		TxOrigin:  txOrigin,
+		Sender:    sender,
+		Recipient: recipient,
+	}
+	transferSub := NewTransferSub(s.ch, s.chain, transferFilter)
+	for {
+		remains, removes, err := transferSub.Read(req.Context())
+		if err != nil {
+			return err
+		}
+		for _, removed := range removes {
+			if err := conn.WriteJSON(convertTransfer(removed, true)); err != nil {
+				return err
+			}
+		}
+		for _, remained := range remains {
+			if err := conn.WriteJSON(convertTransfer(remained, false)); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/block").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubscribeBlock))
 	sub.Path("/event").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubscribeEvent))
+	sub.Path("/transfer").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubscribeTransfer))
 
 }
