@@ -8,26 +8,25 @@ import (
 )
 
 type TransferSub struct {
-	ch     chan struct{} // When chain changed, this channel will be readable
 	chain  *chain.Chain
 	filter *TransferFilter
+	bs     *BlockSub
 }
 
-func NewTransferSub(ch chan struct{}, chain *chain.Chain, filter *TransferFilter) *TransferSub {
+func NewTransferSub(chain *chain.Chain, filter *TransferFilter) *TransferSub {
 	return &TransferSub{
-		ch:     ch,
 		chain:  chain,
 		filter: filter,
+		bs:     NewBlockSub(chain, filter.FromBlock),
 	}
 }
 
 func (ts *TransferSub) Read(ctx context.Context) ([]*Transfer, []*Transfer, error) {
-	bs := NewBlockSub(ts.ch, ts.chain, ts.filter.FromBlock)
-	blkChanges, blkRemoves, err := bs.Read(ctx)
+	blkChanges, blkRemoves, err := ts.bs.Read(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	ts.filter.FromBlock = bs.fromBlock
+	ts.filter.FromBlock = ts.bs.fromBlock
 
 	transferChanges, err := ts.filterTransfer(blkChanges)
 	if err != nil {

@@ -25,7 +25,7 @@ import (
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network, ch chan struct{}) http.HandlerFunc {
+func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network) http.HandlerFunc {
 	router := mux.NewRouter()
 
 	// to serve api doc and swagger-ui
@@ -58,7 +58,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/transactions")
 	node.New(nw).
 		Mount(router, "/node")
-	subscriptions.New(ch, chain).
+	subscriptions.New(chain).
 		Mount(router, "/subscriptions")
 
 	return router.ServeHTTP

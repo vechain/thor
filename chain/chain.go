@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -35,6 +36,7 @@ type Chain struct {
 	tag          byte
 	caches       caches
 	rw           sync.RWMutex
+	headSignal   co.Signal
 }
 
 type caches struct {
@@ -226,6 +228,9 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 
 	c.caches.rawBlocks.Add(newBlockID, newRawBlock(raw, newBlock))
 	c.caches.receipts.Add(newBlockID, receipts)
+
+	c.headSignal.Broadcast()
+
 	return fork, nil
 }
 
@@ -529,4 +534,9 @@ func (c *Chain) IsNotFound(err error) bool {
 // IsBlockExist returns if the error means block was already in the chain.
 func (c *Chain) IsBlockExist(err error) bool {
 	return err == errBlockExist
+}
+
+// HeadWaiter returns a waiter for listening event of head block change.
+func (c *Chain) HeadWaiter() func() <-chan bool {
+	return c.headSignal.Waiter()
 }

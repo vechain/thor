@@ -10,16 +10,16 @@ import (
 )
 
 type BlockSub struct {
-	ch        chan struct{} // When chain changed, this channel will be readable
-	chain     *chain.Chain
-	fromBlock thor.Bytes32
+	chain        *chain.Chain
+	fromBlock    thor.Bytes32
+	headerWaiter func() <-chan bool
 }
 
-func NewBlockSub(ch chan struct{}, chain *chain.Chain, fromBlock thor.Bytes32) *BlockSub {
+func NewBlockSub(chain *chain.Chain, fromBlock thor.Bytes32) *BlockSub {
 	return &BlockSub{
-		ch:        ch,
-		chain:     chain,
-		fromBlock: fromBlock,
+		chain:        chain,
+		fromBlock:    fromBlock,
+		headerWaiter: chain.HeadWaiter(),
 	}
 }
 
@@ -28,7 +28,7 @@ func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, e
 		select {
 		case <-ctx.Done():
 			return nil, nil, ctx.Err()
-		case <-bs.ch:
+		case <-bs.headerWaiter():
 			best := bs.chain.BestBlock()
 			bestID := best.Header().ID()
 

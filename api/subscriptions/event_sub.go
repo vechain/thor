@@ -8,26 +8,25 @@ import (
 )
 
 type EventSub struct {
-	ch     chan struct{} // When chain changed, this channel will be readable
 	chain  *chain.Chain
 	filter *EventFilter
+	bs     *BlockSub
 }
 
-func NewEventSub(ch chan struct{}, chain *chain.Chain, filter *EventFilter) *EventSub {
+func NewEventSub(chain *chain.Chain, filter *EventFilter) *EventSub {
 	return &EventSub{
-		ch:     ch,
 		chain:  chain,
 		filter: filter,
+		bs:     NewBlockSub(chain, filter.FromBlock),
 	}
 }
 
 func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
-	bs := NewBlockSub(es.ch, es.chain, es.filter.FromBlock)
-	blkChanges, blkRemoves, err := bs.Read(ctx)
+	blkChanges, blkRemoves, err := es.bs.Read(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	es.filter.FromBlock = bs.fromBlock
+	es.filter.FromBlock = es.bs.fromBlock
 
 	eventChanges, err := es.filterEvent(blkChanges)
 	if err != nil {
