@@ -93,15 +93,14 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "t4"))
 	}
 	eventFilter := &EventFilter{
-		FromBlock: bid,
-		Address:   address,
-		Topic0:    t0,
-		Topic1:    t1,
-		Topic2:    t2,
-		Topic3:    t3,
-		Topic4:    t4,
+		Address: address,
+		Topic0:  t0,
+		Topic1:  t1,
+		Topic2:  t2,
+		Topic3:  t3,
+		Topic4:  t4,
 	}
-	eventSub := NewEventSub(s.chain, eventFilter)
+	eventSub := NewEventSub(s.chain, bid, eventFilter)
 	for {
 		remains, removes, err := eventSub.Read(req.Context())
 		if err != nil {
@@ -173,12 +172,11 @@ func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http
 		return utils.BadRequest(errors.WithMessage(err, "recipient"))
 	}
 	transferFilter := &TransferFilter{
-		FromBlock: bid,
 		TxOrigin:  txOrigin,
 		Sender:    sender,
 		Recipient: recipient,
 	}
-	transferSub := NewTransferSub(s.chain, transferFilter)
+	transferSub := NewTransferSub(s.chain, bid, transferFilter)
 	for {
 		remains, removes, err := transferSub.Read(req.Context())
 		if err != nil {

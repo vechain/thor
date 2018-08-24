@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -73,12 +74,7 @@ type Event struct {
 	Data        []byte
 }
 
-func newEvent(header *block.Header, tx *tx.Transaction, event *tx.Event) (*Event, error) {
-	origin, err := tx.Signer()
-	if err != nil {
-		return nil, err
-	}
-
+func newEvent(header *block.Header, origin thor.Address, tx *tx.Transaction, event *tx.Event) *Event {
 	return &Event{
 		header.ID(),
 		header.Number(),
@@ -88,7 +84,7 @@ func newEvent(header *block.Header, tx *tx.Transaction, event *tx.Event) (*Event
 		event.Address,
 		event.Topics,
 		event.Data,
-	}, nil
+	}
 }
 
 type Transfer struct {
@@ -173,14 +169,12 @@ func convertEvent(event *Event, removed bool) *SubscriptionEvent {
 
 // EventFilter contains options for contract event filtering.
 type EventFilter struct {
-	FromBlock thor.Bytes32  // beginning of the queried range, nil means best block
-	Address   *thor.Address // restricts matches to events created by specific contracts
-
-	Topic0 *thor.Bytes32
-	Topic1 *thor.Bytes32
-	Topic2 *thor.Bytes32
-	Topic3 *thor.Bytes32
-	Topic4 *thor.Bytes32
+	Address *thor.Address // restricts matches to events created by specific contracts
+	Topic0  *thor.Bytes32
+	Topic1  *thor.Bytes32
+	Topic2  *thor.Bytes32
+	Topic3  *thor.Bytes32
+	Topic4  *thor.Bytes32
 }
 
 func (ef *EventFilter) match(event *tx.Event) bool {
@@ -210,7 +204,6 @@ func (ef *EventFilter) match(event *tx.Event) bool {
 
 // TransferFilter contains options for contract transfer filtering.
 type TransferFilter struct {
-	FromBlock thor.Bytes32  // beginning of the queried range, nil means best block
 	TxOrigin  *thor.Address // who send transaction
 	Sender    *thor.Address // who transferred tokens
 	Recipient *thor.Address // who recieved tokens
@@ -229,4 +222,34 @@ func (tf *TransferFilter) match(transfer *tx.Transfer, origin thor.Address) bool
 		return false
 	}
 	return true
+}
+
+type Output struct {
+	*tx.Output
+	header *block.Header
+	origin thor.Address
+	tx     *tx.Transaction
+}
+
+func extractOutputs(chain *chain.Chain, blks []*block.Block) ([]*Output, error) {
+	result := []*Output{}
+	for _, blk := range blks {
+		receipts, err := chain.GetBlockReceipts(blk.Header().ID())
+		if err != nil {
+			return nil, err
+		}
+
+		for i, receipt := range receipts {
+			tx := blk.Transactions()[i]
+			origin, err := tx.Signer()
+			if err != nil {
+				return nil, err
+			}
+
+			for _, output := range receipt.Outputs {
+				result = append(result, &Output{output, blk.Header(), origin, tx})
+			}
+		}
+	}
+	return result, nil
 }

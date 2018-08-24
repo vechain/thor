@@ -5,6 +5,7 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/thor"
 )
 
 type EventSub struct {
@@ -13,11 +14,11 @@ type EventSub struct {
 	bs     *BlockSub
 }
 
-func NewEventSub(chain *chain.Chain, filter *EventFilter) *EventSub {
+func NewEventSub(chain *chain.Chain, fromBlock thor.Bytes32, filter *EventFilter) *EventSub {
 	return &EventSub{
 		chain:  chain,
 		filter: filter,
-		bs:     NewBlockSub(chain, filter.FromBlock),
+		bs:     NewBlockSub(chain, fromBlock),
 	}
 }
 
@@ -26,7 +27,6 @@ func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	es.filter.FromBlock = es.bs.fromBlock
 
 	eventChanges, err := es.filterEvent(blkChanges)
 	if err != nil {
@@ -42,26 +42,19 @@ func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
 }
 
 func (es *EventSub) filterEvent(blks []*block.Block) ([]*Event, error) {
-	result := []*Event{}
-	for _, blk := range blks {
-		receipts, err := es.chain.GetBlockReceipts(blk.Header().ID())
-		if err != nil {
-			return nil, err
-		}
+	outputs, err := extractOutputs(es.chain, blks)
+	if err != nil {
+		return nil, err
+	}
 
-		for i, receipt := range receipts {
-			for _, output := range receipt.Outputs {
-				for _, event := range output.Events {
-					if es.filter.match(event) {
-						v, err := newEvent(blk.Header(), blk.Transactions()[i], event)
-						if err != nil {
-							return nil, err
-						}
-						result = append(result, v)
-					}
-				}
+	result := []*Event{}
+	for _, output := range outputs {
+		for _, event := range output.Events {
+			if es.filter.match(event) {
+				result = append(result, newEvent(output.header, output.origin, output.tx, event))
 			}
 		}
 	}
+
 	return result, nil
 }
