@@ -11,17 +11,17 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+var upgrader = websocket.Upgrader{}
+
 type Subscriptions struct {
-	chain        *chain.Chain
-	headerWaiter func() <-chan bool
+	chain *chain.Chain
 }
 
 func New(chain *chain.Chain) *Subscriptions {
-	return &Subscriptions{chain, chain.HeadWaiter()}
+	return &Subscriptions{chain}
 }
 
 func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Request) error {
-	var upgrader = websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		return err
@@ -32,12 +32,13 @@ func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
 	ctx := req.Context()
+	ticker := s.chain.Ticker()
 	blockSub := NewBlockSub(s.chain, bid)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.headerWaiter():
+		case <-ticker():
 			for {
 				remains, removes, err := blockSub.Read()
 				if err != nil {
@@ -70,7 +71,6 @@ func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Re
 }
 
 func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Request) error {
-	var upgrader = websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		return err
@@ -114,11 +114,12 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 	}
 	eventSub := NewEventSub(s.chain, bid, eventFilter)
 	ctx := req.Context()
+	ticker := s.chain.Ticker()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.headerWaiter():
+		case <-ticker():
 			for {
 				remains, removes, err := eventSub.Read()
 				if err != nil {
@@ -172,7 +173,6 @@ func parseAddress(addr string) (*thor.Address, error) {
 }
 
 func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http.Request) error {
-	var upgrader = websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		return err
@@ -201,11 +201,12 @@ func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http
 	}
 	transferSub := NewTransferSub(s.chain, bid, transferFilter)
 	ctx := req.Context()
+	ticker := s.chain.Ticker()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-s.headerWaiter():
+		case <-ticker():
 			for {
 				remains, removes, err := transferSub.Read()
 				if err != nil {

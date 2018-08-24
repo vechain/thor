@@ -36,7 +36,7 @@ type Chain struct {
 	tag          byte
 	caches       caches
 	rw           sync.RWMutex
-	headSignal   co.Signal
+	tick         co.Signal
 }
 
 type caches struct {
@@ -229,7 +229,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 	c.caches.rawBlocks.Add(newBlockID, newRawBlock(raw, newBlock))
 	c.caches.receipts.Add(newBlockID, receipts)
 
-	c.headSignal.Broadcast()
+	c.tick.Broadcast()
 
 	return fork, nil
 }
@@ -536,7 +536,7 @@ func (c *Chain) IsBlockExist(err error) bool {
 	return err == errBlockExist
 }
 
-// HeadWaiter returns a waiter for listening event of head block change.
-func (c *Chain) HeadWaiter() func() <-chan bool {
-	return c.headSignal.Waiter()
+// Ticker returns a ticker to receive event of head block change.
+func (c *Chain) Ticker() func() <-chan bool {
+	return c.tick.Waiter()
 }
