@@ -1,8 +1,6 @@
 package subscriptions
 
 import (
-	"context"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -22,18 +20,18 @@ func NewEventSub(chain *chain.Chain, fromBlock thor.Bytes32, filter *EventFilter
 	}
 }
 
-func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
-	blkChanges, blkRemoves, err := es.bs.Read(ctx)
+func (es *EventSub) Read() ([]*Event, []*Event, error) {
+	nextBlks, removedBlks, err := es.bs.Read()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	eventChanges, err := es.filterEvent(blkChanges)
+	eventChanges, err := es.filterEvent(nextBlks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	eventRemoves, err := es.filterEvent(blkRemoves)
+	eventRemoves, err := es.filterEvent(removedBlks)
 	if err != nil {
 		return nil, nil, err
 	}

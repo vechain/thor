@@ -1,8 +1,6 @@
 package subscriptions
 
 import (
-	"context"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -22,18 +20,18 @@ func NewTransferSub(chain *chain.Chain, fromBlock thor.Bytes32, filter *Transfer
 	}
 }
 
-func (ts *TransferSub) Read(ctx context.Context) ([]*Transfer, []*Transfer, error) {
-	blkChanges, blkRemoves, err := ts.bs.Read(ctx)
+func (ts *TransferSub) Read() ([]*Transfer, []*Transfer, error) {
+	nextBlks, removedBlks, err := ts.bs.Read()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transferChanges, err := ts.filterTransfer(blkChanges)
+	transferChanges, err := ts.filterTransfer(nextBlks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	transferRemoves, err := ts.filterTransfer(blkRemoves)
+	transferRemoves, err := ts.filterTransfer(removedBlks)
 	if err != nil {
 		return nil, nil, err
 	}
