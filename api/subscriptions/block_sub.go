@@ -1,7 +1,6 @@
 package subscriptions
 
 import (
-	"context"
 	"errors"
 
 	"github.com/vechain/thor/block"
@@ -10,66 +9,54 @@ import (
 )
 
 type BlockSub struct {
-	chain        *chain.Chain
-	fromBlock    thor.Bytes32
-	headerWaiter func() <-chan bool
+	chain     *chain.Chain
+	fromBlock thor.Bytes32
 }
 
 func NewBlockSub(chain *chain.Chain, fromBlock thor.Bytes32) *BlockSub {
 	return &BlockSub{
-		chain:        chain,
-		fromBlock:    fromBlock,
-		headerWaiter: chain.HeadWaiter(),
+		chain:     chain,
+		fromBlock: fromBlock,
 	}
 }
 
-func (bs *BlockSub) Read(ctx context.Context) ([]*block.Block, []*block.Block, error) {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		case <-bs.headerWaiter():
-			best := bs.chain.BestBlock()
-			bestID := best.Header().ID()
+func (bs *BlockSub) Read() ([]*block.Block, []*block.Block, error) {
+	best := bs.chain.BestBlock()
+	bestID := best.Header().ID()
 
-			if bestID == bs.fromBlock {
-				continue
-			}
-
-			ancestor, err := bs.chain.GetAncestorBlockID(bestID, block.Number(bs.fromBlock))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if ancestor == bs.fromBlock {
-				changes, err := bs.sliceChain(ancestor, bestID)
-				if err != nil {
-					return nil, nil, err
-				}
-
-				bs.fromBlock = bestID
-				return changes, nil, nil
-			}
-
-			sa, err := bs.lookForSameAncestor(bs.fromBlock, ancestor)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			removes, err := bs.sliceChain(sa, bs.fromBlock)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			changes, err := bs.sliceChain(sa, bestID)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			bs.fromBlock = bestID
-			return changes, removes, nil
-		}
+	if bestID == bs.fromBlock {
+		return nil, nil, nil
 	}
+
+	ancestor, err := bs.chain.GetAncestorBlockID(bestID, block.Number(bs.fromBlock))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if ancestor == bs.fromBlock {
+		next, err := bs.nextBlock(ancestor)
+		if err != nil {
+			return nil, nil, err
+		}
+		return []*block.Block{next}, nil, nil
+	}
+
+	sa, err := bs.lookForSameAncestor(bs.fromBlock, ancestor)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	removes, err := bs.sliceChain(sa, bs.fromBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	next, err := bs.nextBlock(sa)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return []*block.Block{next}, removes, nil
 }
 
 // from open, to closed
@@ -112,4 +99,19 @@ func (bs *BlockSub) lookForSameAncestor(src, tar thor.Bytes32) (thor.Bytes32, er
 		}
 		tar = tarHeader.ParentID()
 	}
+}
+
+func (bs *BlockSub) nextBlock(from thor.Bytes32) (*block.Block, error) {
+	fromBlk, err := bs.chain.GetBlock(from)
+	if err != nil {
+		return nil, err
+	}
+
+	nextBlk, err := bs.chain.GetTrunkBlock(fromBlk.Header().Number() + 1)
+	if err != nil {
+		return nil, err
+	}
+
+	bs.fromBlock = nextBlk.Header().ID()
+	return nextBlk, nil
 }
