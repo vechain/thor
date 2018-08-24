@@ -12,11 +12,12 @@ import (
 )
 
 type Subscriptions struct {
-	chain *chain.Chain
+	chain        *chain.Chain
+	headerWaiter func() <-chan bool
 }
 
 func New(chain *chain.Chain) *Subscriptions {
-	return &Subscriptions{chain}
+	return &Subscriptions{chain, chain.HeadWaiter()}
 }
 
 func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Request) error {
@@ -30,28 +31,39 @@ func (s *Subscriptions) handleSubscribeBlock(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "bid"))
 	}
+	ctx := req.Context()
 	blockSub := NewBlockSub(s.chain, bid)
 	for {
-		remains, removes, err := blockSub.Read(req.Context())
-		if err != nil {
-			return err
-		}
-		for _, removed := range removes {
-			blk, err := convertBlock(removed, true)
-			if err != nil {
-				return err
-			}
-			if err := conn.WriteJSON(blk); err != nil {
-				return err
-			}
-		}
-		for _, remained := range remains {
-			blk, err := convertBlock(remained, false)
-			if err != nil {
-				return err
-			}
-			if err := conn.WriteJSON(blk); err != nil {
-				return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-s.headerWaiter():
+			for {
+				remains, removes, err := blockSub.Read()
+				if err != nil {
+					return err
+				}
+				if remains == nil {
+					break
+				}
+				for _, removed := range removes {
+					blk, err := convertBlock(removed, true)
+					if err != nil {
+						return err
+					}
+					if err := conn.WriteJSON(blk); err != nil {
+						return err
+					}
+				}
+				for _, remained := range remains {
+					blk, err := convertBlock(remained, false)
+					if err != nil {
+						return err
+					}
+					if err := conn.WriteJSON(blk); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -101,19 +113,30 @@ func (s *Subscriptions) handleSubscribeEvent(w http.ResponseWriter, req *http.Re
 		Topic4:  t4,
 	}
 	eventSub := NewEventSub(s.chain, bid, eventFilter)
+	ctx := req.Context()
 	for {
-		remains, removes, err := eventSub.Read(req.Context())
-		if err != nil {
-			return err
-		}
-		for _, removed := range removes {
-			if err := conn.WriteJSON(convertEvent(removed, true)); err != nil {
-				return err
-			}
-		}
-		for _, remained := range remains {
-			if err := conn.WriteJSON(convertEvent(remained, false)); err != nil {
-				return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-s.headerWaiter():
+			for {
+				remains, removes, err := eventSub.Read()
+				if err != nil {
+					return err
+				}
+				if remains == nil {
+					break
+				}
+				for _, removed := range removes {
+					if err := conn.WriteJSON(convertEvent(removed, true)); err != nil {
+						return err
+					}
+				}
+				for _, remained := range remains {
+					if err := conn.WriteJSON(convertEvent(remained, false)); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -177,19 +200,30 @@ func (s *Subscriptions) handleSubscribeTransfer(w http.ResponseWriter, req *http
 		Recipient: recipient,
 	}
 	transferSub := NewTransferSub(s.chain, bid, transferFilter)
+	ctx := req.Context()
 	for {
-		remains, removes, err := transferSub.Read(req.Context())
-		if err != nil {
-			return err
-		}
-		for _, removed := range removes {
-			if err := conn.WriteJSON(convertTransfer(removed, true)); err != nil {
-				return err
-			}
-		}
-		for _, remained := range remains {
-			if err := conn.WriteJSON(convertTransfer(remained, false)); err != nil {
-				return err
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-s.headerWaiter():
+			for {
+				remains, removes, err := transferSub.Read()
+				if err != nil {
+					return err
+				}
+				if remains == nil {
+					break
+				}
+				for _, removed := range removes {
+					if err := conn.WriteJSON(convertTransfer(removed, true)); err != nil {
+						return err
+					}
+				}
+				for _, remained := range remains {
+					if err := conn.WriteJSON(convertTransfer(remained, false)); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
