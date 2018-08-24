@@ -1,4 +1,3 @@
 [submodule "vendor"]
 	path = vendor
 	url = https://github.com/vechain/thor-go-vendor
-	branch = 180613
