@@ -25,11 +25,11 @@ disco: |$(SRC_BASE)
 	@cd $(SRC_BASE) && go build -v -i -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/disco
 	@echo "done. executable created at 'bin/$@'"
 
-dep:
+dep: |$(SRC_BASE)
 ifeq ($(shell command -v dep 2> /dev/null),)
 	@git submodule update --init
 else
-	@dep ensure	
+	@cd $(SRC_BASE) && dep ensure -vendor-only
 endif
 
 $(SRC_BASE):
