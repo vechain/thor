@@ -231,7 +231,7 @@ type Output struct {
 	tx     *tx.Transaction
 }
 
-func parseOutputs(chain *chain.Chain, blks []*block.Block) ([]*Output, error) {
+func extractOutputs(chain *chain.Chain, blks []*block.Block) ([]*Output, error) {
 	result := []*Output{}
 	for _, blk := range blks {
 		receipts, err := chain.GetBlockReceipts(blk.Header().ID())

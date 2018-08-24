@@ -42,7 +42,7 @@ func (es *EventSub) Read(ctx context.Context) ([]*Event, []*Event, error) {
 }
 
 func (es *EventSub) filterEvent(blks []*block.Block) ([]*Event, error) {
-	outputs, err := parseOutputs(es.chain, blks)
+	outputs, err := extractOutputs(es.chain, blks)
 	if err != nil {
 		return nil, err
 	}

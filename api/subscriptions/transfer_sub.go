@@ -42,7 +42,7 @@ func (ts *TransferSub) Read(ctx context.Context) ([]*Transfer, []*Transfer, erro
 }
 
 func (ts *TransferSub) filterTransfer(blks []*block.Block) ([]*Transfer, error) {
-	outputs, err := parseOutputs(ts.chain, blks)
+	outputs, err := extractOutputs(ts.chain, blks)
 	if err != nil {
 		return nil, err
 	}
