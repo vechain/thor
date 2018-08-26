@@ -41,7 +41,7 @@ func init() {
 }
 
 var chainConfig = params.ChainConfig{
-	ChainId:             big.NewInt(0),
+	ChainID:             big.NewInt(0),
 	HomesteadBlock:      big.NewInt(0),
 	DAOForkBlock:        big.NewInt(0),
 	DAOForkSupport:      false,
