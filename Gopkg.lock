@@ -34,6 +34,14 @@
   version = "v1.1.0"
 
 [[projects]]
+  digest = "1:c0243ca6ea596b1c547ae44d824fa42f9127af26788efaeb930898586d186c4d"
+  name = "github.com/deckarep/golang-set"
+  packages = ["."]
+  pruneopts = ""
+  revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
+  version = "v1.7"
+
+[[projects]]
   digest = "1:044b2f1eea2f5cfb0d3678baf60892734f59d5c2ea3932cb6ed894a97ccba15c"
   name = "github.com/elazarl/go-bindata-assetfs"
   packages = ["."]
@@ -42,7 +50,7 @@
   version = "v1.0.0"
 
 [[projects]]
-  digest = "1:bce577a2057a8f5bd3559ba9682b3ea642726a7885a29c8dbda709021371e294"
+  digest = "1:a2daa1865bd98ecd61f67cf7f7617f2b7f0501a96ade3140b12d56f5cca60fd5"
   name = "github.com/ethereum/go-ethereum"
   packages = [
     ".",
@@ -60,7 +68,6 @@
     "crypto/bn256/cloudflare",
     "crypto/bn256/google",
     "crypto/ecies",
-    "crypto/randentropy",
     "crypto/secp256k1",
     "crypto/sha3",
     "ethdb",
@@ -77,8 +84,8 @@
     "trie",
   ]
   pruneopts = ""
-  revision = "eae63c511ceafab14b92e274c1b18bf1700e2d3d"
-  version = "v1.8.10"
+  revision = "316fc7ecfc10d06603f1358c1f4c1020ec36dd2a"
+  version = "v1.8.14"
 
 [[projects]]
   digest = "1:9ca737b471693542351e112c9e86be9bf7385e42256893a09ecb2a98e2036f74"
@@ -237,11 +244,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:3588273cb8ecbeea7ea3c2e2d108fd2e2f7bb452bd31ff3677efc29c0a92a1b6"
+  digest = "1:527616aaa3c4f90aa02e7c8e052e642ab845dce9ddc4b2998a4b276baa4b6b99"
   name = "github.com/rjeczalik/notify"
   packages = ["."]
   pruneopts = ""
-  revision = "d152f3ce359a5464dc41e84a8919fc67e55bbbf0"
+  revision = "4e54e7fd043e865c50bda93359fb78813a8d165b"
 
 [[projects]]
   digest = "1:3926a4ec9a4ff1a072458451aa2d9b98acd059a45b38f7335d31e06c3d6a0159"
@@ -274,7 +281,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:c3415eeb330bf30a2d8181e516ec79804c198f3d171ab9c9364f29dbe76c05d9"
+  digest = "1:793a79198b755828dec284c6f1325e24e09186f1b7ba818b65c7c35104ed86eb"
   name = "golang.org/x/crypto"
   packages = [
     "blake2b",
@@ -283,7 +290,7 @@
     "scrypt",
   ]
   pruneopts = ""
-  revision = "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
+  revision = "614d502a4dac94afa3a6ce146bd1736da82514c6"
 
 [[projects]]
   branch = "master"
@@ -303,11 +310,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:e80ec2e647548e8fd36bb104d39220f162b72f9222507f0fc1d5f0b7618a5e9f"
+  digest = "1:7a5f7a1206de6b90f67cb465e489eac3298e95afa7262813b542df4fab38952f"
   name = "golang.org/x/sys"
-  packages = ["unix"]
+  packages = [
+    "cpu",
+    "unix",
+  ]
   pruneopts = ""
-  revision = "378d26f46672a356c46195c28f61bdb4c0a781dd"
+  revision = "4910a1d54f876d7b22162a85f4d066d3ee649450"
 
 [[projects]]
   digest = "1:5acd3512b047305d49e8763eef7ba423901e85d5dd2fd1e71778a0ea8de10bd4"
@@ -334,14 +344,6 @@
   pruneopts = ""
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
-
-[[projects]]
-  digest = "1:812b8cd6b58e655c0399b001419f51442b6ca9d9cf9a9edf471a4a5ad497c767"
-  name = "gopkg.in/fatih/set.v0"
-  packages = ["."]
-  pruneopts = ""
-  revision = "57907de300222151a123d29255ed17f5ed43fad3"
-  version = "v0.1.0"
 
 [[projects]]
   branch = "v2"

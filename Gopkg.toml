@@ -24,7 +24,7 @@ ignored = []
 
 [[constraint]]
   name = "github.com/ethereum/go-ethereum"
-  version = "=1.8.10"
+  version = "=1.8.14"
 
 [[constraint]]
   name = "github.com/gorilla/mux"
