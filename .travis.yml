@@ -6,9 +6,14 @@ matrix:
     - os: linux
       dist: trusty
       go: 1.10.x
-before_install:
-  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
+    - os: linux
+      dist: trusty
+      go: 1.11.x
+    # - os: osx
+    #   go: 1.10.x
+    # - os: osx
+    #   go: 1.11.x
 install:
-  - dep ensure -vendor-only
+  - make dep
 script:
   - make all test
