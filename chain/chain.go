@@ -539,3 +539,69 @@ func (c *Chain) IsBlockExist(err error) bool {
 func (c *Chain) NewTicker() co.Waiter {
 	return c.tick.NewWaiter()
 }
+
+type Block struct {
+	*block.Block
+	Obsolete bool
+}
+
+type BlockReader interface {
+	Read() ([]*Block, error)
+}
+
+type readBlock func() ([]*Block, error)
+
+func (r readBlock) Read() ([]*Block, error) {
+	return r()
+}
+
+func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
+	return readBlock(func() ([]*Block, error) {
+		best := c.BestBlock()
+		bestID := best.Header().ID()
+
+		if bestID == position {
+			return nil, nil
+		}
+
+		var blocks []*Block
+		for {
+			positionBlock, err := c.GetBlock(position)
+			if err != nil {
+				return nil, err
+			}
+
+			if block.Number(position) > block.Number(bestID) {
+				blocks = append(blocks, &Block{positionBlock, true})
+				position = positionBlock.Header().ParentID()
+				continue
+			}
+
+			ancestor, err := c.GetAncestorBlockID(bestID, block.Number(position))
+			if err != nil {
+				return nil, err
+			}
+
+			if position == ancestor {
+				next, err := c.nextBlock(bestID, block.Number(position))
+				if err != nil {
+					return nil, err
+				}
+				position = next.Header().ID()
+				return append(blocks, &Block{next, false}), nil
+			}
+
+			blocks = append(blocks, &Block{positionBlock, true})
+			position = positionBlock.Header().ParentID()
+		}
+	})
+}
+
+func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, error) {
+	next, err := c.GetAncestorBlockID(descendantID, num+1)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.GetBlock(next)
+}
