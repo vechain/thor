@@ -557,16 +557,17 @@ func (r readBlock) Read() ([]*Block, error) {
 
 func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
 	return readBlock(func() ([]*Block, error) {
-		best := c.BestBlock()
-		bestID := best.Header().ID()
+		c.rw.RLock()
+		defer c.rw.RUnlock()
 
+		bestID := c.bestBlock.Header().ID()
 		if bestID == position {
 			return nil, nil
 		}
 
 		var blocks []*Block
 		for {
-			positionBlock, err := c.GetBlock(position)
+			positionBlock, err := c.getBlock(position)
 			if err != nil {
 				return nil, err
 			}
@@ -577,7 +578,7 @@ func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
 				continue
 			}
 
-			ancestor, err := c.GetAncestorBlockID(bestID, block.Number(position))
+			ancestor, err := c.ancestorTrie.GetAncestor(bestID, block.Number(position))
 			if err != nil {
 				return nil, err
 			}
