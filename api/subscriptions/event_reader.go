@@ -24,7 +24,7 @@ func newEventReader(chain *chain.Chain, position thor.Bytes32, filter *EventFilt
 	}
 }
 
-func (er *eventReader) read() ([]interface{}, bool, error) {
+func (er *eventReader) Read() ([]interface{}, bool, error) {
 	blocks, err := er.blockReader.Read()
 	if err != nil {
 		return nil, false, err

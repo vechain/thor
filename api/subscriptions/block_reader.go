@@ -22,7 +22,7 @@ func newBlockReader(chain *chain.Chain, position thor.Bytes32) *blockReader {
 	}
 }
 
-func (br *blockReader) read() ([]interface{}, bool, error) {
+func (br *blockReader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
