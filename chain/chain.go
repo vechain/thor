@@ -599,10 +599,10 @@ func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
 }
 
 func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, error) {
-	next, err := c.GetAncestorBlockID(descendantID, num+1)
+	next, err := c.ancestorTrie.GetAncestor(descendantID, num)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.GetBlock(next)
+	return c.getBlock(next)
 }
