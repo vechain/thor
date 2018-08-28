@@ -19,17 +19,16 @@ func NewTransferReader(chain *chain.Chain, position thor.Bytes32, filter *Transf
 	}
 }
 
-func (tr *TransferReader) Read() ([]interface{}, error) {
+func (tr *TransferReader) Read() ([]interface{}, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-
 	var msgs []interface{}
 	for _, block := range blocks {
 		receipts, err := tr.chain.GetBlockReceipts(block.Header().ID())
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -37,12 +36,12 @@ func (tr *TransferReader) Read() ([]interface{}, error) {
 				for _, transfer := range output.Transfers {
 					origin, err := txs[i].Signer()
 					if err != nil {
-						return nil, err
+						return nil, false, err
 					}
 					if tr.filter.Match(transfer, origin) {
 						msg, err := convertTransfer(block.Header(), txs[i], transfer, block.Obsolete)
 						if err != nil {
-							return nil, err
+							return nil, false, err
 						}
 						msgs = append(msgs, msg)
 					}
@@ -50,5 +49,5 @@ func (tr *TransferReader) Read() ([]interface{}, error) {
 			}
 		}
 	}
-	return msgs, nil
+	return msgs, len(blocks) > 0, nil
 }

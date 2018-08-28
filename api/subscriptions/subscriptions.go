@@ -95,9 +95,7 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 	return NewTransferReader(s.chain, position, transferFilter), nil
 }
 
-type reader interface {
-	Read() ([]interface{}, error)
-}
+type Read func() ([]interface{}, bool, error)
 
 var upgrader = websocket.Upgrader{}
 
@@ -105,26 +103,26 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	var reader reader
+	var read Read
 	switch mux.Vars(req)["subject"] {
 	case "block":
 		blockReader, err := s.handleBlockReader(w, req)
 		if err != nil {
 			return err
 		}
-		reader = blockReader
+		read = blockReader.Read
 	case "event":
-		eventSub, err := s.handleEventReader(w, req)
+		eventReader, err := s.handleEventReader(w, req)
 		if err != nil {
 			return err
 		}
-		reader = eventSub
+		read = eventReader.Read
 	case "transfer":
-		transferSub, err := s.handleTransferReader(w, req)
+		transferReader, err := s.handleTransferReader(w, req)
 		if err != nil {
 			return err
 		}
-		reader = transferSub
+		read = transferReader.Read
 	default:
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
@@ -134,13 +132,12 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	defer conn.Close()
-	if err := s.pipe(conn, reader); err != nil {
+	if err := s.pipe(conn, read); err != nil {
 		return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error()))
 	}
 	return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
 }
-
-func (s *Subscriptions) pipe(conn *websocket.Conn, reader reader) error {
+func (s *Subscriptions) pipe(conn *websocket.Conn, read Read) error {
 	ticker := s.chain.NewTicker()
 	for {
 		select {
@@ -148,17 +145,17 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader reader) error {
 			return nil
 		case <-ticker.C():
 			for {
-				msgs, err := reader.Read()
+				msgs, hasMore, err := read()
 				if err != nil {
 					return err
-				}
-				if len(msgs) == 0 {
-					break
 				}
 				for _, msg := range msgs {
 					if err := conn.WriteJSON(msg); err != nil {
 						return err
 					}
+				}
+				if !hasMore {
+					break
 				}
 			}
 		}

@@ -17,18 +17,18 @@ func NewBlockReader(chain *chain.Chain, position thor.Bytes32) *BlockReader {
 	}
 }
 
-func (br *BlockReader) Read() ([]interface{}, error) {
+func (br *BlockReader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var msgs []interface{}
 	for _, block := range blocks {
 		msg, err := convertBlock(block)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		msgs = append(msgs, msg)
 	}
-	return msgs, nil
+	return msgs, len(blocks) > 0, nil
 }

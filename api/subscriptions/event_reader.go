@@ -19,17 +19,16 @@ func NewEventReader(chain *chain.Chain, position thor.Bytes32, filter *EventFilt
 	}
 }
 
-func (er *EventReader) Read() ([]interface{}, error) {
+func (er *EventReader) Read() ([]interface{}, bool, error) {
 	blocks, err := er.blockReader.Read()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-
 	var msgs []interface{}
 	for _, block := range blocks {
 		receipts, err := er.chain.GetBlockReceipts(block.Header().ID())
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		txs := block.Transactions()
 		for i, receipt := range receipts {
@@ -38,7 +37,7 @@ func (er *EventReader) Read() ([]interface{}, error) {
 					if er.filter.Match(event) {
 						msg, err := convertEvent(block.Header(), txs[i], event, block.Obsolete)
 						if err != nil {
-							return nil, err
+							return nil, false, err
 						}
 						msgs = append(msgs, msg)
 					}
@@ -46,5 +45,5 @@ func (er *EventReader) Read() ([]interface{}, error) {
 			}
 		}
 	}
-	return msgs, nil
+	return msgs, len(blocks) > 0, nil
 }
