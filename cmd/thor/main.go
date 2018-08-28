@@ -128,8 +128,11 @@ func defaultAction(ctx *cli.Context) error {
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
 
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm), chain.GenesisBlock().Header().ID())
-	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
+	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm)
+	defer func() { log.Info("closing API..."); apiCloser() }()
+
+	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
+	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	printStartupMessage(gene, chain, master, instanceDir, apiURL)
 
@@ -175,14 +178,20 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	soloContext := solo.New(chain, state.NewCreator(mainDB), logDB, txPool, uint64(ctx.Int("gas-limit")), ctx.Bool("on-demand"))
+	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{})
+	defer func() { log.Info("closing API..."); apiCloser() }()
 
-	apiSrv, apiURL := startAPIServer(ctx, api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}), chain.GenesisBlock().Header().ID())
-	defer func() { log.Info("stopping API server..."); apiSrv.Close() }()
+	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
+	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
 
-	return soloContext.Run(handleExitSignal())
+	return solo.New(chain,
+		state.NewCreator(mainDB),
+		logDB,
+		txPool,
+		uint64(ctx.Int("gas-limit")),
+		ctx.Bool("on-demand")).Run(handleExitSignal())
 }
 
 func masterKeyAction(ctx *cli.Context) error {
