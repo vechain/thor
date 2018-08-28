@@ -540,11 +540,13 @@ func (c *Chain) NewTicker() co.Waiter {
 	return c.tick.NewWaiter()
 }
 
+// Block expanded block.Block to indicate whether it is obsolete
 type Block struct {
 	*block.Block
 	Obsolete bool
 }
 
+// BlockReader defines the interface to read Block
 type BlockReader interface {
 	Read() ([]*Block, error)
 }
@@ -555,6 +557,7 @@ func (r readBlock) Read() ([]*Block, error) {
 	return r()
 }
 
+// NewBlockReader generate an object that implements the BlockReader interface
 func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
 	return readBlock(func() ([]*Block, error) {
 		c.rw.RLock()
