@@ -539,3 +539,73 @@ func (c *Chain) IsBlockExist(err error) bool {
 func (c *Chain) NewTicker() co.Waiter {
 	return c.tick.NewWaiter()
 }
+
+// Block expanded block.Block to indicate whether it is obsolete
+type Block struct {
+	*block.Block
+	Obsolete bool
+}
+
+// BlockReader defines the interface to read Block
+type BlockReader interface {
+	Read() ([]*Block, error)
+}
+
+type readBlock func() ([]*Block, error)
+
+func (r readBlock) Read() ([]*Block, error) {
+	return r()
+}
+
+// NewBlockReader generate an object that implements the BlockReader interface
+func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
+	return readBlock(func() ([]*Block, error) {
+		c.rw.RLock()
+		defer c.rw.RUnlock()
+
+		bestID := c.bestBlock.Header().ID()
+		if bestID == position {
+			return nil, nil
+		}
+
+		var blocks []*Block
+		for {
+			positionBlock, err := c.getBlock(position)
+			if err != nil {
+				return nil, err
+			}
+
+			if block.Number(position) > block.Number(bestID) {
+				blocks = append(blocks, &Block{positionBlock, true})
+				position = positionBlock.Header().ParentID()
+				continue
+			}
+
+			ancestor, err := c.ancestorTrie.GetAncestor(bestID, block.Number(position))
+			if err != nil {
+				return nil, err
+			}
+
+			if position == ancestor {
+				next, err := c.nextBlock(bestID, block.Number(position))
+				if err != nil {
+					return nil, err
+				}
+				position = next.Header().ID()
+				return append(blocks, &Block{next, false}), nil
+			}
+
+			blocks = append(blocks, &Block{positionBlock, true})
+			position = positionBlock.Header().ParentID()
+		}
+	})
+}
+
+func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, error) {
+	next, err := c.ancestorTrie.GetAncestor(descendantID, num)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.getBlock(next)
+}
