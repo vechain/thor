@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.0.1
+  version: 1.0.2
 
 servers:
   - url: '/'
@@ -25,6 +25,8 @@ tags:
     description: Access to event & transfer logs
   - name: Node
     description: Access to node status info
+  - name: Subscriptions
+    description: Subscribe interested subjects
     
 paths:
   /accounts/{address}:
@@ -246,7 +248,7 @@ paths:
         - Logs
       summary: Filter transfer logs
       description: |
-        Transfer logs are recorded on VET transferring. e.g.
+        Transfer logs are recorded on VET transferring.
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
@@ -330,6 +332,102 @@ paths:
               schema:
                 items:
                   $ref: '#/components/schemas/PeerStats'
+
+  /subscriptions/block:
+    get:
+      tags:
+        - Subscriptions
+      summary: (Websocket) Subscribe new blocks
+      parameters:
+        - $ref: '#/components/parameters/PositionInQuery'
+      
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockMsg'
+          
+  /subscriptions/event:
+    get:
+      tags:
+        - Subscriptions
+      summary: (Websocket) Subscribe new events
+      description: |
+        which satisfy criteria in query.
+        
+      parameters:
+        - $ref: '#/components/parameters/PositionInQuery'
+        - name: addr
+          in: query
+          schema:
+            type: string
+          description: address of contract which emitted the event
+        - name: t0
+          in: query
+          schema:
+            type: string
+          description: topic0 of event
+        - name: t1
+          in: query
+          schema:
+            type: string
+          description: topic1 of event
+        - name: t2
+          in: query
+          schema:
+            type: string
+          description: topic2 of event
+        - name: t3
+          in: query
+          schema:
+            type: string
+          description: topic3 of event
+        - name: t4
+          in: query
+          schema:
+            type: string
+          description: topic4 of event
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventMsg'
+          
+  /subscriptions/transfer:
+    get:
+      tags:
+        - Subscriptions
+      summary: (Websocket) Subscribe new transfers
+      description: |
+        which satisfy criteria in query.
+      parameters:
+        - $ref: '#/components/parameters/PositionInQuery'
+        - name: txOrigin
+          in: query
+          schema:
+            type: string
+          description: signer address of tx which contains the transfer
+        - name: sender
+          in: query
+          schema:
+            type: string
+          description: address of token sender
+        - name: recipient
+          in: query
+          schema:
+            type: string
+          description: address of token recipient
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferMsg'
 
 components:
   schemas:
@@ -919,6 +1017,28 @@ components:
               type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+        
+    BlockMsg:
+      allOf:
+        - $ref: '#/components/schemas/Block'
+        - $ref: '#/components/schemas/Obsolete'
+              
+    EventMsg:
+      allOf:
+        - $ref: '#/components/schemas/FilteredEvent'
+        - $ref: '#/components/schemas/Obsolete'
+              
+    TransferMsg:
+      allOf:
+        - $ref: '#/components/schemas/FilteredTransfer'
+        - $ref: '#/components/schemas/Obsolete'
+    
+    Obsolete:
+      properties:
+        obsolete:
+          type: boolean
+          description: |
+            indicates whether the block containing this data become branch block
 
   parameters:
     AddressInPath:
@@ -975,7 +1095,7 @@ components:
     FilterAddressInQuery:
       name: address
       in: query
-      description: address of account
+      description: address of account which is the events emitter
       required: false
       schema:
         type: string
@@ -1002,3 +1122,12 @@ components:
       schema:
         type: string
       example: '0x9bcc6526a76ae560244f698805cc001977246cb92c2b4f1e2b7a204e445409ea'
+      
+    PositionInQuery:
+      name: pos
+      in: query
+      description: |
+        a saved block ID for resuming the subscription. best block ID is assumed if omitted.
+      schema:
+        type: string
+      
