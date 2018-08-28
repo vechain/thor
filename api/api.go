@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/api/node"
+	"github.com/vechain/thor/api/subscriptions"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/chain"
@@ -57,6 +58,8 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/transactions")
 	node.New(nw).
 		Mount(router, "/node")
+	subscriptions.New(chain).
+		Mount(router, "/subscriptions")
 
 	return router.ServeHTTP
 }
