@@ -11,11 +11,11 @@ type EventReader struct {
 	blockReader chain.BlockReader
 }
 
-func NewEventReader(chain *chain.Chain, fromBlock thor.Bytes32, filter *EventFilter) *EventReader {
+func NewEventReader(chain *chain.Chain, position thor.Bytes32, filter *EventFilter) *EventReader {
 	return &EventReader{
 		chain:       chain,
 		filter:      filter,
-		blockReader: chain.NewBlockReader(fromBlock),
+		blockReader: chain.NewBlockReader(position),
 	}
 }
 
@@ -24,24 +24,27 @@ func (er *EventReader) Read() ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(blocks) == 0 {
-		return nil, nil
-	}
-	outputs, err := extractOutputs(er.chain, blocks)
-	if err != nil {
-		return nil, err
-	}
-	result := []interface{}{}
-	for _, output := range outputs {
-		for _, event := range output.Events {
-			if er.filter.match(event) {
-				event, err := convertEvent(output.header, output.origin, output.tx, event, output.obsolete)
-				if err != nil {
-					return nil, err
+
+	var msgs []interface{}
+	for _, block := range blocks {
+		receipts, err := er.chain.GetBlockReceipts(block.Header().ID())
+		if err != nil {
+			return nil, err
+		}
+		txs := block.Transactions()
+		for i, receipt := range receipts {
+			for _, output := range receipt.Outputs {
+				for _, event := range output.Events {
+					if er.filter.Match(event) {
+						msg, err := convertEvent(block.Header(), txs[i], event, block.Obsolete)
+						if err != nil {
+							return nil, err
+						}
+						msgs = append(msgs, msg)
+					}
 				}
-				result = append(result, event)
 			}
 		}
 	}
-	return result, nil
+	return msgs, nil
 }

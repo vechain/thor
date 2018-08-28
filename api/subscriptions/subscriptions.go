@@ -23,17 +23,17 @@ func New(chain *chain.Chain) *Subscriptions {
 }
 
 func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*BlockReader, error) {
-	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "bid"))
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
-	return NewBlockReader(s.chain, bid), nil
+	return NewBlockReader(s.chain, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*EventReader, error) {
-	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "bid"))
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
@@ -67,13 +67,13 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 		Topic3:  t3,
 		Topic4:  t4,
 	}
-	return NewEventReader(s.chain, bid, eventFilter), nil
+	return NewEventReader(s.chain, position, eventFilter), nil
 }
 
 func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*TransferReader, error) {
-	bid, err := s.parseBlockID(req.URL.Query().Get("bid"))
+	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "bid"))
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
@@ -92,12 +92,14 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 		Sender:    sender,
 		Recipient: recipient,
 	}
-	return NewTransferReader(s.chain, bid, transferFilter), nil
+	return NewTransferReader(s.chain, position, transferFilter), nil
 }
 
 type reader interface {
 	Read() ([]interface{}, error)
 }
+
+var upgrader = websocket.Upgrader{}
 
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
 	s.wg.Add(1)
@@ -124,9 +126,9 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		}
 		reader = transferSub
 	default:
-		return utils.BadRequest(errors.WithMessage(errors.New("should be one of `block`,`event`,`transfer`"), "subject"))
+		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
-	upgrader := websocket.Upgrader{}
+
 	conn, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		return err
@@ -146,15 +148,15 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader reader) error {
 			return nil
 		case <-ticker.C():
 			for {
-				results, err := reader.Read()
+				msgs, err := reader.Read()
 				if err != nil {
 					return err
 				}
-				if len(results) == 0 {
+				if len(msgs) == 0 {
 					break
 				}
-				for _, result := range results {
-					if err := conn.WriteJSON(result); err != nil {
+				for _, msg := range msgs {
+					if err := conn.WriteJSON(msg); err != nil {
 						return err
 					}
 				}

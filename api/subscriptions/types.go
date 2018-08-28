@@ -9,7 +9,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-type SubscriptionBlock struct {
+type BlockMessage struct {
 	Number       uint32         `json:"number"`
 	ID           thor.Bytes32   `json:"id"`
 	Size         uint32         `json:"size"`
@@ -27,10 +27,7 @@ type SubscriptionBlock struct {
 	Obsolete     bool           `json:"obsolete"`
 }
 
-func convertBlock(b *chain.Block) (*SubscriptionBlock, error) {
-	if b == nil {
-		return nil, nil
-	}
+func convertBlock(b *chain.Block) (*BlockMessage, error) {
 	header := b.Header()
 	signer, err := header.Signer()
 	if err != nil {
@@ -42,7 +39,7 @@ func convertBlock(b *chain.Block) (*SubscriptionBlock, error) {
 	for i, tx := range txs {
 		txIds[i] = tx.ID()
 	}
-	return &SubscriptionBlock{
+	return &BlockMessage{
 		Number:       header.Number(),
 		ID:           header.ID(),
 		ParentID:     header.ParentID(),
@@ -69,7 +66,7 @@ type LogMeta struct {
 	TxOrigin       thor.Address `json:"txOrigin"`
 }
 
-type SubscriptionTransfer struct {
+type TransferMessage struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
 	Amount    *math.HexOrDecimal256 `json:"amount"`
@@ -77,16 +74,16 @@ type SubscriptionTransfer struct {
 	Obsolete  bool                  `json:"obsolete"`
 }
 
-func convertTransfer(header *block.Header, origin thor.Address, tx *tx.Transaction, transfer *tx.Transfer, obsolete bool) (*SubscriptionTransfer, error) {
+func convertTransfer(header *block.Header, tx *tx.Transaction, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
 	}
-	v := math.HexOrDecimal256(*transfer.Amount)
-	return &SubscriptionTransfer{
+
+	return &TransferMessage{
 		Sender:    transfer.Sender,
 		Recipient: transfer.Recipient,
-		Amount:    &v,
+		Amount:    (*math.HexOrDecimal256)(transfer.Amount),
 		Meta: LogMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
@@ -98,7 +95,7 @@ func convertTransfer(header *block.Header, origin thor.Address, tx *tx.Transacti
 	}, nil
 }
 
-type SubscriptionEvent struct {
+type EventMessage struct {
 	Address  thor.Address   `json:"address"`
 	Topics   []thor.Bytes32 `json:"topics"`
 	Data     string         `json:"data"`
@@ -106,12 +103,12 @@ type SubscriptionEvent struct {
 	Obsolete bool           `json:"obsolete"`
 }
 
-func convertEvent(header *block.Header, origin thor.Address, tx *tx.Transaction, event *tx.Event, obsolete bool) (*SubscriptionEvent, error) {
+func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obsolete bool) (*EventMessage, error) {
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
 	}
-	return &SubscriptionEvent{
+	return &EventMessage{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
 		Meta: LogMeta{
@@ -136,7 +133,7 @@ type EventFilter struct {
 	Topic4  *thor.Bytes32
 }
 
-func (ef *EventFilter) match(event *tx.Event) bool {
+func (ef *EventFilter) Match(event *tx.Event) bool {
 	if (ef.Address != nil) && (*ef.Address != event.Address) {
 		return false
 	}
@@ -165,10 +162,10 @@ func (ef *EventFilter) match(event *tx.Event) bool {
 type TransferFilter struct {
 	TxOrigin  *thor.Address // who send transaction
 	Sender    *thor.Address // who transferred tokens
-	Recipient *thor.Address // who recieved tokens
+	Recipient *thor.Address // who received tokens
 }
 
-func (tf *TransferFilter) match(transfer *tx.Transfer, origin thor.Address) bool {
+func (tf *TransferFilter) Match(transfer *tx.Transfer, origin thor.Address) bool {
 	if (tf.TxOrigin != nil) && (*tf.TxOrigin != origin) {
 		return false
 	}
@@ -181,35 +178,4 @@ func (tf *TransferFilter) match(transfer *tx.Transfer, origin thor.Address) bool
 		return false
 	}
 	return true
-}
-
-type Output struct {
-	*tx.Output
-	header   *block.Header
-	origin   thor.Address
-	tx       *tx.Transaction
-	obsolete bool
-}
-
-func extractOutputs(chain *chain.Chain, blks []*chain.Block) ([]*Output, error) {
-	result := []*Output{}
-	for _, blk := range blks {
-		receipts, err := chain.GetBlockReceipts(blk.Header().ID())
-		if err != nil {
-			return nil, err
-		}
-
-		for i, receipt := range receipts {
-			tx := blk.Transactions()[i]
-			origin, err := tx.Signer()
-			if err != nil {
-				return nil, err
-			}
-
-			for _, output := range receipt.Outputs {
-				result = append(result, &Output{output, blk.Header(), origin, tx, blk.Obsolete})
-			}
-		}
-	}
-	return result, nil
 }

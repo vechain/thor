@@ -10,10 +10,10 @@ type BlockReader struct {
 	blockReader chain.BlockReader
 }
 
-func NewBlockReader(chain *chain.Chain, fromBlock thor.Bytes32) *BlockReader {
+func NewBlockReader(chain *chain.Chain, position thor.Bytes32) *BlockReader {
 	return &BlockReader{
 		chain:       chain,
-		blockReader: chain.NewBlockReader(fromBlock),
+		blockReader: chain.NewBlockReader(position),
 	}
 }
 
@@ -22,13 +22,13 @@ func (br *BlockReader) Read() ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := []interface{}{}
-	for _, b := range blocks {
-		block, err := convertBlock(b)
+	var msgs []interface{}
+	for _, block := range blocks {
+		msg, err := convertBlock(block)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, block)
+		msgs = append(msgs, msg)
 	}
-	return result, nil
+	return msgs, nil
 }
