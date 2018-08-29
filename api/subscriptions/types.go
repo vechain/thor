@@ -1,3 +1,8 @@
+// Copyright (c) 2018 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package subscriptions
 
 import (
@@ -9,6 +14,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+//BlockMessage block piped by websocket
 type BlockMessage struct {
 	Number       uint32         `json:"number"`
 	ID           thor.Bytes32   `json:"id"`
@@ -66,6 +72,7 @@ type LogMeta struct {
 	TxOrigin       thor.Address `json:"txOrigin"`
 }
 
+//TransferMessage transfer piped by websocket
 type TransferMessage struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
@@ -95,6 +102,7 @@ func convertTransfer(header *block.Header, tx *tx.Transaction, transfer *tx.Tran
 	}, nil
 }
 
+//EventMessage event piped by websocket
 type EventMessage struct {
 	Address  thor.Address   `json:"address"`
 	Topics   []thor.Bytes32 `json:"topics"`
@@ -133,6 +141,7 @@ type EventFilter struct {
 	Topic4  *thor.Bytes32
 }
 
+// Match returs whether event matches filter
 func (ef *EventFilter) Match(event *tx.Event) bool {
 	if (ef.Address != nil) && (*ef.Address != event.Address) {
 		return false
@@ -165,6 +174,7 @@ type TransferFilter struct {
 	Recipient *thor.Address // who received tokens
 }
 
+// Match returs whether transfer matches filter
 func (tf *TransferFilter) Match(transfer *tx.Transfer, origin thor.Address) bool {
 	if (tf.TxOrigin != nil) && (*tf.TxOrigin != origin) {
 		return false
