@@ -26,6 +26,7 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
@@ -257,7 +258,7 @@ func (p *p2pComm) Stop() {
 	}
 }
 
-func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes32) (*http.Server, string) {
+func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes32) (string, func()) {
 	addr := ctx.String(apiAddrFlag.Name)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -273,10 +274,14 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	handler = handleXGenesisID(handler, genesisID)
 	handler = requestBodyLimit(handler)
 	srv := &http.Server{Handler: handler}
-	go func() {
+	var goes co.Goes
+	goes.Go(func() {
 		srv.Serve(listener)
-	}()
-	return srv, "http://" + listener.Addr().String() + "/"
+	})
+	return "http://" + listener.Addr().String() + "/", func() {
+		srv.Close()
+		goes.Wait()
+	}
 }
 
 func printStartupMessage(
