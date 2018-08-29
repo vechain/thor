@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +21,6 @@ import (
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/handlers"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
@@ -265,12 +263,6 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 		fatal(fmt.Sprintf("listen API addr [%v]: %v", addr, err))
 	}
 
-	if origins := ctx.String(apiCorsFlag.Name); origins != "" {
-		handler = handlers.CORS(
-			handlers.AllowedOrigins(strings.Split(origins, ",")),
-			handlers.AllowedHeaders([]string{"content-type"}),
-		)(handler)
-	}
 	handler = handleXGenesisID(handler, genesisID)
 	handler = requestBodyLimit(handler)
 	srv := &http.Server{Handler: handler}
