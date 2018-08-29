@@ -1,3 +1,8 @@
+// Copyright (c) 2018 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package subscriptions
 
 import (
@@ -5,21 +10,21 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type TransferReader struct {
+type transferReader struct {
 	chain       *chain.Chain
 	filter      *TransferFilter
 	blockReader chain.BlockReader
 }
 
-func NewTransferReader(chain *chain.Chain, position thor.Bytes32, filter *TransferFilter) *TransferReader {
-	return &TransferReader{
+func newTransferReader(chain *chain.Chain, position thor.Bytes32, filter *TransferFilter) *transferReader {
+	return &transferReader{
 		chain:       chain,
 		filter:      filter,
 		blockReader: chain.NewBlockReader(position),
 	}
 }
 
-func (tr *TransferReader) Read() ([]interface{}, bool, error) {
+func (tr *transferReader) read() ([]interface{}, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
 		return nil, false, err
