@@ -10,19 +10,19 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type BlockReader struct {
+type blockReader struct {
 	chain       *chain.Chain
 	blockReader chain.BlockReader
 }
 
-func NewBlockReader(chain *chain.Chain, position thor.Bytes32) *BlockReader {
-	return &BlockReader{
+func newBlockReader(chain *chain.Chain, position thor.Bytes32) *blockReader {
+	return &blockReader{
 		chain:       chain,
 		blockReader: chain.NewBlockReader(position),
 	}
 }
 
-func (br *BlockReader) Read() ([]interface{}, bool, error) {
+func (br *blockReader) read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err

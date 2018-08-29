@@ -10,21 +10,21 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type EventReader struct {
+type eventReader struct {
 	chain       *chain.Chain
 	filter      *EventFilter
 	blockReader chain.BlockReader
 }
 
-func NewEventReader(chain *chain.Chain, position thor.Bytes32, filter *EventFilter) *EventReader {
-	return &EventReader{
+func newEventReader(chain *chain.Chain, position thor.Bytes32, filter *EventFilter) *eventReader {
+	return &eventReader{
 		chain:       chain,
 		filter:      filter,
 		blockReader: chain.NewBlockReader(position),
 	}
 }
 
-func (er *EventReader) Read() ([]interface{}, bool, error) {
+func (er *eventReader) read() ([]interface{}, bool, error) {
 	blocks, err := er.blockReader.Read()
 	if err != nil {
 		return nil, false, err

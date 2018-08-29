@@ -27,15 +27,15 @@ func New(chain *chain.Chain) *Subscriptions {
 	return &Subscriptions{chain: chain, done: make(chan struct{})}
 }
 
-func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*BlockReader, error) {
+func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
 	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
-	return NewBlockReader(s.chain, position), nil
+	return newBlockReader(s.chain, position), nil
 }
 
-func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*EventReader, error) {
+func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
 	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
@@ -72,10 +72,10 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 		Topic3:  t3,
 		Topic4:  t4,
 	}
-	return NewEventReader(s.chain, position, eventFilter), nil
+	return newEventReader(s.chain, position, eventFilter), nil
 }
 
-func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*TransferReader, error) {
+func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
 	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
@@ -97,10 +97,10 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 		Sender:    sender,
 		Recipient: recipient,
 	}
-	return NewTransferReader(s.chain, position, transferFilter), nil
+	return newTransferReader(s.chain, position, transferFilter), nil
 }
 
-type Read func() ([]interface{}, bool, error)
+type read func() ([]interface{}, bool, error)
 
 var upgrader = websocket.Upgrader{}
 
@@ -108,26 +108,26 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	var read Read
+	var read read
 	switch mux.Vars(req)["subject"] {
 	case "block":
 		blockReader, err := s.handleBlockReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = blockReader.Read
+		read = blockReader.read
 	case "event":
 		eventReader, err := s.handleEventReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = eventReader.Read
+		read = eventReader.read
 	case "transfer":
 		transferReader, err := s.handleTransferReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = transferReader.Read
+		read = transferReader.read
 	default:
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
@@ -142,7 +142,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	}
 	return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
 }
-func (s *Subscriptions) pipe(conn *websocket.Conn, read Read) error {
+func (s *Subscriptions) pipe(conn *websocket.Conn, read read) error {
 	ticker := s.chain.NewTicker()
 	for {
 		select {

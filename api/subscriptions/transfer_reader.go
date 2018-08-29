@@ -10,21 +10,21 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type TransferReader struct {
+type transferReader struct {
 	chain       *chain.Chain
 	filter      *TransferFilter
 	blockReader chain.BlockReader
 }
 
-func NewTransferReader(chain *chain.Chain, position thor.Bytes32, filter *TransferFilter) *TransferReader {
-	return &TransferReader{
+func newTransferReader(chain *chain.Chain, position thor.Bytes32, filter *TransferFilter) *transferReader {
+	return &transferReader{
 		chain:       chain,
 		filter:      filter,
 		blockReader: chain.NewBlockReader(position),
 	}
 }
 
-func (tr *TransferReader) Read() ([]interface{}, bool, error) {
+func (tr *transferReader) read() ([]interface{}, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
 		return nil, false, err
