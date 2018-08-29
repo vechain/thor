@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
@@ -22,6 +23,15 @@ type Subscriptions struct {
 	done  chan struct{}
 	wg    sync.WaitGroup
 }
+
+type msgReader interface {
+	Read() (msgs []interface{}, hasMore bool, err error)
+}
+
+var (
+	upgrader = websocket.Upgrader{}
+	log      = log15.New("pkg", "subscriptions")
+)
 
 func New(chain *chain.Chain) *Subscriptions {
 	return &Subscriptions{chain: chain, done: make(chan struct{})}
@@ -100,49 +110,61 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 	return newTransferReader(s.chain, position, transferFilter), nil
 }
 
-type read func() ([]interface{}, bool, error)
-
-var upgrader = websocket.Upgrader{}
-
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	var read read
+	var reader msgReader
 	switch mux.Vars(req)["subject"] {
 	case "block":
 		blockReader, err := s.handleBlockReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = blockReader.read
+		reader = blockReader
 	case "event":
 		eventReader, err := s.handleEventReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = eventReader.read
+		reader = eventReader
 	case "transfer":
 		transferReader, err := s.handleTransferReader(w, req)
 		if err != nil {
 			return err
 		}
-		read = transferReader.read
+		reader = transferReader
 	default:
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
 
 	conn, err := upgrader.Upgrade(w, req, nil)
+	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		return err
+		log.Debug("upgrade to websocket", "err", err)
+		return nil
 	}
-	defer conn.Close()
-	if err := s.pipe(conn, read); err != nil {
-		return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error()))
+
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Debug("close websocket", "err", err)
+		}
+	}()
+
+	var closeMsg []byte
+	if err := s.pipe(conn, reader); err != nil {
+		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
+	} else {
+		closeMsg = websocket.FormatCloseMessage(websocket.CloseGoingAway, "")
 	}
-	return conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, ""))
+
+	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
+		log.Debug("write close message", "err", err)
+	}
+	return nil
 }
-func (s *Subscriptions) pipe(conn *websocket.Conn, read read) error {
+
+func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 	ticker := s.chain.NewTicker()
 	for {
 		select {
@@ -150,7 +172,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, read read) error {
 			return nil
 		case <-ticker.C():
 			for {
-				msgs, hasMore, err := read()
+				msgs, hasMore, err := reader.Read()
 				if err != nil {
 					return err
 				}

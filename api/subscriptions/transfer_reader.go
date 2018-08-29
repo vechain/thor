@@ -24,7 +24,7 @@ func newTransferReader(chain *chain.Chain, position thor.Bytes32, filter *Transf
 	}
 }
 
-func (tr *transferReader) read() ([]interface{}, bool, error) {
+func (tr *transferReader) Read() ([]interface{}, bool, error) {
 	blocks, err := tr.blockReader.Read()
 	if err != nil {
 		return nil, false, err
