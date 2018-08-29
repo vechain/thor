@@ -7,8 +7,10 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/api/blocks"
@@ -25,7 +27,12 @@ import (
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network) (http.HandlerFunc, func()) {
+func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network, allowedOrigins string) (http.HandlerFunc, func()) {
+	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
+	for i, o := range origins {
+		origins[i] = strings.ToLower(strings.TrimSpace(o))
+	}
+
 	router := mux.NewRouter()
 
 	// to serve api doc and swagger-ui
@@ -58,8 +65,11 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/transactions")
 	node.New(nw).
 		Mount(router, "/node")
-	subs := subscriptions.New(chain)
+	subs := subscriptions.New(chain, origins)
 	subs.Mount(router, "/subscriptions")
 
-	return router.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
+	return handlers.CORS(
+			handlers.AllowedOrigins(origins),
+			handlers.AllowedHeaders([]string{"content-type"}))(router).ServeHTTP,
+		subs.Close // subscriptions handles hijacked conns, which need to be closed
 }

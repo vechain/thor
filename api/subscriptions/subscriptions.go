@@ -19,9 +19,10 @@ import (
 )
 
 type Subscriptions struct {
-	chain *chain.Chain
-	done  chan struct{}
-	wg    sync.WaitGroup
+	chain    *chain.Chain
+	upgrader *websocket.Upgrader
+	done     chan struct{}
+	wg       sync.WaitGroup
 }
 
 type msgReader interface {
@@ -29,12 +30,28 @@ type msgReader interface {
 }
 
 var (
-	upgrader = websocket.Upgrader{}
-	log      = log15.New("pkg", "subscriptions")
+	log = log15.New("pkg", "subscriptions")
 )
 
-func New(chain *chain.Chain) *Subscriptions {
-	return &Subscriptions{chain: chain, done: make(chan struct{})}
+func New(chain *chain.Chain, allowedOrigins []string) *Subscriptions {
+	return &Subscriptions{
+		chain: chain,
+		upgrader: &websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				for _, allowedOrigin := range allowedOrigins {
+					if allowedOrigin == origin || allowedOrigin == "*" {
+						return true
+					}
+				}
+				return false
+			},
+		},
+		done: make(chan struct{}),
+	}
 }
 
 func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
@@ -138,7 +155,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
 
-	conn, err := upgrader.Upgrade(w, req, nil)
+	conn, err := s.upgrader.Upgrade(w, req, nil)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
