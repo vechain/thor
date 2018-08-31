@@ -180,7 +180,7 @@ paths:
     post:
       tags:
         - Transactions
-      summary: Send transaction
+      summary: Commit transaction
       description: |
         in raw or structured format. If no signature in structured format,
         `signingHash` is returned in response body.
@@ -213,7 +213,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Block'
+                allOf:
+                  - $ref: '#/components/schemas/Block'
+                  - type: object
+                    properties:
+                      isTrunk:
+                        type: boolean
+                        description: whether the block is on th trunk
+                        
 
   /logs/events:
     post:
@@ -240,7 +247,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FilteredEvent'
+                  allOf:
+                    - $ref: '#/components/schemas/Event'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
 
   /logs/transfers:
     post:
@@ -266,7 +278,13 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FilteredTransfer'
+                  allOf:
+                    - $ref: '#/components/schemas/Transfer'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
+                  
 
   /events:
     post:
@@ -292,7 +310,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FilteredEvent'
+                  allOf:
+                    - $ref: '#/components/schemas/Event'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
 
   /transfers:
     post:
@@ -317,7 +340,12 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/FilteredTransfer'
+                  allOf:
+                    - $ref: '#/components/schemas/Transfer'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
 
   /node/network/peers:
     get:
@@ -347,7 +375,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BlockMsg'
+                allOf:
+                  - $ref: '#/components/schemas/Block'
+                  - $ref: '#/components/schemas/Obsolete'
           
   /subscriptions/event:
     get:
@@ -395,7 +425,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EventMsg'
+                allOf:
+                  - $ref: '#/components/schemas/Event'
+                  - $ref: '#/components/schemas/Obsolete'
+                  - type: object
+                    properties:
+                      meta:
+                        $ref: '#/components/schemas/LogMeta'
+                
           
   /subscriptions/transfer:
     get:
@@ -427,7 +464,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransferMsg'
+                allOf:
+                    - $ref: '#/components/schemas/Transfer'
+                    - $ref: '#/components/schemas/Obsolete'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
 
 components:
   schemas:
@@ -569,10 +612,6 @@ components:
           format: bytes20
           description: the one who signed this block
           example: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
-        isTrunk:
-          type: boolean
-          description: whether block is trunk
-          example: true
         transactions:
           type: array
           description: transactions IDs
@@ -901,19 +940,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TopicSet'
-
-    FilteredEvent:
-      properties:
-        topics:
-          type: array
-          items:
-            type: string
-            example: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-        data:
-          type: string
-          example: '0x00000000000000000000000000000000000000000000d3c21bcecceda1000000'
-        meta:
-          $ref: '#/components/schemas/LogMeta'
+    
 
     AddressSet:
       properties:
@@ -937,21 +964,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AddressSet'
-
-    FilteredTransfer:
-      properties:
-        sender:
-          type: string
-          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
-        recipient:
-          type: string
-          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        amount:
-          type: string
-          example: '0x47fdb3c3f456c0000'
-        meta:
-          $ref: '#/components/schemas/LogMeta'
-
+    
     PeerStats:
       properties:
         name:
@@ -1017,21 +1030,7 @@ components:
               type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-        
-    BlockMsg:
-      allOf:
-        - $ref: '#/components/schemas/Block'
-        - $ref: '#/components/schemas/Obsolete'
-              
-    EventMsg:
-      allOf:
-        - $ref: '#/components/schemas/FilteredEvent'
-        - $ref: '#/components/schemas/Obsolete'
-              
-    TransferMsg:
-      allOf:
-        - $ref: '#/components/schemas/FilteredTransfer'
-        - $ref: '#/components/schemas/Obsolete'
+    
     
     Obsolete:
       properties:
