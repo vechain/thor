@@ -55,15 +55,17 @@ func convertFilter(filter *Filter) *logdb.EventFilter {
 
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
-	Topics []*thor.Bytes32      `json:"topics"`
-	Data   string               `json:"data"`
-	Meta   transactions.LogMeta `json:"meta"`
+	Address thor.Address         `json:"address"`
+	Topics  []*thor.Bytes32      `json:"topics"`
+	Data    string               `json:"data"`
+	Meta    transactions.LogMeta `json:"meta"`
 }
 
 //convert a logdb.Event into a json format Event
 func convertEvent(event *logdb.Event) *FilteredEvent {
 	fe := FilteredEvent{
-		Data: hexutil.Encode(event.Data),
+		Address: event.Address,
+		Data:    hexutil.Encode(event.Data),
 		Meta: transactions.LogMeta{
 			BlockID:        event.BlockID,
 			BlockNumber:    event.BlockNumber,
@@ -84,6 +86,7 @@ func convertEvent(event *logdb.Event) *FilteredEvent {
 func (e *FilteredEvent) String() string {
 	return fmt.Sprintf(`
 		Event(
+			address: 	   %v,
 			topics:        %v,
 			data:          %v,
 			meta: (blockID     %v,
@@ -92,6 +95,7 @@ func (e *FilteredEvent) String() string {
 				txID     %v,
 				txOrigin %v)
 			)`,
+		e.Address,
 		e.Topics,
 		e.Data,
 		e.Meta.BlockID,
