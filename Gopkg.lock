@@ -243,12 +243,12 @@
   revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
-  branch = "master"
-  digest = "1:527616aaa3c4f90aa02e7c8e052e642ab845dce9ddc4b2998a4b276baa4b6b99"
+  digest = "1:7143292549152d009ca9e9c493b74736a2ebd93f921bea8a4b308d7cc5edc6b3"
   name = "github.com/rjeczalik/notify"
   packages = ["."]
   pruneopts = ""
-  revision = "4e54e7fd043e865c50bda93359fb78813a8d165b"
+  revision = "0f065fa99b48b842c3fd3e2c8b194c6f2b69f6b8"
+  version = "v0.9.1"
 
 [[projects]]
   digest = "1:3926a4ec9a4ff1a072458451aa2d9b98acd059a45b38f7335d31e06c3d6a0159"
@@ -383,9 +383,9 @@
     "github.com/ethereum/go-ethereum/ethdb",
     "github.com/ethereum/go-ethereum/event",
     "github.com/ethereum/go-ethereum/log",
-    "github.com/ethereum/go-ethereum/metrics",
     "github.com/ethereum/go-ethereum/p2p",
     "github.com/ethereum/go-ethereum/p2p/discover",
+    "github.com/ethereum/go-ethereum/p2p/discv5",
     "github.com/ethereum/go-ethereum/p2p/nat",
     "github.com/ethereum/go-ethereum/p2p/netutil",
     "github.com/ethereum/go-ethereum/params",
@@ -405,7 +405,6 @@
     "github.com/syndtr/goleveldb/leveldb",
     "github.com/syndtr/goleveldb/leveldb/errors",
     "github.com/syndtr/goleveldb/leveldb/filter",
-    "github.com/syndtr/goleveldb/leveldb/iterator",
     "github.com/syndtr/goleveldb/leveldb/opt",
     "github.com/syndtr/goleveldb/leveldb/storage",
     "github.com/syndtr/goleveldb/leveldb/util",
