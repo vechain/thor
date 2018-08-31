@@ -9,10 +9,10 @@ matrix:
     - os: linux
       dist: trusty
       go: 1.11.x
-    # - os: osx
-    #   go: 1.10.x
-    # - os: osx
-    #   go: 1.11.x
+    - os: osx
+      go: 1.10.x
+    - os: osx
+      go: 1.11.x
 install:
   - make dep
 script:
