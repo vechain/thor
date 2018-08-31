@@ -131,26 +131,23 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	var reader msgReader
+	var (
+		reader msgReader
+		err    error
+	)
 	switch mux.Vars(req)["subject"] {
 	case "block":
-		blockReader, err := s.handleBlockReader(w, req)
-		if err != nil {
+		if reader, err = s.handleBlockReader(w, req); err != nil {
 			return err
 		}
-		reader = blockReader
 	case "event":
-		eventReader, err := s.handleEventReader(w, req)
-		if err != nil {
+		if reader, err = s.handleEventReader(w, req); err != nil {
 			return err
 		}
-		reader = eventReader
 	case "transfer":
-		transferReader, err := s.handleTransferReader(w, req)
-		if err != nil {
+		if reader, err = s.handleTransferReader(w, req); err != nil {
 			return err
 		}
-		reader = transferReader
 	default:
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
