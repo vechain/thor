@@ -32,23 +32,26 @@ type Filter struct {
 
 func convertFilter(filter *Filter) *logdb.EventFilter {
 	f := &logdb.EventFilter{
-		Address: filter.Address,
 		Range:   filter.Range,
 		Options: filter.Options,
 		Order:   filter.Order,
 	}
 	if len(filter.TopicSets) > 0 {
-		var topicSets [][5]*thor.Bytes32
-		for _, topicSet := range filter.TopicSets {
+		criterias := make([]*logdb.Criteria, len(filter.TopicSets))
+		for i, topicSet := range filter.TopicSets {
 			var topics [5]*thor.Bytes32
 			topics[0] = topicSet.Topic0
 			topics[1] = topicSet.Topic1
 			topics[2] = topicSet.Topic2
 			topics[3] = topicSet.Topic3
 			topics[4] = topicSet.Topic4
-			topicSets = append(topicSets, topics)
+			criteria := &logdb.Criteria{
+				Address: filter.Address,
+				Topics:  topics,
+			}
+			criterias[i] = criteria
 		}
-		f.TopicSet = topicSets
+		f.Criterias = criterias
 	}
 	return f
 }
