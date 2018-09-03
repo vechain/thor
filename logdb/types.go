@@ -97,13 +97,17 @@ type Options struct {
 	Limit  uint64
 }
 
+type Criteria struct {
+	Address *thor.Address // always a contract address
+	Topics  [5]*thor.Bytes32
+}
+
 //EventFilter filter
 type EventFilter struct {
-	Address  *thor.Address // always a contract address
-	TopicSet [][5]*thor.Bytes32
-	Range    *Range
-	Options  *Options
-	Order    Order //default asc
+	Criterias []*Criteria
+	Range     *Range
+	Options   *Options
+	Order     Order //default asc
 }
 
 type AddressSet struct {
