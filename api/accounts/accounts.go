@@ -109,17 +109,16 @@ func (a *Accounts) sterilizeOptions(options *ContractCall) {
 		options.Gas = math.MaxUint64
 	}
 	if options.GasPrice == nil {
-		gp := new(big.Int)
-		dgp := math.HexOrDecimal256(*gp)
-		options.GasPrice = &dgp
+		options.GasPrice = (*math.HexOrDecimal256)(new(big.Int))
 	}
 	if options.Value == nil {
-		v := new(big.Int)
-		dv := math.HexOrDecimal256(*v)
-		options.Value = &dv
+		options.Value = (*math.HexOrDecimal256)(new(big.Int))
 	}
 	if options.Caller == nil {
 		options.Caller = &thor.Address{}
+	}
+	if options.Data == "" {
+		options.Data = "0x"
 	}
 }
 
