@@ -29,6 +29,7 @@ func TestEvents(t *testing.T) {
 	initEventServer(t)
 	defer ts.Close()
 	getEvents(t)
+	getEvents2(t)
 }
 
 func getEvents(t *testing.T) {
@@ -64,6 +65,47 @@ func getEvents(t *testing.T) {
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
 
+func getEvents2(t *testing.T) {
+	t0 := thor.BytesToBytes32([]byte("topic0"))
+	t1 := thor.BytesToBytes32([]byte("topic1"))
+	limit := 5
+	filter := &logdb.EventFilter{
+		Range: &logdb.Range{
+			Unit: "",
+			From: 0,
+			To:   10,
+		},
+		Options: &logdb.Options{
+			Offset: 0,
+			Limit:  uint64(limit),
+		},
+		Order: "",
+		Criterias: []*logdb.Criteria{
+			&logdb.Criteria{
+				Address: &contractAddr,
+				Topics: [5]*thor.Bytes32{&t0,
+					nil,
+					nil,
+					nil,
+					nil},
+			},
+			&logdb.Criteria{
+				Address: &contractAddr,
+				Topics: [5]*thor.Bytes32{nil,
+					&t1,
+					nil,
+					nil,
+					nil},
+			},
+		},
+	}
+	res := httpPost(t, ts.URL+"/logs/event?", filter)
+	var logs []*events.FilteredEvent
+	if err := json.Unmarshal(res, &logs); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, limit, len(logs), "should be `limit` logs")
+}
 func initEventServer(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -88,6 +130,7 @@ func initEventServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	events.New(db).Mount(router, "/logs/events")
+	events.New2(db).Mount(router, "/logs/event")
 	ts = httptest.NewServer(router)
 }
 
