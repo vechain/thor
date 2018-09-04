@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.0.2
+  version: 1.0.3
 
 servers:
   - url: '/'
@@ -220,9 +220,8 @@ paths:
                       isTrunk:
                         type: boolean
                         description: whether the block is on th trunk
-                        
 
-  /logs/events:
+  /logs/event:
     post:
       tags:
         - Logs
@@ -231,9 +230,7 @@ paths:
         Event logs are produced by `OP_LOG` in EVM.
       parameters:
         - $ref: '#/components/parameters/FilterOrderInQuery'
-        - $ref: '#/components/parameters/FilterAddressInQuery'
       requestBody:
-        description: event filter criteria
         required: true
         content:
           application/json:
@@ -254,8 +251,72 @@ paths:
                         meta:
                           $ref: '#/components/schemas/LogMeta'
 
+  /logs/transfer:
+    post:
+      tags:
+        - Logs
+      summary: Filter transfer logs
+      description: |
+        Transfer logs are recorded on VET transferring.
+      parameters:
+        - $ref: '#/components/parameters/FilterOrderInQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferFilter'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Transfer'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'                        
+
+  /logs/events:
+    post:
+      deprecated: true
+      tags:
+        - Logs
+      summary: Filter event logs
+      description: |
+        Event logs are produced by `OP_LOG` in EVM.
+      parameters:
+        - $ref: '#/components/parameters/FilterOrderInQuery'
+        - $ref: '#/components/parameters/FilterAddressInQuery'
+      requestBody:
+        description: event filter criteria
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventFilterLegacy'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Event'
+                    - type: object
+                      properties:
+                        meta:
+                          $ref: '#/components/schemas/LogMeta'
+
   /logs/transfers:
     post:
+      deprecated: true
       tags:
         - Logs
       summary: Filter transfer logs
@@ -269,7 +330,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TransferFilter'
+              $ref: '#/components/schemas/TransferFilterLegacy'
       responses:
         '200':
           description: OK
@@ -301,7 +362,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/EventFilter'
+              $ref: '#/components/schemas/EventFilterLegacy'
       responses:
         '200':
           description: OK
@@ -331,7 +392,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TransferFilter'
+              $ref: '#/components/schemas/TransferFilterLegacy'
       responses:
         '200':
           description: OK
@@ -393,7 +454,7 @@ paths:
           in: query
           schema:
             type: string
-          description: address of contract which emitted the event
+          description: address of event emitter
         - name: t0
           in: query
           schema:
@@ -806,13 +867,13 @@ components:
         gas:
           type: integer
           format: uint64
-          description: 'optional, to specify max gas for execution'
+          description: max allowed gas for execution
         gasPrice:
           type: string
-          description: 'optional, absolute gas price'
+          description: absolute gas price
         caller:
           type: string
-          description: 'optional, to specify the caller'
+          description: caller address (msg.sender)
       example:
         value: '0xde0b6b3a7640000'
         data: '0x5665436861696e2054686f72'
@@ -906,7 +967,7 @@ components:
         `null` stands for the full range.
         
 
-    TopicSet:
+    TopicSetLegacy:
       properties:
         topic0:
           type: string
@@ -930,7 +991,7 @@ components:
       example:
         topic0: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
 
-    EventFilter:
+    EventFilterLegacy:
       properties:
         range:
           $ref: '#/components/schemas/FilterRange'
@@ -939,10 +1000,71 @@ components:
         topicSets:
           type: array
           items:
-            $ref: '#/components/schemas/TopicSet'
-    
+            $ref: '#/components/schemas/TopicSetLegacy'
 
-    AddressSet:
+    AddressSetLegacy:
+      properties:
+        txOrigin:
+          type: string
+          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
+        sender:
+          type: string
+          example: '0xe59d475abe695c7f67a8a2321f33a856b0b4c71d'
+        recipient:
+          type: string
+          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+
+    TransferFilterLegacy:
+      properties:
+        range:
+          $ref: '#/components/schemas/FilterRange'
+        options:
+          $ref: '#/components/schemas/FilterOptions'
+        addressSets:
+          type: array
+          items:
+            $ref: '#/components/schemas/AddressSetLegacy'
+            
+    EventCriteria:
+      properties:
+        address:
+          type: string
+          description: address of event emitter
+        topic0:
+          type: string
+        topic1:
+          type: string
+        topic2:
+          type: string
+        topic3:
+          type: string
+        topic4:
+          type: string
+      description: |
+        criteria to filter out event. All fields are joined with `and` operand. `null` field are ignored. e.g. 
+        ```
+        {
+          "address": "0xe59d475abe695c7f67a8a2321f33a856b0b4c71d",
+          "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+        }
+        ```
+        matches events emitted by `0xe59d475abe695c7f67a8a2321f33a856b0b4c71d` and with `topic0` equals `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`.
+      example:
+        address: "0xe59d475abe695c7f67a8a2321f33a856b0b4c71d"
+        topic0: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+            
+    EventFilter:
+      properties:
+        range:
+          $ref: '#/components/schemas/FilterRange'
+        options:
+          $ref: '#/components/schemas/FilterOptions'
+        criteriaSet:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventCriteria'
+            
+    TransferCriteria:
       properties:
         txOrigin:
           type: string
@@ -960,10 +1082,10 @@ components:
           $ref: '#/components/schemas/FilterRange'
         options:
           $ref: '#/components/schemas/FilterOptions'
-        AddressSets:
+        criteriaSet:
           type: array
           items:
-            $ref: '#/components/schemas/AddressSet'
+            $ref: '#/components/schemas/TransferCriteria'
     
     PeerStats:
       properties:
