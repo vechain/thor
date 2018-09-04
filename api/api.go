@@ -16,10 +16,12 @@ import (
 	"github.com/vechain/thor/api/blocks"
 	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/api/events"
+	"github.com/vechain/thor/api/eventslegacy"
 	"github.com/vechain/thor/api/node"
 	"github.com/vechain/thor/api/subscriptions"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
+	"github.com/vechain/thor/api/transferslegacy"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/state"
@@ -55,10 +57,14 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/events")
 	transfers.New(logDB).
 		Mount(router, "/transfers")
-	events.New(logDB).
+	eventslegacy.New(logDB).
 		Mount(router, "/logs/events")
-	transfers.New(logDB).
+	events.New(logDB).
+		Mount(router, "/logs/event")
+	transferslegacy.New(logDB).
 		Mount(router, "/logs/transfers")
+	transfers.New(logDB).
+		Mount(router, "/logs/transfer")
 	blocks.New(chain).
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).
