@@ -1,8 +1,3 @@
-// Copyright (c) 2018 The VeChainThor developers
-
-// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
-// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-
 package events
 
 import (
@@ -13,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
 )
 
 type Events struct {
@@ -27,9 +21,8 @@ func New(db *logdb.LogDB) *Events {
 }
 
 //Filter query events with option
-func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, error) {
-	f := convertFilter(filter)
-	events, err := e.db.FilterEvents(ctx, f)
+func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
+	events, err := e.db.FilterEvents(ctx, convertEventFilter(ef))
 	if err != nil {
 		return nil, err
 	}
@@ -41,25 +34,11 @@ func (e *Events) filter(ctx context.Context, filter *Filter) ([]*FilteredEvent, 
 }
 
 func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
-	var filter Filter
+	var filter *EventFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	query := req.URL.Query()
-	if query.Get("address") != "" {
-		addr, err := thor.ParseAddress(query.Get("address"))
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "address"))
-		}
-		filter.Address = &addr
-	}
-	order := query.Get("order")
-	if order != string(logdb.DESC) {
-		filter.Order = logdb.ASC
-	} else {
-		filter.Order = logdb.DESC
-	}
-	fes, err := e.filter(req.Context(), &filter)
+	fes, err := e.filter(req.Context(), filter)
 	if err != nil {
 		return err
 	}
