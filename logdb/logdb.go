@@ -85,30 +85,23 @@ func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Even
 			stmt += " AND " + condition + " <= ? "
 		}
 	}
-	if filter.Address != nil {
-		args = append(args, filter.Address.Bytes())
-		stmt += " AND address = ? "
-	}
-	length := len(filter.TopicSet)
-	if length > 0 {
-		for i, topics := range filter.TopicSet {
-			if i == 0 {
-				stmt += " AND (( 1 "
-			} else {
-				stmt += " OR ( 1 "
-			}
-			for j, topic := range topics {
-				if topic != nil {
-					args = append(args, topic.Bytes())
-					stmt += fmt.Sprintf(" AND topic%v = ? ", j)
-				}
-			}
-			if i == length-1 {
-				stmt += " )) "
-			} else {
-				stmt += " ) "
+	for i, criteria := range filter.CriteriaSet {
+		if i == 0 {
+			stmt += " AND ( 1"
+		} else {
+			stmt += " OR ( 1"
+		}
+		if criteria.Address != nil {
+			args = append(args, criteria.Address.Bytes())
+			stmt += " AND address = ? "
+		}
+		for j, topic := range criteria.Topics {
+			if topic != nil {
+				args = append(args, topic.Bytes())
+				stmt += fmt.Sprintf(" AND topic%v = ?", j)
 			}
 		}
+		stmt += ")"
 	}
 
 	if filter.Order == DESC {
