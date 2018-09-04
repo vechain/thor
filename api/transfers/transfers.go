@@ -39,7 +39,7 @@ func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([
 }
 
 func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
-	var filter logdb.TransferFilter
+	var filter TransferFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -49,7 +49,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	} else {
 		filter.Order = logdb.DESC
 	}
-	tLogs, err := t.filter(req.Context(), &filter)
+	tLogs, err := t.filter(req.Context(), convertTransferFilter(&filter))
 	if err != nil {
 		return err
 	}
