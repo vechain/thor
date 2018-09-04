@@ -36,8 +36,8 @@ func getTransfers(t *testing.T) {
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
 	tf := &logdb.TransferFilter{
-		AddressSets: []*logdb.AddressSet{
-			&logdb.AddressSet{
+		CriteriaSet: []*logdb.TransferCriteria{
+			&logdb.TransferCriteria{
 				TxOrigin:  &from,
 				Recipient: &to,
 			},
@@ -53,7 +53,7 @@ func getTransfers(t *testing.T) {
 		},
 		Order: logdb.DESC,
 	}
-	res := httpPost(t, ts.URL+"/logs/transfers", tf)
+	res := httpPost(t, ts.URL+"/logs/transfer", tf)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -86,7 +86,7 @@ func initLogServer(t *testing.T) {
 	}
 
 	router := mux.NewRouter()
-	transfers.New(db).Mount(router, "/logs/transfers")
+	transfers.New(db).Mount(router, "/logs/transfer")
 	ts = httptest.NewServer(router)
 }
 
