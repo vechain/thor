@@ -97,16 +97,20 @@ type Options struct {
 	Limit  uint64
 }
 
-//EventFilter filter
-type EventFilter struct {
-	Address  *thor.Address // always a contract address
-	TopicSet [][5]*thor.Bytes32
-	Range    *Range
-	Options  *Options
-	Order    Order //default asc
+type EventCriteria struct {
+	Address *thor.Address // always a contract address
+	Topics  [5]*thor.Bytes32
 }
 
-type AddressSet struct {
+//EventFilter filter
+type EventFilter struct {
+	CriteriaSet []*EventCriteria
+	Range       *Range
+	Options     *Options
+	Order       Order //default asc
+}
+
+type TransferCriteria struct {
 	TxOrigin  *thor.Address //who send transaction
 	Sender    *thor.Address //who transferred tokens
 	Recipient *thor.Address //who recieved tokens
@@ -114,7 +118,7 @@ type AddressSet struct {
 
 type TransferFilter struct {
 	TxID        *thor.Bytes32
-	AddressSets []*AddressSet
+	CriteriaSet []*TransferCriteria
 	Range       *Range
 	Options     *Options
 	Order       Order //default asc
