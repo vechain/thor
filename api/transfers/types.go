@@ -34,3 +34,36 @@ func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 		},
 	}
 }
+
+type AddressSet struct {
+	TxOrigin  *thor.Address //who send transaction
+	Sender    *thor.Address //who transferred tokens
+	Recipient *thor.Address //who recieved tokens
+}
+
+type TransferFilter struct {
+	TxID        *thor.Bytes32
+	AddressSets []*AddressSet
+	Range       *logdb.Range
+	Options     *logdb.Options
+	Order       logdb.Order //default asc
+}
+
+func convertTransferFilter(tf *TransferFilter) *logdb.TransferFilter {
+	t := &logdb.TransferFilter{
+		TxID:    tf.TxID,
+		Range:   tf.Range,
+		Options: tf.Options,
+		Order:   tf.Order,
+	}
+	transferCriterias := make([]*logdb.TransferCriteria, len(tf.AddressSets))
+	for i, addressSet := range tf.AddressSets {
+		transferCriterias[i] = &logdb.TransferCriteria{
+			TxOrigin:  addressSet.TxOrigin,
+			Sender:    addressSet.Sender,
+			Recipient: addressSet.Recipient,
+		}
+	}
+	t.CriteriaSet = transferCriterias
+	return t
+}

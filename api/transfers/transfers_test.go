@@ -29,15 +29,16 @@ func TestTransfers(t *testing.T) {
 	initLogServer(t)
 	defer ts.Close()
 	getTransfers(t)
+	getTransfers2(t)
 }
 
 func getTransfers(t *testing.T) {
 	limit := 5
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
-	tf := &logdb.TransferFilter{
-		AddressSets: []*logdb.AddressSet{
-			&logdb.AddressSet{
+	tf := &transfers.TransferFilter{
+		AddressSets: []*transfers.AddressSet{
+			&transfers.AddressSet{
 				TxOrigin:  &from,
 				Recipient: &to,
 			},
@@ -54,6 +55,36 @@ func getTransfers(t *testing.T) {
 		Order: logdb.DESC,
 	}
 	res := httpPost(t, ts.URL+"/logs/transfers", tf)
+	var tLogs []*transfers.FilteredTransfer
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, limit, len(tLogs), "should be `limit` transfers")
+}
+
+func getTransfers2(t *testing.T) {
+	limit := 5
+	from := thor.BytesToAddress([]byte("from"))
+	to := thor.BytesToAddress([]byte("to"))
+	tf := &logdb.TransferFilter{
+		CriteriaSet: []*logdb.TransferCriteria{
+			&logdb.TransferCriteria{
+				TxOrigin:  &from,
+				Recipient: &to,
+			},
+		},
+		Range: &logdb.Range{
+			Unit: logdb.Block,
+			From: 0,
+			To:   1000,
+		},
+		Options: &logdb.Options{
+			Offset: 0,
+			Limit:  uint64(limit),
+		},
+		Order: logdb.DESC,
+	}
+	res := httpPost(t, ts.URL+"/logs/transfer", tf)
 	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
@@ -87,6 +118,7 @@ func initLogServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	transfers.New(db).Mount(router, "/logs/transfers")
+	transfers.New2(db).Mount(router, "/logs/transfer")
 	ts = httptest.NewServer(router)
 }
 

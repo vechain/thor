@@ -57,18 +57,25 @@ func TestEvents(t *testing.T) {
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
-		Order:   logdb.DESC,
-		Address: &addr,
-		TopicSet: [][5]*thor.Bytes32{{&t0,
-			nil,
-			nil,
-			nil,
-			nil},
-			{nil,
-				&t1,
-				nil,
-				nil,
-				nil}},
+		Order: logdb.DESC,
+		CriteriaSet: []*logdb.EventCriteria{
+			&logdb.EventCriteria{
+				Address: &addr,
+				Topics: [5]*thor.Bytes32{nil,
+					nil,
+					nil,
+					nil,
+					nil},
+			},
+			&logdb.EventCriteria{
+				Address: &addr,
+				Topics: [5]*thor.Bytes32{&t0,
+					&t1,
+					nil,
+					nil,
+					nil},
+			},
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -103,8 +110,8 @@ func TestTransfers(t *testing.T) {
 	}
 
 	tf := &logdb.TransferFilter{
-		AddressSets: []*logdb.AddressSet{
-			&logdb.AddressSet{
+		CriteriaSet: []*logdb.TransferCriteria{
+			&logdb.TransferCriteria{
 				TxOrigin:  &from,
 				Recipient: &to,
 			},

@@ -85,30 +85,23 @@ func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Even
 			stmt += " AND " + condition + " <= ? "
 		}
 	}
-	if filter.Address != nil {
-		args = append(args, filter.Address.Bytes())
-		stmt += " AND address = ? "
-	}
-	length := len(filter.TopicSet)
-	if length > 0 {
-		for i, topics := range filter.TopicSet {
-			if i == 0 {
-				stmt += " AND (( 1 "
-			} else {
-				stmt += " OR ( 1 "
-			}
-			for j, topic := range topics {
-				if topic != nil {
-					args = append(args, topic.Bytes())
-					stmt += fmt.Sprintf(" AND topic%v = ? ", j)
-				}
-			}
-			if i == length-1 {
-				stmt += " )) "
-			} else {
-				stmt += " ) "
+	for i, criteria := range filter.CriteriaSet {
+		if i == 0 {
+			stmt += " AND ( 1"
+		} else {
+			stmt += " OR ( 1"
+		}
+		if criteria.Address != nil {
+			args = append(args, criteria.Address.Bytes())
+			stmt += " AND address = ? "
+		}
+		for j, topic := range criteria.Topics {
+			if topic != nil {
+				args = append(args, topic.Bytes())
+				stmt += fmt.Sprintf(" AND topic%v = ?", j)
 			}
 		}
+		stmt += ")"
 	}
 
 	if filter.Order == DESC {
@@ -146,24 +139,24 @@ func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([
 		args = append(args, filter.TxID.Bytes())
 		stmt += " AND txID = ? "
 	}
-	length := len(filter.AddressSets)
+	length := len(filter.CriteriaSet)
 	if length > 0 {
-		for i, addressSet := range filter.AddressSets {
+		for i, criteria := range filter.CriteriaSet {
 			if i == 0 {
 				stmt += " AND (( 1 "
 			} else {
 				stmt += " OR ( 1 "
 			}
-			if addressSet.TxOrigin != nil {
-				args = append(args, addressSet.TxOrigin.Bytes())
+			if criteria.TxOrigin != nil {
+				args = append(args, criteria.TxOrigin.Bytes())
 				stmt += " AND txOrigin = ? "
 			}
-			if addressSet.Sender != nil {
-				args = append(args, addressSet.Sender.Bytes())
+			if criteria.Sender != nil {
+				args = append(args, criteria.Sender.Bytes())
 				stmt += " AND sender = ? "
 			}
-			if addressSet.Recipient != nil {
-				args = append(args, addressSet.Recipient.Bytes())
+			if criteria.Recipient != nil {
+				args = append(args, criteria.Recipient.Bytes())
 				stmt += " AND recipient = ? "
 			}
 			if i == length-1 {

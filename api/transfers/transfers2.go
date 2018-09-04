@@ -15,18 +15,18 @@ import (
 	"github.com/vechain/thor/logdb"
 )
 
-type Transfers struct {
+type Transfers2 struct {
 	db *logdb.LogDB
 }
 
-func New(db *logdb.LogDB) *Transfers {
-	return &Transfers{
+func New2(db *logdb.LogDB) *Transfers2 {
+	return &Transfers2{
 		db,
 	}
 }
 
 //Filter query logs with option
-func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([]*FilteredTransfer, error) {
+func (t *Transfers2) filter(ctx context.Context, filter *logdb.TransferFilter) ([]*FilteredTransfer, error) {
 	transfers, err := t.db.FilterTransfers(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -38,8 +38,8 @@ func (t *Transfers) filter(ctx context.Context, filter *logdb.TransferFilter) ([
 	return tLogs, nil
 }
 
-func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
-	var filter TransferFilter
+func (t *Transfers2) handleFilterTransferLogs(w http.ResponseWriter, req *http.Request) error {
+	var filter logdb.TransferFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
@@ -49,14 +49,14 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	} else {
 		filter.Order = logdb.DESC
 	}
-	tLogs, err := t.filter(req.Context(), convertTransferFilter(&filter))
+	tLogs, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, tLogs)
 }
 
-func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
+func (t *Transfers2) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
