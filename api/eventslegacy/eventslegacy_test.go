@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events_test
+package eventslegacy_test
 
 import (
 	"bytes"
@@ -16,6 +16,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/events"
+	"github.com/vechain/thor/api/eventslegacy"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -35,7 +36,7 @@ func getEvents(t *testing.T) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
-	filter := &events.EventFilter{
+	filter := &eventslegacy.FilterLegacy{
 		Range: &logdb.Range{
 			Unit: "",
 			From: 0,
@@ -45,29 +46,25 @@ func getEvents(t *testing.T) {
 			Offset: 0,
 			Limit:  uint64(limit),
 		},
-		Order: "",
-		CriteriaSet: []*events.EventCriteria{
-			&events.EventCriteria{
-				Address: &contractAddr,
-				TopicSet: events.TopicSet{
-					Topic0: &t0,
-				},
+		Order:   "",
+		Address: &contractAddr,
+		TopicSets: []*eventslegacy.TopicSet{
+			&eventslegacy.TopicSet{
+				Topic0: &t0,
 			},
-			&events.EventCriteria{
-				Address: &contractAddr,
-				TopicSet: events.TopicSet{
-					Topic1: &t1,
-				},
+			&eventslegacy.TopicSet{
+				Topic1: &t1,
 			},
 		},
 	}
-	res := httpPost(t, ts.URL+"/logs/event?", filter)
+	res := httpPost(t, ts.URL+"/logs/events?address="+contractAddr.String(), filter)
 	var logs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &logs); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, limit, len(logs), "should be `limit` logs")
 }
+
 func initEventServer(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -91,7 +88,7 @@ func initEventServer(t *testing.T) {
 	}
 
 	router := mux.NewRouter()
-	events.New(db).Mount(router, "/logs/event")
+	eventslegacy.New(db).Mount(router, "/logs/events")
 	ts = httptest.NewServer(router)
 }
 

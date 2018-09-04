@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transfers_test
+package transferslegacy_test
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api/transfers"
+	"github.com/vechain/thor/api/transferslegacy"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
@@ -35,9 +35,9 @@ func getTransfers(t *testing.T) {
 	limit := 5
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
-	tf := &logdb.TransferFilter{
-		CriteriaSet: []*logdb.TransferCriteria{
-			&logdb.TransferCriteria{
+	tf := &transferslegacy.TransferFilter{
+		AddressSets: []*transferslegacy.AddressSet{
+			&transferslegacy.AddressSet{
 				TxOrigin:  &from,
 				Recipient: &to,
 			},
@@ -53,8 +53,8 @@ func getTransfers(t *testing.T) {
 		},
 		Order: logdb.DESC,
 	}
-	res := httpPost(t, ts.URL+"/logs/transfer", tf)
-	var tLogs []*transfers.FilteredTransfer
+	res := httpPost(t, ts.URL+"/logs/transfers", tf)
+	var tLogs []*transferslegacy.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func initLogServer(t *testing.T) {
 	}
 
 	router := mux.NewRouter()
-	transfers.New(db).Mount(router, "/logs/transfer")
+	transferslegacy.New(db).Mount(router, "/logs/transfers")
 	ts = httptest.NewServer(router)
 }
 

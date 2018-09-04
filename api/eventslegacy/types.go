@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events
+package eventslegacy
 
 import (
 	"fmt"
@@ -20,6 +20,40 @@ type TopicSet struct {
 	Topic2 *thor.Bytes32 `json:"topic2"`
 	Topic3 *thor.Bytes32 `json:"topic3"`
 	Topic4 *thor.Bytes32 `json:"topic4"`
+}
+
+type FilterLegacy struct {
+	Address   *thor.Address
+	TopicSets []*TopicSet
+	Range     *logdb.Range
+	Options   *logdb.Options
+	Order     logdb.Order
+}
+
+func convertFilter(filter *FilterLegacy) *logdb.EventFilter {
+	f := &logdb.EventFilter{
+		Range:   filter.Range,
+		Options: filter.Options,
+		Order:   filter.Order,
+	}
+	if len(filter.TopicSets) > 0 {
+		criterias := make([]*logdb.EventCriteria, len(filter.TopicSets))
+		for i, topicSet := range filter.TopicSets {
+			var topics [5]*thor.Bytes32
+			topics[0] = topicSet.Topic0
+			topics[1] = topicSet.Topic1
+			topics[2] = topicSet.Topic2
+			topics[3] = topicSet.Topic3
+			topics[4] = topicSet.Topic4
+			criteria := &logdb.EventCriteria{
+				Address: filter.Address,
+				Topics:  topics,
+			}
+			criterias[i] = criteria
+		}
+		f.CriteriaSet = criterias
+	}
+	return f
 }
 
 // FilteredEvent only comes from one contract
@@ -73,42 +107,4 @@ func (e *FilteredEvent) String() string {
 		e.Meta.TxID,
 		e.Meta.TxOrigin,
 	)
-}
-
-type EventCriteria struct {
-	Address *thor.Address `json:"address"`
-	TopicSet
-}
-
-type EventFilter struct {
-	CriteriaSet []*EventCriteria `json:"criteriaSet"`
-	Range       *logdb.Range     `json:"range"`
-	Options     *logdb.Options   `json:"options"`
-	Order       logdb.Order      `json:"order"`
-}
-
-func convertEventFilter(filter *EventFilter) *logdb.EventFilter {
-	f := &logdb.EventFilter{
-		Range:   filter.Range,
-		Options: filter.Options,
-		Order:   filter.Order,
-	}
-	if len(filter.CriteriaSet) > 0 {
-		criterias := make([]*logdb.EventCriteria, len(filter.CriteriaSet))
-		for i, criteria := range filter.CriteriaSet {
-			var topics [5]*thor.Bytes32
-			topics[0] = criteria.Topic0
-			topics[1] = criteria.Topic1
-			topics[2] = criteria.Topic2
-			topics[3] = criteria.Topic3
-			topics[4] = criteria.Topic4
-			criteria := &logdb.EventCriteria{
-				Address: criteria.Address,
-				Topics:  topics,
-			}
-			criterias[i] = criteria
-		}
-		f.CriteriaSet = criterias
-	}
-	return f
 }
