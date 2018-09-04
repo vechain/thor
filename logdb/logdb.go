@@ -85,7 +85,7 @@ func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Even
 			stmt += " AND " + condition + " <= ? "
 		}
 	}
-	for i, criteria := range filter.Criterias {
+	for i, criteria := range filter.CriteriaSet {
 		if i == 0 {
 			stmt += " AND ( 1"
 		} else {

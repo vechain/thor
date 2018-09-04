@@ -58,7 +58,7 @@ func TestEvents(t *testing.T) {
 			Limit:  uint64(limit),
 		},
 		Order: logdb.DESC,
-		Criterias: []*logdb.Criteria{
+		CriteriaSet: []*logdb.Criteria{
 			&logdb.Criteria{
 				Address: &addr,
 				Topics: [5]*thor.Bytes32{nil,

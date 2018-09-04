@@ -21,8 +21,8 @@ func New2(db *logdb.LogDB) *Events2 {
 }
 
 //Filter query events with option
-func (e *Events2) filter(ctx context.Context, filter *logdb.EventFilter) ([]*FilteredEvent, error) {
-	events, err := e.db.FilterEvents(ctx, filter)
+func (e *Events2) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
+	events, err := e.db.FilterEvents(ctx, convertEventFilter(ef))
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (e *Events2) filter(ctx context.Context, filter *logdb.EventFilter) ([]*Fil
 }
 
 func (e *Events2) handleFilter(w http.ResponseWriter, req *http.Request) error {
-	var filter *logdb.EventFilter
+	var filter *EventFilter
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}

@@ -69,7 +69,7 @@ func getEvents2(t *testing.T) {
 	t0 := thor.BytesToBytes32([]byte("topic0"))
 	t1 := thor.BytesToBytes32([]byte("topic1"))
 	limit := 5
-	filter := &logdb.EventFilter{
+	filter := &events.EventFilter{
 		Range: &logdb.Range{
 			Unit: "",
 			From: 0,
@@ -80,22 +80,18 @@ func getEvents2(t *testing.T) {
 			Limit:  uint64(limit),
 		},
 		Order: "",
-		Criterias: []*logdb.Criteria{
-			&logdb.Criteria{
+		CriteriaSet: []*events.Criteria{
+			&events.Criteria{
 				Address: &contractAddr,
-				Topics: [5]*thor.Bytes32{&t0,
-					nil,
-					nil,
-					nil,
-					nil},
+				TopicSet: events.TopicSet{
+					Topic0: &t0,
+				},
 			},
-			&logdb.Criteria{
+			&events.Criteria{
 				Address: &contractAddr,
-				Topics: [5]*thor.Bytes32{nil,
-					&t1,
-					nil,
-					nil,
-					nil},
+				TopicSet: events.TopicSet{
+					Topic1: &t1,
+				},
 			},
 		},
 	}

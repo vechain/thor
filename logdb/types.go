@@ -104,10 +104,10 @@ type Criteria struct {
 
 //EventFilter filter
 type EventFilter struct {
-	Criterias []*Criteria
-	Range     *Range
-	Options   *Options
-	Order     Order //default asc
+	CriteriaSet []*Criteria
+	Range       *Range
+	Options     *Options
+	Order       Order //default asc
 }
 
 type AddressSet struct {
