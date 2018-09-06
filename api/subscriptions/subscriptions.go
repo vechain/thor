@@ -192,28 +192,32 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 			}
 		}
 	}()
-
 	ticker := s.chain.NewTicker()
 	for {
-		select {
-		case <-s.done:
-			return nil
-		case <-closed:
-			return nil
-		case <-ticker.C():
-			for {
-				msgs, hasMore, err := reader.Read()
-				if err != nil {
-					return err
-				}
-				for _, msg := range msgs {
-					if err := conn.WriteJSON(msg); err != nil {
-						return err
-					}
-				}
-				if !hasMore {
-					break
-				}
+		msgs, hasMore, err := reader.Read()
+		if err != nil {
+			return err
+		}
+		for _, msg := range msgs {
+			if err := conn.WriteJSON(msg); err != nil {
+				return err
+			}
+		}
+		if !hasMore {
+			select {
+			case <-s.done:
+				return nil
+			case <-closed:
+				return nil
+			case <-ticker.C():
+			}
+		} else {
+			select {
+			case <-s.done:
+				return nil
+			case <-closed:
+				return nil
+			default:
 			}
 		}
 	}
