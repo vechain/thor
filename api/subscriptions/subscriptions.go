@@ -181,26 +181,26 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 	ticker := s.chain.NewTicker()
 	for {
-		select {
-		case <-s.done:
-			return nil
-		case <-ticker.C():
-			for {
-				msgs, hasMore, err := reader.Read()
-				if err != nil {
-					return err
-				}
-				for _, msg := range msgs {
-					if err := conn.WriteJSON(msg); err != nil {
-						return err
-					}
-				}
-				if !hasMore {
-					break
-				}
+	read:
+		msgs, hasMore, err := reader.Read()
+		if err != nil {
+			return err
+		}
+		for _, msg := range msgs {
+			if err := conn.WriteJSON(msg); err != nil {
+				return err
+			}
+		}
+		if !hasMore {
+			select {
+			case <-s.done:
+				return nil
+			case <-ticker.C():
+				goto read
 			}
 		}
 	}
+
 }
 
 func (s *Subscriptions) parseBlockID(bid string) (thor.Bytes32, error) {
