@@ -179,10 +179,26 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 }
 
 func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
+	closed := make(chan struct{})
+	// start read loop to handle close event
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				log.Debug("websocket read err", "err", err)
+				close(closed)
+				break
+			}
+		}
+	}()
+
 	ticker := s.chain.NewTicker()
 	for {
 		select {
 		case <-s.done:
+			return nil
+		case <-closed:
 			return nil
 		case <-ticker.C():
 			for {
