@@ -40,6 +40,11 @@ var (
 		Value: "",
 		Usage: "comma separated list of domains from which to accept cross origin requests to API",
 	}
+	apiTimeoutFlag = cli.IntFlag{
+		Name:  "api-timeout",
+		Value: 10000,
+		Usage: "API request timeout",
+	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Value: int(log15.LvlInfo),

@@ -65,6 +65,7 @@ func main() {
 			beneficiaryFlag,
 			apiAddrFlag,
 			apiCorsFlag,
+			apiTimeoutFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
