@@ -17,7 +17,9 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	tty "github.com/mattn/go-tty"
@@ -133,6 +135,20 @@ func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
 			return
 		}
 		h.ServeHTTP(w, r)
+	})
+}
+
+// middleware for http request timeout.
+func handleAPITimeOut(h http.Handler, timeout time.Duration) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.String(), "/subscriptions") {
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			defer cancel()
+			r = r.WithContext(ctx)
+			h.ServeHTTP(w, r)
+		} else {
+			h.ServeHTTP(w, r)
+		}
 	})
 }
 

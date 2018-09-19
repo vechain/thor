@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -237,10 +236,8 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		return err
 	}
 	address := mux.Vars(req)["address"]
-	ctx, cancel := context.WithTimeout(req.Context(), time.Second*10)
-	defer cancel()
 	if address == "" {
-		output, err := a.Call(ctx, nil, callBody, h)
+		output, err := a.Call(req.Context(), nil, callBody, h)
 		if err != nil {
 			return err
 		}
@@ -250,7 +247,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	output, err := a.Call(ctx, &addr, callBody, h)
+	output, err := a.Call(req.Context(), &addr, callBody, h)
 	if err != nil {
 		return err
 	}
