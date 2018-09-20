@@ -20,11 +20,11 @@ import (
 )
 
 type Subscriptions struct {
-	blockOffset uint32
-	chain       *chain.Chain
-	upgrader    *websocket.Upgrader
-	done        chan struct{}
-	wg          sync.WaitGroup
+	backtraceLimit uint32
+	chain          *chain.Chain
+	upgrader       *websocket.Upgrader
+	done           chan struct{}
+	wg             sync.WaitGroup
 }
 
 type msgReader interface {
@@ -35,10 +35,10 @@ var (
 	log = log15.New("pkg", "subscriptions")
 )
 
-func New(chain *chain.Chain, allowedOrigins []string, blockOffset uint32) *Subscriptions {
+func New(chain *chain.Chain, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
 	return &Subscriptions{
-		blockOffset: blockOffset,
-		chain:       chain,
+		backtraceLimit: backtraceLimit,
+		chain:          chain,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
@@ -58,23 +58,17 @@ func New(chain *chain.Chain, allowedOrigins []string, blockOffset uint32) *Subsc
 }
 
 func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
-	}
-	if err := s.validatePostion(position); err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	return newBlockReader(s.chain, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
-	}
-	if err := s.validatePostion(position); err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
@@ -112,12 +106,9 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 }
 
 func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
-	}
-	if err := s.validatePostion(position); err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
@@ -235,20 +226,19 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 	}
 }
 
-func (s *Subscriptions) validatePostion(pos thor.Bytes32) error {
-	bestn := s.chain.BestBlock().Header().Number()
-	posn := block.Number(pos)
-	if bestn-posn > s.blockOffset {
-		return errors.New("position too large")
+func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
+	bestID := s.chain.BestBlock().Header().ID()
+	if posStr == "" {
+		return bestID, nil
 	}
-	return nil
-}
-
-func (s *Subscriptions) parseBlockID(bid string) (thor.Bytes32, error) {
-	if bid == "" {
-		return s.chain.BestBlock().Header().ID(), nil
+	pos, err := thor.ParseBytes32(posStr)
+	if err != nil {
+		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
-	return thor.ParseBytes32(bid)
+	if block.Number(bestID)-block.Number(pos) > s.backtraceLimit {
+		return thor.Bytes32{}, utils.Forbidden(errors.New("pos: backtrace limit exceeded"))
+	}
+	return pos, nil
 }
 
 func parseTopic(t string) (*thor.Bytes32, error) {

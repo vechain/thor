@@ -43,12 +43,12 @@ var (
 	apiTimeoutFlag = cli.IntFlag{
 		Name:  "api-timeout",
 		Value: 10000,
-		Usage: "API request timeout",
+		Usage: "API request timeout value in milliseconds",
 	}
-	apiSubsOffsetFlag = cli.IntFlag{
-		Name:  "api-subsoffset",
-		Value: 10000,
-		Usage: "block position offset",
+	apiBacktraceLimitFlag = cli.IntFlag{
+		Name:  "api-backtrace-limit",
+		Value: 1000,
+		Usage: "limit the distance between 'position' and best block for subscriptions APIs",
 	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",

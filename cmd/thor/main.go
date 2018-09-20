@@ -66,7 +66,7 @@ func main() {
 			apiAddrFlag,
 			apiCorsFlag,
 			apiTimeoutFlag,
-			apiSubsOffsetFlag,
+			apiBacktraceLimitFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -81,6 +81,8 @@ func main() {
 					dataDirFlag,
 					apiAddrFlag,
 					apiCorsFlag,
+					apiTimeoutFlag,
+					apiBacktraceLimitFlag,
 					onDemandFlag,
 					persistFlag,
 					gasLimitFlag,
@@ -129,7 +131,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiSubsOffsetFlag.Name)))
+	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)))
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
@@ -179,7 +181,7 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiSubsOffsetFlag.Name)))
+	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)))
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
