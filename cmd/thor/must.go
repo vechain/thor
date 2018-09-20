@@ -262,7 +262,10 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	if err != nil {
 		fatal(fmt.Sprintf("listen API addr [%v]: %v", addr, err))
 	}
-
+	timeout := ctx.Int(apiTimeoutFlag.Name)
+	if timeout > 0 {
+		handler = handleAPITimeout(handler, time.Duration(timeout)*time.Millisecond)
+	}
 	handler = handleXGenesisID(handler, genesisID)
 	handler = requestBodyLimit(handler)
 	srv := &http.Server{Handler: handler}

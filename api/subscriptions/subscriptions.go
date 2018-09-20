@@ -14,15 +14,17 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
 type Subscriptions struct {
-	chain    *chain.Chain
-	upgrader *websocket.Upgrader
-	done     chan struct{}
-	wg       sync.WaitGroup
+	backtraceLimit uint32
+	chain          *chain.Chain
+	upgrader       *websocket.Upgrader
+	done           chan struct{}
+	wg             sync.WaitGroup
 }
 
 type msgReader interface {
@@ -33,9 +35,10 @@ var (
 	log = log15.New("pkg", "subscriptions")
 )
 
-func New(chain *chain.Chain, allowedOrigins []string) *Subscriptions {
+func New(chain *chain.Chain, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
 	return &Subscriptions{
-		chain: chain,
+		backtraceLimit: backtraceLimit,
+		chain:          chain,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
@@ -55,17 +58,17 @@ func New(chain *chain.Chain, allowedOrigins []string) *Subscriptions {
 }
 
 func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	return newBlockReader(s.chain, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
 	if err != nil {
@@ -103,9 +106,9 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 }
 
 func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
-	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
 	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+		return nil, err
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
 	if err != nil {
@@ -223,11 +226,19 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 	}
 }
 
-func (s *Subscriptions) parseBlockID(bid string) (thor.Bytes32, error) {
-	if bid == "" {
-		return s.chain.BestBlock().Header().ID(), nil
+func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
+	bestID := s.chain.BestBlock().Header().ID()
+	if posStr == "" {
+		return bestID, nil
 	}
-	return thor.ParseBytes32(bid)
+	pos, err := thor.ParseBytes32(posStr)
+	if err != nil {
+		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "pos"))
+	}
+	if block.Number(bestID)-block.Number(pos) > s.backtraceLimit {
+		return thor.Bytes32{}, utils.Forbidden(errors.New("pos: backtrace limit exceeded"))
+	}
+	return pos, nil
 }
 
 func parseTopic(t string) (*thor.Bytes32, error) {
