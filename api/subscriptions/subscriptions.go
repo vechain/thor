@@ -14,15 +14,17 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
 type Subscriptions struct {
-	chain    *chain.Chain
-	upgrader *websocket.Upgrader
-	done     chan struct{}
-	wg       sync.WaitGroup
+	blockOffset uint32
+	chain       *chain.Chain
+	upgrader    *websocket.Upgrader
+	done        chan struct{}
+	wg          sync.WaitGroup
 }
 
 type msgReader interface {
@@ -33,9 +35,10 @@ var (
 	log = log15.New("pkg", "subscriptions")
 )
 
-func New(chain *chain.Chain, allowedOrigins []string) *Subscriptions {
+func New(chain *chain.Chain, allowedOrigins []string, blockOffset uint32) *Subscriptions {
 	return &Subscriptions{
-		chain: chain,
+		blockOffset: blockOffset,
+		chain:       chain,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
@@ -59,12 +62,18 @@ func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
+	if err := s.validatePostion(position); err != nil {
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+	}
 	return newBlockReader(s.chain, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
 	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+	}
+	if err := s.validatePostion(position); err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	address, err := parseAddress(req.URL.Query().Get("addr"))
@@ -105,6 +114,9 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
 	position, err := s.parseBlockID(req.URL.Query().Get("pos"))
 	if err != nil {
+		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
+	}
+	if err := s.validatePostion(position); err != nil {
 		return nil, utils.BadRequest(errors.WithMessage(err, "pos"))
 	}
 	txOrigin, err := parseAddress(req.URL.Query().Get("txOrigin"))
@@ -221,6 +233,15 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 			}
 		}
 	}
+}
+
+func (s *Subscriptions) validatePostion(pos thor.Bytes32) error {
+	bestn := s.chain.BestBlock().Header().Number()
+	posn := block.Number(pos)
+	if bestn-posn > s.blockOffset {
+		return errors.New("position too large")
+	}
+	return nil
 }
 
 func (s *Subscriptions) parseBlockID(bid string) (thor.Bytes32, error) {

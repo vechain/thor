@@ -45,6 +45,11 @@ var (
 		Value: 10000,
 		Usage: "API request timeout",
 	}
+	apiSubsOffsetFlag = cli.IntFlag{
+		Name:  "api-subsoffset",
+		Value: 10000,
+		Usage: "block position offset",
+	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Value: int(log15.LvlInfo),
