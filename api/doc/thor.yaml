@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.0.3
+  version: 1.0.4
 
 servers:
   - url: '/'
@@ -27,6 +27,8 @@ tags:
     description: Access to node status info
   - name: Subscriptions
     description: Subscribe interested subjects
+  - name: Debug
+    description: Debug utilities
     
 paths:
   /accounts/{address}:
@@ -532,6 +534,28 @@ paths:
                       properties:
                         meta:
                           $ref: '#/components/schemas/LogMeta'
+
+  /debug/tracers:
+    post:
+      tags:
+        - Debug
+      summary: create a tracer
+      description:
+        for a clause
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TracerOption'      
+
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object      
 
 components:
   schemas:
@@ -1160,6 +1184,31 @@ components:
           type: boolean
           description: |
             indicates whether the block containing this data become branch block
+
+    TracerOption:
+      properties:
+        name:
+          type: string
+          enum:
+            - 4byte
+            - bigram
+            - call
+            - evmdis
+            - noop
+            - opcount
+            - prestate
+            - trigram
+            - unigram
+          description: |
+            name of tracer
+          example: ""
+        target:
+          type: string
+          description: |
+            the unified path of target to be traced.
+            Currently, only clause is supported. Format:
+            `blockID/txIndex/clauseIndex`
+          example: 0x000dabb4d6f0a80ad7ad7cd0e07a1f20b546db0730d869d5ccb0dd2a16e7595b/0/0
 
   parameters:
     AddressInPath:
