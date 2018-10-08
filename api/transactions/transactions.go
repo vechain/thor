@@ -106,6 +106,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	}
 	return convertReceipt(receipt, h, tx)
 }
+
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	data, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -198,7 +199,6 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 		return err
 	}
 	return utils.WriteJSON(w, tx)
-
 }
 
 func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {
