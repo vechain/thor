@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/api/eventslegacy"
 	"github.com/vechain/thor/api/node"
 	"github.com/vechain/thor/api/subscriptions"
+	"github.com/vechain/thor/api/trace"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/api/transferslegacy"
@@ -69,6 +70,8 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).
 		Mount(router, "/transactions")
+	trace.New(chain, stateCreator).
+		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
 	subs := subscriptions.New(chain, origins, backtraceLimit)
