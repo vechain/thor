@@ -1,4 +1,4 @@
-package trace
+package debug
 
 import (
 	"fmt"
