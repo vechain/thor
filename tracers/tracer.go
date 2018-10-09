@@ -303,14 +303,19 @@ type Tracer struct {
 	reason    error  // Textual reason for the interruption
 }
 
+// CodeByName returns code by tracer name
+func CodeByName(name string) (string, bool) {
+	return tracer(name)
+}
+
 // New instantiates a new tracer instance. code specifies a Javascript snippet,
 // which must evaluate to an expression returning an object with 'step', 'fault'
 // and 'result' functions.
 func New(code string) (*Tracer, error) {
 	// Resolve any tracers by name and assemble the tracer object
-	if tracer, ok := tracer(code); ok {
-		code = tracer
-	}
+	// if tracer, ok := tracer(code); ok {
+	// 	code = tracer
+	// }
 	tracer := &Tracer{
 		vm:              duktape.New(),
 		ctx:             make(map[string]interface{}),
