@@ -43,6 +43,7 @@ func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID 
 		if d.chain.IsNotFound(err) {
 			return nil, utils.Forbidden(errors.New("block not found"))
 		}
+		return nil, err
 	}
 	txs := block.Transactions()
 	if txIndex >= uint64(len(txs)) {
@@ -135,9 +136,26 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "target[0]"))
 	}
-	txIndex, err := strconv.ParseUint(parts[1], 0, 0)
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "target[1]"))
+	var txIndex uint64
+	if len(parts[1]) == 64 || len(parts[1]) == 66 {
+		txID, err := thor.ParseBytes32(parts[1])
+		if err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "target[1]"))
+		}
+		txMeta, err := d.chain.GetTransactionMeta(txID, blockID)
+		if err != nil {
+			if d.chain.IsNotFound(err) {
+				return utils.Forbidden(errors.New("transaction not found"))
+			}
+			return err
+		}
+		txIndex = txMeta.Index
+	} else {
+		i, err := strconv.ParseUint(parts[1], 0, 0)
+		if err != nil {
+			return utils.BadRequest(errors.WithMessage(err, "target[1]"))
+		}
+		txIndex = i
 	}
 	clauseIndex, err := strconv.ParseUint(parts[2], 0, 0)
 	if err != nil {
