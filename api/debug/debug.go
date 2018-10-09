@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package trace
+package debug
 
 import (
 	"context"
@@ -28,24 +28,24 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
-type Trace struct {
+type Debug struct {
 	chain  *chain.Chain
 	stateC *state.Creator
 }
 
-func New(chain *chain.Chain, stateC *state.Creator) *Trace {
-	return &Trace{
+func New(chain *chain.Chain, stateC *state.Creator) *Debug {
+	return &Debug{
 		chain,
 		stateC,
 	}
 }
 
-func (t *Trace) computeTxEnv(ctx context.Context, block *block.Block, txIndex uint64) (*runtime.Runtime, *state.State, error) {
-	parentHeader, err := t.chain.GetBlockHeader(block.Header().ParentID())
+func (d *Debug) computeTxEnv(ctx context.Context, block *block.Block, txIndex uint64) (*runtime.Runtime, *state.State, error) {
+	parentHeader, err := d.chain.GetBlockHeader(block.Header().ParentID())
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := t.stateC.NewState(parentHeader.StateRoot())
+	st, err := d.stateC.NewState(parentHeader.StateRoot())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -61,7 +61,7 @@ func (t *Trace) computeTxEnv(ctx context.Context, block *block.Block, txIndex ui
 		GasLimit:    parentHeader.GasLimit(),
 		TotalScore:  parentHeader.TotalScore(),
 	}
-	rt := runtime.New(t.chain.NewSeeker(parentHeader.ID()), st, blockContext)
+	rt := runtime.New(d.chain.NewSeeker(parentHeader.ID()), st, blockContext)
 	executeTx := func(tx *tx.Transaction) error {
 		_, err := rt.ExecuteTransaction(tx)
 		return err
@@ -87,8 +87,8 @@ func (t *Trace) computeTxEnv(ctx context.Context, block *block.Block, txIndex ui
 }
 
 //trace an existed transaction
-func (t *Trace) traceTransaction(ctx context.Context, tracer interface{}, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
-	tx, err := t.chain.GetTransaction(blockID, txIndex)
+func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
+	tx, err := d.chain.GetTransaction(blockID, txIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -96,15 +96,15 @@ func (t *Trace) traceTransaction(ctx context.Context, tracer interface{}, blockI
 	if err != nil {
 		return nil, err
 	}
-	block, err := t.chain.GetBlock(blockID)
+	block, err := d.chain.GetBlock(blockID)
 	if err != nil {
 		return nil, err
 	}
-	rt, st, err := t.computeTxEnv(ctx, block, txIndex)
+	rt, st, err := d.computeTxEnv(ctx, block, txIndex)
 	if err != nil {
 		return nil, err
 	}
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer.(vm.Tracer)})
+	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
 	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
 	txCtx := &xenv.TransactionContext{
 		ID:         tx.ID(),
@@ -159,14 +159,14 @@ func (t *Trace) traceTransaction(ctx context.Context, tracer interface{}, blockI
 	return nil, fmt.Errorf("clause index %d out of range for tx %x", clauseIndex, tx.ID())
 }
 
-func (t *Trace) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
+func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
 	var traceop *TracerOption
 	if err := utils.ParseJSON(req.Body, &traceop); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	var tracer vm.Tracer
 	if traceop.Name == "" {
-		tracer = vm.NewStructLogger(&vm.LogConfig{Debug: true})
+		tracer = vm.NewStructLogger(nil)
 	} else {
 		tr, err := tracers.New(traceop.Name)
 		if err != nil {
@@ -174,32 +174,32 @@ func (t *Trace) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 		}
 		tracer = tr
 	}
-	d := strings.Split(traceop.Target, "/")
-	if len(d) != 3 {
+	parts := strings.Split(traceop.Target, "/")
+	if len(parts) != 3 {
 		return utils.BadRequest(errors.New("target:" + traceop.Target + " unsupported"))
 	}
-	blockID, err := thor.ParseBytes32(d[0])
+	blockID, err := thor.ParseBytes32(parts[0])
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "target[0]"))
 	}
-	txIndex, err := strconv.ParseUint(d[1], 0, 0)
+	txIndex, err := strconv.ParseUint(parts[1], 0, 0)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "target[1]"))
 	}
-	clauseIndex, err := strconv.ParseUint(d[2], 0, 0)
+	clauseIndex, err := strconv.ParseUint(parts[2], 0, 0)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "target[2]"))
 	}
 
-	res, err := t.traceTransaction(req.Context(), tracer, blockID, txIndex, clauseIndex)
+	res, err := d.traceTransaction(req.Context(), tracer, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, res)
 }
 
-func (t *Trace) Mount(root *mux.Router, pathPrefix string) {
+func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(t.handleTraceTransaction))
+	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceTransaction))
 }

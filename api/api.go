@@ -14,12 +14,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/api/blocks"
+	"github.com/vechain/thor/api/debug"
 	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/api/eventslegacy"
 	"github.com/vechain/thor/api/node"
 	"github.com/vechain/thor/api/subscriptions"
-	"github.com/vechain/thor/api/trace"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
 	"github.com/vechain/thor/api/transferslegacy"
@@ -70,7 +70,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).
 		Mount(router, "/transactions")
-	trace.New(chain, stateCreator).
+	debug.New(chain, stateCreator).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
