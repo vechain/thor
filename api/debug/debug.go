@@ -16,16 +16,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/runtime"
+	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
-	"github.com/vechain/thor/xenv"
 )
 
 type Debug struct {
@@ -40,112 +36,52 @@ func New(chain *chain.Chain, stateC *state.Creator) *Debug {
 	}
 }
 
-func (d *Debug) computeTxEnv(ctx context.Context, block *block.Block, txIndex uint64) (*runtime.Runtime, *state.State, error) {
-	parentHeader, err := d.chain.GetBlockHeader(block.Header().ParentID())
-	if err != nil {
-		return nil, nil, err
-	}
-	st, err := d.stateC.NewState(parentHeader.StateRoot())
-	if err != nil {
-		return nil, nil, err
-	}
-	signer, err := parentHeader.Signer()
-	if err != nil {
-		return nil, nil, err
-	}
-	blockContext := &xenv.BlockContext{
-		Beneficiary: parentHeader.Beneficiary(),
-		Signer:      signer,
-		Number:      parentHeader.Number(),
-		Time:        parentHeader.Timestamp(),
-		GasLimit:    parentHeader.GasLimit(),
-		TotalScore:  parentHeader.TotalScore(),
-	}
-	rt := runtime.New(d.chain.NewSeeker(parentHeader.ID()), st, blockContext)
-	executeTx := func(tx *tx.Transaction) error {
-		_, err := rt.ExecuteTransaction(tx)
-		return err
-	}
-	for idx, tx := range block.Transactions() {
-		if idx == int(txIndex) {
-			return rt, st, nil
-		}
-		errExecuteTx := make(chan error, 1)
-		go func() {
-			errExecuteTx <- executeTx(tx)
-		}()
-		select {
-		case err := <-errExecuteTx:
-			if err != nil {
-				return nil, nil, err
-			}
-		case <-ctx.Done():
-			return nil, nil, ctx.Err()
-		}
-	}
-	return nil, nil, fmt.Errorf("tx index %d out of range for block %x", txIndex, block.Header().ID())
-}
-
 //trace an existed transaction
 func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
-	tx, err := d.chain.GetTransaction(blockID, txIndex)
-	if err != nil {
-		return nil, err
-	}
-	txSinger, err := tx.Signer()
-	if err != nil {
-		return nil, err
-	}
 	block, err := d.chain.GetBlock(blockID)
 	if err != nil {
-		return nil, err
+		if d.chain.IsNotFound(err) {
+			return nil, utils.Forbidden(errors.New("block not found"))
+		}
 	}
-	rt, st, err := d.computeTxEnv(ctx, block, txIndex)
+	txs := block.Transactions()
+	if txIndex >= uint64(len(txs)) {
+		return nil, utils.Forbidden(errors.New("tx index out of range"))
+	}
+	if clauseIndex >= uint64(len(txs[txIndex].Clauses())) {
+		return nil, utils.Forbidden(errors.New("clause index out of range"))
+	}
+
+	rt, err := consensus.New(d.chain, d.stateC).NewRuntimeForReplay(block.Header())
 	if err != nil {
 		return nil, err
 	}
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
-	baseGasPrice := builtin.Params.Native(st).Get(thor.KeyBaseGasPrice)
-	txCtx := &xenv.TransactionContext{
-		ID:         tx.ID(),
-		Origin:     txSinger,
-		GasPrice:   tx.GasPrice(baseGasPrice),
-		ProvedWork: tx.ProvedWork(block.Header().Number(), rt.Seeker().GetID),
-		BlockRef:   tx.BlockRef(),
-		Expiration: tx.Expiration()}
-	clauses := tx.Clauses()
-	leftOverGas := tx.Gas()
-	gasUsed := uint64(0)
-	for i, clause := range clauses {
-		vmout := make(chan *runtime.Output, 1)
-		exec, interrupt := rt.PrepareClause(clause, uint32(i), leftOverGas, txCtx)
-		go func() {
-			o, _ := exec()
-			vmout <- o
-		}()
-		select {
-		case <-ctx.Done():
-			interrupt()
-			return nil, ctx.Err()
-		case vo := <-vmout:
-			if vo.VMErr != nil {
-				return nil, vo.VMErr
+
+	for i, tx := range txs {
+		if uint64(i) > txIndex {
+			break
+		}
+		txExec, err := rt.PrepareTransaction(tx)
+		if err != nil {
+			return nil, err
+		}
+		clauseCounter := uint64(0)
+		for txExec.HasNextClause() {
+			isTarget := txIndex == uint64(i) && clauseIndex == clauseCounter
+			if isTarget {
+				rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
 			}
-			if err := rt.Seeker().Err(); err != nil {
+			gasUsed, output, err := txExec.NextClause()
+			if err != nil {
 				return nil, err
 			}
-			if err := st.Err(); err != nil {
-				return nil, err
-			}
-			gasUsed += leftOverGas - vo.LeftOverGas
-			leftOverGas = vo.LeftOverGas
-			if i == int(clauseIndex) {
+			if isTarget {
 				switch tr := tracer.(type) {
 				case *vm.StructLogger:
 					return &ExecutionResult{
 						Gas:         gasUsed,
-						Failed:      vo.VMErr != nil,
-						ReturnValue: hexutil.Encode(vo.Data),
+						Failed:      output.VMErr != nil,
+						ReturnValue: hexutil.Encode(output.Data),
 						StructLogs:  formatLogs(tr.StructLogs()),
 					}, nil
 				case *tracers.Tracer:
@@ -154,29 +90,46 @@ func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID 
 					return nil, fmt.Errorf("bad tracer type %T", tracer)
 				}
 			}
+			clauseCounter++
+		}
+		if _, err := txExec.Finalize(); err != nil {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
 		}
 	}
-	return nil, fmt.Errorf("clause index %d out of range for tx %x", clauseIndex, tx.ID())
+	return nil, utils.Forbidden(errors.New("early reverted"))
 }
 
 func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
-	var traceop *TracerOption
-	if err := utils.ParseJSON(req.Body, &traceop); err != nil {
+	var opt *TracerOption
+	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	var tracer vm.Tracer
-	if traceop.Name == "" {
+	if opt.Name == "" {
 		tracer = vm.NewStructLogger(nil)
 	} else {
-		tr, err := tracers.New(traceop.Name)
+		name := opt.Name
+		if !strings.HasSuffix(name, "Tracer") {
+			name += "Tracer"
+		}
+		code, ok := tracers.CodeByName(name)
+		if !ok {
+			return utils.BadRequest(errors.New("name: unsupported tracer"))
+		}
+		tr, err := tracers.New(code)
 		if err != nil {
 			return err
 		}
 		tracer = tr
 	}
-	parts := strings.Split(traceop.Target, "/")
+	parts := strings.Split(opt.Target, "/")
 	if len(parts) != 3 {
-		return utils.BadRequest(errors.New("target:" + traceop.Target + " unsupported"))
+		return utils.BadRequest(errors.New("target:" + opt.Target + " unsupported"))
 	}
 	blockID, err := thor.ParseBytes32(parts[0])
 	if err != nil {
