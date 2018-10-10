@@ -1210,14 +1210,14 @@ components:
             - trigram
             - unigram
           description: |
-            name of tracer
+            name of tracer. Empty name stands for default struct logger tracer.
           example: ""
         target:
           type: string
           description: |
             the unified path of target to be traced.
             Currently, only clause is supported. Format:
-            `blockID/txIndex/clauseIndex`
+            `blockID/(txIndex|txId)/clauseIndex`
           example: 0x000dabb4d6f0a80ad7ad7cd0e07a1f20b546db0730d869d5ccb0dd2a16e7595b/0/0
 
   parameters:
