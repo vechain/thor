@@ -115,6 +115,9 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	if err := json.Unmarshal(data, &m); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if m == nil {
+		return utils.BadRequest(errors.New("body: empty body"))
+	}
 	var sendTx = func(tx *tx.Transaction) error {
 		if err := t.pool.Add(tx); err != nil {
 			if txpool.IsBadTx(err) {

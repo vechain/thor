@@ -110,6 +110,9 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if opt == nil {
+		return utils.BadRequest(errors.New("body: empty body"))
+	}
 	var tracer vm.Tracer
 	if opt.Name == "" {
 		tracer = vm.NewStructLogger(nil)
