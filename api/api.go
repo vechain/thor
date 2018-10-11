@@ -29,7 +29,7 @@ import (
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network, allowedOrigins string, backtraceLimit uint32) (http.HandlerFunc, func()) {
+func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network, allowedOrigins string, backtraceLimit uint32, callGasLimit uint64) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
 		origins[i] = strings.ToLower(strings.TrimSpace(o))
@@ -51,7 +51,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 			http.Redirect(w, req, "doc/swagger-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(chain, stateCreator).
+	accounts.New(chain, stateCreator, callGasLimit).
 		Mount(router, "/accounts")
 	eventslegacy.New(logDB).
 		Mount(router, "/events")

@@ -163,7 +163,7 @@ func initAccountServer(t *testing.T) {
 	packTx(chain, stateC, transactionCall, t)
 
 	router := mux.NewRouter()
-	accounts.New(chain, stateC).Mount(router, "/accounts")
+	accounts.New(chain, stateC, math.MaxUint64).Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 
