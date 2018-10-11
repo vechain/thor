@@ -45,6 +45,11 @@ var (
 		Value: 10000,
 		Usage: "API request timeout value in milliseconds",
 	}
+	apiCallGasLimitFlag = cli.IntFlag{
+		Name:  "--api-call-gas-limit",
+		Value: 50000000,
+		Usage: "limit contract call gas",
+	}
 	apiBacktraceLimitFlag = cli.IntFlag{
 		Name:  "api-backtrace-limit",
 		Value: 1000,

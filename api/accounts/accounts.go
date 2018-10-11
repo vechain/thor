@@ -28,12 +28,14 @@ import (
 type Accounts struct {
 	chain        *chain.Chain
 	stateCreator *state.Creator
+	callGasLimit uint64
 }
 
-func New(chain *chain.Chain, stateCreator *state.Creator) *Accounts {
+func New(chain *chain.Chain, stateCreator *state.Creator, callGasLimit uint64) *Accounts {
 	return &Accounts{
 		chain,
 		stateCreator,
+		callGasLimit,
 	}
 }
 
@@ -105,7 +107,7 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 
 func (a *Accounts) sterilizeOptions(options *ContractCall) {
 	if options.Gas == 0 {
-		options.Gas = math.MaxUint64
+		options.Gas = a.callGasLimit
 	}
 	if options.GasPrice == nil {
 		options.GasPrice = (*math.HexOrDecimal256)(new(big.Int))
@@ -128,13 +130,11 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 	if err != nil {
 		return nil, err
 	}
-	v := big.Int(*body.Value)
 	data, err := hexutil.Decode(body.Data)
 	if err != nil {
 		return nil, err
 	}
-	clause := tx.NewClause(to).WithData(data).WithValue(&v)
-	gp := (*big.Int)(body.GasPrice)
+	clause := tx.NewClause(to).WithData(data).WithValue((*big.Int)(body.Value))
 	signer, _ := header.Signer()
 	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
 		&xenv.BlockContext{
@@ -144,10 +144,9 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore()})
-
 	exec, interrupt := rt.PrepareClause(clause, 0, body.Gas, &xenv.TransactionContext{
 		Origin:     *body.Caller,
-		GasPrice:   gp,
+		GasPrice:   (*big.Int)(body.GasPrice),
 		ProvedWork: &big.Int{}})
 	vmout := make(chan *runtime.Output, 1)
 	go func() {
@@ -223,6 +222,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	callBody := &ContractCall{}
 	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	if callBody.Gas > a.callGasLimit {
+		return utils.Forbidden(errors.New("gas: exceeds limit"))
 	}
 	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
