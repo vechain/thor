@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/stackedmap"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 // State manages the main accounts trie.
@@ -361,6 +362,34 @@ func (s *State) NewCheckpoint() int {
 // RevertTo revert to checkpoint specified by revision.
 func (s *State) RevertTo(revision int) {
 	s.sm.PopTo(revision)
+}
+
+// BuildStorageTrie build up storage trie for given address with cumulative changes.
+func (s *State) BuildStorageTrie(addr thor.Address) (*trie.SecureTrie, error) {
+	acc := s.getAccount(addr)
+
+	root := thor.BytesToBytes32(acc.StorageRoot)
+
+	// retrieve a copied trie
+	trie, err := trCache.Get(root, s.kv, true)
+	if err != nil {
+		return nil, err
+	}
+	// traverse journal to filter out storage changes for addr
+	s.sm.Journal(func(k, v interface{}) bool {
+		switch key := k.(type) {
+		case storageKey:
+			if key.addr == addr {
+				saveStorage(trie, key.key, v.(rlp.RawValue))
+			}
+		}
+		// abort if error occurred
+		return s.err == nil
+	})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return trie, nil
 }
 
 // Stage makes a stage object to compute hash of trie or commit all changes.
