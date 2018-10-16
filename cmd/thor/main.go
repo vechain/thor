@@ -83,6 +83,7 @@ func main() {
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
+					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					onDemandFlag,
 					persistFlag,
