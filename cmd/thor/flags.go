@@ -46,7 +46,7 @@ var (
 		Usage: "API request timeout value in milliseconds",
 	}
 	apiCallGasLimitFlag = cli.IntFlag{
-		Name:  "--api-call-gas-limit",
+		Name:  "api-call-gas-limit",
 		Value: 50000000,
 		Usage: "limit contract call gas",
 	}
