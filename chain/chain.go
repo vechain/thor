@@ -180,7 +180,7 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 	if err := saveBlockRaw(batch, newBlockID, raw); err != nil {
 		return nil, err
 	}
-	if err := saveBlockReceipts(c.kv, newBlockID, receipts); err != nil {
+	if err := saveBlockReceipts(batch, newBlockID, receipts); err != nil {
 		return nil, err
 	}
 
