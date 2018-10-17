@@ -71,6 +71,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CallResult'
+  /accounts/*:
+    post:
+      parameters:
+        - $ref: '#/components/parameters/RevisionInQuery'
+      tags:
+        - Accounts
+      summary: Execute a batch of codes
+      description: |
+        to simulate execution of a transaction.
+      requestBody:
+        description: arguments and environment
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchCallData'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchCallResult'
 
   /accounts:
     post:
@@ -899,6 +922,34 @@ components:
         vmError:
           type: string
           example: ''
+
+    BatchCallData:
+      properties:
+        clauses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Clause'
+        gas:
+          type: integer
+          format: uint64
+          description: max allowed gas for execution
+        gasPrice:
+          type: string
+          description: absolute gas price
+        caller:
+          type: string
+          description: caller address (msg.sender)
+      example:
+        clauses:
+          - to: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+            value: '0xde0b6b3a7640000'
+            data: '0x5665436861696e2054686f72'      
+
+    BatchCallResult:
+      type: array
+      items:
+        $ref: '#/components/schemas/CallResult'
+
 
     FilterOptions:
       properties:
