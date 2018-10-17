@@ -539,7 +539,7 @@ paths:
     post:
       tags:
         - Debug
-      summary: create a tracer
+      summary: Create a tracer
       description:
         for a clause
       requestBody:
@@ -555,7 +555,28 @@ paths:
           content:
             application/json:
               schema:
-                type: object      
+                type: object
+
+  /debug/storage-range:
+    post:
+      tags:
+        - Debug
+      summary: Retrieve storage range
+      description: |
+        of the account with given address
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StorageRangeOption'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageRange'
 
 components:
   schemas:
@@ -1208,7 +1229,39 @@ components:
             the unified path of target to be traced.
             Currently, only clause is supported. Format:
             `blockID/(txIndex|txId)/clauseIndex`
-          example: 0x000dabb4d6f0a80ad7ad7cd0e07a1f20b546db0730d869d5ccb0dd2a16e7595b/0/0
+          example: '0x000dabb4d6f0a80ad7ad7cd0e07a1f20b546db0730d869d5ccb0dd2a16e7595b/0/0'
+
+    StorageRangeOption:
+      properties:
+        address:
+          type: string
+          description: |
+            address of account
+          example: '0xa4627036e2095eb71c2341054daa63577c062498'
+        keyStart:
+          type: string
+          example: '0x0000000000000000000000000000000000000000000000000000000000000000'
+        maxResult:
+          type: number
+          example: 10
+        target:
+          type: string
+          example: '0x000edefb448685f9c72fc2b946980ef51d8d208bbaa4d3fdcf0c57d4847aca2e/0/0'
+
+    StorageRange:
+      properties:
+        nextKey:
+          type: string
+          example:
+            null
+        storage:
+          type: object
+          example:
+            '0x33e423980c9b37d048bd5fadbd4a2aeb95146922045405accc2f468d0ef96988':
+              key:
+                '0x0000000000000000000000000000000000000000000000000000000000000001'
+              value:
+                '0x00000000000000000000000000000000000000000000000000000000000000c8'
 
   parameters:
     AddressInPath:
