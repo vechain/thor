@@ -228,8 +228,6 @@ paths:
       summary: Filter event logs
       description: |
         Event logs are produced by `OP_LOG` in EVM.
-      parameters:
-        - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
         required: true
         content:
@@ -258,8 +256,6 @@ paths:
       summary: Filter transfer logs
       description: |
         Transfer logs are recorded on VET transferring.
-      parameters:
-        - $ref: '#/components/parameters/FilterOrderInQuery'
       requestBody:
         required: true
         content:
@@ -1063,6 +1059,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EventCriteria'
+        order:
+          description: |
+            order of filters, defaults to `asc`
+          type: string
+          enum:
+            - asc
+            - desc
             
     TransferCriteria:
       properties:
@@ -1086,6 +1089,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TransferCriteria'
+        order:
+          description: |
+            order of filters, defaults to `asc`
+          type: string
+          enum:
+            - asc
+            - desc
     
     PeerStats:
       properties:
