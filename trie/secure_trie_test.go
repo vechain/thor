@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"runtime"
 	"sync"
 	"testing"
@@ -89,21 +90,21 @@ func TestSecureDelete(t *testing.T) {
 	}
 }
 
-// func TestSecureGetKey(t *testing.T) {
-// 	trie := newEmptySecure()
-// 	trie.Update([]byte("foo"), []byte("bar"))
+func TestSecureGetKey(t *testing.T) {
+	trie := newEmptySecure()
+	trie.Update([]byte("foo"), []byte("bar"))
 
-// 	key := []byte("foo")
-// 	value := []byte("bar")
-// 	seckey := thor.Blake2b(key).Bytes()
+	key := []byte("foo")
+	value := []byte("bar")
+	seckey := thor.Blake2b(key).Bytes()
 
-// 	if !bytes.Equal(trie.Get(key), value) {
-// 		t.Errorf("Get did not return bar")
-// 	}
-// 	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {
-// 		t.Errorf("GetKey returned %q, want %q", k, key)
-// 	}
-// }
+	if !bytes.Equal(trie.Get(key), value) {
+		t.Errorf("Get did not return bar")
+	}
+	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {
+		t.Errorf("GetKey returned %q, want %q", k, key)
+	}
+}
 
 func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
