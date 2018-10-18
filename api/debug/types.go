@@ -3,6 +3,8 @@ package debug
 import (
 	"fmt"
 
+	"github.com/vechain/thor/thor"
+
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/vm"
 )
@@ -66,4 +68,23 @@ func formatLogs(logs []vm.StructLog) []StructLogRes {
 		}
 	}
 	return formatted
+}
+
+type StorageRangeOption struct {
+	Address   thor.Address
+	KeyStart  string
+	MaxResult int
+	Target    string
+}
+
+type StorageRangeResult struct {
+	Storage StorageMap    `json:"storage"`
+	NextKey *thor.Bytes32 `json:"nextKey"` // nil if Storage includes the last key in the trie.
+}
+
+type StorageMap map[string]StorageEntry
+
+type StorageEntry struct {
+	Key   *thor.Bytes32 `json:"key"`
+	Value *thor.Bytes32 `json:"value"`
 }
