@@ -52,6 +52,11 @@ func convertFilter(filter *FilterLegacy) *logdb.EventFilter {
 			criterias[i] = criteria
 		}
 		f.CriteriaSet = criterias
+	} else if filter.Address != nil {
+		f.CriteriaSet = []*logdb.EventCriteria{
+			&logdb.EventCriteria{
+				Address: filter.Address,
+			}}
 	}
 	return f
 }
