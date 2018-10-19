@@ -148,7 +148,8 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 		Origin:     *body.Caller,
 		GasPrice:   (*big.Int)(body.GasPrice),
 		ProvedWork: &big.Int{}})
-	vmout := make(chan *runtime.Output, 1)
+	vmout := make(chan *runtime.Output, 0)
+	defer close(vmout)
 	go func() {
 		o, _ := exec()
 		vmout <- o
@@ -157,14 +158,17 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 	case <-ctx.Done():
 		interrupt()
 		return nil, ctx.Err()
-	case vo := <-vmout:
-		if err := rt.Seeker().Err(); err != nil {
-			return nil, err
+	case out, ok := <-vmout:
+		if ok {
+			if err := rt.Seeker().Err(); err != nil {
+				return nil, err
+			}
+			if err := state.Err(); err != nil {
+				return nil, err
+			}
+			return convertVMOutputWithInputGas(out, body.Gas), nil
 		}
-		if err := state.Err(); err != nil {
-			return nil, err
-		}
-		return convertVMOutputWithInputGas(vo, body.Gas), nil
+		return nil, nil
 	}
 }
 
@@ -256,6 +260,117 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, output)
 }
 
+func (a *Accounts) handleBatchCall(w http.ResponseWriter, req *http.Request) error {
+	callData := &BatchCallData{}
+	if err := utils.ParseJSON(req.Body, &callData); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	if callData.Gas > a.callGasLimit {
+		return utils.Forbidden(errors.New("gas: exceeds limit"))
+	}
+	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	h, err := a.getBlockHeader(revision)
+	if err != nil {
+		if a.chain.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
+	}
+	outputs, err := a.BatchCall(req.Context(), callData, h)
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, outputs)
+}
+
+func (a *Accounts) BatchCall(ctx context.Context, body *BatchCallData, header *block.Header) (outputs BatchCallResult, err error) {
+	a.sterilizeBatchCallData(body)
+	state, err := a.stateCreator.NewState(header.StateRoot())
+	if err != nil {
+		return nil, err
+	}
+	signer, _ := header.Signer()
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore()})
+	results := make(BatchCallResult, 0)
+	totalGas := body.Gas
+	vmout := make(chan *runtime.Output, 0)
+	defer close(vmout)
+	for i, c := range body.Clauses {
+		data, err := hexutil.Decode(c.Data)
+		if err != nil {
+			return nil, err
+		}
+		clause := tx.NewClause(c.To).WithData(data).WithValue((*big.Int)(c.Value))
+		exec, interrupt := rt.PrepareClause(clause, uint32(i), totalGas, &xenv.TransactionContext{
+			Origin:     *body.Caller,
+			GasPrice:   (*big.Int)(body.GasPrice),
+			ProvedWork: &big.Int{}})
+		go func() {
+			o, _ := exec()
+			vmout <- o
+		}()
+		select {
+		case <-ctx.Done():
+			interrupt()
+			return nil, ctx.Err()
+		case out, ok := <-vmout:
+			if ok {
+				if err := rt.Seeker().Err(); err != nil {
+					return nil, err
+				}
+				if err := state.Err(); err != nil {
+					return nil, err
+				}
+				results = append(results, convertVMOutputWithInputGas(out, totalGas))
+				if out.VMErr != nil {
+					return results, nil
+				}
+				totalGas = out.LeftOverGas
+			} else {
+				return results, nil
+			}
+		}
+	}
+	return results, nil
+}
+
+func (a *Accounts) sterilizeBatchCallData(callData *BatchCallData) {
+	if callData.Gas == 0 {
+		callData.Gas = a.callGasLimit
+	}
+	if callData.GasPrice == nil {
+		callData.GasPrice = (*math.HexOrDecimal256)(new(big.Int))
+	}
+	if callData.Caller == nil {
+		callData.Caller = &thor.Address{}
+	}
+	clauses := make(Clauses, len(callData.Clauses))
+	for i, clause := range callData.Clauses {
+		if clause.Data == "" {
+			clause.Data = "0x"
+		}
+		if clause.Value == nil {
+			clause.Value = (*math.HexOrDecimal256)(big.NewInt(0))
+		}
+		clauses[i] = Clause{
+			Data:  clause.Data,
+			Value: clause.Value,
+			To:    clause.To,
+		}
+	}
+	callData.Clauses = clauses
+}
+
 func (a *Accounts) parseRevision(revision string) (interface{}, error) {
 	if revision == "" || revision == "best" {
 		return nil, nil
@@ -291,6 +406,7 @@ func (a *Accounts) getBlockHeader(revision interface{}) (*block.Header, error) {
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
+	sub.Path("/*").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleBatchCall))
 	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
