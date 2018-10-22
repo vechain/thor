@@ -239,6 +239,112 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, output)
 }
 
+func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
+	batchCallData := &BatchCallData{}
+	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	if err != nil {
+		return err
+	}
+	results, err := a.batchCall(req.Context(), batchCallData, h)
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, results)
+}
+
+func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, header *block.Header) (results BatchCallResults, err error) {
+	gas, gasPrice, caller, clauses, err := a.handleBatchCallData(batchCallData)
+	if err != nil {
+		return nil, err
+	}
+	state, err := a.stateCreator.NewState(header.StateRoot())
+	if err != nil {
+		return nil, err
+	}
+	signer, _ := header.Signer()
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore()})
+	results = make(BatchCallResults, 0)
+	vmout := make(chan *runtime.Output, 1)
+	for i, clause := range clauses {
+		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, &xenv.TransactionContext{
+			Origin:     *caller,
+			GasPrice:   gasPrice,
+			ProvedWork: &big.Int{}})
+		go func() {
+			o, _ := exec()
+			vmout <- o
+		}()
+		select {
+		case <-ctx.Done():
+			interrupt()
+			return nil, ctx.Err()
+		case out := <-vmout:
+			if err := rt.Seeker().Err(); err != nil {
+				return nil, err
+			}
+			if err := state.Err(); err != nil {
+				return nil, err
+			}
+			results = append(results, convertCallResultWithInputGas(out, gas))
+			if out.VMErr != nil {
+				return results, nil
+			}
+			gas = out.LeftOverGas
+		}
+	}
+	return results, nil
+}
+
+func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (gas uint64, gasPrice *big.Int, caller *thor.Address, clauses []*tx.Clause, err error) {
+	if batchCallData.Gas > a.callGasLimit {
+		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+	} else if batchCallData.Gas == 0 {
+		gas = a.callGasLimit
+	} else {
+		gas = batchCallData.Gas
+	}
+	if batchCallData.GasPrice == nil {
+		gasPrice = new(big.Int)
+	} else {
+		gasPrice = (*big.Int)(batchCallData.GasPrice)
+	}
+	if batchCallData.Caller == nil {
+		caller = &thor.Address{}
+	} else {
+		caller = batchCallData.Caller
+	}
+	cs := make([]*tx.Clause, len(batchCallData.Clauses))
+	for i, c := range batchCallData.Clauses {
+		var value *big.Int
+		if c.Value == nil {
+			value = new(big.Int)
+		} else {
+			value = (*big.Int)(c.Value)
+		}
+		var data []byte
+		if c.Data != "" {
+			data, err = hexutil.Decode(c.Data)
+			if err != nil {
+				err = utils.BadRequest(errors.WithMessage(err, "data["+string(i)+"]"))
+				return
+			}
+		}
+		cs[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
+	}
+	clauses = cs
+	return
+}
+
 func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
 		return a.chain.BestBlock().Header(), nil
@@ -277,6 +383,7 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
+	sub.Path("/*").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
 	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))

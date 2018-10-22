@@ -82,3 +82,22 @@ func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 		VMError:   vmError,
 	}
 }
+
+type Clause struct {
+	To    *thor.Address         `json:"to"`
+	Value *math.HexOrDecimal256 `json:"value"`
+	Data  string                `json:"data"`
+}
+
+//Clauses array of clauses.
+type Clauses []Clause
+
+//BatchCallData executes a batch of codes
+type BatchCallData struct {
+	Clauses  Clauses               `json:"clauses"`
+	Gas      uint64                `json:"gas"`
+	GasPrice *math.HexOrDecimal256 `json:"gasPrice"`
+	Caller   *thor.Address         `json:"caller"`
+}
+
+type BatchCallResults []*CallResult
