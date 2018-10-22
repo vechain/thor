@@ -57,15 +57,8 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	h, err := a.getBlockHeader(revision)
-	if err != nil {
-		if a.chain.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
 		return err
 	}
 	code, err := a.getCode(addr, h.StateRoot())
@@ -173,15 +166,8 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	h, err := a.getBlockHeader(revision)
-	if err != nil {
-		if a.chain.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
 		return err
 	}
 	acc, err := a.getAccount(addr, h)
@@ -200,15 +186,8 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "key"))
 	}
-	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	h, err := a.getBlockHeader(revision)
-	if err != nil {
-		if a.chain.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
 		return err
 	}
 	storage, err := a.getStorage(addr, key, h.StateRoot())
@@ -226,15 +205,8 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if callBody.Gas > a.callGasLimit {
 		return utils.Forbidden(errors.New("gas: exceeds limit"))
 	}
-	revision, err := a.parseRevision(req.URL.Query().Get("revision"))
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	h, err := a.getBlockHeader(revision)
-	if err != nil {
-		if a.chain.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
 		return err
 	}
 	address := mux.Vars(req)["address"]
@@ -256,36 +228,39 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	return utils.WriteJSON(w, output)
 }
 
-func (a *Accounts) parseRevision(revision string) (interface{}, error) {
+func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
-		return nil, nil
+		return a.chain.BestBlock().Header(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)
 		if err != nil {
+			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		h, err := a.chain.GetBlockHeader(blockID)
+		if err != nil {
+			if a.chain.IsNotFound(err) {
+				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
+			}
 			return nil, err
 		}
-		return blockID, nil
+		return h, nil
 	}
 	n, err := strconv.ParseUint(revision, 0, 0)
 	if err != nil {
-		return nil, err
+		return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 	if n > math.MaxUint32 {
-		return nil, errors.New("block number out of max uint32")
+		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
 	}
-	return uint32(n), err
-}
-
-func (a *Accounts) getBlockHeader(revision interface{}) (*block.Header, error) {
-	switch revision.(type) {
-	case thor.Bytes32:
-		return a.chain.GetBlockHeader(revision.(thor.Bytes32))
-	case uint32:
-		return a.chain.GetTrunkBlockHeader(revision.(uint32))
-	default:
-		return a.chain.BestBlock().Header(), nil
+	h, err := a.chain.GetTrunkBlockHeader(uint32(n))
+	if err != nil {
+		if a.chain.IsNotFound(err) {
+			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return nil, err
 	}
+	return h, nil
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
