@@ -97,37 +97,51 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 	}
 	return storage, nil
 }
-
-func (a *Accounts) sterilizeOptions(options *ContractCall) {
-	if options.Gas == 0 {
-		options.Gas = a.callGasLimit
+func (a *Accounts) handleCallData(callData *CallData, to *thor.Address) (gas uint64, gasPrice *big.Int, caller *thor.Address, clause *tx.Clause, err error) {
+	if callData.Gas > a.callGasLimit {
+		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+	} else if callData.Gas == 0 {
+		gas = a.callGasLimit
+	} else {
+		gas = callData.Gas
 	}
-	if options.GasPrice == nil {
-		options.GasPrice = (*math.HexOrDecimal256)(new(big.Int))
+	if callData.GasPrice == nil {
+		gasPrice = new(big.Int)
+	} else {
+		gasPrice = (*big.Int)(callData.GasPrice)
 	}
-	if options.Value == nil {
-		options.Value = (*math.HexOrDecimal256)(new(big.Int))
+	var value *big.Int
+	if callData.Value == nil {
+		value = new(big.Int)
+	} else {
+		value = (*big.Int)(callData.Value)
 	}
-	if options.Caller == nil {
-		options.Caller = &thor.Address{}
+	if callData.Caller == nil {
+		caller = &thor.Address{}
+	} else {
+		caller = callData.Caller
 	}
-	if options.Data == "" {
-		options.Data = "0x"
+	var data []byte
+	if callData.Data != "" {
+		data, err = hexutil.Decode(callData.Data)
+		if err != nil {
+			err = utils.BadRequest(errors.WithMessage(err, "data"))
+			return
+		}
 	}
+	clause = tx.NewClause(to).WithData(data).WithValue(value)
+	return
 }
 
-//Call a contract with input
-func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
-	a.sterilizeOptions(body)
+func (a *Accounts) call(ctx context.Context, to *thor.Address, callData *CallData, header *block.Header) (result *CallResult, err error) {
+	gas, gasPrice, caller, clause, err := a.handleCallData(callData, to)
+	if err != nil {
+		return nil, err
+	}
 	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
 		return nil, err
 	}
-	data, err := hexutil.Decode(body.Data)
-	if err != nil {
-		return nil, err
-	}
-	clause := tx.NewClause(to).WithData(data).WithValue((*big.Int)(body.Value))
 	signer, _ := header.Signer()
 	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
 		&xenv.BlockContext{
@@ -137,27 +151,27 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore()})
-	exec, interrupt := rt.PrepareClause(clause, 0, body.Gas, &xenv.TransactionContext{
-		Origin:     *body.Caller,
-		GasPrice:   (*big.Int)(body.GasPrice),
+	exec, interrupt := rt.PrepareClause(clause, 0, gas, &xenv.TransactionContext{
+		Origin:     *caller,
+		GasPrice:   gasPrice,
 		ProvedWork: &big.Int{}})
 	vmout := make(chan *runtime.Output, 1)
 	go func() {
-		o, _ := exec()
-		vmout <- o
+		out, _ := exec()
+		vmout <- out
 	}()
 	select {
 	case <-ctx.Done():
 		interrupt()
 		return nil, ctx.Err()
-	case vo := <-vmout:
+	case out := <-vmout:
 		if err := rt.Seeker().Err(); err != nil {
 			return nil, err
 		}
 		if err := state.Err(); err != nil {
 			return nil, err
 		}
-		return convertVMOutputWithInputGas(vo, body.Gas), nil
+		return convertCallResultWithInputGas(out, gas), nil
 	}
 }
 
@@ -198,12 +212,9 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	callBody := &ContractCall{}
-	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
+	callData := &CallData{}
+	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
-	}
-	if callBody.Gas > a.callGasLimit {
-		return utils.Forbidden(errors.New("gas: exceeds limit"))
 	}
 	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
@@ -211,7 +222,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	}
 	address := mux.Vars(req)["address"]
 	if address == "" {
-		output, err := a.Call(req.Context(), nil, callBody, h)
+		output, err := a.call(req.Context(), nil, callData, h)
 		if err != nil {
 			return err
 		}
@@ -221,7 +232,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	output, err := a.Call(req.Context(), &addr, callBody, h)
+	output, err := a.call(req.Context(), &addr, callData, h)
 	if err != nil {
 		return err
 	}

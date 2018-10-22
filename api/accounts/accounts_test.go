@@ -205,7 +205,7 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 }
 
 func deployContractWithCall(t *testing.T) {
-	reqBody := &accounts.ContractCall{
+	reqBody := &accounts.CallData{
 		Gas:    10000000,
 		Caller: nil,
 		Data:   hexutil.Encode(bytecode),
@@ -215,7 +215,7 @@ func deployContractWithCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httpPost(t, ts.URL+"/accounts", reqBodyBytes)
-	var output *accounts.VMOutput
+	var output *accounts.CallResult
 	if err = json.Unmarshal(response, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.ContractCall{
+	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
 
@@ -244,7 +244,7 @@ func callContract(t *testing.T) {
 	}
 
 	response := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBodyBytes)
-	var output *accounts.VMOutput
+	var output *accounts.CallResult
 	if err = json.Unmarshal(response, &output); err != nil {
 		t.Fatal(err)
 	}

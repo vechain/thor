@@ -20,8 +20,8 @@ type Account struct {
 	HasCode bool                 `json:"hasCode"`
 }
 
-//ContractCall represents contract-call body
-type ContractCall struct {
+//CallData represents contract-call body
+type CallData struct {
 	Value    *math.HexOrDecimal256 `json:"value"`
 	Data     string                `json:"data"`
 	Gas      uint64                `json:"gas"`
@@ -29,7 +29,7 @@ type ContractCall struct {
 	Caller   *thor.Address         `json:"caller"`
 }
 
-type VMOutput struct {
+type CallResult struct {
 	Data      string                   `json:"data"`
 	Events    []*transactions.Event    `json:"events"`
 	Transfers []*transactions.Transfer `json:"transfers"`
@@ -38,7 +38,7 @@ type VMOutput struct {
 	VMError   string                   `json:"vmError"`
 }
 
-func convertVMOutputWithInputGas(vo *runtime.Output, inputGas uint64) *VMOutput {
+func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallResult {
 	gasUsed := inputGas - vo.LeftOverGas
 	var (
 		vmError  string
@@ -73,7 +73,7 @@ func convertVMOutputWithInputGas(vo *runtime.Output, inputGas uint64) *VMOutput 
 		transfers[j] = transfer
 	}
 
-	return &VMOutput{
+	return &CallResult{
 		Data:      hexutil.Encode(vo.Data),
 		Events:    events,
 		Transfers: transfers,
