@@ -85,6 +85,15 @@ func ParseBytes32(s string) (Bytes32, error) {
 	return b, nil
 }
 
+// MustParseBytes32 convert string presented into Bytes32 type, panic on error.
+func MustParseBytes32(s string) Bytes32 {
+	b32, err := ParseBytes32(s)
+	if err != nil {
+		panic(err)
+	}
+	return b32
+}
+
 // BytesToBytes32 converts bytes slice into Bytes32.
 // If b is larger than Bytes32 legnth, b will be cropped (from the left).
 // If b is smaller than Bytes32 length, b will be extended (from the left).

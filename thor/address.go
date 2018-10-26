@@ -86,6 +86,15 @@ func ParseAddress(s string) (Address, error) {
 	return addr, nil
 }
 
+// MustParseAddress convert string presented address into Address type, panic on error.
+func MustParseAddress(s string) Address {
+	addr, err := ParseAddress(s)
+	if err != nil {
+		panic(err)
+	}
+	return addr
+}
+
 // BytesToAddress converts bytes slice into address.
 // If b is larger than address legnth, b will be cropped (from the left).
 // If b is smaller than address length, b will be extended (from the left).

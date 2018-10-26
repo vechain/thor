@@ -291,6 +291,7 @@ func printStartupMessage(
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]    
     Best block   [ %v #%v @%v ]
+    Forks        [ %v ]
     Master       [ %v ]
     Beneficiary  [ %v ]
     Instance dir [ %v ]
@@ -299,6 +300,7 @@ func printStartupMessage(
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		thor.GetForkConfig(gene.ID()),
 		master.Address(),
 		func() string {
 			if master.Beneficiary == nil {
@@ -346,11 +348,13 @@ func printSoloStartupMessage(
 	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    
     Best block  [ %v #%v @%v ]
+    Forks       [ %v ]
     Data dir    [ %v ]
     API portal  [ %v ]`,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		thor.GetForkConfig(gene.ID()),
 		dataDir,
 		apiURL)
 
