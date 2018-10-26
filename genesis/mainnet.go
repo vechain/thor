@@ -52,20 +52,20 @@ func NewMainnet() *Genesis {
 			// 21,046,908,616.5 x 4
 			amount := new(big.Int).Mul(big.NewInt(210469086165), big.NewInt(1e17))
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(mustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), amount)
-			state.SetEnergy(mustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), &big.Int{}, launchTime)
+			state.SetBalance(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), amount)
+			state.SetEnergy(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), &big.Int{}, launchTime)
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(mustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), amount)
-			state.SetEnergy(mustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), &big.Int{}, launchTime)
+			state.SetBalance(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), amount)
+			state.SetEnergy(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), &big.Int{}, launchTime)
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(mustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), amount)
-			state.SetEnergy(mustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), &big.Int{}, launchTime)
+			state.SetBalance(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), amount)
+			state.SetEnergy(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), &big.Int{}, launchTime)
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(mustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), amount)
-			state.SetEnergy(mustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), &big.Int{}, launchTime)
+			state.SetBalance(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), amount)
+			state.SetEnergy(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), &big.Int{}, launchTime)
 
 			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 			return nil
@@ -121,13 +121,13 @@ type approver struct {
 
 func loadApprovers() []*approver {
 	return []*approver{
-		{mustParseAddress("0xb0f6d9933c1c2f4d891ca479343921f2d32e0fad"), "CY Cheung"},
-		{mustParseAddress("0xda48cc4d23b41158e1294e0e4bcce8e9953cee26"), "George Kang"},
-		{mustParseAddress("0xca7b45abe0d421e5628d2224bfe8fa6a6cf7c51b"), "Jay Zhang"},
-		{mustParseAddress("0xa03f185f2a0def1efdd687ef3b96e404869d93de"), "Margaret Rui Zhu"},
-		{mustParseAddress("0x74bac19f78369637db63f7496ecb5f88cc183672"), "Peter Zhou"},
-		{mustParseAddress("0x5fefc7836af047c949d1fea72839823d2f06f7e3"), "Renato Grottola"},
-		{mustParseAddress("0x7519874d0f7d31b5f0fd6f0429a4e5ece6f3fd49"), "Sunny Lu"},
+		{thor.MustParseAddress("0xb0f6d9933c1c2f4d891ca479343921f2d32e0fad"), "CY Cheung"},
+		{thor.MustParseAddress("0xda48cc4d23b41158e1294e0e4bcce8e9953cee26"), "George Kang"},
+		{thor.MustParseAddress("0xca7b45abe0d421e5628d2224bfe8fa6a6cf7c51b"), "Jay Zhang"},
+		{thor.MustParseAddress("0xa03f185f2a0def1efdd687ef3b96e404869d93de"), "Margaret Rui Zhu"},
+		{thor.MustParseAddress("0x74bac19f78369637db63f7496ecb5f88cc183672"), "Peter Zhou"},
+		{thor.MustParseAddress("0x5fefc7836af047c949d1fea72839823d2f06f7e3"), "Renato Grottola"},
+		{thor.MustParseAddress("0x7519874d0f7d31b5f0fd6f0429a4e5ece6f3fd49"), "Sunny Lu"},
 	}
 }
 
@@ -239,9 +239,9 @@ func loadAuthorityNodes() []*authorityNode {
 	candidates := make([]*authorityNode, 0, len(all))
 	for _, item := range all {
 		candidates = append(candidates, &authorityNode{
-			masterAddress:   mustParseAddress(item[0]),
-			endorsorAddress: mustParseAddress(item[1]),
-			identity:        mustParseBytes32(item[2]),
+			masterAddress:   thor.MustParseAddress(item[0]),
+			endorsorAddress: thor.MustParseAddress(item[1]),
+			identity:        thor.MustParseBytes32(item[2]),
 		})
 	}
 	return candidates

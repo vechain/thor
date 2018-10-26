@@ -68,10 +68,11 @@ type Output struct {
 
 // Runtime bases on EVM and VeChain Thor builtins.
 type Runtime struct {
-	vmConfig vm.Config
-	seeker   *chain.Seeker
-	state    *state.State
-	ctx      *xenv.BlockContext
+	vmConfig   vm.Config
+	seeker     *chain.Seeker
+	state      *state.State
+	ctx        *xenv.BlockContext
+	forkConfig thor.ForkConfig
 }
 
 // New create a Runtime object.
@@ -80,11 +81,18 @@ func New(
 	state *state.State,
 	ctx *xenv.BlockContext,
 ) *Runtime {
-	return &Runtime{
+	rt := Runtime{
 		seeker: seeker,
 		state:  state,
 		ctx:    ctx,
 	}
+	if seeker != nil {
+		rt.forkConfig = thor.GetForkConfig(seeker.GenesisID())
+	} else {
+		// for genesis building stage
+		rt.forkConfig = thor.NoFork
+	}
+	return &rt
 }
 
 func (rt *Runtime) Seeker() *chain.Seeker       { return rt.seeker }
@@ -118,7 +126,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			stateDB.SubBalance(common.Address(sender), amount)
 			stateDB.AddBalance(common.Address(recipient), amount)
 
-			if rt.ctx.Number >= thor.FixTransferLogFork.BlockNumber {
+			if rt.ctx.Number >= rt.forkConfig.FixTransferLog {
 				// `amount` will be recycled by evm(OP_CALL) right after this function return,
 				// which leads to incorrect transfer log.
 				// Make a copy to prevent it.

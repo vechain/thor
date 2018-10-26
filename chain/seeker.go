@@ -54,3 +54,8 @@ func (s *Seeker) GetHeader(id thor.Bytes32) *block.Header {
 	}
 	return header
 }
+
+// GenesisID get genesis block ID.
+func (s *Seeker) GenesisID() thor.Bytes32 {
+	return s.chain.GenesisBlock().Header().ID()
+}
