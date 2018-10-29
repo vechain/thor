@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -64,6 +65,12 @@ type Output struct {
 	RefundGas       uint64
 	VMErr           error         // VMErr identify the execution result of the contract function, not evm function's err.
 	ContractAddress *thor.Address // if create a new contract, or is nil.
+}
+
+type TransactionExecutor struct {
+	HasNextClause func() bool
+	NextClause    func() (gasUsed uint64, output *Output, err error)
+	Finalize      func() (*tx.Receipt, error)
 }
 
 // Runtime bases on EVM and VeChain Thor builtins.
@@ -308,6 +315,20 @@ func (rt *Runtime) PrepareClause(
 // ExecuteTransaction executes a transaction.
 // If some clause failed, receipt.Outputs will be nil and vmOutputs may shorter than clause count.
 func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, err error) {
+	executor, err := rt.PrepareTransaction(tx)
+	if err != nil {
+		return nil, err
+	}
+	for executor.HasNextClause() {
+		if _, _, err := executor.NextClause(); err != nil {
+			return nil, err
+		}
+	}
+	return executor.Finalize()
+}
+
+// PrepareTransaction prepare to execute tx.
+func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor, error) {
 	resolvedTx, err := ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
@@ -323,55 +344,79 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 
-	receipt = &Tx.Receipt{Outputs: make([]*Tx.Output, 0, len(resolvedTx.Clauses))}
-
 	txCtx := resolvedTx.ToContext(gasPrice, rt.ctx.Number, rt.seeker.GetID)
-	for i, clause := range resolvedTx.Clauses {
-		output := rt.ExecuteClause(clause, uint32(i), leftOverGas, txCtx)
 
-		if leftOverGas < output.LeftOverGas {
-			panic("serious bug: negative used gas!!!")
-		}
-		gasUsed := leftOverGas - output.LeftOverGas
-		leftOverGas = output.LeftOverGas
+	txOutputs := make([]*Tx.Output, 0, len(resolvedTx.Clauses))
+	reverted := false
+	finalized := false
 
-		// Apply refund counter, capped to half of the used gas.
-		refund := gasUsed / 2
-		if refund > output.RefundGas {
-			refund = output.RefundGas
-		}
-
-		// won't overflow
-		leftOverGas += refund
-
-		if output.VMErr != nil {
-			// vm exception here
-			// revert all executed clauses
-			rt.state.RevertTo(checkpoint)
-			receipt.Reverted = true
-			receipt.Outputs = nil
-			break
-		}
-		receipt.Outputs = append(receipt.Outputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
+	hasNext := func() bool {
+		return !reverted && len(txOutputs) < len(resolvedTx.Clauses)
 	}
 
-	receipt.GasUsed = tx.Gas() - leftOverGas
-	receipt.GasPayer = payer
-	receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+	return &TransactionExecutor{
+		HasNextClause: hasNext,
+		NextClause: func() (gasUsed uint64, output *Output, err error) {
+			if !hasNext() {
+				return 0, nil, errors.New("no more clause")
+			}
+			nextClauseIndex := uint32(len(txOutputs))
+			output = rt.ExecuteClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
+			gasUsed = leftOverGas - output.LeftOverGas
+			leftOverGas = output.LeftOverGas
 
-	returnGas(leftOverGas)
+			// Apply refund counter, capped to half of the used gas.
+			refund := gasUsed / 2
+			if refund > output.RefundGas {
+				refund = output.RefundGas
+			}
 
-	// reward
-	rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-	overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+			// won't overflow
+			leftOverGas += refund
 
-	reward := new(big.Int).SetUint64(receipt.GasUsed)
-	reward.Mul(reward, overallGasPrice)
-	reward.Mul(reward, rewardRatio)
-	reward.Div(reward, big.NewInt(1e18))
-	builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward)
+			if output.VMErr != nil {
+				// vm exception here
+				// revert all executed clauses
+				rt.state.RevertTo(checkpoint)
+				reverted = true
+				txOutputs = nil
+				return
+			}
+			txOutputs = append(txOutputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
+			return
+		},
+		Finalize: func() (*Tx.Receipt, error) {
+			if hasNext() {
+				return nil, errors.New("not all clauses processed")
+			}
+			if finalized {
+				return nil, errors.New("already finalized")
+			}
+			finalized = true
 
-	receipt.Reward = reward
+			receipt := &Tx.Receipt{
+				Reverted: reverted,
+				Outputs:  txOutputs,
+				GasUsed:  tx.Gas() - leftOverGas,
+				GasPayer: payer,
+			}
 
-	return receipt, nil
+			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
+
+			returnGas(leftOverGas)
+
+			// reward
+			rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
+			overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+
+			reward := new(big.Int).SetUint64(receipt.GasUsed)
+			reward.Mul(reward, overallGasPrice)
+			reward.Mul(reward, rewardRatio)
+			reward.Div(reward, big.NewInt(1e18))
+			builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward)
+
+			receipt.Reward = reward
+			return receipt, nil
+		},
+	}, nil
 }

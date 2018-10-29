@@ -198,13 +198,18 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	callBody := &ContractCall{}
+	var callBody *ContractCall
 	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+
+	if callBody == nil {
+		return utils.BadRequest(errors.New("body: empty body"))
 	}
 	if callBody.Gas > a.callGasLimit {
 		return utils.Forbidden(errors.New("gas: exceeds limit"))
 	}
+
 	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
