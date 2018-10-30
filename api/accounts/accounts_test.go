@@ -8,6 +8,7 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -96,11 +97,15 @@ var runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c01000000
 var ts *httptest.Server
 
 func TestAccount(t *testing.T) {
+	a, _ := new(big.Int).SetString("0x1e0", 0)
+	b, _ := new(big.Int).SetString("0xc8bf91f667b1a44000", 0)
+	fmt.Println(a, b)
 	initAccountServer(t)
 	defer ts.Close()
 	getAccount(t)
 	deployContractWithCall(t)
 	callContract(t)
+	batchCall(t)
 }
 
 func getAccount(t *testing.T) {
@@ -205,7 +210,7 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 }
 
 func deployContractWithCall(t *testing.T) {
-	reqBody := &accounts.ContractCall{
+	reqBody := &accounts.CallData{
 		Gas:    10000000,
 		Caller: nil,
 		Data:   hexutil.Encode(bytecode),
@@ -215,7 +220,7 @@ func deployContractWithCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httpPost(t, ts.URL+"/accounts", reqBodyBytes)
-	var output *accounts.VMOutput
+	var output *accounts.CallResult
 	if err = json.Unmarshal(response, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +239,7 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.ContractCall{
+	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
 
@@ -244,7 +249,7 @@ func callContract(t *testing.T) {
 	}
 
 	response := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBodyBytes)
-	var output *accounts.VMOutput
+	var output *accounts.CallResult
 	if err = json.Unmarshal(response, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -258,6 +263,53 @@ func callContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, a+b, ret, "should be equal")
+}
+
+func batchCall(t *testing.T) {
+	a := uint8(1)
+	b := uint8(2)
+
+	method := "add"
+	abi, err := ABI.New([]byte(abiJSON))
+	m, _ := abi.MethodByName(method)
+	input, err := m.EncodeInput(a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqBody := &accounts.BatchCallData{
+		Clauses: accounts.Clauses{
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  hexutil.Encode(input),
+				Value: nil,
+			},
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  hexutil.Encode(input),
+				Value: nil,
+			}},
+	}
+	reqBodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httpPost(t, ts.URL+"/accounts/*", reqBodyBytes)
+	var results accounts.BatchCallResults
+	if err = json.Unmarshal(response, &results); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range results {
+		data, err := hexutil.Decode(result.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ret uint8
+		err = m.DecodeOutput(data, &ret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, a+b, ret, "should be equal")
+	}
 }
 
 func httpPost(t *testing.T, url string, data []byte) []byte {

@@ -97,37 +97,51 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 	}
 	return storage, nil
 }
-
-func (a *Accounts) sterilizeOptions(options *ContractCall) {
-	if options.Gas == 0 {
-		options.Gas = a.callGasLimit
+func (a *Accounts) handleCallData(callData *CallData, to *thor.Address) (gas uint64, gasPrice *big.Int, caller *thor.Address, clause *tx.Clause, err error) {
+	if callData.Gas > a.callGasLimit {
+		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+	} else if callData.Gas == 0 {
+		gas = a.callGasLimit
+	} else {
+		gas = callData.Gas
 	}
-	if options.GasPrice == nil {
-		options.GasPrice = (*math.HexOrDecimal256)(new(big.Int))
+	if callData.GasPrice == nil {
+		gasPrice = new(big.Int)
+	} else {
+		gasPrice = (*big.Int)(callData.GasPrice)
 	}
-	if options.Value == nil {
-		options.Value = (*math.HexOrDecimal256)(new(big.Int))
+	var value *big.Int
+	if callData.Value == nil {
+		value = new(big.Int)
+	} else {
+		value = (*big.Int)(callData.Value)
 	}
-	if options.Caller == nil {
-		options.Caller = &thor.Address{}
+	if callData.Caller == nil {
+		caller = &thor.Address{}
+	} else {
+		caller = callData.Caller
 	}
-	if options.Data == "" {
-		options.Data = "0x"
+	var data []byte
+	if callData.Data != "" {
+		data, err = hexutil.Decode(callData.Data)
+		if err != nil {
+			err = utils.BadRequest(errors.WithMessage(err, "data"))
+			return
+		}
 	}
+	clause = tx.NewClause(to).WithData(data).WithValue(value)
+	return
 }
 
-//Call a contract with input
-func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCall, header *block.Header) (output *VMOutput, err error) {
-	a.sterilizeOptions(body)
+func (a *Accounts) call(ctx context.Context, to *thor.Address, callData *CallData, header *block.Header) (result *CallResult, err error) {
+	gas, gasPrice, caller, clause, err := a.handleCallData(callData, to)
+	if err != nil {
+		return nil, err
+	}
 	state, err := a.stateCreator.NewState(header.StateRoot())
 	if err != nil {
 		return nil, err
 	}
-	data, err := hexutil.Decode(body.Data)
-	if err != nil {
-		return nil, err
-	}
-	clause := tx.NewClause(to).WithData(data).WithValue((*big.Int)(body.Value))
 	signer, _ := header.Signer()
 	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
 		&xenv.BlockContext{
@@ -137,27 +151,27 @@ func (a *Accounts) Call(ctx context.Context, to *thor.Address, body *ContractCal
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore()})
-	exec, interrupt := rt.PrepareClause(clause, 0, body.Gas, &xenv.TransactionContext{
-		Origin:     *body.Caller,
-		GasPrice:   (*big.Int)(body.GasPrice),
+	exec, interrupt := rt.PrepareClause(clause, 0, gas, &xenv.TransactionContext{
+		Origin:     *caller,
+		GasPrice:   gasPrice,
 		ProvedWork: &big.Int{}})
 	vmout := make(chan *runtime.Output, 1)
 	go func() {
-		o, _ := exec()
-		vmout <- o
+		out, _ := exec()
+		vmout <- out
 	}()
 	select {
 	case <-ctx.Done():
 		interrupt()
 		return nil, ctx.Err()
-	case vo := <-vmout:
+	case out := <-vmout:
 		if err := rt.Seeker().Err(); err != nil {
 			return nil, err
 		}
 		if err := state.Err(); err != nil {
 			return nil, err
 		}
-		return convertVMOutputWithInputGas(vo, body.Gas), nil
+		return convertCallResultWithInputGas(out, gas), nil
 	}
 }
 
@@ -198,25 +212,17 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 }
 
 func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) error {
-	var callBody *ContractCall
-	if err := utils.ParseJSON(req.Body, &callBody); err != nil {
+	callData := &CallData{}
+	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-
-	if callBody == nil {
-		return utils.BadRequest(errors.New("body: empty body"))
-	}
-	if callBody.Gas > a.callGasLimit {
-		return utils.Forbidden(errors.New("gas: exceeds limit"))
-	}
-
 	h, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
 	address := mux.Vars(req)["address"]
 	if address == "" {
-		output, err := a.Call(req.Context(), nil, callBody, h)
+		output, err := a.call(req.Context(), nil, callData, h)
 		if err != nil {
 			return err
 		}
@@ -226,11 +232,117 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	output, err := a.Call(req.Context(), &addr, callBody, h)
+	output, err := a.call(req.Context(), &addr, callData, h)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, output)
+}
+
+func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
+	batchCallData := &BatchCallData{}
+	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	if err != nil {
+		return err
+	}
+	results, err := a.batchCall(req.Context(), batchCallData, h)
+	if err != nil {
+		return err
+	}
+	return utils.WriteJSON(w, results)
+}
+
+func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, header *block.Header) (results BatchCallResults, err error) {
+	gas, gasPrice, caller, clauses, err := a.handleBatchCallData(batchCallData)
+	if err != nil {
+		return nil, err
+	}
+	state, err := a.stateCreator.NewState(header.StateRoot())
+	if err != nil {
+		return nil, err
+	}
+	signer, _ := header.Signer()
+	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+		&xenv.BlockContext{
+			Beneficiary: header.Beneficiary(),
+			Signer:      signer,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
+			GasLimit:    header.GasLimit(),
+			TotalScore:  header.TotalScore()})
+	results = make(BatchCallResults, 0)
+	vmout := make(chan *runtime.Output, 1)
+	for i, clause := range clauses {
+		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, &xenv.TransactionContext{
+			Origin:     *caller,
+			GasPrice:   gasPrice,
+			ProvedWork: &big.Int{}})
+		go func() {
+			out, _ := exec()
+			vmout <- out
+		}()
+		select {
+		case <-ctx.Done():
+			interrupt()
+			return nil, ctx.Err()
+		case out := <-vmout:
+			if err := rt.Seeker().Err(); err != nil {
+				return nil, err
+			}
+			if err := state.Err(); err != nil {
+				return nil, err
+			}
+			results = append(results, convertCallResultWithInputGas(out, gas))
+			if out.VMErr != nil {
+				return results, nil
+			}
+			gas = out.LeftOverGas
+		}
+	}
+	return results, nil
+}
+
+func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (gas uint64, gasPrice *big.Int, caller *thor.Address, clauses []*tx.Clause, err error) {
+	if batchCallData.Gas > a.callGasLimit {
+		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+	} else if batchCallData.Gas == 0 {
+		gas = a.callGasLimit
+	} else {
+		gas = batchCallData.Gas
+	}
+	if batchCallData.GasPrice == nil {
+		gasPrice = new(big.Int)
+	} else {
+		gasPrice = (*big.Int)(batchCallData.GasPrice)
+	}
+	if batchCallData.Caller == nil {
+		caller = &thor.Address{}
+	} else {
+		caller = batchCallData.Caller
+	}
+	cs := make([]*tx.Clause, len(batchCallData.Clauses))
+	for i, c := range batchCallData.Clauses {
+		var value *big.Int
+		if c.Value == nil {
+			value = new(big.Int)
+		} else {
+			value = (*big.Int)(c.Value)
+		}
+		var data []byte
+		if c.Data != "" {
+			data, err = hexutil.Decode(c.Data)
+			if err != nil {
+				err = utils.BadRequest(errors.WithMessage(err, "data["+string(i)+"]"))
+				return
+			}
+		}
+		cs[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
+	}
+	clauses = cs
+	return
 }
 
 func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
@@ -271,6 +383,7 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
+	sub.Path("/*").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
 	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
