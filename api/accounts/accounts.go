@@ -7,6 +7,7 @@ package accounts
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -97,83 +98,6 @@ func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot tho
 	}
 	return storage, nil
 }
-func (a *Accounts) handleCallData(callData *CallData, to *thor.Address) (gas uint64, gasPrice *big.Int, caller *thor.Address, clause *tx.Clause, err error) {
-	if callData.Gas > a.callGasLimit {
-		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
-	} else if callData.Gas == 0 {
-		gas = a.callGasLimit
-	} else {
-		gas = callData.Gas
-	}
-	if callData.GasPrice == nil {
-		gasPrice = new(big.Int)
-	} else {
-		gasPrice = (*big.Int)(callData.GasPrice)
-	}
-	var value *big.Int
-	if callData.Value == nil {
-		value = new(big.Int)
-	} else {
-		value = (*big.Int)(callData.Value)
-	}
-	if callData.Caller == nil {
-		caller = &thor.Address{}
-	} else {
-		caller = callData.Caller
-	}
-	var data []byte
-	if callData.Data != "" {
-		data, err = hexutil.Decode(callData.Data)
-		if err != nil {
-			err = utils.BadRequest(errors.WithMessage(err, "data"))
-			return
-		}
-	}
-	clause = tx.NewClause(to).WithData(data).WithValue(value)
-	return
-}
-
-func (a *Accounts) call(ctx context.Context, to *thor.Address, callData *CallData, header *block.Header) (result *CallResult, err error) {
-	gas, gasPrice, caller, clause, err := a.handleCallData(callData, to)
-	if err != nil {
-		return nil, err
-	}
-	state, err := a.stateCreator.NewState(header.StateRoot())
-	if err != nil {
-		return nil, err
-	}
-	signer, _ := header.Signer()
-	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
-		&xenv.BlockContext{
-			Beneficiary: header.Beneficiary(),
-			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
-			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore()})
-	exec, interrupt := rt.PrepareClause(clause, 0, gas, &xenv.TransactionContext{
-		Origin:     *caller,
-		GasPrice:   gasPrice,
-		ProvedWork: &big.Int{}})
-	vmout := make(chan *runtime.Output, 1)
-	go func() {
-		out, _ := exec()
-		vmout <- out
-	}()
-	select {
-	case <-ctx.Done():
-		interrupt()
-		return nil, ctx.Err()
-	case out := <-vmout:
-		if err := rt.Seeker().Err(); err != nil {
-			return nil, err
-		}
-		if err := state.Err(); err != nil {
-			return nil, err
-		}
-		return convertCallResultWithInputGas(out, gas), nil
-	}
-}
 
 func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) error {
 	addr, err := thor.ParseAddress(mux.Vars(req)["address"])
@@ -220,23 +144,31 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return err
 	}
-	address := mux.Vars(req)["address"]
-	if address == "" {
-		output, err := a.call(req.Context(), nil, callData, h)
+	var addr *thor.Address
+	if mux.Vars(req)["address"] != "" {
+		address, err := thor.ParseAddress(mux.Vars(req)["address"])
 		if err != nil {
-			return err
+			return utils.BadRequest(errors.WithMessage(err, "address"))
 		}
-		return utils.WriteJSON(w, output)
+		addr = &address
 	}
-	addr, err := thor.ParseAddress(address)
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "address"))
+	var batchCallData = &BatchCallData{
+		Clauses: Clauses{
+			Clause{
+				To:    addr,
+				Value: callData.Value,
+				Data:  callData.Data,
+			},
+		},
+		Gas:      callData.Gas,
+		GasPrice: callData.GasPrice,
+		Caller:   callData.Caller,
 	}
-	output, err := a.call(req.Context(), &addr, callData, h)
+	results, err := a.batchCall(req.Context(), batchCallData, h)
 	if err != nil {
 		return err
 	}
-	return utils.WriteJSON(w, output)
+	return utils.WriteJSON(w, results[0])
 }
 
 func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request) error {
@@ -323,7 +255,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (gas uint64
 	} else {
 		caller = batchCallData.Caller
 	}
-	cs := make([]*tx.Clause, len(batchCallData.Clauses))
+	clauses = make([]*tx.Clause, len(batchCallData.Clauses))
 	for i, c := range batchCallData.Clauses {
 		var value *big.Int
 		if c.Value == nil {
@@ -335,13 +267,12 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (gas uint64
 		if c.Data != "" {
 			data, err = hexutil.Decode(c.Data)
 			if err != nil {
-				err = utils.BadRequest(errors.WithMessage(err, "data["+string(i)+"]"))
+				err = utils.BadRequest(errors.WithMessage(err, fmt.Sprintf("data[%d]", i)))
 				return
 			}
 		}
-		cs[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
+		clauses[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
 	}
-	clauses = cs
 	return
 }
 
