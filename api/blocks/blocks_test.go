@@ -36,28 +36,40 @@ const (
 var blk *block.Block
 var ts *httptest.Server
 
-func TestBlock(t *testing.T) {
+var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
+var invalidNumberRevision = "4294967296"                                                  //invalid block number
 
+func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
-	res := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
+	//invalid block id
+	res, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	//invalid block number
+	res, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+
+	res, statusCode = httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(blocks.Block)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
 	checkBlock(t, blk, rb)
-	// get block info with blocknumber
-	res = httpGet(t, ts.URL+"/blocks/1")
-	if err := json.Unmarshal(res, &rb); err != nil {
-		t.Fatal(err)
-	}
-	checkBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
 
-	res = httpGet(t, ts.URL+"/blocks/best")
+	res, statusCode = httpGet(t, ts.URL+"/blocks/1")
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
 	checkBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	res, statusCode = httpGet(t, ts.URL+"/blocks/best")
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
 
 }
 
@@ -132,7 +144,7 @@ func checkBlock(t *testing.T, expBl *block.Block, actBl *blocks.Block) {
 
 }
 
-func httpGet(t *testing.T, url string) []byte {
+func httpGet(t *testing.T, url string) ([]byte, int) {
 	res, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -142,5 +154,5 @@ func httpGet(t *testing.T, url string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r
+	return r, res.StatusCode
 }
