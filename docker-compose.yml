@@ -1,0 +1,22 @@
+version: '3'
+services:
+  thor-onbns-test:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    ports:
+      - "127.0.0.1:8669:8669"
+      - "11235:11235"
+      - "11235:11235/udp"
+    command: ["--network", "test", "--api-addr", "0.0.0.0:8669"]
+  thor-onbns-main:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile-main
+    ports:
+      - "127.0.0.1:8668:8668"
+      - "11234:11234"
+      - "11234:11234/udp"
+    command: ["--network", "main", "--api-addr", "0.0.0.0:8668", "--p2p-port", "11234"]
