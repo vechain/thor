@@ -10,7 +10,10 @@ services:
       - "8545:0002"
       - "11235:11235"
       - "11235:11235/udp"
-    command: sh -c "web3-gear --endpoint 0.0.0.0:0001 --host 0.0.0.0 --port 0002"
+    command: sh -c "/usr/local/starting.sh"
+
+      # sh -c "/usr/local/bin/thor --network test --api-addr 0.0.0.0:0001 && echo hello && sleep 10 && web3-gear --endpoint 0.0.0.0:0001 --host 0.0.0.0 --port 0002"
+      
       # - "sh -c \""
       # - "/usr/local/bin/thor --network test --api-addr 0.0.0.0:0001"
       # - "&&"
@@ -19,6 +22,7 @@ services:
       # - "sleep 10"
       # - "&&"
       # - "web3-gear --endpoint 0.0.0.0:0001 --host 0.0.0.0 --port 0002\""
+  
   # thor-onbns-main:
   #   restart: on-failure
   #   build:
