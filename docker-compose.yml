@@ -1,0 +1,35 @@
+version: '3'
+services:
+  thor-onbns-test:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: Dockerfile-test
+    ports:
+      - "8669:0001"
+      - "8545:0002"
+      - "11235:11235"
+      - "11235:11235/udp"
+    command: sh -c "/usr/local/starting.sh"
+
+      # sh -c "/usr/local/bin/thor --network test --api-addr 0.0.0.0:0001 && echo hello && sleep 10 && web3-gear --endpoint 0.0.0.0:0001 --host 0.0.0.0 --port 0002"
+      
+      # - "sh -c \""
+      # - "/usr/local/bin/thor --network test --api-addr 0.0.0.0:0001"
+      # - "&&"
+      # - "echo starting web3-gear..."
+      # - "&&"
+      # - "sleep 10"
+      # - "&&"
+      # - "web3-gear --endpoint 0.0.0.0:0001 --host 0.0.0.0 --port 0002\""
+  
+  # thor-onbns-main:
+  #   restart: on-failure
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile-main
+  #   ports:
+  #     - "127.0.0.1:8668:8668"
+  #     - "11234:11234"
+  #     - "11234:11234/udp"
+  #   command: ["--network", "main", "--api-addr", "0.0.0.0:8668", "--p2p-port", "11234"]
