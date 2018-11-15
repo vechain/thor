@@ -1,6 +1,6 @@
 version: '3'
 services:
-  thor-onbns-test-with:
+  thor-onbns-test:
     restart: on-failure
     build:
       context: .
