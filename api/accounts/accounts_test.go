@@ -93,25 +93,50 @@ var bytecode = common.Hex2Bytes("608060405234801561001057600080fd5b5061012580610
 
 var runtimeBytecode = common.Hex2Bytes("6080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
 
+var invalidAddr = "abc"                                                                   //invlaid address
+var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
+var invalidNumberRevision = "4294967296"                                                  //invalid block number
+
 var ts *httptest.Server
 
 func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
 	getAccount(t)
+	getCode(t)
+	getStorage(t)
 	deployContractWithCall(t)
 	callContract(t)
+	batchCall(t)
 }
 
 func getAccount(t *testing.T) {
-	res := httpGet(t, ts.URL+"/accounts/"+addr.String())
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
+
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+invalidNumberRevision)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+
+	//revision is optional defaut `best`
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String())
 	var acc accounts.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
 
-	res = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code")
+}
+
+func getCode(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/code")
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
+
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+invalidNumberRevision)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+
+	//revision is optional defaut `best`
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code")
 	var code map[string]string
 	if err := json.Unmarshal(res, &code); err != nil {
 		t.Fatal(err)
@@ -121,8 +146,21 @@ func getAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, runtimeBytecode, c, "code should be equal")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
+}
 
-	res = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String())
+func getStorage(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
+
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+invalidBytes32)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad storage key")
+
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+invalidNumberRevision)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+
+	//revision is optional defaut `best`
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String())
 	var value map[string]string
 	if err := json.Unmarshal(res, &value); err != nil {
 		t.Fatal(err)
@@ -132,7 +170,7 @@ func getAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, thor.BytesToBytes32([]byte{storageValue}), h, "storage should be equal")
-
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
 func initAccountServer(t *testing.T) {
@@ -205,18 +243,25 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 }
 
 func deployContractWithCall(t *testing.T) {
-	reqBody := &accounts.ContractCall{
-		Gas:    10000000,
-		Caller: nil,
-		Data:   hexutil.Encode(bytecode),
+	badBody := &accounts.CallData{
+		Gas:  10000000,
+		Data: "abc",
 	}
-	reqBodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		t.Fatal(err)
+	res, statusCode := httpPost(t, ts.URL+"/accounts", badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
+
+	reqBody := &accounts.CallData{
+		Gas:  10000000,
+		Data: hexutil.Encode(bytecode),
 	}
-	response := httpPost(t, ts.URL+"/accounts", reqBodyBytes)
-	var output *accounts.VMOutput
-	if err = json.Unmarshal(response, &output); err != nil {
+
+	res, statusCode = httpPost(t, ts.URL+"/accounts?revision="+invalidNumberRevision, reqBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+
+	//revision is optional defaut `best`
+	res, statusCode = httpPost(t, ts.URL+"/accounts", reqBody)
+	var output *accounts.CallResult
+	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
 	assert.False(t, output.Reverted)
@@ -224,9 +269,17 @@ func deployContractWithCall(t *testing.T) {
 }
 
 func callContract(t *testing.T) {
+	res, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
+
+	badBody := &accounts.CallData{
+		Data: "input",
+	}
+	res, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid input data")
+
 	a := uint8(1)
 	b := uint8(2)
-
 	method := "add"
 	abi, err := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
@@ -234,18 +287,12 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.ContractCall{
+	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
-
-	reqBodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	response := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBodyBytes)
-	var output *accounts.VMOutput
-	if err = json.Unmarshal(response, &output); err != nil {
+	res, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
+	var output *accounts.CallResult
+	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
 	data, err := hexutil.Decode(output.Data)
@@ -257,10 +304,78 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, a+b, ret, "should be equal")
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, a+b, ret)
 }
 
-func httpPost(t *testing.T, url string, data []byte) []byte {
+func batchCall(t *testing.T) {
+	badBody := &accounts.BatchCallData{
+		Clauses: accounts.Clauses{
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  "data1",
+				Value: nil,
+			},
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  "data2",
+				Value: nil,
+			}},
+	}
+	res, statusCode := httpPost(t, ts.URL+"/accounts/*", badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
+
+	a := uint8(1)
+	b := uint8(2)
+	method := "add"
+	abi, err := ABI.New([]byte(abiJSON))
+	m, _ := abi.MethodByName(method)
+	input, err := m.EncodeInput(a, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqBody := &accounts.BatchCallData{
+		Clauses: accounts.Clauses{
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  hexutil.Encode(input),
+				Value: nil,
+			},
+			accounts.Clause{
+				To:    &contractAddr,
+				Data:  hexutil.Encode(input),
+				Value: nil,
+			}},
+	}
+
+	res, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
+
+	res, statusCode = httpPost(t, ts.URL+"/accounts/*", reqBody)
+	var results accounts.BatchCallResults
+	if err = json.Unmarshal(res, &results); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range results {
+		data, err := hexutil.Decode(result.Data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ret uint8
+		err = m.DecodeOutput(data, &ret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, a+b, ret, "should be equal")
+	}
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
@@ -270,10 +385,10 @@ func httpPost(t *testing.T, url string, data []byte) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r
+	return r, res.StatusCode
 }
 
-func httpGet(t *testing.T, url string) []byte {
+func httpGet(t *testing.T, url string) ([]byte, int) {
 	res, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -283,5 +398,5 @@ func httpGet(t *testing.T, url string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return r
+	return r, res.StatusCode
 }

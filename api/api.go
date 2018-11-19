@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/api/blocks"
+	"github.com/vechain/thor/api/debug"
 	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/api/eventslegacy"
@@ -69,6 +70,8 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).
 		Mount(router, "/transactions")
+	debug.New(chain, stateCreator).
+		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
 	subs := subscriptions.New(chain, origins, backtraceLimit)
