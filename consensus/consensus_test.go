@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
@@ -70,7 +71,21 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	gen := genesis.NewDevnet()
+	launchTime := uint64(1526400000)
+	gen := new(genesis.Builder).
+		GasLimit(thor.InitialGasLimit).
+		Timestamp(launchTime).
+		State(func(state *state.State) error {
+			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(genesis.DevAccounts()[0].Address[:]))
+			for _, acc := range genesis.DevAccounts() {
+				state.SetBalance(acc.Address, bal)
+				state.SetEnergy(acc.Address, bal, launchTime)
+				builtin.Authority.Native(state).Add(acc.Address, acc.Address, thor.Bytes32{})
+			}
+			return nil
+		})
 
 	stateCreator := state.NewCreator(db)
 	parent, _, err := gen.Build(stateCreator)
