@@ -7,7 +7,6 @@ package genesis
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -63,6 +62,7 @@ func NewDevnet() *Genesis {
 	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
 
 	executor := DevAccounts()[0].Address
+	soloBlockSigner := DevAccounts()[0]
 
 	builder := new(Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -103,13 +103,10 @@ func NewDevnet() *Genesis {
 			executor).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			executor).
+		Call(
+			tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
 			executor)
-
-	for i, a := range DevAccounts() {
-		builder.Call(
-			tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", a.Address, a.Address, thor.BytesToBytes32([]byte(fmt.Sprintf("a%v", i))))),
-			executor)
-	}
 
 	id, err := builder.ComputeID()
 	if err != nil {
