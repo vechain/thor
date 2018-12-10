@@ -189,3 +189,9 @@ func (tf *TransferFilter) Match(transfer *tx.Transfer, origin thor.Address) bool
 	}
 	return true
 }
+
+type BloomMessage struct {
+	Block *BlockMessage `json:"block"`
+	Bits  []string      `json:"bits"`
+	Bloom string        `json:"bloom"`
+}
