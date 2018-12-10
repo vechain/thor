@@ -9,25 +9,24 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
-type bitsReader struct {
+type beatReader struct {
 	chain       *chain.Chain
 	blockReader chain.BlockReader
 }
 
-func newBitsReader(chain *chain.Chain, position thor.Bytes32) *bitsReader {
-	return &bitsReader{
+func newBitsReader(chain *chain.Chain, position thor.Bytes32) *beatReader {
+	return &beatReader{
 		chain:       chain,
 		blockReader: chain.NewBlockReader(position),
 	}
 }
 
-func (br *bitsReader) Read() ([]interface{}, bool, error) {
+func (br *beatReader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
@@ -39,43 +38,39 @@ func (br *bitsReader) Read() ([]interface{}, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
-		var bitMsgs []string
 		var bloom types.Bloom
 		txs := block.Transactions()
 		for i, receipt := range receipts {
 			for _, output := range receipt.Outputs {
 				for _, event := range output.Events {
-					bitMsgs, bloom = appendData(bitMsgs, bloom, event.Address.Bytes())
+					bloom = appendData(bloom, event.Address.Bytes())
 					for _, topic := range event.Topics {
-						bitMsgs, bloom = appendData(bitMsgs, bloom, topic.Bytes())
+						bloom.Add(new(big.Int).SetBytes(topic.Bytes()))
 					}
 				}
 				for _, transfer := range output.Transfers {
-					bitMsgs, bloom = appendData(bitMsgs, bloom, transfer.Sender.Bytes())
-					bitMsgs, bloom = appendData(bitMsgs, bloom, transfer.Sender.Bytes())
+					bloom = appendData(bloom, transfer.Sender.Bytes())
+					bloom = appendData(bloom, transfer.Recipient.Bytes())
 				}
 			}
 			origin, _ := txs[i].Signer()
-			bitMsgs, bloom = appendData(bitMsgs, bloom, origin.Bytes())
+			bloom = appendData(bloom, origin.Bytes())
 		}
 		signer, _ := header.Signer()
-		bitMsgs, bloom = appendData(bitMsgs, bloom, signer.Bytes())
-		bitMsgs, bloom = appendData(bitMsgs, bloom, header.Beneficiary().Bytes())
-		blockMsg, err := convertBlock(block)
-		if err != nil {
-			return nil, false, err
-		}
-		msgs = append(msgs, &BloomMessage{
-			Block: blockMsg,
-			Bits:  bitMsgs,
-			Bloom: hexutil.Encode(bloom.Bytes()),
+		bloom = appendData(bloom, signer.Bytes())
+		bloom = appendData(bloom, header.Beneficiary().Bytes())
+		msgs = append(msgs, &BeatMessage{
+			Number:    header.Number(),
+			ID:        header.ID(),
+			ParentID:  header.ParentID(),
+			Timestamp: header.Timestamp(),
+			Bloom:     hexutil.Encode(bloom.Bytes()),
 		})
 	}
 	return msgs, len(blocks) > 0, nil
 }
 
-func appendData(bitMsgs []string, bloom types.Bloom, data []byte) ([]string, types.Bloom) {
-	bitMsgs = append(bitMsgs, hexutil.Encode(data))
+func appendData(bloom types.Bloom, data []byte) types.Bloom {
 	bloom.Add(new(big.Int).SetBytes(data))
-	return bitMsgs, bloom
+	return bloom
 }

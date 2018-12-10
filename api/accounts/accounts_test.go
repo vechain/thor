@@ -8,6 +8,7 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -399,4 +401,15 @@ func httpGet(t *testing.T, url string) ([]byte, int) {
 		t.Fatal(err)
 	}
 	return r, res.StatusCode
+}
+
+func BenchmarkBloom(b *testing.B) {
+	var bloom types.Bloom
+	for i := 0; i < b.N; i++ {
+		key := thor.BytesToBytes32([]byte(fmt.Sprintf("k%d", i)))
+		bloom.Add(new(big.Int).SetBytes(key.Bytes()))
+		if !bloom.TestBytes(key.Bytes()) {
+			b.Error("expected to test true")
+		}
+	}
 }
