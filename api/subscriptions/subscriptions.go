@@ -130,6 +130,14 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 	return newTransferReader(s.chain, position, transferFilter), nil
 }
 
+func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (*beatReader, error) {
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
+	if err != nil {
+		return nil, err
+	}
+	return newBeatReader(s.chain, position), nil
+}
+
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
 	s.wg.Add(1)
 	defer s.wg.Done()
@@ -149,6 +157,10 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		}
 	case "transfer":
 		if reader, err = s.handleTransferReader(w, req); err != nil {
+			return err
+		}
+	case "beat":
+		if reader, err = s.handleBeatReader(w, req); err != nil {
 			return err
 		}
 	default:
