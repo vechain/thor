@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	tty "github.com/mattn/go-tty"
+	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/thor"
 )
 
@@ -133,6 +134,16 @@ func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
 			http.Error(w, "genesis id mismatch", http.StatusForbidden)
 			return
 		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// middleware to set 'x-thorest-ver' to response headers.
+func handleXThorestVersion(h http.Handler) http.Handler {
+	const headerKey = "x-thorest-ver"
+	ver := doc.Version()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(headerKey, ver)
 		h.ServeHTTP(w, r)
 	})
 }

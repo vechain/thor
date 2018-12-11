@@ -267,6 +267,7 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 		handler = handleAPITimeout(handler, time.Duration(timeout)*time.Millisecond)
 	}
 	handler = handleXGenesisID(handler, genesisID)
+	handler = handleXThorestVersion(handler)
 	handler = requestBodyLimit(handler)
 	srv := &http.Server{Handler: handler}
 	var goes co.Goes
