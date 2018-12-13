@@ -569,7 +569,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Beat'
+                allOf:
+                    - $ref: '#/components/schemas/Beat'
+                    - $ref: '#/components/schemas/Obsolete'
 
   /debug/tracers:
     post:
