@@ -457,9 +457,7 @@ paths:
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: '#/components/schemas/Block'
-                  - $ref: '#/components/schemas/Obsolete'
+                 $ref: '#/components/schemas/Block'                 
           
   /subscriptions/event:
     get:
@@ -509,7 +507,6 @@ paths:
               schema:
                 allOf:
                   - $ref: '#/components/schemas/Event'
-                  - $ref: '#/components/schemas/Obsolete'
                   - type: object
                     properties:
                       meta:
@@ -548,7 +545,6 @@ paths:
               schema:
                 allOf:
                     - $ref: '#/components/schemas/Transfer'
-                    - $ref: '#/components/schemas/Obsolete'
                     - type: object
                       properties:
                         meta:
@@ -1275,14 +1271,6 @@ components:
               type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-    
-    
-    Obsolete:
-      properties:
-        obsolete:
-          type: boolean
-          description: |
-            indicates whether the block containing this data become branch block
 
     TracerOption:
       properties:
