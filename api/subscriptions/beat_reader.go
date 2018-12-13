@@ -71,6 +71,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 			Timestamp: header.Timestamp(),
 			Bloom:     hexutil.Encode(bloom.Bits[:]),
 			K:         uint32(k),
+			Obsolete:  block.Obsolete,
 		})
 	}
 	return msgs, len(blocks) > 0, nil

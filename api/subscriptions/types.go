@@ -196,5 +196,6 @@ type BeatMessage struct {
 	ParentID  thor.Bytes32 `json:"parentID"`
 	Timestamp uint64       `json:"timestamp"`
 	Bloom     string       `json:"bloom"`
-	K         uint32          `json:"k"`
+	K         uint32       `json:"k"`
+	Obsolete  bool         `json:"obsolete"`
 }
