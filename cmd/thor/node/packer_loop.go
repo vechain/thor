@@ -8,6 +8,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -133,7 +134,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		gasUsed := newBlock.Header().GasUsed()
 		// calc target gas limit only if gas used above third of gas limit
 		if gasUsed > newBlock.Header().GasLimit()/3 {
-			targetGasLimit := uint64(thor.TolerableBlockPackingTime) * gasUsed / uint64(execElapsed)
+			targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
 			n.packer.SetTargetGasLimit(targetGasLimit)
 			log.Debug("reset target gas limit", "value", targetGasLimit)
 		}
