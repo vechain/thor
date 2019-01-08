@@ -112,7 +112,7 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 
 	dir := filepath.Join(dataDir, "main.db")
 	db, err := lvldb.New(dir, lvldb.Options{
-		CacheSize:              128,
+		CacheSize:              256,
 		OpenFilesCacheCapacity: fileCache,
 	})
 	if err != nil {
