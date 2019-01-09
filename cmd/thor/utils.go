@@ -128,6 +128,9 @@ func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
 	expectedID := genesisID.String()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actualID := r.Header.Get(headerKey)
+		if actualID == "" {
+			actualID = r.URL.Query().Get(headerKey)
+		}
 		w.Header().Set(headerKey, expectedID)
 		if actualID != "" && actualID != expectedID {
 			io.Copy(ioutil.Discard, r.Body)
