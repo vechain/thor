@@ -40,6 +40,7 @@ func New(chain *chain.Chain, allowedOrigins []string, backtraceLimit uint32) *Su
 		backtraceLimit: backtraceLimit,
 		chain:          chain,
 		upgrader: &websocket.Upgrader{
+			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
 				origin := r.Header.Get("Origin")
 				if origin == "" {
