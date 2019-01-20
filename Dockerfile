@@ -15,5 +15,5 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /go/thor/bin/thor /usr/local/bin/
 
-EXPOSE 8669 11223 11223/udp
+EXPOSE 8669 11235 11235/udp
 ENTRYPOINT ["thor"]
