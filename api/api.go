@@ -77,8 +77,10 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 	subs := subscriptions.New(chain, origins, backtraceLimit)
 	subs.Mount(router, "/subscriptions")
 
-	return handlers.CORS(
-			handlers.AllowedOrigins(origins),
-			handlers.AllowedHeaders([]string{"content-type"}))(router).ServeHTTP,
+	handler := handlers.CompressHandler(router)
+	handler = handlers.CORS(
+		handlers.AllowedOrigins(origins),
+		handlers.AllowedHeaders([]string{"content-type"}))(handler)
+	return handler.ServeHTTP,
 		subs.Close // subscriptions handles hijacked conns, which need to be closed
 }
