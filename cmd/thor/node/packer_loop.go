@@ -38,6 +38,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 	)
 	defer ticker.Stop()
 
+	n.packer.SetTargetGasLimit(n.targetGasLimit)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -129,14 +131,16 @@ func (n *Node) pack(flow *packer.Flow) error {
 		)
 	}
 
-	n.packer.SetTargetGasLimit(0)
-	if execElapsed > 0 {
-		gasUsed := newBlock.Header().GasUsed()
-		// calc target gas limit only if gas used above third of gas limit
-		if gasUsed > newBlock.Header().GasLimit()/3 {
-			targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
-			n.packer.SetTargetGasLimit(targetGasLimit)
-			log.Debug("reset target gas limit", "value", targetGasLimit)
+	if n.targetGasLimit == 0 {
+		n.packer.SetTargetGasLimit(0)
+		if execElapsed > 0 {
+			gasUsed := newBlock.Header().GasUsed()
+			// calc target gas limit only if gas used above third of gas limit
+			if gasUsed > newBlock.Header().GasLimit()/3 {
+				targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
+				n.packer.SetTargetGasLimit(targetGasLimit)
+				log.Debug("reset target gas limit", "value", targetGasLimit)
+			}
 		}
 	}
 	return nil

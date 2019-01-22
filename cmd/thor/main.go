@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
-	"github.com/mattn/go-isatty"
+	isatty "github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
@@ -63,6 +63,7 @@ func main() {
 			configDirFlag,
 			dataDirFlag,
 			beneficiaryFlag,
+			targetGasLimitFlag,
 			apiAddrFlag,
 			apiCorsFlag,
 			apiTimeoutFlag,
@@ -151,7 +152,8 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
-		p2pcom.comm).
+		p2pcom.comm,
+		uint64(ctx.Int(targetGasLimitFlag.Name))).
 		Run(exitSignal)
 }
 
