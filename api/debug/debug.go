@@ -27,6 +27,8 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
+var devNetGenesisID = thor.MustParseBytes32("0x00000000973ceb7f343a58b08f0693d6701a5fd354ff73d7058af3fba222aea4")
+
 type Debug struct {
 	chain  *chain.Chain
 	stateC *state.Creator
@@ -54,7 +56,8 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 	if clauseIndex >= uint64(len(txs[txIndex].Clauses())) {
 		return nil, nil, utils.Forbidden(errors.New("clause index out of range"))
 	}
-	rt, err := consensus.New(d.chain, d.stateC).NewRuntimeForReplay(block.Header())
+	skipPoA := d.chain.GenesisBlock().Header().ID() == devNetGenesisID
+	rt, err := consensus.New(d.chain, d.stateC).NewRuntimeForReplay(block.Header(), skipPoA)
 	if err != nil {
 		return nil, nil, err
 	}
