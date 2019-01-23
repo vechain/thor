@@ -61,14 +61,15 @@ func New(
 	targetGasLimit uint64,
 ) *Node {
 	return &Node{
-		packer:      packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:        consensus.New(chain, stateCreator),
-		master:      master,
-		chain:       chain,
-		logDB:       logDB,
-		txPool:      txPool,
-		txStashPath: txStashPath,
-		comm:        comm,
+		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
+		cons:           consensus.New(chain, stateCreator),
+		master:         master,
+		chain:          chain,
+		logDB:          logDB,
+		txPool:         txPool,
+		txStashPath:    txStashPath,
+		comm:           comm,
+		targetGasLimit: targetGasLimit,
 	}
 }
 
