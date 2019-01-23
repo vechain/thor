@@ -61,7 +61,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	return stage, receipts, nil
 }
 
-func (c *Consensus) NewRuntimeForReplay(header *block.Header) (*runtime.Runtime, error) {
+func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*runtime.Runtime, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, err
@@ -77,8 +77,10 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header) (*runtime.Runtime,
 	if err != nil {
 		return nil, err
 	}
-	if err := c.validateProposer(header, parentHeader, state); err != nil {
-		return nil, err
+	if !skipPoA {
+		if err := c.validateProposer(header, parentHeader, state); err != nil {
+			return nil, err
+		}
 	}
 
 	return runtime.New(
