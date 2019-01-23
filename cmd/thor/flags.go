@@ -97,4 +97,9 @@ var (
 		Name:  "export",
 		Usage: "export master key to keystore",
 	}
+	targetGasLimitFlag = cli.IntFlag{
+		Name:  "target-gas-limit",
+		Value: 0,
+		Usage: "target block gas limit (adaptive if set to 0)",
+	}
 )

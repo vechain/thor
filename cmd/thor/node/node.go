@@ -40,13 +40,14 @@ type Node struct {
 	packer *packer.Packer
 	cons   *consensus.Consensus
 
-	master      *Master
-	chain       *chain.Chain
-	logDB       *logdb.LogDB
-	txPool      *txpool.TxPool
-	txStashPath string
-	comm        *comm.Communicator
-	commitLock  sync.Mutex
+	master         *Master
+	chain          *chain.Chain
+	logDB          *logdb.LogDB
+	txPool         *txpool.TxPool
+	txStashPath    string
+	comm           *comm.Communicator
+	commitLock     sync.Mutex
+	targetGasLimit uint64
 }
 
 func New(
@@ -57,6 +58,7 @@ func New(
 	txPool *txpool.TxPool,
 	txStashPath string,
 	comm *comm.Communicator,
+	targetGasLimit uint64,
 ) *Node {
 	return &Node{
 		packer:      packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
