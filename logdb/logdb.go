@@ -25,7 +25,7 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
 	if err != nil {
 		return nil, err
 	}
