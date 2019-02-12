@@ -34,6 +34,10 @@ func New(path string) (logDB *LogDB, err error) {
 			db.Close()
 		}
 	}()
+
+	// to avoid 'database is locked' error
+	db.SetMaxOpenConns(1)
+
 	if _, err := db.Exec(eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
 	}
