@@ -25,7 +25,7 @@ type LogDB struct {
 
 // New create or open log db at given path.
 func New(path string) (logDB *LogDB, err error) {
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared")
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +34,10 @@ func New(path string) (logDB *LogDB, err error) {
 			db.Close()
 		}
 	}()
+
+	// to avoid 'database is locked' error
+	db.SetMaxOpenConns(1)
+
 	if _, err := db.Exec(eventTableSchema + transferTableSchema); err != nil {
 		return nil, err
 	}
