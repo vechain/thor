@@ -154,9 +154,7 @@ The [Dockerfile](Dockerfile) is designed to build the last release of the source
 
 Awesome explorers built by the community:
 
-- [VeScan](https://www.vescan.io/)
 - [VeForge](https://explore.veforge.com/) by *Totient Labs*
-- [TheVechain](https://thevechain.com/)
 
 ## Testnet faucet
 
