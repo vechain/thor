@@ -109,9 +109,10 @@ type EventMessage struct {
 	Data     string         `json:"data"`
 	Meta     LogMeta        `json:"meta"`
 	Obsolete bool           `json:"obsolete"`
+	Clause   int            `json:"clause"`
 }
 
-func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obsolete bool) (*EventMessage, error) {
+func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obsolete bool, whichClause int) (*EventMessage, error) {
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
@@ -128,6 +129,7 @@ func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obs
 		},
 		Topics:   event.Topics,
 		Obsolete: obsolete,
+		Clause: whichClause,
 	}, nil
 }
 
