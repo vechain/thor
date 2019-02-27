@@ -6,6 +6,8 @@
 package genesis
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -19,20 +21,35 @@ import (
 
 // PrivateGenesis is user customized genesis
 type PrivateGenesis struct {
-	LaunchTime          uint64          `json:"launchTime"`
-	RewardRatio         *big.Int        `json:"rewardRatio"`
-	BaseGasPrice        *big.Int        `json:"baseGasPrice"`
-	GasLimit            uint64          `json:"gaslimit"`
-	ProposerEndorsement *big.Int        `json:"proposerEndorsement"`
-	ExtraData           string          `json:"extraData"`
-	Accounts            []Account       `json:"accounts"`
-	AuthorityNodes      []AuthorityNode `json:"authority-nodes"`
-	Executor            Executor        `json:"executor"`
+	LaunchTime     uint64          `json:"launchTime"`
+	GasLimit       uint64          `json:"gaslimit"`
+	ExtraData      string          `json:"extraData"`
+	Accounts       []Account       `json:"accounts"`
+	AuthorityNodes []AuthorityNode `json:"authority-nodes"`
+	Params         Params          `json:"params"`
 }
 
 // NewPrivateNet create mainnet genesis.
-func NewPrivateNet(gen *PrivateGenesis) *Genesis {
+func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 	launchTime := gen.LaunchTime
+
+	if gen.GasLimit < 0 {
+		return nil, errors.New("gasLimit must not be 0")
+	}
+	switch gen.Params.Executor.Type {
+	case "contract":
+		if len(gen.Params.Executor.Approvers) == 0 {
+			return nil, errors.New("at least one approver for executor contract")
+		}
+		break
+	case "address":
+		if gen.Params.Executor.Address == nil {
+			return nil, errors.New("executor address must be set")
+		}
+		break
+	default:
+		return nil, fmt.Errorf("unrecognized type of executor: %s", gen.Params.Executor.Type)
+	}
 
 	builder := new(Builder).
 		Timestamp(launchTime).
@@ -50,22 +67,37 @@ func NewPrivateNet(gen *PrivateGenesis) *Genesis {
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 
-			if gen.Executor.Type == "contract" {
+			if gen.Params.Executor.Type == "contract" {
 				state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
-
 			for _, a := range gen.Accounts {
+				if a.Balance == nil {
+					return fmt.Errorf("%s: balance must be set", a.Address)
+				}
+				if a.Balance.Sign() < 1 {
+					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
+				}
+				if a.Balance.Sign() < 1 {
+					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
+				}
+
 				tokenSupply.Add(tokenSupply, a.Balance)
 				state.SetBalance(a.Address, a.Balance)
 				if a.Energy != nil {
+					if a.Energy.Sign() < 1 {
+						return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
+					}
 					energySupply.Add(energySupply, a.Energy)
 					state.SetEnergy(a.Address, a.Energy, launchTime)
 				}
 				if len(a.Code) > 0 {
-					code, _ := hexutil.Decode(a.Code)
+					code, err := hexutil.Decode(a.Code)
+					if err != nil {
+						return fmt.Errorf("invalid contract code for address: %s", a.Address)
+					}
 					state.SetCode(a.Address, code)
 				}
 				if len(a.Storage) > 0 {
@@ -82,34 +114,47 @@ func NewPrivateNet(gen *PrivateGenesis) *Genesis {
 	///// initialize builtin contracts
 
 	// initialize params
+	if gen.Params.BaseGasPrice.Sign() < 1 {
+		return nil, errors.New("baseGasPrice must be a non-zero integer")
+	}
+	if gen.Params.RewardRatio.Sign() < 1 {
+		return nil, errors.New("rewardRatio must be a non-zero integer")
+	}
+	if gen.Params.ProposerEndorsement.Sign() < 1 {
+		return nil, errors.New("proposerEndorsement must be a non-zero integer")
+	}
+
 	var executor thor.Address
-	if gen.Executor.Type == "contract" {
+	if gen.Params.Executor.Type == "contract" {
 		executor = builtin.Executor.Address
 	} else {
-		executor = *gen.Executor.Address
+		executor = *gen.Params.Executor.Address
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.RewardRatio)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Params.RewardRatio)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.BaseGasPrice)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Params.BaseGasPrice)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.ProposerEndorsement)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Params.ProposerEndorsement)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
+	if len(gen.AuthorityNodes) == 0 {
+		return nil, errors.New("at least one authority node")
+	}
 	// add initial authority nodes
 	for _, anode := range gen.AuthorityNodes {
 		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
-	if gen.Executor.Type == "contract" {
+	if gen.Params.Executor.Type == "contract" {
 		// add initial approvers
-		for _, approver := range gen.Executor.Approvers {
+		for _, approver := range gen.Params.Executor.Approvers {
 			data := mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
 			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), executor)
 		}
@@ -125,7 +170,7 @@ func NewPrivateNet(gen *PrivateGenesis) *Genesis {
 	if err != nil {
 		panic(err)
 	}
-	return &Genesis{builder, id, "privatenet"}
+	return &Genesis{builder, id, "privatenet"}, nil
 }
 
 // Account is the account will set to the genesis block
@@ -155,4 +200,12 @@ type Executor struct {
 type Approver struct {
 	Address  thor.Address `json:"address"`
 	Identity thor.Bytes32 `json:"identity"`
+}
+
+// Params means the chain params for param contract
+type Params struct {
+	RewardRatio         *big.Int `json:"rewardRatio"`
+	BaseGasPrice        *big.Int `json:"baseGasPrice"`
+	ProposerEndorsement *big.Int `json:"proposerEndorsement"`
+	Executor            Executor `json:"executor"`
 }

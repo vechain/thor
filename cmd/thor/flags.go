@@ -13,11 +13,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (main|test)",
-	}
-	genesisFlag = cli.StringFlag{
-		Name:  "genesis",
-		Usage: "customized genesis file path for private network",
+		Usage: "the network to join (main|test) or path to genesis file",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",

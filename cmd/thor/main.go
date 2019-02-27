@@ -60,7 +60,6 @@ func main() {
 		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
 		Flags: []cli.Flag{
 			networkFlag,
-			genesisFlag,
 			configDirFlag,
 			dataDirFlag,
 			beneficiaryFlag,

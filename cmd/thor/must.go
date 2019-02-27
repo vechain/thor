@@ -16,8 +16,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -50,7 +48,6 @@ func initLogger(ctx *cli.Context) {
 
 func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	network := ctx.String(networkFlag.Name)
-	genesisPath := ctx.String(genesisFlag.Name)
 
 	if network != "" {
 		switch network {
@@ -59,70 +56,30 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 		case "main":
 			return genesis.NewMainnet()
 		default:
-			cli.ShowAppHelp(ctx)
-			fmt.Printf("unrecognized value '%s' for flag -%s\n", network, networkFlag.Name)
-			os.Exit(1)
-			return nil
-		}
-	} else if genesisPath != "" {
-		file, err := os.Open(genesisPath)
-		if err != nil {
-			fatal("failed to open genesis file\n")
-		}
-
-		defer file.Close()
-
-		privateGen := new(genesis.PrivateGenesis)
-		if err := json.NewDecoder(file).Decode(privateGen); err != nil {
-			fatal(fmt.Sprintf("failed to decode genesis file: %v", err))
-		}
-
-		ensure := func(condition bool, msg string) {
-			if condition == false {
-				fatal(msg)
+			file, err := os.Open(network)
+			if err != nil {
+				fatal("failed to open genesis file")
 			}
-		}
-		// validate the genesis file
-		ensure(privateGen.BaseGasPrice.Sign() == 1, "baseGasPrice must be a non-zero integer")
-		ensure(privateGen.RewardRatio.Sign() == 1, "rewardRatio must be a non-zero integer")
-		ensure(privateGen.ProposerEndorsement.Sign() == 1, "proposerEndorsement must be a non-zero integer")
-		ensure(privateGen.GasLimit > 0, "gasLimit must not be 0")
 
-		for _, a := range privateGen.Accounts {
-			ensure(a.Balance != nil, fmt.Sprintf("%s: balance must be set", a.Address))
-			ensure(a.Balance.Sign() == 1, fmt.Sprintf("%s: balance must be a non-zero integer", a.Address))
-			if a.Energy != nil {
-				ensure(a.Energy.Sign() == 1, fmt.Sprintf("%s: energy must be a non-zero integer", a.Address))
+			defer file.Close()
+
+			gen := new(genesis.PrivateGenesis)
+			if err := json.NewDecoder(file).Decode(gen); err != nil {
+				fatal(fmt.Sprintf("failed to decode genesis file: %v", err))
 			}
-			if len(a.Code) > 0 {
-				if _, err := hexutil.Decode(a.Code); err != nil {
-					fatal(fmt.Sprintf("invalid contract code for address: %s", a.Address))
-				}
+
+			privateGen, err := genesis.NewPrivateNet(gen)
+			if err != nil {
+				fatal(fmt.Sprintf("failed to build genesis: %v", err))
 			}
-		}
-		ensure(len(privateGen.AuthorityNodes) > 0, "at least one authority node")
 
-		switch privateGen.Executor.Type {
-		case "contract":
-			ensure(len(privateGen.Executor.Approvers) > 0, "at least one approver for executor contract")
-			break
-		case "address":
-			ensure(privateGen.Executor.Address != nil, "executor address must be set")
-			break
-		default:
-			fatal(fmt.Sprintf("unrecognized type of executor: %s", privateGen.Executor.Type))
+			return privateGen
 		}
-
-		return genesis.NewPrivateNet(privateGen)
 	}
+
 	cli.ShowAppHelp(ctx)
-	fmt.Printf("network flag not specified: -%s\n", networkFlag.Name)
+	fmt.Printf("network flag not specified: -%s", networkFlag.Name)
 	os.Exit(1)
-	return nil
-}
-
-func parseGenesisFile(path string) error {
-
 	return nil
 }
 
