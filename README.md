@@ -158,9 +158,7 @@ Awesome explorers built by the community:
 
 ## Testnet faucet
 
-``` 
-curl -X POST -d '{"to":"Your_Address"}' -H "Content-Type: application/json" https://faucet.outofgas.io/requests
-```
+- [faucet.vecha.in](https://faucet.vecha.in) by *VeChain Foundation*
 
 ## API
 
