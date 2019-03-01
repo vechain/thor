@@ -68,6 +68,7 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 				fatal(fmt.Sprintf("failed to decode genesis file: %v", err))
 			}
 
+			fmt.Printf("decoded genesis: %+v", gen)
 			privateGen, err := genesis.NewPrivateNet(gen)
 			if err != nil {
 				fatal(fmt.Sprintf("failed to build genesis: %v", err))

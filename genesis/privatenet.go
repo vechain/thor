@@ -21,12 +21,13 @@ import (
 
 // PrivateGenesis is user customized genesis
 type PrivateGenesis struct {
-	LaunchTime     uint64          `json:"launchTime"`
-	GasLimit       uint64          `json:"gaslimit"`
-	ExtraData      string          `json:"extraData"`
-	Accounts       []Account       `json:"accounts"`
-	AuthorityNodes []AuthorityNode `json:"authority-nodes"`
-	Params         Params          `json:"params"`
+	LaunchTime uint64      `json:"launchTime"`
+	GasLimit   uint64      `json:"gaslimit"`
+	ExtraData  string      `json:"extraData"`
+	Accounts   []Account   `json:"accounts"`
+	Authority  []Authority `json:"authority"`
+	Param      Param       `json:"param"`
+	Executor   Executor    `json:"executor"`
 }
 
 // NewPrivateNet create mainnet genesis.
@@ -36,19 +37,11 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 	if gen.GasLimit < 0 {
 		return nil, errors.New("gasLimit must not be 0")
 	}
-	switch gen.Params.Executor.Type {
-	case "contract":
-		if len(gen.Params.Executor.Approvers) == 0 {
-			return nil, errors.New("at least one approver for executor contract")
-		}
-		break
-	case "address":
-		if gen.Params.Executor.Address == nil {
-			return nil, errors.New("executor address must be set")
-		}
-		break
-	default:
-		return nil, fmt.Errorf("unrecognized type of executor: %s", gen.Params.Executor.Type)
+	var executor thor.Address
+	if gen.Param.ExecutorAddress != nil {
+		executor = *gen.Param.ExecutorAddress
+	} else {
+		executor = builtin.Executor.Address
 	}
 
 	builder := new(Builder).
@@ -67,7 +60,7 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 
-			if gen.Params.Executor.Type == "contract" {
+			if len(gen.Executor.Approvers) > 0 {
 				state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 			}
 
@@ -114,47 +107,40 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Params.BaseGasPrice.Sign() < 1 {
+	if gen.Param.BaseGasPrice.Sign() < 1 {
 		return nil, errors.New("baseGasPrice must be a non-zero integer")
 	}
-	if gen.Params.RewardRatio.Sign() < 1 {
+	if gen.Param.RewardRatio.Sign() < 1 {
 		return nil, errors.New("rewardRatio must be a non-zero integer")
 	}
-	if gen.Params.ProposerEndorsement.Sign() < 1 {
+	if gen.Param.ProposerEndorsement.Sign() < 1 {
 		return nil, errors.New("proposerEndorsement must be a non-zero integer")
-	}
-
-	var executor thor.Address
-	if gen.Params.Executor.Type == "contract" {
-		executor = builtin.Executor.Address
-	} else {
-		executor = *gen.Params.Executor.Address
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Params.RewardRatio)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Param.RewardRatio)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Params.BaseGasPrice)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Param.BaseGasPrice)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Params.ProposerEndorsement)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Param.ProposerEndorsement)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	if len(gen.AuthorityNodes) == 0 {
+	if len(gen.Authority) == 0 {
 		return nil, errors.New("at least one authority node")
 	}
 	// add initial authority nodes
-	for _, anode := range gen.AuthorityNodes {
+	for _, anode := range gen.Authority {
 		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
-	if gen.Params.Executor.Type == "contract" {
+	if len(gen.Executor.Approvers) > 0 {
 		// add initial approvers
-		for _, approver := range gen.Params.Executor.Approvers {
+		for _, approver := range gen.Executor.Approvers {
 			data := mustEncodeInput(builtin.Executor.ABI, "addApprover", approver.Address, approver.Identity)
 			builder.Call(tx.NewClause(&builtin.Executor.Address).WithData(data), executor)
 		}
@@ -182,8 +168,8 @@ type Account struct {
 	Storage map[string]thor.Bytes32 `json:"storage,omitempty"`
 }
 
-// AuthorityNode is the authority node info
-type AuthorityNode struct {
+// Authority is the authority node info
+type Authority struct {
 	MasterAddress   thor.Address `json:"masterAddress"`
 	EndorsorAddress thor.Address `json:"endorsorAddress"`
 	Identity        thor.Bytes32 `json:"identity"`
@@ -191,9 +177,7 @@ type AuthorityNode struct {
 
 // Executor is the params for executor info
 type Executor struct {
-	Type      string        `json:"type"`
-	Address   *thor.Address `json:"address,omitempty"`
-	Approvers []Approver    `json:"approvers,omitempty"`
+	Approvers []Approver `json:"approvers"`
 }
 
 // Approver is the approver info for executor contract
@@ -202,10 +186,10 @@ type Approver struct {
 	Identity thor.Bytes32 `json:"identity"`
 }
 
-// Params means the chain params for param contract
-type Params struct {
-	RewardRatio         *big.Int `json:"rewardRatio"`
-	BaseGasPrice        *big.Int `json:"baseGasPrice"`
-	ProposerEndorsement *big.Int `json:"proposerEndorsement"`
-	Executor            Executor `json:"executor"`
+// Param means the chain params for param contract
+type Param struct {
+	RewardRatio         *big.Int      `json:"rewardRatio"`
+	BaseGasPrice        *big.Int      `json:"baseGasPrice"`
+	ProposerEndorsement *big.Int      `json:"proposerEndorsement"`
+	ExecutorAddress     *thor.Address `json:"executorAddress"`
 }
