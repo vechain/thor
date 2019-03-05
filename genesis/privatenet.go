@@ -26,7 +26,7 @@ type PrivateGenesis struct {
 	ExtraData  string      `json:"extraData"`
 	Accounts   []Account   `json:"accounts"`
 	Authority  []Authority `json:"authority"`
-	Param      Param       `json:"param"`
+	Params     Params      `json:"params"`
 	Executor   Executor    `json:"executor"`
 }
 
@@ -38,8 +38,8 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 		return nil, errors.New("gasLimit must not be 0")
 	}
 	var executor thor.Address
-	if gen.Param.ExecutorAddress != nil {
-		executor = *gen.Param.ExecutorAddress
+	if gen.Params.ExecutorAddress != nil {
+		executor = *gen.Params.ExecutorAddress
 	} else {
 		executor = builtin.Executor.Address
 	}
@@ -107,26 +107,26 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Param.BaseGasPrice.Sign() < 1 {
+	if gen.Params.BaseGasPrice.Sign() < 1 {
 		return nil, errors.New("baseGasPrice must be a non-zero integer")
 	}
-	if gen.Param.RewardRatio.Sign() < 1 {
+	if gen.Params.RewardRatio.Sign() < 1 {
 		return nil, errors.New("rewardRatio must be a non-zero integer")
 	}
-	if gen.Param.ProposerEndorsement.Sign() < 1 {
+	if gen.Params.ProposerEndorsement.Sign() < 1 {
 		return nil, errors.New("proposerEndorsement must be a non-zero integer")
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Param.RewardRatio)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Params.RewardRatio)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Param.BaseGasPrice)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Params.BaseGasPrice)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Param.ProposerEndorsement)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Params.ProposerEndorsement)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
 	if len(gen.Authority) == 0 {
@@ -156,7 +156,7 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 	if err != nil {
 		panic(err)
 	}
-	return &Genesis{builder, id, "privatenet"}, nil
+	return &Genesis{builder, id, "customnet"}, nil
 }
 
 // Account is the account will set to the genesis block
@@ -186,8 +186,8 @@ type Approver struct {
 	Identity thor.Bytes32 `json:"identity"`
 }
 
-// Param means the chain params for param contract
-type Param struct {
+// Params means the chain params for params contract
+type Params struct {
 	RewardRatio         *big.Int      `json:"rewardRatio"`
 	BaseGasPrice        *big.Int      `json:"baseGasPrice"`
 	ProposerEndorsement *big.Int      `json:"proposerEndorsement"`

@@ -1,7 +1,7 @@
 {
     "launchTime": 1530316800,
     "gasLimit": 10000000,
-    "extraData": "My private VeChain",
+    "extraData": "My custom VeChain",
     "accounts": [
         {
             "address": "0x137053dfbe6c0a43f915ad2efefefdcc2708e975",
@@ -45,7 +45,7 @@
             "identity": "0x000000000000000000000000000000000000000000000000006d617374657234"
         }
     ],
-    "param": {
+    "params": {
         "rewardRatio": 300000000000000000,
         "baseGasPrice": 1000000000000000,
         "proposerEndorsement": 25000000000000000000000000,
