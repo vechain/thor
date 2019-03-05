@@ -80,8 +80,8 @@ func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
 				tokenSupply.Add(tokenSupply, a.Balance)
 				state.SetBalance(a.Address, a.Balance)
 				if a.Energy != nil {
-					if a.Energy.Sign() < 1 {
-						return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
+					if a.Energy.Sign() < 0 {
+						return fmt.Errorf("%s: energy must be a non-negative integer", a.Address)
 					}
 					energySupply.Add(energySupply, a.Energy)
 					state.SetEnergy(a.Address, a.Energy, launchTime)
