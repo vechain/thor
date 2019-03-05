@@ -58,20 +58,21 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 		default:
 			file, err := os.Open(network)
 			if err != nil {
-				fatal("failed to open genesis file")
+				fatal(fmt.Sprintf("open genesis file: %v", err))
 			}
-
 			defer file.Close()
 
-			gen := new(genesis.PrivateGenesis)
-			if err := json.NewDecoder(file).Decode(gen); err != nil {
-				fatal(fmt.Sprintf("failed to decode genesis file: %v", err))
+			decoder := json.NewDecoder(file)
+			decoder.DisallowUnknownFields()
+
+			var gen genesis.PrivateGenesis
+			if err := decoder.Decode(&gen); err != nil {
+				fatal(fmt.Sprintf("decode genesis file: %v", err))
 			}
 
-			fmt.Printf("decoded genesis: %+v", gen)
-			privateGen, err := genesis.NewPrivateNet(gen)
+			privateGen, err := genesis.NewPrivateNet(&gen)
 			if err != nil {
-				fatal(fmt.Sprintf("failed to build genesis: %v", err))
+				fatal(fmt.Sprintf("build genesis: %v", err))
 			}
 
 			return privateGen
