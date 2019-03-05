@@ -19,8 +19,8 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
-// PrivateGenesis is user customized genesis
-type PrivateGenesis struct {
+// CustomGenesis is user customized genesis
+type CustomGenesis struct {
 	LaunchTime uint64      `json:"launchTime"`
 	GasLimit   uint64      `json:"gaslimit"`
 	ExtraData  string      `json:"extraData"`
@@ -30,8 +30,8 @@ type PrivateGenesis struct {
 	Executor   Executor    `json:"executor"`
 }
 
-// NewPrivateNet create mainnet genesis.
-func NewPrivateNet(gen *PrivateGenesis) (*Genesis, error) {
+// NewCustomNet create custom network genesis.
+func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	launchTime := gen.LaunchTime
 
 	if gen.GasLimit < 0 {
