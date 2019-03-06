@@ -80,7 +80,7 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	}
 
 	cli.ShowAppHelp(ctx)
-	fmt.Printf("network flag not specified: -%s", networkFlag.Name)
+	fmt.Println("network flag not specified")
 	os.Exit(1)
 	return nil
 }
