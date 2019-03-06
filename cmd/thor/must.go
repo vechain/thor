@@ -65,17 +65,17 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 			decoder := json.NewDecoder(file)
 			decoder.DisallowUnknownFields()
 
-			var gen genesis.PrivateGenesis
+			var gen genesis.CustomGenesis
 			if err := decoder.Decode(&gen); err != nil {
 				fatal(fmt.Sprintf("decode genesis file: %v", err))
 			}
 
-			privateGen, err := genesis.NewPrivateNet(&gen)
+			customGen, err := genesis.NewCustomNet(&gen)
 			if err != nil {
 				fatal(fmt.Sprintf("build genesis: %v", err))
 			}
 
-			return privateGen
+			return customGen
 		}
 	}
 
