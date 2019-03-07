@@ -13,7 +13,7 @@ import (
 var (
 	networkFlag = cli.StringFlag{
 		Name:  "network",
-		Usage: "the network to join (main|test)",
+		Usage: "the network to join (main|test) or path to genesis file",
 	}
 	configDirFlag = cli.StringFlag{
 		Name:   "config-dir",
@@ -82,7 +82,7 @@ var (
 	}
 	persistFlag = cli.BoolFlag{
 		Name:  "persist",
-		Usage: "blockchain data storage option, if setted data will be saved to disk",
+		Usage: "blockchain data storage option, if set data will be saved to disk",
 	}
 	gasLimitFlag = cli.IntFlag{
 		Name:  "gas-limit",

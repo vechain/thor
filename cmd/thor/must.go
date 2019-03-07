@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -47,21 +48,41 @@ func initLogger(ctx *cli.Context) {
 
 func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 	network := ctx.String(networkFlag.Name)
-	switch network {
-	case "test":
-		return genesis.NewTestnet()
-	case "main":
-		return genesis.NewMainnet()
-	default:
-		cli.ShowAppHelp(ctx)
-		if network == "" {
-			fmt.Printf("network flag not specified: -%s\n", networkFlag.Name)
-		} else {
-			fmt.Printf("unrecognized value '%s' for flag -%s\n", network, networkFlag.Name)
+
+	if network != "" {
+		switch network {
+		case "test":
+			return genesis.NewTestnet()
+		case "main":
+			return genesis.NewMainnet()
+		default:
+			file, err := os.Open(network)
+			if err != nil {
+				fatal(fmt.Sprintf("open genesis file: %v", err))
+			}
+			defer file.Close()
+
+			decoder := json.NewDecoder(file)
+			decoder.DisallowUnknownFields()
+
+			var gen genesis.CustomGenesis
+			if err := decoder.Decode(&gen); err != nil {
+				fatal(fmt.Sprintf("decode genesis file: %v", err))
+			}
+
+			customGen, err := genesis.NewCustomNet(&gen)
+			if err != nil {
+				fatal(fmt.Sprintf("build genesis: %v", err))
+			}
+
+			return customGen
 		}
-		os.Exit(1)
-		return nil
 	}
+
+	cli.ShowAppHelp(ctx)
+	fmt.Println("network flag not specified")
+	os.Exit(1)
+	return nil
 }
 
 func makeConfigDir(ctx *cli.Context) string {
