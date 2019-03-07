@@ -95,7 +95,7 @@ func main() {
 			},
 			{
 				Name:  "master-key",
-				Usage: "import and export master key",
+				Usage: "master key management",
 				Flags: []cli.Flag{
 					configDirFlag,
 					importMasterKeyFlag,
@@ -209,7 +209,12 @@ func masterKeyAction(ctx *cli.Context) error {
 	}
 
 	if !hasImportFlag && !hasExportFlag {
-		return fmt.Errorf("missing flag, either %s or %s", importMasterKeyFlag.Name, exportMasterKeyFlag.Name)
+		masterKey, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
+		if err != nil {
+			return err
+		}
+		fmt.Println("Master:", thor.Address(crypto.PubkeyToAddress(masterKey.PublicKey)))
+		return nil
 	}
 
 	if hasImportFlag {
