@@ -102,17 +102,21 @@ To find out usages of all command line options:
 bin/thor -h
 ```
 
-- `--network value`      the network to join (main|test)
-- `--data-dir value`     directory for block-chain databases
-- `--beneficiary value`  address for block rewards
-- `--api-addr value`     API service listening address (default: "localhost:8669")
-- `--api-cors value`     comma separated list of domains from which to accept cross origin requests to API
-- `--verbosity value`    log verbosity (0-9) (default: 3)
-- `--max-peers value`    maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)
-- `--p2p-port value`     P2P network listening port (default: 11235)
-- `--nat value`          port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
-- `--help, -h`           show help
-- `--version, -v`        print the version
+- `--network value`             the network to join (main|test) or path to genesis file
+- `--data-dir value`            directory for block-chain databases
+- `--beneficiary value`         address for block rewards
+- `--target-gas-limit value`    target block gas limit (adaptive if set to 0) (default: 0)
+- `--api-addr value`            API service listening address (default: "localhost:8669")
+- `--api-cors value`            comma separated list of domains from which to accept cross origin requests to API
+- `--api-timeout value`         API request timeout value in milliseconds (default: 10000)
+- `--api-call-gas-limit value`  limit contract call gas (default: 50000000)
+- `--api-backtrace-limit value` limit the distance between 'position' and best block for subscriptions APIs (default: 1000)
+- `--verbosity value`           log verbosity (0-9) (default: 3)
+- `--max-peers value`           maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)
+- `--p2p-port value`            P2P network listening port (default: 11235)
+- `--nat value`                 port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
+- `--help, -h`                  show help
+- `--version, -v`               print the version
 
 ### Sub-commands
 
@@ -124,9 +128,12 @@ bin/thor solo --persist                 # save blockchain data to disk(default t
 bin/thor solo --persist --on-demand     # two options can work together
 ```
 
-- `master-key`          import and export master key
+- `master-key`          master key management
 
 ```
+# print the master address
+bin/thor master-key
+
 # export master key to keystore
 bin/thor master-key --export > keystore.json
 
