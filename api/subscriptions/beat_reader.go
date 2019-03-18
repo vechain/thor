@@ -40,6 +40,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 		txs := block.Transactions()
 		bloomContent := &bloomContent{}
 		for i, receipt := range receipts {
+			bloomContent.add(receipt.GasPayer.Bytes())
 			for _, output := range receipt.Outputs {
 				for _, event := range output.Events {
 					bloomContent.add(event.Address.Bytes())
