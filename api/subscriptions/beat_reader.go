@@ -54,6 +54,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 			}
 			origin, _ := txs[i].Signer()
 			bloomContent.add(origin.Bytes())
+			bloomContent.add(receipt.GasPayer.Bytes())
 		}
 		signer, _ := header.Signer()
 		bloomContent.add(signer.Bytes())
