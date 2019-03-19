@@ -332,7 +332,7 @@ branch:   %v  %v`, fork.Ancestor,
 }
 
 func checkClockOffset() {
-	resp, err := ntp.Query("ap.pool.ntp.org")
+	resp, err := ntp.Query("pool.ntp.org")
 	if err != nil {
 		log.Debug("failed to access NTP", "err", err)
 		return
