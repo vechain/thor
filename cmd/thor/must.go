@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -218,7 +219,6 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 	if err != nil {
 		fatal("load or generate P2P key:", err)
 	}
-
 	nat, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
@@ -234,6 +234,11 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		NAT:            nat,
 	}
 
+	bootnodes := parseBootNode(ctx)
+	if bootnodes != nil {
+		opts.BootstrapNodes = bootnodes
+	}
+
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
 	if data, err := ioutil.ReadFile(peersCachePath); err != nil {
@@ -242,6 +247,16 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		}
 	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
+	}
+
+	m := make(map[discover.NodeID]interface{})
+	for _, node := range opts.KnownNodes {
+		m[node.ID] = nil
+	}
+	for _, bootnode := range bootnodes {
+		if _, ok := m[bootnode.ID]; !ok {
+			opts.KnownNodes = append(opts.KnownNodes, bootnode)
+		}
 	}
 
 	return &p2pComm{
@@ -405,4 +420,21 @@ func getNodeID(ctx *cli.Context) string {
 	}
 
 	return fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&key.PublicKey).Bytes(), ctx.Int(p2pPortFlag.Name))
+}
+
+func parseBootNode(ctx *cli.Context) []*discover.Node {
+	s := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
+	if s == "" {
+		return nil
+	}
+	inputs := strings.Split(s, ",")
+	nodes := make([]*discover.Node, 0, len(inputs))
+	for _, i := range inputs {
+		node := discover.MustParseNode(i)
+		nodes = append(nodes, node)
+	}
+	if len(s) == 0 {
+		return nil
+	}
+	return nodes
 }

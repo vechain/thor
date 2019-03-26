@@ -102,4 +102,8 @@ var (
 		Value: 0,
 		Usage: "target block gas limit (adaptive if set to 0)",
 	}
+	bootNodeFlag = cli.StringFlag{
+		Name:  "bootnode",
+		Usage: "comma separated list of bootnode IDs",
+	}
 )

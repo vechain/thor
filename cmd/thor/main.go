@@ -73,6 +73,7 @@ func main() {
 			maxPeersFlag,
 			p2pPortFlag,
 			natFlag,
+			bootNodeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
