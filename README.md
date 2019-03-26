@@ -95,6 +95,12 @@ Connect to VeChain's testnet:
 bin/thor --network test
 ```
 
+or startup a custom network
+```
+bin/thor --network <custom-net-genesis.json>
+```
+exmaple genesis config file can be found at [genesis/example.json](https://raw.githubusercontent.com/vechain/thor/master/genesis/example.json).
+
 
 To find out usages of all command line options:
 
