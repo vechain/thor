@@ -249,9 +249,10 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		log.Warn("failed to load peers cache", "err", err)
 	}
 
-	m := make(map[discover.NodeID]interface{})
+	var empty struct{}
+	m := make(map[discover.NodeID]struct{})
 	for _, node := range opts.KnownNodes {
-		m[node.ID] = nil
+		m[node.ID] = empty
 	}
 	for _, bootnode := range bootnodes {
 		if _, ok := m[bootnode.ID]; !ok {
@@ -428,13 +429,10 @@ func parseBootNode(ctx *cli.Context) []*discover.Node {
 		return nil
 	}
 	inputs := strings.Split(s, ",")
-	nodes := make([]*discover.Node, 0, len(inputs))
+	var nodes []*discover.Node
 	for _, i := range inputs {
 		node := discover.MustParseNode(i)
 		nodes = append(nodes, node)
-	}
-	if len(s) == 0 {
-		return nil
 	}
 	return nodes
 }
