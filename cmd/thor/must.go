@@ -14,12 +14,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
@@ -217,7 +219,6 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 	if err != nil {
 		fatal("load or generate P2P key:", err)
 	}
-
 	nat, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
@@ -233,6 +234,11 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		NAT:            nat,
 	}
 
+	bootnodes := parseBootNode(ctx)
+	if bootnodes != nil {
+		opts.BootstrapNodes = bootnodes
+	}
+
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
 	if data, err := ioutil.ReadFile(peersCachePath); err != nil {
@@ -241,6 +247,17 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 		}
 	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
+	}
+
+	var empty struct{}
+	m := make(map[discover.NodeID]struct{})
+	for _, node := range opts.KnownNodes {
+		m[node.ID] = empty
+	}
+	for _, bootnode := range bootnodes {
+		if _, ok := m[bootnode.ID]; !ok {
+			opts.KnownNodes = append(opts.KnownNodes, bootnode)
+		}
 	}
 
 	return &p2pComm{
@@ -307,17 +324,19 @@ func printStartupMessage(
 	master *node.Master,
 	dataDir string,
 	apiURL string,
+	nodeID string,
 ) {
 	bestBlock := chain.BestBlock()
 
 	fmt.Printf(`Starting %v
-    Network      [ %v %v ]    
+    Network      [ %v %v ]
     Best block   [ %v #%v @%v ]
     Forks        [ %v ]
     Master       [ %v ]
     Beneficiary  [ %v ]
     Instance dir [ %v ]
     API portal   [ %v ]
+    Node ID      [ %v ]
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -331,7 +350,8 @@ func printStartupMessage(
 			return master.Beneficiary.String()
 		}(),
 		dataDir,
-		apiURL)
+		apiURL,
+		nodeID)
 }
 
 func openMemMainDB() *lvldb.LevelDB {
@@ -391,4 +411,28 @@ func printSoloStartupMessage(
 	info += tableEnd + "\r\n"
 
 	fmt.Print(info)
+}
+
+func getNodeID(ctx *cli.Context) string {
+	configDir := makeConfigDir(ctx)
+	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
+	if err != nil {
+		fatal("load or generate P2P key:", err)
+	}
+
+	return fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&key.PublicKey).Bytes(), ctx.Int(p2pPortFlag.Name))
+}
+
+func parseBootNode(ctx *cli.Context) []*discover.Node {
+	s := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
+	if s == "" {
+		return nil
+	}
+	inputs := strings.Split(s, ",")
+	var nodes []*discover.Node
+	for _, i := range inputs {
+		node := discover.MustParseNode(i)
+		nodes = append(nodes, node)
+	}
+	return nodes
 }

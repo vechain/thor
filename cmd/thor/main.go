@@ -73,6 +73,7 @@ func main() {
 			maxPeersFlag,
 			p2pPortFlag,
 			natFlag,
+			bootNodeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -140,7 +141,7 @@ func defaultAction(ctx *cli.Context) error {
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage(gene, chain, master, instanceDir, apiURL)
+	printStartupMessage(gene, chain, master, instanceDir, apiURL, getNodeID(ctx))
 
 	p2pcom.Start()
 	defer p2pcom.Stop()
