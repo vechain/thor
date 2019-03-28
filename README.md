@@ -121,6 +121,8 @@ bin/thor -h
 - `--max-peers value`           maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)
 - `--p2p-port value`            P2P network listening port (default: 11235)
 - `--nat value`                 port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
+- `--bootnode value`            comma separated list of bootnode IDs
+- `--pprof`                     turn on go-pprof
 - `--help, -h`                  show help
 - `--version, -v`               print the version
 
