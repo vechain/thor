@@ -83,7 +83,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 		router.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		router.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		router.PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
 	handler := handlers.CompressHandler(router)
