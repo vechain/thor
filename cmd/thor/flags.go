@@ -106,4 +106,8 @@ var (
 		Name:  "bootnode",
 		Usage: "comma separated list of bootnode IDs",
 	}
+	pprofFlag = cli.BoolFlag{
+		Name:  "pprof",
+		Usage: "turn on go-pprof",
+	}
 )
