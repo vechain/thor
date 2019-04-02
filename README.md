@@ -163,7 +163,7 @@ docker run -d\
 
 Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor`binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
 
-The [Dockerfile](Dockerfile) is designed to build the last release of the source code and will publish docker images to [dockerhub](https://hub.docker.com/r/vechain/thor/) by release, feel free to fork and build Dockerfile for your own purpose.
+The [Dockerfile](https://raw.githubusercontent.com/vechain/thor/master/Dockerfile) is designed to build the last release of the source code and will publish docker images to [dockerhub](https://hub.docker.com/r/vechain/thor/) by release, feel free to fork and build Dockerfile for your own purpose.
 
 ## Explorers
 
@@ -179,7 +179,7 @@ Awesome explorers built by the community:
 
 Once `thor` started, online *OpenAPI* doc can be accessed in your browser. e.g. http://localhost:8669/ by default.
 
-[![Thorest](thorest.png)](http://localhost:8669/)
+[![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)
 
 ## Acknowledgement
 
