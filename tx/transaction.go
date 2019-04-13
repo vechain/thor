@@ -210,7 +210,7 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature)
+	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature[0:65])
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -225,6 +225,20 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	}
 	// copy sig
 	newTx.body.Signature = append([]byte(nil), sig...)
+	return &newTx
+}
+
+// WithRelayerSignature create a new tx with relayer signature set.
+func (t *Transaction) WithRelayerSignature(sig []byte) *Transaction {
+	newTx := Transaction{
+		body: t.body,
+	}
+	s := make([]byte, 130, 130)
+	if len(t.body.Signature) == 65 {
+		copy(s[0:65], t.body.Signature[0:65])
+	}
+	copy(s[65:], sig[:])
+	newTx.body.Signature = s
 	return &newTx
 }
 
@@ -331,17 +345,91 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 	return x.Add(x, gasPrice)
 }
 
+// Relayed returns the reserved[0] that indicates if the fee is relayed
+func (t *Transaction) Relayed() bool {
+	if len(t.body.Reserved) == 0 {
+		return false
+	}
+
+	txRelayed, ok := t.body.Reserved[0].(byte)
+	if !ok {
+		return false
+	}
+	if txRelayed == 1 {
+		return true
+	}
+	return false
+}
+
+// RelayHash returns the hash for the relayer to sign
+func (t *Transaction) RelayHash() (thor.Bytes32, error) {
+	signer, err := t.Signer()
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	var hash thor.Bytes32
+
+	hw := thor.NewBlake2b()
+	rlp.Encode(hw, []interface{}{
+		t.body.ChainTag,
+		t.body.BlockRef,
+		t.body.Expiration,
+		t.body.Clauses,
+		t.body.GasPriceCoef,
+		t.body.Gas,
+		t.body.DependsOn,
+		t.body.Nonce,
+		t.body.Reserved,
+		signer,
+	})
+	hw.Sum(hash[:0])
+	return hash, nil
+}
+
+// Relayer returns fee relayer who would like to pay the fee
+func (t *Transaction) Relayer() (*thor.Address, error) {
+	if b := t.Relayed(); b == false {
+		return nil, nil
+	}
+	if len(t.Signature()) != 130 {
+		return nil, nil
+	}
+
+	hash, err := t.RelayHash()
+	if err != nil {
+		return nil, err
+	}
+
+	sig := t.Signature()[65:]
+	pub, err := crypto.SigToPub(hash.Bytes(), sig)
+	if err != nil {
+		return nil, err
+	}
+	relayer := thor.Address(crypto.PubkeyToAddress(*pub))
+
+	return &relayer, nil
+}
+
 func (t *Transaction) String() string {
 	var (
 		from      string
 		br        BlockRef
 		dependsOn string
+		relayer   string
 	)
 	signer, err := t.Signer()
 	if err != nil {
 		from = "N/A"
 	} else {
 		from = signer.String()
+	}
+	addr, err := t.Relayer()
+	fmt.Printf("%+v", err)
+	fmt.Printf("%+v", err)
+	if addr == nil || err != nil {
+		relayer = "N/A"
+	} else {
+		relayer = addr.String()
 	}
 
 	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
@@ -362,10 +450,11 @@ func (t *Transaction) String() string {
 	Expiration:     %v
 	DependsOn:      %v
 	Nonce:          %v
-	UnprovedWork:   %v	
+	UnprovedWork:   %v
+	Relayer:		%v
 	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), t.body.Signature)
+		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), relayer, t.body.Signature)
 }
 
 // IntrinsicGas calculate intrinsic gas cost for tx with such clauses.

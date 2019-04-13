@@ -69,6 +69,12 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 	return b
 }
 
+// Relayed marks transaction to be fee relayed
+func (b *Builder) Relayed() *Builder {
+	b.body.Reserved = append(b.body.Reserved, byte(1))
+	return b
+}
+
 // Build build tx object.
 func (b *Builder) Build() *Transaction {
 	tx := Transaction{body: b.body}
