@@ -50,9 +50,18 @@ type body struct {
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`
 	Nonce        uint64
-	Reserved     []interface{}
+	Reserved     *Reserved
 	Signature    []byte
 }
+
+// Reserved it the reserved property of tx
+type Reserved struct {
+	Flag byte `rlp:"nil"`
+}
+
+const (
+	flagRelayed = 1 << iota
+)
 
 // ChainTag returns chain tag.
 func (t *Transaction) ChainTag() byte {
@@ -210,7 +219,14 @@ func (t *Transaction) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature[0:65])
+	var sig []byte
+	if len(t.body.Signature) == 130 {
+		sig = t.body.Signature[0:65]
+	} else {
+		sig = t.body.Signature[:]
+	}
+
+	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), sig)
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -242,10 +258,19 @@ func (t *Transaction) WithRelayerSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
-// HasReservedFields returns if there're reserved fields.
+// ValidReservedFields returns if the reserved fields are valid.
 // Reserved fields are for backward compatibility purpose.
-func (t *Transaction) HasReservedFields() bool {
-	return len(t.body.Reserved) > 0
+func (t *Transaction) ValidReservedFields() bool {
+	relayed := t.Relayed()
+
+	if !relayed && len(t.body.Signature) == 65 {
+		return true
+	}
+	if relayed && len(t.body.Signature) == 130 {
+		return true
+	}
+	return false
+
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -347,15 +372,11 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 
 // Relayed returns the reserved[0] that indicates if the fee is relayed
 func (t *Transaction) Relayed() bool {
-	if len(t.body.Reserved) == 0 {
+	if t.body.Reserved == nil {
 		return false
 	}
 
-	txRelayed, ok := t.body.Reserved[0].(byte)
-	if !ok {
-		return false
-	}
-	if txRelayed == 1 {
+	if t.body.Reserved.Flag&flagRelayed == flagRelayed {
 		return true
 	}
 	return false
@@ -388,7 +409,7 @@ func (t *Transaction) RelayHash() (thor.Bytes32, error) {
 
 // Relayer returns fee relayer who would like to pay the fee
 func (t *Transaction) Relayer() (*thor.Address, error) {
-	if b := t.Relayed(); b == false {
+	if t.Relayed() == false {
 		return nil, nil
 	}
 	if len(t.Signature()) != 130 {
@@ -424,8 +445,6 @@ func (t *Transaction) String() string {
 		from = signer.String()
 	}
 	addr, err := t.Relayer()
-	fmt.Printf("%+v", err)
-	fmt.Printf("%+v", err)
 	if addr == nil || err != nil {
 		relayer = "N/A"
 	} else {
@@ -451,7 +470,7 @@ func (t *Transaction) String() string {
 	DependsOn:      %v
 	Nonce:          %v
 	UnprovedWork:   %v
-	Relayer:		%v
+	Relayer:        %v
 	Signature:      0x%x
 `, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
 		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), relayer, t.body.Signature)

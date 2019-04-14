@@ -71,7 +71,12 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 
 // Relayed marks transaction to be fee relayed
 func (b *Builder) Relayed() *Builder {
-	b.body.Reserved = append(b.body.Reserved, byte(1))
+	if b.body.Reserved != nil {
+		b.body.Reserved.Flag |= flagRelayed
+	} else {
+		b.body.Reserved = &Reserved{Flag: flagRelayed}
+	}
+
 	return b
 }
 
