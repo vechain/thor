@@ -50,13 +50,13 @@ type body struct {
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`
 	Nonce        uint64
-	Reserved     *Reserved
+	Reserved     *Reserved `rlp:"nil"`
 	Signature    []byte
 }
 
 // Reserved it the reserved property of tx
 type Reserved struct {
-	Flag byte `rlp:"nil"`
+	Flag byte
 }
 
 const (
@@ -258,9 +258,9 @@ func (t *Transaction) WithRelayerSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
-// ValidReservedFields returns if the reserved fields are valid.
+// Validate returns if the tx is valid, mostly for checking the reserved field
 // Reserved fields are for backward compatibility purpose.
-func (t *Transaction) ValidReservedFields() bool {
+func (t *Transaction) Validate() bool {
 	relayed := t.Relayed()
 
 	if !relayed && len(t.body.Signature) == 65 {
