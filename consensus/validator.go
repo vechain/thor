@@ -133,8 +133,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
 		case tx.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
-		case tx.HasReservedFields():
-			return consensusError(fmt.Sprintf("tx reserved fields not empty"))
+		case !tx.Validate():
+			return consensusError(fmt.Sprintf("invalid reserved fields"))
 		}
 	}
 

@@ -153,8 +153,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 	switch {
 	case newTx.ChainTag() != p.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case newTx.HasReservedFields():
-		return badTxError{"reserved fields not empty"}
+	case !newTx.Validate():
+		return badTxError{"invalid reserved fields"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
 	}
