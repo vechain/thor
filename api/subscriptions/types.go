@@ -70,6 +70,7 @@ type LogMeta struct {
 	BlockTimestamp uint64       `json:"blockTimestamp"`
 	TxID           thor.Bytes32 `json:"txID"`
 	TxOrigin       thor.Address `json:"txOrigin"`
+	ClauseIndex    uint32       `json:"clauseIndex"`
 }
 
 //TransferMessage transfer piped by websocket
@@ -81,7 +82,7 @@ type TransferMessage struct {
 	Obsolete  bool                  `json:"obsolete"`
 }
 
-func convertTransfer(header *block.Header, tx *tx.Transaction, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
+func convertTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint32, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
@@ -97,6 +98,7 @@ func convertTransfer(header *block.Header, tx *tx.Transaction, transfer *tx.Tran
 			BlockTimestamp: header.Timestamp(),
 			TxID:           tx.ID(),
 			TxOrigin:       signer,
+			ClauseIndex:    clauseIndex,
 		},
 		Obsolete: obsolete,
 	}, nil
@@ -111,7 +113,7 @@ type EventMessage struct {
 	Obsolete bool           `json:"obsolete"`
 }
 
-func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obsolete bool) (*EventMessage, error) {
+func convertEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, event *tx.Event, obsolete bool) (*EventMessage, error) {
 	signer, err := tx.Signer()
 	if err != nil {
 		return nil, err
@@ -125,6 +127,7 @@ func convertEvent(header *block.Header, tx *tx.Transaction, event *tx.Event, obs
 			BlockTimestamp: header.Timestamp(),
 			TxID:           tx.ID(),
 			TxOrigin:       signer,
+			ClauseIndex:    clauseIndex,
 		},
 		Topics:   event.Topics,
 		Obsolete: obsolete,

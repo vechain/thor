@@ -9,10 +9,18 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
+
+type LogMeta struct {
+	BlockID        thor.Bytes32 `json:"blockID"`
+	BlockNumber    uint32       `json:"blockNumber"`
+	BlockTimestamp uint64       `json:"blockTimestamp"`
+	TxID           thor.Bytes32 `json:"txID"`
+	TxOrigin       thor.Address `json:"txOrigin"`
+	ClauseIndex    uint32       `json:"clauseIndex"`
+}
 
 type TopicSet struct {
 	Topic0 *thor.Bytes32 `json:"topic0"`
@@ -63,10 +71,10 @@ func convertFilter(filter *FilterLegacy) *logdb.EventFilter {
 
 // FilteredEvent only comes from one contract
 type FilteredEvent struct {
-	Address thor.Address         `json:"address"`
-	Topics  []*thor.Bytes32      `json:"topics"`
-	Data    string               `json:"data"`
-	Meta    transactions.LogMeta `json:"meta"`
+	Address thor.Address    `json:"address"`
+	Topics  []*thor.Bytes32 `json:"topics"`
+	Data    string          `json:"data"`
+	Meta    LogMeta         `json:"meta"`
 }
 
 //convert a logdb.Event into a json format Event
@@ -74,12 +82,13 @@ func convertEvent(event *logdb.Event) *FilteredEvent {
 	fe := FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
-		Meta: transactions.LogMeta{
+		Meta: LogMeta{
 			BlockID:        event.BlockID,
 			BlockNumber:    event.BlockNumber,
 			BlockTimestamp: event.BlockTime,
 			TxID:           event.TxID,
 			TxOrigin:       event.TxOrigin,
+			ClauseIndex:    event.ClauseIndex,
 		},
 	}
 	fe.Topics = make([]*thor.Bytes32, 0)
@@ -101,7 +110,8 @@ func (e *FilteredEvent) String() string {
 				blockNumber    %v,
 				blockTimestamp %v),
 				txID     %v,
-				txOrigin %v)
+				txOrigin %v,
+				clauseIndex %v)
 			)`,
 		e.Address,
 		e.Topics,
@@ -111,5 +121,6 @@ func (e *FilteredEvent) String() string {
 		e.Meta.BlockTimestamp,
 		e.Meta.TxID,
 		e.Meta.TxOrigin,
+		e.Meta.ClauseIndex,
 	)
 }

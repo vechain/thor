@@ -663,6 +663,32 @@ components:
           description: block unix timestamp
           example: 1533267900
 
+    ReceiptMeta:
+      description: tx receipt meta info
+      properties:
+        blockID:
+          type: string
+          description: block identifier (bytes32)
+          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+        blockNumber:
+          type: integer
+          format: uint32
+          description: block number (height)
+          example: 325324
+        blockTimestamp:
+          type: integer
+          format: uint64
+          description: block unix timestamp
+          example: 1533267900
+        txID:
+          type: string
+          description: transaction identifier
+          example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+        txOrigin:
+          type: string
+          description: transaction origin (signer)
+          example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+
     LogMeta:
       description: event or transfer log meta info
       properties:
@@ -688,6 +714,11 @@ components:
           type: string
           description: transaction origin (signer)
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+        clauseIndex:
+          type: integer
+          format: uint32
+          description: index of clause which generates this log
+          example: 0
 
     Block:
       properties:
@@ -937,7 +968,7 @@ components:
                 items:
                   $ref: '#/components/schemas/Transfer'
         meta:
-          $ref: '#/components/schemas/LogMeta'
+          $ref: '#/components/schemas/ReceiptMeta'
 
     CallData:
       properties:
@@ -1155,14 +1186,15 @@ components:
         criteria to filter out event. All fields are joined with `and` operator. `null` field are ignored. e.g. 
         ```
         {
-          "address": "0xe59d475abe695c7f67a8a2321f33a856b0b4c71d",
+          "address": "0x0000000000000000000000000000456E65726779",
           "topic0": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
         }
         ```
         matches events emitted by `0xe59d475abe695c7f67a8a2321f33a856b0b4c71d` and with `topic0` equals `0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef`.
       example:
-        address: "0xe59d475abe695c7f67a8a2321f33a856b0b4c71d"
+        address: "0x0000000000000000000000000000456E65726779"
         topic0: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+        topic1: '0x0000000000000000000000005034aa590125b64023a0262112b98d72e3c8e40e'
             
     EventFilter:
       properties:
