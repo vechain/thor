@@ -79,7 +79,7 @@ func initEventServer(t *testing.T) {
 	header := new(block.Builder).Build().Header()
 	for i := 0; i < 100; i++ {
 		if err := db.Prepare(header).ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin"))).
-			Insert(tx.Events{txEv}, nil).Commit(); err != nil {
+			Insert(tx.Events{txEv}, nil, 0).Commit(); err != nil {
 			if err != nil {
 				t.Fatal(err)
 			}
