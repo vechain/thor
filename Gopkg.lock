@@ -195,6 +195,14 @@
   version = "v0.0.3"
 
 [[projects]]
+  digest = "1:84c28d9899cc4e00c38042d345cea8819275a5a62403a58530cac67022894776"
+  name = "github.com/mattn/go-runewidth"
+  packages = ["."]
+  pruneopts = ""
+  revision = "3ee7d812e62a0804a7d0a324e0249ca2db3476d3"
+  version = "v0.0.4"
+
+[[projects]]
   digest = "1:8bbdb2b3dce59271877770d6fe7dcbb8362438fa7d2e1e1f688e4bf2aac72706"
   name = "github.com/mattn/go-sqlite3"
   packages = ["."]
@@ -346,6 +354,14 @@
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:d507b81e744f12d9ad26818dd2c2fa5eda03326e02c31c58483d7d1940c93c68"
+  name = "gopkg.in/cheggaaa/pb.v1"
+  packages = ["."]
+  pruneopts = ""
+  revision = "f907f6f5dd81f77c2bbc1cde92e4c5a04720cb11"
+  version = "v1.0.28"
+
+[[projects]]
   branch = "v2"
   digest = "1:a585c075875ab9c344f7840a927f09f3285563f7318e761a1d61d642316f2217"
   name = "gopkg.in/karalabe/cookiejar.v2"
@@ -426,6 +442,7 @@
     "github.com/syndtr/goleveldb/leveldb/util",
     "golang.org/x/crypto/blake2b",
     "golang.org/x/crypto/ripemd160",
+    "gopkg.in/cheggaaa/pb.v1",
     "gopkg.in/karalabe/cookiejar.v2/collections/prque",
     "gopkg.in/olebedev/go-duktape.v3",
     "gopkg.in/urfave/cli.v1",

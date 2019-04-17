@@ -284,22 +284,16 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 	if err != nil {
 		return nil, err
 	}
-
-	forkIDs := make([]thor.Bytes32, 0, len(fork.Branch))
-	for _, header := range fork.Branch {
-		forkIDs = append(forkIDs, header.ID())
-	}
-
 	batch := n.logDB.Prepare(newBlock.Header())
 	for i, tx := range newBlock.Transactions() {
 		origin, _ := tx.Signer()
 		txBatch := batch.ForTransaction(tx.ID(), origin)
-		for _, output := range receipts[i].Outputs {
-			txBatch.Insert(output.Events, output.Transfers)
+		for j, output := range receipts[i].Outputs {
+			txBatch.Insert(output.Events, output.Transfers, uint32(j))
 		}
 	}
 
-	if err := batch.Commit(forkIDs...); err != nil {
+	if err := batch.Commit(); err != nil {
 		return nil, errors.Wrap(err, "commit logs")
 	}
 	return fork, nil

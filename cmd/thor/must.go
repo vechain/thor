@@ -145,7 +145,7 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 }
 
 func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
-	dir := filepath.Join(dataDir, "logs.db")
+	dir := filepath.Join(dataDir, "logs-v2.db")
 	db, err := logdb.New(dir)
 	if err != nil {
 		fatal(fmt.Sprintf("open log database [%v]: %v", dir, err))
@@ -166,7 +166,7 @@ func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB)
 
 	if err := logDB.Prepare(genesisBlock.Header()).
 		ForTransaction(thor.Bytes32{}, thor.Address{}).
-		Insert(genesisEvents, nil).Commit(); err != nil {
+		Insert(genesisEvents, nil, 0).Commit(); err != nil {
 		fatal("write genesis events: ", err)
 	}
 	return chain
@@ -318,13 +318,11 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	}
 }
 
-func printStartupMessage(
+func printStartupMessage1(
 	gene *genesis.Genesis,
 	chain *chain.Chain,
 	master *node.Master,
 	dataDir string,
-	apiURL string,
-	nodeID string,
 ) {
 	bestBlock := chain.BestBlock()
 
@@ -335,8 +333,6 @@ func printStartupMessage(
     Master       [ %v ]
     Beneficiary  [ %v ]
     Instance dir [ %v ]
-    API portal   [ %v ]
-    Node ID      [ %v ]
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -349,7 +345,16 @@ func printStartupMessage(
 			}
 			return master.Beneficiary.String()
 		}(),
-		dataDir,
+		dataDir)
+}
+
+func printStartupMessage2(
+	apiURL string,
+	nodeID string,
+) {
+	fmt.Printf(`    API portal   [ %v ]
+    Node ID      [ %v ]
+`,
 		apiURL,
 		nodeID)
 }
