@@ -14,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/logdb"
+	logdb "github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -36,7 +36,7 @@ func TestEvents(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		if err := db.Prepare(header).ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin"))).
-			Insert(tx.Events{txEvent}, nil).Commit(); err != nil {
+			Insert(tx.Events{txEvent}, nil, 0).Commit(); err != nil {
 			t.Fatal(err)
 		}
 
@@ -102,7 +102,7 @@ func TestTransfers(t *testing.T) {
 			Amount:    value,
 		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		if err := db.Prepare(header).ForTransaction(thor.Bytes32{}, from).Insert(nil, tx.Transfers{transLog}).
+		if err := db.Prepare(header).ForTransaction(thor.Bytes32{}, from).Insert(nil, tx.Transfers{transLog}, 0).
 			Commit(); err != nil {
 			t.Fatal(err)
 		}
@@ -174,7 +174,7 @@ func BenchmarkLog(b *testing.B) {
 		batch := db.Prepare(header)
 		txBatch := batch.ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")))
 		for j := 0; j < 100; j++ {
-			txBatch.Insert(tx.Events{l}, nil)
+			txBatch.Insert(tx.Events{l}, nil, 0)
 			header = new(block.Builder).ParentID(header.ID()).Build().Header()
 		}
 

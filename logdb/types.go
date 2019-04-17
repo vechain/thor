@@ -15,26 +15,28 @@ import (
 
 //Event represents tx.Event that can be stored in db.
 type Event struct {
-	BlockID     thor.Bytes32
-	Index       uint32
 	BlockNumber uint32
+	Index       uint32
+	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
 	TxOrigin    thor.Address //contract caller
+	ClauseIndex uint32
 	Address     thor.Address // always a contract address
 	Topics      [5]*thor.Bytes32
 	Data        []byte
 }
 
 //newEvent converts tx.Event to Event.
-func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, txEvent *tx.Event) *Event {
+func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, clauseIndex uint32, txEvent *tx.Event) *Event {
 	ev := &Event{
-		BlockID:     header.ID(),
-		Index:       index,
 		BlockNumber: header.Number(),
+		Index:       index,
+		BlockID:     header.ID(),
 		BlockTime:   header.Timestamp(),
 		TxID:        txID,
 		TxOrigin:    txOrigin,
+		ClauseIndex: clauseIndex,
 		Address:     txEvent.Address, // always a contract address
 		Data:        txEvent.Data,
 	}
@@ -46,26 +48,28 @@ func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin th
 
 //Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
-	BlockID     thor.Bytes32
-	Index       uint32
 	BlockNumber uint32
+	Index       uint32
+	BlockID     thor.Bytes32
 	BlockTime   uint64
 	TxID        thor.Bytes32
 	TxOrigin    thor.Address
+	ClauseIndex uint32
 	Sender      thor.Address
 	Recipient   thor.Address
 	Amount      *big.Int
 }
 
 //newTransfer converts tx.Transfer to Transfer.
-func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, transfer *tx.Transfer) *Transfer {
+func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, clauseIndex uint32, transfer *tx.Transfer) *Transfer {
 	return &Transfer{
-		BlockID:     header.ID(),
-		Index:       index,
 		BlockNumber: header.Number(),
+		Index:       index,
+		BlockID:     header.ID(),
 		BlockTime:   header.Timestamp(),
 		TxID:        txID,
 		TxOrigin:    txOrigin,
+		ClauseIndex: clauseIndex,
 		Sender:      transfer.Sender,
 		Recipient:   transfer.Recipient,
 		Amount:      transfer.Amount,
