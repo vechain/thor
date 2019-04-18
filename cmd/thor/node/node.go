@@ -48,6 +48,7 @@ type Node struct {
 	comm           *comm.Communicator
 	commitLock     sync.Mutex
 	targetGasLimit uint64
+	skipLogs       bool
 }
 
 func New(
@@ -59,6 +60,7 @@ func New(
 	txStashPath string,
 	comm *comm.Communicator,
 	targetGasLimit uint64,
+	skipLogs bool,
 ) *Node {
 	return &Node{
 		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
@@ -70,6 +72,7 @@ func New(
 		txStashPath:    txStashPath,
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
+		skipLogs:       skipLogs,
 	}
 }
 
@@ -284,17 +287,19 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 	if err != nil {
 		return nil, err
 	}
-	batch := n.logDB.Prepare(newBlock.Header())
-	for i, tx := range newBlock.Transactions() {
-		origin, _ := tx.Signer()
-		txBatch := batch.ForTransaction(tx.ID(), origin)
-		for j, output := range receipts[i].Outputs {
-			txBatch.Insert(output.Events, output.Transfers, uint32(j))
+	if !n.skipLogs {
+		batch := n.logDB.Prepare(newBlock.Header())
+		for i, tx := range newBlock.Transactions() {
+			origin, _ := tx.Signer()
+			txBatch := batch.ForTransaction(tx.ID(), origin)
+			for j, output := range receipts[i].Outputs {
+				txBatch.Insert(output.Events, output.Transfers, uint32(j))
+			}
 		}
-	}
 
-	if err := batch.Commit(); err != nil {
-		return nil, errors.Wrap(err, "commit logs")
+		if err := batch.Commit(); err != nil {
+			return nil, errors.Wrap(err, "commit logs")
+		}
 	}
 	return fork, nil
 }

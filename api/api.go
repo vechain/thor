@@ -31,7 +31,18 @@ import (
 )
 
 //New return api router
-func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool, logDB *logdb.LogDB, nw node.Network, allowedOrigins string, backtraceLimit uint32, callGasLimit uint64, pprofOn bool) (http.HandlerFunc, func()) {
+func New(
+	chain *chain.Chain,
+	stateCreator *state.Creator,
+	txPool *txpool.TxPool,
+	logDB *logdb.LogDB,
+	nw node.Network,
+	allowedOrigins string,
+	backtraceLimit uint32,
+	callGasLimit uint64,
+	pprofOn bool,
+	skipLogs bool) (http.HandlerFunc, func()) {
+
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
 		origins[i] = strings.ToLower(strings.TrimSpace(o))
@@ -55,18 +66,21 @@ func New(chain *chain.Chain, stateCreator *state.Creator, txPool *txpool.TxPool,
 
 	accounts.New(chain, stateCreator, callGasLimit).
 		Mount(router, "/accounts")
-	eventslegacy.New(logDB).
-		Mount(router, "/events")
-	transferslegacy.New(logDB).
-		Mount(router, "/transfers")
-	eventslegacy.New(logDB).
-		Mount(router, "/logs/events")
-	events.New(logDB).
-		Mount(router, "/logs/event")
-	transferslegacy.New(logDB).
-		Mount(router, "/logs/transfers")
-	transfers.New(logDB).
-		Mount(router, "/logs/transfer")
+
+	if !skipLogs {
+		eventslegacy.New(logDB).
+			Mount(router, "/events")
+		transferslegacy.New(logDB).
+			Mount(router, "/transfers")
+		eventslegacy.New(logDB).
+			Mount(router, "/logs/events")
+		events.New(logDB).
+			Mount(router, "/logs/event")
+		transferslegacy.New(logDB).
+			Mount(router, "/logs/transfers")
+		transfers.New(logDB).
+			Mount(router, "/logs/transfer")
+	}
 	blocks.New(chain).
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).

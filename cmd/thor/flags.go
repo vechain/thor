@@ -110,4 +110,8 @@ var (
 		Name:  "pprof",
 		Usage: "turn on go-pprof",
 	}
+	skipLogsFlag = cli.BoolFlag{
+		Name:  "skip-logs",
+		Usage: "skip writing event|transfer logs (/logs API will be disabled)",
+	}
 )

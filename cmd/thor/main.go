@@ -77,6 +77,7 @@ func main() {
 			p2pPortFlag,
 			natFlag,
 			bootNodeFlag,
+			skipLogsFlag,
 			pprofFlag,
 		},
 		Action: defaultAction,
@@ -130,6 +131,8 @@ func defaultAction(ctx *cli.Context) error {
 	mainDB := openMainDB(ctx, instanceDir)
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+
 	logDB := openLogDB(ctx, instanceDir)
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
@@ -138,15 +141,27 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage1(gene, chain, master, instanceDir)
 
-	if err := syncLogDB(exitSignal, chain, logDB); err != nil {
-		return err
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+			return err
+		}
 	}
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)), uint64(ctx.Int(apiCallGasLimitFlag.Name)), ctx.Bool(pprofFlag.Name))
+	apiHandler, apiCloser := api.New(
+		chain,
+		state.NewCreator(mainDB),
+		txPool,
+		logDB,
+		p2pcom.comm,
+		ctx.String(apiCorsFlag.Name),
+		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
+		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		ctx.Bool(pprofFlag.Name),
+		skipLogs)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
@@ -165,7 +180,8 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pcom.comm,
-		uint64(ctx.Int(targetGasLimitFlag.Name))).
+		uint64(ctx.Int(targetGasLimitFlag.Name)),
+		skipLogs).
 		Run(exitSignal)
 }
 
@@ -201,7 +217,17 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)), uint64(ctx.Int(apiCallGasLimitFlag.Name)), ctx.Bool(pprofFlag.Name))
+	apiHandler, apiCloser := api.New(
+		chain,
+		state.NewCreator(mainDB),
+		txPool,
+		logDB,
+		solo.Communicator{},
+		ctx.String(apiCorsFlag.Name),
+		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
+		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		ctx.Bool(pprofFlag.Name),
+		false)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
@@ -321,31 +347,27 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 	}
 
 	fmt.Println(">> Syncing logdb <<")
-	pb := pb.New64(int64(bestBlockNum))
-	pb.SetRefreshRate(time.Second)
-	pb.Set64(int64(pos))
-	pb.Start()
+	pb := pb.New64(int64(bestBlockNum)).
+		Set64(int64(pos)).SetMaxWidth(90).
+		Start()
 
-	defer func() { pb.Finish() }()
+	defer func() { pb.NotPrint = true }()
 
-	for {
+	for ; pos <= bestBlockNum; pos++ {
 		block, err := chain.GetTrunkBlock(pos)
 		if err != nil {
-			if chain.IsNotFound(err) {
-				break
-			}
 			return errors.Wrap(err, "get trunk block")
 		}
-		receipts, err := chain.GetBlockReceipts(block.Header().ID())
-		if err != nil {
-			return errors.Wrap(err, "get block receipts")
-		}
-		pos++
+		txs := block.Transactions()
+		if len(txs) > 0 {
+			receipts, err := chain.GetBlockReceipts(block.Header().ID())
+			if err != nil {
+				return errors.Wrap(err, "get block receipts")
+			}
 
-		batch := logDB.Prepare(block.Header())
+			batch := logDB.Prepare(block.Header())
 
-		if len(receipts) > 0 {
-			for i, tx := range block.Transactions() {
+			for i, tx := range txs {
 				origin, _ := tx.Signer()
 				txBatch := batch.ForTransaction(tx.ID(), origin)
 				for j, output := range receipts[i].Outputs {
@@ -364,5 +386,6 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 		default:
 		}
 	}
+	pb.Finish()
 	return nil
 }
