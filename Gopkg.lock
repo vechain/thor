@@ -268,7 +268,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ce5194e5afac308cc34e500cab45b4ce88a0742d689e3cf7e37b607ad76bed2f"
+  digest = "1:38dcf4a9ebfc46be0506e6bbc2735d71bd547aa0729733a02a0435a2c8664196"
   name = "github.com/syndtr/goleveldb"
   packages = [
     "leveldb",
@@ -285,7 +285,7 @@
     "leveldb/util",
   ]
   pruneopts = ""
-  revision = "ae2bd5eed72d46b28834ec3f60db3a3ebedd8dbd"
+  revision = "c3a204f8e96543bb0cc090385c001078f184fc46"
 
 [[projects]]
   branch = "master"

@@ -43,11 +43,11 @@ func New(path string, opts Options) (*LevelDB, error) {
 	}
 
 	db, err := leveldb.OpenFile(path, &opt.Options{
-		CompactionTableSize:    64 * opt.MiB,
-		OpenFilesCacheCapacity: opts.OpenFilesCacheCapacity,
-		BlockCacheCapacity:     opts.CacheSize / 2 * opt.MiB,
-		WriteBuffer:            opts.CacheSize / 4 * opt.MiB, // Two of these are used internally
-		Filter:                 filter.NewBloomFilter(10),
+		CompactionTableSizeMultiplier: 1.5,
+		OpenFilesCacheCapacity:        opts.OpenFilesCacheCapacity,
+		BlockCacheCapacity:            opts.CacheSize / 2 * opt.MiB,
+		WriteBuffer:                   opts.CacheSize / 4 * opt.MiB, // Two of these are used internally
+		Filter:                        filter.NewBloomFilter(10),
 	})
 
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
