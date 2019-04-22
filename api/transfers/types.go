@@ -7,16 +7,24 @@ package transfers
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
+
+type LogMeta struct {
+	BlockID        thor.Bytes32 `json:"blockID"`
+	BlockNumber    uint32       `json:"blockNumber"`
+	BlockTimestamp uint64       `json:"blockTimestamp"`
+	TxID           thor.Bytes32 `json:"txID"`
+	TxOrigin       thor.Address `json:"txOrigin"`
+	ClauseIndex    uint32       `json:"clauseIndex"`
+}
 
 type FilteredTransfer struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
 	Amount    *math.HexOrDecimal256 `json:"amount"`
-	Meta      transactions.LogMeta  `json:"meta"`
+	Meta      LogMeta               `json:"meta"`
 }
 
 func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
@@ -25,12 +33,13 @@ func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 		Sender:    transfer.Sender,
 		Recipient: transfer.Recipient,
 		Amount:    &v,
-		Meta: transactions.LogMeta{
+		Meta: LogMeta{
 			BlockID:        transfer.BlockID,
 			BlockNumber:    transfer.BlockNumber,
 			BlockTimestamp: transfer.BlockTime,
 			TxID:           transfer.TxID,
 			TxOrigin:       transfer.TxOrigin,
+			ClauseIndex:    transfer.ClauseIndex,
 		},
 	}
 }

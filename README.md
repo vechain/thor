@@ -122,6 +122,7 @@ bin/thor -h
 - `--p2p-port value`            P2P network listening port (default: 11235)
 - `--nat value`                 port mapping mechanism (any|none|upnp|pmp|extip:<IP>) (default: "none")
 - `--bootnode value`            comma separated list of bootnode IDs
+- `--skip-logs`                 skip writing event|transfer logs (/logs API will be disabled)
 - `--pprof`                     turn on go-pprof
 - `--help, -h`                  show help
 - `--version, -v`               print the version

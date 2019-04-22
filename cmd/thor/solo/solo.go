@@ -172,8 +172,8 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		origin, _ := tx.Signer()
 		txBatch := batch.ForTransaction(tx.ID(), origin)
 		receipt := receipts[i]
-		for _, output := range receipt.Outputs {
-			txBatch.Insert(output.Events, output.Transfers)
+		for j, output := range receipt.Outputs {
+			txBatch.Insert(output.Events, output.Transfers, uint32(j))
 		}
 	}
 	if err := batch.Commit(); err != nil {

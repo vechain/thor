@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +21,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/genesis"
@@ -28,6 +30,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
+	"gopkg.in/cheggaaa/pb.v1"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -74,6 +77,7 @@ func main() {
 			p2pPortFlag,
 			natFlag,
 			bootNodeFlag,
+			skipLogsFlag,
 			pprofFlag,
 		},
 		Action: defaultAction,
@@ -127,23 +131,43 @@ func defaultAction(ctx *cli.Context) error {
 	mainDB := openMainDB(ctx, instanceDir)
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+
 	logDB := openLogDB(ctx, instanceDir)
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
 	master := loadNodeMaster(ctx)
 
+	printStartupMessage1(gene, chain, master, instanceDir)
+
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+			return err
+		}
+	}
+
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, p2pcom.comm, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)), uint64(ctx.Int(apiCallGasLimitFlag.Name)), ctx.Bool(pprofFlag.Name))
+	apiHandler, apiCloser := api.New(
+		chain,
+		state.NewCreator(mainDB),
+		txPool,
+		logDB,
+		p2pcom.comm,
+		ctx.String(apiCorsFlag.Name),
+		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
+		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		ctx.Bool(pprofFlag.Name),
+		skipLogs)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage(gene, chain, master, instanceDir, apiURL, getNodeID(ctx))
+	printStartupMessage2(apiURL, getNodeID(ctx))
 
 	p2pcom.Start()
 	defer p2pcom.Stop()
@@ -156,11 +180,13 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pcom.comm,
-		uint64(ctx.Int(targetGasLimitFlag.Name))).
+		uint64(ctx.Int(targetGasLimitFlag.Name)),
+		skipLogs).
 		Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
+	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
@@ -184,11 +210,24 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
+	if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+		return err
+	}
 
 	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	apiHandler, apiCloser := api.New(chain, state.NewCreator(mainDB), txPool, logDB, solo.Communicator{}, ctx.String(apiCorsFlag.Name), uint32(ctx.Int(apiBacktraceLimitFlag.Name)), uint64(ctx.Int(apiCallGasLimitFlag.Name)), ctx.Bool(pprofFlag.Name))
+	apiHandler, apiCloser := api.New(
+		chain,
+		state.NewCreator(mainDB),
+		txPool,
+		logDB,
+		solo.Communicator{},
+		ctx.String(apiCorsFlag.Name),
+		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
+		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		ctx.Bool(pprofFlag.Name),
+		false)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
@@ -201,7 +240,7 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		uint64(ctx.Int("gas-limit")),
-		ctx.Bool("on-demand")).Run(handleExitSignal())
+		ctx.Bool("on-demand")).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {
@@ -285,5 +324,68 @@ func masterKeyAction(ctx *cli.Context) error {
 		_, err = fmt.Println(string(keyjson))
 		return err
 	}
+	return nil
+}
+
+func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) error {
+	bestBlockNum := chain.BestBlock().Header().Number()
+	if bestBlockNum == 0 {
+		return nil
+	}
+
+	pos, err := logDB.QueryLastBlockNumber()
+	if err != nil {
+		return errors.Wrap(err, "get last synced block number")
+	}
+
+	if pos >= bestBlockNum {
+		return nil
+	}
+
+	if pos == 0 {
+		pos = 1
+	}
+
+	fmt.Println(">> Syncing logdb <<")
+	pb := pb.New64(int64(bestBlockNum)).
+		Set64(int64(pos)).SetMaxWidth(90).
+		Start()
+
+	defer func() { pb.NotPrint = true }()
+
+	for ; pos <= bestBlockNum; pos++ {
+		block, err := chain.GetTrunkBlock(pos)
+		if err != nil {
+			return errors.Wrap(err, "get trunk block")
+		}
+		txs := block.Transactions()
+		if len(txs) > 0 {
+			receipts, err := chain.GetBlockReceipts(block.Header().ID())
+			if err != nil {
+				return errors.Wrap(err, "get block receipts")
+			}
+
+			batch := logDB.Prepare(block.Header())
+
+			for i, tx := range txs {
+				origin, _ := tx.Signer()
+				txBatch := batch.ForTransaction(tx.ID(), origin)
+				for j, output := range receipts[i].Outputs {
+					txBatch.Insert(output.Events, output.Transfers, uint32(j))
+				}
+			}
+			if err := batch.Commit(); err != nil {
+				return errors.Wrap(err, "commit logs")
+			}
+		}
+
+		pb.Set64(int64(pos))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+	pb.Finish()
 	return nil
 }

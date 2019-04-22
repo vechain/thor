@@ -187,7 +187,7 @@ type TxMeta struct {
 	BlockTimestamp uint64       `json:"blockTimestamp"`
 }
 
-type LogMeta struct {
+type ReceiptMeta struct {
 	BlockID        thor.Bytes32 `json:"blockID"`
 	BlockNumber    uint32       `json:"blockNumber"`
 	BlockTimestamp uint64       `json:"blockTimestamp"`
@@ -202,7 +202,7 @@ type Receipt struct {
 	Paid     *math.HexOrDecimal256 `json:"paid"`
 	Reward   *math.HexOrDecimal256 `json:"reward"`
 	Reverted bool                  `json:"reverted"`
-	Meta     LogMeta               `json:"meta"`
+	Meta     ReceiptMeta           `json:"meta"`
 	Outputs  []*Output             `json:"outputs"`
 }
 
@@ -241,7 +241,7 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 		Paid:     &paid,
 		Reward:   &reward,
 		Reverted: txReceipt.Reverted,
-		Meta: LogMeta{
+		Meta: ReceiptMeta{
 			header.ID(),
 			header.Number(),
 			header.Timestamp(),
