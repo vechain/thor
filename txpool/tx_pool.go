@@ -50,6 +50,7 @@ type TxPool struct {
 	options      Options
 	chain        *chain.Chain
 	stateCreator *state.Creator
+	forkConfig   thor.ForkConfig
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -68,6 +69,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, options Options) *TxPo
 		options:      options,
 		chain:        chain,
 		stateCreator: stateCreator,
+		forkConfig:   thor.GetForkConfig(chain.GenesisBlock().Header().ID()),
 		all:          newTxObjectMap(),
 		done:         make(chan struct{}),
 	}
@@ -148,13 +150,16 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		// tx already in the pool
 		return nil
 	}
+	headBlock := p.chain.BestBlock().Header()
 
 	// validation
 	switch {
 	case newTx.ChainTag() != p.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case !newTx.Validate():
-		return badTxError{"invalid reserved fields"}
+	case headBlock.Number() < p.forkConfig.VIP191 && newTx.HasReservedFields():
+		return badTxError{"reserved fields not empty"}
+	case headBlock.Number() >= p.forkConfig.VIP191 && !newTx.Validate():
+		return badTxError{"reserved fields are not valid"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
 	}
@@ -164,7 +169,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		return badTxError{err.Error()}
 	}
 
-	headBlock := p.chain.BestBlock().Header()
 	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
 		state, err := p.stateCreator.NewState(headBlock.StateRoot())
 		if err != nil {

@@ -72,7 +72,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	switch {
 	case tx.ChainTag() != f.packer.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case !tx.Validate():
+	case f.runtime.Context().Number < f.packer.forkConfig.VIP191 && tx.HasReservedFields():
+		return badTxError{"reserved fields not empty"}
+	case f.runtime.Context().Number >= f.packer.forkConfig.VIP191 && !tx.Validate():
 		return badTxError{"reserved fields are not valid"}
 	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
