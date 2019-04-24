@@ -37,6 +37,8 @@ type Transaction struct {
 		unprovedWork atomic.Value
 		size         atomic.Value
 		intrinsicGas atomic.Value
+		relayHash    atomic.Value
+		relayer      atomic.Value
 	}
 }
 
@@ -258,6 +260,12 @@ func (t *Transaction) WithRelayerSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
+// HasReservedFields returns if there're reserved fields.
+// Reserved fields are for backward compatibility purpose.
+func (t *Transaction) HasReservedFields() bool {
+	return t.body.Reserved != nil
+}
+
 // Validate returns if the tx is valid, mostly for checking the reserved field
 // Reserved fields are for backward compatibility purpose.
 func (t *Transaction) Validate() bool {
@@ -384,6 +392,10 @@ func (t *Transaction) Relayed() bool {
 
 // RelayHash returns the hash for the relayer to sign
 func (t *Transaction) RelayHash() (thor.Bytes32, error) {
+	if cached := t.cache.relayHash.Load(); cached != nil {
+		return cached.(thor.Bytes32), nil
+	}
+
 	signer, err := t.Signer()
 	if err != nil {
 		return thor.Bytes32{}, err
@@ -404,11 +416,16 @@ func (t *Transaction) RelayHash() (thor.Bytes32, error) {
 		signer,
 	})
 	hw.Sum(hash[:0])
+
+	t.cache.relayHash.Store(hash)
 	return hash, nil
 }
 
 // Relayer returns fee relayer who would like to pay the fee
 func (t *Transaction) Relayer() (*thor.Address, error) {
+	if cached := t.cache.relayer.Load(); cached != nil {
+		return cached.(*thor.Address), nil
+	}
 	if t.Relayed() == false {
 		return nil, nil
 	}
@@ -428,6 +445,7 @@ func (t *Transaction) Relayer() (*thor.Address, error) {
 	}
 	relayer := thor.Address(crypto.PubkeyToAddress(*pub))
 
+	t.cache.relayer.Store(&relayer)
 	return &relayer, nil
 }
 
