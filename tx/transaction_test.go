@@ -79,12 +79,14 @@ func TestRelayedTx(t *testing.T) {
 
 	p1, _ := crypto.ToECDSA(signer)
 	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), p1)
-	trx = trx.WithSignature(sig)
 
-	hash, _ := trx.RelayHash()
+	origin := crypto.PubkeyToAddress(p1.PublicKey)
+	hash, _ := trx.RelayHash(thor.Address(origin))
 	p2, _ := crypto.ToECDSA(relayer)
 	relaySig, _ := crypto.Sign(hash.Bytes(), p2)
-	trx = trx.WithRelayerSignature(relaySig)
+
+	sig = append(sig, relaySig...)
+	trx = trx.WithSignature(sig)
 
 	assert.Equal(t, true, trx.Validate())
 	assert.Equal(t, "0x26e49892acb0aab9b73b5efdf190ba77dea25a595fd0f3e9a5fea66240630214", hash.String())

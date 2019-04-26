@@ -69,6 +69,7 @@ type Transaction struct {
 	Origin       thor.Address        `json:"origin"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
+	Reserved     *Reserved           `json:"reserved"`
 	Size         uint32              `json:"size"`
 	Meta         TxMeta              `json:"meta"`
 }
@@ -81,6 +82,21 @@ type UnSignedTx struct {
 	Gas          uint64              `json:"gas"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
+	Reserved     *Reserved           `json:"reserved"`
+}
+
+// Reserved is the reserved field of tx
+type Reserved struct {
+	Flag uint8 `json:"flag"`
+}
+
+func convertReversed(tx *tx.Transaction) *Reserved {
+	if tx.Reserved() != nil {
+		return &Reserved{
+			uint8(tx.Reserved().Flag),
+		}
+	}
+	return nil
 }
 
 func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
@@ -100,6 +116,13 @@ func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
 	var bf tx.BlockRef
 	copy(bf[:], blockRef[:])
 
+	var r *tx.Reserved
+	if ustx.Reserved != nil {
+		r = &tx.Reserved{
+			Flag: ustx.Reserved.Flag,
+		}
+	}
+
 	return txBuilder.ChainTag(ustx.ChainTag).
 		BlockRef(bf).
 		Expiration(ustx.Expiration).
@@ -107,6 +130,7 @@ func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
 		GasPriceCoef(ustx.GasPriceCoef).
 		DependsOn(ustx.DependsOn).
 		Nonce(uint64(ustx.Nonce)).
+		Reserved(r).
 		Build(), nil
 }
 
@@ -172,6 +196,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 		Gas:          tx.Gas(),
 		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
+		Reserved:     convertReversed(tx),
 		Meta: TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),

@@ -80,6 +80,18 @@ func (b *Builder) Relayed() *Builder {
 	return b
 }
 
+// Reserved set the reserved
+func (b *Builder) Reserved(r *Reserved) *Builder {
+	if r == nil {
+		b.body.Reserved = nil
+	} else {
+		cpy := *r
+		b.body.Reserved = &cpy
+	}
+
+	return b
+}
+
 // Build build tx object.
 func (b *Builder) Build() *Transaction {
 	tx := Transaction{body: b.body}

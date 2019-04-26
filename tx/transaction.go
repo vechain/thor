@@ -210,6 +210,15 @@ func (t *Transaction) Signature() []byte {
 	return append([]byte(nil), t.body.Signature...)
 }
 
+// Reserved returns reserved
+func (t *Transaction) Reserved() *Reserved {
+	if t.body.Reserved == nil {
+		return nil
+	}
+	cpy := *t.body.Reserved
+	return &cpy
+}
+
 // Signer extract signer of tx from signature.
 func (t *Transaction) Signer() (signer thor.Address, err error) {
 	if cached := t.cache.signer.Load(); cached != nil {
@@ -243,20 +252,6 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	}
 	// copy sig
 	newTx.body.Signature = append([]byte(nil), sig...)
-	return &newTx
-}
-
-// WithRelayerSignature create a new tx with relayer signature set.
-func (t *Transaction) WithRelayerSignature(sig []byte) *Transaction {
-	newTx := Transaction{
-		body: t.body,
-	}
-	s := make([]byte, 130, 130)
-	if len(t.body.Signature) == 65 {
-		copy(s[0:65], t.body.Signature[0:65])
-	}
-	copy(s[65:], sig[:])
-	newTx.body.Signature = s
 	return &newTx
 }
 
@@ -391,15 +386,11 @@ func (t *Transaction) Relayed() bool {
 }
 
 // RelayHash returns the hash for the relayer to sign
-func (t *Transaction) RelayHash() (thor.Bytes32, error) {
+func (t *Transaction) RelayHash(signer thor.Address) (thor.Bytes32, error) {
 	if cached := t.cache.relayHash.Load(); cached != nil {
 		return cached.(thor.Bytes32), nil
 	}
 
-	signer, err := t.Signer()
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
 	var hash thor.Bytes32
 
 	hw := thor.NewBlake2b()
@@ -433,7 +424,12 @@ func (t *Transaction) Relayer() (*thor.Address, error) {
 		return nil, nil
 	}
 
-	hash, err := t.RelayHash()
+	signer, err := t.Signer()
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := t.RelayHash(signer)
 	if err != nil {
 		return nil, err
 	}
