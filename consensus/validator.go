@@ -122,7 +122,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	}
 
 	for _, tx := range txs {
-		if _, err := tx.Signer(); err != nil {
+		if _, err := tx.Origin(); err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
 
@@ -135,8 +135,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
 		case header.Number() < c.forkConfig.VIP191 && tx.HasReservedFields():
 			return consensusError("reserved fields not empty")
-		case header.Number() >= c.forkConfig.VIP191 && !tx.Validate():
-			return consensusError("invalid reserved fields")
 		}
 	}
 

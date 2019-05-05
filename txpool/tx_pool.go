@@ -158,8 +158,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		return badTxError{"chain tag mismatch"}
 	case headBlock.Number() < p.forkConfig.VIP191 && newTx.HasReservedFields():
 		return badTxError{"reserved fields not empty"}
-	case headBlock.Number() >= p.forkConfig.VIP191 && !newTx.Validate():
-		return badTxError{"reserved fields are not valid"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
 	}

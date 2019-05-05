@@ -32,13 +32,12 @@ type Transaction struct {
 
 	cache struct {
 		signingHash  atomic.Value
-		signer       atomic.Value
+		origin       atomic.Value
 		id           atomic.Value
 		unprovedWork atomic.Value
 		size         atomic.Value
 		intrinsicGas atomic.Value
-		relayHash    atomic.Value
-		relayer      atomic.Value
+		delegator    atomic.Value
 	}
 }
 
@@ -52,18 +51,9 @@ type body struct {
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`
 	Nonce        uint64
-	Reserved     *Reserved `rlp:"nil"`
+	Reserved     reserved
 	Signature    []byte
 }
-
-// Reserved it the reserved property of tx
-type Reserved struct {
-	Flag byte
-}
-
-const (
-	flagRelayed = 1 << iota
-)
 
 // ChainTag returns chain tag.
 func (t *Transaction) ChainTag() byte {
@@ -94,21 +84,21 @@ func (t *Transaction) IsExpired(blockNum uint32) bool {
 }
 
 // ID returns id of tx.
-// ID = hash(signingHash, signer).
-// It returns zero Bytes32 if signer not available.
+// ID = hash(signingHash, origin).
+// It returns zero Bytes32 if origin not available.
 func (t *Transaction) ID() (id thor.Bytes32) {
 	if cached := t.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.id.Store(id) }()
 
-	signer, err := t.Signer()
+	origin, err := t.Origin()
 	if err != nil {
 		return
 	}
 	hw := thor.NewBlake2b()
 	hw.Write(t.SigningHash().Bytes())
-	hw.Write(signer.Bytes())
+	hw.Write(origin.Bytes())
 	hw.Sum(id[:0])
 	return
 }
@@ -123,15 +113,15 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 		t.cache.unprovedWork.Store(w)
 	}()
 
-	signer, err := t.Signer()
+	origin, err := t.Origin()
 	if err != nil {
 		return &big.Int{}
 	}
-	return t.EvaluateWork(signer)(t.body.Nonce)
+	return t.EvaluateWork(origin)(t.body.Nonce)
 }
 
-// EvaluateWork try to compute work when tx signer assumed.
-func (t *Transaction) EvaluateWork(signer thor.Address) func(nonce uint64) *big.Int {
+// EvaluateWork try to compute work when tx origin assumed.
+func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		t.body.ChainTag,
@@ -142,7 +132,7 @@ func (t *Transaction) EvaluateWork(signer thor.Address) func(nonce uint64) *big.
 		t.body.Gas,
 		t.body.DependsOn,
 		t.body.Reserved,
-		signer,
+		origin,
 	})
 
 	var hashWithoutNonce thor.Bytes32
@@ -210,42 +200,73 @@ func (t *Transaction) Signature() []byte {
 	return append([]byte(nil), t.body.Signature...)
 }
 
-// Reserved returns reserved
-func (t *Transaction) Reserved() *Reserved {
-	if t.body.Reserved == nil {
-		return nil
-	}
-	cpy := *t.body.Reserved
-	return &cpy
+// Features returns features.
+func (t *Transaction) Features() Features {
+	return t.body.Reserved.Features
 }
 
-// Signer extract signer of tx from signature.
-func (t *Transaction) Signer() (signer thor.Address, err error) {
-	if cached := t.cache.signer.Load(); cached != nil {
+// Origin extract address of tx originator from signature.
+func (t *Transaction) Origin() (thor.Address, error) {
+	if err := t.validateSignatureLength(); err != nil {
+		return thor.Address{}, err
+	}
+
+	if cached := t.cache.origin.Load(); cached != nil {
 		return cached.(thor.Address), nil
 	}
-	defer func() {
-		if err == nil {
-			t.cache.signer.Store(signer)
-		}
-	}()
 
-	var sig []byte
-	if len(t.body.Signature) == 130 {
-		sig = t.body.Signature[0:65]
-	} else {
-		sig = t.body.Signature[:]
-	}
-
-	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), sig)
+	pub, err := crypto.SigToPub(t.SigningHash().Bytes(), t.body.Signature[:65])
 	if err != nil {
 		return thor.Address{}, err
 	}
-	signer = thor.Address(crypto.PubkeyToAddress(*pub))
+	origin := thor.Address(crypto.PubkeyToAddress(*pub))
+	t.cache.origin.Store(origin)
+	return origin, nil
+}
+
+// DelegatorSigningHash returns hash of tx components for delegator to sign, by assuming originator address.
+// According to VIP-191, it's identical to tx id.
+func (t *Transaction) DelegatorSigningHash(origin thor.Address) (hash thor.Bytes32) {
+	hw := thor.NewBlake2b()
+	hw.Write(t.SigningHash().Bytes())
+	hw.Write(origin.Bytes())
+	hw.Sum(hash[:0])
 	return
 }
 
+// Delegator returns delegator address who would like to pay for gas fee.
+func (t *Transaction) Delegator() (*thor.Address, error) {
+	if err := t.validateSignatureLength(); err != nil {
+		return nil, err
+	}
+
+	if !t.Features().IsDelegated() {
+		return nil, nil
+	}
+
+	if cached := t.cache.delegator.Load(); cached != nil {
+		addr := cached.(thor.Address)
+		return &addr, nil
+	}
+
+	origin, err := t.Origin()
+	if err != nil {
+		return nil, err
+	}
+
+	pub, err := crypto.SigToPub(t.DelegatorSigningHash(origin).Bytes(), t.body.Signature[65:])
+	if err != nil {
+		return nil, err
+	}
+
+	delegator := thor.Address(crypto.PubkeyToAddress(*pub))
+
+	t.cache.delegator.Store(delegator)
+	return &delegator, nil
+}
+
 // WithSignature create a new tx with signature set.
+// For delegated tx, sig is joined with signatures of originator and delegator.
 func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	newTx := Transaction{
 		body: t.body,
@@ -258,22 +279,7 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 // HasReservedFields returns if there're reserved fields.
 // Reserved fields are for backward compatibility purpose.
 func (t *Transaction) HasReservedFields() bool {
-	return t.body.Reserved != nil
-}
-
-// Validate returns if the tx is valid, mostly for checking the reserved field
-// Reserved fields are for backward compatibility purpose.
-func (t *Transaction) Validate() bool {
-	relayed := t.Relayed()
-
-	if !relayed && len(t.body.Signature) == 65 {
-		return true
-	}
-	if relayed && len(t.body.Signature) == 130 {
-		return true
-	}
-	return false
-
+	return t.body.Reserved.Features != 0
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -373,96 +379,24 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 	return x.Add(x, gasPrice)
 }
 
-// Relayed returns the reserved[0] that indicates if the fee is relayed
-func (t *Transaction) Relayed() bool {
-	if t.body.Reserved == nil {
-		return false
-	}
-
-	if t.body.Reserved.Flag&flagRelayed == flagRelayed {
-		return true
-	}
-	return false
-}
-
-// RelayHash returns the hash for the relayer to sign
-func (t *Transaction) RelayHash(signer thor.Address) (thor.Bytes32, error) {
-	if cached := t.cache.relayHash.Load(); cached != nil {
-		return cached.(thor.Bytes32), nil
-	}
-
-	var hash thor.Bytes32
-
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
-		t.body.ChainTag,
-		t.body.BlockRef,
-		t.body.Expiration,
-		t.body.Clauses,
-		t.body.GasPriceCoef,
-		t.body.Gas,
-		t.body.DependsOn,
-		t.body.Nonce,
-		t.body.Reserved,
-		signer,
-	})
-	hw.Sum(hash[:0])
-
-	t.cache.relayHash.Store(hash)
-	return hash, nil
-}
-
-// Relayer returns fee relayer who would like to pay the fee
-func (t *Transaction) Relayer() (*thor.Address, error) {
-	if cached := t.cache.relayer.Load(); cached != nil {
-		return cached.(*thor.Address), nil
-	}
-	if t.Relayed() == false {
-		return nil, nil
-	}
-	if len(t.Signature()) != 130 {
-		return nil, nil
-	}
-
-	signer, err := t.Signer()
-	if err != nil {
-		return nil, err
-	}
-
-	hash, err := t.RelayHash(signer)
-	if err != nil {
-		return nil, err
-	}
-
-	sig := t.Signature()[65:]
-	pub, err := crypto.SigToPub(hash.Bytes(), sig)
-	if err != nil {
-		return nil, err
-	}
-	relayer := thor.Address(crypto.PubkeyToAddress(*pub))
-
-	t.cache.relayer.Store(&relayer)
-	return &relayer, nil
-}
-
 func (t *Transaction) String() string {
 	var (
-		from      string
-		br        BlockRef
-		dependsOn string
-		relayer   string
+		originStr    string
+		br           BlockRef
+		dependsOn    string
+		delegatorStr string
 	)
-	signer, err := t.Signer()
+	origin, err := t.Origin()
 	if err != nil {
-		from = "N/A"
+		originStr = "N/A"
 	} else {
-		from = signer.String()
+		originStr = origin.String()
 	}
-	addr, err := t.Relayer()
-	if addr == nil || err != nil {
-		relayer = "N/A"
+	delegator, err := t.Delegator()
+	if err != nil {
+		delegatorStr = "N/A"
 	} else {
-		relayer = addr.String()
+		delegatorStr = delegator.String()
 	}
 
 	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
@@ -474,7 +408,7 @@ func (t *Transaction) String() string {
 
 	return fmt.Sprintf(`
 	Tx(%v, %v)
-	From:           %v
+	Origin:         %v
 	Clauses:        %v
 	GasPriceCoef:   %v
 	Gas:            %v
@@ -484,10 +418,23 @@ func (t *Transaction) String() string {
 	DependsOn:      %v
 	Nonce:          %v
 	UnprovedWork:   %v
-	Relayer:        %v
+	Delegator:      %v
 	Signature:      0x%x
-`, t.ID(), t.Size(), from, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
-		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), relayer, t.body.Signature)
+`, t.ID(), t.Size(), originStr, t.body.Clauses, t.body.GasPriceCoef, t.body.Gas,
+		t.body.ChainTag, br.Number(), br[4:], t.body.Expiration, dependsOn, t.body.Nonce, t.UnprovedWork(), delegatorStr, t.body.Signature)
+}
+
+func (t *Transaction) validateSignatureLength() error {
+	if t.Features().IsDelegated() {
+		if len(t.body.Signature) != 65*2 {
+			return errors.New("invalid tx signature length(delegated)")
+		}
+	} else {
+		if len(t.body.Signature) != 65 {
+			return errors.New("invalid tx signature length")
+		}
+	}
+	return nil
 }
 
 // IntrinsicGas calculate intrinsic gas cost for tx with such clauses.

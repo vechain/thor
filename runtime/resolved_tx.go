@@ -21,14 +21,14 @@ import (
 type ResolvedTransaction struct {
 	tx           *tx.Transaction
 	Origin       thor.Address
-	Relayer      *thor.Address
+	Delegator    *thor.Address
 	IntrinsicGas uint64
 	Clauses      []*tx.Clause
 }
 
 // ResolveTransaction resolves the transaction and performs basic validation.
 func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
-	origin, err := tx.Signer()
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 	if tx.Gas() < intrinsicGas {
 		return nil, errors.New("intrinsic gas exceeds provided gas")
 	}
-	relayer, err := tx.Relayer()
+	delegator, err := tx.Delegator()
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func ResolveTransaction(tx *tx.Transaction) (*ResolvedTransaction, error) {
 	return &ResolvedTransaction{
 		tx,
 		origin,
-		relayer,
+		delegator,
 		intrinsicGas,
 		clauses,
 	}, nil
@@ -109,9 +109,9 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	}
 
 	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
-	if r.Relayer != nil {
-		if energy.Sub(*r.Relayer, prepaid) {
-			return baseGasPrice, gasPrice, *r.Relayer, func(rgas uint64) { doReturnGas(rgas) }, nil
+	if r.Delegator != nil {
+		if energy.Sub(*r.Delegator, prepaid) {
+			return baseGasPrice, gasPrice, *r.Delegator, func(rgas uint64) { doReturnGas(rgas) }, nil
 		}
 		return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
 	}

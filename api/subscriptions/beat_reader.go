@@ -53,7 +53,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 					bloomContent.add(transfer.Recipient.Bytes())
 				}
 			}
-			origin, _ := txs[i].Signer()
+			origin, _ := txs[i].Origin()
 			bloomContent.add(origin.Bytes())
 		}
 		signer, _ := header.Signer()

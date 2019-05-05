@@ -849,15 +849,11 @@ components:
         nonce:
           type: string
           example: '0x29c257e36ea6e72a'
-        reserved :
-          nullable: true
-          description: Reserved part of tx, can be null
-          properties:
-            flag:
-              type: integer
-              format: uint8
-              description: Flags for transaction
-              example: 1
+        features :
+          type: string
+          format: hex
+          description: features bitset in hex format
+          example: '0x1'
 
     SignedTx:
       allOf:

@@ -13,6 +13,7 @@ import (
 )
 
 func TestBytes32(t *testing.T) {
+
 	bytes32 := BytesToBytes32([]byte("bytes32"))
 	data, _ := json.Marshal(&bytes32)
 	assert.Equal(t, "\""+bytes32.String()+"\"", string(data))

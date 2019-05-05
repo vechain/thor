@@ -13,7 +13,8 @@ import (
 
 // Builder to make it easy to build transaction.
 type Builder struct {
-	body body
+	body     body
+	features Features
 }
 
 // ChainTag set chain tag.
@@ -69,26 +70,9 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 	return b
 }
 
-// Relayed marks transaction to be fee relayed
-func (b *Builder) Relayed() *Builder {
-	if b.body.Reserved != nil {
-		b.body.Reserved.Flag |= flagRelayed
-	} else {
-		b.body.Reserved = &Reserved{Flag: flagRelayed}
-	}
-
-	return b
-}
-
-// Reserved set the reserved
-func (b *Builder) Reserved(r *Reserved) *Builder {
-	if r == nil {
-		b.body.Reserved = nil
-	} else {
-		cpy := *r
-		b.body.Reserved = &cpy
-	}
-
+// Features set features.
+func (b *Builder) Features(feat Features) *Builder {
+	b.features = feat
 	return b
 }
 
