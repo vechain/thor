@@ -290,7 +290,7 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 	if !n.skipLogs {
 		batch := n.logDB.Prepare(newBlock.Header())
 		for i, tx := range newBlock.Transactions() {
-			origin, _ := tx.Signer()
+			origin, _ := tx.Origin()
 			txBatch := batch.ForTransaction(tx.ID(), origin)
 			for j, output := range receipts[i].Outputs {
 				txBatch.Insert(output.Events, output.Transfers, uint32(j))

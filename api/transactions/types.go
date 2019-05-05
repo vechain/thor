@@ -102,13 +102,6 @@ func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
 	var bf tx.BlockRef
 	copy(bf[:], blockRef[:])
 
-	var r *tx.Reserved
-	if ustx.Reserved != nil {
-		r = &tx.Reserved{
-			Flag: ustx.Reserved.Flag,
-		}
-	}
-
 	return txBuilder.ChainTag(ustx.ChainTag).
 		BlockRef(bf).
 		Expiration(ustx.Expiration).
@@ -116,7 +109,7 @@ func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
 		GasPriceCoef(ustx.GasPriceCoef).
 		DependsOn(ustx.DependsOn).
 		Nonce(uint64(ustx.Nonce)).
-		Reserved(r).
+		Features(tx.Features(ustx.Features)).
 		Build(), nil
 }
 
@@ -160,8 +153,8 @@ type rawTransaction struct {
 
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64) (*Transaction, error) {
-	//tx signer
-	signer, err := tx.Signer()
+	//tx origin
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +166,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
-		Origin:       signer,
+		Origin:       origin,
 		BlockRef:     hexutil.Encode(br[:]),
 		Expiration:   tx.Expiration(),
 		Nonce:        math.HexOrDecimal64(tx.Nonce()),
@@ -182,7 +175,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 		Gas:          tx.Gas(),
 		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
-		Reserved:     convertReversed(tx),
+		Features:     math.HexOrDecimal64(tx.Features()),
 		Meta: TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
@@ -242,7 +235,7 @@ type Transfer struct {
 func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)
-	signer, err := tx.Signer()
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +250,7 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			header.Number(),
 			header.Timestamp(),
 			tx.ID(),
-			signer,
+			origin,
 		},
 	}
 	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))

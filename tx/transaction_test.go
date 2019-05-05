@@ -38,9 +38,9 @@ func TestTx(t *testing.T) {
 	assert.Equal(t, big.NewInt(150), trx.GasPrice(big.NewInt(100)))
 	assert.Equal(t, []byte(nil), trx.Signature())
 
-	assert.Equal(t, false, trx.Relayed())
+	assert.Equal(t, false, trx.Features().IsDelegated())
 
-	relayer, _ := trx.Relayer()
+	relayer, _ := trx.Delegator()
 	assert.Nil(t, relayer)
 
 	k, _ := hex.DecodeString("7582be841ca040aa940fff6c05773129e135623e41acce3e0b8ba520dc1ae26a")
@@ -48,9 +48,8 @@ func TestTx(t *testing.T) {
 	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), priv)
 
 	trx = trx.WithSignature(sig)
-	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Signer(); return s.String() }())
+	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Origin(); return s.String() }())
 	assert.Equal(t, "0xda90eaea52980bc4bb8d40cb2ff84d78433b3b4a6e7d50b75736c5e3e77b71ec", trx.ID().String())
-	assert.Equal(t, true, trx.Validate())
 
 	assert.Equal(t, "f8970184aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e208600000060606081808252088083bc614ec0b841f76f3c91a834165872aa9464fc55b03a13f46ea8d3b858e528fcceaf371ad6884193c3f313ff8effbb57fe4d1adc13dceb933bedbf9dbb528d2936203d5511df00",
 		func() string { d, _ := rlp.EncodeToBytes(trx); return hex.EncodeToString(d) }(),
@@ -58,54 +57,53 @@ func TestTx(t *testing.T) {
 
 }
 
-func TestRelayedTx(t *testing.T) {
-	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
-	signer, _ := hex.DecodeString("7582be841ca040aa940fff6c05773129e135623e41acce3e0b8ba520dc1ae26a")
-	relayer, _ := hex.DecodeString("321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51")
+// func TestRelayedTx(t *testing.T) {
+// 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
+// 	signer, _ := hex.DecodeString("7582be841ca040aa940fff6c05773129e135623e41acce3e0b8ba520dc1ae26a")
+// 	relayer, _ := hex.DecodeString("321d6443bc6177273b5abf54210fe806d451d6b7973bccc2384ef78bbcd0bf51")
 
-	trx := new(tx.Builder).ChainTag(0xa4).
-		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
-		Expiration(32).
-		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
-		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
-		GasPriceCoef(128).
-		Gas(210000).
-		Relayed().
-		DependsOn(nil).
-		Nonce(12345678).Build()
+// 	trx := new(tx.Builder).ChainTag(0xa4).
+// 		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
+// 		Expiration(32).
+// 		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+// 		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+// 		GasPriceCoef(128).
+// 		Gas(210000).
+// 		DependsOn(nil).
+// 		Nonce(12345678).Build()
 
-	assert.Equal(t, "0x96c4cd08584994f337946f950eca5511abe15b152bc879bf47c2227901f9f2af", trx.SigningHash().String())
-	assert.Equal(t, true, trx.Relayed())
+// 	assert.Equal(t, "0x96c4cd08584994f337946f950eca5511abe15b152bc879bf47c2227901f9f2af", trx.SigningHash().String())
+// 	assert.Equal(t, true, trx.Relayed())
 
-	p1, _ := crypto.ToECDSA(signer)
-	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), p1)
+// 	p1, _ := crypto.ToECDSA(signer)
+// 	sig, _ := crypto.Sign(trx.SigningHash().Bytes(), p1)
 
-	origin := crypto.PubkeyToAddress(p1.PublicKey)
-	hash, _ := trx.RelayHash(thor.Address(origin))
-	p2, _ := crypto.ToECDSA(relayer)
-	relaySig, _ := crypto.Sign(hash.Bytes(), p2)
+// 	origin := crypto.PubkeyToAddress(p1.PublicKey)
+// 	hash, _ := trx.RelayHash(thor.Address(origin))
+// 	p2, _ := crypto.ToECDSA(relayer)
+// 	relaySig, _ := crypto.Sign(hash.Bytes(), p2)
 
-	sig = append(sig, relaySig...)
-	trx = trx.WithSignature(sig)
+// 	sig = append(sig, relaySig...)
+// 	trx = trx.WithSignature(sig)
 
-	assert.Equal(t, true, trx.Validate())
-	assert.Equal(t, "0x26e49892acb0aab9b73b5efdf190ba77dea25a595fd0f3e9a5fea66240630214", hash.String())
-	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Signer(); return s.String() }())
-	assert.Equal(t, "0x956577b09b2a770d10ea129b26d916955df3606dc973da0043d6321b922fdef9", trx.ID().String())
-	assert.Equal(t, "0xd3ae78222beadb038203be21ed5ce7c9b1bff602", func() string { s, _ := trx.Relayer(); return s.String() }())
+// 	assert.Equal(t, true, trx.Validate())
+// 	assert.Equal(t, "0x26e49892acb0aab9b73b5efdf190ba77dea25a595fd0f3e9a5fea66240630214", hash.String())
+// 	assert.Equal(t, "0xd989829d88b0ed1b06edf5c50174ecfa64f14a64", func() string { s, _ := trx.Signer(); return s.String() }())
+// 	assert.Equal(t, "0x956577b09b2a770d10ea129b26d916955df3606dc973da0043d6321b922fdef9", trx.ID().String())
+// 	assert.Equal(t, "0xd3ae78222beadb038203be21ed5ce7c9b1bff602", func() string { s, _ := trx.Relayer(); return s.String() }())
 
-	assert.Equal(t, "f8db81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec101b882bad4d4401b1fb1c41d61727d7fd2aeb2bb3e65a27638a5326ca98404c0209ab159eaeb37f0ac75ed1ac44d92c3d17402d7d64b4c09664ae2698e1102448040c00098c933cf0c413e157039fa22f927b4cb3671b107930bb5bec7172846756a37d23068540b3856acde15b8decd17f44a7f7744863485dba1f9549f8bd45d9705df00",
-		func() string { d, _ := rlp.EncodeToBytes(trx); return hex.EncodeToString(d) }(),
-	)
+// 	assert.Equal(t, "f8db81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec101b882bad4d4401b1fb1c41d61727d7fd2aeb2bb3e65a27638a5326ca98404c0209ab159eaeb37f0ac75ed1ac44d92c3d17402d7d64b4c09664ae2698e1102448040c00098c933cf0c413e157039fa22f927b4cb3671b107930bb5bec7172846756a37d23068540b3856acde15b8decd17f44a7f7744863485dba1f9549f8bd45d9705df00",
+// 		func() string { d, _ := rlp.EncodeToBytes(trx); return hex.EncodeToString(d) }(),
+// 	)
 
-	assert.Equal(t, true, trx.Relayed())
+// 	assert.Equal(t, true, trx.Relayed())
 
-	raw, _ := hex.DecodeString("f8db81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec101b882bad4d4401b1fb1c41d61727d7fd2aeb2bb3e65a27638a5326ca98404c0209ab159eaeb37f0ac75ed1ac44d92c3d17402d7d64b4c09664ae2698e1102448040c00098c933cf0c413e157039fa22f927b4cb3671b107930bb5bec7172846756a37d23068540b3856acde15b8decd17f44a7f7744863485dba1f9549f8bd45d9705df00")
-	var tx *tx.Transaction
-	if err := rlp.DecodeBytes(raw, &tx); err != nil {
-		t.Error(err)
-	}
-}
+// 	raw, _ := hex.DecodeString("f8db81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec101b882bad4d4401b1fb1c41d61727d7fd2aeb2bb3e65a27638a5326ca98404c0209ab159eaeb37f0ac75ed1ac44d92c3d17402d7d64b4c09664ae2698e1102448040c00098c933cf0c413e157039fa22f927b4cb3671b107930bb5bec7172846756a37d23068540b3856acde15b8decd17f44a7f7744863485dba1f9549f8bd45d9705df00")
+// 	var tx *tx.Transaction
+// 	if err := rlp.DecodeBytes(raw, &tx); err != nil {
+// 		t.Error(err)
+// 	}
+// }
 
 func TestIntrinsicGas(t *testing.T) {
 	gas, err := tx.IntrinsicGas()

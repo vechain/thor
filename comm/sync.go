@@ -77,7 +77,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 							tx.ID()
 							tx.UnprovedWork()
 							tx.IntrinsicGas()
-							tx.Relayer()
+							tx.Delegator()
 						}
 					}
 				}
