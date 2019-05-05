@@ -1,7 +1,6 @@
 package tx
 
 import (
-	"bytes"
 	"errors"
 	"io"
 
@@ -13,25 +12,12 @@ type reserved struct {
 }
 
 func (r *reserved) EncodeRLP(w io.Writer) error {
-	fields := []interface{}{r.Features}
-	var raws []rlp.RawValue
-	for _, v := range fields {
-		raw, err := rlp.EncodeToBytes(v)
-		if err != nil {
-			return err
-		}
-		raws = append(raws, raw)
+	if r.Features == 0 {
+		w.Write(rlp.EmptyList)
+		return nil
 	}
 
-	for i := len(raws); i > 0; {
-		last := raws[i-1]
-		if bytes.Equal(last, rlp.EmptyList) || bytes.Equal(last, rlp.EmptyString) {
-			raws = raws[:i-1] // pop the last empty value to trim
-		} else {
-			break
-		}
-	}
-	return rlp.Encode(w, raws)
+	return rlp.Encode(w, r)
 }
 
 func (r *reserved) DecodeRLP(s *rlp.Stream) error {
@@ -40,22 +26,21 @@ func (r *reserved) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	if i := len(raws); i > 0 {
-		last := raws[i-1]
-		if bytes.Equal(last, rlp.EmptyList) || bytes.Equal(last, rlp.EmptyString) {
-			return errors.New("tx reserved field not trimmed")
-		}
-	}
-
-	fields := []interface{}{&r.Features}
-	if len(raws) > len(fields) {
-		return errors.New("tx reserved field incompatible")
-	}
-
-	for i, raw := range raws {
-		if err := rlp.DecodeBytes(raw, fields[i]); err != nil {
+	switch len(raws) {
+	case 0:
+		r.Features = 0
+		return nil
+	case 1:
+		var feat Features
+		if err := rlp.DecodeBytes(raws[0], &feat); err != nil {
 			return err
 		}
+		if feat == 0 {
+			return errors.New("tx reserved field not trimmed")
+		}
+		r.Features = feat
+		return nil
+	default:
+		return errors.New("tx reserved field incompatible")
 	}
-	return nil
 }
