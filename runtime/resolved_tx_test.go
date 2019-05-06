@@ -8,7 +8,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -80,7 +79,7 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 	}
 
 	_, err := runtime.ResolveTransaction(txBuild().Build())
-	tr.assert.Equal(secp256k1.ErrInvalidSignatureLen, err)
+	tr.assert.Equal("invalid tx signature length", err.Error())
 
 	_, err = runtime.ResolveTransaction(txSign(txBuild().Gas(21000 - 1)))
 	tr.assert.NotNil(err)

@@ -282,7 +282,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	triggers["triggerErrTxSignerUnavailable"] = func() {
 		blk := tc.sign(tc.originalBuilder().Transaction(txBuilder(tc.tag).Build()).Build())
 		err := tc.consent(blk)
-		expect := consensusError("tx signer unavailable: invalid signature length")
+		expect := consensusError("tx signer unavailable: invalid tx signature length")
 		tc.assert.Equal(err, expect)
 	}
 

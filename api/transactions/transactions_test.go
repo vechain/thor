@@ -214,7 +214,7 @@ func initTransactionServer(t *testing.T) {
 }
 
 func checkTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
-	origin, err := expectedTx.Signer()
+	origin, err := expectedTx.Origin()
 	if err != nil {
 		t.Fatal(err)
 	}
