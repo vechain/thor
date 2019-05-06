@@ -13,8 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/p2psrv/rpc"
 	"github.com/vechain/thor/thor"
 )
@@ -36,8 +36,8 @@ type Peer struct {
 	logger log15.Logger
 
 	createdTime mclock.AbsTime
-	knownTxs    *cache.RandCache
-	knownBlocks *cache.RandCache
+	knownTxs    *lru.Cache
+	knownBlocks *lru.Cache
 	head        struct {
 		sync.Mutex
 		id         thor.Bytes32
@@ -54,14 +54,15 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		"peer", peer,
 		"dir", dir,
 	}
-
+	knownTxs, _ := lru.New(maxKnownTxs)
+	knownBlocks, _ := lru.New(maxKnownBlocks)
 	return &Peer{
 		Peer:        peer,
 		RPC:         rpc.New(peer, rw),
 		logger:      log.New(ctx...),
 		createdTime: mclock.Now(),
-		knownTxs:    cache.NewRandCache(maxKnownTxs),
-		knownBlocks: cache.NewRandCache(maxKnownBlocks),
+		knownTxs:    knownTxs,
+		knownBlocks: knownBlocks,
 	}
 }
 
@@ -83,12 +84,12 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(hash thor.Bytes32) {
-	p.knownTxs.Set(hash, time.Now().Unix())
+	p.knownTxs.Add(hash, time.Now().Unix())
 }
 
 // MarkBlock marks a block to known.
 func (p *Peer) MarkBlock(id thor.Bytes32) {
-	p.knownBlocks.Set(id, struct{}{})
+	p.knownBlocks.Add(id, struct{}{})
 }
 
 // IsTransactionKnown returns if the transaction is known.
