@@ -17,7 +17,7 @@ func (r *reserved) EncodeRLP(w io.Writer) error {
 		return nil
 	}
 
-	return rlp.Encode(w, r)
+	return rlp.Encode(w, []interface{}{r.Features})
 }
 
 func (r *reserved) DecodeRLP(s *rlp.Stream) error {

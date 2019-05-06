@@ -131,7 +131,7 @@ func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.
 		t.body.GasPriceCoef,
 		t.body.Gas,
 		t.body.DependsOn,
-		t.body.Reserved,
+		&t.body.Reserved,
 		origin,
 	})
 
@@ -164,7 +164,7 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 		t.body.Gas,
 		t.body.DependsOn,
 		t.body.Nonce,
-		t.body.Reserved,
+		&t.body.Reserved,
 	})
 	hw.Sum(hash[:0])
 	return

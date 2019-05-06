@@ -13,8 +13,7 @@ import (
 
 // Builder to make it easy to build transaction.
 type Builder struct {
-	body     body
-	features Features
+	body body
 }
 
 // ChainTag set chain tag.
@@ -72,7 +71,7 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 
 // Features set features.
 func (b *Builder) Features(feat Features) *Builder {
-	b.features = feat
+	b.body.Reserved.Features = feat
 	return b
 }
 

@@ -82,7 +82,7 @@ type UnSignedTx struct {
 	Gas          uint64              `json:"gas"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	Features     tx.Features         `json:"features"`
+	Features     math.HexOrDecimal64 `json:"features"`
 }
 
 func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
