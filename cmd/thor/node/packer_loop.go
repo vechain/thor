@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 func (n *Node) packerLoop(ctx context.Context) {
@@ -83,10 +84,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 func (n *Node) pack(flow *packer.Flow) error {
 	txs := n.txPool.Executables()
-	var txsToRemove []thor.Bytes32
+	var txsToRemove []*tx.Transaction
 	defer func() {
-		for _, id := range txsToRemove {
-			n.txPool.Remove(id)
+		for _, tx := range txsToRemove {
+			n.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
 
@@ -99,7 +100,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 			if packer.IsTxNotAdoptableNow(err) {
 				continue
 			}
-			txsToRemove = append(txsToRemove, tx.ID())
+			txsToRemove = append(txsToRemove, tx)
 		}
 	}
 

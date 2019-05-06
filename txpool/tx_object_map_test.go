@@ -41,13 +41,13 @@ func TestTxObjMap(t *testing.T) {
 	assert.Nil(t, m.Add(txObj3, 1))
 	assert.Equal(t, 2, m.Len())
 
-	assert.True(t, m.Contains(tx1.ID()))
-	assert.False(t, m.Contains(tx2.ID()))
-	assert.True(t, m.Contains(tx3.ID()))
+	assert.True(t, m.Contains(tx1.Hash()))
+	assert.False(t, m.Contains(tx2.Hash()))
+	assert.True(t, m.Contains(tx3.Hash()))
 
-	assert.True(t, m.Remove(tx1.ID()))
-	assert.False(t, m.Contains(tx1.ID()))
-	assert.False(t, m.Remove(tx2.ID()))
+	assert.True(t, m.Remove(tx1.Hash()))
+	assert.False(t, m.Contains(tx1.Hash()))
+	assert.False(t, m.Remove(tx2.Hash()))
 
 	assert.Equal(t, []*txObject{txObj3}, m.ToTxObjects())
 	assert.Equal(t, tx.Transactions{tx3}, m.ToTxs())

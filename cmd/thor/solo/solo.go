@@ -22,7 +22,6 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -118,10 +117,10 @@ func (s *Solo) loop(ctx context.Context) {
 
 func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	best := s.chain.BestBlock()
-	var txsToRemove []thor.Bytes32
+	var txsToRemove []*tx.Transaction
 	defer func() {
-		for _, id := range txsToRemove {
-			s.txPool.Remove(id)
+		for _, tx := range txsToRemove {
+			s.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
 
@@ -142,7 +141,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		case packer.IsTxNotAdoptableNow(err):
 			continue
 		default:
-			txsToRemove = append(txsToRemove, tx.ID())
+			txsToRemove = append(txsToRemove, tx)
 		}
 	}
 

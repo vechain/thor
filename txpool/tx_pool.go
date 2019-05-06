@@ -144,7 +144,7 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
-	if p.all.Contains(newTx.ID()) {
+	if p.all.Contains(newTx.Hash()) {
 		// tx already in the pool
 		return nil
 	}
@@ -217,9 +217,9 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 	return p.add(newTx, true)
 }
 
-// Remove removes tx from pool by its ID.
-func (p *TxPool) Remove(txID thor.Bytes32) bool {
-	if p.all.Remove(txID) {
+// Remove removes tx from pool by its Hash.
+func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
+	if p.all.Remove(txHash) {
 		log.Debug("tx removed", "id", txID)
 		return true
 	}
@@ -255,7 +255,7 @@ func (p *TxPool) Dump() tx.Transactions {
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
-	var toRemove []thor.Bytes32
+	var toRemove []*txObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -264,11 +264,11 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 					break
 				}
 				removed++
-				p.all.Remove(txObj.ID())
+				p.all.Remove(txObj.Hash())
 			}
 		} else {
-			for _, id := range toRemove {
-				p.all.Remove(id)
+			for _, txObj := range toRemove {
+				p.all.Remove(txObj.Hash())
 			}
 			removed = len(toRemove)
 		}
@@ -288,14 +288,14 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	for _, txObj := range all {
 		// out of lifetime
 		if now > txObj.timeAdded+int64(p.options.MaxLifetime) {
-			toRemove = append(toRemove, txObj.ID())
+			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
 		}
 		// settled, out of energy or dep broken
 		executable, err := txObj.Executable(p.chain, state, headBlock)
 		if err != nil {
-			toRemove = append(toRemove, txObj.ID())
+			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", err)
 			continue
 		}
@@ -327,18 +327,18 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	// remove over limit txs, from non-executables to low priced
 	if len(executableObjs) > limit {
 		for _, txObj := range nonExecutableObjs {
-			toRemove = append(toRemove, txObj.ID())
+			toRemove = append(toRemove, txObj)
 			log.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
 		}
 		for _, txObj := range executableObjs[limit:] {
-			toRemove = append(toRemove, txObj.ID())
+			toRemove = append(toRemove, txObj)
 			log.Debug("executable tx washed out due to pool limit", "id", txObj.ID())
 		}
 		executableObjs = executableObjs[:limit]
 	} else if len(executableObjs)+len(nonExecutableObjs) > limit {
 		// executableObjs + nonExecutableObjs over pool limit
 		for _, txObj := range nonExecutableObjs[limit-len(executableObjs):] {
-			toRemove = append(toRemove, txObj.ID())
+			toRemove = append(toRemove, txObj)
 			log.Debug("non-executable tx washed out due to pool limit", "id", txObj.ID())
 		}
 	}

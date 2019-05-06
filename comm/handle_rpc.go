@@ -69,7 +69,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&newTx); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkTransaction(newTx.ID())
+		peer.MarkTransaction(newTx.Hash())
 		c.txPool.StrictlyAdd(newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
@@ -146,10 +146,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 
 			for _, tx := range txsToSync.txs {
 				n++
-				if peer.IsTransactionKnown(tx.ID()) {
+				if peer.IsTransactionKnown(tx.Hash()) {
 					continue
 				}
-				peer.MarkTransaction(tx.ID())
+				peer.MarkTransaction(tx.Hash())
 				toSend = append(toSend, tx)
 				size += tx.Size()
 				if size >= maxTxSyncSize {

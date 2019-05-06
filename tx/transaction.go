@@ -37,6 +37,7 @@ type Transaction struct {
 		unprovedWork atomic.Value
 		size         atomic.Value
 		intrinsicGas atomic.Value
+		hash         atomic.Value
 	}
 }
 
@@ -99,6 +100,19 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	hw.Write(t.SigningHash().Bytes())
 	hw.Write(signer.Bytes())
 	hw.Sum(id[:0])
+	return
+}
+
+// Hash returns hash of tx.
+// Unlike ID, it's the hash of RLP encoded tx.
+func (t *Transaction) Hash() (hash thor.Bytes32) {
+	if cached := t.cache.hash.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { t.cache.hash.Store(hash) }()
+	hw := thor.NewBlake2b()
+	rlp.Encode(hw, t)
+	hw.Sum(hash[:0])
 	return
 }
 
