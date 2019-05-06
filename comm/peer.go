@@ -13,15 +13,16 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/inconshreveable/log15"
+	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/p2psrv/rpc"
 	"github.com/vechain/thor/thor"
 )
 
 const (
-	maxKnownTxs    = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
-	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
+	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
 )
 
 func init() {
@@ -35,8 +36,8 @@ type Peer struct {
 	logger log15.Logger
 
 	createdTime mclock.AbsTime
-	knownTxs    *lru.Cache
-	knownBlocks *lru.Cache
+	knownTxs    *cache.RandCache
+	knownBlocks *cache.RandCache
 	head        struct {
 		sync.Mutex
 		id         thor.Bytes32
@@ -53,15 +54,14 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		"peer", peer,
 		"dir", dir,
 	}
-	knownTxs, _ := lru.New(maxKnownTxs)
-	knownBlocks, _ := lru.New(maxKnownBlocks)
+
 	return &Peer{
 		Peer:        peer,
 		RPC:         rpc.New(peer, rw),
 		logger:      log.New(ctx...),
 		createdTime: mclock.Now(),
-		knownTxs:    knownTxs,
-		knownBlocks: knownBlocks,
+		knownTxs:    cache.NewRandCache(maxKnownTxs),
+		knownBlocks: cache.NewRandCache(maxKnownBlocks),
 	}
 }
 
@@ -83,17 +83,21 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(id thor.Bytes32) {
-	p.knownTxs.Add(id, struct{}{})
+	p.knownTxs.Set(id, time.Now().Unix())
 }
 
 // MarkBlock marks a block to known.
 func (p *Peer) MarkBlock(id thor.Bytes32) {
-	p.knownBlocks.Add(id, struct{}{})
+	p.knownBlocks.Set(id, struct{}{})
 }
 
 // IsTransactionKnown returns if the transaction is known.
 func (p *Peer) IsTransactionKnown(id thor.Bytes32) bool {
-	return p.knownTxs.Contains(id)
+	ts, ok := p.knownTxs.Get(id)
+	if !ok {
+		return false
+	}
+	return ts.(int64)+knownTxMarkExpiration > time.Now().Unix()
 }
 
 // IsBlockKnown returns if the block is known.
