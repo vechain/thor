@@ -13,7 +13,7 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-// txObjectMap to maintain mapping of ID to tx object, and account quota.
+// txObjectMap to maintain mapping of tx hash to tx object, and account quota.
 type txObjectMap struct {
 	lock     sync.RWMutex
 	txObjMap map[thor.Bytes32]*txObject
@@ -27,10 +27,10 @@ func newTxObjectMap() *txObjectMap {
 	}
 }
 
-func (m *txObjectMap) Contains(txID thor.Bytes32) bool {
+func (m *txObjectMap) Contains(txHash thor.Bytes32) bool {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
-	_, found := m.txObjMap[txID]
+	_, found := m.txObjMap[txHash]
 	return found
 }
 
@@ -38,7 +38,7 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if _, found := m.txObjMap[txObj.ID()]; found {
+	if _, found := m.txObjMap[txObj.Hash()]; found {
 		return nil
 	}
 
@@ -47,21 +47,21 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 	}
 
 	m.quota[txObj.Origin()]++
-	m.txObjMap[txObj.ID()] = txObj
+	m.txObjMap[txObj.Hash()] = txObj
 	return nil
 }
 
-func (m *txObjectMap) Remove(txID thor.Bytes32) bool {
+func (m *txObjectMap) Remove(txHash thor.Bytes32) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if txObj, ok := m.txObjMap[txID]; ok {
+	if txObj, ok := m.txObjMap[txHash]; ok {
 		if m.quota[txObj.Origin()] > 1 {
 			m.quota[txObj.Origin()]--
 		} else {
 			delete(m.quota, txObj.Origin())
 		}
-		delete(m.txObjMap, txID)
+		delete(m.txObjMap, txHash)
 		return true
 	}
 	return false
@@ -93,13 +93,13 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, txObj := range txObjs {
-		if _, found := m.txObjMap[txObj.ID()]; found {
+		if _, found := m.txObjMap[txObj.Hash()]; found {
 			continue
 		}
 		// skip account limit check
 
 		m.quota[txObj.Origin()]++
-		m.txObjMap[txObj.ID()] = txObj
+		m.txObjMap[txObj.Hash()] = txObj
 	}
 }
 

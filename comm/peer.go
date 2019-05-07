@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	maxKnownTxs    = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
-	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
+	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
 )
 
 func init() {
@@ -82,8 +83,8 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 }
 
 // MarkTransaction marks a transaction to known.
-func (p *Peer) MarkTransaction(id thor.Bytes32) {
-	p.knownTxs.Add(id, struct{}{})
+func (p *Peer) MarkTransaction(hash thor.Bytes32) {
+	p.knownTxs.Add(hash, time.Now().Unix())
 }
 
 // MarkBlock marks a block to known.
@@ -92,8 +93,12 @@ func (p *Peer) MarkBlock(id thor.Bytes32) {
 }
 
 // IsTransactionKnown returns if the transaction is known.
-func (p *Peer) IsTransactionKnown(id thor.Bytes32) bool {
-	return p.knownTxs.Contains(id)
+func (p *Peer) IsTransactionKnown(hash thor.Bytes32) bool {
+	ts, ok := p.knownTxs.Get(hash)
+	if !ok {
+		return false
+	}
+	return ts.(int64)+knownTxMarkExpiration > time.Now().Unix()
 }
 
 // IsBlockKnown returns if the block is known.

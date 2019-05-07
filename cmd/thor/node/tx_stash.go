@@ -6,6 +6,7 @@
 package node
 
 import (
+	"bytes"
 	"container/list"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -27,7 +28,7 @@ func newTxStash(kv kv.GetPutter, maxSize int) *txStash {
 }
 
 func (ts *txStash) Save(tx *tx.Transaction) error {
-	has, err := ts.kv.Has(tx.ID().Bytes())
+	has, err := ts.kv.Has(tx.Hash().Bytes())
 	if err != nil {
 		return err
 	}
@@ -40,10 +41,10 @@ func (ts *txStash) Save(tx *tx.Transaction) error {
 		return err
 	}
 
-	if err := ts.kv.Put(tx.ID().Bytes(), data); err != nil {
+	if err := ts.kv.Put(tx.Hash().Bytes(), data); err != nil {
 		return err
 	}
-	ts.fifo.PushBack(tx.ID())
+	ts.fifo.PushBack(tx.Hash())
 	for ts.fifo.Len() > ts.maxSize {
 		keyToDelete := ts.fifo.Remove(ts.fifo.Front()).(thor.Bytes32).Bytes()
 		if err := ts.kv.Delete(keyToDelete); err != nil {
@@ -54,6 +55,7 @@ func (ts *txStash) Save(tx *tx.Transaction) error {
 }
 
 func (ts *txStash) LoadAll() tx.Transactions {
+	batch := ts.kv.NewBatch()
 	var txs tx.Transactions
 	iter := ts.kv.NewIterator(*kv.NewRangeWithBytesPrefix(nil))
 	for iter.Next() {
@@ -65,8 +67,19 @@ func (ts *txStash) LoadAll() tx.Transactions {
 			}
 		} else {
 			txs = append(txs, &tx)
-			ts.fifo.PushBack(tx.ID())
+			ts.fifo.PushBack(tx.Hash())
+
+			// Keys were tx ids.
+			// Here to remap values using tx hashes.
+			if !bytes.Equal(iter.Key(), tx.Hash().Bytes()) {
+				batch.Delete(iter.Key())
+				batch.Put(tx.Hash().Bytes(), iter.Value())
+			}
 		}
+	}
+
+	if err := batch.Write(); err != nil {
+		log.Warn("remap stashed txs", "err", err)
 	}
 	return txs
 }
