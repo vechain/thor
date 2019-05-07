@@ -16,6 +16,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/metric"
@@ -427,11 +428,11 @@ func (t *Transaction) String() string {
 func (t *Transaction) validateSignatureLength() error {
 	if t.Features().IsDelegated() {
 		if len(t.body.Signature) != 65*2 {
-			return errors.New("invalid tx signature length(delegated)")
+			return secp256k1.ErrInvalidSignatureLen
 		}
 	} else {
 		if len(t.body.Signature) != 65 {
-			return errors.New("invalid tx signature length")
+			return secp256k1.ErrInvalidSignatureLen
 		}
 	}
 	return nil
