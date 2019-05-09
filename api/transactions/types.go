@@ -7,13 +7,10 @@ package transactions
 
 import (
 	"fmt"
-	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -48,15 +45,6 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
-func hasKey(m map[string]interface{}, key string) bool {
-	for k := range m {
-		if strings.ToLower(k) == strings.ToLower(key) {
-			return true
-		}
-	}
-	return false
-}
-
 //Transaction transaction
 type Transaction struct {
 	ID           thor.Bytes32        `json:"id"`
@@ -72,62 +60,6 @@ type Transaction struct {
 	Features     math.HexOrDecimal64 `json:"features"`
 	Size         uint32              `json:"size"`
 	Meta         TxMeta              `json:"meta"`
-}
-type UnSignedTx struct {
-	ChainTag     uint8               `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      Clauses             `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-	Features     math.HexOrDecimal64 `json:"features"`
-}
-
-func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
-	txBuilder := new(tx.Builder)
-	for _, clause := range ustx.Clauses {
-		data, err := hexutil.Decode(clause.Data)
-		if err != nil {
-			return nil, errors.WithMessage(err, "data")
-		}
-		v := big.Int(clause.Value)
-		txBuilder.Clause(tx.NewClause(clause.To).WithData(data).WithValue(&v))
-	}
-	blockRef, err := hexutil.Decode(ustx.BlockRef)
-	if err != nil {
-		return nil, errors.WithMessage(err, "blockRef")
-	}
-	var bf tx.BlockRef
-	copy(bf[:], blockRef[:])
-
-	return txBuilder.ChainTag(ustx.ChainTag).
-		BlockRef(bf).
-		Expiration(ustx.Expiration).
-		Gas(ustx.Gas).
-		GasPriceCoef(ustx.GasPriceCoef).
-		DependsOn(ustx.DependsOn).
-		Nonce(uint64(ustx.Nonce)).
-		Features(tx.Features(ustx.Features)).
-		Build(), nil
-}
-
-type SignedTx struct {
-	UnSignedTx
-	Signature string `json:"signature"`
-}
-
-func (stx *SignedTx) decode() (*tx.Transaction, error) {
-	tx, err := stx.UnSignedTx.decode()
-	if err != nil {
-		return nil, err
-	}
-	sig, err := hexutil.Decode(stx.Signature)
-	if err != nil {
-		return nil, errors.WithMessage(err, "signature")
-	}
-	return tx.WithSignature(sig), nil
 }
 
 type RawTx struct {
