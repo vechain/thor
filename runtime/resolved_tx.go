@@ -148,10 +148,11 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 }
 
 // ToContext create a tx context object.
-func (r *ResolvedTransaction) ToContext(gasPrice *big.Int, blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
+func (r *ResolvedTransaction) ToContext(gasPrice *big.Int, gasPayer thor.Address, blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
 	return &xenv.TransactionContext{
 		ID:         r.tx.ID(),
 		Origin:     r.Origin,
+		GasPayer:   gasPayer,
 		GasPrice:   gasPrice,
 		ProvedWork: r.tx.ProvedWork(blockNumber, getID),
 		BlockRef:   r.tx.BlockRef(),
