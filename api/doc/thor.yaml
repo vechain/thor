@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.1.1
+  version: 1.1.2
 
 servers:
   - url: '/'
@@ -207,21 +207,20 @@ paths:
         - Transactions
       summary: Commit transaction
       description: |
-        in raw or structured format. If no signature in structured format,
-        `signingHash` is returned in response body.
+        in raw.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RawOrSignedOrUnsignedTx'
+              $ref: '#/components/schemas/RawTx'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IDOrSigningHash'
+                $ref: '#/components/schemas/TXID'
 
   /blocks/{revision}:
     parameters:
@@ -849,6 +848,11 @@ components:
         nonce:
           type: string
           example: '0x29c257e36ea6e72a'
+        features :
+          type: string
+          format: hex
+          description: features bitset in hex format
+          example: '0x1'
 
     SignedTx:
       allOf:
@@ -1289,24 +1293,10 @@ components:
           blockNumber: 1
           blockTimestamp: 1523156271
 
-    RawOrSignedOrUnsignedTx:
-      oneOf:
-        - $ref: '#/components/schemas/RawTx'
-        - $ref: '#/components/schemas/SignedTx'
-        - $ref: '#/components/schemas/TxBody'
-      example:
-        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
-
-    IDOrSigningHash:
-      oneOf:
-        - type: object
-          properties:
-            id:
-              type: string
-        - type: object
-          properties:
-            signingHash:
-              type: string
+    TXID:
+      properties:
+        id:
+          type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
     

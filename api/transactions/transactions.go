@@ -6,9 +6,6 @@
 package transactions
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -18,7 +15,6 @@ import (
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -107,65 +103,27 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor
 	return convertReceipt(receipt, h, tx)
 }
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
-	data, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return err
-	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
+	var rawTx *RawTx
+	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	if m == nil {
-		return utils.BadRequest(errors.New("body: empty body"))
+	tx, err := rawTx.decode()
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
-	var sendTx = func(tx *tx.Transaction) error {
-		if err := t.pool.Add(tx); err != nil {
-			if txpool.IsBadTx(err) {
-				return utils.BadRequest(err)
-			}
-			if txpool.IsTxRejected(err) {
-				return utils.Forbidden(err)
-			}
-			return err
-		}
-		return utils.WriteJSON(w, map[string]string{
-			"id": tx.ID().String(),
-		})
-	}
-	reader := bytes.NewReader(data)
-	if hasKey(m, "raw") {
-		var rawTx *RawTx
-		if err := utils.ParseJSON(reader, &rawTx); err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "body"))
-		}
-		tx, err := rawTx.decode()
-		if err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "raw"))
-		}
-		return sendTx(tx)
-	} else if hasKey(m, "signature") {
-		var stx *SignedTx
-		if err := utils.ParseJSON(reader, &stx); err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "body"))
-		}
-		tx, err := stx.decode()
-		if err != nil {
+
+	if err := t.pool.Add(tx); err != nil {
+		if txpool.IsBadTx(err) {
 			return utils.BadRequest(err)
 		}
-		return sendTx(tx)
-	} else {
-		var ustx *UnSignedTx
-		if err := utils.ParseJSON(reader, &ustx); err != nil {
-			return utils.BadRequest(errors.WithMessage(err, "body"))
+		if txpool.IsTxRejected(err) {
+			return utils.Forbidden(err)
 		}
-		tx, err := ustx.decode()
-		if err != nil {
-			return utils.BadRequest(err)
-		}
-		return utils.WriteJSON(w, map[string]string{
-			"signingHash": tx.SigningHash().String(),
-		})
+		return err
 	}
+	return utils.WriteJSON(w, map[string]string{
+		"id": tx.ID().String(),
+	})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
