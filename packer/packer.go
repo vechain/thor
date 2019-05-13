@@ -24,6 +24,7 @@ type Packer struct {
 	nodeMaster     thor.Address
 	beneficiary    *thor.Address
 	targetGasLimit uint64
+	forkConfig     thor.ForkConfig
 }
 
 // New create a new Packer instance.
@@ -40,6 +41,7 @@ func New(
 		nodeMaster,
 		beneficiary,
 		0,
+		thor.GetForkConfig(chain.GenesisBlock().Header().ID()),
 	}
 }
 
