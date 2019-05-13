@@ -44,7 +44,11 @@ func (r *reserved) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 		r.Features = feat
-		r.Unused = raws[1:]
+		if len > 1 {
+			r.Unused = raws[1:]
+		} else {
+			r.Unused = nil
+		}
 	} else {
 		r.Features = 0
 		r.Unused = nil

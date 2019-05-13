@@ -7,33 +7,46 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestReserved(t *testing.T) {
-	r := reserved{
-		Features: 1,
-		Unused:   nil,
+func TestReservedEncoding(t *testing.T) {
+	cases := []struct {
+		input    reserved
+		expected []byte
+	}{
+		{reserved{0, nil}, []byte{0xc0}},
+		{reserved{8, nil}, []byte{0xc1, 0x08}},
+		{reserved{8, []rlp.RawValue{[]byte{0x81}}}, []byte{0xc2, 0x08, 0x81}},
+		{reserved{8, []rlp.RawValue{[]byte{0x80}}}, []byte{0xc1, 0x08}}, // trimmed
+		{reserved{8, []rlp.RawValue{[]byte{0xc0}}}, []byte{0xc1, 0x08}}, // trimmed
 	}
 
-	data, err := rlp.EncodeToBytes(&r)
-	assert.Nil(t, err)
+	for i, c := range cases {
+		data, err := rlp.EncodeToBytes(&c.input)
+		assert.Nil(t, err, "case #%v", i)
+		assert.Equal(t, c.expected, data, "case #%v", i)
+	}
+}
 
-	expected, _ := rlp.EncodeToBytes([]interface{}{Features(1)})
-	assert.EqualValues(t, expected, data)
+func TestReservedDecoding(t *testing.T) {
+	cases := []struct {
+		input    []byte
+		expected reserved
+	}{
+		{[]byte{0xc0}, reserved{0, nil}},
+		{[]byte{0xc1, 0x08}, reserved{8, nil}},
+		{[]byte{0xc2, 0x08, 0x07}, reserved{8, []rlp.RawValue{[]byte{0x07}}}},
+	}
 
-	// trimming
-	r.Unused = []rlp.RawValue{rlp.EmptyList}
-	data, err = rlp.EncodeToBytes(&r)
-	assert.Nil(t, err)
-	assert.EqualValues(t, expected, data)
+	for i, c := range cases {
+		var r reserved
+		err := rlp.DecodeBytes(c.input, &r)
+		assert.Nil(t, err, "case #%v", i)
+		assert.Equal(t, c.expected, r, "case #%v", i)
+	}
 
-	// trimming
-	r.Unused = []rlp.RawValue{rlp.EmptyString}
-	data, err = rlp.EncodeToBytes(&r)
-	assert.Nil(t, err)
-	assert.EqualValues(t, expected, data)
+	var r reserved
+	err := rlp.DecodeBytes([]byte{0xc1, 0x80}, &r)
+	assert.EqualError(t, err, "invalid reserved fields: not trimmed")
 
-	// trimming
-	r.Features = 0
-	data, err = rlp.EncodeToBytes(&r)
-	assert.Nil(t, err)
-	assert.EqualValues(t, rlp.EmptyList, data)
+	err = rlp.DecodeBytes([]byte{0xc2, 0x1, 0x80}, &r)
+	assert.EqualError(t, err, "invalid reserved fields: not trimmed")
 }
