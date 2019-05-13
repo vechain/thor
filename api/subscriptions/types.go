@@ -83,7 +83,7 @@ type TransferMessage struct {
 }
 
 func convertTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint32, transfer *tx.Transfer, obsolete bool) (*TransferMessage, error) {
-	signer, err := tx.Signer()
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func convertTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint3
 			BlockNumber:    header.Number(),
 			BlockTimestamp: header.Timestamp(),
 			TxID:           tx.ID(),
-			TxOrigin:       signer,
+			TxOrigin:       origin,
 			ClauseIndex:    clauseIndex,
 		},
 		Obsolete: obsolete,
@@ -114,7 +114,7 @@ type EventMessage struct {
 }
 
 func convertEvent(header *block.Header, tx *tx.Transaction, clauseIndex uint32, event *tx.Event, obsolete bool) (*EventMessage, error) {
-	signer, err := tx.Signer()
+	signer, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}

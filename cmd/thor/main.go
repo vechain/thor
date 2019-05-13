@@ -368,7 +368,7 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 			batch := logDB.Prepare(block.Header())
 
 			for i, tx := range txs {
-				origin, _ := tx.Signer()
+				origin, _ := tx.Origin()
 				txBatch := batch.ForTransaction(tx.ID(), origin)
 				for j, output := range receipts[i].Outputs {
 					txBatch.Insert(output.Events, output.Transfers, uint32(j))
