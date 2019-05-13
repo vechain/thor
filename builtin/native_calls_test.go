@@ -49,6 +49,7 @@ type ccase struct {
 	provedWork *big.Int
 	txID       thor.Bytes32
 	blockRef   tx.BlockRef
+	gasPayer   thor.Address
 	expiration uint32
 
 	output *[]interface{}
@@ -91,6 +92,11 @@ func (c *ccase) BlockRef(blockRef tx.BlockRef) *ccase {
 	return c
 }
 
+func (c *ccase) GasPayer(gasPayer thor.Address) *ccase {
+	c.gasPayer = gasPayer
+	return c
+}
+
 func (c *ccase) Expiration(expiration uint32) *ccase {
 	c.expiration = expiration
 	return c
@@ -126,6 +132,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			ID:         c.txID,
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
+			GasPayer:   c.gasPayer,
 			ProvedWork: c.provedWork,
 			BlockRef:   c.blockRef,
 			Expiration: c.expiration})
@@ -901,7 +908,7 @@ func TestExtensionNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
-	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+	st.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 
 	privKeys := make([]*ecdsa.PrivateKey, 2)
 
@@ -917,10 +924,14 @@ func TestExtensionNative(t *testing.T) {
 	b1_singer, _ := b1.Header().Signer()
 	b2_singer, _ := b2.Header().Signer()
 
+	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
+
 	_, err := c.AddBlock(b1, nil)
 	assert.Equal(t, err, nil)
 	_, err = c.AddBlock(b2, nil)
 	assert.Equal(t, err, nil)
+
+	assert.Equal(t, builtin.Extension.Address, builtin.Extension.Address)
 
 	seeker := c.NewSeeker(b2.Header().ID())
 	defer func() {
@@ -931,7 +942,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test := &ctest{
 		rt:  rt,
-		abi: builtin.Extension.ABI,
+		abi: builtin.ExtensionV2.ABI,
 		to:  builtin.Extension.Address,
 	}
 
@@ -1022,4 +1033,14 @@ func TestExtensionNative(t *testing.T) {
 	test.Case("blockSigner", big.NewInt(1)).
 		ShouldOutput(b1_singer).
 		Assert(t)
+
+	test.Case("txGasPayer").
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("txGasPayer").
+		GasPayer(gasPayer).
+		ShouldOutput(gasPayer).
+		Assert(t)
+
 }
