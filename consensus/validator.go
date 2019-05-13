@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	TX "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
 )
 
@@ -122,7 +123,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	}
 
 	for _, tx := range txs {
-		if _, err := tx.Signer(); err != nil {
+		if _, err := tx.Origin(); err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
 
@@ -133,8 +134,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
 		case tx.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
-		case tx.HasReservedFields():
-			return consensusError(fmt.Sprintf("tx reserved fields not empty"))
+		}
+
+		if header.Number() < c.forkConfig.VIP191 {
+			if tx.ReservedFieldsCount() != 0 {
+				return consensusError("invalid tx: reserved fields not empty")
+			}
+		} else {
+			if tx.ReservedFieldsCount() > 1 {
+				return consensusError("invalid tx: unknown reserved fields")
+			}
+			if tx.Features() > TX.MaxFeaturesValue {
+				return consensusError("invalid tx: bad features")
+			}
 		}
 	}
 

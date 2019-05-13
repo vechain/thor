@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	TX "github.com/vechain/thor/tx"
 )
 
 // Flow the flow of packing a new block.
@@ -72,7 +73,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	switch {
 	case tx.ChainTag() != f.packer.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case tx.HasReservedFields():
+	case f.runtime.Context().Number < f.packer.forkConfig.VIP191 && tx.ReservedFieldsCount() != 0:
 		return badTxError{"reserved fields not empty"}
 	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
@@ -85,6 +86,19 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 			return errTxNotAdoptableNow
 		}
 		return errGasLimitReached
+	}
+
+	if f.runtime.Context().Number < f.packer.forkConfig.VIP191 {
+		if tx.ReservedFieldsCount() != 0 {
+			return badTxError{"reserved fields not empty"}
+		}
+	} else {
+		if tx.ReservedFieldsCount() > 1 {
+			return badTxError{"unknown reserved fields"}
+		}
+		if tx.Features() > TX.MaxFeaturesValue {
+			return badTxError{"bad features"}
+		}
 	}
 
 	// check if tx already there

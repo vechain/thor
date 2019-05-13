@@ -10,6 +10,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
 )
@@ -19,13 +20,15 @@ import (
 type Consensus struct {
 	chain        *chain.Chain
 	stateCreator *state.Creator
+	forkConfig   thor.ForkConfig
 }
 
 // New create a Consensus instance.
 func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
 	return &Consensus{
 		chain:        chain,
-		stateCreator: stateCreator}
+		stateCreator: stateCreator,
+		forkConfig:   thor.GetForkConfig(chain.GenesisBlock().Header().ID())}
 }
 
 // Process process a block.
