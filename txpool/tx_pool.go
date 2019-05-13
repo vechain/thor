@@ -156,10 +156,21 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 	switch {
 	case newTx.ChainTag() != p.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case headBlock.Number() < p.forkConfig.VIP191 && newTx.HasReservedFields():
-		return badTxError{"reserved fields not empty"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
+	}
+
+	if headBlock.Number() < p.forkConfig.VIP191 {
+		if newTx.ReservedFieldsCount() != 0 {
+			return txRejectedError{"reserved fields not empty"}
+		}
+	} else {
+		if newTx.ReservedFieldsCount() > 1 {
+			return txRejectedError{"unknown reserved fields"}
+		}
+		if newTx.Features() > tx.MaxFeaturesValue {
+			return txRejectedError{"bad features"}
+		}
 	}
 
 	txObj, err := resolveTx(newTx)

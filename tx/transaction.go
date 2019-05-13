@@ -277,10 +277,17 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
-// HasReservedFields returns if there're reserved fields.
+// ReservedFieldsCount returns count of reserved fields.
 // Reserved fields are for backward compatibility purpose.
-func (t *Transaction) HasReservedFields() bool {
-	return t.body.Reserved.Features != 0
+func (t *Transaction) ReservedFieldsCount() int {
+	if unusedLen := len(t.body.Reserved.Unused); unusedLen > 0 {
+		return unusedLen + 1
+	}
+	if t.body.Reserved.Features == 0 {
+		return 0
+	}
+
+	return 1
 }
 
 // EncodeRLP implements rlp.Encoder

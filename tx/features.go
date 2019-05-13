@@ -1,11 +1,14 @@
 package tx
 
 // Features bitset contains tx features.
-type Features uint64
+type Features uint32
 
 const (
 	// See VIP-191 for more detail. (https://github.com/vechain/VIPs/blob/master/vips/VIP-191.md)
 	delegatedMask Features = 1
+
+	// MaxFeaturesValue max allowed features value
+	MaxFeaturesValue = delegatedMask
 )
 
 // IsDelegated returns whether tx is delegated.
