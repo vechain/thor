@@ -428,7 +428,7 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, veri
 				}
 
 				for i, tx := range txs {
-					origin, _ := tx.Signer()
+					origin, _ := tx.Origin()
 					task.Write(tx.ID(), origin, receipts[i].Outputs)
 				}
 			}
