@@ -99,6 +99,11 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 			TotalScore:  parent.TotalScore() + score,
 		})
 
+	// Before process hook of VIP-191, update builtin extension contract's code to V2
+	if parent.Number()+1 == p.forkConfig.VIP191 {
+		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
+	}
+
 	return newFlow(p, parent, rt), nil
 }
 
@@ -122,6 +127,11 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 			GasLimit:    gasLimit,
 			TotalScore:  parent.TotalScore() + 1,
 		})
+
+	// Before process hook of VIP-191, update builtin extension contract's code to V2
+	if parent.Number()+1 == p.forkConfig.VIP191 {
+		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
+	}
 
 	return newFlow(p, parent, rt), nil
 }

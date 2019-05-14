@@ -172,6 +172,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			TotalScore:  header.TotalScore(),
 		})
 
+	// Before process hook of VIP-191, update builtin extension contract's code to V2
+	if header.Number() == c.forkConfig.VIP191 {
+		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
+	}
+
 	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
 			return true, reverted, nil
