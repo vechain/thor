@@ -112,3 +112,75 @@ func TestP(t *testing.T) {
 	fmt.Println(best.Header().Number(), best.Header().GasUsed())
 	//	fmt.Println(best)
 }
+
+func TestForkVIP191(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	defer kv.Close()
+
+	launchTime := uint64(time.Now().Unix())
+	a1 := genesis.DevAccounts()[0]
+	stateCreator := state.NewCreator(kv)
+
+	b0, _, err := new(genesis.Builder).
+		GasLimit(thor.InitialGasLimit).
+		Timestamp(launchTime).
+		State(func(state *state.State) error {
+			// setup builtin contracts
+			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+
+			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+			state.SetBalance(a1.Address, bal)
+			state.SetEnergy(a1.Address, bal, launchTime)
+
+			_ = builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
+			return nil
+		}).
+		Build(stateCreator)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	f := thor.ForkConfig{
+		FixTransferLog: 0,
+		VIP191:         1,
+	}
+	thor.SetCustomNetForkConfig(b0.Header().ID(), f)
+
+	c, _ := chain.New(kv, b0)
+
+	best := c.BestBlock()
+	p := packer.New(c, stateCreator, a1.Address, &a1.Address)
+	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	root, _ := stage.Commit()
+	assert.Equal(t, root, blk.Header().StateRoot())
+
+	_, _, err = consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.AddBlock(blk, receipts); err != nil {
+		t.Fatal(err)
+	}
+
+	headState, err := state.NewCreator(kv).NewState(blk.Header().StateRoot())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, headState.GetCode(builtin.Extension.Address), builtin.ExtensionV2.RuntimeBytecodes())
+
+	geneState, err := state.NewCreator(kv).NewState(b0.Header().StateRoot())
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, geneState.GetCode(builtin.Extension.Address), builtin.Extension.RuntimeBytecodes())
+}
