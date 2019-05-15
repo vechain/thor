@@ -57,5 +57,7 @@ func (r *reserved) DecodeRLP(s *rlp.Stream) error {
 }
 
 func isEmptyRLPRaw(value rlp.RawValue) bool {
-	return bytes.Equal(value, rlp.EmptyList) || bytes.Equal(value, rlp.EmptyString)
+	return len(value) == 0 ||
+		bytes.Equal(value, rlp.EmptyList) ||
+		bytes.Equal(value, rlp.EmptyString)
 }
