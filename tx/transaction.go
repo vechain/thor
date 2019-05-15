@@ -251,12 +251,12 @@ func (t *Transaction) DelegatorSigningHash(origin thor.Address) (hash thor.Bytes
 
 // Delegator returns delegator address who would like to pay for gas fee.
 func (t *Transaction) Delegator() (*thor.Address, error) {
-	if err := t.validateSignatureLength(); err != nil {
-		return nil, err
-	}
-
 	if !t.Features().IsDelegated() {
 		return nil, nil
+	}
+
+	if err := t.validateSignatureLength(); err != nil {
+		return nil, err
 	}
 
 	if cached := t.cache.delegator.Load(); cached != nil {
@@ -447,14 +447,13 @@ func (t *Transaction) String() string {
 }
 
 func (t *Transaction) validateSignatureLength() error {
+	expectedSigLen := 65
 	if t.Features().IsDelegated() {
-		if len(t.body.Signature) != 65*2 {
-			return secp256k1.ErrInvalidSignatureLen
-		}
-	} else {
-		if len(t.body.Signature) != 65 {
-			return secp256k1.ErrInvalidSignatureLen
-		}
+		expectedSigLen *= 2
+	}
+
+	if len(t.body.Signature) != expectedSigLen {
+		return secp256k1.ErrInvalidSignatureLen
 	}
 	return nil
 }
