@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 // ForkConfig config for a fork.
@@ -13,7 +14,17 @@ type ForkConfig struct {
 }
 
 func (fc ForkConfig) String() string {
-	return fmt.Sprintf("FTRL: #%v", fc.VIP191)
+	var strs []string
+	push := func(name string, blockNum uint32) {
+		if blockNum != math.MaxUint32 {
+			strs = append(strs, fmt.Sprintf("%v: #%v", name, blockNum))
+		}
+	}
+
+	push("FTRL", fc.FixTransferLog)
+	push("VIP191", fc.VIP191)
+
+	return strings.Join(strs, ", ")
 }
 
 // NoFork a special config without any forks.
