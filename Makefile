@@ -23,6 +23,9 @@ disco:| go_version_check
 	@go build -v -i -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/disco
 	@echo "done. executable created at 'bin/$@'"
 
+dep:| go_version_check
+	@go mod download
+
 go_version_check:
 	@if test $(MAJOR) -lt 1; then \
 		echo "Go 1.12 or higher required"; \
