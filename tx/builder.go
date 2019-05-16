@@ -69,6 +69,12 @@ func (b *Builder) DependsOn(txID *thor.Bytes32) *Builder {
 	return b
 }
 
+// Features set features.
+func (b *Builder) Features(feat Features) *Builder {
+	b.body.Reserved.Features = feat
+	return b
+}
+
 // Build build tx object.
 func (b *Builder) Build() *Transaction {
 	tx := Transaction{body: b.body}

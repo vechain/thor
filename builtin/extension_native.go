@@ -113,9 +113,13 @@ func init() {
 			output := env.TransactionContext().Expiration
 			return []interface{}{output}
 		}},
+		{"native_txGasPayer", func(env *xenv.Environment) []interface{} {
+			output := env.TransactionContext().GasPayer
+			return []interface{}{output}
+		}},
 	}
 
-	abi := Extension.NativeABI()
+	abi := ExtensionV2.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{

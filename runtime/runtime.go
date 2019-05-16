@@ -344,7 +344,7 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
 
-	txCtx := resolvedTx.ToContext(gasPrice, rt.ctx.Number, rt.seeker.GetID)
+	txCtx := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.seeker.GetID)
 
 	txOutputs := make([]*Tx.Output, 0, len(resolvedTx.Clauses))
 	reverted := false

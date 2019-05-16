@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.1.1
+  version: 1.1.2
 
 servers:
   - url: '/'
@@ -207,21 +207,20 @@ paths:
         - Transactions
       summary: Commit transaction
       description: |
-        in raw or structured format. If no signature in structured format,
-        `signingHash` is returned in response body.
+        in raw.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RawOrSignedOrUnsignedTx'
+              $ref: '#/components/schemas/RawTx'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IDOrSigningHash'
+                $ref: '#/components/schemas/TXID'
 
   /blocks/{revision}:
     parameters:
@@ -849,6 +848,11 @@ components:
         nonce:
           type: string
           example: '0x29c257e36ea6e72a'
+        features :
+          type: string
+          format: hex
+          description: features bitset in hex format
+          example: '0x1'
 
     SignedTx:
       allOf:
@@ -1034,12 +1038,32 @@ components:
         caller:
           type: string
           description: caller address (msg.sender)
+        provedWork:
+          type: string
+          description: tx proved work(for extension contract)
+        gasPayer:
+          type: string
+          description: gas payer(for extension contract)
+        expiration:
+          type: integer
+          format: uint32
+          description: tx expiration(for extension contract)
+        blockRef:
+          type: string
+          description: block reference(for extension contract)
       example:
         clauses:
           - to: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
             value: '0xde0b6b3a7640000'
-            data: '0x5665436861696e2054686f72'      
-
+            data: '0x5665436861696e2054686f72' 
+        gas: 50000
+        gasPrice: 1000000000000000
+        caller: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        provedWork: 1000
+        gasPayer: '0xd3ae78222beadb038203be21ed5ce7c9b1bff602'
+        expiration: 1000
+        blockRef: '0x00000000851caf3c'
+        
     BatchCallResult:
       type: array
       items:
@@ -1289,24 +1313,10 @@ components:
           blockNumber: 1
           blockTimestamp: 1523156271
 
-    RawOrSignedOrUnsignedTx:
-      oneOf:
-        - $ref: '#/components/schemas/RawTx'
-        - $ref: '#/components/schemas/SignedTx'
-        - $ref: '#/components/schemas/TxBody'
-      example:
-        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
-
-    IDOrSigningHash:
-      oneOf:
-        - type: object
-          properties:
-            id:
-              type: string
-        - type: object
-          properties:
-            signingHash:
-              type: string
+    TXID:
+      properties:
+        id:
+          type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
     

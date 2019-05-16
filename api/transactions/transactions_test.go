@@ -102,28 +102,6 @@ func senTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
-
-	unsignedTx := transactions.UnSignedTx{
-		ChainTag:   chainTag,
-		BlockRef:   hexutil.Encode(blockRef[:]),
-		Expiration: expiration,
-		Gas:        gas,
-	}
-	res = httpPost(t, ts.URL+"/transactions", unsignedTx)
-	if err = json.Unmarshal(res, &txObj); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, tx.SigningHash().String(), txObj["signingHash"], "should be the same transaction signingHash")
-
-	signedTx := transactions.SignedTx{
-		UnSignedTx: unsignedTx,
-		Signature:  hexutil.Encode(sig),
-	}
-	res = httpPost(t, ts.URL+"/transactions", signedTx)
-	if err = json.Unmarshal(res, &txObj); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, tx.ID().String(), txObj["id"], "should be the same transaction id")
 }
 
 func httpPost(t *testing.T, url string, obj interface{}) []byte {
@@ -214,7 +192,7 @@ func initTransactionServer(t *testing.T) {
 }
 
 func checkTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
-	origin, err := expectedTx.Signer()
+	origin, err := expectedTx.Origin()
 	if err != nil {
 		t.Fatal(err)
 	}

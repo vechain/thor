@@ -78,7 +78,7 @@ func NewDevnet() *Genesis {
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+			state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}

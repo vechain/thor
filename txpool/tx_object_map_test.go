@@ -20,9 +20,9 @@ func TestTxObjMap(t *testing.T) {
 	kv, _ := lvldb.NewMem()
 	chain := newChain(kv)
 
-	tx1 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0])
-	tx2 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0])
-	tx3 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[1])
+	tx1 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx3 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1)
 	txObj2, _ := resolveTx(tx2)

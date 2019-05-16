@@ -7,13 +7,10 @@ package transactions
 
 import (
 	"fmt"
-	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -48,15 +45,6 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
-func hasKey(m map[string]interface{}, key string) bool {
-	for k := range m {
-		if strings.ToLower(k) == strings.ToLower(key) {
-			return true
-		}
-	}
-	return false
-}
-
 //Transaction transaction
 type Transaction struct {
 	ID           thor.Bytes32        `json:"id"`
@@ -69,62 +57,9 @@ type Transaction struct {
 	Origin       thor.Address        `json:"origin"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
+	Features     math.HexOrDecimal64 `json:"features"`
 	Size         uint32              `json:"size"`
 	Meta         TxMeta              `json:"meta"`
-}
-type UnSignedTx struct {
-	ChainTag     uint8               `json:"chainTag"`
-	BlockRef     string              `json:"blockRef"`
-	Expiration   uint32              `json:"expiration"`
-	Clauses      Clauses             `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
-	Gas          uint64              `json:"gas"`
-	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Nonce        math.HexOrDecimal64 `json:"nonce"`
-}
-
-func (ustx *UnSignedTx) decode() (*tx.Transaction, error) {
-	txBuilder := new(tx.Builder)
-	for _, clause := range ustx.Clauses {
-		data, err := hexutil.Decode(clause.Data)
-		if err != nil {
-			return nil, errors.WithMessage(err, "data")
-		}
-		v := big.Int(clause.Value)
-		txBuilder.Clause(tx.NewClause(clause.To).WithData(data).WithValue(&v))
-	}
-	blockRef, err := hexutil.Decode(ustx.BlockRef)
-	if err != nil {
-		return nil, errors.WithMessage(err, "blockRef")
-	}
-	var bf tx.BlockRef
-	copy(bf[:], blockRef[:])
-
-	return txBuilder.ChainTag(ustx.ChainTag).
-		BlockRef(bf).
-		Expiration(ustx.Expiration).
-		Gas(ustx.Gas).
-		GasPriceCoef(ustx.GasPriceCoef).
-		DependsOn(ustx.DependsOn).
-		Nonce(uint64(ustx.Nonce)).
-		Build(), nil
-}
-
-type SignedTx struct {
-	UnSignedTx
-	Signature string `json:"signature"`
-}
-
-func (stx *SignedTx) decode() (*tx.Transaction, error) {
-	tx, err := stx.UnSignedTx.decode()
-	if err != nil {
-		return nil, err
-	}
-	sig, err := hexutil.Decode(stx.Signature)
-	if err != nil {
-		return nil, errors.WithMessage(err, "signature")
-	}
-	return tx.WithSignature(sig), nil
 }
 
 type RawTx struct {
@@ -150,8 +85,8 @@ type rawTransaction struct {
 
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64) (*Transaction, error) {
-	//tx signer
-	signer, err := tx.Signer()
+	//tx origin
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +98,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 	t := &Transaction{
 		ChainTag:     tx.ChainTag(),
 		ID:           tx.ID(),
-		Origin:       signer,
+		Origin:       origin,
 		BlockRef:     hexutil.Encode(br[:]),
 		Expiration:   tx.Expiration(),
 		Nonce:        math.HexOrDecimal64(tx.Nonce()),
@@ -172,6 +107,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 		Gas:          tx.Gas(),
 		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
+		Features:     math.HexOrDecimal64(tx.Features()),
 		Meta: TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
@@ -231,7 +167,7 @@ type Transfer struct {
 func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)
-	signer, err := tx.Signer()
+	origin, err := tx.Origin()
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +182,7 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			header.Number(),
 			header.Timestamp(),
 			tx.ID(),
-			signer,
+			origin,
 		},
 	}
 	receipt.Outputs = make([]*Output, len(txReceipt.Outputs))

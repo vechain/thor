@@ -39,7 +39,7 @@ func (tr *transferReader) Read() ([]interface{}, bool, error) {
 		for i, receipt := range receipts {
 			for j, output := range receipt.Outputs {
 				for _, transfer := range output.Transfers {
-					origin, err := txs[i].Signer()
+					origin, err := txs[i].Origin()
 					if err != nil {
 						return nil, false, err
 					}

@@ -97,8 +97,8 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 		case txEv := <-txEvCh:
 			newTx := txEv.Tx
-			singer, _ := newTx.Signer()
-			log.Info("new Tx", "id", newTx.ID(), "signer", singer)
+			origin, _ := newTx.Origin()
+			log.Info("new Tx", "id", newTx.ID(), "origin", origin)
 			if s.onDemand {
 				if err := s.packing(tx.Transactions{newTx}); err != nil {
 					log.Error("failed to pack block", "err", err)
@@ -168,7 +168,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 
 	batch := s.logDB.Prepare(b.Header())
 	for i, tx := range b.Transactions() {
-		origin, _ := tx.Signer()
+		origin, _ := tx.Origin()
 		txBatch := batch.ForTransaction(tx.ID(), origin)
 		receipt := receipts[i]
 		for j, output := range receipt.Outputs {

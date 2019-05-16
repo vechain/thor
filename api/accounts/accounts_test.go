@@ -369,6 +369,20 @@ func batchCall(t *testing.T) {
 		assert.Equal(t, a+b, ret, "should be equal")
 	}
 	assert.Equal(t, http.StatusOK, statusCode)
+
+	big := math.HexOrDecimal256(*big.NewInt(1000))
+	fullBody := &accounts.BatchCallData{
+		Clauses:    accounts.Clauses{},
+		Gas:        21000,
+		GasPrice:   &big,
+		ProvedWork: &big,
+		Caller:     &contractAddr,
+		GasPayer:   &contractAddr,
+		Expiration: 100,
+		BlockRef:   "0x00000000aabbccdd",
+	}
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*", fullBody)
+	assert.Equal(t, http.StatusOK, statusCode)
 }
 
 func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
