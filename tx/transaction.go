@@ -403,28 +403,20 @@ func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32
 
 func (t *Transaction) String() string {
 	var (
-		originStr    string
+		originStr    = "N/A"
 		br           BlockRef
-		dependsOn    string
-		delegatorStr string
+		dependsOn    = "nil"
+		delegatorStr = "N/A"
 	)
-	origin, err := t.Origin()
-	if err != nil {
-		originStr = "N/A"
-	} else {
+	if origin, err := t.Origin(); err == nil {
 		originStr = origin.String()
 	}
-	delegator, err := t.Delegator()
-	if err != nil {
-		delegatorStr = "N/A"
-	} else {
+	if delegator, _ := t.Delegator(); delegator != nil {
 		delegatorStr = delegator.String()
 	}
 
 	binary.BigEndian.PutUint64(br[:], t.body.BlockRef)
-	if t.body.DependsOn == nil {
-		dependsOn = "nil"
-	} else {
+	if t.body.DependsOn != nil {
 		dependsOn = t.body.DependsOn.String()
 	}
 
