@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 // Header contains almost all information about a block, except block body.
@@ -38,9 +39,9 @@ type headerBody struct {
 	GasUsed    uint64
 	TotalScore uint64
 
-	TxsRoot      thor.Bytes32
-	StateRoot    thor.Bytes32
-	ReceiptsRoot thor.Bytes32
+	TxsRootFeatures txsRootFeatures
+	StateRoot       thor.Bytes32
+	ReceiptsRoot    thor.Bytes32
 
 	Signature []byte
 }
@@ -83,7 +84,12 @@ func (h *Header) Beneficiary() thor.Address {
 
 // TxsRoot returns merkle root of txs contained in this block.
 func (h *Header) TxsRoot() thor.Bytes32 {
-	return h.body.TxsRoot
+	return h.body.TxsRootFeatures.Root
+}
+
+// TxsFeatures returns supported txs features.
+func (h *Header) TxsFeatures() tx.Features {
+	return h.body.TxsRootFeatures.Features
 }
 
 // StateRoot returns account state merkle root just afert this block being applied.
@@ -138,7 +144,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		h.body.GasUsed,
 		h.body.TotalScore,
 
-		h.body.TxsRoot,
+		&h.body.TxsRootFeatures,
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
 	})
@@ -217,11 +223,12 @@ func (h *Header) String() string {
 	GasUsed:		%v
 	TotalScore:		%v
 	TxsRoot:		%v
+	TxsFeatures:	%v
 	StateRoot:		%v
 	ReceiptsRoot:	%v
 	Signature:		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRoot, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
 }
 
 // Number extract block number from block id.
