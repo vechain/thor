@@ -4,7 +4,7 @@ A general purpose blockchain highly compatible with Ethereum's ecosystem.
 
 This is the first implementation written in golang.
 
-[![Go](https://img.shields.io/badge/golang-%3E%3D1.10-orange.svg?style=flat-square")](https://golang.org)
+[![Go](https://img.shields.io/badge/golang-%3E%3D1.12-orange.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
 [![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
@@ -29,8 +29,7 @@ This is the first implementation written in golang.
 
 ### Requirements
 
-Thor requires `Go` 1.10+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install). 
-
+Thor requires `Go` 1.12+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install). 
 
 ### Getting the source
 
@@ -41,7 +40,6 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
-
 ### Dependency management
 
 Simply run:
@@ -49,20 +47,7 @@ Simply run:
 make dep
 ```
 
-To manually install dependencies, choices are
-
-- [dep](https://github.com/golang/dep), Golang's official dependency management tool 
-
-    ```
-    dep ensure -vendor-only
-    ```
-    (*Note that to make `dep` work, you should put the source code at `$GOPATH/src/github.com/vechain/thor`*)
-
-- git submodule
-
-    ```
-    git submodule update --init
-    ```
+If you keep getting network error, it is suggested to use [Go Module Proxy](https://golang.org/cmd/go/#hdr-Module_proxy_protocol). [https://goproxy.io/](https://goproxy.io/) is one option.
 
 ### Building
 
