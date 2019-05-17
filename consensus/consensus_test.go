@@ -99,7 +99,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	}
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(c, stateCreator, proposer.Address, &proposer.Address)
+	p := packer.New(c, stateCreator, proposer.Address, &proposer.Address, thor.NoFork)
 	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	con := New(c, stateCreator)
+	con := New(c, stateCreator, thor.NoFork)
 	if _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}

@@ -73,7 +73,7 @@ func initExectorTest() *ctest {
 	st, _ := state.New(b0.Header().StateRoot(), kv)
 	seeker := c.NewSeeker(b0.Header().ID())
 
-	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, thor.NoFork)
 
 	return &ctest{
 		rt:  rt,

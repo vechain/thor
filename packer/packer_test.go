@@ -83,7 +83,7 @@ func TestP(t *testing.T) {
 
 	for {
 		best := c.BestBlock()
-		p := packer.New(c, stateCreator, a1.Address, &a1.Address)
+		p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.NoFork)
 		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
@@ -97,7 +97,7 @@ func TestP(t *testing.T) {
 		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
-		fmt.Println(consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2)))
+		fmt.Println(consensus.New(c, stateCreator, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
 
 		if _, err := c.AddBlock(blk, receipts); err != nil {
 			t.Fatal(err)
@@ -151,7 +151,7 @@ func TestForkVIP191(t *testing.T) {
 	c, _ := chain.New(kv, b0)
 
 	best := c.BestBlock()
-	p := packer.New(c, stateCreator, a1.Address, &a1.Address)
+	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(c, stateCreator).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, err = consensus.New(c, stateCreator, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}
