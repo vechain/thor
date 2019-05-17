@@ -50,7 +50,6 @@ type TxPool struct {
 	options      Options
 	chain        *chain.Chain
 	stateCreator *state.Creator
-	forkConfig   thor.ForkConfig
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -69,7 +68,6 @@ func New(chain *chain.Chain, stateCreator *state.Creator, options Options) *TxPo
 		options:      options,
 		chain:        chain,
 		stateCreator: stateCreator,
-		forkConfig:   thor.GetForkConfig(chain.GenesisBlock().Header().ID()),
 		all:          newTxObjectMap(),
 		done:         make(chan struct{}),
 	}
@@ -160,17 +158,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		return txRejectedError{"size too large"}
 	}
 
-	if headBlock.Number() < p.forkConfig.VIP191 {
-		if newTx.ReservedFieldsCount() != 0 {
-			return txRejectedError{"reserved fields not empty"}
-		}
-	} else {
-		if newTx.ReservedFieldsCount() > 1 {
-			return txRejectedError{"unknown reserved fields"}
-		}
-		if newTx.Features() > tx.MaxFeaturesValue {
-			return txRejectedError{"bad features"}
-		}
+	if err := newTx.TestFeatures(headBlock.TxsFeatures()); err != nil {
+		return txRejectedError{err.Error()}
 	}
 
 	txObj, err := resolveTx(newTx)
