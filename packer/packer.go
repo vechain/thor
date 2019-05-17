@@ -34,7 +34,8 @@ func New(
 	chain *chain.Chain,
 	stateCreator *state.Creator,
 	nodeMaster thor.Address,
-	beneficiary *thor.Address) *Packer {
+	beneficiary *thor.Address,
+	forkConfig thor.ForkConfig) *Packer {
 
 	return &Packer{
 		chain,
@@ -42,7 +43,7 @@ func New(
 		nodeMaster,
 		beneficiary,
 		0,
-		thor.GetForkConfig(chain.GenesisBlock().Header().ID()),
+		forkConfig,
 	}
 }
 
@@ -98,15 +99,20 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 			Time:        newBlockTime,
 			GasLimit:    p.gasLimit(parent.GasLimit()),
 			TotalScore:  parent.TotalScore() + score,
-		})
+		},
+		p.forkConfig)
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
-	if parent.Number()+1 == p.forkConfig.VIP191 {
+	vip191 := p.forkConfig.VIP191
+	if vip191 == 0 {
+		vip191 = 1
+	}
+	if parent.Number()+1 == vip191 {
 		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 	}
 
 	var features tx.Features
-	if parent.Number()+1 >= p.forkConfig.VIP191 {
+	if parent.Number()+1 >= vip191 {
 		features |= tx.DelegationFeature
 	}
 
@@ -132,15 +138,21 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 			Time:        targetTime,
 			GasLimit:    gasLimit,
 			TotalScore:  parent.TotalScore() + 1,
-		})
+		},
+		p.forkConfig)
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
-	if parent.Number()+1 == p.forkConfig.VIP191 {
+	vip191 := p.forkConfig.VIP191
+	if vip191 == 0 {
+		vip191 = 1
+	}
+
+	if parent.Number()+1 == vip191 {
 		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 	}
 
 	var features tx.Features
-	if parent.Number()+1 >= p.forkConfig.VIP191 {
+	if parent.Number()+1 >= vip191 {
 		features |= tx.DelegationFeature
 	}
 

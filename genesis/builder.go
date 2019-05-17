@@ -92,7 +92,7 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 	rt := runtime.New(nil, state, &xenv.BlockContext{
 		Time:     b.timestamp,
 		GasLimit: b.gasLimit,
-	})
+	}, thor.NoFork)
 
 	for _, call := range b.calls {
 		out := rt.ExecuteClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{

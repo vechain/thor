@@ -30,13 +30,20 @@ type Accounts struct {
 	chain        *chain.Chain
 	stateCreator *state.Creator
 	callGasLimit uint64
+	forkConfig   thor.ForkConfig
 }
 
-func New(chain *chain.Chain, stateCreator *state.Creator, callGasLimit uint64) *Accounts {
+func New(
+	chain *chain.Chain,
+	stateCreator *state.Creator,
+	callGasLimit uint64,
+	forkConfig thor.ForkConfig,
+) *Accounts {
 	return &Accounts{
 		chain,
 		stateCreator,
 		callGasLimit,
+		forkConfig,
 	}
 }
 
@@ -204,7 +211,9 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 			Number:      header.Number(),
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore()})
+			TotalScore:  header.TotalScore(),
+		},
+		a.forkConfig)
 	results = make(BatchCallResults, 0)
 	vmout := make(chan *runtime.Output, 1)
 	for i, clause := range clauses {
