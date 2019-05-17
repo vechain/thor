@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
 )
 
@@ -104,7 +105,12 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 	}
 
-	return newFlow(p, parent, rt), nil
+	var features tx.Features
+	if parent.Number()+1 >= p.forkConfig.VIP191 {
+		features |= tx.DelegationFeature
+	}
+
+	return newFlow(p, parent, rt, features), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -133,7 +139,12 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
 	}
 
-	return newFlow(p, parent, rt), nil
+	var features tx.Features
+	if parent.Number()+1 >= p.forkConfig.VIP191 {
+		features |= tx.DelegationFeature
+	}
+
+	return newFlow(p, parent, rt, features), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

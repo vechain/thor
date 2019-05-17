@@ -4,23 +4,20 @@ package tx
 type Features uint32
 
 const (
-	// See VIP-191 for more detail. (https://github.com/vechain/VIPs/blob/master/vips/VIP-191.md)
-	delegatedMask Features = 1
-
-	// MaxFeaturesValue max allowed features value
-	MaxFeaturesValue = delegatedMask
+	// DelegationFeature See VIP-191 for more detail. (https://github.com/vechain/VIPs/blob/master/vips/VIP-191.md)
+	DelegationFeature Features = 1
 )
 
 // IsDelegated returns whether tx is delegated.
 func (f Features) IsDelegated() bool {
-	return (f & delegatedMask) == delegatedMask
+	return (f & DelegationFeature) == DelegationFeature
 }
 
 // SetDelegated set tx delegated flag.
 func (f *Features) SetDelegated(flag bool) {
 	if flag {
-		*f |= delegatedMask
+		*f |= DelegationFeature
 	} else {
-		*f &= (^delegatedMask)
+		*f &= (^DelegationFeature)
 	}
 }

@@ -138,7 +138,7 @@ func TestAdd(t *testing.T) {
 	}{
 		{newTx(pool.chain.Tag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(0), acc), "tx rejected: tx is not executable"},
 		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: tx is not executable"},
-		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(2), acc), "tx rejected: bad features"},
+		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(2), acc), "tx rejected: unsupported features"},
 		{badReserved, "tx rejected: unknown reserved fields"},
 	}
 

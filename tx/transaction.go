@@ -291,17 +291,18 @@ func (t *Transaction) WithSignature(sig []byte) *Transaction {
 	return &newTx
 }
 
-// ReservedFieldsCount returns count of reserved fields.
-// Reserved fields are for backward compatibility purpose.
-func (t *Transaction) ReservedFieldsCount() int {
-	if unusedLen := len(t.body.Reserved.Unused); unusedLen > 0 {
-		return unusedLen + 1
-	}
-	if t.body.Reserved.Features == 0 {
-		return 0
+// TestFeatures test if the tx is compatible with given supported features.
+// An error returned if it is incompatible.
+func (t *Transaction) TestFeatures(supported Features) error {
+	r := &t.body.Reserved
+	if r.Features&supported != r.Features {
+		return errors.New("unsupported features")
 	}
 
-	return 1
+	if len(r.Unused) > 0 {
+		return errors.New("unused reserved slot")
+	}
+	return nil
 }
 
 // EncodeRLP implements rlp.Encoder
