@@ -87,17 +87,13 @@ func New(
 	seeker *chain.Seeker,
 	state *state.State,
 	ctx *xenv.BlockContext,
+	forkConfig thor.ForkConfig,
 ) *Runtime {
 	rt := Runtime{
-		seeker: seeker,
-		state:  state,
-		ctx:    ctx,
-	}
-	if seeker != nil {
-		rt.forkConfig = thor.GetForkConfig(seeker.GenesisID())
-	} else {
-		// for genesis building stage
-		rt.forkConfig = thor.NoFork
+		seeker:     seeker,
+		state:      state,
+		ctx:        ctx,
+		forkConfig: forkConfig,
 	}
 	return &rt
 }

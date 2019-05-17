@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -49,9 +50,14 @@ func New(
 	onDemand bool,
 ) *Solo {
 	return &Solo{
-		chain:    chain,
-		txPool:   txPool,
-		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address),
+		chain:  chain,
+		txPool: txPool,
+		packer: packer.New(
+			chain,
+			stateCreator,
+			genesis.DevAccounts()[0].Address,
+			&genesis.DevAccounts()[0].Address,
+			thor.GetForkConfig(chain.GenesisBlock().Header().ID())),
 		logDB:    logDB,
 		gasLimit: gasLimit,
 		onDemand: onDemand,

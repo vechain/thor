@@ -24,11 +24,12 @@ type Consensus struct {
 }
 
 // New create a Consensus instance.
-func New(chain *chain.Chain, stateCreator *state.Creator) *Consensus {
+func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkConfig) *Consensus {
 	return &Consensus{
 		chain:        chain,
 		stateCreator: stateCreator,
-		forkConfig:   thor.GetForkConfig(chain.GenesisBlock().Header().ID())}
+		forkConfig:   forkConfig,
+	}
 }
 
 // Process process a block.
@@ -96,5 +97,6 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
-		}), nil
+		},
+		c.forkConfig), nil
 }

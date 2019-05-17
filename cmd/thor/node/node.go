@@ -63,9 +63,10 @@ func New(
 	targetGasLimit uint64,
 	skipLogs bool,
 ) *Node {
+	forkConfig := thor.GetForkConfig(chain.GenesisBlock().Header().ID())
 	return &Node{
-		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:           consensus.New(chain, stateCreator),
+		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
+		cons:           consensus.New(chain, stateCreator, forkConfig),
 		master:         master,
 		chain:          chain,
 		logDB:          logDB,

@@ -27,6 +27,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -41,7 +42,9 @@ func New(
 	backtraceLimit uint32,
 	callGasLimit uint64,
 	pprofOn bool,
-	skipLogs bool) (http.HandlerFunc, func()) {
+	skipLogs bool,
+	forkConfig thor.ForkConfig,
+) (http.HandlerFunc, func()) {
 
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -64,7 +67,7 @@ func New(
 			http.Redirect(w, req, "doc/swagger-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(chain, stateCreator, callGasLimit).
+	accounts.New(chain, stateCreator, callGasLimit, forkConfig).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
@@ -85,7 +88,7 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(chain, txPool).
 		Mount(router, "/transactions")
-	debug.New(chain, stateCreator).
+	debug.New(chain, stateCreator, forkConfig).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
