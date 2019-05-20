@@ -126,7 +126,7 @@ func TestAdd(t *testing.T) {
 		}
 	}
 
-	raw, _ := hex.DecodeString("f8dc81b984aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec2017fb882bb61f654ee9868682314900fb8fb93ad2dae1f81370bded564101388ba80c64250e186e18d4861830ec8d5d30f1d03f8697bb03f5a3d9ea375862b79ec6ed1850173183f8edb80cfda71dbdd6b46004b084f4032fb9bf37dfc274c1324ac897c1f506aa907b6e6acc61c94dc5c42c05b762e7e0fc0670f0420689961e6269da7ab00")
+	raw, _ := hex.DecodeString("f8dc81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec20108b88256e32450c1907f627d2c11fe5a9d0216be1712f4938b5feb04e37edef236c56266c3378acf97994beff22698b70023f486645d29cb23b479a7b044f7c6b104d2000584fcb3964446d4d832dcc849e2d76ea7e04a4ebdc3a4b61e7997e93277363d4e7fe9315e7f6dd8d9c0a8bff5879503f5c04adab8b08772499e74d34f67923501")
 	var badReserved *Tx.Transaction
 	if err := rlp.DecodeBytes(raw, &badReserved); err != nil {
 		t.Error(err)
@@ -159,8 +159,6 @@ func TestBeforeVIP191Add(t *testing.T) {
 	chain := newChain(kv)
 
 	acc := genesis.DevAccounts()[0]
-
-	thor.SetCustomNetForkConfig(chain.GenesisBlock().Header().ID(), thor.ForkConfig{0, 100})
 
 	pool := New(chain, state.NewCreator(kv), Options{
 		Limit:           10,
