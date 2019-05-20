@@ -22,6 +22,7 @@ type Block struct {
 	GasUsed      uint64         `json:"gasUsed"`
 	TotalScore   uint64         `json:"totalScore"`
 	TxsRoot      thor.Bytes32   `json:"txsRoot"`
+	TxsFeatures  uint32         `json:"txsFeatures"`
 	StateRoot    thor.Bytes32   `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
 	Signer       thor.Address   `json:"signer"`
@@ -58,6 +59,7 @@ func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
 		StateRoot:    header.StateRoot(),
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
+		TxsFeatures:  uint32(header.TxsFeatures()),
 		IsTrunk:      isTrunk,
 		Transactions: txIds,
 	}, nil

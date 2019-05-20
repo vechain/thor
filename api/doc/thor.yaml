@@ -771,6 +771,11 @@ components:
           format: bytes32
           description: root hash of transactions in the block 
           example: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
+        txsFeatures:
+          type: integer
+          format: uint32
+          description: supported txs features bitset
+          example: 0
         stateRoot:
           type: string
           format: bytes32
@@ -848,21 +853,6 @@ components:
         nonce:
           type: string
           example: '0x29c257e36ea6e72a'
-        features :
-          type: string
-          format: hex
-          description: features bitset in hex format
-          example: '0x1'
-
-    SignedTx:
-      allOf:
-        - $ref: '#/components/schemas/TxBody'
-        - type: object
-          properties:
-            signature:
-              type: string
-              description: signature hex string
-              example: '0x67cd851b90fb016457bb30ccbdaa3405f3db667daeb95258e1859c545be30c10f1780476f7c6ba24c75d26c8f1a9df59fe89b105c6f86733c1d5c1c74f14cd9201'
 
     TxWithMeta:
       allOf:
@@ -877,6 +867,10 @@ components:
               type: string
               description: the one who signed the transaction
               example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+            delegator:
+              type: string
+              description: the delegator who paid the gas fee
+              example: null
             size:
               type: integer
               format: uint32
@@ -1305,6 +1299,7 @@ components:
         gasPriceCoef: 128
         gas: 21000
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        delegator: null
         nonce: '0xd92966da424d9939'
         dependsOn: null
         size: 180
@@ -1405,7 +1400,12 @@ components:
           type: integer
           format: uint64
           description: block unix timestamp
-          example: 1533267900        
+          example: 1533267900
+        txsFeatures:
+          type: integer
+          format: uint32
+          description: supported txs features bitset
+          example: 0
         bloom:
           type: string
           format: hex

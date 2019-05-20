@@ -55,9 +55,9 @@ type Transaction struct {
 	GasPriceCoef uint8               `json:"gasPriceCoef"`
 	Gas          uint64              `json:"gas"`
 	Origin       thor.Address        `json:"origin"`
+	Delegator    *thor.Address       `json:"delegator"`
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
-	Features     math.HexOrDecimal64 `json:"features"`
 	Size         uint32              `json:"size"`
 	Meta         TxMeta              `json:"meta"`
 }
@@ -86,10 +86,9 @@ type rawTransaction struct {
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64) (*Transaction, error) {
 	//tx origin
-	origin, err := tx.Origin()
-	if err != nil {
-		return nil, err
-	}
+	origin, _ := tx.Origin()
+	delegator, _ := tx.Delegator()
+
 	cls := make(Clauses, len(tx.Clauses()))
 	for i, c := range tx.Clauses() {
 		cls[i] = convertClause(c)
@@ -107,7 +106,7 @@ func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64
 		Gas:          tx.Gas(),
 		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
-		Features:     math.HexOrDecimal64(tx.Features()),
+		Delegator:    delegator,
 		Meta: TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
