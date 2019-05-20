@@ -281,6 +281,9 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		if err != nil {
 			return nil, 0, nil, errors.WithMessage(err, "blockRef")
 		}
+		if len(blockRef) != 8 {
+			return nil, 0, nil, errors.New("blockRef: invalid length")
+		}
 		var blkRef tx.BlockRef
 		copy(blkRef[:], blockRef[:])
 		txCtx.BlockRef = blkRef
