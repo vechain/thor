@@ -48,6 +48,7 @@ func New(
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
+	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
 		chain:  chain,
@@ -57,7 +58,7 @@ func New(
 			stateCreator,
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
-			thor.GetForkConfig(chain.GenesisBlock().Header().ID())),
+			forkConfig),
 		logDB:    logDB,
 		gasLimit: gasLimit,
 		onDemand: onDemand,

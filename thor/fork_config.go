@@ -1,7 +1,6 @@
 package thor
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -50,13 +49,4 @@ var forkConfigs = map[Bytes32]ForkConfig{
 // GetForkConfig get fork config for given genesis ID.
 func GetForkConfig(genesisID Bytes32) ForkConfig {
 	return forkConfigs[genesisID]
-}
-
-// SetCustomNetForkConfig set the fork config for the given genesis ID.
-func SetCustomNetForkConfig(genesisID Bytes32, f ForkConfig) error {
-	if _, ok := forkConfigs[genesisID]; ok {
-		return errors.New("Can not overwrite fork config")
-	}
-	forkConfigs[genesisID] = f
-	return nil
 }

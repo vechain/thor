@@ -62,8 +62,8 @@ func New(
 	comm *comm.Communicator,
 	targetGasLimit uint64,
 	skipLogs bool,
+	forkConfig thor.ForkConfig,
 ) *Node {
-	forkConfig := thor.GetForkConfig(chain.GenesisBlock().Header().ID())
 	return &Node{
 		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
 		cons:           consensus.New(chain, stateCreator, forkConfig),

@@ -128,7 +128,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
-	gene := selectGenesis(ctx)
+	gene, forkConfig := selectGenesis(ctx)
 	instanceDir := makeInstanceDir(ctx, gene)
 
 	mainDB := openMainDB(ctx, instanceDir)
@@ -142,7 +142,7 @@ func defaultAction(ctx *cli.Context) error {
 	chain := initChain(gene, mainDB, logDB)
 	master := loadNodeMaster(ctx)
 
-	printStartupMessage1(gene, chain, master, instanceDir)
+	printStartupMessage1(gene, chain, master, instanceDir, forkConfig)
 
 	if !skipLogs {
 		if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
@@ -165,7 +165,7 @@ func defaultAction(ctx *cli.Context) error {
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
-		thor.GetForkConfig(gene.ID()))
+		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
@@ -185,7 +185,8 @@ func defaultAction(ctx *cli.Context) error {
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pcom.comm,
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
-		skipLogs).
+		skipLogs,
+		forkConfig).
 		Run(exitSignal)
 }
 
@@ -195,6 +196,8 @@ func soloAction(ctx *cli.Context) error {
 
 	initLogger(ctx)
 	gene := genesis.NewDevnet()
+	// Solo forks from the start
+	forkConfig := thor.ForkConfig{}
 
 	var mainDB *lvldb.LevelDB
 	var logDB *logdb.LogDB
@@ -232,20 +235,21 @@ func soloAction(ctx *cli.Context) error {
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		false,
-		thor.GetForkConfig(gene.ID()))
+		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printSoloStartupMessage(gene, chain, instanceDir, apiURL)
+	printSoloStartupMessage(gene, chain, instanceDir, apiURL, forkConfig)
 
 	return solo.New(chain,
 		state.NewCreator(mainDB),
 		logDB,
 		txPool,
 		uint64(ctx.Int("gas-limit")),
-		ctx.Bool("on-demand")).Run(exitSignal)
+		ctx.Bool("on-demand"),
+		forkConfig).Run(exitSignal)
 }
 
 func masterKeyAction(ctx *cli.Context) error {

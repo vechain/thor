@@ -49,15 +49,17 @@ func initLogger(ctx *cli.Context) {
 	ethlog.Root().SetHandler(ethLogHandler)
 }
 
-func selectGenesis(ctx *cli.Context) *genesis.Genesis {
+func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig) {
 	network := ctx.String(networkFlag.Name)
 
 	if network != "" {
 		switch network {
 		case "test":
-			return genesis.NewTestnet()
+			gene := genesis.NewTestnet()
+			return gene, thor.GetForkConfig(gene.ID())
 		case "main":
-			return genesis.NewMainnet()
+			gene := genesis.NewMainnet()
+			return gene, thor.GetForkConfig(gene.ID())
 		default:
 			file, err := os.Open(network)
 			if err != nil {
@@ -78,14 +80,14 @@ func selectGenesis(ctx *cli.Context) *genesis.Genesis {
 				fatal(fmt.Sprintf("build genesis: %v", err))
 			}
 
-			return customGen
+			return customGen, gen.ForkConfig
 		}
 	}
 
 	cli.ShowAppHelp(ctx)
 	fmt.Println("network flag not specified")
 	os.Exit(1)
-	return nil
+	return nil, thor.ForkConfig{}
 }
 
 func makeConfigDir(ctx *cli.Context) string {
@@ -325,6 +327,7 @@ func printStartupMessage1(
 	chain *chain.Chain,
 	master *node.Master,
 	dataDir string,
+	forkConfig thor.ForkConfig,
 ) {
 	bestBlock := chain.BestBlock()
 
@@ -339,7 +342,7 @@ func printStartupMessage1(
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
-		thor.GetForkConfig(gene.ID()),
+		forkConfig,
 		master.Address(),
 		func() string {
 			if master.Beneficiary == nil {
@@ -382,6 +385,7 @@ func printSoloStartupMessage(
 	chain *chain.Chain,
 	dataDir string,
 	apiURL string,
+	forkConfig thor.ForkConfig,
 ) {
 	tableHead := `
 ┌────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────┐
@@ -403,7 +407,7 @@ func printSoloStartupMessage(
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
-		thor.GetForkConfig(gene.ID()),
+		forkConfig,
 		dataDir,
 		apiURL)
 
