@@ -149,7 +149,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 
 	if len(gen.ExtraData) > 0 {
 		var extra [28]byte
-		copy(extra[:], "Salute & Respect, Ethereum!")
+		copy(extra[:], gen.ExtraData)
 		builder.ExtraData(extra)
 	}
 
