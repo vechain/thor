@@ -21,6 +21,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -327,33 +328,78 @@ func masterKeyAction(ctx *cli.Context) error {
 	return nil
 }
 
-func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) error {
-	bestBlockNum := chain.BestBlock().Header().Number()
-	if bestBlockNum == 0 {
-		return nil
+func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, error) {
+	best := chain.BestBlock().Header()
+	if best.Number() == 0 {
+		return 0, nil
 	}
 
-	pos, err := logDB.QueryLastBlockNumber()
+	newestID, err := logDB.NewestBlockID()
 	if err != nil {
-		return errors.Wrap(err, "get last synced block number")
+		return 0, err
 	}
 
-	if pos >= bestBlockNum {
+	if block.Number(newestID) == 0 {
+		return 0, nil
+	}
+
+	if newestID == best.ID() {
+		return best.Number(), nil
+	}
+
+	seekStart := block.Number(newestID)
+	if seekStart >= best.Number() {
+		seekStart = best.Number() - 1
+	}
+
+	header, err := chain.GetTrunkBlockHeader(seekStart)
+	if err != nil {
+		return 0, err
+	}
+
+	for header.Number() > 0 {
+		has, err := logDB.HasBlockID(header.ID())
+		if err != nil {
+			return 0, err
+		}
+		if has {
+			break
+		}
+
+		header, err = chain.GetBlockHeader(header.ParentID())
+		if err != nil {
+			return 0, err
+		}
+	}
+	return block.Number(header.ID()) + 1, nil
+
+}
+
+func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) error {
+	pos, err := seekLogDBSyncPosition(chain, logDB)
+	if err != nil {
+		return errors.Wrap(err, "seek log db sync position")
+	}
+	best := chain.BestBlock().Header()
+	if best.Number() == pos {
 		return nil
 	}
 
 	if pos == 0 {
-		pos = 1
+		fmt.Println(">> Rebuilding log db <<")
+		pos = 1 // block 0 can be skipped
+	} else {
+		fmt.Println(">> Syncing log db <<")
 	}
 
-	fmt.Println(">> Syncing logdb <<")
-	pb := pb.New64(int64(bestBlockNum)).
-		Set64(int64(pos)).SetMaxWidth(90).
+	pb := pb.New64(int64(best.Number())).
+		Set64(int64(pos)).
+		SetMaxWidth(90).
 		Start()
 
 	defer func() { pb.NotPrint = true }()
 
-	for ; pos <= bestBlockNum; pos++ {
+	for ; pos <= best.Number(); pos++ {
 		block, err := chain.GetTrunkBlock(pos)
 		if err != nil {
 			return errors.Wrap(err, "get trunk block")
@@ -365,17 +411,14 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 				return errors.Wrap(err, "get block receipts")
 			}
 
-			batch := logDB.Prepare(block.Header())
+			task := logDB.NewTask().ForBlock(block.Header())
 
 			for i, tx := range txs {
 				origin, _ := tx.Signer()
-				txBatch := batch.ForTransaction(tx.ID(), origin)
-				for j, output := range receipts[i].Outputs {
-					txBatch.Insert(output.Events, output.Transfers, uint32(j))
-				}
+				task.Write(tx.ID(), origin, receipts[i].Outputs)
 			}
-			if err := batch.Commit(); err != nil {
-				return errors.Wrap(err, "commit logs")
+			if err := task.Commit(); err != nil {
+				return errors.Wrap(err, "write logs")
 			}
 		}
 
