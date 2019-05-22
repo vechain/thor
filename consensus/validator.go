@@ -215,7 +215,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 	receiptsRoot := receipts.RootHash()
 	if header.ReceiptsRoot() != receiptsRoot {
-		return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
+		if m, ok := c.mismatchedReceiptMap[header.ID()]; ok == false || m.Acceptable != header.ReceiptsRoot() || m.Accurate != receiptsRoot {
+			return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
+		}
 	}
 
 	if err := rt.Seeker().Err(); err != nil {
