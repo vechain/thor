@@ -80,6 +80,7 @@ func main() {
 			bootNodeFlag,
 			skipLogsFlag,
 			pprofFlag,
+			verifyLogsFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -98,6 +99,7 @@ func main() {
 					gasLimitFlag,
 					verbosityFlag,
 					pprofFlag,
+					verifyLogsFlag,
 				},
 				Action: soloAction,
 			},
@@ -143,7 +145,7 @@ func defaultAction(ctx *cli.Context) error {
 	printStartupMessage1(gene, chain, master, instanceDir)
 
 	if !skipLogs {
-		if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+		if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
 		}
 	}
@@ -211,7 +213,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
-	if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+	if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 		return err
 	}
 
@@ -375,11 +377,17 @@ func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, erro
 
 }
 
-func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) error {
+func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, verify bool) error {
 	pos, err := seekLogDBSyncPosition(chain, logDB)
 	if err != nil {
 		return errors.Wrap(err, "seek log db sync position")
 	}
+	if verify && pos > 0 {
+		if err := verifyLogDB(ctx, pos, chain, logDB); err != nil {
+			return errors.Wrap(err, "verify log db")
+		}
+	}
+
 	best := chain.BestBlock().Header()
 	if best.Number() == pos {
 		return nil
