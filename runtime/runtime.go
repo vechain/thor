@@ -129,17 +129,10 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			stateDB.SubBalance(common.Address(sender), amount)
 			stateDB.AddBalance(common.Address(recipient), amount)
 
-			if rt.ctx.Number >= rt.forkConfig.FixTransferLog {
-				// `amount` will be recycled by evm(OP_CALL) right after this function return,
-				// which leads to incorrect transfer log.
-				// Make a copy to prevent it.
-				amount = new(big.Int).Set(amount)
-			}
-
 			stateDB.AddTransfer(&tx.Transfer{
 				Sender:    thor.Address(sender),
 				Recipient: thor.Address(recipient),
-				Amount:    amount,
+				Amount:    new(big.Int).Set(amount),
 			})
 		},
 		GetHash: func(num uint64) common.Hash {
