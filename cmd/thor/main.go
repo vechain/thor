@@ -399,30 +399,39 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 
 	defer func() { pb.NotPrint = true }()
 
-	for ; pos <= best.Number(); pos++ {
-		block, err := chain.GetTrunkBlock(pos)
+	for pos <= best.Number() {
+		to := pos + 255
+		if to > best.Number() {
+			to = best.Number()
+		}
+		blocks, err := fastReadBlocks(chain, pos, to)
 		if err != nil {
-			return errors.Wrap(err, "get trunk block")
-		}
-		txs := block.Transactions()
-		if len(txs) > 0 {
-			receipts, err := chain.GetBlockReceipts(block.Header().ID())
-			if err != nil {
-				return errors.Wrap(err, "get block receipts")
-			}
-
-			task := logDB.NewTask().ForBlock(block.Header())
-
-			for i, tx := range txs {
-				origin, _ := tx.Signer()
-				task.Write(tx.ID(), origin, receipts[i].Outputs)
-			}
-			if err := task.Commit(); err != nil {
-				return errors.Wrap(err, "write logs")
-			}
+			return errors.Wrap(err, "read blocks")
 		}
 
-		pb.Set64(int64(pos))
+		task := logDB.NewTask()
+		for _, b := range blocks {
+			txs := b.Transactions()
+			if len(txs) > 0 {
+				task.ForBlock(b.Header())
+				receipts, err := chain.GetBlockReceipts(b.Header().ID())
+				if err != nil {
+					return errors.Wrap(err, "get block receipts")
+				}
+
+				for i, tx := range txs {
+					origin, _ := tx.Signer()
+					task.Write(tx.ID(), origin, receipts[i].Outputs)
+				}
+			}
+			pb.Add64(1)
+		}
+
+		if err := task.Commit(); err != nil {
+			return errors.Wrap(err, "write logs")
+		}
+		pos = to + 1
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -431,4 +440,27 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 	}
 	pb.Finish()
 	return nil
+}
+
+func fastReadBlocks(chain *chain.Chain, from, to uint32) ([]*block.Block, error) {
+	blocks := make([]*block.Block, 0, to-from+1)
+	b, err := chain.GetTrunkBlock(to)
+	if err != nil {
+		return nil, err
+	}
+	blocks = append(blocks, b)
+
+	for b.Header().Number() > from {
+		b, err = chain.GetBlock(b.Header().ParentID())
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, b)
+	}
+
+	for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
+		blocks[i], blocks[j] = blocks[j], blocks[i]
+	}
+
+	return blocks, nil
 }
