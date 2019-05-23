@@ -21,13 +21,14 @@ import (
 
 // CustomGenesis is user customized genesis
 type CustomGenesis struct {
-	LaunchTime uint64      `json:"launchTime"`
-	GasLimit   uint64      `json:"gaslimit"`
-	ExtraData  string      `json:"extraData"`
-	Accounts   []Account   `json:"accounts"`
-	Authority  []Authority `json:"authority"`
-	Params     Params      `json:"params"`
-	Executor   Executor    `json:"executor"`
+	LaunchTime uint64           `json:"launchTime"`
+	GasLimit   uint64           `json:"gaslimit"`
+	ExtraData  string           `json:"extraData"`
+	Accounts   []Account        `json:"accounts"`
+	Authority  []Authority      `json:"authority"`
+	Params     Params           `json:"params"`
+	Executor   Executor         `json:"executor"`
+	ForkConfig *thor.ForkConfig `json:"forkConfig"`
 }
 
 // NewCustomNet create custom network genesis.
@@ -148,7 +149,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 
 	if len(gen.ExtraData) > 0 {
 		var extra [28]byte
-		copy(extra[:], "Salute & Respect, Ethereum!")
+		copy(extra[:], gen.ExtraData)
 		builder.ExtraData(extra)
 	}
 

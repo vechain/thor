@@ -142,16 +142,13 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f := thor.ForkConfig{
-		FixTransferLog: 0,
-		VIP191:         1,
-	}
-	thor.SetCustomNetForkConfig(b0.Header().ID(), f)
-
 	c, _ := chain.New(kv, b0)
 
 	best := c.BestBlock()
-	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{})
+	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
+		FixTransferLog: 0,
+		VIP191:         1,
+	})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
