@@ -196,7 +196,7 @@ func soloAction(ctx *cli.Context) error {
 
 	initLogger(ctx)
 	gene := genesis.NewDevnet()
-	// Solo forks from the start
+	// Solo forks from the block 0.
 	forkConfig := thor.ForkConfig{}
 
 	var mainDB *lvldb.LevelDB
