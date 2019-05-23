@@ -160,8 +160,8 @@ func initTransactionServer(t *testing.T) {
 			Amount:    value,
 		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		if err := logDB.Prepare(header).ForTransaction(thor.Bytes32{}, from).
-			Insert(nil, tx.Transfers{transLog}, 0).Commit(); err != nil {
+		if err := logDB.NewTask().ForBlock(header).Write(thor.Bytes32{}, from,
+			[]*tx.Output{{nil, tx.Transfers{transLog}}}).Commit(); err != nil {
 			t.Fatal(err)
 		}
 	}

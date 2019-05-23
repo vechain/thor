@@ -35,8 +35,13 @@ func TestEvents(t *testing.T) {
 	header := new(block.Builder).Build().Header()
 
 	for i := 0; i < 100; i++ {
-		if err := db.Prepare(header).ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin"))).
-			Insert(tx.Events{txEvent}, nil, 0).Commit(); err != nil {
+		if err := db.NewTask().ForBlock(header).Write(
+			thor.BytesToBytes32([]byte("txID")),
+			thor.BytesToAddress([]byte("txOrigin")),
+			[]*tx.Output{{
+				Events:    tx.Events{txEvent},
+				Transfers: nil,
+			}}).Commit(); err != nil {
 			t.Fatal(err)
 		}
 
@@ -102,8 +107,11 @@ func TestTransfers(t *testing.T) {
 			Amount:    value,
 		}
 		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		if err := db.Prepare(header).ForTransaction(thor.Bytes32{}, from).Insert(nil, tx.Transfers{transLog}, 0).
-			Commit(); err != nil {
+		if err := db.NewTask().ForBlock(header).Write(thor.Bytes32{}, from,
+			[]*tx.Output{{
+				Events:    nil,
+				Transfers: tx.Transfers{transLog},
+			}}).Commit(); err != nil {
 			t.Fatal(err)
 		}
 
@@ -171,14 +179,17 @@ func BenchmarkLog(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		header := new(block.Builder).Build().Header()
-		batch := db.Prepare(header)
-		txBatch := batch.ForTransaction(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")))
+		task := db.NewTask().ForBlock(header)
+
 		for j := 0; j < 100; j++ {
-			txBatch.Insert(tx.Events{l}, nil, 0)
-			header = new(block.Builder).ParentID(header.ID()).Build().Header()
+			task.Write(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")),
+				[]*tx.Output{{
+					Events: tx.Events{l},
+				}})
 		}
 
-		if err := batch.Commit(); err != nil {
+		header = new(block.Builder).ParentID(header.ID()).Build().Header()
+		if err := task.Commit(); err != nil {
 			b.Fatal(err)
 		}
 	}

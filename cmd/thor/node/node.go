@@ -49,6 +49,7 @@ type Node struct {
 	commitLock     sync.Mutex
 	targetGasLimit uint64
 	skipLogs       bool
+	logDBFailed    bool
 }
 
 func New(
@@ -288,20 +289,39 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 		return nil, err
 	}
 	if !n.skipLogs {
-		batch := n.logDB.Prepare(newBlock.Header())
-		for i, tx := range newBlock.Transactions() {
-			origin, _ := tx.Signer()
-			txBatch := batch.ForTransaction(tx.ID(), origin)
-			for j, output := range receipts[i].Outputs {
-				txBatch.Insert(output.Events, output.Transfers, uint32(j))
+		if n.logDBFailed {
+			log.Warn("!!!log db skipped due to write failure (restart required to recover)")
+		} else {
+			if err := n.writeLogs(fork.Trunk); err != nil {
+				n.logDBFailed = true
+				return nil, errors.Wrap(err, "write logs")
 			}
-		}
-
-		if err := batch.Commit(); err != nil {
-			return nil, errors.Wrap(err, "commit logs")
 		}
 	}
 	return fork, nil
+}
+
+func (n *Node) writeLogs(trunk []*block.Header) error {
+	// write full trunk blocks to prevent logs dropped
+	// in rare condition of long fork
+	task := n.logDB.NewTask()
+	for _, header := range trunk {
+		body, err := n.chain.GetBlockBody(header.ID())
+		if err != nil {
+			return err
+		}
+		receipts, err := n.chain.GetBlockReceipts(header.ID())
+		if err != nil {
+			return err
+		}
+
+		task.ForBlock(header)
+		for i, tx := range body.Txs {
+			origin, _ := tx.Signer()
+			task.Write(tx.ID(), origin, receipts[i].Outputs)
+		}
+	}
+	return task.Commit()
 }
 
 func (n *Node) processFork(fork *chain.Fork) {
