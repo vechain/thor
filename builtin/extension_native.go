@@ -119,7 +119,7 @@ func init() {
 		}},
 	}
 
-	abi := ExtensionV2.NativeABI()
+	abi := Extension.V2.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{

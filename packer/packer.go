@@ -54,6 +54,20 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		return nil, errors.Wrap(err, "state")
 	}
 
+	// Before process hook of VIP-191, update builtin extension contract's code to V2
+	vip191 := p.forkConfig.VIP191
+	if vip191 == 0 {
+		vip191 = 1
+	}
+	if parent.Number()+1 == vip191 {
+		state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+	}
+
+	var features tx.Features
+	if parent.Number()+1 >= vip191 {
+		features |= tx.DelegationFeature
+	}
+
 	var (
 		endorsement = builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
 		authority   = builtin.Authority.Native(state)
@@ -67,7 +81,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 
 	for _, c := range candidates {
 		if p.beneficiary == nil && c.NodeMaster == p.nodeMaster {
-			// not beneficiary not set, set it to endorsor
+			// no beneficiary not set, set it to endorsor
 			beneficiary = c.Endorsor
 		}
 		proposers = append(proposers, poa.Proposer{
@@ -102,20 +116,6 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		},
 		p.forkConfig)
 
-	// Before process hook of VIP-191, update builtin extension contract's code to V2
-	vip191 := p.forkConfig.VIP191
-	if vip191 == 0 {
-		vip191 = 1
-	}
-	if parent.Number()+1 == vip191 {
-		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
-	}
-
-	var features tx.Features
-	if parent.Number()+1 >= vip191 {
-		features |= tx.DelegationFeature
-	}
-
 	return newFlow(p, parent, rt, features), nil
 }
 
@@ -126,6 +126,21 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 	state, err := p.stateCreator.NewState(parent.StateRoot())
 	if err != nil {
 		return nil, errors.Wrap(err, "state")
+	}
+
+	// Before process hook of VIP-191, update builtin extension contract's code to V2
+	vip191 := p.forkConfig.VIP191
+	if vip191 == 0 {
+		vip191 = 1
+	}
+
+	if parent.Number()+1 == vip191 {
+		state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+	}
+
+	var features tx.Features
+	if parent.Number()+1 >= vip191 {
+		features |= tx.DelegationFeature
 	}
 
 	rt := runtime.New(
@@ -140,21 +155,6 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 			TotalScore:  parent.TotalScore() + 1,
 		},
 		p.forkConfig)
-
-	// Before process hook of VIP-191, update builtin extension contract's code to V2
-	vip191 := p.forkConfig.VIP191
-	if vip191 == 0 {
-		vip191 = 1
-	}
-
-	if parent.Number()+1 == vip191 {
-		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
-	}
-
-	var features tx.Features
-	if parent.Number()+1 >= vip191 {
-		features |= tx.DelegationFeature
-	}
 
 	return newFlow(p, parent, rt, features), nil
 }
