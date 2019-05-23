@@ -41,6 +41,7 @@ func init() {
 	}
 }
 
+// chainConfig is the basic chainconfig since vechain launched.
 var chainConfig = params.ChainConfig{
 	ChainID:             big.NewInt(0),
 	HomesteadBlock:      big.NewInt(0),
@@ -51,9 +52,16 @@ var chainConfig = params.ChainConfig{
 	EIP155Block:         big.NewInt(0),
 	EIP158Block:         big.NewInt(0),
 	ByzantiumBlock:      big.NewInt(0),
-	ConstantinopleBlock: nil,
+	ConstantinopleBlock: nil, // any block after this block, applies the constantinople rules.
 	Ethash:              nil,
 	Clique:              nil,
+}
+
+// applyChainConfig applies change to chain config according to thor fork config.
+func applyChainConfig(basic *params.ChainConfig, forkConfig thor.ForkConfig) *params.ChainConfig {
+	forkedBlockNumber := forkConfig.Constantinople
+	basic.ConstantinopleBlock = big.NewInt(int64(forkedBlockNumber))
+	return basic
 }
 
 // Output output of clause execution.
@@ -240,7 +248,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
-	}, stateDB, &chainConfig, rt.vmConfig)
+	}, stateDB, applyChainConfig(&chainConfig, rt.forkConfig), rt.vmConfig)
 }
 
 // ExecuteClause executes single clause.
