@@ -20,19 +20,17 @@ import (
 
 // Builtin contracts binding.
 var (
-	Params      = &paramsContract{mustLoadContract("Params")}
-	Authority   = &authorityContract{mustLoadContract("Authority")}
-	Energy      = &energyContract{mustLoadContract("Energy")}
-	Executor    = &executorContract{mustLoadContract("Executor")}
-	Prototype   = &prototypeContract{mustLoadContract("Prototype")}
-	Extension   = &extensionContract{mustLoadContract("Extension")}
-	ExtensionV2 = &extensionContract{mustLoadContract("ExtensionV2")}
-	Measure     = mustLoadContract("Measure")
+	Params    = &paramsContract{mustLoadContract("Params")}
+	Authority = &authorityContract{mustLoadContract("Authority")}
+	Energy    = &energyContract{mustLoadContract("Energy")}
+	Executor  = &executorContract{mustLoadContract("Executor")}
+	Prototype = &prototypeContract{mustLoadContract("Prototype")}
+	Extension = &extensionContract{
+		mustLoadContract("Extension"),
+		mustLoadContract("ExtensionV2"),
+	}
+	Measure = mustLoadContract("Measure")
 )
-
-func init() {
-	ExtensionV2.Address = Extension.Address
-}
 
 type (
 	paramsContract    struct{ *contract }
@@ -40,7 +38,10 @@ type (
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
 	prototypeContract struct{ *contract }
-	extensionContract struct{ *contract }
+	extensionContract struct {
+		*contract
+		V2 *contract
+	}
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {

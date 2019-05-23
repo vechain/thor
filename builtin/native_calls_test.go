@@ -908,7 +908,7 @@ func TestExtensionNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
-	st.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
+	st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
 
 	privKeys := make([]*ecdsa.PrivateKey, 2)
 
@@ -942,7 +942,7 @@ func TestExtensionNative(t *testing.T) {
 
 	test := &ctest{
 		rt:  rt,
-		abi: builtin.ExtensionV2.ABI,
+		abi: builtin.Extension.V2.ABI,
 		to:  builtin.Extension.Address,
 	}
 

@@ -71,15 +71,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
-
-	var features tx.Features
-	if header.Number() >= c.forkConfig.VIP191 {
-		features |= tx.DelegationFeature
-	}
-
-	if header.TxsFeatures() != features {
-		return consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
-	}
 	return nil
 }
 
@@ -170,15 +161,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			TotalScore:  header.TotalScore(),
 		},
 		c.forkConfig)
-
-	vip191 := c.forkConfig.VIP191
-	if vip191 == 0 {
-		vip191 = 1
-	}
-	// Before process hook of VIP-191, update builtin extension contract's code to V2
-	if header.Number() == vip191 {
-		state.SetCode(builtin.Extension.Address, builtin.ExtensionV2.RuntimeBytecodes())
-	}
 
 	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {

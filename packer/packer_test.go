@@ -172,7 +172,7 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, headState.GetCode(builtin.Extension.Address), builtin.ExtensionV2.RuntimeBytecodes())
+	assert.Equal(t, headState.GetCode(builtin.Extension.Address), builtin.Extension.V2.RuntimeBytecodes())
 
 	geneState, err := state.NewCreator(kv).NewState(b0.Header().StateRoot())
 
