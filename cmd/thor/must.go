@@ -79,7 +79,12 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig) {
 				fatal(fmt.Sprintf("build genesis: %v", err))
 			}
 
-			return customGen, gen.ForkConfig
+			f := thor.NoFork
+			if gen.ForkConfig != nil {
+				f = *gen.ForkConfig
+			}
+
+			return customGen, f
 		}
 	}
 

@@ -21,14 +21,14 @@ import (
 
 // CustomGenesis is user customized genesis
 type CustomGenesis struct {
-	LaunchTime uint64          `json:"launchTime"`
-	GasLimit   uint64          `json:"gaslimit"`
-	ExtraData  string          `json:"extraData"`
-	Accounts   []Account       `json:"accounts"`
-	Authority  []Authority     `json:"authority"`
-	Params     Params          `json:"params"`
-	Executor   Executor        `json:"executor"`
-	ForkConfig thor.ForkConfig `json:"forkConfig"`
+	LaunchTime uint64           `json:"launchTime"`
+	GasLimit   uint64           `json:"gaslimit"`
+	ExtraData  string           `json:"extraData"`
+	Accounts   []Account        `json:"accounts"`
+	Authority  []Authority      `json:"authority"`
+	Params     Params           `json:"params"`
+	Executor   Executor         `json:"executor"`
+	ForkConfig *thor.ForkConfig `json:"forkConfig"`
 }
 
 // NewCustomNet create custom network genesis.
