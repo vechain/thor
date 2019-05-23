@@ -8,7 +8,6 @@ package logdb
 import (
 	"context"
 	"database/sql"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -18,7 +17,8 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-var configBlockNumKey = "blockNum"
+// the key to last written block id.
+var configBlockIDKey = "blockID"
 
 type LogDB struct {
 	path          string
@@ -67,11 +67,10 @@ func (db *LogDB) Path() string {
 	return db.path
 }
 
-func (db *LogDB) Prepare(header *block.Header) *BlockBatch {
-	return &BlockBatch{
-		db:     db.db,
-		header: header,
-	}
+// NewTask create a new task to perform transactional operations of
+// writing logs.
+func (db *LogDB) NewTask() *Task {
+	return &Task{db: db.db}
 }
 
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
@@ -313,118 +312,164 @@ func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interf
 	return transfers, nil
 }
 
-func (db *LogDB) QueryLastBlockNumber() (uint32, error) {
-	row := db.db.QueryRow("SELECT value FROM config WHERE key=?", configBlockNumKey)
+// NewestBlockID query newest written block id.
+func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
+	// select from config if any
+	row := db.db.QueryRow("SELECT value FROM config WHERE key=?", configBlockIDKey)
 	var data []byte
 	if err := row.Scan(&data); err != nil {
-		if sql.ErrNoRows == err {
-			return 0, nil
-		}
-		return 0, err
-	}
-	return binary.BigEndian.Uint32(data), nil
-}
-
-func topicValue(topic *thor.Bytes32) []byte {
-	if topic == nil {
-		return nil
-	}
-	return topic.Bytes()
-}
-
-type BlockBatch struct {
-	db        *sql.DB
-	header    *block.Header
-	events    []*Event
-	transfers []*Transfer
-}
-
-func (bb *BlockBatch) execInTx(proc func(*sql.Tx) error) (err error) {
-	tx, err := bb.db.Begin()
-	if err != nil {
-		return err
-	}
-	if err := proc(tx); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}
-
-func (bb *BlockBatch) Commit() error {
-	return bb.execInTx(func(tx *sql.Tx) error {
-		// skip on initializing genesis
-		if bb.header.Number() > 0 {
-			if _, err := tx.Exec("DELETE from event where blockNumber >= ?", bb.header.Number()); err != nil {
-				return err
-			}
-			if _, err := tx.Exec("DELETE from transfer where blockNumber >= ?", bb.header.Number()); err != nil {
-				return err
-			}
-			var b4 [4]byte
-			binary.BigEndian.PutUint32(b4[:], bb.header.Number())
-
-			tx.Exec("INSERT OR REPLACE INTO config(key, value) VALUES(?,?)",
-				configBlockNumKey,
-				b4[:],
-			)
+		if sql.ErrNoRows != err {
+			return thor.Bytes32{}, err
 		}
 
-		for _, event := range bb.events {
-			if _, err := tx.Exec("INSERT OR REPLACE INTO event(blockNumber, eventIndex, blockID, blockTime, txID, txOrigin, clauseIndex, address, topic0, topic1, topic2, topic3, topic4, data) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-				event.BlockNumber,
-				event.Index,
-				event.BlockID.Bytes(),
-				event.BlockTime,
-				event.TxID.Bytes(),
-				event.TxOrigin.Bytes(),
-				event.ClauseIndex,
-				event.Address.Bytes(),
-				topicValue(event.Topics[0]),
-				topicValue(event.Topics[1]),
-				topicValue(event.Topics[2]),
-				topicValue(event.Topics[3]),
-				topicValue(event.Topics[4]),
-				event.Data,
-			); err != nil {
-				return err
+		// no config, query newest block ID from existing records
+		row = db.db.QueryRow(
+			`SELECT MAX(blockId) FROM (
+SELECT * FROM (SELECT blockId FROM transfer ORDER BY blockNumber DESC LIMIT 1)
+UNION
+SELECT * FROM (SELECT blockId FROM event ORDER BY blockNumber DESC LIMIT 1))`)
+
+		if err := row.Scan(&data); err != nil {
+			if sql.ErrNoRows != err {
+				return thor.Bytes32{}, err
 			}
 		}
+	}
+	return thor.BytesToBytes32(data), nil
+}
 
-		for _, transfer := range bb.transfers {
-			if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockNumber, transferIndex, blockID, blockTime, txID, txOrigin, clauseIndex, sender, recipient, amount) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
-				transfer.BlockNumber,
-				transfer.Index,
-				transfer.BlockID.Bytes(),
-				transfer.BlockTime,
-				transfer.TxID.Bytes(),
-				transfer.TxOrigin.Bytes(),
-				transfer.ClauseIndex,
-				transfer.Sender.Bytes(),
-				transfer.Recipient.Bytes(),
-				transfer.Amount.Bytes(),
-			); err != nil {
+// HasBlockID query whether given block id related logs were written.
+func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
+	num := block.Number(id)
+	row := db.db.QueryRow(`SELECT COUNT(*) FROM (
+SELECT * FROM (SELECT blockNumber FROM transfer WHERE blockNumber=? AND blockID=? LIMIT 1) 
+UNION
+SELECT * FROM (SELECT blockNumber FROM event WHERE blockNumber=? AND blockID=? LIMIT 1))`,
+		num, id.Bytes(), num, id.Bytes())
+	var count int
+	if err := row.Scan(&count); err != nil {
+		// no need to check ErrNoRows
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func topicValue(topics []thor.Bytes32, i int) []byte {
+	if i < len(topics) {
+		return topics[i].Bytes()
+	}
+	return nil
+}
+
+// Task to transactionally perform logs writting.
+type Task struct {
+	db      *sql.DB
+	queries []func(tx *sql.Tx) error
+	ctx     *taskContext
+}
+
+type taskContext struct {
+	blockNumber uint32
+	blockID     thor.Bytes32
+	blockTime   uint64
+
+	// counters
+	eventCount    uint32
+	transferCount uint32
+}
+
+func (t *Task) add(op func(tx *sql.Tx) error) {
+	t.queries = append(t.queries, op)
+}
+
+// ForBlock set context to given block.
+func (t *Task) ForBlock(b *block.Header) *Task {
+	if b.Number() > 0 {
+		t.add(func(tx *sql.Tx) error {
+			if _, err := tx.Exec("DELETE from event where blockNumber >= ?", b.Number()); err != nil {
 				return err
+			}
+			if _, err := tx.Exec("DELETE from transfer where blockNumber >= ?", b.Number()); err != nil {
+				return err
+			}
+
+			if _, err := tx.Exec("INSERT OR REPLACE INTO config(key, value) VALUES(?,?)",
+				configBlockIDKey,
+				b.ID().Bytes()); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	t.ctx = &taskContext{
+		blockNumber: b.Number(),
+		blockID:     b.ID(),
+		blockTime:   b.Timestamp(),
+	}
+	return t
+}
+
+// Write write all outputs of a tx.
+func (t *Task) Write(txID thor.Bytes32, txOrigin thor.Address, outputs []*tx.Output) *Task {
+	// necessary to assign since it's used in closure
+	ctx := t.ctx
+	t.add(func(tx *sql.Tx) error {
+		for clauseIndex, output := range outputs {
+			for _, ev := range output.Events {
+				if _, err := tx.Exec("INSERT OR REPLACE INTO event(blockNumber, eventIndex, blockID, blockTime, txID, txOrigin, clauseIndex, address, topic0, topic1, topic2, topic3, topic4, data) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+					ctx.blockNumber,
+					ctx.eventCount,
+					ctx.blockID.Bytes(),
+					ctx.blockTime,
+					txID.Bytes(),
+					txOrigin.Bytes(),
+					clauseIndex,
+					ev.Address.Bytes(),
+					topicValue(ev.Topics, 0),
+					topicValue(ev.Topics, 1),
+					topicValue(ev.Topics, 2),
+					topicValue(ev.Topics, 3),
+					topicValue(ev.Topics, 4),
+					ev.Data,
+				); err != nil {
+					return err
+				}
+				ctx.eventCount++
+			}
+			for _, tr := range output.Transfers {
+				if _, err := tx.Exec("INSERT OR REPLACE INTO transfer(blockNumber, transferIndex, blockID, blockTime, txID, txOrigin, clauseIndex, sender, recipient, amount) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+					ctx.blockNumber,
+					ctx.transferCount,
+					ctx.blockID.Bytes(),
+					ctx.blockTime,
+					txID.Bytes(),
+					txOrigin.Bytes(),
+					clauseIndex,
+					tr.Sender.Bytes(),
+					tr.Recipient.Bytes(),
+					tr.Amount.Bytes(),
+				); err != nil {
+					return err
+				}
+				ctx.transferCount++
 			}
 		}
 		return nil
 	})
+	return t
 }
 
-func (bb *BlockBatch) ForTransaction(txID thor.Bytes32, txOrigin thor.Address) struct {
-	Insert func(tx.Events, tx.Transfers, uint32) *BlockBatch
-} {
-	return struct {
-		Insert func(events tx.Events, transfers tx.Transfers, clauseIndex uint32) *BlockBatch
-	}{
-		func(events tx.Events, transfers tx.Transfers, clauseIndex uint32) *BlockBatch {
-			for _, event := range events {
-				bb.events = append(bb.events, newEvent(bb.header, uint32(len(bb.events)), txID, txOrigin, clauseIndex, event))
-			}
-			for _, transfer := range transfers {
-				bb.transfers = append(bb.transfers, newTransfer(bb.header, uint32(len(bb.transfers)), txID, txOrigin, clauseIndex, transfer))
-			}
-			return bb
-		},
+// Commit commit task.
+func (t *Task) Commit() error {
+	tx, err := t.db.Begin()
+	if err != nil {
+		return err
 	}
+	for _, q := range t.queries {
+		if err := q(tx); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }

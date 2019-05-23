@@ -177,13 +177,6 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 
 	batch := c.kv.NewBatch()
 
-	if err := saveBlockRaw(batch, newBlockID, raw); err != nil {
-		return nil, err
-	}
-	if err := saveBlockReceipts(batch, newBlockID, receipts); err != nil {
-		return nil, err
-	}
-
 	if err := c.ancestorTrie.Update(batch, newBlockID, newBlock.Header().ParentID()); err != nil {
 		return nil, err
 	}
@@ -203,6 +196,14 @@ func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, er
 		if err := saveTxMeta(batch, tx.ID(), meta); err != nil {
 			return nil, err
 		}
+	}
+
+	if err := saveBlockReceipts(batch, newBlockID, receipts); err != nil {
+		return nil, err
+	}
+
+	if err := saveBlockRaw(batch, newBlockID, raw); err != nil {
+		return nil, err
 	}
 
 	var fork *Fork

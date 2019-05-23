@@ -173,16 +173,12 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		return errors.WithMessage(err, "commit block")
 	}
 
-	batch := s.logDB.Prepare(b.Header())
+	task := s.logDB.NewTask().ForBlock(b.Header())
 	for i, tx := range b.Transactions() {
 		origin, _ := tx.Origin()
-		txBatch := batch.ForTransaction(tx.ID(), origin)
-		receipt := receipts[i]
-		for j, output := range receipt.Outputs {
-			txBatch.Insert(output.Events, output.Transfers, uint32(j))
-		}
+		task.Write(tx.ID(), origin, receipts[i].Outputs)
 	}
-	if err := batch.Commit(); err != nil {
+	if err := task.Commit(); err != nil {
 		return errors.WithMessage(err, "commit log")
 	}
 

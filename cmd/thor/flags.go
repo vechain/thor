@@ -114,4 +114,9 @@ var (
 		Name:  "skip-logs",
 		Usage: "skip writing event|transfer logs (/logs API will be disabled)",
 	}
+	verifyLogsFlag = cli.BoolFlag{
+		Name:   "verify-logs",
+		Usage:  "verify log db at startup",
+		Hidden: true,
+	}
 )

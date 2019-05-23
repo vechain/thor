@@ -21,6 +21,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -79,6 +80,7 @@ func main() {
 			bootNodeFlag,
 			skipLogsFlag,
 			pprofFlag,
+			verifyLogsFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -97,6 +99,7 @@ func main() {
 					gasLimitFlag,
 					verbosityFlag,
 					pprofFlag,
+					verifyLogsFlag,
 				},
 				Action: soloAction,
 			},
@@ -142,7 +145,7 @@ func defaultAction(ctx *cli.Context) error {
 	printStartupMessage1(gene, chain, master, instanceDir, forkConfig)
 
 	if !skipLogs {
-		if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+		if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
 		}
 	}
@@ -214,7 +217,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
-	if err := syncLogDB(exitSignal, chain, logDB); err != nil {
+	if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 		return err
 	}
 
@@ -333,59 +336,116 @@ func masterKeyAction(ctx *cli.Context) error {
 	return nil
 }
 
-func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) error {
-	bestBlockNum := chain.BestBlock().Header().Number()
-	if bestBlockNum == 0 {
-		return nil
+func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, error) {
+	best := chain.BestBlock().Header()
+	if best.Number() == 0 {
+		return 0, nil
 	}
 
-	pos, err := logDB.QueryLastBlockNumber()
+	newestID, err := logDB.NewestBlockID()
 	if err != nil {
-		return errors.Wrap(err, "get last synced block number")
+		return 0, err
 	}
 
-	if pos >= bestBlockNum {
+	if block.Number(newestID) == 0 {
+		return 0, nil
+	}
+
+	if newestID == best.ID() {
+		return best.Number(), nil
+	}
+
+	seekStart := block.Number(newestID)
+	if seekStart >= best.Number() {
+		seekStart = best.Number() - 1
+	}
+
+	header, err := chain.GetTrunkBlockHeader(seekStart)
+	if err != nil {
+		return 0, err
+	}
+
+	for header.Number() > 0 {
+		has, err := logDB.HasBlockID(header.ID())
+		if err != nil {
+			return 0, err
+		}
+		if has {
+			break
+		}
+
+		header, err = chain.GetBlockHeader(header.ParentID())
+		if err != nil {
+			return 0, err
+		}
+	}
+	return block.Number(header.ID()) + 1, nil
+
+}
+
+func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, verify bool) error {
+	pos, err := seekLogDBSyncPosition(chain, logDB)
+	if err != nil {
+		return errors.Wrap(err, "seek log db sync position")
+	}
+	if verify && pos > 0 {
+		if err := verifyLogDB(ctx, pos, chain, logDB); err != nil {
+			return errors.Wrap(err, "verify log db")
+		}
+	}
+
+	best := chain.BestBlock().Header()
+	if best.Number() == pos {
 		return nil
 	}
 
 	if pos == 0 {
-		pos = 1
+		fmt.Println(">> Rebuilding log db <<")
+		pos = 1 // block 0 can be skipped
+	} else {
+		fmt.Println(">> Syncing log db <<")
 	}
 
-	fmt.Println(">> Syncing logdb <<")
-	pb := pb.New64(int64(bestBlockNum)).
-		Set64(int64(pos)).SetMaxWidth(90).
+	pb := pb.New64(int64(best.Number())).
+		Set64(int64(pos)).
+		SetMaxWidth(90).
 		Start()
 
 	defer func() { pb.NotPrint = true }()
 
-	for ; pos <= bestBlockNum; pos++ {
-		block, err := chain.GetTrunkBlock(pos)
-		if err != nil {
-			return errors.Wrap(err, "get trunk block")
+	for pos <= best.Number() {
+		to := pos + 255
+		if to > best.Number() {
+			to = best.Number()
 		}
-		txs := block.Transactions()
-		if len(txs) > 0 {
-			receipts, err := chain.GetBlockReceipts(block.Header().ID())
-			if err != nil {
-				return errors.Wrap(err, "get block receipts")
-			}
+		blocks, err := fastReadBlocks(chain, pos, to)
+		if err != nil {
+			return errors.Wrap(err, "read blocks")
+		}
 
-			batch := logDB.Prepare(block.Header())
+		task := logDB.NewTask()
+		for _, b := range blocks {
+			txs := b.Transactions()
+			if len(txs) > 0 {
+				task.ForBlock(b.Header())
+				receipts, err := chain.GetBlockReceipts(b.Header().ID())
+				if err != nil {
+					return errors.Wrap(err, "get block receipts")
+				}
 
-			for i, tx := range txs {
-				origin, _ := tx.Origin()
-				txBatch := batch.ForTransaction(tx.ID(), origin)
-				for j, output := range receipts[i].Outputs {
-					txBatch.Insert(output.Events, output.Transfers, uint32(j))
+				for i, tx := range txs {
+					origin, _ := tx.Origin()
+					task.Write(tx.ID(), origin, receipts[i].Outputs)
 				}
 			}
-			if err := batch.Commit(); err != nil {
-				return errors.Wrap(err, "commit logs")
-			}
+			pb.Add64(1)
 		}
 
-		pb.Set64(int64(pos))
+		if err := task.Commit(); err != nil {
+			return errors.Wrap(err, "write logs")
+		}
+		pos = to + 1
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -394,4 +454,27 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB) erro
 	}
 	pb.Finish()
 	return nil
+}
+
+func fastReadBlocks(chain *chain.Chain, from, to uint32) ([]*block.Block, error) {
+	blocks := make([]*block.Block, 0, to-from+1)
+	b, err := chain.GetTrunkBlock(to)
+	if err != nil {
+		return nil, err
+	}
+	blocks = append(blocks, b)
+
+	for b.Header().Number() > from {
+		b, err = chain.GetBlock(b.Header().ParentID())
+		if err != nil {
+			return nil, err
+		}
+		blocks = append(blocks, b)
+	}
+
+	for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
+		blocks[i], blocks[j] = blocks[j], blocks[i]
+	}
+
+	return blocks, nil
 }

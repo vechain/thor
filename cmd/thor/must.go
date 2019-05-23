@@ -35,6 +35,7 @@ import (
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -171,9 +172,10 @@ func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB)
 		fatal("initialize block chain:", err)
 	}
 
-	if err := logDB.Prepare(genesisBlock.Header()).
-		ForTransaction(thor.Bytes32{}, thor.Address{}).
-		Insert(genesisEvents, nil, 0).Commit(); err != nil {
+	if err := logDB.NewTask().ForBlock(genesisBlock.Header()).
+		Write(thor.Bytes32{}, thor.Address{}, []*tx.Output{{
+			Events: genesisEvents,
+		}}).Commit(); err != nil {
 		fatal("write genesis events: ", err)
 	}
 	return chain

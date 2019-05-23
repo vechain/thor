@@ -8,9 +8,7 @@ package logdb
 import (
 	"math/big"
 
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
 )
 
 //Event represents tx.Event that can be stored in db.
@@ -27,25 +25,6 @@ type Event struct {
 	Data        []byte
 }
 
-//newEvent converts tx.Event to Event.
-func newEvent(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, clauseIndex uint32, txEvent *tx.Event) *Event {
-	ev := &Event{
-		BlockNumber: header.Number(),
-		Index:       index,
-		BlockID:     header.ID(),
-		BlockTime:   header.Timestamp(),
-		TxID:        txID,
-		TxOrigin:    txOrigin,
-		ClauseIndex: clauseIndex,
-		Address:     txEvent.Address, // always a contract address
-		Data:        txEvent.Data,
-	}
-	for i := 0; i < len(txEvent.Topics) && i < len(ev.Topics); i++ {
-		ev.Topics[i] = &txEvent.Topics[i]
-	}
-	return ev
-}
-
 //Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockNumber uint32
@@ -58,22 +37,6 @@ type Transfer struct {
 	Sender      thor.Address
 	Recipient   thor.Address
 	Amount      *big.Int
-}
-
-//newTransfer converts tx.Transfer to Transfer.
-func newTransfer(header *block.Header, index uint32, txID thor.Bytes32, txOrigin thor.Address, clauseIndex uint32, transfer *tx.Transfer) *Transfer {
-	return &Transfer{
-		BlockNumber: header.Number(),
-		Index:       index,
-		BlockID:     header.ID(),
-		BlockTime:   header.Timestamp(),
-		TxID:        txID,
-		TxOrigin:    txOrigin,
-		ClauseIndex: clauseIndex,
-		Sender:      transfer.Sender,
-		Recipient:   transfer.Recipient,
-		Amount:      transfer.Amount,
-	}
 }
 
 type RangeType string
