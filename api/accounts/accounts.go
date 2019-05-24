@@ -30,13 +30,20 @@ type Accounts struct {
 	chain        *chain.Chain
 	stateCreator *state.Creator
 	callGasLimit uint64
+	forkConfig   thor.ForkConfig
 }
 
-func New(chain *chain.Chain, stateCreator *state.Creator, callGasLimit uint64) *Accounts {
+func New(
+	chain *chain.Chain,
+	stateCreator *state.Creator,
+	callGasLimit uint64,
+	forkConfig thor.ForkConfig,
+) *Accounts {
 	return &Accounts{
 		chain,
 		stateCreator,
 		callGasLimit,
+		forkConfig,
 	}
 }
 
@@ -188,7 +195,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 }
 
 func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, header *block.Header) (results BatchCallResults, err error) {
-	gas, gasPrice, caller, clauses, err := a.handleBatchCallData(batchCallData)
+	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
 	}
@@ -204,14 +211,13 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 			Number:      header.Number(),
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
-			TotalScore:  header.TotalScore()})
+			TotalScore:  header.TotalScore(),
+		},
+		a.forkConfig)
 	results = make(BatchCallResults, 0)
 	vmout := make(chan *runtime.Output, 1)
 	for i, clause := range clauses {
-		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, &xenv.TransactionContext{
-			Origin:     *caller,
-			GasPrice:   gasPrice,
-			ProvedWork: &big.Int{}})
+		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
 		go func() {
 			out, _ := exec()
 			vmout <- out
@@ -237,24 +243,52 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 	return results, nil
 }
 
-func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (gas uint64, gasPrice *big.Int, caller *thor.Address, clauses []*tx.Clause, err error) {
+func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xenv.TransactionContext, gas uint64, clauses []*tx.Clause, err error) {
 	if batchCallData.Gas > a.callGasLimit {
-		return 0, nil, nil, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
+		return nil, 0, nil, utils.Forbidden(errors.New("gas: exceeds limit"))
 	} else if batchCallData.Gas == 0 {
 		gas = a.callGasLimit
 	} else {
 		gas = batchCallData.Gas
 	}
+
+	txCtx = &xenv.TransactionContext{}
+
 	if batchCallData.GasPrice == nil {
-		gasPrice = new(big.Int)
+		txCtx.GasPrice = new(big.Int)
 	} else {
-		gasPrice = (*big.Int)(batchCallData.GasPrice)
+		txCtx.GasPrice = (*big.Int)(batchCallData.GasPrice)
 	}
 	if batchCallData.Caller == nil {
-		caller = &thor.Address{}
+		txCtx.Origin = thor.Address{}
 	} else {
-		caller = batchCallData.Caller
+		txCtx.Origin = *batchCallData.Caller
 	}
+	if batchCallData.GasPayer == nil {
+		txCtx.GasPayer = thor.Address{}
+	} else {
+		txCtx.GasPayer = *batchCallData.GasPayer
+	}
+	if batchCallData.ProvedWork == nil {
+		txCtx.ProvedWork = new(big.Int)
+	} else {
+		txCtx.ProvedWork = (*big.Int)(batchCallData.ProvedWork)
+	}
+	txCtx.Expiration = batchCallData.Expiration
+
+	if len(batchCallData.BlockRef) > 0 {
+		blockRef, err := hexutil.Decode(batchCallData.BlockRef)
+		if err != nil {
+			return nil, 0, nil, errors.WithMessage(err, "blockRef")
+		}
+		if len(blockRef) != 8 {
+			return nil, 0, nil, errors.New("blockRef: invalid length")
+		}
+		var blkRef tx.BlockRef
+		copy(blkRef[:], blockRef[:])
+		txCtx.BlockRef = blkRef
+	}
+
 	clauses = make([]*tx.Clause, len(batchCallData.Clauses))
 	for i, c := range batchCallData.Clauses {
 		var value *big.Int

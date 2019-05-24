@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.1.1
+  version: 1.2.0
 
 servers:
   - url: '/'
@@ -52,6 +52,7 @@ paths:
                 $ref: '#/components/schemas/Account'
 
     post:
+      deprecated: true
       tags:
         - Accounts
       summary: Execute account code
@@ -99,6 +100,7 @@ paths:
 
   /accounts:
     post:
+      deprecated: true
       parameters:
         - $ref: '#/components/parameters/RevisionInQuery'
       tags:
@@ -207,21 +209,20 @@ paths:
         - Transactions
       summary: Commit transaction
       description: |
-        in raw or structured format. If no signature in structured format,
-        `signingHash` is returned in response body.
+        in raw.
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RawOrSignedOrUnsignedTx'
+              $ref: '#/components/schemas/RawTx'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IDOrSigningHash'
+                $ref: '#/components/schemas/TXID'
 
   /blocks/{revision}:
     parameters:
@@ -772,6 +773,11 @@ components:
           format: bytes32
           description: root hash of transactions in the block 
           example: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
+        txsFeatures:
+          type: integer
+          format: uint32
+          description: supported txs features bitset
+          example: 0
         stateRoot:
           type: string
           format: bytes32
@@ -850,16 +856,6 @@ components:
           type: string
           example: '0x29c257e36ea6e72a'
 
-    SignedTx:
-      allOf:
-        - $ref: '#/components/schemas/TxBody'
-        - type: object
-          properties:
-            signature:
-              type: string
-              description: signature hex string
-              example: '0x67cd851b90fb016457bb30ccbdaa3405f3db667daeb95258e1859c545be30c10f1780476f7c6ba24c75d26c8f1a9df59fe89b105c6f86733c1d5c1c74f14cd9201'
-
     TxWithMeta:
       allOf:
         - $ref: '#/components/schemas/TxBody'
@@ -873,6 +869,10 @@ components:
               type: string
               description: the one who signed the transaction
               example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+            delegator:
+              type: string
+              description: the delegator who paid the gas fee
+              example: null
             size:
               type: integer
               format: uint32
@@ -1034,12 +1034,32 @@ components:
         caller:
           type: string
           description: caller address (msg.sender)
+        provedWork:
+          type: string
+          description: tx proved work(for extension contract)
+        gasPayer:
+          type: string
+          description: gas payer(for extension contract)
+        expiration:
+          type: integer
+          format: uint32
+          description: tx expiration(for extension contract)
+        blockRef:
+          type: string
+          description: block reference(for extension contract)
       example:
         clauses:
           - to: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
             value: '0xde0b6b3a7640000'
-            data: '0x5665436861696e2054686f72'      
-
+            data: '0x5665436861696e2054686f72' 
+        gas: 50000
+        gasPrice: '1000000000000000'
+        caller: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        provedWork: '1000'
+        gasPayer: '0xd3ae78222beadb038203be21ed5ce7c9b1bff602'
+        expiration: 1000
+        blockRef: '0x00000000851caf3c'
+        
     BatchCallResult:
       type: array
       items:
@@ -1281,6 +1301,7 @@ components:
         gasPriceCoef: 128
         gas: 21000
         origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        delegator: null
         nonce: '0xd92966da424d9939'
         dependsOn: null
         size: 180
@@ -1289,24 +1310,10 @@ components:
           blockNumber: 1
           blockTimestamp: 1523156271
 
-    RawOrSignedOrUnsignedTx:
-      oneOf:
-        - $ref: '#/components/schemas/RawTx'
-        - $ref: '#/components/schemas/SignedTx'
-        - $ref: '#/components/schemas/TxBody'
-      example:
-        raw: '0xf86981ba800adad994000000000000000000000000000000000000746f82271080018252088001c0b8414792c9439594098323900e6470742cd877ec9f9906bca05510e421f3b013ed221324e77ca10d3466b32b1800c72e12719b213f1d4c370305399dd27af962626400'
-
-    IDOrSigningHash:
-      oneOf:
-        - type: object
-          properties:
-            id:
-              type: string
-        - type: object
-          properties:
-            signingHash:
-              type: string
+    TXID:
+      properties:
+        id:
+          type: string
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
     
@@ -1395,7 +1402,12 @@ components:
           type: integer
           format: uint64
           description: block unix timestamp
-          example: 1533267900        
+          example: 1533267900
+        txsFeatures:
+          type: integer
+          format: uint32
+          description: supported txs features bitset
+          example: 0
         bloom:
           type: string
           format: hex

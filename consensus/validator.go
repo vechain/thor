@@ -71,7 +71,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
-
 	return nil
 }
 
@@ -122,7 +121,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	}
 
 	for _, tx := range txs {
-		if _, err := tx.Signer(); err != nil {
+		if _, err := tx.Origin(); err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
 		}
 
@@ -133,8 +132,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
 		case tx.IsExpired(header.Number()):
 			return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
-		case tx.HasReservedFields():
-			return consensusError(fmt.Sprintf("tx reserved fields not empty"))
+		}
+
+		if err := tx.TestFeatures(header.TxsFeatures()); err != nil {
+			return consensusError("invalid tx: " + err.Error())
 		}
 	}
 
@@ -158,7 +159,8 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
-		})
+		},
+		c.forkConfig)
 
 	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {

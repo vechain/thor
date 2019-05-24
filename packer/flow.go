@@ -26,18 +26,21 @@ type Flow struct {
 	gasUsed      uint64
 	txs          tx.Transactions
 	receipts     tx.Receipts
+	features     tx.Features
 }
 
 func newFlow(
 	packer *Packer,
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
+	features tx.Features,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
+		features:     features,
 	}
 }
 
@@ -69,11 +72,13 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
+	if err := tx.TestFeatures(f.features); err != nil {
+		return badTxError{err.Error()}
+	}
+
 	switch {
 	case tx.ChainTag() != f.packer.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case tx.HasReservedFields():
-		return badTxError{"reserved fields not empty"}
 	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
 	case tx.IsExpired(f.runtime.Context().Number):
@@ -146,7 +151,9 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		TotalScore(f.runtime.Context().TotalScore).
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
-		StateRoot(stateRoot)
+		StateRoot(stateRoot).
+		TransactionFeatures(f.features)
+
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
 	}

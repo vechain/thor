@@ -23,14 +23,14 @@ func TestNativeCallReturnGas(t *testing.T) {
 	outer, _ := builtin.Measure.ABI.MethodByName("outer")
 	outerData, _ := outer.EncodeInput()
 
-	innerOutput := New(nil, state, &xenv.BlockContext{}).ExecuteClause(
+	innerOutput := New(nil, state, &xenv.BlockContext{}, thor.NoFork).ExecuteClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(innerData),
 		0,
 		math.MaxUint64,
 		&xenv.TransactionContext{})
 	assert.Nil(t, innerOutput.VMErr)
 
-	outerOutput := New(nil, state, &xenv.BlockContext{}).ExecuteClause(
+	outerOutput := New(nil, state, &xenv.BlockContext{}, thor.NoFork).ExecuteClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(outerData),
 		0,
 		math.MaxUint64,

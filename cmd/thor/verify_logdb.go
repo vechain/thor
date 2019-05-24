@@ -101,7 +101,7 @@ func verifyLogDBPerBlock(
 	txs := block.Transactions()
 	for txIndex, r := range receipts {
 		tx := txs[txIndex]
-		origin, _ := tx.Signer()
+		origin, _ := tx.Origin()
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {

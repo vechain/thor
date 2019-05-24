@@ -22,6 +22,7 @@ import (
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -47,11 +48,17 @@ func New(
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
+	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
-		chain:    chain,
-		txPool:   txPool,
-		packer:   packer.New(chain, stateCreator, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address),
+		chain:  chain,
+		txPool: txPool,
+		packer: packer.New(
+			chain,
+			stateCreator,
+			genesis.DevAccounts()[0].Address,
+			&genesis.DevAccounts()[0].Address,
+			forkConfig),
 		logDB:    logDB,
 		gasLimit: gasLimit,
 		onDemand: onDemand,
@@ -97,8 +104,8 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 		case txEv := <-txEvCh:
 			newTx := txEv.Tx
-			singer, _ := newTx.Signer()
-			log.Info("new Tx", "id", newTx.ID(), "signer", singer)
+			origin, _ := newTx.Origin()
+			log.Info("new Tx", "id", newTx.ID(), "origin", origin)
 			if s.onDemand {
 				if err := s.packing(tx.Transactions{newTx}); err != nil {
 					log.Error("failed to pack block", "err", err)
@@ -168,7 +175,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 
 	task := s.logDB.NewTask().ForBlock(b.Header())
 	for i, tx := range b.Transactions() {
-		origin, _ := tx.Signer()
+		origin, _ := tx.Origin()
 		task.Write(tx.ID(), origin, receipts[i].Outputs)
 	}
 	if err := task.Commit(); err != nil {

@@ -84,4 +84,23 @@ func TestBlock(t *testing.T) {
 	rlp.DecodeBytes(data, &b)
 	fmt.Println(b.Header().ID())
 	fmt.Println(&b)
+
+	block = new(Builder).
+		GasUsed(gasUsed).
+		GasLimit(gasLimit).
+		TotalScore(totalScore).
+		StateRoot(emptyRoot).
+		ReceiptsRoot(emptyRoot).
+		Timestamp(now).
+		ParentID(emptyRoot).
+		Beneficiary(beneficiary).
+		TransactionFeatures(1).
+		Build()
+
+	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
+	data, _ = rlp.EncodeToBytes(block)
+	var bx Block
+	assert.Nil(t, rlp.DecodeBytes(data, &bx))
+	assert.Equal(t, block.Header().ID(), bx.Header().ID())
+	assert.Equal(t, block.Header().TxsFeatures(), bx.Header().TxsFeatures())
 }

@@ -201,7 +201,7 @@ func initAccountServer(t *testing.T) {
 	packTx(chain, stateC, transactionCall, t)
 
 	router := mux.NewRouter()
-	accounts.New(chain, stateC, math.MaxUint64).Mount(router, "/accounts")
+	accounts.New(chain, stateC, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 
@@ -224,7 +224,7 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 
 func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transaction, t *testing.T) {
 	b := chain.BestBlock()
-	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address)
+	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
 	err = flow.Adopt(transaction)
 	if err != nil {
@@ -368,6 +368,20 @@ func batchCall(t *testing.T) {
 		}
 		assert.Equal(t, a+b, ret, "should be equal")
 	}
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	big := math.HexOrDecimal256(*big.NewInt(1000))
+	fullBody := &accounts.BatchCallData{
+		Clauses:    accounts.Clauses{},
+		Gas:        21000,
+		GasPrice:   &big,
+		ProvedWork: &big,
+		Caller:     &contractAddr,
+		GasPayer:   &contractAddr,
+		Expiration: 100,
+		BlockRef:   "0x00000000aabbccdd",
+	}
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*", fullBody)
 	assert.Equal(t, http.StatusOK, statusCode)
 }
 

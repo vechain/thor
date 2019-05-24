@@ -6,9 +6,11 @@
 package txpool
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
@@ -55,7 +57,7 @@ func TestSubscribeNewTx(t *testing.T) {
 
 	pool.SubscribeTxEvent(txCh)
 
-	tx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0])
+	tx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	assert.Nil(t, pool.Add(tx))
 
 	v := true
@@ -70,7 +72,7 @@ func TestWashTxs(t *testing.T) {
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
 
-	tx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, genesis.DevAccounts()[0])
+	tx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	assert.Nil(t, pool.Add(tx))
 
 	txs, _, err = pool.wash(pool.chain.BestBlock().Header())
@@ -104,13 +106,13 @@ func TestAdd(t *testing.T) {
 	pool.chain.AddBlock(b1, nil)
 	acc := genesis.DevAccounts()[0]
 
-	dupTx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, acc)
+	dupTx := newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
 	tests := []struct {
 		tx     *tx.Transaction
 		errStr string
 	}{
-		{newTx(pool.chain.Tag()+1, nil, 21000, tx.BlockRef{}, 100, nil, acc), "bad tx: chain tag mismatch"},
+		{newTx(pool.chain.Tag()+1, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc), "bad tx: chain tag mismatch"},
 		{dupTx, ""},
 		{dupTx, ""},
 	}
@@ -124,12 +126,20 @@ func TestAdd(t *testing.T) {
 		}
 	}
 
+	raw, _ := hex.DecodeString("f8dc81a484aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e20860000006060608180830334508083bc614ec20108b88256e32450c1907f627d2c11fe5a9d0216be1712f4938b5feb04e37edef236c56266c3378acf97994beff22698b70023f486645d29cb23b479a7b044f7c6b104d2000584fcb3964446d4d832dcc849e2d76ea7e04a4ebdc3a4b61e7997e93277363d4e7fe9315e7f6dd8d9c0a8bff5879503f5c04adab8b08772499e74d34f67923501")
+	var badReserved *Tx.Transaction
+	if err := rlp.DecodeBytes(raw, &badReserved); err != nil {
+		t.Error(err)
+	}
+
 	tests = []struct {
-		tx     *tx.Transaction
+		tx     *Tx.Transaction
 		errStr string
 	}{
-		{newTx(pool.chain.Tag(), nil, 21000, tx.NewBlockRef(200), 100, nil, acc), "tx rejected: tx is not executable"},
-		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, acc), "tx rejected: tx is not executable"},
+		{newTx(pool.chain.Tag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(0), acc), "tx rejected: tx is not executable"},
+		{newTx(pool.chain.Tag(), nil, 21000, tx.BlockRef{}, 100, &thor.Bytes32{1}, Tx.Features(2), acc), "tx rejected: unsupported features"},
+		{badReserved, "tx rejected: unsupported features"},
 	}
 
 	for _, tt := range tests {
@@ -140,4 +150,24 @@ func TestAdd(t *testing.T) {
 			assert.Equal(t, tt.errStr, err.Error())
 		}
 	}
+}
+
+func TestBeforeVIP191Add(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	defer kv.Close()
+
+	chain := newChain(kv)
+
+	acc := genesis.DevAccounts()[0]
+
+	pool := New(chain, state.NewCreator(kv), Options{
+		Limit:           10,
+		LimitPerAccount: 2,
+		MaxLifetime:     time.Hour,
+	})
+	defer pool.Close()
+
+	err := pool.StrictlyAdd(newTx(pool.chain.Tag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc))
+
+	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }

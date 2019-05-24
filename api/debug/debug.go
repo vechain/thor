@@ -30,14 +30,16 @@ import (
 var devNetGenesisID = thor.MustParseBytes32("0x00000000973ceb7f343a58b08f0693d6701a5fd354ff73d7058af3fba222aea4")
 
 type Debug struct {
-	chain  *chain.Chain
-	stateC *state.Creator
+	chain      *chain.Chain
+	stateC     *state.Creator
+	forkConfig thor.ForkConfig
 }
 
-func New(chain *chain.Chain, stateC *state.Creator) *Debug {
+func New(chain *chain.Chain, stateC *state.Creator, forkConfig thor.ForkConfig) *Debug {
 	return &Debug{
 		chain,
 		stateC,
+		forkConfig,
 	}
 }
 
@@ -57,7 +59,11 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 		return nil, nil, utils.Forbidden(errors.New("clause index out of range"))
 	}
 	skipPoA := d.chain.GenesisBlock().Header().ID() == devNetGenesisID
-	rt, err := consensus.New(d.chain, d.stateC).NewRuntimeForReplay(block.Header(), skipPoA)
+	rt, err := consensus.New(
+		d.chain,
+		d.stateC,
+		d.forkConfig,
+	).NewRuntimeForReplay(block.Header(), skipPoA)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -49,6 +49,7 @@ type ccase struct {
 	provedWork *big.Int
 	txID       thor.Bytes32
 	blockRef   tx.BlockRef
+	gasPayer   thor.Address
 	expiration uint32
 
 	output *[]interface{}
@@ -91,6 +92,11 @@ func (c *ccase) BlockRef(blockRef tx.BlockRef) *ccase {
 	return c
 }
 
+func (c *ccase) GasPayer(gasPayer thor.Address) *ccase {
+	c.gasPayer = gasPayer
+	return c
+}
+
 func (c *ccase) Expiration(expiration uint32) *ccase {
 	c.expiration = expiration
 	return c
@@ -126,6 +132,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 			ID:         c.txID,
 			Origin:     c.caller,
 			GasPrice:   &big.Int{},
+			GasPayer:   c.gasPayer,
 			ProvedWork: c.provedWork,
 			BlockRef:   c.blockRef,
 			Expiration: c.expiration})
@@ -194,7 +201,7 @@ func TestParamsNative(t *testing.T) {
 		assert.Nil(t, seeker.Err())
 	}()
 
-	rt := runtime.New(seeker, st, &xenv.BlockContext{})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{}, thor.NoFork)
 
 	test := &ctest{
 		rt:  rt,
@@ -266,7 +273,7 @@ func TestAuthorityNative(t *testing.T) {
 		assert.Nil(t, seeker.Err())
 	}()
 
-	rt := runtime.New(seeker, st, &xenv.BlockContext{})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{}, thor.NoFork)
 
 	candidateEvent := func(nodeMaster thor.Address, action string) *tx.Event {
 		ev, _ := builtin.Authority.ABI.EventByName("Candidate")
@@ -398,7 +405,7 @@ func TestEnergyNative(t *testing.T) {
 		}
 	}
 
-	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: b0.Header().Timestamp()})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: b0.Header().Timestamp()}, thor.NoFork)
 	test := &ctest{
 		rt:     rt,
 		abi:    builtin.Energy.ABI,
@@ -556,7 +563,7 @@ func TestPrototypeNative(t *testing.T) {
 	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Time:   genesisBlock.Header().Timestamp(),
 		Number: genesisBlock.Header().Number(),
-	})
+	}, thor.NoFork)
 
 	code, _ := hex.DecodeString("60606040523415600e57600080fd5b603580601b6000396000f3006060604052600080fd00a165627a7a72305820edd8a93b651b5aac38098767f0537d9b25433278c9d155da2135efc06927fc960029")
 	out := rt.ExecuteClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{
@@ -795,7 +802,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Number: thor.MaxBackTrackingBlockNumber + 1,
 		Time:   c.BestBlock().Header().Timestamp(),
-	})
+	}, thor.NoFork)
 
 	test := &ctest{
 		rt:     rt,
@@ -863,7 +870,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	rt := runtime.New(seeker, st, &xenv.BlockContext{
 		Number: c.BestBlock().Header().Number(),
 		Time:   c.BestBlock().Header().Timestamp(),
-	})
+	}, thor.NoFork)
 
 	test := &ctest{
 		rt:     rt,
@@ -901,7 +908,7 @@ func TestExtensionNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _ := gene.Build(state.NewCreator(kv))
 	c, _ := chain.New(kv, genesisBlock)
-	st.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+	st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
 
 	privKeys := make([]*ecdsa.PrivateKey, 2)
 
@@ -917,21 +924,25 @@ func TestExtensionNative(t *testing.T) {
 	b1_singer, _ := b1.Header().Signer()
 	b2_singer, _ := b2.Header().Signer()
 
+	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
+
 	_, err := c.AddBlock(b1, nil)
 	assert.Equal(t, err, nil)
 	_, err = c.AddBlock(b2, nil)
 	assert.Equal(t, err, nil)
+
+	assert.Equal(t, builtin.Extension.Address, builtin.Extension.Address)
 
 	seeker := c.NewSeeker(b2.Header().ID())
 	defer func() {
 		assert.Nil(t, st.Err())
 		assert.Nil(t, seeker.Err())
 	}()
-	rt := runtime.New(seeker, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer})
+	rt := runtime.New(seeker, st, &xenv.BlockContext{Number: 2, Time: b2.Header().Timestamp(), TotalScore: b2.Header().TotalScore(), Signer: b2_singer}, thor.NoFork)
 
 	test := &ctest{
 		rt:  rt,
-		abi: builtin.Extension.ABI,
+		abi: builtin.Extension.V2.ABI,
 		to:  builtin.Extension.Address,
 	}
 
@@ -1022,4 +1033,14 @@ func TestExtensionNative(t *testing.T) {
 	test.Case("blockSigner", big.NewInt(1)).
 		ShouldOutput(b1_singer).
 		Assert(t)
+
+	test.Case("txGasPayer").
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("txGasPayer").
+		GasPayer(gasPayer).
+		ShouldOutput(gasPayer).
+		Assert(t)
+
 }

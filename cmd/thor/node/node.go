@@ -62,10 +62,11 @@ func New(
 	comm *comm.Communicator,
 	targetGasLimit uint64,
 	skipLogs bool,
+	forkConfig thor.ForkConfig,
 ) *Node {
 	return &Node{
-		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary),
-		cons:           consensus.New(chain, stateCreator),
+		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
+		cons:           consensus.New(chain, stateCreator, forkConfig),
 		master:         master,
 		chain:          chain,
 		logDB:          logDB,
@@ -317,7 +318,7 @@ func (n *Node) writeLogs(trunk []*block.Header) error {
 
 		task.ForBlock(header)
 		for i, tx := range body.Txs {
-			origin, _ := tx.Signer()
+			origin, _ := tx.Origin()
 			task.Write(tx.ID(), origin, receipts[i].Outputs)
 		}
 	}

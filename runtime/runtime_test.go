@@ -71,7 +71,7 @@ func TestContractSuicide(t *testing.T) {
 	}
 
 	origin := genesis.DevAccounts()[0].Address
-	out := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{Time: time}).
+	out := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, thor.NoFork).
 		ExecuteClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
 	if out.VMErr != nil {
 		t.Fatal(out.VMErr)
@@ -115,7 +115,7 @@ func TestCall(t *testing.T) {
 
 	state, _ := state.New(b0.Header().StateRoot(), kv)
 
-	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{})
+	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()

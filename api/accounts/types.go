@@ -94,10 +94,14 @@ type Clauses []Clause
 
 //BatchCallData executes a batch of codes
 type BatchCallData struct {
-	Clauses  Clauses               `json:"clauses"`
-	Gas      uint64                `json:"gas"`
-	GasPrice *math.HexOrDecimal256 `json:"gasPrice"`
-	Caller   *thor.Address         `json:"caller"`
+	Clauses    Clauses               `json:"clauses"`
+	Gas        uint64                `json:"gas"`
+	GasPrice   *math.HexOrDecimal256 `json:"gasPrice"`
+	ProvedWork *math.HexOrDecimal256 `json:"provedWork"`
+	Caller     *thor.Address         `json:"caller"`
+	GasPayer   *thor.Address         `json:"gasPayer"`
+	Expiration uint32                `json:"expiration"`
+	BlockRef   string                `json:"blockRef"`
 }
 
 type BatchCallResults []*CallResult

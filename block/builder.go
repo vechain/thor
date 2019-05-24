@@ -70,10 +70,16 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 	return b
 }
 
+// TransactionFeatures set supported transaction features
+func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
+	b.headerBody.TxsRootFeatures.Features = features
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
-	header.body.TxsRoot = b.txs.RootHash()
+	header.body.TxsRootFeatures.Root = b.txs.RootHash()
 
 	return &Block{
 		header: &header,

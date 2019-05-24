@@ -148,15 +148,18 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		// tx already in the pool
 		return nil
 	}
+	headBlock := p.chain.BestBlock().Header()
 
 	// validation
 	switch {
 	case newTx.ChainTag() != p.chain.Tag():
 		return badTxError{"chain tag mismatch"}
-	case newTx.HasReservedFields():
-		return badTxError{"reserved fields not empty"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
+	}
+
+	if err := newTx.TestFeatures(headBlock.TxsFeatures()); err != nil {
+		return txRejectedError{err.Error()}
 	}
 
 	txObj, err := resolveTx(newTx)
@@ -164,7 +167,6 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		return badTxError{err.Error()}
 	}
 
-	headBlock := p.chain.BestBlock().Header()
 	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
 		state, err := p.stateCreator.NewState(headBlock.StateRoot())
 		if err != nil {

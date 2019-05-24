@@ -25,8 +25,11 @@ var (
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{mustLoadContract("Prototype")}
-	Extension = &extensionContract{mustLoadContract("Extension")}
-	Measure   = mustLoadContract("Measure")
+	Extension = &extensionContract{
+		mustLoadContract("Extension"),
+		mustLoadContract("ExtensionV2"),
+	}
+	Measure = mustLoadContract("Measure")
 )
 
 type (
@@ -35,7 +38,10 @@ type (
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
 	prototypeContract struct{ *contract }
-	extensionContract struct{ *contract }
+	extensionContract struct {
+		*contract
+		V2 *contract
+	}
 )
 
 func (p *paramsContract) Native(state *state.State) *params.Params {

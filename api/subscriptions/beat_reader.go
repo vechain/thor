@@ -53,7 +53,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 					bloomContent.add(transfer.Recipient.Bytes())
 				}
 			}
-			origin, _ := txs[i].Signer()
+			origin, _ := txs[i].Origin()
 			bloomContent.add(origin.Bytes())
 		}
 		signer, _ := header.Signer()
@@ -66,13 +66,14 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 			bloom.Add(item)
 		}
 		msgs = append(msgs, &BeatMessage{
-			Number:    header.Number(),
-			ID:        header.ID(),
-			ParentID:  header.ParentID(),
-			Timestamp: header.Timestamp(),
-			Bloom:     hexutil.Encode(bloom.Bits[:]),
-			K:         uint32(k),
-			Obsolete:  block.Obsolete,
+			Number:      header.Number(),
+			ID:          header.ID(),
+			ParentID:    header.ParentID(),
+			Timestamp:   header.Timestamp(),
+			TxsFeatures: uint32(header.TxsFeatures()),
+			Bloom:       hexutil.Encode(bloom.Bits[:]),
+			K:           uint32(k),
+			Obsolete:    block.Obsolete,
 		})
 	}
 	return msgs, len(blocks) > 0, nil
