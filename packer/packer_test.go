@@ -146,8 +146,7 @@ func TestForkVIP191(t *testing.T) {
 
 	best := c.BestBlock()
 	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
-		FixTransferLog: 0,
-		VIP191:         1,
+		VIP191: 1,
 	})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
