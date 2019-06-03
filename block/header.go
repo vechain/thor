@@ -214,19 +214,19 @@ func (h *Header) String() string {
 	}
 
 	return fmt.Sprintf(`Header(%v):
-	Number:			%v
-	ParentID:		%v
-	Timestamp:		%v
-	Signer:			%v
-	Beneficiary:	%v
-	GasLimit:		%v
-	GasUsed:		%v
-	TotalScore:		%v
-	TxsRoot:		%v
-	TxsFeatures:	%v
-	StateRoot:		%v
-	ReceiptsRoot:	%v
-	Signature:		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+	Number:         %v
+	ParentID:       %v
+	Timestamp:      %v
+	Signer:         %v
+	Beneficiary:    %v
+	GasLimit:       %v
+	GasUsed:        %v
+	TotalScore:     %v
+	TxsRoot:        %v
+	TxsFeatures:    %v
+	StateRoot:      %v
+	ReceiptsRoot:   %v
+	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
 }
