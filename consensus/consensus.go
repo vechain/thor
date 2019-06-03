@@ -24,7 +24,7 @@ type Consensus struct {
 	chain                *chain.Chain
 	stateCreator         *state.Creator
 	forkConfig           thor.ForkConfig
-	mismatchedReceiptMap thor.MismatchedReceiptMap
+	correctReceiptsRoots map[string]string
 }
 
 // New create a Consensus instance.
@@ -33,7 +33,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkCo
 		chain:                chain,
 		stateCreator:         stateCreator,
 		forkConfig:           forkConfig,
-		mismatchedReceiptMap: thor.GetMismatchedReceiptMap(chain.GenesisBlock().Header().ID()),
+		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 	}
 }
 
