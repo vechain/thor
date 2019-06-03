@@ -21,17 +21,19 @@ import (
 // Consensus check whether the block is verified,
 // and predicate which trunk it belong to.
 type Consensus struct {
-	chain        *chain.Chain
-	stateCreator *state.Creator
-	forkConfig   thor.ForkConfig
+	chain                *chain.Chain
+	stateCreator         *state.Creator
+	forkConfig           thor.ForkConfig
+	correctReceiptsRoots map[string]string
 }
 
 // New create a Consensus instance.
 func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkConfig) *Consensus {
 	return &Consensus{
-		chain:        chain,
-		stateCreator: stateCreator,
-		forkConfig:   forkConfig,
+		chain:                chain,
+		stateCreator:         stateCreator,
+		forkConfig:           forkConfig,
+		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 	}
 }
 
