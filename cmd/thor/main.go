@@ -407,7 +407,7 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, veri
 	}
 
 	pb := pb.New64(int64(best.Number())).
-		Set64(int64(pos)).
+		Set64(int64(pos - 1)).
 		SetMaxWidth(90).
 		Start()
 
