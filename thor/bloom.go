@@ -15,7 +15,7 @@ func EstimateBloomK(itemCount int) int {
 	if k > maxK {
 		return maxK
 	}
-	if k < 0 {
+	if k < 1 {
 		return 1
 	}
 	return k
