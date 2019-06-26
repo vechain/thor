@@ -35,7 +35,7 @@ type CustomGenesis struct {
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	launchTime := gen.LaunchTime
 
-	if gen.GasLimit < 0 {
+	if gen.GasLimit <= 0 {
 		return nil, errors.New("gasLimit must not be 0")
 	}
 	var executor thor.Address
