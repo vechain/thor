@@ -32,7 +32,7 @@ const (
 
 	MaxBlockProposers uint64 = 101
 
-	TolerableBlockPackingTime = 2 * time.Second // the indicator to adjust target block gas limit
+	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
 
 	MaxBackTrackingBlockNumber = 65535
 )
