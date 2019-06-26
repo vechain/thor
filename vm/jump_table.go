@@ -80,6 +80,21 @@ func NewConstantinopleInstructionSet() [256]operation {
 		validateStack: makeStackFunc(2, 1),
 		valid:         true,
 	}
+	instructionSet[EXTCODEHASH] = operation{
+		execute:       opExtCodeHash,
+		gasCost:       gasExtCodeHash,
+		validateStack: makeStackFunc(1, 1),
+		valid:         true,
+	}
+	instructionSet[CREATE2] = operation{
+		execute:       opCreate2,
+		gasCost:       gasCreate2,
+		validateStack: makeStackFunc(4, 1),
+		memorySize:    memoryCreate2,
+		valid:         true,
+		writes:        true,
+		returns:       true,
+	}
 	return instructionSet
 }
 
