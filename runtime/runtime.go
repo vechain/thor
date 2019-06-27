@@ -41,7 +41,7 @@ func init() {
 	}
 }
 
-var chainConfig = params.ChainConfig{
+var baseChainConfig = params.ChainConfig{
 	ChainID:             big.NewInt(0),
 	HomesteadBlock:      big.NewInt(0),
 	DAOForkBlock:        big.NewInt(0),
@@ -75,11 +75,12 @@ type TransactionExecutor struct {
 
 // Runtime bases on EVM and VeChain Thor builtins.
 type Runtime struct {
-	vmConfig   vm.Config
-	seeker     *chain.Seeker
-	state      *state.State
-	ctx        *xenv.BlockContext
-	forkConfig thor.ForkConfig
+	vmConfig    vm.Config
+	seeker      *chain.Seeker
+	state       *state.State
+	ctx         *xenv.BlockContext
+	forkConfig  thor.ForkConfig
+	chainConfig params.ChainConfig
 }
 
 // New create a Runtime object.
@@ -89,11 +90,14 @@ func New(
 	ctx *xenv.BlockContext,
 	forkConfig thor.ForkConfig,
 ) *Runtime {
+	currentChainConfig := baseChainConfig
+	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	rt := Runtime{
-		seeker:     seeker,
-		state:      state,
-		ctx:        ctx,
-		forkConfig: forkConfig,
+		seeker:      seeker,
+		state:       state,
+		ctx:         ctx,
+		forkConfig:  forkConfig,
+		chainConfig: currentChainConfig,
 	}
 	return &rt
 }
@@ -240,7 +244,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
-	}, stateDB, &chainConfig, rt.vmConfig)
+	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 
 // ExecuteClause executes single clause.
