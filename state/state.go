@@ -332,6 +332,7 @@ func (s *State) SetCode(addr thor.Address, code []byte) {
 	if len(code) > 0 {
 		s.sm.Put(codeKey(addr), code)
 		codeHash = crypto.Keccak256(code)
+		codeCache.Add(string(codeHash), code)
 	} else {
 		s.sm.Put(codeKey(addr), []byte(nil))
 	}

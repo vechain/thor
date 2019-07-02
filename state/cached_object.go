@@ -7,9 +7,12 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 )
+
+var codeCache, _ = lru.New(512)
 
 // cachedObject to cache code and storage of an account.
 type cachedObject struct {
@@ -80,10 +83,15 @@ func (co *cachedObject) GetCode() ([]byte, error) {
 
 	if len(co.data.CodeHash) > 0 {
 		// do have code
+		if code, has := codeCache.Get(string(co.data.CodeHash)); has {
+			return code.([]byte), nil
+		}
+
 		code, err := co.kv.Get(co.data.CodeHash)
 		if err != nil {
 			return nil, err
 		}
+		codeCache.Add(string(co.data.CodeHash), code)
 		cache.code = code
 		return code, nil
 	}
