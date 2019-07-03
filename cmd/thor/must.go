@@ -137,8 +137,8 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 	}
 
 	fileCache := limit / 2
-	if fileCache > 1024 {
-		fileCache = 1024
+	if fileCache > 5120 {
+		fileCache = 5120
 	}
 
 	dir := filepath.Join(dataDir, "main.db")

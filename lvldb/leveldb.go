@@ -43,7 +43,7 @@ func New(path string, opts Options) (*LevelDB, error) {
 	}
 
 	db, err := leveldb.OpenFile(path, &opt.Options{
-		CompactionTableSizeMultiplier: 1.5,
+		CompactionTableSizeMultiplier: 2,
 		OpenFilesCacheCapacity:        opts.OpenFilesCacheCapacity,
 		BlockCacheCapacity:            opts.CacheSize / 2 * opt.MiB,
 		WriteBuffer:                   opts.CacheSize / 4 * opt.MiB, // Two of these are used internally
