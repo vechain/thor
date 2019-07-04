@@ -38,9 +38,10 @@ ignored = []
   name = "github.com/stretchr/testify"
   version = "1.1.4"
 
-[[constraint]]
-  branch = "master"
+[[override]]
+  branch = "read-options-no-trigger-compaction"
   name = "github.com/syndtr/goleveldb"
+  source = "https://github.com/qianbin/goleveldb.git"
 
 [[constraint]]
   branch = "master"

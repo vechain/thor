@@ -24,7 +24,7 @@ type Options struct {
 }
 
 var writeOpt = opt.WriteOptions{}
-var readOpt = opt.ReadOptions{}
+var readOpt = opt.ReadOptions{DontTriggerCompaction: true}
 
 // LevelDB wraps level db impls.
 type LevelDB struct {
