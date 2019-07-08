@@ -185,7 +185,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			precompiles = PrecompiledContractsByzantium
 		}
 		if precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
-			// Calling a non existing account, don't do antything, but ping the tracer
+			// Calling a non existing account, don't do anything, but ping the tracer
 			if evm.vmConfig.Debug && evm.depth == 0 {
 				evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
 				evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, nil)
@@ -441,7 +441,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	// Cannot use crypto.CreateAddress2 function.
-	// v1.8.14 -> v1.8.27 depedency issue. See patch.go file.
+	// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
 	contractAddr = CreateAddress2(caller.Address(), common.BigToHash(salt), crypto.Keccak256Hash(code).Bytes())
 	return evm.create(caller, code, gas, endowment, contractAddr) // endowment is value.
 }
