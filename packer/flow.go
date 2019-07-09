@@ -84,8 +84,8 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	case tx.IsExpired(f.runtime.Context().Number):
 		return badTxError{"expired"}
 	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
-		// gasUsed < 90% gas limit
-		if float64(f.gasUsed)/float64(f.runtime.Context().GasLimit) < 0.9 {
+		// has enough space to adopt minimum tx
+		if f.gasUsed+thor.TxGas+thor.ClauseGas <= f.runtime.Context().GasLimit {
 			// try to find a lower gas tx
 			return errTxNotAdoptableNow
 		}
