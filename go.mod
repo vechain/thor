@@ -28,7 +28,7 @@ require (
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
 	github.com/pkg/errors v0.8.0
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/rcrowley/go-metrics v0.0.0-20171128170426-e181e095bae9
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.1.4
@@ -40,3 +40,5 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+replace github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965 => github.com/qianbin/goleveldb v1.0.1-0.20190703064911-8603f976fb57
