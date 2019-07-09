@@ -267,8 +267,8 @@
   version = "v1.1.4"
 
 [[projects]]
-  branch = "master"
-  digest = "1:38dcf4a9ebfc46be0506e6bbc2735d71bd547aa0729733a02a0435a2c8664196"
+  branch = "read-options-no-trigger-compaction"
+  digest = "1:3bfce61ff23743c23b82639a387eaff2ab4db96b1f02072bfc6094355c8c9833"
   name = "github.com/syndtr/goleveldb"
   packages = [
     "leveldb",
@@ -285,7 +285,8 @@
     "leveldb/util",
   ]
   pruneopts = ""
-  revision = "c3a204f8e96543bb0cc090385c001078f184fc46"
+  revision = "8603f976fb575bce7358877547953f1959d61415"
+  source = "https://github.com/qianbin/goleveldb.git"
 
 [[projects]]
   branch = "master"
@@ -432,6 +433,7 @@
     "github.com/mattn/go-tty",
     "github.com/pborman/uuid",
     "github.com/pkg/errors",
+    "github.com/pmezard/go-difflib/difflib",
     "github.com/rcrowley/go-metrics",
     "github.com/stretchr/testify/assert",
     "github.com/syndtr/goleveldb/leveldb",
