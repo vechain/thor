@@ -57,6 +57,8 @@ func NewSecure(root thor.Bytes32, db Database, cachelimit uint16) (*SecureTrie, 
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
+	db = cacheDatabase(db)
+
 	trie, err := New(root, db)
 	if err != nil {
 		return nil, err
@@ -171,6 +173,8 @@ func (t *SecureTrie) NodeIterator(start []byte) NodeIterator {
 // the trie's database. Calling code must ensure that the changes made to db are
 // written back to the trie's attached database before using the trie.
 func (t *SecureTrie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
+	db = cacheDatabaseWriter(db)
+
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		for hk, key := range t.secKeyCache {

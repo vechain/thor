@@ -108,6 +108,7 @@ func (t *Trie) newFlag() nodeFlag {
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(root thor.Bytes32, db Database) (*Trie, error) {
+	db = cacheDatabase(db)
 	trie := &Trie{db: db, originalRoot: root}
 	if (root != thor.Bytes32{}) && root != emptyRoot {
 		if db == nil {
@@ -483,6 +484,8 @@ func (t *Trie) Commit() (root thor.Bytes32, err error) {
 // the changes made to db are written back to the trie's attached
 // database before using the trie.
 func (t *Trie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
+	db = cacheDatabaseWriter(db)
+
 	hash, cached, err := t.hashRoot(db)
 	if err != nil {
 		return (thor.Bytes32{}), err
