@@ -86,3 +86,7 @@ ignored = []
 [[constraint]]
   name = "gopkg.in/cheggaaa/pb.v1"
   version = "1.0.28"
+
+[[constraint]]
+  name = "github.com/allegro/bigcache"
+  version = "2.0.0"
