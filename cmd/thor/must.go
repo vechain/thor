@@ -70,7 +70,10 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig) {
 			decoder := json.NewDecoder(file)
 			decoder.DisallowUnknownFields()
 
+			var forkConfig = thor.NoFork
 			var gen genesis.CustomGenesis
+			gen.ForkConfig = &forkConfig
+
 			if err := decoder.Decode(&gen); err != nil {
 				fatal(fmt.Sprintf("decode genesis file: %v", err))
 			}
@@ -80,12 +83,7 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig) {
 				fatal(fmt.Sprintf("build genesis: %v", err))
 			}
 
-			f := thor.NoFork
-			if gen.ForkConfig != nil {
-				f = *gen.ForkConfig
-			}
-
-			return customGen, f
+			return customGen, forkConfig
 		}
 	}
 
