@@ -42,7 +42,7 @@ type trieWriter interface {
 
 // New create an state object.
 func New(root thor.Bytes32, kv kv.GetPutter) (*State, error) {
-	trie, err := trCache.Get(root, kv, false)
+	trie, err := trie.NewSecure(root, kv, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +372,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*trie.SecureTrie, error) {
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
 	// retrieve a copied trie
-	trie, err := trCache.Get(root, s.kv, true)
+	trie, err := trie.NewSecure(root, s.kv, 0)
 	if err != nil {
 		return nil, err
 	}

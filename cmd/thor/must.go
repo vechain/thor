@@ -35,6 +35,7 @@ import (
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -126,6 +127,11 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) string {
 }
 
 func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
+	cacheMB := ctx.Int(cacheFlag.Name)
+	if cacheMB < 128 {
+		cacheMB = 128
+	}
+
 	limit, err := fdlimit.Current()
 	if err != nil {
 		fatal("failed to get fd limit:", err)
@@ -141,12 +147,13 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 
 	dir := filepath.Join(dataDir, "main.db")
 	db, err := lvldb.New(dir, lvldb.Options{
-		CacheSize:              256,
+		CacheSize:              cacheMB / 2,
 		OpenFilesCacheCapacity: fileCache,
 	})
 	if err != nil {
 		fatal(fmt.Sprintf("open chain database [%v]: %v", dir, err))
 	}
+	trie.SetCache(trie.NewCache(cacheMB / 2))
 	return db
 }
 

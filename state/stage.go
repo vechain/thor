@@ -28,7 +28,7 @@ type codeWithHash struct {
 
 func newStage(root thor.Bytes32, kv kv.GetPutter, changes map[thor.Address]*changedObject) *Stage {
 
-	accountTrie, err := trCache.Get(root, kv, true)
+	accountTrie, err := trie.NewSecure(root, kv, 0)
 	if err != nil {
 		return &Stage{err: err}
 	}
@@ -48,7 +48,7 @@ func newStage(root thor.Bytes32, kv kv.GetPutter, changes map[thor.Address]*chan
 		// skip storage changes if account is empty
 		if !dataCpy.IsEmpty() {
 			if len(obj.storage) > 0 {
-				strie, err := trCache.Get(thor.BytesToBytes32(dataCpy.StorageRoot), kv, true)
+				strie, err := trie.NewSecure(thor.BytesToBytes32(dataCpy.StorageRoot), kv, 0)
 				if err != nil {
 					return &Stage{err: err}
 				}
@@ -97,11 +97,10 @@ func (s *Stage) Commit() (thor.Bytes32, error) {
 
 	// commit storage tries
 	for _, strie := range s.storageTries {
-		root, err := strie.CommitTo(batch)
+		_, err := strie.CommitTo(batch)
 		if err != nil {
 			return thor.Bytes32{}, err
 		}
-		trCache.Add(root, strie, s.kv)
 	}
 
 	// commit accounts trie
@@ -113,8 +112,6 @@ func (s *Stage) Commit() (thor.Bytes32, error) {
 	if err := batch.Write(); err != nil {
 		return thor.Bytes32{}, err
 	}
-
-	trCache.Add(root, s.accountTrie, s.kv)
 
 	return root, nil
 }

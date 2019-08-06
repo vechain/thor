@@ -10,6 +10,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 var codeCache, _ = lru.New(512)
@@ -37,7 +38,7 @@ func (co *cachedObject) getOrCreateStorageTrie() (trieReader, error) {
 
 	root := thor.BytesToBytes32(co.data.StorageRoot)
 
-	trie, err := trCache.Get(root, co.kv, false)
+	trie, err := trie.NewSecure(root, co.kv, 0)
 	if err != nil {
 		return nil, err
 	}

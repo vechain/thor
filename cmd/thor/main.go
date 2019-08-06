@@ -66,6 +66,7 @@ func main() {
 			networkFlag,
 			configDirFlag,
 			dataDirFlag,
+			cacheFlag,
 			beneficiaryFlag,
 			targetGasLimitFlag,
 			apiAddrFlag,

@@ -2,6 +2,17 @@
 
 
 [[projects]]
+  digest = "1:8b13694e3e7b33c6f389f367b6a001a1184b051e34880fdd9e58a2207d9f6573"
+  name = "github.com/allegro/bigcache"
+  packages = [
+    ".",
+    "queue",
+  ]
+  pruneopts = ""
+  revision = "69ea0af04088faa57adb9ac683934277141e92a5"
+  version = "v2.0.0"
+
+[[projects]]
   branch = "master"
   digest = "1:995f2346b013b59bbddd0edb81fc5dfd00e0621a80a64e19b9cf263404f9b38e"
   name = "github.com/aristanetworks/goarista"
@@ -398,6 +409,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/allegro/bigcache",
     "github.com/beevik/ntp",
     "github.com/davecgh/go-spew/spew",
     "github.com/elazarl/go-bindata-assetfs",
