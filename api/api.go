@@ -106,7 +106,9 @@ func New(
 	handler := handlers.CompressHandler(router)
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
-		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}))(handler)
+		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
+		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
+	)(handler)
 	return handler.ServeHTTP,
 		subs.Close // subscriptions handles hijacked conns, which need to be closed
 }
