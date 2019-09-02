@@ -53,6 +53,17 @@
   version = "v1.7"
 
 [[projects]]
+  digest = "1:60fa67f45c65e8269107fbc31dd8d7b0175bee2cfb028983c9006ebb3678aeab"
+  name = "github.com/elastic/gosigar"
+  packages = [
+    ".",
+    "sys/windows",
+  ]
+  pruneopts = ""
+  revision = "7aef3366157f2bfdf3e068f73ce7193573e88e0c"
+  version = "v0.10.5"
+
+[[projects]]
   digest = "1:044b2f1eea2f5cfb0d3678baf60892734f59d5c2ea3932cb6ed894a97ccba15c"
   name = "github.com/elazarl/go-bindata-assetfs"
   packages = ["."]
@@ -335,6 +346,7 @@
   packages = [
     "cpu",
     "unix",
+    "windows",
   ]
   pruneopts = ""
   revision = "4910a1d54f876d7b22162a85f4d066d3ee649450"
@@ -412,6 +424,7 @@
     "github.com/allegro/bigcache",
     "github.com/beevik/ntp",
     "github.com/davecgh/go-spew/spew",
+    "github.com/elastic/gosigar",
     "github.com/elazarl/go-bindata-assetfs",
     "github.com/ethereum/go-ethereum/accounts/abi",
     "github.com/ethereum/go-ethereum/accounts/keystore",

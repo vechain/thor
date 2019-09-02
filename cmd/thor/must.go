@@ -9,14 +9,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
+	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -127,11 +130,51 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) string {
 }
 
 func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
-	cacheMB := ctx.Int(cacheFlag.Name)
-	if cacheMB < 128 {
-		cacheMB = 128
+	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
+	log.Debug("cache size(MB)", "size", cacheMB)
+
+	// go-ethereum stuff
+	// Ensure Go's GC ignores the database cache for trigger percentage
+	gogc := math.Max(20, math.Min(100, 100/(float64(cacheMB)/1024)))
+
+	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
+	debug.SetGCPercent(int(gogc))
+
+	fdCache := suggestFDCache()
+	log.Debug("fd cache", "n", fdCache)
+
+	dir := filepath.Join(dataDir, "main.db")
+	db, err := lvldb.New(dir, lvldb.Options{
+		CacheSize:              cacheMB / 2,
+		OpenFilesCacheCapacity: fdCache,
+	})
+	if err != nil {
+		fatal(fmt.Sprintf("open chain database [%v]: %v", dir, err))
+	}
+	trie.SetCache(trie.NewCache(cacheMB / 2))
+	return db
+}
+
+func normalizeCacheSize(sizeMB int) int {
+	if sizeMB < 128 {
+		sizeMB = 128
 	}
 
+	var mem gosigar.Mem
+	if err := mem.Get(); err != nil {
+		log.Warn("failed to get total mem:", "err", err)
+	} else {
+		// limit to 1/2 os physical ram
+		limitMB := int(mem.Total / 1024 / 1024 / 2)
+		if sizeMB > limitMB {
+			sizeMB = limitMB
+			log.Warn("cache size(MB) limited", "limit", limitMB)
+		}
+	}
+	return sizeMB
+}
+
+func suggestFDCache() int {
 	limit, err := fdlimit.Current()
 	if err != nil {
 		fatal("failed to get fd limit:", err)
@@ -140,21 +183,11 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 		log.Warn("low fd limit, increase it if possible", "limit", limit)
 	}
 
-	fileCache := limit / 2
-	if fileCache > 5120 {
-		fileCache = 5120
+	n := limit / 2
+	if n > 5120 {
+		return 5120
 	}
-
-	dir := filepath.Join(dataDir, "main.db")
-	db, err := lvldb.New(dir, lvldb.Options{
-		CacheSize:              cacheMB / 2,
-		OpenFilesCacheCapacity: fileCache,
-	})
-	if err != nil {
-		fatal(fmt.Sprintf("open chain database [%v]: %v", dir, err))
-	}
-	trie.SetCache(trie.NewCache(cacheMB / 2))
-	return db
+	return n
 }
 
 func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
