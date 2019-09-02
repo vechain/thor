@@ -3,12 +3,14 @@ module github.com/vechain/thor
 go 1.12
 
 require (
+	github.com/allegro/bigcache v1.2.1
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
 	github.com/beevik/ntp v0.2.0
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.0
 	github.com/deckarep/golang-set v0.0.0-20171013212420-1d4478f51bed // indirect
+	github.com/elastic/gosigar v0.10.5
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/fatih/color v1.7.0 // indirect
