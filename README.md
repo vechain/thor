@@ -110,6 +110,7 @@ bin/thor -h
 
 - `--network value`             the network to join (main|test) or path to genesis file
 - `--data-dir value`            directory for block-chain databases
+- `--cache value`               megabytes of ram allocated to internal caching (default: 2048)
 - `--beneficiary value`         address for block rewards
 - `--target-gas-limit value`    target block gas limit (adaptive if set to 0) (default: 0)
 - `--api-addr value`            API service listening address (default: "localhost:8669")
