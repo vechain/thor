@@ -139,9 +139,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	startTime := mclock.Now()
 	for _, tx := range pendingTxs {
 		err := flow.Adopt(tx)
-		if err != nil {
-			log.Error("executing transaction", "error", fmt.Sprintf("%+v", err.Error()))
-		}
 		switch {
 		case packer.IsGasLimitReached(err):
 			break
