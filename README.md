@@ -47,7 +47,7 @@ Simply run:
 make dep
 ```
 
-If you keep getting network error, it is suggested to use [Go Module Proxy](https://golang.org/cmd/go/#hdr-Module_proxy_protocol). [https://goproxy.io/](https://goproxy.io/) is one option.
+If you keep getting network error, it is suggested to use [Go Module Proxy](https://golang.org/cmd/go/#hdr-Module_proxy_protocol). [https://proxy.golang.org/](https://proxy.golang.org/) is one option.
 
 ### Building
 
