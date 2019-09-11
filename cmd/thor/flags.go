@@ -122,6 +122,6 @@ var (
 	cacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "megabytes of ram allocated to internal caching",
-		Value: 2048,
+		Value: 4096,
 	}
 )
