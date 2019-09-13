@@ -164,8 +164,15 @@ func normalizeCacheSize(sizeMB int) int {
 	if err := mem.Get(); err != nil {
 		log.Warn("failed to get total mem:", "err", err)
 	} else {
-		// limit to 1/2 os physical ram
-		limitMB := int(mem.Total / 1024 / 1024 / 2)
+		total := int(mem.Total / 1024 / 1024)
+		half := total / 2
+
+		// limit to not less than total/2 and up to total-2GB
+		limitMB := total - 2048
+		if limitMB < half {
+			limitMB = half
+		}
+
 		if sizeMB > limitMB {
 			sizeMB = limitMB
 			log.Warn("cache size(MB) limited", "limit", limitMB)
