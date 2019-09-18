@@ -385,67 +385,66 @@ func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, erro
 }
 
 func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, verify bool) error {
-	pos, err := seekLogDBSyncPosition(chain, logDB)
+	startPos, err := seekLogDBSyncPosition(chain, logDB)
 	if err != nil {
 		return errors.Wrap(err, "seek log db sync position")
 	}
-	if verify && pos > 0 {
-		if err := verifyLogDB(ctx, pos, chain, logDB); err != nil {
+	if verify && startPos > 0 {
+		if err := verifyLogDB(ctx, startPos-1, chain, logDB); err != nil {
 			return errors.Wrap(err, "verify log db")
 		}
 	}
 
-	best := chain.BestBlock().Header()
-	if best.Number() == pos {
+	bestNum := chain.BestBlock().Header().Number()
+
+	if bestNum == startPos {
 		return nil
 	}
 
-	if pos == 0 {
+	if startPos == 0 {
 		fmt.Println(">> Rebuilding log db <<")
-		pos = 1 // block 0 can be skipped
+		startPos = 1 // block 0 can be skipped
 	} else {
 		fmt.Println(">> Syncing log db <<")
 	}
 
-	pb := pb.New64(int64(best.Number())).
-		Set64(int64(pos - 1)).
+	pb := pb.New64(int64(bestNum)).
+		Set64(int64(startPos - 1)).
 		SetMaxWidth(90).
 		Start()
 
 	defer func() { pb.NotPrint = true }()
 
-	for pos <= best.Number() {
-		to := pos + 255
-		if to > best.Number() {
-			to = best.Number()
-		}
-		blocks, err := fastReadBlocks(chain, pos, to)
-		if err != nil {
-			return errors.Wrap(err, "read blocks")
-		}
+	it := chain.NewIterator(256).Seek(startPos)
 
-		task := logDB.NewTask()
-		for _, b := range blocks {
-			txs := b.Transactions()
-			if len(txs) > 0 {
-				task.ForBlock(b.Header())
-				receipts, err := chain.GetBlockReceipts(b.Header().ID())
-				if err != nil {
-					return errors.Wrap(err, "get block receipts")
-				}
+	task := logDB.NewTask()
+	taskLen := 0
 
-				for i, tx := range txs {
-					origin, _ := tx.Origin()
-					task.Write(tx.ID(), origin, receipts[i].Outputs)
-				}
+	for it.Next() {
+		b := it.Block()
+
+		task.ForBlock(b.Header())
+		txs := b.Transactions()
+		if len(txs) > 0 {
+			receipts, err := chain.GetBlockReceipts(b.Header().ID())
+			if err != nil {
+				return errors.Wrap(err, "get block receipts")
 			}
-			pb.Add64(1)
-		}
 
-		if err := task.Commit(); err != nil {
-			return errors.Wrap(err, "write logs")
+			for i, tx := range txs {
+				origin, _ := tx.Origin()
+				task.Write(tx.ID(), origin, receipts[i].Outputs)
+				taskLen++
+			}
 		}
-		pos = to + 1
+		if taskLen > 512 {
+			if err := task.Commit(); err != nil {
+				return errors.Wrap(err, "write logs")
+			}
+			task = logDB.NewTask()
+			taskLen = 0
+		}
+		pb.Add64(1)
 
 		select {
 		case <-ctx.Done():
@@ -453,29 +452,16 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, veri
 		default:
 		}
 	}
+
+	if taskLen > 0 {
+		if err := task.Commit(); err != nil {
+			return errors.Wrap(err, "write logs")
+		}
+	}
+
+	if err := it.Error(); err != nil {
+		return errors.Wrap(err, "read block")
+	}
 	pb.Finish()
 	return nil
-}
-
-func fastReadBlocks(chain *chain.Chain, from, to uint32) ([]*block.Block, error) {
-	blocks := make([]*block.Block, 0, to-from+1)
-	b, err := chain.GetTrunkBlock(to)
-	if err != nil {
-		return nil, err
-	}
-	blocks = append(blocks, b)
-
-	for b.Header().Number() > from {
-		b, err = chain.GetBlock(b.Header().ParentID())
-		if err != nil {
-			return nil, err
-		}
-		blocks = append(blocks, b)
-	}
-
-	for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
-		blocks[i], blocks[j] = blocks[j], blocks[i]
-	}
-
-	return blocks, nil
 }

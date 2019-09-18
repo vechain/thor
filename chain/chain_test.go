@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 func initChain() *chain.Chain {
@@ -73,4 +74,46 @@ func TestAdd(t *testing.T) {
 			assert.Equal(t, tt.fork.Trunk[i].ID(), b.ID())
 		}
 	}
+}
+
+func TestIterator(t *testing.T) {
+	ch := initChain()
+	b0 := ch.GenesisBlock()
+	nextB := b0
+	for i := 0; i < 100; i++ {
+		nextB = newBlock(nextB, 1)
+		ch.AddBlock(nextB, nil)
+	}
+
+	var ids []thor.Bytes32
+
+	it := ch.NewIterator(16)
+	for it.Next() {
+		ids = append(ids, it.Block().Header().ID())
+	}
+	assert.Nil(t, it.Error())
+	assert.Equal(t, func() []thor.Bytes32 {
+		var ret []thor.Bytes32
+		for i := uint32(0); i <= ch.BestBlock().Header().Number(); i++ {
+			id, _ := ch.GetTrunkBlockID(i)
+			ret = append(ret, id)
+		}
+		return ret
+	}(), ids)
+
+	// fromNum == head
+	ids = nil
+	it = ch.NewIterator(16)
+	it.Seek(ch.BestBlock().Header().Number())
+	for it.Next() {
+		ids = append(ids, it.Block().Header().ID())
+	}
+	assert.Nil(t, it.Error())
+	assert.Equal(t, []thor.Bytes32{ch.BestBlock().Header().ID()}, ids)
+
+	// fromNum beyond head
+	it = ch.NewIterator(16)
+	it.Seek(ch.BestBlock().Header().Number() + 1)
+	assert.False(t, it.Next())
+	assert.Nil(t, it.Error())
 }

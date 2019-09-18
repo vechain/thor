@@ -7,6 +7,7 @@ package chain
 
 import (
 	"bytes"
+	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -609,4 +610,93 @@ func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, 
 	}
 
 	return c.getBlock(next)
+}
+
+// NewIterator create a block iterator, to fast iterate blocks from lower number to higher.
+// It's much faster than get block one by one.
+func (c *Chain) NewIterator(bufSize int) *Iterator {
+	return &Iterator{
+		chain:   c,
+		headID:  c.BestBlock().Header().ID(),
+		bufSize: bufSize,
+	}
+}
+
+// Iterator block iterator.
+type Iterator struct {
+	chain   *Chain
+	headID  thor.Bytes32
+	bufSize int
+
+	nextNum uint32
+	buf     []*block.Block
+	err     error
+}
+
+// Error returns occurred error.
+func (i *Iterator) Error() error {
+	return i.err
+}
+
+// Seek seek to given block number as start position.
+// Error will be reset.
+func (i *Iterator) Seek(num uint32) *Iterator {
+	i.nextNum = num
+	i.buf = nil
+	i.err = nil
+	return i
+}
+
+// Next move the iterator to next.
+func (i *Iterator) Next() bool {
+	if i.err != nil {
+		return false
+	}
+
+	if bufLen := len(i.buf); bufLen > 1 {
+		// pop last one
+		i.buf = i.buf[:bufLen-1]
+		return true
+	}
+
+	i.buf = nil
+
+	if i.nextNum > block.Number(i.headID) {
+		return false
+	}
+
+	toNum := i.nextNum + uint32(i.bufSize)
+	if toNum > block.Number(i.headID) {
+		toNum = block.Number(i.headID)
+	}
+
+	id, err := i.chain.GetAncestorBlockID(i.headID, toNum)
+	if err != nil {
+		i.err = err
+		return false
+	}
+
+	var buf []*block.Block
+	for block.Number(id) >= i.nextNum && block.Number(id) != math.MaxUint32 {
+		b, err := i.chain.GetBlock(id)
+		if err != nil {
+			i.err = err
+			return false
+		}
+		buf = append(buf, b)
+		// traverse by parent id to save read io
+		id = b.Header().ParentID()
+	}
+
+	i.buf = buf
+	i.nextNum = toNum + 1
+	return true
+}
+
+// Block returns current block.
+func (i *Iterator) Block() *block.Block {
+	if bufLen := len(i.buf); bufLen > 0 {
+		return i.buf[bufLen-1]
+	}
+	return nil
 }
