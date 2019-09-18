@@ -612,7 +612,8 @@ func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, 
 	return c.getBlock(next)
 }
 
-// NewIterator create a block iterator. From `fromNum` to number of `headID`.
+// NewIterator create a block iterator, to fast iterate blocks from lower number to higher.
+// It's much faster than get block one by one.
 func (c *Chain) NewIterator(bufSize int) *Iterator {
 	return &Iterator{
 		chain:   c,
@@ -637,8 +638,8 @@ func (i *Iterator) Error() error {
 	return i.err
 }
 
-// Seek seek to given block number.
-// It'll reset error.
+// Seek seek to given block number as start position.
+// Error will be reset.
 func (i *Iterator) Seek(num uint32) *Iterator {
 	i.nextNum = num
 	i.buf = nil
