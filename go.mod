@@ -34,7 +34,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20171128170426-e181e095bae9
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.1.4
-	github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965
+	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
 	golang.org/x/crypto v0.0.0-20180820150726-614d502a4dac
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
@@ -42,5 +42,3 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.2.2
 )
-
-replace github.com/syndtr/goleveldb v0.0.0-20190318030020-c3a204f8e965 => github.com/qianbin/goleveldb v1.0.1-0.20190703064911-8603f976fb57
