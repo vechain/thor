@@ -24,7 +24,7 @@ type Options struct {
 }
 
 var writeOpt = opt.WriteOptions{}
-var readOpt = opt.ReadOptions{DontTriggerCompaction: true}
+var readOpt = opt.ReadOptions{}
 
 // LevelDB wraps level db impls.
 type LevelDB struct {
@@ -48,6 +48,7 @@ func New(path string, opts Options) (*LevelDB, error) {
 		BlockCacheCapacity:            opts.CacheSize / 2 * opt.MiB,
 		WriteBuffer:                   32 * opt.MiB, // Two of these are used internally
 		Filter:                        filter.NewBloomFilter(10),
+		DisableSeeksCompaction:        true,
 	})
 
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
