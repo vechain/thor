@@ -169,6 +169,23 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate 
 	return candidates
 }
 
+// AllCandidates lists all registered candidates.
+func (a *Authority) AllCandidates() []*Candidate {
+	var candidates []*Candidate
+	ptr := a.getAddressPtr(headKey)
+	for ptr != nil {
+		entry := a.getEntry(*ptr)
+		candidates = append(candidates, &Candidate{
+			NodeMaster: *ptr,
+			Endorsor:   entry.Endorsor,
+			Identity:   entry.Identity,
+			Active:     entry.Active,
+		})
+		ptr = entry.Next
+	}
+	return candidates
+}
+
 // First returns node master address of first entry.
 func (a *Authority) First() *thor.Address {
 	return a.getAddressPtr(headKey)
