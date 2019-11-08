@@ -31,7 +31,8 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if err := c.validateProposer(header, parentHeader, state); err != nil {
+	candidates, err := c.validateProposer(header, parentHeader, state)
+	if err != nil {
 		return nil, nil, err
 	}
 
@@ -44,6 +45,47 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
+	hasAuthorityEvent := func() bool {
+		for _, r := range receipts {
+			for _, o := range r.Outputs {
+				for _, ev := range o.Events {
+					if ev.Address == builtin.Authority.Address {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}()
+
+	// if no event emitted from Authority contract, it's believed that the candidates list not changed
+	if !hasAuthorityEvent {
+
+		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
+		// can be reused
+		hasEndorsorEvent := func() bool {
+			for _, r := range receipts {
+				for _, o := range r.Outputs {
+					for _, ev := range o.Events {
+						if ev.Address == builtin.Params.Address {
+							return true
+						}
+					}
+					for _, t := range o.Transfers {
+						if candidates.IsEndorsor(t.Sender) || candidates.IsEndorsor(t.Recipient) {
+							return true
+						}
+					}
+				}
+			}
+			return false
+		}()
+
+		if hasEndorsorEvent {
+			candidates.InvalidateCache()
+		}
+		c.candidatesCache.Add(header.ID(), candidates)
+	}
 	return stage, receipts, nil
 }
 
@@ -74,43 +116,45 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) error {
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
 	authority := builtin.Authority.Native(st)
-	endorsement := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
-
-	candidates := authority.Candidates(endorsement, thor.MaxBlockProposers)
-	proposers := make([]poa.Proposer, 0, len(candidates))
-	for _, c := range candidates {
-		proposers = append(proposers, poa.Proposer{
-			Address: c.NodeMaster,
-			Active:  c.Active,
-		})
+	var candidates *poa.Candidates
+	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
+		candidates = entry.(*poa.Candidates).Copy()
+	} else {
+		candidates = poa.NewCandidates(authority.AllCandidates())
 	}
+
+	proposers := candidates.Pick(st)
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
-		return consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
-		return consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
-		return consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
+		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
-	for _, proposer := range updates {
-		authority.Update(proposer.Address, proposer.Active)
+	for _, u := range updates {
+		authority.Update(u.Address, u.Active)
+		if !candidates.Update(u.Address, u.Active) {
+			// should never happen
+			panic("something wrong with candidates list")
+		}
 	}
 
-	return nil
+	return candidates, nil
 }
 
 func (c *Consensus) validateBlockBody(blk *block.Block) error {

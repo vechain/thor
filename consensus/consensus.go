@@ -8,6 +8,7 @@ package consensus
 import (
 	"fmt"
 
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -25,15 +26,18 @@ type Consensus struct {
 	stateCreator         *state.Creator
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
+	candidatesCache      *simplelru.LRU
 }
 
 // New create a Consensus instance.
 func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkConfig) *Consensus {
+	candidatesCache, _ := simplelru.NewLRU(16, nil)
 	return &Consensus{
 		chain:                chain,
 		stateCreator:         stateCreator,
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
+		candidatesCache:      candidatesCache,
 	}
 }
 
@@ -105,7 +109,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		return nil, err
 	}
 	if !skipPoA {
-		if err := c.validateProposer(header, parentHeader, state); err != nil {
+		if _, err := c.validateProposer(header, parentHeader, state); err != nil {
 			return nil, err
 		}
 	}
