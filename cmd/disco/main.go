@@ -74,10 +74,10 @@ func run(ctx *cli.Context) error {
 		if key, err = crypto.HexToECDSA(keyHex); err != nil {
 			return errors.Wrap(err, "-keyhex")
 		}
-	}
-
-	if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
-		return errors.Wrap(err, "-keyfile")
+	} else {
+		if key, err = loadOrGenerateKeyFile(ctx.String("keyfile")); err != nil {
+			return errors.Wrap(err, "-keyfile")
+		}
 	}
 
 	netrestrict := ctx.String("netrestrict")
