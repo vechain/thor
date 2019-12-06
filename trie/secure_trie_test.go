@@ -29,7 +29,7 @@ import (
 
 func newEmptySecure() *SecureTrie {
 	db := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(thor.Bytes32{}, db, 0)
+	trie, _ := NewSecure(thor.Bytes32{}, db)
 	return trie
 }
 
@@ -37,7 +37,7 @@ func newEmptySecure() *SecureTrie {
 func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	db := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(thor.Bytes32{}, db, 0)
+	trie, _ := NewSecure(thor.Bytes32{}, db)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
