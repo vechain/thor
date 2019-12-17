@@ -124,4 +124,8 @@ var (
 		Usage: "megabytes of ram allocated to internal caching",
 		Value: 4096,
 	}
+	skipTxPoolBlockList = cli.BoolFlag{
+		Name:  "skip-txpool-blocklist",
+		Usage: "skip applying txpool blocklist",
+	}
 )
