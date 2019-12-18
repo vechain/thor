@@ -154,9 +154,10 @@ The [Dockerfile](https://raw.githubusercontent.com/vechain/thor/master/Dockerfil
 
 ## Explorers
 
-Awesome explorers built by the community:
-
-- [VeForge](https://explore.veforge.com/) by *Totient Labs*
+- [VeChain Explorer (Official)](https://explore.vechain.org)
+- [VeChainStats](https://vechainstats.com/) 
+- [Vexplorer](https://vexplorer.io/)
+- [Insight](https://insight.vecha.in/)
 
 ## Testnet faucet
 
