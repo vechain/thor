@@ -6,6 +6,9 @@
 package txpool
 
 import (
+	"context"
+	"math/rand"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -34,9 +37,11 @@ var (
 
 // Options options for tx pool.
 type Options struct {
-	Limit           int
-	LimitPerAccount int
-	MaxLifetime     time.Duration
+	Limit                  int
+	LimitPerAccount        int
+	MaxLifetime            time.Duration
+	BlocklistCacheFilePath string
+	BlocklistFetchURL      string
 }
 
 // TxEvent will be posted when tx is added or status changed.
@@ -50,12 +55,14 @@ type TxPool struct {
 	options      Options
 	chain        *chain.Chain
 	stateCreator *state.Creator
+	blocklist    blocklist
 
 	executables    atomic.Value
 	all            *txObjectMap
 	addedAfterWash uint32
 
-	done   chan struct{}
+	ctx    context.Context
+	cancel func()
 	txFeed event.Feed
 	scope  event.SubscriptionScope
 	goes   co.Goes
@@ -64,14 +71,18 @@ type TxPool struct {
 // New create a new TxPool instance.
 // Shutdown is required to be called at end.
 func New(chain *chain.Chain, stateCreator *state.Creator, options Options) *TxPool {
+	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
 		options:      options,
 		chain:        chain,
 		stateCreator: stateCreator,
 		all:          newTxObjectMap(),
-		done:         make(chan struct{}),
+		ctx:          ctx,
+		cancel:       cancel,
 	}
+
 	pool.goes.Go(pool.housekeeping)
+	pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
 }
 
@@ -86,7 +97,7 @@ func (p *TxPool) housekeeping() {
 
 	for {
 		select {
-		case <-p.done:
+		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
 			var headBlockChanged bool
@@ -130,9 +141,60 @@ func (p *TxPool) housekeeping() {
 	}
 }
 
+func (p *TxPool) fetchBlocklistLoop() {
+	var (
+		path = p.options.BlocklistCacheFilePath
+		url  = p.options.BlocklistFetchURL
+	)
+
+	if path != "" {
+		if err := p.blocklist.Load(path); err != nil {
+			if !os.IsNotExist(err) {
+				log.Warn("blocklist load failed", "error", err, "path", path)
+			}
+		} else {
+			log.Debug("blocklist loaded", "len", p.blocklist.Len())
+		}
+	}
+	if url == "" {
+		return
+	}
+
+	fetch := func() {
+		if err := p.blocklist.Fetch(p.ctx, url); err != nil {
+			if err == context.Canceled {
+				return
+			}
+			log.Warn("blocklist fetch failed", "error", err, "url", url)
+		} else {
+			log.Debug("blocklist fetched", "len", p.blocklist.Len())
+			if path != "" {
+				if err := p.blocklist.Save(path); err != nil {
+					log.Warn("blocklist save failed", "error", err, "path", path)
+				} else {
+					log.Debug("blocklist saved")
+				}
+			}
+		}
+	}
+
+	fetch()
+
+	for {
+		// delay 1~2 min
+		delay := time.Second * time.Duration(rand.Int()%60+60)
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-time.After(delay):
+			fetch()
+		}
+	}
+}
+
 // Close cleanup inner go routines.
 func (p *TxPool) Close() {
-	close(p.done)
+	p.cancel()
 	p.scope.Close()
 	p.goes.Wait()
 	log.Debug("closed")
@@ -148,6 +210,12 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		// tx already in the pool
 		return nil
 	}
+	origin, _ := newTx.Origin()
+	if p.blocklist.Contains(origin) {
+		// tx origin blocked
+		return nil
+	}
+
 	headBlock := p.chain.BestBlock().Header()
 
 	// validation
@@ -240,6 +308,10 @@ func (p *TxPool) Executables() tx.Transactions {
 func (p *TxPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*txObject, 0, len(txs))
 	for _, tx := range txs {
+		origin, _ := tx.Origin()
+		if p.blocklist.Contains(origin) {
+			continue
+		}
 		// here we ignore errors
 		if txObj, err := resolveTx(tx); err == nil {
 			txObjs = append(txObjs, txObj)
@@ -288,6 +360,12 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		now               = time.Now().UnixNano()
 	)
 	for _, txObj := range all {
+		if p.blocklist.Contains(txObj.Origin()) {
+			toRemove = append(toRemove, txObj)
+			log.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
+			continue
+		}
+
 		// out of lifetime
 		if now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
