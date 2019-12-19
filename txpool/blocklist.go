@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -69,16 +70,25 @@ func (bl *blocklist) Save(path string) error {
 }
 
 // Fetch fetch list from remote url.
-func (bl *blocklist) Fetch(ctx context.Context, url string) error {
+func (bl *blocklist) Fetch(ctx context.Context, url string, eTag *string) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
+	}
+	if eTag != nil && *eTag != "" {
+		req.Header.Add("if-none-match", *eTag)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	defer io.Copy(ioutil.Discard, resp.Body)
+
+	if resp.StatusCode == http.StatusNotModified {
+		return nil
+	}
+
 	if resp.StatusCode/100 != 2 {
 		return fmt.Errorf("status %v", resp.Status)
 	}
@@ -92,6 +102,9 @@ func (bl *blocklist) Fetch(ctx context.Context, url string) error {
 	bl.list = newList
 	bl.lock.Unlock()
 
+	if eTag != nil {
+		*eTag = resp.Header.Get("etag")
+	}
 	return nil
 }
 
