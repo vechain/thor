@@ -160,8 +160,9 @@ func (p *TxPool) fetchBlocklistLoop() {
 		return
 	}
 
+	var eTag string
 	fetch := func() {
-		if err := p.blocklist.Fetch(p.ctx, url); err != nil {
+		if err := p.blocklist.Fetch(p.ctx, url, &eTag); err != nil {
 			if err == context.Canceled {
 				return
 			}
