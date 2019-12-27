@@ -44,14 +44,22 @@ func (c *Candidates) Copy() *Candidates {
 }
 
 // Pick picks a list of proposers, which satisfy preset conditions.
-func (c *Candidates) Pick(state *state.State) []Proposer {
+func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
 		// re-pick
-		endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+		endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+		if err != nil {
+			return nil, err
+		}
+
 		satisfied = make([]int, 0, len(c.list))
 		for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers; i++ {
-			if bal := state.GetBalance(c.list[i].Endorsor); bal.Cmp(endorsement) >= 0 {
+			bal, err := state.GetBalance(c.list[i].Endorsor)
+			if err != nil {
+				return nil, err
+			}
+			if bal.Cmp(endorsement) >= 0 {
 				satisfied = append(satisfied, i)
 			}
 		}
@@ -65,7 +73,7 @@ func (c *Candidates) Pick(state *state.State) []Proposer {
 			Active:  c.list[i].Active,
 		})
 	}
-	return proposers
+	return proposers, nil
 }
 
 // Update update candidate activity status, by its master address.
