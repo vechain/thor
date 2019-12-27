@@ -18,7 +18,13 @@ func init() {
 	}{
 		{"native_executor", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			addr := thor.BytesToAddress(Params.Native(env.State()).Get(thor.KeyExecutorAddress).Bytes())
+
+			val, err := Params.Native(env.State()).Get(thor.KeyExecutorAddress)
+			if err != nil {
+				panic(err)
+			}
+
+			addr := thor.BytesToAddress(val.Bytes())
 			return []interface{}{addr}
 		}},
 		{"native_add", func(env *xenv.Environment) []interface{} {
@@ -30,10 +36,13 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Add(
+			ok, err := Authority.Native(env.State()).Add(
 				thor.Address(args.NodeMaster),
 				thor.Address(args.Endorsor),
 				thor.Bytes32(args.Identity))
+			if err != nil {
+				panic(err)
+			}
 
 			if ok {
 				env.UseGas(thor.SstoreSetGas)
@@ -46,7 +55,10 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			ok := Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
+			ok, err := Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
 			if ok {
 				env.UseGas(thor.SstoreResetGas * 3)
 			}
@@ -57,13 +69,20 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, identity, active := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			listed, endorsor, identity, active, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{listed, endorsor, identity, active}
 		}},
 		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			if nodeMaster := Authority.Native(env.State()).First(); nodeMaster != nil {
+			nodeMaster, err := Authority.Native(env.State()).First()
+			if err != nil {
+				panic(err)
+			}
+			if nodeMaster != nil {
 				return []interface{}{*nodeMaster}
 			}
 			return []interface{}{thor.Address{}}
@@ -73,7 +92,11 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			if next := Authority.Native(env.State()).Next(thor.Address(nodeMaster)); next != nil {
+			next, err := Authority.Native(env.State()).Next(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
+			if next != nil {
 				return []interface{}{*next}
 			}
 			return []interface{}{thor.Address{}}
@@ -83,16 +106,25 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, _, _ := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			listed, endorsor, _, _, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
 			if !listed {
 				return []interface{}{false}
 			}
 
 			env.UseGas(thor.GetBalanceGas)
-			bal := env.State().GetBalance(endorsor)
+			bal, err := env.State().GetBalance(endorsor)
+			if err != nil {
+				panic(err)
+			}
 
 			env.UseGas(thor.SloadGas)
-			endorsement := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
+			endorsement, err := Params.Native(env.State()).Get(thor.KeyProposerEndorsement)
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}

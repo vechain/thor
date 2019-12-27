@@ -20,7 +20,11 @@ func init() {
 	}{
 		{"native_executor", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			addr := thor.BytesToAddress(Params.Native(env.State()).Get(thor.KeyExecutorAddress).Bytes())
+			val, err := Params.Native(env.State()).Get(thor.KeyExecutorAddress)
+			if err != nil {
+				panic(err)
+			}
+			addr := thor.BytesToAddress(val.Bytes())
 			return []interface{}{addr}
 		}},
 		{"native_get", func(env *xenv.Environment) []interface{} {
@@ -28,7 +32,10 @@ func init() {
 			env.ParseArgs(&key)
 
 			env.UseGas(thor.SloadGas)
-			v := Params.Native(env.State()).Get(thor.Bytes32(key))
+			v, err := Params.Native(env.State()).Get(thor.Bytes32(key))
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{v}
 		}},
 		{"native_set", func(env *xenv.Environment) []interface{} {
@@ -39,7 +46,9 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SstoreSetGas)
-			Params.Native(env.State()).Set(thor.Bytes32(args.Key), args.Value)
+			if err := Params.Native(env.State()).Set(thor.Bytes32(args.Key), args.Value); err != nil {
+				panic(err)
+			}
 			return nil
 		}},
 	}
