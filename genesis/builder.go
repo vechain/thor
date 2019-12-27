@@ -10,7 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -65,11 +65,9 @@ func (b *Builder) ExtraData(data [28]byte) *Builder {
 
 // ComputeID compute genesis ID.
 func (b *Builder) ComputeID() (thor.Bytes32, error) {
-	kv, err := lvldb.NewMem()
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-	blk, _, err := b.Build(state.NewCreator(kv))
+	db := muxdb.NewMem()
+
+	blk, _, _, err := b.Build(state.NewStater(db))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -77,15 +75,12 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 }
 
 // Build build genesis block according to presets.
-func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events tx.Events, err error) {
-	state, err := stateCreator.NewState(thor.Bytes32{})
-	if err != nil {
-		return nil, nil, err
-	}
+func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
+	state := stater.NewState(thor.Bytes32{})
 
 	for _, proc := range b.stateProcs {
 		if err := proc(state); err != nil {
-			return nil, nil, errors.Wrap(err, "state process")
+			return nil, nil, nil, errors.Wrap(err, "state process")
 		}
 	}
 
@@ -95,21 +90,31 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 	}, thor.NoFork)
 
 	for _, call := range b.calls {
-		out := rt.ExecuteClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
+		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
 			Origin: call.caller,
 		})
+		out, _, err := exec()
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err, "call")
+		}
 		if out.VMErr != nil {
-			return nil, nil, errors.Wrap(out.VMErr, "vm")
+			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
 		}
 		for _, event := range out.Events {
 			events = append(events, (*tx.Event)(event))
 		}
+		for _, transfer := range out.Transfers {
+			transfers = append(transfers, transfer)
+		}
 	}
 
-	stage := state.Stage()
+	stage, err := state.Stage()
+	if err != nil {
+		return nil, nil, nil, errors.Wrap(err, "stage")
+	}
 	stateRoot, err := stage.Commit()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "commit state")
+		return nil, nil, nil, errors.Wrap(err, "commit state")
 	}
 
 	parentID := thor.Bytes32{0xff, 0xff, 0xff, 0xff} //so, genesis number is 0
@@ -121,5 +126,5 @@ func (b *Builder) Build(stateCreator *state.Creator) (blk *block.Block, events t
 		GasLimit(b.gasLimit).
 		StateRoot(stateRoot).
 		ReceiptsRoot(tx.Transactions(nil).RootHash()).
-		Build(), events, nil
+		Build(), events, transfers, nil
 }

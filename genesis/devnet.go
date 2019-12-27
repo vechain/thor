@@ -70,27 +70,42 @@ func NewDevnet() *Genesis {
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
 			for addr := range vm.PrecompiledContractsByzantium {
-				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
+				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
+					return err
+				}
 			}
 
 			// setup builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range DevAccounts() {
 				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-				state.SetBalance(a.Address, bal)
-				state.SetEnergy(a.Address, bal, launchTime)
+				if err := state.SetBalance(a.Address, bal); err != nil {
+					return err
+				}
+				if err := state.SetEnergy(a.Address, bal, launchTime); err != nil {
+					return err
+				}
 				tokenSupply.Add(tokenSupply, bal)
 				energySupply.Add(energySupply, bal)
 			}
-			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-			return nil
+			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		}).
 		Call(
 			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
