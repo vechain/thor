@@ -6,15 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -37,47 +36,44 @@ func TestResolvedTx(t *testing.T) {
 }
 
 type testResolvedTransaction struct {
-	t            *testing.T
-	assert       *assert.Assertions
-	chain        *chain.Chain
-	stateCreator *state.Creator
+	t      *testing.T
+	assert *assert.Assertions
+	repo   *chain.Repository
+	stater *state.Stater
 }
 
 func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) {
-	db, err := lvldb.NewMem()
-	if err != nil {
-		return nil, err
-	}
+	db := muxdb.NewMem()
 
 	gen := genesis.NewDevnet()
 
-	stateCreator := state.NewCreator(db)
-	parent, _, err := gen.Build(stateCreator)
+	stater := state.NewStater(db)
+	parent, _, _, err := gen.Build(stater)
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := chain.New(db, parent)
+	repo, err := chain.NewRepository(db, parent)
 	if err != nil {
 		return nil, err
 	}
 
 	return &testResolvedTransaction{
-		t:            t,
-		assert:       assert.New(t),
-		chain:        c,
-		stateCreator: stateCreator,
+		t:      t,
+		assert: assert.New(t),
+		repo:   repo,
+		stater: stater,
 	}, nil
 }
 
-func (tr *testResolvedTransaction) currentState() (*state.State, error) {
-	return tr.stateCreator.NewState(tr.chain.BestBlock().Header().StateRoot())
+func (tr *testResolvedTransaction) currentState() *state.State {
+	return tr.stater.NewState(tr.repo.BestBlock().Header().StateRoot())
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
 
 	txBuild := func() *tx.Builder {
-		return txBuilder(tr.chain.Tag())
+		return txBuilder(tr.repo.ChainTag())
 	}
 
 	_, err := runtime.ResolveTransaction(txBuild().Build())
@@ -103,7 +99,7 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 func (tr *testResolvedTransaction) TestCommonTo() {
 
 	txBuild := func() *tx.Builder {
-		return txBuilder(tr.chain.Tag())
+		return txBuilder(tr.repo.ChainTag())
 	}
 
 	commonTo := func(tx *tx.Transaction, assert func(interface{}, ...interface{}) bool) {
@@ -131,16 +127,13 @@ func (tr *testResolvedTransaction) TestCommonTo() {
 }
 
 func (tr *testResolvedTransaction) TestBuyGas() {
-	state, err := tr.currentState()
-	if err != nil {
-		tr.t.Fatal(err)
-	}
+	state := tr.currentState()
 
 	txBuild := func() *tx.Builder {
-		return txBuilder(tr.chain.Tag())
+		return txBuilder(tr.repo.ChainTag())
 	}
 
-	targetTime := tr.chain.BestBlock().Header().Timestamp() + thor.BlockInterval
+	targetTime := tr.repo.BestBlock().Header().Timestamp() + thor.BlockInterval
 
 	buyGas := func(tx *tx.Transaction) thor.Address {
 		resolve, err := runtime.ResolveTransaction(tx)

@@ -19,7 +19,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime/statedb"
 	State "github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -184,8 +184,8 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		db, _        = lvldb.NewMem()
-		state, _     = State.NewCreator(db).NewState(thor.Bytes32{})
+		db           = muxdb.OpenMem()
+		state        = State.New(db, thor.Bytes32{})
 		stateDB      = statedb.New(state)
 		snapshotRevs = make([]int, len(test.snapshots))
 		sindex       = 0
@@ -200,7 +200,7 @@ func (test *snapshotTest) run() bool {
 	// Revert all snapshots in reverse order. Each revert must yield a state
 	// that is equivalent to fresh state with all actions up the snapshot applied.
 	for sindex--; sindex >= 0; sindex-- {
-		state, _ := State.NewCreator(db).NewState(thor.Bytes32{})
+		state := State.New(db, thor.Bytes32{})
 		checkStateDB := statedb.New(state)
 		for _, action := range test.actions[:test.snapshots[sindex]] {
 			action.fn(action, checkStateDB)
