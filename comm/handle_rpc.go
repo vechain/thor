@@ -36,9 +36,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		best := c.chain.BestBlock().Header()
+		best := c.repo.BestBlock().Header()
 		write(&proto.Status{
-			GenesisBlockID: c.chain.GenesisBlock().Header().ID(),
+			GenesisBlockID: c.repo.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),
 			TotalScore:     best.TotalScore(),
 			BestBlockID:    best.ID(),
@@ -70,7 +70,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 		peer.MarkTransaction(newTx.Hash())
-		c.txPool.Add(newTx)
+		_ = c.txPool.Add(newTx)
 		write(&struct{}{})
 	case proto.MsgGetBlockByID:
 		var blockID thor.Bytes32
@@ -78,12 +78,13 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 		var result []rlp.RawValue
-		raw, err := c.chain.GetBlockRaw(blockID)
+		b, err := c.repo.GetBlock(blockID)
 		if err != nil {
-			if !c.chain.IsNotFound(err) {
+			if !c.repo.IsNotFound(err) {
 				log.Error("failed to get block", "err", err)
 			}
 		} else {
+			raw, _ := rlp.EncodeToBytes(b)
 			result = append(result, rlp.RawValue(raw))
 		}
 		write(result)
@@ -93,9 +94,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		id, err := c.chain.GetTrunkBlockID(num)
+		id, err := c.repo.NewBestChain().GetBlockID(num)
 		if err != nil {
-			if !c.chain.IsNotFound(err) {
+			if !c.repo.IsNotFound(err) {
 				log.Error("failed to get block id by number", "err", err)
 			}
 			write(thor.Bytes32{})
@@ -112,14 +113,16 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		const maxSize = 512 * 1024
 		result := make([]rlp.RawValue, 0, maxBlocks)
 		var size metric.StorageSize
+		chain := c.repo.NewBestChain()
 		for size < maxSize && len(result) < maxBlocks {
-			raw, err := c.chain.GetTrunkBlockRaw(num)
+			b, err := chain.GetBlock(num)
 			if err != nil {
-				if !c.chain.IsNotFound(err) {
+				if !c.repo.IsNotFound(err) {
 					log.Error("failed to get block raw by number", "err", err)
 				}
 				break
 			}
+			raw, _ := rlp.EncodeToBytes(b)
 			result = append(result, rlp.RawValue(raw))
 			num++
 			size += metric.StorageSize(len(raw))
