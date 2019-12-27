@@ -58,9 +58,9 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 	if reverted, ok := f.processedTxs[txID]; ok {
 		return true, reverted, nil
 	}
-	txMeta, err := f.packer.chain.GetTransactionMeta(txID, f.parentHeader.ID())
+	txMeta, err := f.runtime.Chain().GetTransactionMeta(txID)
 	if err != nil {
-		if f.packer.chain.IsNotFound(err) {
+		if f.packer.repo.IsNotFound(err) {
 			return false, false, nil
 		}
 		return false, false, err
@@ -82,7 +82,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	switch {
-	case tx.ChainTag() != f.packer.chain.Tag():
+	case tx.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
 	case f.runtime.Context().Number < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
@@ -138,15 +138,11 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	if err := f.runtime.Seeker().Err(); err != nil {
-		return nil, nil, nil, err
-	}
-
-	stage := f.runtime.State().Stage()
-	stateRoot, err := stage.Hash()
+	stage, err := f.runtime.State().Stage()
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	stateRoot := stage.Hash()
 
 	builder := new(block.Builder).
 		Beneficiary(f.runtime.Context().Beneficiary).

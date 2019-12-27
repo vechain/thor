@@ -18,12 +18,16 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
+
+func M(args ...interface{}) []interface{} {
+	return args
+}
 
 type txIterator struct {
 	chainTag byte
@@ -61,19 +65,17 @@ func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
 }
 
 func TestP(t *testing.T) {
-
-	kv, _ := lvldb.NewMem()
-	defer kv.Close()
+	db := muxdb.NewMem()
 
 	g := genesis.NewDevnet()
-	b0, _, _ := g.Build(state.NewCreator(kv))
+	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	c, _ := chain.New(kv, b0)
+	repo, _ := chain.NewRepository(db, b0)
 
 	a1 := genesis.DevAccounts()[0]
 
 	start := time.Now().UnixNano()
-	stateCreator := state.NewCreator(kv)
+	stater := state.NewStater(db)
 	// f, err := os.Create("/tmp/ppp")
 	// if err != nil {
 	// 	log.Fatal(err)
@@ -82,8 +84,8 @@ func TestP(t *testing.T) {
 	// defer pprof.StopCPUProfile()
 
 	for {
-		best := c.BestBlock()
-		p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.NoFork)
+		best := repo.BestBlock()
+		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork)
 		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
@@ -97,31 +99,31 @@ func TestP(t *testing.T) {
 		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
-		fmt.Println(consensus.New(c, stateCreator, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
+		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
 
-		if _, err := c.AddBlock(blk, receipts); err != nil {
+		if err := repo.AddBlock(blk, receipts); err != nil {
 			t.Fatal(err)
 		}
+		repo.SetBestBlockID(blk.Header().ID())
 
 		if time.Now().UnixNano() > start+1000*1000*1000*1 {
 			break
 		}
 	}
 
-	best := c.BestBlock()
+	best := repo.BestBlock()
 	fmt.Println(best.Header().Number(), best.Header().GasUsed())
 	//	fmt.Println(best)
 }
 
 func TestForkVIP191(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	defer kv.Close()
+	db := muxdb.NewMem()
 
 	launchTime := uint64(time.Now().Unix())
 	a1 := genesis.DevAccounts()[0]
-	stateCreator := state.NewCreator(kv)
+	stater := state.NewStater(db)
 
-	b0, _, err := new(genesis.Builder).
+	b0, _, _, err := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
@@ -133,19 +135,19 @@ func TestForkVIP191(t *testing.T) {
 			state.SetBalance(a1.Address, bal)
 			state.SetEnergy(a1.Address, bal, launchTime)
 
-			_ = builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
+			builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
 			return nil
 		}).
-		Build(stateCreator)
+		Build(stater)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c, _ := chain.New(kv, b0)
+	repo, _ := chain.NewRepository(db, b0)
 
-	best := c.BestBlock()
-	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
+	best := repo.BestBlock()
+	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
 		VIP191: 1,
 	})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
@@ -157,28 +159,22 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(c, stateCreator, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := c.AddBlock(blk, receipts); err != nil {
+	if err := repo.AddBlock(blk, receipts); err != nil {
 		t.Fatal(err)
 	}
 
-	headState, err := state.NewCreator(kv).NewState(blk.Header().StateRoot())
-	if err != nil {
-		t.Fatal(err)
-	}
+	headState := state.New(db, blk.Header().StateRoot())
 
-	assert.Equal(t, headState.GetCode(builtin.Extension.Address), builtin.Extension.V2.RuntimeBytecodes())
+	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState, err := state.NewCreator(kv).NewState(b0.Header().StateRoot())
+	geneState := state.New(db, b0.Header().StateRoot())
 
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, geneState.GetCode(builtin.Extension.Address), builtin.Extension.RuntimeBytecodes())
+	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }
 
 func TestBlocklist(t *testing.T) {
