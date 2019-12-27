@@ -8,6 +8,8 @@ require (
 	github.com/beevik/ntp v0.2.0
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
+	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/coocood/freecache v1.1.0
 	github.com/davecgh/go-spew v1.1.0
 	github.com/deckarep/golang-set v0.0.0-20171013212420-1d4478f51bed // indirect
 	github.com/elastic/gosigar v0.10.5

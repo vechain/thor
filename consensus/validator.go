@@ -8,7 +8,6 @@ package consensus
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -127,10 +126,17 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
-		candidates = poa.NewCandidates(authority.AllCandidates())
+		list, err := authority.AllCandidates()
+		if err != nil {
+			return nil, err
+		}
+		candidates = poa.NewCandidates(list)
 	}
 
-	proposers := candidates.Pick(st)
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return nil, err
+	}
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
@@ -147,7 +153,9 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	}
 
 	for _, u := range updates {
-		authority.Update(u.Address, u.Active)
+		if _, err := authority.Update(u.Address, u.Active); err != nil {
+			return nil, err
+		}
 		if !candidates.Update(u.Address, u.Active) {
 			// should never happen
 			panic("something wrong with candidates list")
@@ -175,8 +183,8 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 
 		switch {
-		case tx.ChainTag() != c.chain.Tag():
-			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.chain.Tag(), tx.ChainTag()))
+		case tx.ChainTag() != c.repo.ChainTag():
+			return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.repo.ChainTag(), tx.ChainTag()))
 		case header.Number() < tx.BlockRef().Number():
 			return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
 		case tx.IsExpired(header.Number()):
@@ -198,8 +206,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	processedTxs := make(map[thor.Bytes32]bool)
 	header := blk.Header()
 	signer, _ := header.Signer()
+	chain := c.repo.NewChain(header.ParentID())
+
 	rt := runtime.New(
-		c.chain.NewSeeker(header.ParentID()),
+		chain,
 		state,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
@@ -215,9 +225,10 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		if reverted, ok := processedTxs[txID]; ok {
 			return true, reverted, nil
 		}
-		meta, err := c.chain.GetTransactionMeta(txID, header.ParentID())
+
+		meta, err := chain.GetTransactionMeta(txID)
 		if err != nil {
-			if c.chain.IsNotFound(err) {
+			if chain.IsNotFound(err) {
 				return false, false, nil
 			}
 			return false, false, err
@@ -269,15 +280,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		}
 	}
 
-	if err := rt.Seeker().Err(); err != nil {
-		return nil, nil, errors.WithMessage(err, "chain")
-	}
-
-	stage := state.Stage()
-	stateRoot, err := stage.Hash()
+	stage, err := state.Stage()
 	if err != nil {
 		return nil, nil, err
 	}
+	stateRoot := stage.Hash()
 
 	if blk.Header().StateRoot() != stateRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
