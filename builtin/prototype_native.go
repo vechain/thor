@@ -39,7 +39,10 @@ func init() {
 			env.ParseArgs(&self)
 
 			env.UseGas(thor.GetBalanceGas)
-			master := env.State().GetMaster(thor.Address(self))
+			master, err := env.State().GetMaster(thor.Address(self))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{master}
 		}},
@@ -51,7 +54,9 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SstoreResetGas)
-			env.State().SetMaster(thor.Address(args.Self), thor.Address(args.NewMaster))
+			if err := env.State().SetMaster(thor.Address(args.Self), thor.Address(args.NewMaster)); err != nil {
+				panic(err)
+			}
 
 			env.Log(masterEvent, thor.Address(args.Self), nil, args.NewMaster)
 			return nil
@@ -74,21 +79,28 @@ func init() {
 
 			if args.BlockNumber == ctx.Number {
 				env.UseGas(thor.GetBalanceGas)
-				val := env.State().GetBalance(thor.Address(args.Self))
+				val, err := env.State().GetBalance(thor.Address(args.Self))
+				if err != nil {
+					panic(err)
+				}
 				return []interface{}{val}
 			}
 
 			env.UseGas(thor.SloadGas)
-			blockID := env.Seeker().GetID(args.BlockNumber)
+			env.UseGas(thor.SloadGas)
+			header, err := env.Chain().GetBlockHeader(args.BlockNumber)
+			if err != nil {
+				panic(err)
+			}
 
 			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(blockID)
-
-			env.UseGas(thor.SloadGas)
-			state := env.State().Spawn(header.StateRoot())
+			state := env.State().NewStater().NewState(header.StateRoot())
 
 			env.UseGas(thor.GetBalanceGas)
-			val := state.GetBalance(thor.Address(args.Self))
+			val, err := state.GetBalance(thor.Address(args.Self))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{val}
 		}},
@@ -109,21 +121,28 @@ func init() {
 
 			if args.BlockNumber == ctx.Number {
 				env.UseGas(thor.GetBalanceGas)
-				val := env.State().GetEnergy(thor.Address(args.Self), ctx.Time)
+				val, err := env.State().GetEnergy(thor.Address(args.Self), ctx.Time)
+				if err != nil {
+					panic(err)
+				}
 				return []interface{}{val}
 			}
 
 			env.UseGas(thor.SloadGas)
-			blockID := env.Seeker().GetID(args.BlockNumber)
+			env.UseGas(thor.SloadGas)
+			header, err := env.Chain().GetBlockHeader(args.BlockNumber)
+			if err != nil {
+				panic(err)
+			}
 
 			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(blockID)
-
-			env.UseGas(thor.SloadGas)
-			state := env.State().Spawn(header.StateRoot())
+			state := env.State().NewStater().NewState(header.StateRoot())
 
 			env.UseGas(thor.GetBalanceGas)
-			val := state.GetEnergy(thor.Address(args.Self), header.Timestamp())
+			val, err := state.GetEnergy(thor.Address(args.Self), header.Timestamp())
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{val}
 		}},
@@ -132,7 +151,11 @@ func init() {
 			env.ParseArgs(&self)
 
 			env.UseGas(thor.GetBalanceGas)
-			hasCode := !env.State().GetCodeHash(thor.Address(self)).IsZero()
+			codeHash, err := env.State().GetCodeHash(thor.Address(self))
+			if err != nil {
+				panic(err)
+			}
+			hasCode := !codeHash.IsZero()
 
 			return []interface{}{hasCode}
 		}},
@@ -144,7 +167,10 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			storage := env.State().GetStorage(thor.Address(args.Self), args.Key)
+			storage, err := env.State().GetStorage(thor.Address(args.Self), args.Key)
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{storage}
 		}},
 		{"native_creditPlan", func(env *xenv.Environment) []interface{} {
@@ -153,7 +179,10 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(self))
 
 			env.UseGas(thor.SloadGas)
-			credit, rate := binding.CreditPlan()
+			credit, rate, err := binding.CreditPlan()
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{credit, rate}
 		}},
@@ -167,7 +196,9 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SstoreSetGas)
-			binding.SetCreditPlan(args.Credit, args.RecoveryRate)
+			if err := binding.SetCreditPlan(args.Credit, args.RecoveryRate); err != nil {
+				panic(err)
+			}
 			env.Log(creditPlanEvent, thor.Address(args.Self), nil, args.Credit, args.RecoveryRate)
 			return nil
 		}},
@@ -180,7 +211,10 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			isUser := binding.IsUser(thor.Address(args.User))
+			isUser, err := binding.IsUser(thor.Address(args.User))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{isUser}
 		}},
@@ -193,7 +227,10 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(2 * thor.SloadGas)
-			credit := binding.UserCredit(thor.Address(args.User), env.BlockContext().Time)
+			credit, err := binding.UserCredit(thor.Address(args.User), env.BlockContext().Time)
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{credit}
 		}},
@@ -206,12 +243,18 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			if binding.IsUser(thor.Address(args.User)) {
+			isUser, err := binding.IsUser(thor.Address(args.User))
+			if err != nil {
+				panic(err)
+			}
+			if isUser {
 				return []interface{}{false}
 			}
 
 			env.UseGas(thor.SstoreSetGas)
-			binding.AddUser(thor.Address(args.User), env.BlockContext().Time)
+			if err := binding.AddUser(thor.Address(args.User), env.BlockContext().Time); err != nil {
+				panic(err)
+			}
 
 			var action thor.Bytes32
 			copy(action[:], "added")
@@ -227,12 +270,18 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			if !binding.IsUser(thor.Address(args.User)) {
+			isUser, err := binding.IsUser(thor.Address(args.User))
+			if err != nil {
+				panic(err)
+			}
+			if !isUser {
 				return []interface{}{false}
 			}
 
 			env.UseGas(thor.SstoreResetGas)
-			binding.RemoveUser(thor.Address(args.User))
+			if err := binding.RemoveUser(thor.Address(args.User)); err != nil {
+				panic(err)
+			}
 
 			var action thor.Bytes32
 			copy(action[:], "removed")
@@ -248,12 +297,18 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			if binding.IsSponsor(thor.Address(args.Sponsor)) {
+			isSponsor, err := binding.IsSponsor(thor.Address(args.Sponsor))
+			if err != nil {
+				panic(err)
+			}
+			if isSponsor {
 				return []interface{}{false}
 			}
 
 			env.UseGas(thor.SstoreSetGas)
-			binding.Sponsor(thor.Address(args.Sponsor), true)
+			if err := binding.Sponsor(thor.Address(args.Sponsor), true); err != nil {
+				panic(err)
+			}
 
 			var action thor.Bytes32
 			copy(action[:], "sponsored")
@@ -269,12 +324,18 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			if !binding.IsSponsor(thor.Address(args.Sponsor)) {
+			isSponsor, err := binding.IsSponsor(thor.Address(args.Sponsor))
+			if err != nil {
+				panic(err)
+			}
+			if !isSponsor {
 				return []interface{}{false}
 			}
 
 			env.UseGas(thor.SstoreResetGas)
-			binding.Sponsor(thor.Address(args.Sponsor), false)
+			if err := binding.Sponsor(thor.Address(args.Sponsor), false); err != nil {
+				panic(err)
+			}
 
 			var action thor.Bytes32
 			copy(action[:], "unsponsored")
@@ -290,7 +351,10 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			isSponsor := binding.IsSponsor(thor.Address(args.Sponsor))
+			isSponsor, err := binding.IsSponsor(thor.Address(args.Sponsor))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{isSponsor}
 		}},
@@ -303,7 +367,11 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(args.Self))
 
 			env.UseGas(thor.SloadGas)
-			if !binding.IsSponsor(thor.Address(args.Sponsor)) {
+			isSponsor, err := binding.IsSponsor(thor.Address(args.Sponsor))
+			if err != nil {
+				panic(err)
+			}
+			if !isSponsor {
 				return []interface{}{false}
 			}
 
@@ -322,7 +390,10 @@ func init() {
 			binding := Prototype.Native(env.State()).Bind(thor.Address(self))
 
 			env.UseGas(thor.SloadGas)
-			addr := binding.CurrentSponsor()
+			addr, err := binding.CurrentSponsor()
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{addr}
 		}},
