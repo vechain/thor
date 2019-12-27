@@ -55,7 +55,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, errors.New("block ref out of schedule")
 	}
 
-	if _, err := chain.GetTransactionMeta(o.ID(), headBlock.ID()); err != nil {
+	if _, err := chain.GetTransactionMeta(o.ID()); err != nil {
 		if !chain.IsNotFound(err) {
 			return false, err
 		}
@@ -64,7 +64,7 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 	}
 
 	if dep := o.DependsOn(); dep != nil {
-		txMeta, err := chain.GetTransactionMeta(*dep, headBlock.ID())
+		txMeta, err := chain.GetTransactionMeta(*dep)
 		if err != nil {
 			if chain.IsNotFound(err) {
 				return false, nil

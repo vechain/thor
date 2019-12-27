@@ -11,18 +11,17 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/tx"
 )
 
 func TestTxObjMap(t *testing.T) {
+	db := muxdb.NewMem()
+	repo := newChainRepo(db)
 
-	kv, _ := lvldb.NewMem()
-	chain := newChain(kv)
-
-	tx1 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx2 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	tx3 := newTx(chain.Tag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	tx1 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx2 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	tx3 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
 	txObj1, _ := resolveTx(tx1)
 	txObj2, _ := resolveTx(tx2)

@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -52,10 +51,10 @@ type TxEvent struct {
 
 // TxPool maintains unprocessed transactions.
 type TxPool struct {
-	options      Options
-	chain        *chain.Chain
-	stateCreator *state.Creator
-	blocklist    blocklist
+	options   Options
+	repo      *chain.Repository
+	stater    *state.Stater
+	blocklist blocklist
 
 	executables    atomic.Value
 	all            *txObjectMap
@@ -70,15 +69,15 @@ type TxPool struct {
 
 // New create a new TxPool instance.
 // Shutdown is required to be called at end.
-func New(chain *chain.Chain, stateCreator *state.Creator, options Options) *TxPool {
+func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &TxPool{
-		options:      options,
-		chain:        chain,
-		stateCreator: stateCreator,
-		all:          newTxObjectMap(),
-		ctx:          ctx,
-		cancel:       cancel,
+		options: options,
+		repo:    repo,
+		stater:  stater,
+		all:     newTxObjectMap(),
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 
 	pool.goes.Go(pool.housekeeping)
@@ -93,7 +92,7 @@ func (p *TxPool) housekeeping() {
 	ticker := time.NewTicker(time.Second * 2)
 	defer ticker.Stop()
 
-	headBlock := p.chain.BestBlock().Header()
+	headBlock := p.repo.BestBlock().Header()
 
 	for {
 		select {
@@ -101,7 +100,7 @@ func (p *TxPool) housekeeping() {
 			return
 		case <-ticker.C:
 			var headBlockChanged bool
-			if newHeadBlock := p.chain.BestBlock().Header(); newHeadBlock.ID() != headBlock.ID() {
+			if newHeadBlock := p.repo.BestBlock().Header(); newHeadBlock.ID() != headBlock.ID() {
 				headBlock = newHeadBlock
 				headBlockChanged = true
 			}
@@ -211,17 +210,18 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		// tx already in the pool
 		return nil
 	}
+
 	origin, _ := newTx.Origin()
 	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 		// tx origin blocked
 		return nil
 	}
 
-	headBlock := p.chain.BestBlock().Header()
+	headBlock := p.repo.BestBlock().Header()
 
 	// validation
 	switch {
-	case newTx.ChainTag() != p.chain.Tag():
+	case newTx.ChainTag() != p.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
 	case newTx.Size() > maxTxSize:
 		return txRejectedError{"size too large"}
@@ -237,12 +237,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 	}
 
 	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
-		state, err := p.stateCreator.NewState(headBlock.StateRoot())
-		if err != nil {
-			return err
-		}
-
-		executable, err := txObj.Executable(p.chain, state, headBlock)
+		state := p.stater.NewState(headBlock.StateRoot())
+		executable, err := txObj.Executable(p.repo.NewChain(headBlock.ID()), state, headBlock)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -349,13 +345,14 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 	}()
 
-	state, err := p.stateCreator.NewState(headBlock.StateRoot())
+	state := p.stater.NewState(headBlock.StateRoot())
+	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	if err != nil {
-		return nil, 0, errors.WithMessage(err, "new state")
+		return nil, 0, err
 	}
+
 	var (
-		seeker            = p.chain.NewSeeker(headBlock.ID())
-		baseGasPrice      = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+		chain             = p.repo.NewChain(headBlock.ID())
 		executableObjs    = make([]*txObject, 0, len(all))
 		nonExecutableObjs = make([]*txObject, 0, len(all))
 		now               = time.Now().UnixNano()
@@ -374,7 +371,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(p.chain, state, headBlock)
+		executable, err := txObj.Executable(chain, state, headBlock)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", err)
@@ -382,22 +379,17 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 
 		if executable {
-			txObj.overallGasPrice = txObj.OverallGasPrice(
-				baseGasPrice,
-				headBlock.Number(),
-				seeker.GetID)
+			provedWork, err := txObj.ProvedWork(headBlock.Number(), chain.GetBlockID)
+			if err != nil {
+				toRemove = append(toRemove, txObj)
+				log.Debug("tx washed out", "id", txObj.ID(), "err", err)
+				continue
+			}
+			txObj.overallGasPrice = txObj.OverallGasPrice(baseGasPrice, provedWork)
 			executableObjs = append(executableObjs, txObj)
 		} else {
 			nonExecutableObjs = append(nonExecutableObjs, txObj)
 		}
-	}
-
-	if err := state.Err(); err != nil {
-		return nil, 0, errors.WithMessage(err, "state")
-	}
-
-	if err := seeker.Err(); err != nil {
-		return nil, 0, errors.WithMessage(err, "seeker")
 	}
 
 	// sort objs by price from high to low
