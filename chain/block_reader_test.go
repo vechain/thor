@@ -12,22 +12,24 @@ import (
 )
 
 func TestBlockReader(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
+	repo := initRepo()
+	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 2)
-	ch.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil)
 
 	b2 := newBlock(b1, 2)
-	ch.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil)
 
 	b3 := newBlock(b2, 2)
-	ch.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil)
 
 	b4 := newBlock(b3, 2)
-	ch.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil)
 
-	br := ch.NewBlockReader(b2.Header().ID())
+	repo.SetBestBlockID(b4.Header().ID())
+
+	br := repo.NewBlockReader(b2.Header().ID())
 
 	blks, err := br.Read()
 	assert.Nil(t, err)
@@ -41,25 +43,27 @@ func TestBlockReader(t *testing.T) {
 }
 
 func TestBlockReaderFork(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
+	repo := initRepo()
+	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 2)
-	ch.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil)
 
 	b2 := newBlock(b1, 2)
-	ch.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil)
 
 	b2x := newBlock(b1, 1)
-	ch.AddBlock(b2x, nil)
+	repo.AddBlock(b2x, nil)
 
 	b3 := newBlock(b2, 2)
-	ch.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil)
 
 	b4 := newBlock(b3, 2)
-	ch.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil)
 
-	br := ch.NewBlockReader(b2x.Header().ID())
+	repo.SetBestBlockID(b4.Header().ID())
+
+	br := repo.NewBlockReader(b2x.Header().ID())
 
 	blks, err := br.Read()
 	assert.Nil(t, err)

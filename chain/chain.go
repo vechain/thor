@@ -1,702 +1,276 @@
-// Copyright (c) 2018 The VeChainThor developers
-
-// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
-// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-
 package chain
 
 import (
-	"bytes"
-	"math"
-	"sync"
+	"encoding/binary"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
 const (
-	blockCacheLimit    = 512
-	receiptsCacheLimit = 512
+	// IndexTrieName is the name of index trie.
+	// The index tire is used to store mappings from block number to block id, and tx id to tx meta.
+	IndexTrieName = "i"
 )
 
-var errNotFound = errors.New("not found")
-var errBlockExist = errors.New("block already exists")
+// TxMeta contains tx location and reversal state.
+type TxMeta struct {
+	BlockID thor.Bytes32
 
-// Chain describes a persistent block chain.
-// It's thread-safe.
+	// Index the position of the tx in block's txs.
+	Index uint64 // rlp require uint64.
+
+	Reverted bool
+}
+
+// Chain presents the linked block chain, with the range from genesis to given head block.
+//
+// It provides reliable methods to access block by number, tx by id, etc...
 type Chain struct {
-	kv           kv.GetPutter
-	ancestorTrie *ancestorTrie
-	genesisBlock *block.Block
-	bestBlock    *block.Block
-	tag          byte
-	caches       caches
-	rw           sync.RWMutex
-	tick         co.Signal
+	repo     *Repository
+	headID   thor.Bytes32
+	lazyInit func() (*muxdb.Trie, error)
 }
 
-type caches struct {
-	rawBlocks *cache
-	receipts  *cache
-}
-
-// New create an instance of Chain.
-func New(kv kv.GetPutter, genesisBlock *block.Block) (*Chain, error) {
-	if genesisBlock.Header().Number() != 0 {
-		return nil, errors.New("genesis number != 0")
-	}
-	if len(genesisBlock.Transactions()) != 0 {
-		return nil, errors.New("genesis block should not have transactions")
-	}
-	ancestorTrie := newAncestorTrie(kv)
-	var bestBlock *block.Block
-
-	genesisID := genesisBlock.Header().ID()
-	if bestBlockID, err := loadBestBlockID(kv); err != nil {
-		if !kv.IsNotFound(err) {
-			return nil, err
-		}
-		// no genesis yet
-		raw, err := rlp.EncodeToBytes(genesisBlock)
-		if err != nil {
-			return nil, err
-		}
-
-		batch := kv.NewBatch()
-		if err := saveBlockRaw(batch, genesisID, raw); err != nil {
-			return nil, err
-		}
-
-		if err := saveBestBlockID(batch, genesisID); err != nil {
-			return nil, err
-		}
-
-		if err := ancestorTrie.Update(batch, genesisID, genesisBlock.Header().ParentID()); err != nil {
-			return nil, err
-		}
-
-		if err := batch.Write(); err != nil {
-			return nil, err
-		}
-
-		bestBlock = genesisBlock
-	} else {
-		existGenesisID, err := ancestorTrie.GetAncestor(bestBlockID, 0)
-		if err != nil {
-			return nil, err
-		}
-		if existGenesisID != genesisID {
-			return nil, errors.New("genesis mismatch")
-		}
-		raw, err := loadBlockRaw(kv, bestBlockID)
-		if err != nil {
-			return nil, err
-		}
-		bestBlock, err = (&rawBlock{raw: raw}).Block()
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	rawBlocksCache := newCache(blockCacheLimit, func(key interface{}) (interface{}, error) {
-		raw, err := loadBlockRaw(kv, key.(thor.Bytes32))
-		if err != nil {
-			return nil, err
-		}
-		return &rawBlock{raw: raw}, nil
-	})
-
-	receiptsCache := newCache(receiptsCacheLimit, func(key interface{}) (interface{}, error) {
-		return loadBlockReceipts(kv, key.(thor.Bytes32))
-	})
+func newChain(repo *Repository, headID thor.Bytes32) *Chain {
+	var (
+		indexRoot thor.Bytes32
+		indexTrie *muxdb.Trie
+		initErr   error
+	)
 
 	return &Chain{
-		kv:           kv,
-		ancestorTrie: ancestorTrie,
-		genesisBlock: genesisBlock,
-		bestBlock:    bestBlock,
-		tag:          genesisBlock.Header().ID()[31],
-		caches: caches{
-			rawBlocks: rawBlocksCache,
-			receipts:  receiptsCache,
+		repo,
+		headID,
+		func() (*muxdb.Trie, error) {
+			if indexTrie == nil && initErr == nil {
+				if _, indexRoot, initErr = repo.GetBlockHeader(headID); initErr == nil {
+					indexTrie = repo.db.NewTrie(IndexTrieName, indexRoot)
+				}
+			}
+			return indexTrie, initErr
 		},
-	}, nil
+	}
 }
 
-// Tag returns chain tag, which is the last byte of genesis id.
-func (c *Chain) Tag() byte {
-	return c.tag
+// HeadID returns the head block id.
+func (c *Chain) HeadID() thor.Bytes32 {
+	return c.headID
 }
 
-// GenesisBlock returns genesis block.
-func (c *Chain) GenesisBlock() *block.Block {
-	return c.genesisBlock
+// GetBlockID returns block id by given block number.
+func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
+	trie, err := c.lazyInit()
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	var key [4]byte
+	binary.BigEndian.PutUint32(key[:], num)
+
+	data, err := trie.Get(key[:])
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	if len(data) == 0 {
+		return thor.Bytes32{}, errNotFound
+	}
+	return thor.BytesToBytes32(data), nil
 }
 
-// BestBlock returns the newest block on trunk.
-func (c *Chain) BestBlock() *block.Block {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.bestBlock
+// GetTransactionMeta returns tx meta by given tx id.
+func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
+	trie, err := c.lazyInit()
+	if err != nil {
+		return nil, err
+	}
+
+	enc, err := trie.Get(id[:])
+	if err != nil {
+		return nil, err
+	}
+
+	if len(enc) == 0 {
+		return nil, errNotFound
+	}
+	var meta TxMeta
+	if err := rlp.DecodeBytes(enc, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
 }
 
-// AddBlock add a new block into block chain.
-// Once reorg happened (len(Trunk) > 0 && len(Branch) >0), Fork.Branch will be the chain transitted from trunk to branch.
-// Reorg happens when isTrunk is true.
-func (c *Chain) AddBlock(newBlock *block.Block, receipts tx.Receipts) (*Fork, error) {
-	c.rw.Lock()
-	defer c.rw.Unlock()
+// GetBlockHeader returns block header by given block number.
+func (c *Chain) GetBlockHeader(num uint32) (*block.Header, error) {
+	id, err := c.GetBlockID(num)
+	if err != nil {
+		return nil, err
+	}
+	h, _, err := c.repo.GetBlockHeader(id)
+	return h, err
+}
 
-	newBlockID := newBlock.Header().ID()
+// GetBlock returns block by given block number.
+func (c *Chain) GetBlock(num uint32) (*block.Block, error) {
+	id, err := c.GetBlockID(num)
+	if err != nil {
+		return nil, err
+	}
+	return c.repo.GetBlock(id)
+}
 
-	if _, err := c.getBlockHeader(newBlockID); err != nil {
-		if !c.IsNotFound(err) {
+// GetTransaction returns tx along with meta by given tx id.
+func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error) {
+	txMeta, err := c.GetTransactionMeta(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	txs, err := c.repo.GetBlockTransactions(txMeta.BlockID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return txs[txMeta.Index], txMeta, nil
+}
+
+// GetReceipt returns tx receipt by given tx id.
+func (c *Chain) GetReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
+	txMeta, err := c.GetTransactionMeta(txID)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := c.repo.GetBlockReceipts(txMeta.BlockID)
+	if err != nil {
+		return nil, err
+	}
+	return receipts[txMeta.Index], nil
+}
+
+// HasBlock check if the block with given id belongs to the chain.
+func (c *Chain) HasBlock(id thor.Bytes32) (bool, error) {
+	foundID, err := c.GetBlockID(block.Number(id))
+	if err != nil {
+		if c.repo.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return id == foundID, nil
+}
+
+// Exclude returns ids of blocks belongs to this chain, but not belongs to other.
+//
+// The returned ids are in ascending order.
+func (c *Chain) Exclude(other *Chain) ([]thor.Bytes32, error) {
+	var ids []thor.Bytes32
+	// use int64 to prevent infinite loop
+	for i := int64(block.Number(c.headID)); i >= 0; i-- {
+		id, err := c.GetBlockID(uint32(i))
+		if err != nil {
 			return nil, err
 		}
-	} else {
-		// block already there
-		return nil, errBlockExist
-	}
-
-	parent, err := c.getBlockHeader(newBlock.Header().ParentID())
-	if err != nil {
-		if c.IsNotFound(err) {
-			return nil, errors.New("parent missing")
-		}
-		return nil, err
-	}
-
-	raw, err := rlp.EncodeToBytes(newBlock)
-	if err != nil {
-		return nil, err
-	}
-
-	batch := c.kv.NewBatch()
-
-	if err := c.ancestorTrie.Update(batch, newBlockID, newBlock.Header().ParentID()); err != nil {
-		return nil, err
-	}
-
-	for i, tx := range newBlock.Transactions() {
-		meta, err := loadTxMeta(c.kv, tx.ID())
+		has, err := other.HasBlock(id)
 		if err != nil {
-			if !c.IsNotFound(err) {
-				return nil, err
-			}
+			return nil, err
 		}
-		meta = append(meta, TxMeta{
-			BlockID:  newBlockID,
+		if has {
+			break
+		}
+		ids = append(ids, id)
+	}
+	// reverse
+	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
+		ids[i], ids[j] = ids[j], ids[i]
+	}
+	return ids, nil
+}
+
+// IsNotFound returns if the given error means not found.
+func (c *Chain) IsNotFound(err error) bool {
+	return c.repo.IsNotFound(err)
+}
+
+// FindBlockHeaderByTimestamp find the block whose timestamp matches the given timestamp.
+//
+// When flag == 0, exact match is performed (may return error not found)
+// flag > 0, matches the lowest block whose timestamp >= ts
+// flag < 0, matches the highest block whose timestamp <= ts.
+func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.Header, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = e.(error)
+		}
+	}()
+	headNum := block.Number(c.headID)
+	if flag >= 0 {
+		n := uint32(sort.Search(int(headNum), func(i int) bool {
+			h, err := c.GetBlockHeader(uint32(i))
+			if err != nil {
+				panic(err)
+			}
+			return h.Timestamp() >= ts
+		}))
+		if header, err = c.GetBlockHeader(n); err != nil {
+			return
+		}
+		if flag == 0 && header.Timestamp() != ts { // exact match
+			return nil, errNotFound
+		}
+		return
+	}
+
+	// flag < 0
+	n := headNum - uint32(sort.Search(int(headNum), func(i int) bool {
+		h, err := c.GetBlockHeader(headNum - uint32(i))
+		if err != nil {
+			panic(err)
+		}
+		return h.Timestamp() <= ts
+	}))
+	return c.GetBlockHeader(n)
+}
+
+// NewBestChain create a chain with best block as head.
+func (r *Repository) NewBestChain() *Chain {
+	return newChain(r, r.BestBlock().Header().ID())
+}
+
+// NewChain create a chain with head block specified by headID.
+func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
+	return newChain(r, headID)
+}
+
+func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, block *block.Block, receipts tx.Receipts) (thor.Bytes32, error) {
+	txs := block.Transactions()
+	if len(txs) != len(receipts) {
+		return thor.Bytes32{}, errors.New("txs count != receipts count")
+	}
+
+	trie := r.db.NewTrie(IndexTrieName, parentIndexRoot)
+	id := block.Header().ID()
+
+	// map block number to block ID
+	if err := trie.Update(id[:4], id[:]); err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	// map tx id to tx meta
+	for i, tx := range block.Transactions() {
+		enc, err := rlp.EncodeToBytes(&TxMeta{
+			BlockID:  id,
 			Index:    uint64(i),
 			Reverted: receipts[i].Reverted,
 		})
-		if err := saveTxMeta(batch, tx.ID(), meta); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := saveBlockReceipts(batch, newBlockID, receipts); err != nil {
-		return nil, err
-	}
-
-	if err := saveBlockRaw(batch, newBlockID, raw); err != nil {
-		return nil, err
-	}
-
-	var fork *Fork
-	isTrunk := c.isTrunk(newBlock.Header())
-	if isTrunk {
-		if fork, err = c.buildFork(newBlock.Header(), c.bestBlock.Header()); err != nil {
-			return nil, err
-		}
-		if err := saveBestBlockID(batch, newBlockID); err != nil {
-			return nil, err
-		}
-	} else {
-		fork = &Fork{Ancestor: parent, Branch: []*block.Header{newBlock.Header()}}
-	}
-
-	if err := batch.Write(); err != nil {
-		return nil, err
-	}
-
-	if isTrunk {
-		c.bestBlock = newBlock
-	}
-
-	c.caches.rawBlocks.Add(newBlockID, newRawBlock(raw, newBlock))
-	c.caches.receipts.Add(newBlockID, receipts)
-
-	c.tick.Broadcast()
-	return fork, nil
-}
-
-// GetBlockHeader get block header by block id.
-func (c *Chain) GetBlockHeader(id thor.Bytes32) (*block.Header, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getBlockHeader(id)
-}
-
-// GetBlockBody get block body by block id.
-func (c *Chain) GetBlockBody(id thor.Bytes32) (*block.Body, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getBlockBody(id)
-}
-
-// GetBlock get block by id.
-func (c *Chain) GetBlock(id thor.Bytes32) (*block.Block, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getBlock(id)
-}
-
-// GetBlockRaw get block rlp encoded bytes for given id.
-// Never modify the returned raw block.
-func (c *Chain) GetBlockRaw(id thor.Bytes32) (block.Raw, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	raw, err := c.getRawBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.raw, nil
-}
-
-// GetBlockReceipts get all tx receipts in the block for given block id.
-func (c *Chain) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getBlockReceipts(id)
-}
-
-// GetAncestorBlockID get ancestor block ID of descendant for given ancestor block.
-func (c *Chain) GetAncestorBlockID(descendantID thor.Bytes32, ancestorNum uint32) (thor.Bytes32, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.ancestorTrie.GetAncestor(descendantID, ancestorNum)
-}
-
-// GetTransactionMeta get transaction meta info, on the chain defined by head block ID.
-func (c *Chain) GetTransactionMeta(txID thor.Bytes32, headBlockID thor.Bytes32) (*TxMeta, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getTransactionMeta(txID, headBlockID)
-}
-
-// GetTransaction get transaction for given block and index.
-func (c *Chain) GetTransaction(blockID thor.Bytes32, index uint64) (*tx.Transaction, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getTransaction(blockID, index)
-}
-
-// GetTransactionReceipt get tx receipt for given block and index.
-func (c *Chain) GetTransactionReceipt(blockID thor.Bytes32, index uint64) (*tx.Receipt, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	receipts, err := c.getBlockReceipts(blockID)
-	if err != nil {
-		return nil, err
-	}
-	if index >= uint64(len(receipts)) {
-		return nil, errors.New("receipt index out of range")
-	}
-	return receipts[index], nil
-}
-
-// GetTrunkBlockID get block id on trunk by given block number.
-func (c *Chain) GetTrunkBlockID(num uint32) (thor.Bytes32, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
-}
-
-// GetTrunkBlockHeader get block header on trunk by given block number.
-func (c *Chain) GetTrunkBlockHeader(num uint32) (*block.Header, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
-	if err != nil {
-		return nil, err
-	}
-	return c.getBlockHeader(id)
-}
-
-// GetTrunkBlock get block on trunk by given block number.
-func (c *Chain) GetTrunkBlock(num uint32) (*block.Block, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
-	if err != nil {
-		return nil, err
-	}
-	return c.getBlock(id)
-}
-
-// GetTrunkBlockRaw get block raw on trunk by given block number.
-func (c *Chain) GetTrunkBlockRaw(num uint32) (block.Raw, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	id, err := c.ancestorTrie.GetAncestor(c.bestBlock.Header().ID(), num)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := c.getRawBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.raw, nil
-}
-
-// GetTrunkTransactionMeta get transaction meta info on trunk by given tx id.
-func (c *Chain) GetTrunkTransactionMeta(txID thor.Bytes32) (*TxMeta, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	return c.getTransactionMeta(txID, c.bestBlock.Header().ID())
-}
-
-// GetTrunkTransaction get transaction on trunk by given tx id.
-func (c *Chain) GetTrunkTransaction(txID thor.Bytes32) (*tx.Transaction, *TxMeta, error) {
-	c.rw.RLock()
-	defer c.rw.RUnlock()
-	meta, err := c.getTransactionMeta(txID, c.bestBlock.Header().ID())
-	if err != nil {
-		return nil, nil, err
-	}
-	tx, err := c.getTransaction(meta.BlockID, meta.Index)
-	if err != nil {
-		return nil, nil, err
-	}
-	return tx, meta, nil
-}
-
-// NewSeeker returns a new seeker instance.
-func (c *Chain) NewSeeker(headBlockID thor.Bytes32) *Seeker {
-	return newSeeker(c, headBlockID)
-}
-
-func (c *Chain) isTrunk(header *block.Header) bool {
-	bestHeader := c.bestBlock.Header()
-
-	if header.TotalScore() < bestHeader.TotalScore() {
-		return false
-	}
-
-	if header.TotalScore() > bestHeader.TotalScore() {
-		return true
-	}
-
-	// total scores are equal
-	if bytes.Compare(header.ID().Bytes(), bestHeader.ID().Bytes()) < 0 {
-		// smaller ID is preferred, since block with smaller ID usually has larger average score.
-		// also, it's a deterministic decision.
-		return true
-	}
-	return false
-}
-
-// Think about the example below:
-//
-//   B1--B2--B3--B4--B5--B6
-//             \
-//              \
-//               b4--b5
-//
-// When call buildFork(B6, b5), the return values will be:
-// ((B3, [B4, B5, B6], [b4, b5]), nil)
-func (c *Chain) buildFork(trunkHead *block.Header, branchHead *block.Header) (*Fork, error) {
-	var (
-		trunk, branch []*block.Header
-		err           error
-		b1            = trunkHead
-		b2            = branchHead
-	)
-
-	for {
-		if b1.Number() > b2.Number() {
-			trunk = append(trunk, b1)
-			if b1, err = c.getBlockHeader(b1.ParentID()); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if b1.Number() < b2.Number() {
-			branch = append(branch, b2)
-			if b2, err = c.getBlockHeader(b2.ParentID()); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if b1.ID() == b2.ID() {
-			// reverse trunk and branch
-			for i, j := 0, len(trunk)-1; i < j; i, j = i+1, j-1 {
-				trunk[i], trunk[j] = trunk[j], trunk[i]
-			}
-			for i, j := 0, len(branch)-1; i < j; i, j = i+1, j-1 {
-				branch[i], branch[j] = branch[j], branch[i]
-			}
-			return &Fork{b1, trunk, branch}, nil
-		}
-
-		trunk = append(trunk, b1)
-		branch = append(branch, b2)
-
-		if b1, err = c.getBlockHeader(b1.ParentID()); err != nil {
-			return nil, err
-		}
-
-		if b2, err = c.getBlockHeader(b2.ParentID()); err != nil {
-			return nil, err
-		}
-	}
-}
-
-func (c *Chain) getRawBlock(id thor.Bytes32) (*rawBlock, error) {
-	raw, err := c.caches.rawBlocks.GetOrLoad(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.(*rawBlock), nil
-}
-
-func (c *Chain) getBlockHeader(id thor.Bytes32) (*block.Header, error) {
-	raw, err := c.getRawBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.Header()
-}
-
-func (c *Chain) getBlockBody(id thor.Bytes32) (*block.Body, error) {
-	raw, err := c.getRawBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.Body()
-}
-func (c *Chain) getBlock(id thor.Bytes32) (*block.Block, error) {
-	raw, err := c.getRawBlock(id)
-	if err != nil {
-		return nil, err
-	}
-	return raw.Block()
-}
-
-func (c *Chain) getBlockReceipts(blockID thor.Bytes32) (tx.Receipts, error) {
-	receipts, err := c.caches.receipts.GetOrLoad(blockID)
-	if err != nil {
-		return nil, err
-	}
-	return receipts.(tx.Receipts), nil
-}
-
-func (c *Chain) getTransactionMeta(txID thor.Bytes32, headBlockID thor.Bytes32) (*TxMeta, error) {
-	meta, err := loadTxMeta(c.kv, txID)
-	if err != nil {
-		return nil, err
-	}
-	for _, m := range meta {
-		ancestorID, err := c.ancestorTrie.GetAncestor(headBlockID, block.Number(m.BlockID))
 		if err != nil {
-			if c.IsNotFound(err) {
-				continue
-			}
-			return nil, err
+			return thor.Bytes32{}, err
 		}
-		if ancestorID == m.BlockID {
-			return &m, nil
+		if err := trie.Update(tx.ID().Bytes(), enc); err != nil {
+			return thor.Bytes32{}, err
 		}
 	}
-	return nil, errNotFound
-}
-
-func (c *Chain) getTransaction(blockID thor.Bytes32, index uint64) (*tx.Transaction, error) {
-	body, err := c.getBlockBody(blockID)
-	if err != nil {
-		return nil, err
-	}
-	if index >= uint64(len(body.Txs)) {
-		return nil, errors.New("tx index out of range")
-	}
-	return body.Txs[index], nil
-}
-
-// IsNotFound returns if an error means not found.
-func (c *Chain) IsNotFound(err error) bool {
-	return err == errNotFound || c.kv.IsNotFound(err)
-}
-
-// IsBlockExist returns if the error means block was already in the chain.
-func (c *Chain) IsBlockExist(err error) bool {
-	return err == errBlockExist
-}
-
-// NewTicker create a signal Waiter to receive event of head block change.
-func (c *Chain) NewTicker() co.Waiter {
-	return c.tick.NewWaiter()
-}
-
-// Block expanded block.Block to indicate whether it is obsolete
-type Block struct {
-	*block.Block
-	Obsolete bool
-}
-
-// BlockReader defines the interface to read Block
-type BlockReader interface {
-	Read() ([]*Block, error)
-}
-
-type readBlock func() ([]*Block, error)
-
-func (r readBlock) Read() ([]*Block, error) {
-	return r()
-}
-
-// NewBlockReader generate an object that implements the BlockReader interface
-func (c *Chain) NewBlockReader(position thor.Bytes32) BlockReader {
-	return readBlock(func() ([]*Block, error) {
-		c.rw.RLock()
-		defer c.rw.RUnlock()
-
-		bestID := c.bestBlock.Header().ID()
-		if bestID == position {
-			return nil, nil
-		}
-
-		var blocks []*Block
-		for {
-			positionBlock, err := c.getBlock(position)
-			if err != nil {
-				return nil, err
-			}
-
-			if block.Number(position) > block.Number(bestID) {
-				blocks = append(blocks, &Block{positionBlock, true})
-				position = positionBlock.Header().ParentID()
-				continue
-			}
-
-			ancestor, err := c.ancestorTrie.GetAncestor(bestID, block.Number(position))
-			if err != nil {
-				return nil, err
-			}
-
-			if position == ancestor {
-				next, err := c.nextBlock(bestID, block.Number(position))
-				if err != nil {
-					return nil, err
-				}
-				position = next.Header().ID()
-				return append(blocks, &Block{next, false}), nil
-			}
-
-			blocks = append(blocks, &Block{positionBlock, true})
-			position = positionBlock.Header().ParentID()
-		}
-	})
-}
-
-func (c *Chain) nextBlock(descendantID thor.Bytes32, num uint32) (*block.Block, error) {
-	next, err := c.ancestorTrie.GetAncestor(descendantID, num+1)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.getBlock(next)
-}
-
-// NewIterator create a block iterator, to fast iterate blocks from lower number to higher.
-// It's much faster than get block one by one.
-func (c *Chain) NewIterator(bufSize int) *Iterator {
-	return &Iterator{
-		chain:   c,
-		headID:  c.BestBlock().Header().ID(),
-		bufSize: bufSize,
-	}
-}
-
-// Iterator block iterator.
-type Iterator struct {
-	chain   *Chain
-	headID  thor.Bytes32
-	bufSize int
-
-	nextNum uint32
-	buf     []*block.Block
-	err     error
-}
-
-// Error returns occurred error.
-func (i *Iterator) Error() error {
-	return i.err
-}
-
-// Seek seek to given block number as start position.
-// Error will be reset.
-func (i *Iterator) Seek(num uint32) *Iterator {
-	i.nextNum = num
-	i.buf = nil
-	i.err = nil
-	return i
-}
-
-// Next move the iterator to next.
-func (i *Iterator) Next() bool {
-	if i.err != nil {
-		return false
-	}
-
-	if bufLen := len(i.buf); bufLen > 1 {
-		// pop last one
-		i.buf = i.buf[:bufLen-1]
-		return true
-	}
-
-	i.buf = nil
-
-	if i.nextNum > block.Number(i.headID) {
-		return false
-	}
-
-	toNum := i.nextNum + uint32(i.bufSize)
-	if toNum > block.Number(i.headID) {
-		toNum = block.Number(i.headID)
-	}
-
-	id, err := i.chain.GetAncestorBlockID(i.headID, toNum)
-	if err != nil {
-		i.err = err
-		return false
-	}
-
-	var buf []*block.Block
-	for block.Number(id) >= i.nextNum && block.Number(id) != math.MaxUint32 {
-		b, err := i.chain.GetBlock(id)
-		if err != nil {
-			i.err = err
-			return false
-		}
-		buf = append(buf, b)
-		// traverse by parent id to save read io
-		id = b.Header().ParentID()
-	}
-
-	i.buf = buf
-	i.nextNum = toNum + 1
-	return true
-}
-
-// Block returns current block.
-func (i *Iterator) Block() *block.Block {
-	if bufLen := len(i.buf); bufLen > 0 {
-		return i.buf[bufLen-1]
-	}
-	return nil
+	return trie.Commit()
 }
