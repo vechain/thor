@@ -21,7 +21,7 @@ import (
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -67,10 +67,7 @@ type testConsensus struct {
 }
 
 func newTestConsensus(t *testing.T) *testConsensus {
-	db, err := lvldb.NewMem()
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := muxdb.NewMem()
 
 	launchTime := uint64(1526400000)
 	gen := new(genesis.Builder).
@@ -88,19 +85,19 @@ func newTestConsensus(t *testing.T) *testConsensus {
 			return nil
 		})
 
-	stateCreator := state.NewCreator(db)
-	parent, _, err := gen.Build(stateCreator)
+	stater := state.NewStater(db)
+	parent, _, _, err := gen.Build(stater)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c, err := chain.New(db, parent)
+	repo, err := chain.NewRepository(db, parent)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(c, stateCreator, proposer.Address, &proposer.Address, thor.NoFork)
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, thor.NoFork)
 	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +113,9 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: 0,
 	}
-	con := New(c, stateCreator, forkConfig)
+
+	con := New(repo, stater, forkConfig)
+
 	if _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +128,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		pk:       proposer.PrivateKey,
 		parent:   parent,
 		original: original,
-		tag:      c.Tag(),
+		tag:      repo.ChainTag(),
 	}
 }
 
