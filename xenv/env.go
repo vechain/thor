@@ -44,7 +44,7 @@ type TransactionContext struct {
 // Environment an env to execute native method.
 type Environment struct {
 	abi      *abi.Method
-	seeker   *chain.Seeker
+	chain    *chain.Chain
 	state    *state.State
 	blockCtx *BlockContext
 	txCtx    *TransactionContext
@@ -55,7 +55,7 @@ type Environment struct {
 // New create a new env.
 func New(
 	abi *abi.Method,
-	seeker *chain.Seeker,
+	chain *chain.Chain,
 	state *state.State,
 	blockCtx *BlockContext,
 	txCtx *TransactionContext,
@@ -64,7 +64,7 @@ func New(
 ) *Environment {
 	return &Environment{
 		abi:      abi,
-		seeker:   seeker,
+		chain:    chain,
 		state:    state,
 		blockCtx: blockCtx,
 		txCtx:    txCtx,
@@ -73,7 +73,7 @@ func New(
 	}
 }
 
-func (env *Environment) Seeker() *chain.Seeker                   { return env.seeker }
+func (env *Environment) Chain() *chain.Chain                     { return env.chain }
 func (env *Environment) State() *state.State                     { return env.state }
 func (env *Environment) TransactionContext() *TransactionContext { return env.txCtx }
 func (env *Environment) BlockContext() *BlockContext             { return env.blockCtx }
