@@ -6,6 +6,7 @@
 package block
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -229,6 +230,24 @@ func (h *Header) String() string {
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+}
+
+// BetterThan return if this block is better than other one.
+func (h *Header) BetterThan(other *Header) bool {
+	s1 := h.TotalScore()
+	s2 := other.TotalScore()
+
+	if s1 > s2 {
+		return true
+	}
+	if s1 < s2 {
+		return false
+	}
+	// total scores are equal
+
+	// smaller ID is preferred, since block with smaller ID usually has larger average score.
+	// also, it's a deterministic decision.
+	return bytes.Compare(h.ID().Bytes(), other.ID().Bytes()) < 0
 }
 
 // Number extract block number from block id.
