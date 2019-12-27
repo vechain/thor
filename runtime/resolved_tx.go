@@ -96,22 +96,34 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	baseGasPrice *big.Int,
 	gasPrice *big.Int,
 	payer thor.Address,
-	returnGas func(uint64), err error) {
-
-	baseGasPrice = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	returnGas func(uint64) error,
+	err error,
+) {
+	if baseGasPrice, err = builtin.Params.Native(state).Get(thor.KeyBaseGasPrice); err != nil {
+		return
+	}
 	gasPrice = r.tx.GasPrice(baseGasPrice)
 
 	energy := builtin.Energy.Native(state, blockTime)
-	doReturnGas := func(rgas uint64) *big.Int {
+	doReturnGas := func(rgas uint64) (*big.Int, error) {
 		returnedEnergy := new(big.Int).Mul(new(big.Int).SetUint64(rgas), gasPrice)
-		energy.Add(payer, returnedEnergy)
-		return returnedEnergy
+		if err := energy.Add(payer, returnedEnergy); err != nil {
+			return nil, err
+		}
+		return returnedEnergy, nil
 	}
 
 	prepaid := new(big.Int).Mul(new(big.Int).SetUint64(r.tx.Gas()), gasPrice)
 	if r.Delegator != nil {
-		if energy.Sub(*r.Delegator, prepaid) {
-			return baseGasPrice, gasPrice, *r.Delegator, func(rgas uint64) { doReturnGas(rgas) }, nil
+		var sufficient bool
+		if sufficient, err = energy.Sub(*r.Delegator, prepaid); err != nil {
+			return
+		}
+		if sufficient {
+			return baseGasPrice, gasPrice, *r.Delegator, func(rgas uint64) error {
+				_, err := doReturnGas(rgas)
+				return err
+			}, nil
 		}
 		return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
 	}
@@ -119,43 +131,84 @@ func (r *ResolvedTransaction) BuyGas(state *state.State, blockTime uint64) (
 	commonTo := r.CommonTo()
 	if commonTo != nil {
 		binding := builtin.Prototype.Native(state).Bind(*commonTo)
-		credit := binding.UserCredit(r.Origin, blockTime)
+		var credit *big.Int
+		if credit, err = binding.UserCredit(r.Origin, blockTime); err != nil {
+			return
+		}
 		if credit.Cmp(prepaid) >= 0 {
-			doReturnGasAndSetCredit := func(rgas uint64) {
-				returnedEnergy := doReturnGas(rgas)
+			doReturnGasAndSetCredit := func(rgas uint64) error {
+				returnedEnergy, err := doReturnGas(rgas)
+				if err != nil {
+					return err
+				}
+
 				usedEnergy := new(big.Int).Sub(prepaid, returnedEnergy)
-				binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
+				return binding.SetUserCredit(r.Origin, new(big.Int).Sub(credit, usedEnergy), blockTime)
 			}
+			var sponsor thor.Address
+			if sponsor, err = binding.CurrentSponsor(); err != nil {
+				return
+			}
+
+			var isSponsor bool
+			if isSponsor, err = binding.IsSponsor(sponsor); err != nil {
+				return
+			}
+
 			// has enough credit
-			if sponsor := binding.CurrentSponsor(); binding.IsSponsor(sponsor) {
+			if isSponsor {
 				// deduct from sponsor, if any
-				if energy.Sub(sponsor, prepaid) {
+				var ok bool
+				ok, err = energy.Sub(sponsor, prepaid)
+				if err != nil {
+					return
+				}
+				if ok {
 					return baseGasPrice, gasPrice, sponsor, doReturnGasAndSetCredit, nil
 				}
 			}
 			// deduct from To
-			if energy.Sub(*commonTo, prepaid) {
+			var sufficient bool
+			sufficient, err = energy.Sub(*commonTo, prepaid)
+			if err != nil {
+				return
+			}
+			if sufficient {
 				return baseGasPrice, gasPrice, *commonTo, doReturnGasAndSetCredit, nil
 			}
 		}
 	}
 
 	// fallback to deduct from tx origin
-	if energy.Sub(r.Origin, prepaid) {
-		return baseGasPrice, gasPrice, r.Origin, func(rgas uint64) { doReturnGas(rgas) }, nil
+	var sufficient bool
+	if sufficient, err = energy.Sub(r.Origin, prepaid); err != nil {
+		return
+	}
+
+	if sufficient {
+		return baseGasPrice, gasPrice, r.Origin, func(rgas uint64) error { _, err := doReturnGas(rgas); return err }, nil
 	}
 	return nil, nil, thor.Address{}, nil, errors.New("insufficient energy")
 }
 
 // ToContext create a tx context object.
-func (r *ResolvedTransaction) ToContext(gasPrice *big.Int, gasPayer thor.Address, blockNumber uint32, getID func(uint32) thor.Bytes32) *xenv.TransactionContext {
+func (r *ResolvedTransaction) ToContext(
+	gasPrice *big.Int,
+	gasPayer thor.Address,
+	blockNumber uint32,
+	getBlockID func(uint32) (thor.Bytes32, error),
+) (*xenv.TransactionContext, error) {
+	provedWork, err := r.tx.ProvedWork(blockNumber, getBlockID)
+	if err != nil {
+		return nil, err
+	}
 	return &xenv.TransactionContext{
 		ID:         r.tx.ID(),
 		Origin:     r.Origin,
 		GasPayer:   gasPayer,
 		GasPrice:   gasPrice,
-		ProvedWork: r.tx.ProvedWork(blockNumber, getID),
+		ProvedWork: provedWork,
 		BlockRef:   r.tx.BlockRef(),
 		Expiration: r.tx.Expiration(),
-	}
+	}, nil
 }

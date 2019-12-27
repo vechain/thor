@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -14,8 +14,8 @@ import (
 )
 
 func TestNativeCallReturnGas(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	state, _ := state.New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	state := state.New(db, thor.Bytes32{})
 	state.SetCode(builtin.Measure.Address, builtin.Measure.RuntimeBytecodes())
 
 	inner, _ := builtin.Measure.ABI.MethodByName("inner")
@@ -23,18 +23,25 @@ func TestNativeCallReturnGas(t *testing.T) {
 	outer, _ := builtin.Measure.ABI.MethodByName("outer")
 	outerData, _ := outer.EncodeInput()
 
-	innerOutput := New(nil, state, &xenv.BlockContext{}, thor.NoFork).ExecuteClause(
+	exec, _ := New(nil, state, &xenv.BlockContext{}, thor.NoFork).PrepareClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(innerData),
 		0,
 		math.MaxUint64,
 		&xenv.TransactionContext{})
+	innerOutput, _, err := exec()
+
+	assert.Nil(t, err)
 	assert.Nil(t, innerOutput.VMErr)
 
-	outerOutput := New(nil, state, &xenv.BlockContext{}, thor.NoFork).ExecuteClause(
+	exec, _ = New(nil, state, &xenv.BlockContext{}, thor.NoFork).PrepareClause(
 		tx.NewClause(&builtin.Measure.Address).WithData(outerData),
 		0,
 		math.MaxUint64,
 		&xenv.TransactionContext{})
+
+	outerOutput, _, err := exec()
+
+	assert.Nil(t, err)
 	assert.Nil(t, outerOutput.VMErr)
 
 	innerGasUsed := math.MaxUint64 - innerOutput.LeftOverGas
