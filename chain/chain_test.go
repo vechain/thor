@@ -1,119 +1,45 @@
-// Copyright (c) 2018 The VeChainThor developers
-
-// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
-// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
-
-package chain_test
+package chain
 
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
-func initChain() *chain.Chain {
-	kv, _ := lvldb.NewMem()
-	g := genesis.NewDevnet()
-	b0, _, _ := g.Build(state.NewCreator(kv))
-
-	chain, err := chain.New(kv, b0)
-	if err != nil {
-		panic(err)
+func TestChain_HasBlock(t *testing.T) {
+	type fields struct {
+		repo   *Repository
+		headID thor.Bytes32
+		init   func() (*muxdb.Trie, error)
 	}
-	return chain
-}
-
-var privateKey, _ = crypto.GenerateKey()
-
-func newBlock(parent *block.Block, score uint64) *block.Block {
-	b := new(block.Builder).ParentID(parent.Header().ID()).TotalScore(parent.Header().TotalScore() + score).Build()
-	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
-	return b.WithSignature(sig)
-}
-
-func TestAdd(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
-	b1 := newBlock(b0, 1)
-	b2 := newBlock(b1, 1)
-	b3 := newBlock(b2, 1)
-	b4 := newBlock(b3, 1)
-	b4x := newBlock(b3, 2)
-
+	type args struct {
+		id thor.Bytes32
+	}
 	tests := []struct {
-		newBlock *block.Block
-		fork     *chain.Fork
-		best     *block.Header
+		name    string
+		fields  fields
+		args    args
+		want    bool
+		wantErr bool
 	}{
-		{b1, &chain.Fork{Ancestor: b0.Header(), Trunk: []*block.Header{b1.Header()}}, b1.Header()},
-		{b2, &chain.Fork{Ancestor: b1.Header(), Trunk: []*block.Header{b2.Header()}}, b2.Header()},
-		{b3, &chain.Fork{Ancestor: b2.Header(), Trunk: []*block.Header{b3.Header()}}, b3.Header()},
-		{b4, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4.Header()}}, b4.Header()},
-		{b4x, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4x.Header()}, Branch: []*block.Header{b4.Header()}}, b4x.Header()},
+		// TODO: Add test cases.
 	}
-
 	for _, tt := range tests {
-		fork, err := ch.AddBlock(tt.newBlock, nil)
-		assert.Nil(t, err)
-		assert.Equal(t, tt.best.ID(), ch.BestBlock().Header().ID())
-
-		assert.Equal(t, tt.fork.Ancestor.ID(), fork.Ancestor.ID())
-		assert.Equal(t, len(tt.fork.Branch), len(fork.Branch))
-		assert.Equal(t, len(tt.fork.Trunk), len(fork.Trunk))
-		for i, b := range fork.Branch {
-			assert.Equal(t, tt.fork.Branch[i].ID(), b.ID())
-		}
-		for i, b := range fork.Trunk {
-			assert.Equal(t, tt.fork.Trunk[i].ID(), b.ID())
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Chain{
+				repo:     tt.fields.repo,
+				headID:   tt.fields.headID,
+				lazyInit: tt.fields.init,
+			}
+			got, err := c.HasBlock(tt.args.id)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Chain.HasBlock() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("Chain.HasBlock() = %v, want %v", got, tt.want)
+			}
+		})
 	}
-}
-
-func TestIterator(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
-	nextB := b0
-	for i := 0; i < 100; i++ {
-		nextB = newBlock(nextB, 1)
-		ch.AddBlock(nextB, nil)
-	}
-
-	var ids []thor.Bytes32
-
-	it := ch.NewIterator(16)
-	for it.Next() {
-		ids = append(ids, it.Block().Header().ID())
-	}
-	assert.Nil(t, it.Error())
-	assert.Equal(t, func() []thor.Bytes32 {
-		var ret []thor.Bytes32
-		for i := uint32(0); i <= ch.BestBlock().Header().Number(); i++ {
-			id, _ := ch.GetTrunkBlockID(i)
-			ret = append(ret, id)
-		}
-		return ret
-	}(), ids)
-
-	// fromNum == head
-	ids = nil
-	it = ch.NewIterator(16)
-	it.Seek(ch.BestBlock().Header().Number())
-	for it.Next() {
-		ids = append(ids, it.Block().Header().ID())
-	}
-	assert.Nil(t, it.Error())
-	assert.Equal(t, []thor.Bytes32{ch.BestBlock().Header().ID()}, ids)
-
-	// fromNum beyond head
-	it = ch.NewIterator(16)
-	it.Seek(ch.BestBlock().Header().Number() + 1)
-	assert.False(t, it.Next())
-	assert.Nil(t, it.Error())
 }
