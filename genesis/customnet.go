@@ -51,18 +51,32 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
 			for addr := range vm.PrecompiledContractsByzantium {
-				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
+				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
+					return err
+				}
 			}
 
 			// alloc builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
 
 			if len(gen.Executor.Approvers) > 0 {
-				state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
+				if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+					return err
+				}
 			}
 
 			tokenSupply := &big.Int{}
@@ -79,20 +93,26 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				}
 
 				tokenSupply.Add(tokenSupply, a.Balance)
-				state.SetBalance(a.Address, a.Balance)
+				if err := state.SetBalance(a.Address, a.Balance); err != nil {
+					return err
+				}
 				if a.Energy != nil {
 					if a.Energy.Sign() < 0 {
 						return fmt.Errorf("%s: energy must be a non-negative integer", a.Address)
 					}
 					energySupply.Add(energySupply, a.Energy)
-					state.SetEnergy(a.Address, a.Energy, launchTime)
+					if err := state.SetEnergy(a.Address, a.Energy, launchTime); err != nil {
+						return err
+					}
 				}
 				if len(a.Code) > 0 {
 					code, err := hexutil.Decode(a.Code)
 					if err != nil {
 						return fmt.Errorf("invalid contract code for address: %s", a.Address)
 					}
-					state.SetCode(a.Address, code)
+					if err := state.SetCode(a.Address, code); err != nil {
+						return err
+					}
 				}
 				if len(a.Storage) > 0 {
 					for k, v := range a.Storage {
@@ -101,8 +121,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				}
 			}
 
-			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-			return nil
+			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts
