@@ -30,7 +30,7 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	chain          *chain.Chain
+	repo           *chain.Repository
 	txPool         *txpool.TxPool
 	ctx            context.Context
 	cancel         context.CancelFunc
@@ -44,10 +44,10 @@ type Communicator struct {
 }
 
 // New create a new Communicator instance.
-func New(chain *chain.Chain, txPool *txpool.TxPool) *Communicator {
+func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
-		chain:          chain,
+		repo:           repo,
 		txPool:         txPool,
 		ctx:            ctx,
 		cancel:         cancel,
@@ -74,7 +74,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 		syncCount := 0
 
 		shouldSynced := func() bool {
-			bestBlockTime := c.chain.BestBlock().Header().Timestamp()
+			bestBlockTime := c.repo.BestBlock().Header().Timestamp()
 			now := uint64(time.Now().Unix())
 			if bestBlockTime+thor.BlockInterval >= now {
 				return true
@@ -94,7 +94,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 			case <-timer.C:
 				log.Debug("synchronization start")
 
-				best := c.chain.BestBlock().Header()
+				best := c.repo.BestBlock().Header()
 				// choose peer which has the head block with higher total score
 				peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
 					_, totalScore := peer.Head()
@@ -129,7 +129,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 
 // Protocols returns all supported protocols.
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
-	genesisID := c.chain.GenesisBlock().Header().ID()
+	genesisID := c.repo.GenesisBlock().Header().ID()
 	return []*p2psrv.Protocol{
 		&p2psrv.Protocol{
 			Protocol: p2p.Protocol{
@@ -185,7 +185,7 @@ func (c *Communicator) runPeer(peer *Peer) {
 		peer.logger.Debug("failed to get status", "err", err)
 		return
 	}
-	if status.GenesisBlockID != c.chain.GenesisBlock().Header().ID() {
+	if status.GenesisBlockID != c.repo.GenesisBlock().Header().ID() {
 		peer.logger.Debug("failed to handshake", "err", "genesis id mismatch")
 		return
 	}
