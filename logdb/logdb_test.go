@@ -7,6 +7,7 @@ package logdb_test
 
 import (
 	"context"
+	"crypto/rand"
 	"math/big"
 	"os"
 	"os/user"
@@ -18,6 +19,13 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
+
+func newTx() *tx.Transaction {
+	tx := new(tx.Builder).Build()
+	var sig [65]byte
+	rand.Read(sig[:])
+	return tx.WithSignature(sig[:])
+}
 
 func TestEvents(t *testing.T) {
 	db, err := logdb.NewMem()
@@ -32,20 +40,21 @@ func TestEvents(t *testing.T) {
 		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 97, 48},
 	}
 
-	header := new(block.Builder).Build().Header()
+	b := new(block.Builder).Transaction(newTx()).Build()
 
 	for i := 0; i < 100; i++ {
-		if err := db.NewTask().ForBlock(header).Write(
-			thor.BytesToBytes32([]byte("txID")),
-			thor.BytesToAddress([]byte("txOrigin")),
-			[]*tx.Output{{
-				Events:    tx.Events{txEvent},
-				Transfers: nil,
-			}}).Commit(); err != nil {
+		if err := db.Log(func(w *logdb.Writer) error {
+			return w.Write(b, tx.Receipts{
+				{Outputs: []*tx.Output{{
+					Events:    tx.Events{txEvent},
+					Transfers: nil,
+				}}},
+			})
+		}); err != nil {
 			t.Fatal(err)
 		}
 
-		header = new(block.Builder).ParentID(header.ID()).Build().Header()
+		b = new(block.Builder).ParentID(b.Header().ID()).Transaction(newTx()).Build()
 	}
 
 	limit := 5
@@ -54,7 +63,6 @@ func TestEvents(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("addr"))
 	es, err := db.FilterEvents(context.Background(), &logdb.EventFilter{
 		Range: &logdb.Range{
-			Unit: logdb.Block,
 			From: 0,
 			To:   10,
 		},
@@ -98,7 +106,7 @@ func TestTransfers(t *testing.T) {
 	from := thor.BytesToAddress([]byte("from"))
 	to := thor.BytesToAddress([]byte("to"))
 	value := big.NewInt(10)
-	header := new(block.Builder).Build().Header()
+	b := new(block.Builder).Transaction(newTx()).Build()
 	count := 100
 	for i := 0; i < count; i++ {
 		transLog := &tx.Transfer{
@@ -106,26 +114,26 @@ func TestTransfers(t *testing.T) {
 			Recipient: to,
 			Amount:    value,
 		}
-		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		if err := db.NewTask().ForBlock(header).Write(thor.Bytes32{}, from,
-			[]*tx.Output{{
-				Events:    nil,
-				Transfers: tx.Transfers{transLog},
-			}}).Commit(); err != nil {
+		if err := db.Log(func(w *logdb.Writer) error {
+			return w.Write(b, tx.Receipts{
+				{Outputs: []*tx.Output{{
+					Transfers: tx.Transfers{transLog},
+				}}},
+			})
+		}); err != nil {
 			t.Fatal(err)
 		}
-
+		b = new(block.Builder).ParentID(b.Header().ID()).Transaction(newTx()).Build()
 	}
 
 	tf := &logdb.TransferFilter{
 		CriteriaSet: []*logdb.TransferCriteria{
 			&logdb.TransferCriteria{
-				TxOrigin:  &from,
+				Sender:    &from,
 				Recipient: &to,
 			},
 		},
 		Range: &logdb.Range{
-			Unit: logdb.Block,
 			From: 0,
 			To:   1000,
 		},
@@ -139,7 +147,7 @@ func TestTransfers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, len(ts), count, "transfers searched")
+	assert.Equal(t, count, len(ts), "transfers searched")
 }
 
 func home() (string, error) {
@@ -158,39 +166,4 @@ func home() (string, error) {
 	}
 
 	return os.Getwd()
-}
-
-func BenchmarkLog(b *testing.B) {
-	path, err := home()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	db, err := logdb.New(path + "/log.db")
-	if err != nil {
-		b.Fatal(err)
-	}
-	l := &tx.Event{
-		Address: thor.BytesToAddress([]byte("addr")),
-		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic0")), thor.BytesToBytes32([]byte("topic1"))},
-		Data:    []byte("data"),
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		header := new(block.Builder).Build().Header()
-		task := db.NewTask().ForBlock(header)
-
-		for j := 0; j < 100; j++ {
-			task.Write(thor.BytesToBytes32([]byte("txID")), thor.BytesToAddress([]byte("txOrigin")),
-				[]*tx.Output{{
-					Events: tx.Events{l},
-				}})
-		}
-
-		header = new(block.Builder).ParentID(header.ID()).Build().Header()
-		if err := task.Commit(); err != nil {
-			b.Fatal(err)
-		}
-	}
 }
