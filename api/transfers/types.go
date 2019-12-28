@@ -7,6 +7,7 @@ package transfers
 
 import (
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/vechain/thor/api/events"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
@@ -42,4 +43,11 @@ func convertTransfer(transfer *logdb.Transfer) *FilteredTransfer {
 			ClauseIndex:    transfer.ClauseIndex,
 		},
 	}
+}
+
+type TransferFilter struct {
+	CriteriaSet []*logdb.TransferCriteria
+	Range       *events.Range
+	Options     *logdb.Options
+	Order       logdb.Order //default asc
 }

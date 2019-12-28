@@ -18,7 +18,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/txpool"
 )
@@ -36,16 +36,16 @@ func TestNode(t *testing.T) {
 }
 
 func initCommServer(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	stateC := state.NewCreator(db)
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 
-	b, _, err := gene.Build(stateC)
+	b, _, err := gene.Build(stater)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, _ := chain.New(db, b)
-	comm := comm.New(chain, txpool.New(chain, stateC, txpool.Options{
+	repo, _ := chain.NewRepository(db, b)
+	comm := comm.New(repo, txpool.New(repo, stater, txpool.Options{
 		Limit:           10000,
 		LimitPerAccount: 16,
 		MaxLifetime:     10 * time.Minute,

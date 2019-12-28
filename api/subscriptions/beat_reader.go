@@ -14,14 +14,14 @@ import (
 )
 
 type beatReader struct {
-	chain       *chain.Chain
+	repo        *chain.Repository
 	blockReader chain.BlockReader
 }
 
-func newBeatReader(chain *chain.Chain, position thor.Bytes32) *beatReader {
+func newBeatReader(repo *chain.Repository, position thor.Bytes32) *beatReader {
 	return &beatReader{
-		chain:       chain,
-		blockReader: chain.NewBlockReader(position),
+		repo:        repo,
+		blockReader: repo.NewBlockReader(position),
 	}
 }
 
@@ -33,7 +33,7 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 	var msgs []interface{}
 	for _, block := range blocks {
 		header := block.Header()
-		receipts, err := br.chain.GetBlockReceipts(header.ID())
+		receipts, err := br.repo.GetBlockReceipts(header.ID())
 		if err != nil {
 			return nil, false, err
 		}
