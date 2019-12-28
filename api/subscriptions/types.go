@@ -34,7 +34,7 @@ type BlockMessage struct {
 	Obsolete     bool           `json:"obsolete"`
 }
 
-func convertBlock(b *chain.Block) (*BlockMessage, error) {
+func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 	header := b.Header()
 	signer, err := header.Signer()
 	if err != nil {

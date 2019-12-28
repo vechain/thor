@@ -21,7 +21,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -74,19 +74,19 @@ func TestBlock(t *testing.T) {
 }
 
 func initBlockServer(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	stateC := state.NewCreator(db)
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 
-	b, _, err := gene.Build(stateC)
+	b, _, err := gene.Build(stater)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, _ := chain.New(db, b)
+	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	tx := new(tx.Builder).
-		ChainTag(chain.Tag()).
+		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
 		Gas(21000).
@@ -100,7 +100,7 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	tx = tx.WithSignature(sig)
-	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -116,11 +116,14 @@ func initBlockServer(t *testing.T) {
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := chain.AddBlock(block, receipts); err != nil {
+	if err := repo.AddBlock(block, receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	blocks.New(chain).Mount(router, "/blocks")
+	blocks.New(repo).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }

@@ -27,33 +27,31 @@ import (
 )
 
 type Accounts struct {
-	chain        *chain.Chain
-	stateCreator *state.Creator
+	repo         *chain.Repository
+	stater       *state.Stater
 	callGasLimit uint64
 	forkConfig   thor.ForkConfig
 }
 
 func New(
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
 ) *Accounts {
 	return &Accounts{
-		chain,
-		stateCreator,
+		repo,
+		stater,
 		callGasLimit,
 		forkConfig,
 	}
 }
 
 func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, error) {
-	state, err := a.stateCreator.NewState(stateRoot)
+	code, err := a.stater.
+		NewState(stateRoot).
+		GetCode(addr)
 	if err != nil {
-		return nil, err
-	}
-	code := state.GetCode(addr)
-	if err := state.Err(); err != nil {
 		return nil, err
 	}
 	return code, nil
@@ -77,16 +75,20 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 }
 
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account, error) {
-	state, err := a.stateCreator.NewState(header.StateRoot())
+	state := a.stater.NewState(header.StateRoot())
+	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
 	}
-	b := state.GetBalance(addr)
-	code := state.GetCode(addr)
-	energy := state.GetEnergy(addr, header.Timestamp())
-	if err := state.Err(); err != nil {
+	code, err := state.GetCode(addr)
+	if err != nil {
 		return nil, err
 	}
+	energy, err := state.GetEnergy(addr, header.Timestamp())
+	if err != nil {
+		return nil, err
+	}
+
 	return &Account{
 		Balance: math.HexOrDecimal256(*b),
 		Energy:  math.HexOrDecimal256(*energy),
@@ -95,12 +97,11 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 }
 
 func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot thor.Bytes32) (thor.Bytes32, error) {
-	state, err := a.stateCreator.NewState(stateRoot)
+	storage, err := a.stater.
+		NewState(stateRoot).
+		GetStorage(addr, key)
+
 	if err != nil {
-		return thor.Bytes32{}, err
-	}
-	storage := state.GetStorage(addr, key)
-	if err := state.Err(); err != nil {
 		return thor.Bytes32{}, err
 	}
 	return storage, nil
@@ -199,12 +200,10 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 	if err != nil {
 		return nil, err
 	}
-	state, err := a.stateCreator.NewState(header.StateRoot())
-	if err != nil {
-		return nil, err
-	}
+	state := a.stater.NewState(header.StateRoot())
+
 	signer, _ := header.Signer()
-	rt := runtime.New(a.chain.NewSeeker(header.ParentID()), state,
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
@@ -215,29 +214,31 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 		},
 		a.forkConfig)
 	results = make(BatchCallResults, 0)
-	vmout := make(chan *runtime.Output, 1)
+	resultCh := make(chan interface{}, 1)
 	for i, clause := range clauses {
 		exec, interrupt := rt.PrepareClause(clause, uint32(i), gas, txCtx)
 		go func() {
-			out, _ := exec()
-			vmout <- out
+			out, _, err := exec()
+			if err != nil {
+				resultCh <- err
+			}
+			resultCh <- out
 		}()
 		select {
 		case <-ctx.Done():
 			interrupt()
 			return nil, ctx.Err()
-		case out := <-vmout:
-			if err := rt.Seeker().Err(); err != nil {
-				return nil, err
+		case result := <-resultCh:
+			switch v := result.(type) {
+			case error:
+				return nil, v
+			case *runtime.Output:
+				results = append(results, convertCallResultWithInputGas(v, gas))
+				if v.VMErr != nil {
+					return results, nil
+				}
+				gas = v.LeftOverGas
 			}
-			if err := state.Err(); err != nil {
-				return nil, err
-			}
-			results = append(results, convertCallResultWithInputGas(out, gas))
-			if out.VMErr != nil {
-				return results, nil
-			}
-			gas = out.LeftOverGas
 		}
 	}
 	return results, nil
@@ -312,16 +313,16 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 
 func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 	if revision == "" || revision == "best" {
-		return a.chain.BestBlock().Header(), nil
+		return a.repo.BestBlock().Header(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)
 		if err != nil {
 			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
-		h, err := a.chain.GetBlockHeader(blockID)
+		h, _, err := a.repo.GetBlockHeader(blockID)
 		if err != nil {
-			if a.chain.IsNotFound(err) {
+			if a.repo.IsNotFound(err) {
 				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 			}
 			return nil, err
@@ -335,9 +336,9 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 	if n > math.MaxUint32 {
 		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
 	}
-	h, err := a.chain.GetTrunkBlockHeader(uint32(n))
+	h, err := a.repo.NewBestChain().GetBlockHeader(uint32(n))
 	if err != nil {
-		if a.chain.IsNotFound(err) {
+		if a.repo.IsNotFound(err) {
 			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return nil, err

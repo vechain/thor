@@ -25,7 +25,7 @@ import (
 	"github.com/vechain/thor/api/accounts"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -174,20 +174,20 @@ func getStorage(t *testing.T) {
 }
 
 func initAccountServer(t *testing.T) {
-	db, _ := lvldb.NewMem()
-	stateC := state.NewCreator(db)
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 
-	b, _, err := gene.Build(stateC)
+	b, _, _, err := gene.Build(stater)
 	if err != nil {
 		t.Fatal(err)
 	}
-	chain, _ := chain.New(db, b)
+	repo, _ := chain.NewRepository(db, b)
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
-	transaction := buildTxWithClauses(t, chain.Tag(), claTransfer, claDeploy)
+	transaction := buildTxWithClauses(t, repo.ChainTag(), claTransfer, claDeploy)
 	contractAddr = thor.CreateContractAddress(transaction.ID(), 1, 0)
-	packTx(chain, stateC, transaction, t)
+	packTx(repo, stater, transaction, t)
 
 	method := "set"
 	abi, err := ABI.New([]byte(abiJSON))
@@ -197,11 +197,11 @@ func initAccountServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	claCall := tx.NewClause(&contractAddr).WithData(input)
-	transactionCall := buildTxWithClauses(t, chain.Tag(), claCall)
-	packTx(chain, stateC, transactionCall, t)
+	transactionCall := buildTxWithClauses(t, repo.ChainTag(), claCall)
+	packTx(repo, stater, transactionCall, t)
 
 	router := mux.NewRouter()
-	accounts.New(chain, stateC, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
+	accounts.New(repo, stater, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 
@@ -222,9 +222,9 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 	return transaction.WithSignature(sig)
 }
 
-func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transaction, t *testing.T) {
-	b := chain.BestBlock()
-	packer := packer.New(chain, stateC, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
+func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {
+	b := repo.BestBlock()
+	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
 	err = flow.Adopt(transaction)
 	if err != nil {
@@ -237,7 +237,10 @@ func packTx(chain *chain.Chain, stateC *state.Creator, transaction *tx.Transacti
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := chain.AddBlock(b, receipts); err != nil {
+	if err := repo.AddBlock(b, receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
 		t.Fatal(err)
 	}
 }

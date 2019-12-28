@@ -18,12 +18,10 @@ import (
 	"github.com/vechain/thor/api/debug"
 	"github.com/vechain/thor/api/doc"
 	"github.com/vechain/thor/api/events"
-	"github.com/vechain/thor/api/eventslegacy"
 	"github.com/vechain/thor/api/node"
 	"github.com/vechain/thor/api/subscriptions"
 	"github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/api/transfers"
-	"github.com/vechain/thor/api/transferslegacy"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/state"
@@ -33,8 +31,8 @@ import (
 
 //New return api router
 func New(
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
 	nw node.Network,
@@ -67,32 +65,24 @@ func New(
 			http.Redirect(w, req, "doc/swagger-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(chain, stateCreator, callGasLimit, forkConfig).
+	accounts.New(repo, stater, callGasLimit, forkConfig).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
-		eventslegacy.New(logDB).
-			Mount(router, "/events")
-		transferslegacy.New(logDB).
-			Mount(router, "/transfers")
-		eventslegacy.New(logDB).
-			Mount(router, "/logs/events")
-		events.New(logDB).
+		events.New(repo, logDB).
 			Mount(router, "/logs/event")
-		transferslegacy.New(logDB).
-			Mount(router, "/logs/transfers")
-		transfers.New(logDB).
+		transfers.New(repo, logDB).
 			Mount(router, "/logs/transfer")
 	}
-	blocks.New(chain).
+	blocks.New(repo).
 		Mount(router, "/blocks")
-	transactions.New(chain, txPool).
+	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(chain, stateCreator, forkConfig).
+	debug.New(repo, stater, forkConfig).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
-	subs := subscriptions.New(chain, origins, backtraceLimit)
+	subs := subscriptions.New(repo, origins, backtraceLimit)
 	subs.Mount(router, "/subscriptions")
 
 	if pprofOn {

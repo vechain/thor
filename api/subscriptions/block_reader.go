@@ -11,14 +11,14 @@ import (
 )
 
 type blockReader struct {
-	chain       *chain.Chain
+	repo        *chain.Repository
 	blockReader chain.BlockReader
 }
 
-func newBlockReader(chain *chain.Chain, position thor.Bytes32) *blockReader {
+func newBlockReader(repo *chain.Repository, position thor.Bytes32) *blockReader {
 	return &blockReader{
-		chain:       chain,
-		blockReader: chain.NewBlockReader(position),
+		repo:        repo,
+		blockReader: repo.NewBlockReader(position),
 	}
 }
 
