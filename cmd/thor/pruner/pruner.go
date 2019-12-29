@@ -114,8 +114,8 @@ func (p *Pruner) loop() error {
 			status.N1 = status.N2
 			status.N2 = bestNum() + 10
 			// not necessary to prune if n2 is too small
-			if status.N2 < thor.MaxBackTrackingBlockNumber {
-				status.N2 = thor.MaxBackTrackingBlockNumber
+			if status.N2 < thor.MaxStateHistory {
+				status.N2 = thor.MaxStateHistory
 			}
 			if err := waitUntil(status.N2); err != nil {
 				return err
@@ -141,7 +141,7 @@ func (p *Pruner) loop() error {
 				"storageNodes", sNodeCount, "storageEntries", sEntryCount)
 			status.Step = stepDropStale
 		case stepDropStale:
-			if err := waitUntil(status.N2 + thor.MaxBackTrackingBlockNumber + 128); err != nil {
+			if err := waitUntil(status.N2 + thor.MaxStateHistory + 128); err != nil {
 				return err
 			}
 			log.Info("sweeping stale nodes...")

@@ -788,7 +788,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	chain := repo.NewBestChain()
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Number: thor.MaxBackTrackingBlockNumber + 1,
+		Number: thor.MaxStateHistory + 1,
 		Time:   repo.BestBlock().Header().Timestamp(),
 	}, thor.NoFork)
 
