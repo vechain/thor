@@ -73,7 +73,7 @@ func init() {
 				return []interface{}{&big.Int{}}
 			}
 
-			if ctx.Number-args.BlockNumber > thor.MaxBackTrackingBlockNumber {
+			if ctx.Number-args.BlockNumber > thor.MaxStateHistory {
 				return []interface{}{&big.Int{}}
 			}
 
@@ -115,7 +115,7 @@ func init() {
 				return []interface{}{&big.Int{}}
 			}
 
-			if ctx.Number-args.BlockNumber > thor.MaxBackTrackingBlockNumber {
+			if ctx.Number-args.BlockNumber > thor.MaxStateHistory {
 				return []interface{}{&big.Int{}}
 			}
 
