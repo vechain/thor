@@ -31,7 +31,7 @@ var log = log15.New()
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	chain       *chain.Chain
+	repo        *chain.Repository
 	txPool      *txpool.TxPool
 	packer      *packer.Packer
 	logDB       *logdb.LogDB
@@ -42,8 +42,8 @@ type Solo struct {
 
 // New returns Solo instance
 func New(
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	gasLimit uint64,
@@ -51,11 +51,11 @@ func New(
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
-		chain:  chain,
+		repo:   repo,
 		txPool: txPool,
 		packer: packer.New(
-			chain,
-			stateCreator,
+			repo,
+			stater,
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
@@ -123,7 +123,7 @@ func (s *Solo) loop(ctx context.Context) {
 }
 
 func (s *Solo) packing(pendingTxs tx.Transactions) error {
-	best := s.chain.BestBlock()
+	best := s.repo.BestBlock()
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
@@ -165,17 +165,16 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	}
 
 	// ignore fork when solo
-	_, err = s.chain.AddBlock(b, receipts)
-	if err != nil {
+	if err := s.repo.AddBlock(b, receipts); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
-
-	task := s.logDB.NewTask().ForBlock(b.Header())
-	for i, tx := range b.Transactions() {
-		origin, _ := tx.Origin()
-		task.Write(tx.ID(), origin, receipts[i].Outputs)
+	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
+		return errors.WithMessage(err, "set best block")
 	}
-	if err := task.Commit(); err != nil {
+
+	if err := s.logDB.Log(func(w *logdb.Writer) error {
+		return w.Write(b, receipts)
+	}); err != nil {
 		return errors.WithMessage(err, "commit log")
 	}
 
