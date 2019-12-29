@@ -72,9 +72,9 @@ func (p *Pruner) loop() error {
 		return err
 	}
 	if status.Cycles == 0 {
-		log.Info("pruner start")
+		log.Info("pruner started")
 	} else {
-		log.Info("pruner start", "range", fmt.Sprintf("[%v, %v]", status.N1, status.N2), "step", status.Step)
+		log.Info("pruner started", "range", fmt.Sprintf("[%v, %v]", status.N1, status.N2), "step", status.Step)
 	}
 
 	pruner := p.db.NewTriePruner()

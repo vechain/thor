@@ -128,4 +128,8 @@ var (
 		Name:  "skip-txpool-blocklist",
 		Usage: "skip applying txpool blocklist",
 	}
+	disablePrunerFlag = cli.BoolFlag{
+		Name:  "disable-pruner",
+		Usage: "disable state pruner to keep all history",
+	}
 )
