@@ -124,4 +124,8 @@ var (
 		Usage: "megabytes of ram allocated to trie nodes cache",
 		Value: 1024,
 	}
+	disablePrunerFlag = cli.BoolFlag{
+		Name:  "disable-pruner",
+		Usage: "disable state pruner to keep all history",
+	}
 )

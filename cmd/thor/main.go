@@ -83,6 +83,7 @@ func main() {
 			skipLogsFlag,
 			pprofFlag,
 			verifyLogsFlag,
+			disablePrunerFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -180,8 +181,10 @@ func defaultAction(ctx *cli.Context) error {
 	p2pcom.Start()
 	defer p2pcom.Stop()
 
-	pruner := pruner.New(mainDB, repo)
-	defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return node.New(
 		master,
