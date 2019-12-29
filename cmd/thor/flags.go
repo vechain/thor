@@ -121,8 +121,8 @@ var (
 	}
 	cacheFlag = cli.IntFlag{
 		Name:  "cache",
-		Usage: "megabytes of ram allocated to internal caching",
-		Value: 4096,
+		Usage: "megabytes of ram allocated to trie nodes cache",
+		Value: 1024,
 	}
 	skipTxPoolBlockList = cli.BoolFlag{
 		Name:  "skip-txpool-blocklist",
