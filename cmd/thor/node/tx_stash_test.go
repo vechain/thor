@@ -8,6 +8,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/tx"
 )
@@ -19,7 +21,7 @@ func newTx() *tx.Transaction {
 }
 
 func TestTxStash(t *testing.T) {
-	db, _ := lvldb.NewMem()
+	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 	defer db.Close()
 
 	stash := newTxStash(db, 10)
