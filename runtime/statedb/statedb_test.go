@@ -184,7 +184,7 @@ func (test *snapshotTest) String() string {
 func (test *snapshotTest) run() bool {
 	// Run all actions and create snapshots.
 	var (
-		db           = muxdb.OpenMem()
+		db           = muxdb.NewMem()
 		state        = State.New(db, thor.Bytes32{})
 		stateDB      = statedb.New(state)
 		snapshotRevs = make([]int, len(test.snapshots))

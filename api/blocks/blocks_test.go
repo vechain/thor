@@ -78,7 +78,7 @@ func initBlockServer(t *testing.T) {
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 
-	b, _, err := gene.Build(stater)
+	b, _, _, err := gene.Build(stater)
 	if err != nil {
 		t.Fatal(err)
 	}
