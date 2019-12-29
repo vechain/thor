@@ -48,7 +48,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		case <-ticker.C:
 		}
 
-		best := n.chain.BestBlock()
+		best := n.repo.BestBlock()
 		now := uint64(time.Now().Unix())
 
 		if flow == nil {
@@ -114,15 +114,15 @@ func (n *Node) pack(flow *packer.Flow) error {
 		return errors.WithMessage(err, "commit state")
 	}
 
-	fork, err := n.commitBlock(newBlock, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
 	if err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
-	n.processFork(fork)
+	n.processFork(prevTrunk, curTrunk)
 
-	if len(fork.Trunk) > 0 {
+	if prevTrunk.HeadID() != curTrunk.HeadID() {
 		n.comm.BroadcastBlock(newBlock)
 		log.Info("📦 new block packed",
 			"txs", len(receipts),

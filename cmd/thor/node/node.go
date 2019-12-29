@@ -18,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
@@ -25,7 +27,6 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -42,7 +43,7 @@ type Node struct {
 	consLock sync.Mutex
 
 	master         *Master
-	chain          *chain.Chain
+	repo           *chain.Repository
 	logDB          *logdb.LogDB
 	txPool         *txpool.TxPool
 	txStashPath    string
@@ -55,8 +56,8 @@ type Node struct {
 
 func New(
 	master *Master,
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	txStashPath string,
@@ -66,10 +67,10 @@ func New(
 	forkConfig thor.ForkConfig,
 ) *Node {
 	return &Node{
-		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
-		cons:           consensus.New(chain, stateCreator, forkConfig),
+		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
+		cons:           consensus.New(repo, stater, forkConfig),
 		master:         master,
-		chain:          chain,
+		repo:           repo,
 		logDB:          logDB,
 		txPool:         txPool,
 		txStashPath:    txStashPath,
@@ -203,7 +204,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	log.Debug("enter tx stash loop")
 	defer log.Debug("leave tx stash loop")
 
-	db, err := lvldb.New(n.txStashPath, lvldb.Options{})
+	db, err := leveldb.OpenFile(n.txStashPath, &opt.Options{})
 	if err != nil {
 		log.Error("create tx stash", "err", err)
 		return
@@ -274,82 +275,97 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	fork, err := n.commitBlock(blk, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(blk, receipts)
 	if err != nil {
-		if !n.chain.IsBlockExist(err) {
-			log.Error("failed to commit block", "err", err)
-		}
+		log.Error("failed to commit block", "err", err)
 		return false, err
 	}
 	commitElapsed := mclock.Now() - startTime - execElapsed
 	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
-	n.processFork(fork)
-	return len(fork.Trunk) > 0, nil
+	n.processFork(prevTrunk, curTrunk)
+	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
 
-func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.Fork, error) {
+func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.Chain, *chain.Chain, error) {
 	n.commitLock.Lock()
 	defer n.commitLock.Unlock()
 
-	fork, err := n.chain.AddBlock(newBlock, receipts)
+	best := n.repo.BestBlock()
+	err := n.repo.AddBlock(newBlock, receipts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	if newBlock.Header().BetterThan(best.Header()) {
+		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+			return nil, nil, err
+		}
+	}
+	prevTrunk := n.repo.NewChain(best.Header().ID())
+	curTrunk := n.repo.NewBestChain()
+
+	diff, err := curTrunk.Exclude(prevTrunk)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if !n.skipLogs {
 		if n.logDBFailed {
 			log.Warn("!!!log db skipped due to write failure (restart required to recover)")
 		} else {
-			if err := n.writeLogs(fork.Trunk); err != nil {
+			if err := n.writeLogs(diff); err != nil {
 				n.logDBFailed = true
-				return nil, errors.Wrap(err, "write logs")
+				return nil, nil, errors.Wrap(err, "write logs")
 			}
 		}
 	}
-	return fork, nil
+	return prevTrunk, curTrunk, nil
 }
 
-func (n *Node) writeLogs(trunk []*block.Header) error {
+func (n *Node) writeLogs(diff []thor.Bytes32) error {
 	// write full trunk blocks to prevent logs dropped
 	// in rare condition of long fork
-	task := n.logDB.NewTask()
-	for _, header := range trunk {
-		body, err := n.chain.GetBlockBody(header.ID())
-		if err != nil {
-			return err
+	return n.logDB.Log(func(w *logdb.Writer) error {
+		for _, id := range diff {
+			b, err := n.repo.GetBlock(id)
+			if err != nil {
+				return err
+			}
+			receipts, err := n.repo.GetBlockReceipts(id)
+			if err != nil {
+				return err
+			}
+			if err := w.Write(b, receipts); err != nil {
+				return err
+			}
 		}
-		receipts, err := n.chain.GetBlockReceipts(header.ID())
-		if err != nil {
-			return err
-		}
-
-		task.ForBlock(header)
-		for i, tx := range body.Txs {
-			origin, _ := tx.Origin()
-			task.Write(tx.ID(), origin, receipts[i].Outputs)
-		}
-	}
-	return task.Commit()
+		return nil
+	})
 }
 
-func (n *Node) processFork(fork *chain.Fork) {
-	if len(fork.Branch) >= 2 {
-		trunkLen := len(fork.Trunk)
-		branchLen := len(fork.Branch)
+func (n *Node) processFork(prevTrunk, curTrunk *chain.Chain) {
+	sideIds, err := prevTrunk.Exclude(curTrunk)
+	if err != nil {
+		log.Warn("failed to process fork", "err", err)
+		return
+	}
+	if len(sideIds) == 0 {
+		return
+	}
+
+	if n := len(sideIds); n >= 2 {
 		log.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
-ancestor: %v
-trunk:    %v  %v
-branch:   %v  %v`, fork.Ancestor,
-			trunkLen, fork.Trunk[trunkLen-1],
-			branchLen, fork.Branch[branchLen-1]))
+side-chain:   %v  %v`,
+			n, sideIds[n-1]))
 	}
-	for _, header := range fork.Branch {
-		body, err := n.chain.GetBlockBody(header.ID())
+
+	for _, id := range sideIds {
+		b, err := n.repo.GetBlock(id)
 		if err != nil {
-			log.Warn("failed to get block body", "err", err, "blockid", header.ID())
-			continue
+			log.Warn("failed to process fork", "err", err)
+			return
 		}
-		for _, tx := range body.Txs {
+		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}

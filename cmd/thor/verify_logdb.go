@@ -16,7 +16,7 @@ import (
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
-func verifyLogDB(ctx context.Context, endBlockNum uint32, chain *chain.Chain, logDB *logdb.LogDB) error {
+func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
 	fmt.Println(">> Verifying log db <<")
 	pb := pb.New64(int64(endBlockNum)).
 		Set64(0).
@@ -24,40 +24,84 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, chain *chain.Chain, lo
 		Start()
 	defer func() { pb.NotPrint = true }()
 
-	it := chain.NewIterator(256).Seek(1)
-	for it.Next() {
-		b := it.Block()
-		n := b.Header().Number()
-		if n > endBlockNum {
-			break
+	const logStep = uint32(100)
+
+	var (
+		chain       = repo.NewBestChain()
+		evLogs      []*logdb.Event
+		trLogs      []*logdb.Transfer
+		logLimit    = uint32(0)
+		splitEvLogs = func(id thor.Bytes32) (logs []*logdb.Event) {
+			if len(evLogs) == 0 {
+				return
+			}
+			for i, log := range evLogs {
+				if log.BlockID != id {
+					if i > 0 {
+						logs = evLogs[:i]
+						evLogs = evLogs[i:]
+					}
+					return
+				}
+			}
+			logs = evLogs
+			evLogs = nil
+			return
+		}
+		splitTrLogs = func(id thor.Bytes32) (logs []*logdb.Transfer) {
+			if len(trLogs) == 0 {
+				return
+			}
+			for i, log := range trLogs {
+				if log.BlockID != id {
+					if i > 0 {
+						logs = trLogs[:i]
+						trLogs = trLogs[i:]
+					}
+					return
+				}
+			}
+			logs = trLogs
+			trLogs = nil
+			return
+		}
+	)
+
+	for i := uint32(1); i <= endBlockNum; i++ {
+		b, err := chain.GetBlock(i)
+		if err != nil {
+			return err
+		}
+		id := b.Header().ID()
+
+		if i > logLimit {
+			logLimit += logStep
+			evLogs, err = logDB.FilterEvents(context.TODO(), &logdb.EventFilter{
+				Range: &logdb.Range{
+					From: i,
+					To:   logLimit,
+				},
+			})
+			if err != nil {
+				return err
+			}
+			trLogs, err = logDB.FilterTransfers(context.TODO(), &logdb.TransferFilter{
+				Range: &logdb.Range{
+					From: i,
+					To:   logLimit,
+				},
+			})
+			if err != nil {
+				return err
+			}
 		}
 
-		evLogs, err := logDB.FilterEvents(context.TODO(), &logdb.EventFilter{
-			Range: &logdb.Range{
-				Unit: "block",
-				From: uint64(n),
-				To:   uint64(n),
-			},
-		})
-		if err != nil {
-			return err
-		}
-		trLogs, err := logDB.FilterTransfers(context.TODO(), &logdb.TransferFilter{
-			Range: &logdb.Range{
-				Unit: "block",
-				From: uint64(n),
-				To:   uint64(n),
-			},
-		})
+		receipts, err := repo.GetBlockReceipts(id)
 		if err != nil {
 			return err
 		}
 
-		receipts, err := chain.GetBlockReceipts(b.Header().ID())
-		if err != nil {
-			return err
-		}
-		if err := verifyLogDBPerBlock(b, receipts, evLogs, trLogs); err != nil {
+		if err := verifyLogDBPerBlock(b, receipts, splitEvLogs(id), splitTrLogs(id)); err != nil {
 			return err
 		}
 		pb.Add64(1)
@@ -68,9 +112,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, chain *chain.Chain, lo
 		default:
 		}
 	}
-	if err := it.Error(); err != nil {
-		return errors.Wrap(err, "read block")
-	}
+
 	pb.Finish()
 	return nil
 }

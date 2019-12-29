@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/tx"
 )
 

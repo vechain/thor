@@ -34,11 +34,10 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/p2psrv"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
@@ -129,13 +128,13 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) string {
 	return instanceDir
 }
 
-func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
+func openMainDB(ctx *cli.Context, dataDir string) *muxdb.MuxDB {
 	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
 	log.Debug("cache size(MB)", "size", cacheMB)
 
 	// go-ethereum stuff
 	// Ensure Go's GC ignores the database cache for trigger percentage
-	gogc := math.Max(20, math.Min(100, 100/(float64(cacheMB)/1024)))
+	gogc := math.Max(10, math.Min(100, 50/(float64(cacheMB)/1024)))
 
 	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
 	debug.SetGCPercent(int(gogc))
@@ -143,15 +142,14 @@ func openMainDB(ctx *cli.Context, dataDir string) *lvldb.LevelDB {
 	fdCache := suggestFDCache()
 	log.Debug("fd cache", "n", fdCache)
 
-	dir := filepath.Join(dataDir, "main.db")
-	db, err := lvldb.New(dir, lvldb.Options{
-		CacheSize:              cacheMB / 2,
-		OpenFilesCacheCapacity: fdCache,
+	path := filepath.Join(dataDir, "main-v2.db")
+	db, err := muxdb.Open(path, &muxdb.Options{
+		FDCache:         fdCache,
+		TrieCacheSizeMB: cacheMB,
 	})
 	if err != nil {
-		fatal(fmt.Sprintf("open chain database [%v]: %v", dir, err))
+		fatal(fmt.Sprintf("open chain database [%v]: %v", path, err))
 	}
-	trie.SetCache(trie.NewCache(cacheMB / 2))
 	return db
 }
 
@@ -198,7 +196,7 @@ func suggestFDCache() int {
 }
 
 func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
-	dir := filepath.Join(dataDir, "logs-v2.db")
+	dir := filepath.Join(dataDir, "logs-v3.db")
 	db, err := logdb.New(dir)
 	if err != nil {
 		fatal(fmt.Sprintf("open log database [%v]: %v", dir, err))
@@ -206,24 +204,26 @@ func openLogDB(ctx *cli.Context, dataDir string) *logdb.LogDB {
 	return db
 }
 
-func initChain(gene *genesis.Genesis, mainDB *lvldb.LevelDB, logDB *logdb.LogDB) *chain.Chain {
-	genesisBlock, genesisEvents, err := gene.Build(state.NewCreator(mainDB))
+func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logdb.LogDB) *chain.Repository {
+	genesisBlock, genesisEvents, genesisTransfers, err := gene.Build(state.NewStater(mainDB))
 	if err != nil {
 		fatal("build genesis block: ", err)
 	}
 
-	chain, err := chain.New(mainDB, genesisBlock)
+	repo, err := chain.NewRepository(mainDB, genesisBlock)
 	if err != nil {
 		fatal("initialize block chain:", err)
 	}
-
-	if err := logDB.NewTask().ForBlock(genesisBlock.Header()).
-		Write(thor.Bytes32{}, thor.Address{}, []*tx.Output{{
-			Events: genesisEvents,
-		}}).Commit(); err != nil {
+	if err := logDB.Log(func(w *logdb.Writer) error {
+		return w.Write(genesisBlock, tx.Receipts{{
+			Outputs: []*tx.Output{
+				{Events: genesisEvents, Transfers: genesisTransfers},
+			},
+		}})
+	}); err != nil {
 		fatal("write genesis events: ", err)
 	}
-	return chain
+	return repo
 }
 
 func masterKeyPath(ctx *cli.Context) string {
@@ -267,7 +267,7 @@ type p2pComm struct {
 	peersCachePath string
 }
 
-func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, instanceDir string) *p2pComm {
+func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) *p2pComm {
 	configDir := makeConfigDir(ctx)
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
@@ -315,7 +315,7 @@ func newP2PComm(ctx *cli.Context, chain *chain.Chain, txPool *txpool.TxPool, ins
 	}
 
 	return &p2pComm{
-		comm:           comm.New(chain, txPool),
+		comm:           comm.New(repo, txPool),
 		p2pSrv:         p2psrv.New(opts),
 		peersCachePath: peersCachePath,
 	}
@@ -374,12 +374,12 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 
 func printStartupMessage1(
 	gene *genesis.Genesis,
-	chain *chain.Chain,
+	repo *chain.Repository,
 	master *node.Master,
 	dataDir string,
 	forkConfig thor.ForkConfig,
 ) {
-	bestBlock := chain.BestBlock()
+	bestBlock := repo.BestBlock()
 
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]
@@ -414,12 +414,8 @@ func printStartupMessage2(
 		nodeID)
 }
 
-func openMemMainDB() *lvldb.LevelDB {
-	db, err := lvldb.NewMem()
-	if err != nil {
-		fatal(fmt.Sprintf("open chain database: %v", err))
-	}
-	return db
+func openMemMainDB() *muxdb.MuxDB {
+	return muxdb.NewMem()
 }
 
 func openMemLogDB() *logdb.LogDB {
@@ -432,7 +428,7 @@ func openMemLogDB() *logdb.LogDB {
 
 func printSoloStartupMessage(
 	gene *genesis.Genesis,
-	chain *chain.Chain,
+	repo *chain.Repository,
 	dataDir string,
 	apiURL string,
 	forkConfig thor.ForkConfig,
@@ -446,7 +442,7 @@ func printSoloStartupMessage(
 	tableEnd := `
 └────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────┘`
 
-	bestBlock := chain.BestBlock()
+	bestBlock := repo.BestBlock()
 
 	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    

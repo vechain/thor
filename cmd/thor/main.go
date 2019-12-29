@@ -24,10 +24,11 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
+	"github.com/vechain/thor/cmd/thor/pruner"
 	"github.com/vechain/thor/cmd/thor/solo"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
@@ -141,13 +142,14 @@ func defaultAction(ctx *cli.Context) error {
 	logDB := openLogDB(ctx, instanceDir)
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
-	chain := initChain(gene, mainDB, logDB)
+	repo := initChainRepository(gene, mainDB, logDB)
+
 	master := loadNodeMaster(ctx)
 
-	printStartupMessage1(gene, chain, master, instanceDir, forkConfig)
+	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	if !skipLogs {
-		if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
+		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 			return err
 		}
 	}
@@ -157,13 +159,15 @@ func defaultAction(ctx *cli.Context) error {
 		txpoolOpt.BlocklistCacheFilePath = filepath.Join(instanceDir, "blocklist")
 		txpoolOpt.BlocklistFetchURL = "https://env.vechain.org/blocklist.txt"
 	}
-	txPool := txpool.New(chain, state.NewCreator(mainDB), txpoolOpt)
+
+	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
+
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom := newP2PComm(ctx, chain, txPool, instanceDir)
+	p2pcom := newP2PComm(ctx, repo, txPool, instanceDir)
 	apiHandler, apiCloser := api.New(
-		chain,
-		state.NewCreator(mainDB),
+		repo,
+		state.NewStater(mainDB),
 		txPool,
 		logDB,
 		p2pcom.comm,
@@ -175,7 +179,7 @@ func defaultAction(ctx *cli.Context) error {
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
-	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
+	apiURL, srvCloser := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	printStartupMessage2(apiURL, getNodeID(ctx))
@@ -183,10 +187,13 @@ func defaultAction(ctx *cli.Context) error {
 	p2pcom.Start()
 	defer p2pcom.Stop()
 
+	pruner := pruner.New(mainDB, repo)
+	defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+
 	return node.New(
 		master,
-		chain,
-		state.NewCreator(mainDB),
+		repo,
+		state.NewStater(mainDB),
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
@@ -206,7 +213,7 @@ func soloAction(ctx *cli.Context) error {
 	// Solo forks from the start
 	forkConfig := thor.ForkConfig{}
 
-	var mainDB *lvldb.LevelDB
+	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
 
@@ -223,17 +230,17 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
-	chain := initChain(gene, mainDB, logDB)
-	if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
+	repo := initChainRepository(gene, mainDB, logDB)
+	if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 		return err
 	}
 
-	txPool := txpool.New(chain, state.NewCreator(mainDB), defaultTxPoolOptions)
+	txPool := txpool.New(repo, state.NewStater(mainDB), defaultTxPoolOptions)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	apiHandler, apiCloser := api.New(
-		chain,
-		state.NewCreator(mainDB),
+		repo,
+		state.NewStater(mainDB),
 		txPool,
 		logDB,
 		solo.Communicator{},
@@ -245,13 +252,13 @@ func soloAction(ctx *cli.Context) error {
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
-	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
+	apiURL, srvCloser := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printSoloStartupMessage(gene, chain, instanceDir, apiURL, forkConfig)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 
-	return solo.New(chain,
-		state.NewCreator(mainDB),
+	return solo.New(repo,
+		state.NewStater(mainDB),
 		logDB,
 		txPool,
 		uint64(ctx.Int("gas-limit")),
@@ -343,8 +350,8 @@ func masterKeyAction(ctx *cli.Context) error {
 	return nil
 }
 
-func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, error) {
-	best := chain.BestBlock().Header()
+func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
+	best := repo.BestBlock().Header()
 	if best.Number() == 0 {
 		return 0, nil
 	}
@@ -367,7 +374,7 @@ func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, erro
 		seekStart = best.Number() - 1
 	}
 
-	header, err := chain.GetTrunkBlockHeader(seekStart)
+	header, err := repo.NewChain(best.ID()).GetBlockHeader(seekStart)
 	if err != nil {
 		return 0, err
 	}
@@ -381,7 +388,7 @@ func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, erro
 			break
 		}
 
-		header, err = chain.GetBlockHeader(header.ParentID())
+		header, _, err = repo.GetBlockHeader(header.ParentID())
 		if err != nil {
 			return 0, err
 		}
@@ -390,18 +397,18 @@ func seekLogDBSyncPosition(chain *chain.Chain, logDB *logdb.LogDB) (uint32, erro
 
 }
 
-func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, verify bool) error {
-	startPos, err := seekLogDBSyncPosition(chain, logDB)
+func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
+	startPos, err := seekLogDBSyncPosition(repo, logDB)
 	if err != nil {
 		return errors.Wrap(err, "seek log db sync position")
 	}
 	if verify && startPos > 0 {
-		if err := verifyLogDB(ctx, startPos-1, chain, logDB); err != nil {
+		if err := verifyLogDB(ctx, startPos-1, repo, logDB); err != nil {
 			return errors.Wrap(err, "verify log db")
 		}
 	}
 
-	bestNum := chain.BestBlock().Header().Number()
+	bestNum := repo.BestBlock().Header().Number()
 
 	if bestNum == startPos {
 		return nil
@@ -420,53 +427,40 @@ func syncLogDB(ctx context.Context, chain *chain.Chain, logDB *logdb.LogDB, veri
 		Start()
 
 	defer func() { pb.NotPrint = true }()
+	bestChain := repo.NewBestChain()
 
-	it := chain.NewIterator(256).Seek(startPos)
+	if err := logDB.Log(func(w *logdb.Writer) error {
+		for i := startPos; i <= bestNum; i++ {
 
-	task := logDB.NewTask()
-	taskLen := 0
-
-	for it.Next() {
-		b := it.Block()
-
-		task.ForBlock(b.Header())
-		txs := b.Transactions()
-		if len(txs) > 0 {
-			receipts, err := chain.GetBlockReceipts(b.Header().ID())
+			b, err := bestChain.GetBlock(i)
+			if err != nil {
+				return err
+			}
+			receipts, err := repo.GetBlockReceipts(b.Header().ID())
 			if err != nil {
 				return errors.Wrap(err, "get block receipts")
 			}
-
-			for i, tx := range txs {
-				origin, _ := tx.Origin()
-				task.Write(tx.ID(), origin, receipts[i].Outputs)
-				taskLen++
+			if err := w.Write(b, receipts); err != nil {
+				return err
 			}
-		}
-		if taskLen > 512 {
-			if err := task.Commit(); err != nil {
-				return errors.Wrap(err, "write logs")
+			if w.Len() > 2048 {
+				if err := w.Flush(); err != nil {
+					return err
+				}
 			}
-			task = logDB.NewTask()
-			taskLen = 0
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			pb.Add64(1)
 		}
-		pb.Add64(1)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
+		return nil
+	}); err != nil {
+		if err == context.Canceled {
+			return err
 		}
-	}
-
-	if taskLen > 0 {
-		if err := task.Commit(); err != nil {
-			return errors.Wrap(err, "write logs")
-		}
-	}
-
-	if err := it.Error(); err != nil {
-		return errors.Wrap(err, "read block")
+		return errors.Wrap(err, "write logs")
 	}
 	pb.Finish()
 	return nil
