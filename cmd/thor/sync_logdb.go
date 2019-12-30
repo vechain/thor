@@ -16,6 +16,122 @@ import (
 	"gopkg.in/cheggaaa/pb.v1"
 )
 
+func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
+	startPos, err := seekLogDBSyncPosition(repo, logDB)
+	if err != nil {
+		return errors.Wrap(err, "seek log db sync position")
+	}
+	if verify && startPos > 0 {
+		if err := verifyLogDB(ctx, startPos-1, repo, logDB); err != nil {
+			return errors.Wrap(err, "verify log db")
+		}
+	}
+
+	bestNum := repo.BestBlock().Header().Number()
+
+	if bestNum == startPos {
+		return nil
+	}
+
+	if startPos == 0 {
+		fmt.Println(">> Rebuilding log db <<")
+		startPos = 1 // block 0 can be skipped
+	} else {
+		fmt.Println(">> Syncing log db <<")
+	}
+
+	pb := pb.New64(int64(bestNum)).
+		Set64(int64(startPos - 1)).
+		SetMaxWidth(90).
+		Start()
+
+	defer func() { pb.NotPrint = true }()
+	bestChain := repo.NewBestChain()
+
+	if err := logDB.Log(func(w *logdb.Writer) error {
+		for i := startPos; i <= bestNum; i++ {
+
+			b, err := bestChain.GetBlock(i)
+			if err != nil {
+				return err
+			}
+			receipts, err := repo.GetBlockReceipts(b.Header().ID())
+			if err != nil {
+				return errors.Wrap(err, "get block receipts")
+			}
+			if err := w.Write(b, receipts); err != nil {
+				return err
+			}
+			if w.Len() > 2048 {
+				if err := w.Flush(); err != nil {
+					return err
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			pb.Add64(1)
+		}
+		return nil
+	}); err != nil {
+		if err == context.Canceled {
+			return err
+		}
+		return errors.Wrap(err, "write logs")
+	}
+	pb.Finish()
+	return nil
+}
+
+func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
+	best := repo.BestBlock().Header()
+	if best.Number() == 0 {
+		return 0, nil
+	}
+
+	newestID, err := logDB.NewestBlockID()
+	if err != nil {
+		return 0, err
+	}
+
+	if block.Number(newestID) == 0 {
+		return 0, nil
+	}
+
+	if newestID == best.ID() {
+		return best.Number(), nil
+	}
+
+	seekStart := block.Number(newestID)
+	if seekStart >= best.Number() {
+		seekStart = best.Number() - 1
+	}
+
+	header, err := repo.NewChain(best.ID()).GetBlockHeader(seekStart)
+	if err != nil {
+		return 0, err
+	}
+
+	for header.Number() > 0 {
+		has, err := logDB.HasBlockID(header.ID())
+		if err != nil {
+			return 0, err
+		}
+		if has {
+			break
+		}
+
+		header, _, err = repo.GetBlockHeader(header.ParentID())
+		if err != nil {
+			return 0, err
+		}
+	}
+	return block.Number(header.ID()) + 1, nil
+
+}
+
 func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
 	fmt.Println(">> Verifying log db <<")
 	pb := pb.New64(int64(endBlockNum)).
