@@ -180,3 +180,52 @@ func TestForkVIP191(t *testing.T) {
 	}
 	assert.Equal(t, geneState.GetCode(builtin.Extension.Address), builtin.Extension.RuntimeBytecodes())
 }
+
+func TestBlocklist(t *testing.T) {
+	kv, _ := lvldb.NewMem()
+	defer kv.Close()
+
+	g := genesis.NewDevnet()
+	b0, _, _ := g.Build(state.NewCreator(kv))
+
+	c, _ := chain.New(kv, b0)
+
+	a0 := genesis.DevAccounts()[0]
+	a1 := genesis.DevAccounts()[1]
+
+	stateCreator := state.NewCreator(kv)
+
+	forkConfig := thor.ForkConfig{
+		VIP191:    math.MaxUint32,
+		ETH_CONST: math.MaxUint32,
+		BLOCKLIST: 0,
+	}
+
+	thor.MockBlocklist([]string{a0.Address.String()})
+
+	best := c.BestBlock()
+	p := packer.New(c, stateCreator, a0.Address, &a0.Address, forkConfig)
+	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx0 := new(tx.Builder).
+		ChainTag(c.Tag()).
+		Clause(tx.NewClause(&a1.Address)).
+		Gas(300000).GasPriceCoef(0).Nonce(0).Expiration(math.MaxUint32).Build()
+	sig0, _ := crypto.Sign(tx0.SigningHash().Bytes(), a0.PrivateKey)
+	tx0 = tx0.WithSignature(sig0)
+
+	err = flow.Adopt(tx0)
+	assert.True(t, packer.IsBadTx(err))
+	assert.Equal(t, err.Error(), "bad tx: tx origin blocked")
+
+	sig1, _ := crypto.Sign(tx0.SigningHash().Bytes(), a1.PrivateKey)
+	tx1 := tx0.WithSignature(sig1)
+
+	err = flow.Adopt(tx1)
+	if err != nil {
+		t.Fatal("adopt tx from non-blocked origin should not return error")
+	}
+}
