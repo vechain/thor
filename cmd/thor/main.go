@@ -6,7 +6,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -21,8 +20,6 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/pruner"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -32,7 +29,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
-	"gopkg.in/cheggaaa/pb.v1"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -131,20 +127,38 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
-	gene, forkConfig := selectGenesis(ctx)
-	instanceDir := makeInstanceDir(ctx, gene)
+	gene, forkConfig, err := selectGenesis(ctx)
+	if err != nil {
+		return err
+	}
+	instanceDir, err := makeInstanceDir(ctx, gene)
+	if err != nil {
+		return err
+	}
 
-	mainDB := openMainDB(ctx, instanceDir)
+	mainDB, err := openMainDB(ctx, instanceDir)
+	if err != nil {
+		return err
+	}
 	defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
-	logDB := openLogDB(ctx, instanceDir)
+	logDB, err := openLogDB(ctx, instanceDir)
+	if err != nil {
+		return err
+	}
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
-	repo := initChainRepository(gene, mainDB, logDB)
+	repo, err := initChainRepository(gene, mainDB, logDB)
+	if err != nil {
+		return err
+	}
 
-	master := loadNodeMaster(ctx)
+	master, err := loadNodeMaster(ctx)
+	if err != nil {
+		return err
+	}
 
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
@@ -158,7 +172,10 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom := newP2PComm(ctx, repo, txPool, instanceDir)
+	p2pcom, err := newP2PComm(ctx, repo, txPool, instanceDir)
+	if err != nil {
+		return err
+	}
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
@@ -173,12 +190,17 @@ func defaultAction(ctx *cli.Context) error {
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
-	apiURL, srvCloser := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+	if err != nil {
+		return err
+	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, getNodeID(ctx))
+	printStartupMessage2(apiURL, p2pcom.enode)
 
-	p2pcom.Start()
+	if err := p2pcom.Start(); err != nil {
+		return err
+	}
 	defer p2pcom.Stop()
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
@@ -212,21 +234,30 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
+	var err error
 
 	if ctx.Bool("persist") {
-		instanceDir = makeInstanceDir(ctx, gene)
-		mainDB = openMainDB(ctx, instanceDir)
-		logDB = openLogDB(ctx, instanceDir)
+		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
+			return err
+		}
+		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
+			return err
+		}
+		defer func() { log.Info("closing main database..."); mainDB.Close() }()
+		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
+			return err
+		}
+		defer func() { log.Info("closing log database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()
 		logDB = openMemLogDB()
 	}
 
-	defer func() { log.Info("closing main database..."); mainDB.Close() }()
-	defer func() { log.Info("closing log database..."); logDB.Close() }()
-
-	repo := initChainRepository(gene, mainDB, logDB)
+	repo, err := initChainRepository(gene, mainDB, logDB)
+	if err != nil {
+		return err
+	}
 	if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
 		return err
 	}
@@ -248,7 +279,10 @@ func soloAction(ctx *cli.Context) error {
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
-	apiURL, srvCloser := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
+	if err != nil {
+		return err
+	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
@@ -269,8 +303,13 @@ func masterKeyAction(ctx *cli.Context) error {
 		return fmt.Errorf("flag %s and %s are exclusive", importMasterKeyFlag.Name, exportMasterKeyFlag.Name)
 	}
 
+	keyPath, err := masterKeyPath(ctx)
+	if err != nil {
+		return err
+	}
+
 	if !hasImportFlag && !hasExportFlag {
-		masterKey, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
+		masterKey, err := loadOrGeneratePrivateKey(keyPath)
 		if err != nil {
 			return err
 		}
@@ -300,7 +339,7 @@ func masterKeyAction(ctx *cli.Context) error {
 			return errors.WithMessage(err, "decrypt")
 		}
 
-		if err := crypto.SaveECDSA(masterKeyPath(ctx), key.PrivateKey); err != nil {
+		if err := crypto.SaveECDSA(keyPath, key.PrivateKey); err != nil {
 			return err
 		}
 		fmt.Println("Master key imported:", thor.Address(key.Address))
@@ -308,7 +347,7 @@ func masterKeyAction(ctx *cli.Context) error {
 	}
 
 	if hasExportFlag {
-		masterKey, err := loadOrGeneratePrivateKey(masterKeyPath(ctx))
+		masterKey, err := loadOrGeneratePrivateKey(keyPath)
 		if err != nil {
 			return err
 		}
@@ -343,121 +382,5 @@ func masterKeyAction(ctx *cli.Context) error {
 		_, err = fmt.Println(string(keyjson))
 		return err
 	}
-	return nil
-}
-
-func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
-	best := repo.BestBlock().Header()
-	if best.Number() == 0 {
-		return 0, nil
-	}
-
-	newestID, err := logDB.NewestBlockID()
-	if err != nil {
-		return 0, err
-	}
-
-	if block.Number(newestID) == 0 {
-		return 0, nil
-	}
-
-	if newestID == best.ID() {
-		return best.Number(), nil
-	}
-
-	seekStart := block.Number(newestID)
-	if seekStart >= best.Number() {
-		seekStart = best.Number() - 1
-	}
-
-	header, err := repo.NewChain(best.ID()).GetBlockHeader(seekStart)
-	if err != nil {
-		return 0, err
-	}
-
-	for header.Number() > 0 {
-		has, err := logDB.HasBlockID(header.ID())
-		if err != nil {
-			return 0, err
-		}
-		if has {
-			break
-		}
-
-		header, _, err = repo.GetBlockHeader(header.ParentID())
-		if err != nil {
-			return 0, err
-		}
-	}
-	return block.Number(header.ID()) + 1, nil
-
-}
-
-func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
-	startPos, err := seekLogDBSyncPosition(repo, logDB)
-	if err != nil {
-		return errors.Wrap(err, "seek log db sync position")
-	}
-	if verify && startPos > 0 {
-		if err := verifyLogDB(ctx, startPos-1, repo, logDB); err != nil {
-			return errors.Wrap(err, "verify log db")
-		}
-	}
-
-	bestNum := repo.BestBlock().Header().Number()
-
-	if bestNum == startPos {
-		return nil
-	}
-
-	if startPos == 0 {
-		fmt.Println(">> Rebuilding log db <<")
-		startPos = 1 // block 0 can be skipped
-	} else {
-		fmt.Println(">> Syncing log db <<")
-	}
-
-	pb := pb.New64(int64(bestNum)).
-		Set64(int64(startPos - 1)).
-		SetMaxWidth(90).
-		Start()
-
-	defer func() { pb.NotPrint = true }()
-	bestChain := repo.NewBestChain()
-
-	if err := logDB.Log(func(w *logdb.Writer) error {
-		for i := startPos; i <= bestNum; i++ {
-
-			b, err := bestChain.GetBlock(i)
-			if err != nil {
-				return err
-			}
-			receipts, err := repo.GetBlockReceipts(b.Header().ID())
-			if err != nil {
-				return errors.Wrap(err, "get block receipts")
-			}
-			if err := w.Write(b, receipts); err != nil {
-				return err
-			}
-			if w.Len() > 2048 {
-				if err := w.Flush(); err != nil {
-					return err
-				}
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			pb.Add64(1)
-		}
-		return nil
-	}); err != nil {
-		if err == context.Canceled {
-			return err
-		}
-		return errors.Wrap(err, "write logs")
-	}
-	pb.Finish()
 	return nil
 }

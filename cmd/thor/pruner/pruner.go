@@ -71,7 +71,7 @@ func (p *Pruner) loop() error {
 	if err := status.Load(p.db); err != nil {
 		return err
 	}
-	if status.Cycles == 0 {
+	if status.Cycles == 0 && status.Step == stepInitiate {
 		log.Info("pruner started")
 	} else {
 		log.Info("pruner started", "range", fmt.Sprintf("[%v, %v]", status.N1, status.N2), "step", status.Step)
@@ -153,6 +153,8 @@ func (p *Pruner) loop() error {
 
 			status.Cycles++
 			status.Step = stepInitiate
+		default:
+			return fmt.Errorf("unexpected pruner step: %v", status.Step)
 		}
 
 		if err := status.Save(p.db); err != nil {
