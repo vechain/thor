@@ -72,6 +72,11 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
+	origin, _ := tx.Origin()
+	if f.runtime.Context().Number >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+		return badTxError{"tx origin blocked"}
+	}
+
 	if err := tx.TestFeatures(f.features); err != nil {
 		return badTxError{err.Error()}
 	}
