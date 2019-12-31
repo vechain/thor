@@ -37,6 +37,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
+	
+
 	for {
 		now := uint64(time.Now().Unix())
 

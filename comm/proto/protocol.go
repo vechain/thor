@@ -27,6 +27,10 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
+	MsgNewBlockSummary
+	MsgNewTxSet
+	MsgNewEndorsement
+	MsgNewHeader
 )
 
 // MsgName convert msg code to string.
@@ -48,6 +52,14 @@ func MsgName(msgCode uint64) string {
 		return "MsgGetBlocksFromNumber"
 	case MsgGetTxs:
 		return "MsgGetTxs"
+	case MsgNewBlockSummary:
+		return "MsgNewBlockSummary"
+	case MsgNewTxSet:
+		return "MsgNewTxSet"
+	case MsgNewEndorsement:
+		return "MsgNewEndorsement"
+	case MsgNewHeader:
+		return "MsgNewHeader"
 	default:
 		return fmt.Sprintf("unknown msg code(%v)", msgCode)
 	}
