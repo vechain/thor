@@ -178,18 +178,17 @@ func TestForkVIP191(t *testing.T) {
 }
 
 func TestBlocklist(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	defer kv.Close()
+	db := muxdb.NewMem()
 
 	g := genesis.NewDevnet()
-	b0, _, _ := g.Build(state.NewCreator(kv))
+	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	c, _ := chain.New(kv, b0)
+	repo, _ := chain.NewRepository(db, b0)
 
 	a0 := genesis.DevAccounts()[0]
 	a1 := genesis.DevAccounts()[1]
 
-	stateCreator := state.NewCreator(kv)
+	stater := state.NewStater(db)
 
 	forkConfig := thor.ForkConfig{
 		VIP191:    math.MaxUint32,
@@ -199,15 +198,15 @@ func TestBlocklist(t *testing.T) {
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
-	best := c.BestBlock()
-	p := packer.New(c, stateCreator, a0.Address, &a0.Address, forkConfig)
+	best := repo.BestBlock()
+	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig)
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tx0 := new(tx.Builder).
-		ChainTag(c.Tag()).
+		ChainTag(repo.ChainTag()).
 		Clause(tx.NewClause(&a1.Address)).
 		Gas(300000).GasPriceCoef(0).Nonce(0).Expiration(math.MaxUint32).Build()
 	sig0, _ := crypto.Sign(tx0.SigningHash().Bytes(), a0.PrivateKey)
