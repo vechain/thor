@@ -40,6 +40,26 @@ func GetStatus(ctx context.Context, rpc RPC) (*Status, error) {
 	return &status, nil
 }
 
+// NotifiyNewBlockSummary  ...
+func NotifiyNewBlockSummary(ctx context.Context, rpc RPC, bs *block.Summary) error {
+	return nil
+}
+
+// NotifyNewTxSet ...
+func NotifyNewTxSet(ctx context.Context, rpc RPC, ts *block.TxSet) error {
+	return nil
+}
+
+// NotifiyNewEndorsement ...
+func NotifiyNewEndorsement(ctx context.Context, rpc RPC, ed *block.Endorsement) error {
+	return nil
+}
+
+// NotifyNewHeader ...
+func NotifyNewHeader(ctx context.Context, rpc RPC, h *block.Header) error {
+	return nil
+}
+
 // NotifyNewBlockID notify new block ID to remote peer.
 func NotifyNewBlockID(ctx context.Context, rpc RPC, id thor.Bytes32) error {
 	return rpc.Notify(ctx, MsgNewBlockID, &id)

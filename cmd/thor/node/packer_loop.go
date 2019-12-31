@@ -41,6 +41,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
+	
+
 	for {
 		select {
 		case <-ctx.Done():
