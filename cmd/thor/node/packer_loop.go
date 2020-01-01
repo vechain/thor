@@ -131,7 +131,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
 					continue
 				}
-
 			}
 		case bs := <-newBlockSummaryCh:
 		case ed := <-newEndorsementCh:
