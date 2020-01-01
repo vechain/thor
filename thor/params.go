@@ -35,6 +35,10 @@ const (
 	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
 
 	MaxBackTrackingBlockNumber = 65535
+
+	CommitteeSize            uint64 = 10
+	CommitteeThresholdFactor uint64 = 2
+	EpochInterval            uint64 = 1000
 )
 
 // Keys of governance params.

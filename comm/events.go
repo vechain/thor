@@ -16,5 +16,17 @@ type NewBlockEvent struct {
 	*block.Block
 }
 
+// NewBlockSummaryEvent ...
+type NewBlockSummaryEvent struct{}
+
+// NewTxSetEvent ...
+type NewTxSetEvent struct{}
+
+// NewEndorsementEvent ...
+type NewEndorsementEvent struct{}
+
+// NewHeaderEvent ...
+type NewHeaderEvent struct{}
+
 // HandleBlockStream to handle the stream of downloaded blocks in sync process.
 type HandleBlockStream func(ctx context.Context, stream <-chan *block.Block) error
