@@ -2,6 +2,7 @@ package vrf
 
 import (
 	"bytes"
+	"crypto/rand"
 	"testing"
 )
 
@@ -11,6 +12,10 @@ func TestPublicKey(t *testing.T) {
 	_pk := sk.PublicKey()
 
 	if bytes.Compare(pk[:], _pk[:]) != 0 {
+		t.Errorf("Test failed")
+	}
+
+	if bytes.Compare(pk[:], sk[32:]) != 0 {
 		t.Errorf("Test failed")
 	}
 }
@@ -43,5 +48,21 @@ func TestVrfFunc(t *testing.T) {
 
 	if bytes.Compare(hash[:], _hash[:]) != 0 {
 		t.Errorf("Test failed")
+	}
+}
+
+func BenchmarkVrfKeyGen(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		GenKeyPair()
+	}
+}
+
+func BenchmarkVrfProve(b *testing.B) {
+	_, sk := GenKeyPair()
+	msg := make([]byte, 32)
+
+	for i := 0; i < b.N; i++ {
+		rand.Read(msg)
+		sk.Prove(msg)
 	}
 }

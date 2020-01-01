@@ -5,6 +5,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // constants
@@ -30,6 +31,26 @@ type Hash [HashLen]byte
 // GenKeyPair generates a VRF key pair
 func GenKeyPair() (*PublicKey, *PrivateKey) {
 	_pk, _sk := crypto.VrfKeygen()
+
+	var (
+		pk PublicKey
+		sk PrivateKey
+	)
+	copy(pk[:], _pk[:])
+	copy(sk[:], _sk[:])
+
+	return &pk, &sk
+}
+
+// GenKeyPairFromSeed ...
+func GenKeyPairFromSeed(seed []byte) (*PublicKey, *PrivateKey) {
+	var s [32]byte
+	nbyte := copy(s[:], seed)
+	if nbyte < 32 {
+		log.Debug("Number of byte copied: %d", nbyte)
+	}
+
+	_pk, _sk := crypto.VrfKeygenFromSeed(s)
 
 	var (
 		pk PublicKey
