@@ -34,7 +34,12 @@ const (
 
 	TolerableBlockPackingTime = time.Second // the indicator to adjust target block gas limit
 
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
+	MaxStateHistory            = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
+	MaxBackTrackingBlockNumber = 65535
+
+	CommitteeSize            uint64 = 10
+	CommitteeThresholdFactor uint64 = 2
+	EpochInterval            uint64 = 1000
 )
 
 // Keys of governance params.
