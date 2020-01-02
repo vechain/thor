@@ -39,7 +39,7 @@ const (
 
 	CommitteeSize            uint64 = 10
 	CommitteeThresholdFactor uint64 = 2
-	EpochInterval            uint64 = 1000
+	EpochInterval            uint64 = 10
 )
 
 // Keys of governance params.
