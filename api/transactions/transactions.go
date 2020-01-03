@@ -85,7 +85,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	receipt, err := chain.GetReceipt(txID)
+	receipt, err := chain.GetTransactionReceipt(txID)
 	if err != nil {
 		return nil, err
 	}

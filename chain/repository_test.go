@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
+	. "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
@@ -22,45 +22,43 @@ func M(args ...interface{}) []interface{} {
 	return args
 }
 
-func initRepo() *chain.Repository {
+func newTestRepo() *Repository {
 	db := muxdb.NewMem()
 	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	repo, err := chain.NewRepository(db, b0)
+	repo, err := NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
 	return repo
 }
 
-var privateKey, _ = crypto.GenerateKey()
-
-func newBlock(parent *block.Block, score uint64, txs ...*tx.Transaction) *block.Block {
+func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Block {
 	builder := new(block.Builder).
 		ParentID(parent.Header().ID()).
-		TotalScore(parent.Header().
-			TotalScore() + score)
+		Timestamp(ts)
 
 	for _, tx := range txs {
 		builder.Transaction(tx)
 	}
-
 	b := builder.Build()
-	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
+
+	pk, _ := crypto.GenerateKey()
+	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), pk)
 	return b.WithSignature(sig)
 }
 
 func TestRepository(t *testing.T) {
-	repo := initRepo()
+	repo := newTestRepo()
 
 	assert.Equal(t, repo.GenesisBlock(), repo.BestBlock())
 	assert.Equal(t, repo.GenesisBlock().Header().ID()[31], repo.ChainTag())
 
 	tx1 := new(tx.Builder).Build()
-
 	receipt1 := &tx.Receipt{}
-	b1 := newBlock(repo.GenesisBlock(), 1, tx1)
+
+	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
 	assert.Nil(t, repo.AddBlock(b1, tx.Receipts{receipt1}))
 
 	// best block not set, so still 0
@@ -77,5 +75,4 @@ func TestRepository(t *testing.T) {
 
 	assert.Equal(t, M(tx.Transactions{tx1}, nil), M(repo.GetBlockTransactions(b1.Header().ID())))
 	assert.Equal(t, M(tx.Receipts{receipt1}, nil), M(repo.GetBlockReceipts(b1.Header().ID())))
-
 }
