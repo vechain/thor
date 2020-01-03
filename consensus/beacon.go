@@ -37,21 +37,32 @@ func (c *Consensus) Beacon(currEpochNum uint32) (thor.Bytes32, error) {
 		header, err = c.chain.GetTrunkBlockHeader(r)
 
 		if err != nil {
+			r = r - 1
 			continue
 		}
 
-		r = r - 1
+		err = nil
+		break
+	}
+
+	if err != nil {
+		return thor.BytesToBytes32(nil), errors.New("Block not found")
 	}
 
 	for getRoundNumber(header, launchTime) > lastRound {
 		header, err = c.chain.GetBlockHeader(header.ParentID())
 		if err != nil {
 			hex := hex.EncodeToString(header.ParentID().Bytes())
-			return thor.BytesToBytes32(nil), errors.New("Failed to extract block with id = " + hex)
+			return thor.BytesToBytes32(nil), errors.New("Block " + hex + " not found")
 		}
 	}
 
-	return header.ParentID(), nil
+	return CompBeaconFromHeader(header), nil
+}
+
+// CompBeaconFromHeader computes the beacon from the given block header
+func CompBeaconFromHeader(header *block.Header) thor.Bytes32 {
+	return header.ID()
 }
 
 func getRoundNumber(header *block.Header, launchTime uint64) uint32 {
