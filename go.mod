@@ -42,3 +42,5 @@ require (
 )
 
 replace github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d => github.com/qianbin/goleveldb v1.0.1-0.20191124163202-7356cd382be0
+
+replace github.com/algorand/go-algorand => ../../algorand/go-algorand
