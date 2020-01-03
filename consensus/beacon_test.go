@@ -32,7 +32,8 @@ var privateKey, _ = crypto.GenerateKey()
 // n : number of rounds between the parent and current block
 func newBlock(parent *block.Block, n uint64) *block.Block {
 	t := parent.Header().Timestamp() + thor.BlockInterval*n
-	b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).Build()
+	s := parent.Header().TotalScore() + 1
+	b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).TotalScore(s).Build()
 	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
 	return b.WithSignature(sig)
 }
@@ -42,27 +43,44 @@ func TestBeacon(t *testing.T) {
 	gen := cons.chain.GenesisBlock()
 
 	var (
-		currBlock, prevBlock, lastBlock *block.Block
-		err                             error
-		beacon                          thor.Bytes32
+		currBlock, prevBlock *block.Block
+		err                  error
+		beacon               thor.Bytes32
 	)
 
 	prevBlock = gen
+	f := false
 	// To set thor.EpochInveral = 10 for testing purpose
-	for i := uint64(0); i < thor.EpochInterval*2; i++ {
-		// Skip the block at the last round of the first epoch
+	for i := uint64(1); i < thor.EpochInterval*2; i++ {
+		// Skip the block at the last round of the first epoch, meaning
+		// the beacon for the second epoch will be computed from the
+		// block generated at the second last round of the first epoch
 		if i == thor.EpochInterval {
-			lastBlock = prevBlock
+			f = true
 			continue
 		}
 
-		currBlock = newBlock(prevBlock, 1)
+		if !f {
+			currBlock = newBlock(prevBlock, 1)
+		} else {
+			currBlock = newBlock(prevBlock, 2)
+			f = false
+		}
+
+		// fmt.Println("----")
+		// fmt.Println("Number = ", currBlock.Header().Number())
+		// fmt.Println("Timestamp = ", currBlock.Header().Timestamp())
+
 		_, err = cons.chain.AddBlock(currBlock, nil)
 		if err != nil {
 			panic(err)
 		}
 		prevBlock = currBlock
 	}
+
+	// h, _ := cons.chain.GetTrunkBlockHeader(uint32(19))
+	// fmt.Println(hex.EncodeToString(h.ID().Bytes()))
+	// fmt.Println(hex.EncodeToString(prevBlock.Header().ID().Bytes()))
 
 	// Test beacon for the first epoch
 	beacon, err = cons.Beacon(uint32(1))
@@ -74,11 +92,12 @@ func TestBeacon(t *testing.T) {
 	}
 
 	// Test beacon for the second epoch
-	beacon, err = cons.Beacon(uint32(thor.EpochInterval) + 1)
+	lastHeaderOf1stEpoch, _ := cons.chain.GetTrunkBlockHeader(uint32(thor.EpochInterval - 1))
+	beacon, err = cons.Beacon(uint32(2))
 	if err != nil {
 		panic(err)
 	}
-	if bytes.Compare(beacon.Bytes(), lastBlock.Header().ID().Bytes()) != 0 {
+	if bytes.Compare(beacon.Bytes(), CompBeaconFromHeader(lastHeaderOf1stEpoch).Bytes()) != 0 {
 		t.Errorf("Test failed")
 	}
 }

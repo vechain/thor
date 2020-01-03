@@ -66,3 +66,14 @@ func BenchmarkVrfProve(b *testing.B) {
 		sk.Prove(msg)
 	}
 }
+
+func BenchmarkVrfProveVerify(b *testing.B) {
+	pk, sk := GenKeyPair()
+	msg := make([]byte, 32)
+
+	for i := 0; i < b.N; i++ {
+		rand.Read(msg)
+		proof, _ := sk.Prove(msg)
+		pk.Verify(proof, msg)
+	}
+}
