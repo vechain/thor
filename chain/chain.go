@@ -142,8 +142,8 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 	return txs[txMeta.Index], txMeta, nil
 }
 
-// GetReceipt returns tx receipt by given tx id.
-func (c *Chain) GetReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
+// GetTransactionReceipt returns tx receipt by given tx id.
+func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	txMeta, err := c.GetTransactionMeta(txID)
 	if err != nil {
 		return nil, err

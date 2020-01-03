@@ -3,48 +3,67 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package chain
+package chain_test
 
 import (
-	"testing"
-
-	"github.com/vechain/thor/muxdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
+	"testing"
 )
 
-func TestChain_HasBlock(t *testing.T) {
-	type fields struct {
-		repo   *Repository
-		headID thor.Bytes32
-		init   func() (*muxdb.Trie, error)
-	}
-	type args struct {
-		id thor.Bytes32
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    bool
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := &Chain{
-				repo:     tt.fields.repo,
-				headID:   tt.fields.headID,
-				lazyInit: tt.fields.init,
-			}
-			got, err := c.HasBlock(tt.args.id)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Chain.HasBlock() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("Chain.HasBlock() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+func newTx() *tx.Transaction {
+	tx := new(tx.Builder).Build()
+	pk, _ := crypto.GenerateKey()
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
+	return tx.WithSignature(sig)
+}
+
+func TestChain(t *testing.T) {
+	tx1 := newTx()
+
+	repo := newTestRepo()
+
+	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
+	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
+	tx1Receipt := &tx.Receipt{}
+	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
+
+	b2 := newBlock(b1, 20)
+	repo.AddBlock(b2, nil)
+
+	b3 := newBlock(b2, 30)
+	repo.AddBlock(b3, nil)
+
+	b3x := newBlock(b2, 30)
+	repo.AddBlock(b3x, nil)
+
+	c := repo.NewChain(b3.Header().ID())
+
+	assert.Equal(t, b3.Header().ID(), c.HeadID())
+	assert.Equal(t, M(b3.Header().ID(), nil), M(c.GetBlockID(3)))
+	assert.Equal(t, M(b3.Header(), nil), M(c.GetBlockHeader(3)))
+	assert.Equal(t, M(b3, nil), M(c.GetBlock(3)))
+
+	_, err := c.GetBlockID(4)
+	assert.True(t, c.IsNotFound(err))
+
+	assert.Equal(t, M(tx1Meta, nil), M(c.GetTransactionMeta(tx1.ID())))
+	assert.Equal(t, M(tx1, tx1Meta, nil), M(c.GetTransaction(tx1.ID())))
+	assert.Equal(t, M(tx1Receipt, nil), M(c.GetTransactionReceipt(tx1.ID())))
+
+	assert.Equal(t, M(true, nil), M(c.HasBlock(b1.Header().ID())))
+	assert.Equal(t, M(false, nil), M(c.HasBlock(b3x.Header().ID())))
+
+	assert.Equal(t, M(b3.Header(), nil), M(c.FindBlockHeaderByTimestamp(25, 1)))
+	assert.Equal(t, M(b2.Header(), nil), M(c.FindBlockHeaderByTimestamp(25, -1)))
+	_, err = c.FindBlockHeaderByTimestamp(25, 0)
+	assert.True(t, c.IsNotFound(err))
+
+	c1, c2 := repo.NewChain(b3.Header().ID()), repo.NewChain(b3x.Header().ID())
+
+	assert.Equal(t, M([]thor.Bytes32{b3.Header().ID()}, nil), M(c1.Exclude(c2)))
+	assert.Equal(t, M([]thor.Bytes32{b3x.Header().ID()}, nil), M(c2.Exclude(c1)))
 }
