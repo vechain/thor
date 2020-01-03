@@ -40,3 +40,5 @@ require (
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+replace github.com/algorand/go-algorand => ../../algorand/go-algorand
