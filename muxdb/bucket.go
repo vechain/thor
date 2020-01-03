@@ -43,14 +43,7 @@ func (b bucket) ProxyPutter(putter kv.Putter) kv.Putter {
 
 func (b bucket) MakeRange(r kv.Range) kv.Range {
 	r.Start = b.makeKey(r.Start)
-
-	if len(r.Limit) == 0 {
-		// nil limit is treated as after all keys.
-		// can't be simply prepended with prefix.
-		r.Limit = util.BytesPrefix(b).Limit
-	} else {
-		r.Limit = b.makeKey(r.Limit)
-	}
+	r.Limit = util.BytesPrefix(b.makeKey(r.Limit)).Limit
 	return r
 }
 
