@@ -36,7 +36,12 @@ func (ldb *levelEngine) IsNotFound(err error) bool {
 }
 
 func (ldb *levelEngine) Get(key []byte) ([]byte, error) {
-	return ldb.db.Get(key, &readOpt)
+	val, err := ldb.db.Get(key, &readOpt)
+	// val will be []byte{} if error occurs, which is not expected
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 func (ldb *levelEngine) Has(key []byte) (bool, error) {
