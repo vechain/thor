@@ -18,9 +18,9 @@ const (
 	Normal
 )
 
-func getCommitteeThreshold() uint64 {
+func getCommitteeThreshold() uint32 {
 	// threshold = (1 << 64 - 1) * committee_size / total_number_of_nodes * factor
-	return uint64(math.MaxUint32) / thor.MaxBlockProposers * thor.CommitteeSize * thor.CommitteeThresholdFactor
+	return uint32(uint64(math.MaxUint32) / thor.MaxBlockProposers * thor.CommitteeSize * thor.CommitteeThresholdFactor)
 }
 
 // IsCommittee checks committeeship. proof == nil -> false, otherwise true.
@@ -36,7 +36,7 @@ func IsCommittee(sk *vrf.PrivateKey, seed thor.Bytes32) (*vrf.Proof, error) {
 	// Get the threshold
 	th := getCommitteeThreshold()
 	// Is a committee member if the hash is no larger than the threshold
-	if binary.BigEndian.Uint64(h.Bytes()) <= th {
+	if binary.BigEndian.Uint32(h.Bytes()) <= th {
 		return proof, nil
 	}
 	return nil, nil
