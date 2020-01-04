@@ -10,11 +10,21 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vrf"
 )
 
 type Master struct {
 	PrivateKey  *ecdsa.PrivateKey
 	Beneficiary *thor.Address
+
+	VrfPrivateKey *vrf.PrivateKey
+}
+
+func (m *Master) deriveVrfPrivateKey() {
+	// pass the master private key to derive the VRF private key
+	// VRF private key [:32] = master private key
+	// VRF private key [32:] = VRF public key
+	_, m.VrfPrivateKey = vrf.GenKeyPairFromSeed(m.PrivateKey.D.Bytes())
 }
 
 func (m *Master) Address() thor.Address {

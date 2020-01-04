@@ -35,13 +35,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 	var (
 		authorized bool
 		ticker     = n.repo.NewTicker()
-		flow       *packer.Flow
-		err        error
-		ticker     = time.NewTicker(time.Second)
-
-		summary      *block.Summary
-		endorsements block.Endorsements
-		txSet        *block.TxSet
 	)
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
@@ -118,38 +111,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 			log.Error("failed to pack block", "err", err)
 		}
 	RE_SCHEDULE:
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			best := n.chain.BestBlock()
-			now := uint64(time.Now().Unix())
-			r := (launchTime-now)/thor.BlockInterval + 1
-			e := (r-1)/thor.EpochInterval + 1
-
-			if flow == nil {
-				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
-					continue
-				}
-			}
-		case bs := <-newBlockSummaryCh:
-		case ed := <-newEndorsementCh:
-		case h := <-newHeaderCh:
-		case ts := <-newTxSetCh:
-		}
-
-		// 	if flow.ParentHeader().ID() != best.Header().ID() {
-		// 		flow = nil
-		// 		log.Debug("re-schedule packer due to new best block")
-		// 		continue
-		// 	}
-
-		// 	if now+1 >= flow.When() {
-		// 		if err := n.pack(flow); err != nil {
-		// 			log.Error("failed to pack block", "err", err)
-		// 		}
-		// 		flow = nil
-		// 	}
 	}
 }
 
