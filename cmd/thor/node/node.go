@@ -65,6 +65,7 @@ func New(
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Node {
+	master.deriveVrfPrivateKey()
 	return &Node{
 		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
 		cons:           consensus.New(chain, stateCreator, forkConfig),

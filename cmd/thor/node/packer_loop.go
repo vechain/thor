@@ -14,8 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -34,23 +32,23 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Info("synchronization process done")
 
 	var (
-		authorized bool
-		flow       *packer.Flow
-		err        error
-		ticker     = time.NewTicker(time.Second)
+		// authorized bool
+		flow   *packer.Flow
+		err    error
+		ticker = time.NewTicker(time.Second)
 
-		summary      *block.Summary
-		endorsements block.Endorsements
-		txSet        *block.TxSet
+		// summary      *block.Summary
+		// endorsements block.Endorsements
+		// txSet        *block.TxSet
 	)
 	defer ticker.Stop()
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
-	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	newTxSetCh := make(chan *comm.NewTxSetEvent)
-	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
-	newHeaderCh := make(chan *comm.NewHeaderEvent)
+	// newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
+	// newTxSetCh := make(chan *comm.NewTxSetEvent)
+	// newEndorsementCh := make(chan *comm.NewEndorsementEvent)
+	// newHeaderCh := make(chan *comm.NewHeaderEvent)
 
 	launchTime := n.chain.GenesisBlock().Header().Timestamp()
 	// Starting from 1
@@ -58,11 +56,11 @@ func (n *Node) packerLoop(ctx context.Context) {
 	// Starting from 1
 	epochNum := (roundNum-1)/thor.EpochInterval + 1
 
-	epochSeed, err := n.cons.GetEpochSeed(uint32(epochNum))
+	_, err = n.cons.Beacon(uint32(epochNum))
 	if err != nil {
 		panic(struct{}{})
 	}
-	roundSeed := n.cons.GetRoundSeed(epochSeed, uint32(roundNum))
+	// roundSeed := n.cons.GetRoundSeed(beacon, uint32(roundNum))
 
 	for {
 		select {
@@ -71,18 +69,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 		case <-ticker.C:
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
-			r := (launchTime-now)/thor.BlockInterval + 1
-			e := (r-1)/thor.EpochInterval + 1
+			// r := (launchTime-now)/thor.BlockInterval + 1
+			// e := (r-1)/thor.EpochInterval + 1
 
 			if flow == nil {
 				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
 					continue
 				}
 			}
-		case bs := <-newBlockSummaryCh:
-		case ed := <-newEndorsementCh:
-		case h := <-newHeaderCh:
-		case ts := <-newTxSetCh:
+			// case bs := <-newBlockSummaryCh:
+			// case ed := <-newEndorsementCh:
+			// case h := <-newHeaderCh:
+			// case ts := <-newTxSetCh:
 		}
 
 		// 	if flow.ParentHeader().ID() != best.Header().ID() {
