@@ -41,3 +41,11 @@ func IsCommittee(sk *vrf.PrivateKey, seed thor.Bytes32) (*vrf.Proof, error) {
 	}
 	return nil, nil
 }
+
+// GetRoundSeed computes the random seed for each round
+func GetRoundSeed(beacon thor.Bytes32, roundNum uint32) thor.Bytes32 {
+	// round_seed = H(epoch_seed || round_number)
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, roundNum)
+	return thor.Blake2b(beacon.Bytes(), b)
+}

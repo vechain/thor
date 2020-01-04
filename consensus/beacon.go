@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 
@@ -67,12 +66,4 @@ func CompBeaconFromHeader(header *block.Header) thor.Bytes32 {
 
 func getRoundNumber(header *block.Header, launchTime uint64) uint32 {
 	return uint32((header.Timestamp() - launchTime) / thor.BlockInterval)
-}
-
-// GetRoundSeed computes the random seed for each round
-func GetRoundSeed(beacon thor.Bytes32, roundNum uint32) thor.Bytes32 {
-	// round_seed = H(epoch_seed || round_number)
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, roundNum)
-	return thor.Blake2b(beacon.Bytes(), b)
 }
