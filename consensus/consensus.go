@@ -42,6 +42,11 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	}
 }
 
+// ProcessBlockSummary processes the given block summary
+func (c *Consensus) ProcessBlockSummary(bs *block.Summary) error {
+	return nil
+}
+
 // Process process a block.
 func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
