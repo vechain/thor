@@ -54,6 +54,11 @@ func (f *Flow) When() uint64 {
 	return f.runtime.Context().Time
 }
 
+// TotalScore returns total score of new block.
+func (f *Flow) TotalScore() uint64 {
+	return f.runtime.Context().TotalScore
+}
+
 func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
 	if reverted, ok := f.processedTxs[txID]; ok {
 		return true, reverted, nil
