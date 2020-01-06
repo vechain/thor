@@ -57,6 +57,10 @@ type Node struct {
 	seed     thor.Bytes32
 	roundNum uint32
 	epochNum uint32
+
+	rw  sync.RWMutex
+	bs  *block.Summary
+	eds map[thor.Address]*block.Endorsement
 }
 
 func New(
@@ -93,48 +97,10 @@ func (n *Node) Run(ctx context.Context) error {
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
 
-	n.goes.Go(func() { n.beaconLoop(ctx) })
+	n.goes.Go(func() { n.epochRoundInfoLoop(ctx) })
 
 	n.goes.Wait()
 	return nil
-}
-
-func (n *Node) beaconLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	launchTime := n.chain.GenesisBlock().Header().Timestamp()
-	blockInterval := thor.BlockInterval
-	epochInterval := thor.EpochInterval
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			now := uint64(time.Now().Unix())
-			r := (now - launchTime) / blockInterval
-			e := (r - 1) / epochInterval
-
-			if uint32(e) > n.epochNum {
-				n.mu.Lock()
-				n.epochNum = uint32(e)
-				beacon, err := n.cons.Beacon(n.epochNum)
-				if err != nil {
-					panic(err)
-				}
-				n.beacon = beacon
-				n.mu.Unlock()
-			}
-
-			if uint32(r) > n.roundNum {
-				n.mu.Lock()
-				n.roundNum = uint32(r)
-				n.seed = consensus.GetRoundSeed(n.beacon, n.roundNum)
-				n.mu.Unlock()
-			}
-		}
-	}
 }
 
 func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {

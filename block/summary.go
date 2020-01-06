@@ -1,6 +1,10 @@
 package block
 
 import (
+	"io"
+	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
@@ -34,7 +38,7 @@ func (bs *Summary) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	pub, err := crypto.SigToPub(bs.SigningHash().Bytes(), bs.Signature)
+	pub, err := crypto.SigToPub(bs.SigningHash().Bytes(), bs.body.Signature)
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -43,13 +47,13 @@ func (bs *Summary) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// SigniningHash computes the hash to be signed
-func (bs *Summary) SigniningHash() (hash thor.Bytes32) {
+// SigningHash computes the hash to be signed
+func (bs *Summary) SigningHash() (hash thor.Bytes32) {
 	if cached := bs.cache.signingHash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
-	}	
-	defer func() { bs.cache.signingHash.Store(hash) } ()
-	
+	}
+	defer func() { bs.cache.signingHash.Store(hash) }()
+
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		bs.body.ParentID,
@@ -62,14 +66,14 @@ func (bs *Summary) SigniningHash() (hash thor.Bytes32) {
 
 // WithSignature create a new Summary object with signature set.
 func (bs *Summary) WithSignature(sig []byte) *Summary {
-	cpy := Summary(body: bs.body)
+	cpy := Summary{body: bs.body}
 	cpy.body.Signature = append([]byte(nil), sig...)
 	return &cpy
 }
 
 // EncodeRLP implements rlp.Encoder
 func (bs *Summary) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(hw, bs.body)
+	return rlp.Encode(w, bs.body)
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -79,7 +83,7 @@ func (bs *Summary) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
-	
+
 	*bs = Summary{body: body}
 	return nil
 }

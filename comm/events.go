@@ -17,13 +17,19 @@ type NewBlockEvent struct {
 }
 
 // NewBlockSummaryEvent ...
-type NewBlockSummaryEvent struct{}
+type NewBlockSummaryEvent struct {
+	*block.Summary
+}
 
 // NewTxSetEvent ...
-type NewTxSetEvent struct{}
+type NewTxSetEvent struct {
+	*block.TxSet
+}
 
 // NewEndorsementEvent ...
-type NewEndorsementEvent struct{}
+type NewEndorsementEvent struct {
+	*block.Endorsement
+}
 
 // NewHeaderEvent ...
 type NewHeaderEvent struct{}
