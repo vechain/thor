@@ -52,6 +52,7 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	logDBFailed    bool
+	bandwidth      bandwidth
 }
 
 func New(
@@ -244,12 +245,12 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
-	startTime := mclock.Now()
-	now := uint64(time.Now().Unix())
 
 	// consensus object is not thread-safe
 	n.consLock.Lock()
-	stage, receipts, err := n.cons.Process(blk, now)
+	startTime := mclock.Now()
+	stage, receipts, err := n.cons.Process(blk, uint64(time.Now().Unix()))
+	execElapsed := mclock.Now() - startTime
 	n.consLock.Unlock()
 
 	if err != nil {
@@ -268,8 +269,6 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	execElapsed := mclock.Now() - startTime
-
 	if _, err := stage.Commit(); err != nil {
 		log.Error("failed to commit state", "err", err)
 		return false, err
@@ -281,6 +280,11 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 	commitElapsed := mclock.Now() - startTime - execElapsed
+
+	if v, updated := n.bandwidth.Update(blk.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+		log.Debug("bandwidth updated", "gps", v)
+	}
+
 	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
 	n.processFork(prevTrunk, curTrunk)
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil

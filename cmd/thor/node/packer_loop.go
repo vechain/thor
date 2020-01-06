@@ -8,7 +8,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,52 +32,66 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	var (
 		authorized bool
-		flow       *packer.Flow
-		err        error
-		ticker     = time.NewTicker(time.Second)
+		ticker     = n.repo.NewTicker()
 	)
-	defer ticker.Stop()
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-
-		best := n.repo.BestBlock()
 		now := uint64(time.Now().Unix())
 
-		if flow == nil {
-			if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
-				if authorized {
-					authorized = false
-					log.Warn("unable to pack block", "err", err)
-				}
+		if n.targetGasLimit == 0 {
+			// no preset, use suggested
+			suggested := n.bandwidth.SuggestGasLimit()
+			n.packer.SetTargetGasLimit(suggested)
+		}
+
+		flow, err := n.packer.Schedule(n.repo.BestBlock().Header(), now)
+		if err != nil {
+			if authorized {
+				authorized = false
+				log.Warn("unable to pack block", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C():
 				continue
 			}
-			if !authorized {
-				authorized = true
-				log.Info("prepared to pack block")
-			}
-			log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
-			continue
 		}
 
-		if flow.ParentHeader().ID() != best.Header().ID() {
-			flow = nil
-			log.Debug("re-schedule packer due to new best block")
-			continue
+		if !authorized {
+			authorized = true
+			log.Info("prepared to pack block")
 		}
+		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
-		if now+1 >= flow.When() {
-			if err := n.pack(flow); err != nil {
-				log.Error("failed to pack block", "err", err)
+		const halfBlockInterval = thor.BlockInterval / 2
+
+		for {
+			now := uint64(time.Now().Unix())
+			if flow.When() > now+halfBlockInterval {
+				delaySec := flow.When() - (now + halfBlockInterval)
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C():
+					if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+						log.Debug("re-schedule packer due to new best block")
+						goto RE_SCHEDULE
+					}
+				case <-time.After(time.Duration(delaySec) * time.Second):
+					goto PACK
+				}
+			} else {
+				goto PACK
 			}
-			flow = nil
 		}
+	PACK:
+		if err := n.pack(flow); err != nil {
+			log.Error("failed to pack block", "err", err)
+		}
+	RE_SCHEDULE:
 	}
 }
 
@@ -132,17 +145,8 @@ func (n *Node) pack(flow *packer.Flow) error {
 		)
 	}
 
-	if n.targetGasLimit == 0 {
-		n.packer.SetTargetGasLimit(0)
-		if execElapsed > 0 {
-			gasUsed := newBlock.Header().GasUsed()
-			// calc target gas limit only if gas used above third of gas limit
-			if gasUsed > newBlock.Header().GasLimit()/3 {
-				targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
-				n.packer.SetTargetGasLimit(targetGasLimit)
-				log.Debug("reset target gas limit", "value", targetGasLimit)
-			}
-		}
+	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+		log.Debug("bandwidth updated", "gps", v)
 	}
 	return nil
 }
