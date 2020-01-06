@@ -1,20 +1,28 @@
 package block
 
-import "github.com/vechain/thor/vrf"
+import (
+	"io"
+	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vrf"
+)
 
 // Endorsement endorsement
 type Endorsement struct {
 	body endorsementBody
-	
+
 	cache struct {
-		signer atomic.Value
-		signingHash      atomic.Value
+		signer      atomic.Value
+		signingHash atomic.Value
 	}
 }
 
 type endorsementBody struct {
 	BlockSummary *Summary
-	VrfPublickey    *vrf.PublicKey
+	VrfPublicKey *vrf.PublicKey
 	VrfProof     *vrf.Proof
 
 	Signature []byte
@@ -31,7 +39,7 @@ func (ed *Endorsement) Signer() (signer thor.Address, err error) {
 		}
 	}()
 
-	pub, err := crypto.SigToPub(ed.SigningHash().Bytes(), ed.Signature)
+	pub, err := crypto.SigToPub(ed.SigningHash().Bytes(), ed.body.Signature)
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -40,13 +48,13 @@ func (ed *Endorsement) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// SigniningHash computes the hash to be signed
-func (ed *Endorsement) SigniningHash() (hash thor.Bytes32) {
+// SigningHash computes the hash to be signed
+func (ed *Endorsement) SigningHash() (hash thor.Bytes32) {
 	if cached := ed.cache.signingHash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
-	}	
-	defer func() { ed.cache.signingHash.Store(hash) } ()
-	
+	}
+	defer func() { ed.cache.signingHash.Store(hash) }()
+
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		ed.body.BlockSummary,
@@ -67,14 +75,14 @@ func (ed *Endorsement) WithSignature(sig []byte) *Endorsement {
 
 // EncodeRLP implements rlp.Encoder
 func (ed *Endorsement) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(hw, ed.body)
+	return rlp.Encode(w, ed.body)
 }
 
 // DecodeRLP implements rlp.Decoder.
 func (ed *Endorsement) DecodeRLP(s *rlp.Stream) error {
 	var body endorsementBody
 
-	if err := s.Decode(&bodyValue); err != nil {
+	if err := s.Decode(&body); err != nil {
 		return err
 	}
 	*ed = Endorsement{body: body}

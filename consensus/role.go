@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
 )
@@ -42,10 +43,20 @@ func IsCommittee(sk *vrf.PrivateKey, seed thor.Bytes32) (*vrf.Proof, error) {
 	return nil, nil
 }
 
-// GetRoundSeed computes the random seed for each round
-func GetRoundSeed(beacon thor.Bytes32, roundNum uint32) thor.Bytes32 {
+// CompRoundSeed computes the random seed for each round
+func CompRoundSeed(beacon thor.Bytes32, roundNum uint32) thor.Bytes32 {
 	// round_seed = H(epoch_seed || round_number)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, roundNum)
 	return thor.Blake2b(beacon.Bytes(), b)
+}
+
+// IsLeader checks whether the input address is the leader
+func (c *Consensus) IsLeader(thor.Address) bool {
+	return false
+}
+
+// ValidateBlockSummary validates a given block summary
+func (c *Consensus) ValidateBlockSummary(bs *block.Summary) bool {
+	return false
 }
