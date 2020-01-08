@@ -1,6 +1,7 @@
 package block
 
 import (
+	"bytes"
 	"io"
 	"sync/atomic"
 
@@ -25,6 +26,22 @@ type summaryBody struct {
 	Timestamp uint64
 
 	Signature []byte
+}
+
+// NewBlockSummary creates a block summary without signature
+func NewBlockSummary(parentID, txRoot thor.Bytes32, timestamp uint64) *Summary {
+	return &Summary{
+		body: summaryBody{
+			ParentID:  parentID,
+			TxRoot:    txRoot,
+			Timestamp: timestamp,
+		},
+	}
+}
+
+// Copy copies the current block summary
+func (bs *Summary) Copy() *Summary {
+	return &Summary{body: bs.body}
 }
 
 // Signer returns the signer
@@ -86,4 +103,29 @@ func (bs *Summary) DecodeRLP(s *rlp.Stream) error {
 
 	*bs = Summary{body: body}
 	return nil
+}
+
+// IsEqual ...
+func (bs *Summary) IsEqual(_bs *Summary) bool {
+	var buff, _buff bytes.Buffer
+
+	bs.EncodeRLP(&buff)
+	_bs.EncodeRLP(&_buff)
+
+	return bytes.Compare(buff.Bytes(), _buff.Bytes()) == 0
+}
+
+// ParentID returns paraent ID
+func (bs *Summary) ParentID() thor.Bytes32 {
+	return bs.body.ParentID
+}
+
+// Timestamp returns timestamp
+func (bs *Summary) Timestamp() uint64 {
+	return bs.body.Timestamp
+}
+
+// Signature return signature
+func (bs *Summary) Signature() []byte {
+	return bs.body.Signature
 }

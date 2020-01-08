@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -37,9 +39,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 		err    error
 		ticker = time.NewTicker(time.Second)
 
-		// summary      *block.Summary
-		// endorsements block.Endorsements
-		// txSet        *block.TxSet
+		bs  *block.Summary
+		eds map[thor.Bytes32]*block.Endorsement
+		ts  *block.TxSet
 	)
 	defer ticker.Stop()
 
@@ -47,20 +49,11 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	// newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
 	// newTxSetCh := make(chan *comm.NewTxSetEvent)
-	// newEndorsementCh := make(chan *comm.NewEndorsementEvent)
+	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	// newHeaderCh := make(chan *comm.NewHeaderEvent)
 
-	launchTime := n.chain.GenesisBlock().Header().Timestamp()
-	// Starting from 1
-	roundNum := (launchTime-uint64(time.Now().Unix()))/thor.BlockInterval + 1
-	// Starting from 1
-	epochNum := (roundNum-1)/thor.EpochInterval + 1
-
-	_, err = n.cons.Beacon(uint32(epochNum))
-	if err != nil {
-		panic(struct{}{})
-	}
-	// roundSeed := n.cons.GetRoundSeed(beacon, uint32(roundNum))
+	round := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
+	epoch := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
 
 	for {
 		select {
@@ -69,16 +62,39 @@ func (n *Node) packerLoop(ctx context.Context) {
 		case <-ticker.C:
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
-			// r := (launchTime-now)/thor.BlockInterval + 1
-			// e := (r-1)/thor.EpochInterval + 1
+
+			r := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
+			e := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
+			if r > round {
+				round = r
+				if e > epoch {
+					epoch = e
+				}
+			}
 
 			if flow == nil {
 				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
 					continue
 				}
 			}
-			// case bs := <-newBlockSummaryCh:
-			// case ed := <-newEndorsementCh:
+		// case bs := <-newBlockSummaryCh:
+		case ed := <-newEndorsementCh:
+			if bs == nil {
+				continue
+			}
+
+			if !ed.BlockSummary().IsEqual(bs) {
+				continue
+			}
+
+			if _, ok := eds[ed.Endorsement.SigningHash()]; ok {
+				continue
+			}
+
+			if !n.cons.ValidateEndorsement(ed.Endorsement, round) {
+				continue
+			}
+
 			// case h := <-newHeaderCh:
 			// case ts := <-newTxSetCh:
 		}

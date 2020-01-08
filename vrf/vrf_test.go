@@ -3,6 +3,8 @@ package vrf
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"testing"
 )
 
@@ -20,34 +22,41 @@ func TestPublicKey(t *testing.T) {
 	}
 }
 
-func TestVrfFunc(t *testing.T) {
+func TestVrfProofBytes(t *testing.T) {
+	_, sk := GenKeyPair()
+
+	proof, _ := sk.Prove([]byte("message"))
+	b := proof.Bytes()
+
+	if bytes.Compare(proof[:], b) != 0 {
+		t.Errorf("Byte values not equal")
+	}
+
+	b[0] = b[0] + 1
+	if bytes.Compare(proof[:], b) == 0 {
+		t.Errorf("Byte() returns a reference, not a new []byte")
+	}
+}
+
+func TestVrf(t *testing.T) {
 	pk, sk := GenKeyPair()
+	msg := []byte("PositiveMsg")
+	_msg := []byte("NegativeMsg")
 
-	msg := []byte("test")
+	pf, _ := sk.Prove([]byte(nil))
+	fmt.Println(hex.EncodeToString(pf[:]))
 
-	var (
-		proof       *Proof
-		hash, _hash *Hash
-		err         error
-	)
-
-	proof, err = sk.Prove(msg)
+	proof, err := sk.Prove(msg)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
-	hash, err = pk.Verify(proof, msg)
-	if err != nil {
-		t.Error(err)
+	if ok, _ := pk.Verify(proof, msg); !ok {
+		t.Errorf("Verification failed")
 	}
 
-	_hash, err = proof.Hash()
-	if err != nil {
-		t.Error(err)
-	}
-
-	if bytes.Compare(hash[:], _hash[:]) != 0 {
-		t.Errorf("Test failed")
+	if ok, _ := pk.Verify(proof, _msg); ok {
+		t.Errorf("Verification failed")
 	}
 }
 

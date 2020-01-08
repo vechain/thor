@@ -52,15 +52,15 @@ type Node struct {
 	skipLogs       bool
 	logDBFailed    bool
 
-	mu       sync.Mutex
-	beacon   thor.Bytes32
-	seed     thor.Bytes32
-	roundNum uint32
-	epochNum uint32
+	// mu       sync.Mutex
+	// beacon   thor.Bytes32
+	// seed     thor.Bytes32
+	// roundNum uint32
+	// epochNum uint32
 
-	rw  sync.RWMutex
-	bs  *block.Summary
-	eds map[thor.Address]*block.Endorsement
+	// rw  sync.RWMutex
+	// bs  *block.Summary
+	// eds map[thor.Address]*block.Endorsement
 }
 
 func New(
@@ -97,7 +97,7 @@ func (n *Node) Run(ctx context.Context) error {
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
 
-	n.goes.Go(func() { n.epochRoundInfoLoop(ctx) })
+	// n.goes.Go(func() { n.epochRoundInfoLoop(ctx) })
 
 	n.goes.Wait()
 	return nil

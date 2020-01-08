@@ -1,49 +1,41 @@
 package node
 
-import (
-	"context"
-	"time"
+// func (n *Node) epochRoundInfoLoop(ctx context.Context) {
+// 	ticker := time.NewTicker(time.Second)
+// 	defer ticker.Stop()
 
-	"github.com/vechain/thor/consensus"
-	"github.com/vechain/thor/thor"
-)
+// 	launchTime := n.chain.GenesisBlock().Header().Timestamp()
+// 	blockInterval := thor.BlockInterval
+// 	epochInterval := thor.EpochInterval
 
-func (n *Node) epochRoundInfoLoop(ctx context.Context) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case <-ticker.C:
+// 			now := uint64(time.Now().Unix())
+// 			r := (now - launchTime) / blockInterval
+// 			e := (r - 1) / epochInterval
 
-	launchTime := n.chain.GenesisBlock().Header().Timestamp()
-	blockInterval := thor.BlockInterval
-	epochInterval := thor.EpochInterval
+// 			// This is the place we update epoch number and beacon
+// 			if uint32(e) > n.epochNum {
+// 				n.mu.Lock()
+// 				n.epochNum = uint32(e)
+// 				beacon, err := n.cons.Beacon(n.epochNum)
+// 				if err != nil {
+// 					panic(err)
+// 				}
+// 				n.beacon = beacon
+// 				n.mu.Unlock()
+// 			}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			now := uint64(time.Now().Unix())
-			r := (now - launchTime) / blockInterval
-			e := (r - 1) / epochInterval
-
-			// This is the place we update epoch number and beacon
-			if uint32(e) > n.epochNum {
-				n.mu.Lock()
-				n.epochNum = uint32(e)
-				beacon, err := n.cons.Beacon(n.epochNum)
-				if err != nil {
-					panic(err)
-				}
-				n.beacon = beacon
-				n.mu.Unlock()
-			}
-
-			// This is the place we update round number and seed
-			if uint32(r) > n.roundNum {
-				n.mu.Lock()
-				n.roundNum = uint32(r)
-				n.seed = consensus.CompRoundSeed(n.beacon, n.roundNum)
-				n.mu.Unlock()
-			}
-		}
-	}
-}
+// 			// This is the place we update round number and seed
+// 			if uint32(r) > n.roundNum {
+// 				n.mu.Lock()
+// 				n.roundNum = uint32(r)
+// 				n.seed = consensus.CompRoundSeed(n.beacon, n.roundNum)
+// 				n.mu.Unlock()
+// 			}
+// 		}
+// 	}
+// }

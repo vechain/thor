@@ -28,6 +28,20 @@ type endorsementBody struct {
 	Signature []byte
 }
 
+// NewEndorsement creates a new endorsement without signature
+func NewEndorsement(bs *Summary, pubKey *vrf.PublicKey, pf *vrf.Proof) *Endorsement {
+	return &Endorsement{
+		body: endorsementBody{
+			BlockSummary: bs,
+		},
+	}
+}
+
+// Copy copies the current endorsement
+func (ed *Endorsement) Copy() *Endorsement {
+	return &Endorsement{body: ed.body}
+}
+
 // Signer returns the signer
 func (ed *Endorsement) Signer() (signer thor.Address, err error) {
 	if cached := ed.cache.signer.Load(); cached != nil {
@@ -89,5 +103,17 @@ func (ed *Endorsement) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// Endorsements endorsement array
-type Endorsements []*Endorsement
+// BlockSummary returns the block summary
+func (ed *Endorsement) BlockSummary() *Summary {
+	return ed.body.BlockSummary
+}
+
+// VrfPublicKey returns the VRF public key
+func (ed *Endorsement) VrfPublicKey() *vrf.PublicKey {
+	return ed.body.VrfPublicKey
+}
+
+// VrfProof returns the VRF proof
+func (ed *Endorsement) VrfProof() *vrf.Proof {
+	return ed.body.VrfProof
+}

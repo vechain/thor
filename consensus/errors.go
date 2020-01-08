@@ -13,6 +13,15 @@ var (
 	errFutureBlock   = errors.New("block in the future")
 	errParentMissing = errors.New("parent block is missing")
 	errKnownBlock    = errors.New("block already in the chain")
+
+	errRound       = errors.New("Invalid round number")
+	errParent      = errors.New("Invalid parent")
+	errSig         = errors.New("Invalid signature")
+	errTimestamp   = errors.New("Invalid timestamp")
+	errFutureEpoch = errors.New("Future epoch number")
+	errZeroRound   = errors.New("Zero round number")
+	errZeroEpoch   = errors.New("Zero epoch number")
+	errZeroChain   = errors.New("Zero chain length")
 )
 
 type consensusError string
