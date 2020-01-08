@@ -90,7 +90,7 @@ func (k *PrivateKey) Prove(msg []byte) (*Proof, error) {
 }
 
 // Verify verifies VRF proof and outputs the corresponding hash
-func (k *PublicKey) Verify(proof *Proof, msg []byte) (*Hash, error) {
+func (k *PublicKey) Verify(proof *Proof, msg []byte) (bool, *Hash) {
 	var pk crypto.VrfPubkey
 	copy(pk[:], k[:])
 
@@ -99,12 +99,12 @@ func (k *PublicKey) Verify(proof *Proof, msg []byte) (*Hash, error) {
 
 	ok, h := pk.Verify(pf, hashable(msg))
 	if !ok {
-		return nil, errors.New("vrf *PublicKey Verify")
+		return false, nil
 	}
 
 	var hash Hash
 	copy(hash[:], h[:])
-	return &hash, nil
+	return true, &hash
 }
 
 // Hash computes hash from VRF proof
@@ -120,6 +120,11 @@ func (p *Proof) Hash() (*Hash, error) {
 	var hash Hash
 	copy(hash[:], h[:])
 	return &hash, nil
+}
+
+// Bytes ...
+func (p *Proof) Bytes() []byte {
+	return append([]byte(nil), p[:]...)
 }
 
 type hashable []byte

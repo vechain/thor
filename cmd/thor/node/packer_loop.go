@@ -33,31 +33,42 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Info("synchronization process done")
 
 	var (
-		authorized bool
-		ticker     = n.repo.NewTicker()
+		// authorized bool
+		flow   *packer.Flow
+		err    error
+		ticker = time.NewTicker(time.Second)
+
+		bs  *block.Summary
+		eds map[thor.Bytes32]*block.Endorsement
+		ts  *block.TxSet
 	)
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
-	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	newTxSetCh := make(chan *comm.NewTxSetEvent)
+	// newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
+	// newTxSetCh := make(chan *comm.NewTxSetEvent)
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
-	newHeaderCh := make(chan *comm.NewHeaderEvent)
+	// newHeaderCh := make(chan *comm.NewHeaderEvent)
 
-	launchTime := n.chain.GenesisBlock().Header().Timestamp()
-	// Starting from 1
-	roundNum := (launchTime-uint64(time.Now().Unix()))/thor.BlockInterval + 1
-	// Starting from 1
-	epochNum := (roundNum-1)/thor.EpochInterval + 1
-
-	epochSeed, err := n.cons.GetEpochSeed(uint32(epochNum))
-	if err != nil {
-		panic(struct{}{})
-	}
-	roundSeed := n.cons.GetRoundSeed(epochSeed, uint32(roundNum))
+	round := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
+	epoch := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
 
 	for {
-		now := uint64(time.Now().Unix())
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			best := n.chain.BestBlock()
+			now := uint64(time.Now().Unix())
+
+			r := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
+			e := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
+			if r > round {
+				round = r
+				if e > epoch {
+					epoch = e
+				}
+			}
 
 		if n.targetGasLimit == 0 {
 			// no preset, use suggested
@@ -71,17 +82,26 @@ func (n *Node) packerLoop(ctx context.Context) {
 				authorized = false
 				log.Warn("unable to pack block", "err", err)
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C():
+		// case bs := <-newBlockSummaryCh:
+		case ed := <-newEndorsementCh:
+			if bs == nil {
 				continue
 			}
-		}
 
-		if !authorized {
-			authorized = true
-			log.Info("prepared to pack block")
+			if !ed.BlockSummary().IsEqual(bs) {
+				continue
+			}
+
+			if _, ok := eds[ed.Endorsement.SigningHash()]; ok {
+				continue
+			}
+
+			if !n.cons.ValidateEndorsement(ed.Endorsement, round) {
+				continue
+			}
+
+			// case h := <-newHeaderCh:
+			// case ts := <-newTxSetCh:
 		}
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
