@@ -22,6 +22,9 @@ var (
 	errZeroRound   = errors.New("Zero round number")
 	errZeroEpoch   = errors.New("Zero epoch number")
 	errZeroChain   = errors.New("Zero chain length")
+
+	errVrfProof     = errors.New("VRF proof verfication failed")
+	errNotCommittee = errors.New("Not a committee member")
 )
 
 type consensusError string

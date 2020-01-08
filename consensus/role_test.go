@@ -152,21 +152,16 @@ func TestValidateBlockSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs, round) != nil {
-		t.Errorf("Test1 failed")
+	if cons.ValidateBlockSummary(bs) != nil {
+		t.Errorf("clean case failed")
 	}
 
-	// wrong round number
-	if cons.ValidateBlockSummary(bs, round-1) != errRound {
-		t.Errorf("Test2 failed")
-	}
-
-	// Wrong signature
-	rand.Read(sig)
-	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs, round) != errSig {
-		t.Errorf("Test3 failed")
-	}
+	// // Wrong signature
+	// rand.Read(sig)
+	// bs = bs.WithSignature(sig)
+	// if cons.ValidateBlockSummary(bs) != errSig {
+	// 	t.Errorf("Test3 failed")
+	// }
 
 	// wrong parentID
 	bs = block.NewBlockSummary(best.Header().ParentID(), thor.BytesToBytes32([]byte(nil)), cons.Timestamp(round))
@@ -175,18 +170,115 @@ func TestValidateBlockSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs, round) != errParent {
-		t.Errorf("Test4 failed")
+	if cons.ValidateBlockSummary(bs) != errParent {
+		t.Errorf("errParant failed")
+	}
+
+	// wrong timestamp
+	bs = block.NewBlockSummary(best.Header().ID(), thor.BytesToBytes32([]byte(nil)), cons.Timestamp(round)-1)
+	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs = bs.WithSignature(sig)
+	if cons.ValidateBlockSummary(bs) != errTimestamp {
+		t.Errorf("errTimestamp failed")
 	}
 }
 
-// func TestValidateEndorsement(t *testing.T) {
-// 	pk, sk := vrf.GenKeyPair()
-// 	msg := []byte("TestValidateEndorsement")
-// 	proof, err := sk.Prove(msg)
+func getValidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
+	maxIter := 1000
+	for i := 0; i < maxIter; i++ {
+		pk, sk := vrf.GenKeyPair()
+		proof, _ := sk.Prove(seed.Bytes())
+		if isCommitteeByProof(proof) {
+			return proof, pk
+		}
+	}
+	return nil, nil
+}
 
-// 	var ed block.Endorsement
-// }
+func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
+	maxIter := 1000
+	for i := 0; i < maxIter; i++ {
+		pk, sk := vrf.GenKeyPair()
+		proof, _ := sk.Prove(seed.Bytes())
+		if !isCommitteeByProof(proof) {
+			return proof, pk
+		}
+	}
+	return nil, nil
+}
+
+func TestValidateEndorsement(t *testing.T) {
+	ethsk, _ := crypto.GenerateKey()
+
+	cons := initConsensus()
+	gen := cons.chain.GenesisBlock().Header()
+
+	// Create a valid block summary at round 1
+	bs := block.NewBlockSummary(gen.ID(), thor.BytesToBytes32([]byte(nil)), gen.Timestamp()+thor.BlockInterval)
+	sig, err := crypto.Sign(bs.SigningHash().Bytes(), ethsk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs = bs.WithSignature(sig)
+
+	// Get the committee keys and proof
+	beacon := getBeaconFromHeader(cons.chain.GenesisBlock().Header())
+	seed := seed(beacon, 1)
+	proof, pk := getValidCommittee(seed)
+	if proof == nil {
+		t.Errorf("Failed to find a valid committee")
+	}
+
+	// Clean case
+	ed1 := block.NewEndorsement(bs, pk, proof)
+	sig, err = crypto.Sign(ed1.SigningHash().Bytes(), ethsk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ed1 = ed1.WithSignature(sig)
+	if err := cons.ValidateEndorsement(ed1); err != nil {
+		t.Errorf("clean case")
+	}
+
+	// // wrong signature
+	// randSig := make([]byte, 65)
+	// rand.Read(randSig)
+	// ed1 = ed1.WithSignature(randSig)
+	// if err := cons.ValidateEndorsement(ed1); err != errSig {
+	// 	t.Errorf("Test3 failed")
+	// }
+
+	// wrong proof
+	var randProof vrf.Proof
+	rand.Read(randProof[:])
+	ed2 := block.NewEndorsement(bs, pk, &randProof)
+	sig, err = crypto.Sign(ed1.SigningHash().Bytes(), ethsk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ed2 = ed2.WithSignature(sig)
+	if err := cons.ValidateEndorsement(ed2); err != errVrfProof {
+		t.Errorf("errVrfProof")
+	}
+
+	// not committee
+	proof, pk = getInvalidCommittee(seed)
+	if proof == nil {
+		t.Errorf("Failed to find a false committee")
+	}
+	ed3 := block.NewEndorsement(bs, pk, proof)
+	sig, err = crypto.Sign(seed.Bytes(), ethsk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ed3 = ed3.WithSignature(sig)
+	if err := cons.ValidateEndorsement(ed3); err != errNotCommittee {
+		t.Errorf("errNotCommittee")
+	}
+}
 
 func BenchmarkTestEthSig(b *testing.B) {
 	sk, _ := crypto.GenerateKey()
