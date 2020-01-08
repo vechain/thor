@@ -29,10 +29,12 @@ type endorsementBody struct {
 }
 
 // NewEndorsement creates a new endorsement without signature
-func NewEndorsement(bs *Summary, pubKey *vrf.PublicKey, pf *vrf.Proof) *Endorsement {
+func NewEndorsement(bs *Summary, pubKey *vrf.PublicKey, proof *vrf.Proof) *Endorsement {
 	return &Endorsement{
 		body: endorsementBody{
 			BlockSummary: bs,
+			VrfPublicKey: pubKey,
+			VrfProof:     proof,
 		},
 	}
 }

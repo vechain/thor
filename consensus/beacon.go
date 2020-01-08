@@ -16,23 +16,17 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 		return thor.BytesToBytes32(nil), errZeroEpoch
 	}
 
-	if c.chain.BestBlock().Header().Number() == 0 {
-		return thor.BytesToBytes32(nil), errZeroChain
-	}
+	best := c.chain.BestBlock()
+	// bestRound, _ := c.RoundNumber(best.Header().Timestamp())
+	// bestEpoch := EpochNumber(bestRound)
+	// if bestRound == 0 {
+	// 	return getBeaconFromHeader(c.chain.GenesisBlock().Header()), nil
+	// }
+	// if epoch > bestEpoch+1 {
+	// 	return thor.BytesToBytes32(nil), errFutureEpoch
+	// }
 
-	bestRound, _ := c.RoundNumber(c.chain.BestBlock().Header().Timestamp())
-	bestEpoch, _ := EpochNumber(bestRound)
-	if epoch > bestEpoch {
-		return thor.BytesToBytes32(nil), errFutureEpoch
-	}
-
-	// Get the potential number of the last block in the last epoch
 	lastRound := (epoch - 1) * uint32(thor.EpochInterval)
-
-	// For the first epoch, use the id of the genesis block as the seed
-	if lastRound == 0 {
-		return getBeaconFromHeader(c.chain.GenesisBlock().Header()), nil
-	}
 
 	var (
 		header *block.Header
@@ -40,23 +34,32 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 		round  uint32
 	)
 
+	last := lastRound
+	if last > best.Header().Number() {
+		last = best.Header().Number()
+	}
+	header, err = c.chain.GetTrunkBlockHeader(last)
+	if err != nil {
+		return thor.BytesToBytes32([]byte(nil)), err
+	}
+
 	// Backtrack from the last round of the epoch to extract the last block
 	// within the epoch
-	for i := uint32(0); i < lastRound; i++ {
-		header, err = c.chain.GetTrunkBlockHeader(lastRound - i)
-		if err == nil {
-			break
-		}
-	}
+	// for i := last; i >= 0; i-- {
+	// header, err = c.chain.GetTrunkBlockHeader(i)
+	// 	if err == nil {
+	// 		break
+	// 	}
+	// }
 
-	if err != nil {
-		panic("No block found")
-	}
+	// if err != nil {
+	// 	panic("No block found")
+	// }
 
 	for {
-		if header.Number() == 0 {
-			break
-		}
+		// if header.Number() == 0 {
+		// 	break
+		// }
 
 		round, _ = c.RoundNumber(header.Timestamp())
 		if round <= lastRound {

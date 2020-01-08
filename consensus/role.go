@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math"
 
 	"github.com/vechain/thor/block"
@@ -18,14 +17,14 @@ func getCommitteeThreshold() uint32 {
 
 // IsCommittee checks the committeeship given a VRF private key and round number.
 func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, round uint32) (bool, *vrf.Proof, error) {
-	epoch, err1 := EpochNumber(round)
-	if err1 != nil {
-		return false, nil, err1
+	if round == 0 {
+		return false, nil, errZeroRound
 	}
 
-	beacon, err2 := c.beacon(epoch)
-	if err2 != nil {
-		return false, nil, err2
+	epoch := EpochNumber(round)
+	beacon, err := c.beacon(epoch)
+	if err != nil {
+		return false, nil, err
 	}
 
 	seed := seed(beacon, round)
@@ -81,56 +80,70 @@ func (c *Consensus) IsLeader(thor.Address) bool {
 }
 
 // ValidateBlockSummary validates a given block summary
-func (c *Consensus) ValidateBlockSummary(bs *block.Summary, round uint32) error {
-	// Check timestamp
-	t := bs.Timestamp()
-	if t != uint64(round)*thor.BlockInterval+c.chain.GenesisBlock().Header().Timestamp() {
-		return errRound
+func (c *Consensus) ValidateBlockSummary(bs *block.Summary) error {
+	// timestamp > best_block_timestamp && (timestamp - best_block_timestamp) % block_interval == 0
+	currTime := bs.Timestamp()
+	bestTime := c.chain.BestBlock().Header().Timestamp()
+	if currTime <= bestTime || (currTime-bestTime)%thor.BlockInterval != 0 {
+		return errTimestamp
 	}
 
+	// parent == best block
 	parent := c.chain.BestBlock().Header().ID()
 	if bytes.Compare(parent.Bytes(), bs.ParentID().Bytes()) != 0 {
 		return errParent
 	}
 
-	// Check signature
-	if _, err := bs.Signer(); err != nil {
-		return errSig
-	}
+	// Signature should be validated during the check of the
+	// transaction sender
+
+	// if _, err := bs.Signer(); err != nil {
+	// 	return errSig
+	// }
 
 	return nil
 }
 
 // ValidateEndorsement validates a given endorsement
-func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, round uint32) error {
-	if err := c.ValidateBlockSummary(ed.BlockSummary(), round); err != nil {
+func (c *Consensus) ValidateEndorsement(ed *block.Endorsement) error {
+	// validate the block summary
+	if err := c.ValidateBlockSummary(ed.BlockSummary()); err != nil {
 		return err
 	}
 
-	epoch, err := EpochNumber(round)
-	if err != nil {
-		return err
-	}
+	// Signature should be validated during the check of the
+	// transaction sender
 
+	// if _, err := ed.Signer(); err != nil {
+	// 	return errSig
+	// }
+
+	// Compute the VRF seed
+	round, _ := c.RoundNumber(ed.BlockSummary().Timestamp())
+	epoch := EpochNumber(round)
 	beacon, err := c.beacon(epoch)
 	if err != nil {
 		return err
 	}
 	seed := seed(beacon, round)
+
+	// validate proof
 	if ok, _ := ed.VrfPublicKey().Verify(ed.VrfProof(), seed.Bytes()); !ok {
-		return errors.New("Verification failed")
+		return errVrfProof
 	}
 
-	if isCommitteeByProof(ed.VrfProof()) {
-		return errors.New("Invalid committeeship")
+	// validate committeeship
+	if !isCommitteeByProof(ed.VrfProof()) {
+		return errNotCommittee
 	}
+
 	return nil
 }
 
 // RoundNumber computes the round number from timestamp
 func (c *Consensus) RoundNumber(timestamp uint64) (uint32, error) {
 	launchTime := c.chain.GenesisBlock().Header().Timestamp()
-	if launchTime+thor.BlockInterval > timestamp {
+	if launchTime > timestamp {
 		return 0, errTimestamp
 	}
 	return uint32((timestamp - launchTime) / thor.BlockInterval), nil
@@ -146,11 +159,11 @@ func (c *Consensus) EpochNumber(timestamp uint64) (uint32, error) {
 }
 
 // EpochNumber computes the epoch number from time
-func EpochNumber(round uint32) (uint32, error) {
+func EpochNumber(round uint32) uint32 {
 	if round == 0 {
-		return 0, errZeroRound
+		return 0
 	}
-	return uint32(uint64(round-1)/thor.EpochInterval + 1), nil
+	return uint32(uint64(round-1)/thor.EpochInterval + 1)
 }
 
 // Timestamp computes the timestamp for the block generated in that round

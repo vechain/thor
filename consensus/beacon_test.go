@@ -94,7 +94,7 @@ func TestBeacon(t *testing.T) {
 		epoch  uint32
 	)
 
-	// var roundSkipped = map[uint32]interface{}{uint32(thor.EpochInterval): struct{}{}}
+	// skip the entire second epoch
 	roundSkipped := prepareSkippedRoundInfo()
 	nRound := uint32(thor.EpochInterval) * 3
 	blocks, err := addEmptyBlocks(cons.chain, privateKey, nRound, roundSkipped)
