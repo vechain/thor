@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
@@ -70,62 +71,53 @@ func TestIsCommitteeByPrivateKey(t *testing.T) {
 	}
 }
 
-func TestRoundNumber(t *testing.T) {
-	cons := initConsensus()
-	launchTime := cons.chain.GenesisBlock().Header().Timestamp()
-
-	var (
-		round uint32
-		err   error
-	)
-
-	round, err = cons.RoundNumber(launchTime + thor.BlockInterval - 1)
-	if err == nil {
-		t.Errorf("Test1 failed")
-	}
-
-	round, err = cons.RoundNumber(launchTime + thor.BlockInterval*10)
-	if round != 10 || err != nil {
-		t.Errorf("Test2 failed")
-	}
-
-	round, err = cons.RoundNumber(launchTime + thor.BlockInterval*10 + 1)
-	if round != 10 || err != nil {
-		t.Errorf("Test2 failed")
-	}
+func M(a ...interface{}) []interface{} {
+	return a
 }
 
 func TestEpochNumber(t *testing.T) {
 	cons := initConsensus()
 	launchTime := cons.chain.GenesisBlock().Header().Timestamp()
 
-	var (
-		epoch uint32
-		err   error
-	)
-
-	// timestamp eailer than the first block
-	epoch, err = cons.EpochNumber(launchTime + thor.BlockInterval - 1)
-	if err == nil {
-		t.Errorf("Test1 failed")
+	tests := []struct {
+		expected interface{}
+		returned interface{}
+		msg      string
+	}{
+		{
+			[]interface{}{uint32(0), errTimestamp},
+			M(cons.EpochNumber(launchTime - 1)),
+			"t < launch_time",
+		},
+		{
+			[]interface{}{uint32(0), nil},
+			M(cons.EpochNumber(launchTime + 1)),
+			"t = launch_time + 1",
+		},
+		{
+			[]interface{}{uint32(1), nil},
+			M(cons.EpochNumber(launchTime + thor.BlockInterval)),
+			"t = launch_time + block_interval",
+		},
+		{
+			[]interface{}{uint32(1), nil},
+			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
+			"t = launch_time + block_interval * epoch_interval",
+		},
+		{
+			[]interface{}{uint32(1), nil},
+			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
+			"t = launch_time + block_interval * epoch_interval + 1",
+		},
+		{
+			[]interface{}{uint32(2), nil},
+			M(cons.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
+			"t = launch_time + block_interval * (epoch_interval + 1)",
+		},
 	}
 
-	// round epoch_interval-1
-	epoch, err = cons.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval-1))
-	if epoch != 1 || err != nil {
-		t.Errorf("Test2 failed")
-	}
-
-	// round epoch_interval
-	epoch, err = cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)
-	if epoch != 1 || err != nil {
-		t.Errorf("Test3 failed")
-	}
-
-	// round epoch_inverval+1
-	epoch, err = cons.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))
-	if epoch != 2 || err != nil {
-		t.Errorf("Test4 failed")
+	for _, test := range tests {
+		assert.Equal(t, test.expected, test.returned, test.msg)
 	}
 }
 
@@ -153,15 +145,8 @@ func TestValidateBlockSummary(t *testing.T) {
 	}
 	bs = bs.WithSignature(sig)
 	if cons.ValidateBlockSummary(bs) != nil {
-		t.Errorf("clean case failed")
+		t.Errorf("Test clean case failed")
 	}
-
-	// // Wrong signature
-	// rand.Read(sig)
-	// bs = bs.WithSignature(sig)
-	// if cons.ValidateBlockSummary(bs) != errSig {
-	// 	t.Errorf("Test3 failed")
-	// }
 
 	// wrong parentID
 	bs = block.NewBlockSummary(best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round))
@@ -171,7 +156,7 @@ func TestValidateBlockSummary(t *testing.T) {
 	}
 	bs = bs.WithSignature(sig)
 	if cons.ValidateBlockSummary(bs) != errParent {
-		t.Errorf("errParant failed")
+		t.Errorf("Test errParant failed")
 	}
 
 	// wrong timestamp
@@ -182,7 +167,7 @@ func TestValidateBlockSummary(t *testing.T) {
 	}
 	bs = bs.WithSignature(sig)
 	if cons.ValidateBlockSummary(bs) != errTimestamp {
-		t.Errorf("errTimestamp failed")
+		t.Errorf("Test errTimestamp failed")
 	}
 }
 
@@ -242,14 +227,6 @@ func TestValidateEndorsement(t *testing.T) {
 	if err := cons.ValidateEndorsement(ed1); err != nil {
 		t.Errorf("clean case")
 	}
-
-	// // wrong signature
-	// randSig := make([]byte, 65)
-	// rand.Read(randSig)
-	// ed1 = ed1.WithSignature(randSig)
-	// if err := cons.ValidateEndorsement(ed1); err != errSig {
-	// 	t.Errorf("Test3 failed")
-	// }
 
 	// wrong proof
 	var randProof vrf.Proof

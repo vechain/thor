@@ -155,6 +155,11 @@ func (c *Consensus) EpochNumber(timestamp uint64) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	if round == 0 {
+		return 0, nil
+	}
+
 	return uint32(uint64(round-1)/thor.EpochInterval + 1), nil
 }
 
