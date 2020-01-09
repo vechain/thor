@@ -85,11 +85,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				if a.Balance == nil {
 					return fmt.Errorf("%s: balance must be set", a.Address)
 				}
-				if a.Balance.Sign() < 1 {
-					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
-				}
-				if a.Balance.Sign() < 1 {
-					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
+				if a.Balance.Sign() < 0 {
+					return fmt.Errorf("%s: balance must be a non-negative integer", a.Address)
 				}
 
 				tokenSupply.Add(tokenSupply, a.Balance)
@@ -127,14 +124,14 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Params.BaseGasPrice.Sign() < 1 {
-		return nil, errors.New("baseGasPrice must be a non-zero integer")
+	if gen.Params.BaseGasPrice.Sign() < 0 {
+		return nil, errors.New("baseGasPrice must be a non-negative integer")
 	}
-	if gen.Params.RewardRatio.Sign() < 1 {
-		return nil, errors.New("rewardRatio must be a non-zero integer")
+	if gen.Params.RewardRatio.Sign() < 0 {
+		return nil, errors.New("rewardRatio must be a non-negative integer")
 	}
-	if gen.Params.ProposerEndorsement.Sign() < 1 {
-		return nil, errors.New("proposerEndorsement must be a non-zero integer")
+	if gen.Params.ProposerEndorsement.Sign() < 0 {
+		return nil, errors.New("proposerEndorsement must a non-negative integer")
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
