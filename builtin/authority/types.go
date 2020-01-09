@@ -11,19 +11,21 @@ import (
 
 type (
 	entry struct {
-		Endorsor thor.Address
-		Identity thor.Bytes32
-		Active   bool
-		Prev     *thor.Address `rlp:"nil"`
-		Next     *thor.Address `rlp:"nil"`
+		Endorsor     thor.Address
+		Identity     thor.Bytes32
+		Active       bool
+		VrfPublicKey thor.Bytes32
+		Prev         *thor.Address `rlp:"nil"`
+		Next         *thor.Address `rlp:"nil"`
 	}
 
 	// Candidate candidate of block proposer.
 	Candidate struct {
-		NodeMaster thor.Address
-		Endorsor   thor.Address
-		Identity   thor.Bytes32
-		Active     bool
+		NodeMaster   thor.Address
+		Endorsor     thor.Address
+		Identity     thor.Bytes32
+		Active       bool
+		VrfPublicKey thor.Bytes32
 	}
 )
 
@@ -32,6 +34,7 @@ func (e *entry) IsEmpty() bool {
 	return e.Endorsor.IsZero() &&
 		e.Identity.IsZero() &&
 		!e.Active &&
+		e.VrfPublicKey.IsZero() &&
 		e.Prev == nil &&
 		e.Next == nil
 }

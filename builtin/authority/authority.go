@@ -69,20 +69,20 @@ func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) {
 }
 
 // Get get candidate by node master address.
-func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool) {
+func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, vrfPubKey thor.Bytes32) {
 	entry := a.getEntry(nodeMaster)
 	if entry.IsLinked() {
-		return true, entry.Endorsor, entry.Identity, entry.Active
+		return true, entry.Endorsor, entry.Identity, entry.Active, entry.VrfPublicKey
 	}
 	// if it's the only node, IsLinked will be false.
 	// check whether it's the head.
 	ptr := a.getAddressPtr(headKey)
 	listed = ptr != nil && *ptr == nodeMaster
-	return listed, entry.Endorsor, entry.Identity, entry.Active
+	return listed, entry.Endorsor, entry.Identity, entry.Active, entry.VrfPublicKey
 }
 
 // Add add a new candidate.
-func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32) bool {
+func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32, vrfPublicKey thor.Bytes32) bool {
 	entry := a.getEntry(nodeMaster)
 	if !entry.IsEmpty() {
 		return false
@@ -91,6 +91,7 @@ func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity
 	entry.Endorsor = endorsor
 	entry.Identity = identity
 	entry.Active = true // defaults to active
+	entry.VrfPublicKey = vrfPublicKey
 
 	tailPtr := a.getAddressPtr(tailKey)
 	entry.Prev = tailPtr
@@ -158,10 +159,11 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) []*Candidate 
 		entry := a.getEntry(*ptr)
 		if bal := a.state.GetBalance(entry.Endorsor); bal.Cmp(endorsement) >= 0 {
 			candidates = append(candidates, &Candidate{
-				NodeMaster: *ptr,
-				Endorsor:   entry.Endorsor,
-				Identity:   entry.Identity,
-				Active:     entry.Active,
+				NodeMaster:   *ptr,
+				Endorsor:     entry.Endorsor,
+				Identity:     entry.Identity,
+				Active:       entry.Active,
+				VrfPublicKey: entry.VrfPublicKey,
 			})
 		}
 		ptr = entry.Next
@@ -176,10 +178,11 @@ func (a *Authority) AllCandidates() []*Candidate {
 	for ptr != nil {
 		entry := a.getEntry(*ptr)
 		candidates = append(candidates, &Candidate{
-			NodeMaster: *ptr,
-			Endorsor:   entry.Endorsor,
-			Identity:   entry.Identity,
-			Active:     entry.Active,
+			NodeMaster:   *ptr,
+			Endorsor:     entry.Endorsor,
+			Identity:     entry.Identity,
+			Active:       entry.Active,
+			VrfPublicKey: entry.VrfPublicKey,
 		})
 		ptr = entry.Next
 	}

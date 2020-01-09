@@ -146,7 +146,7 @@ func TestValidateBlockSummary(t *testing.T) {
 	)
 
 	// clean case
-	bs = block.NewBlockSummary(best.Header().ID(), thor.BytesToBytes32([]byte(nil)), cons.Timestamp(round))
+	bs = block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round))
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +164,7 @@ func TestValidateBlockSummary(t *testing.T) {
 	// }
 
 	// wrong parentID
-	bs = block.NewBlockSummary(best.Header().ParentID(), thor.BytesToBytes32([]byte(nil)), cons.Timestamp(round))
+	bs = block.NewBlockSummary(best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round))
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestValidateBlockSummary(t *testing.T) {
 	}
 
 	// wrong timestamp
-	bs = block.NewBlockSummary(best.Header().ID(), thor.BytesToBytes32([]byte(nil)), cons.Timestamp(round)-1)
+	bs = block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round)-1)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +217,7 @@ func TestValidateEndorsement(t *testing.T) {
 	gen := cons.chain.GenesisBlock().Header()
 
 	// Create a valid block summary at round 1
-	bs := block.NewBlockSummary(gen.ID(), thor.BytesToBytes32([]byte(nil)), gen.Timestamp()+thor.BlockInterval)
+	bs := block.NewBlockSummary(gen.ID(), thor.Bytes32{}, gen.Timestamp()+thor.BlockInterval)
 	sig, err := crypto.Sign(bs.SigningHash().Bytes(), ethsk)
 	if err != nil {
 		t.Fatal(err)
