@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 func TestConsensus(t *testing.T) {
@@ -80,7 +81,10 @@ func newTestConsensus(t *testing.T) *testConsensus {
 			for _, acc := range genesis.DevAccounts() {
 				state.SetBalance(acc.Address, bal)
 				state.SetEnergy(acc.Address, bal, launchTime)
-				builtin.Authority.Native(state).Add(acc.Address, acc.Address, thor.Bytes32{})
+
+				vrfpk, _ := vrf.GenKeyPairFromSeed(crypto.FromECDSA(acc.PrivateKey))
+
+				builtin.Authority.Native(state).Add(acc.Address, acc.Address, thor.Bytes32{}, vrfpk.Bytes32())
 			}
 			return nil
 		})
