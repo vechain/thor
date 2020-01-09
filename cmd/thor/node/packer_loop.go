@@ -40,7 +40,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		bs  *block.Summary
 		eds map[thor.Bytes32]*block.Endorsement
-		ts  *block.TxSet
+		// ts  *block.TxSet
 	)
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
@@ -50,8 +50,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	// newHeaderCh := make(chan *comm.NewHeaderEvent)
 
-	round := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
-	epoch := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
+	round, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
+	epoch, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
 
 	for {
 		select {
@@ -61,8 +61,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
 
-			r := n.cons.GetRoundNumber(uint64(time.Now().Unix()))
-			e := n.cons.GetEpochNumber(uint64(time.Now().Unix()))
+			r, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
+			e, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
 			if r > round {
 				round = r
 				if e > epoch {
@@ -96,7 +96,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			if !n.cons.ValidateEndorsement(ed.Endorsement, round) {
+			if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
 				continue
 			}
 

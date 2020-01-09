@@ -27,6 +27,10 @@ func TestAuthority(t *testing.T) {
 	p2 := thor.BytesToAddress([]byte("p2"))
 	p3 := thor.BytesToAddress([]byte("p3"))
 
+	pk1 := thor.BytesToBytes32([]byte("pk1"))
+	pk2 := thor.BytesToBytes32([]byte("pk2"))
+	pk3 := thor.BytesToBytes32([]byte("pk3"))
+
 	st.SetBalance(p1, big.NewInt(10))
 	st.SetBalance(p2, big.NewInt(20))
 	st.SetBalance(p3, big.NewInt(30))

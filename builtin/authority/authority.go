@@ -102,6 +102,7 @@ func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity
 	entry.Endorsor = endorsor
 	entry.Identity = identity
 	entry.Active = true // defaults to active
+	entry.VrfPublicKey = vrfPublicKey
 
 	tailPtr, err := a.getAddressPtr(tailKey)
 	if err != nil {
@@ -217,10 +218,11 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate
 		}
 		if bal.Cmp(endorsement) >= 0 {
 			candidates = append(candidates, &Candidate{
-				NodeMaster: *ptr,
-				Endorsor:   entry.Endorsor,
-				Identity:   entry.Identity,
-				Active:     entry.Active,
+				NodeMaster:   *ptr,
+				Endorsor:     entry.Endorsor,
+				Identity:     entry.Identity,
+				Active:       entry.Active,
+				VrfPublicKey: entry.VrfPublicKey,
 			})
 		}
 		ptr = entry.Next
@@ -241,10 +243,11 @@ func (a *Authority) AllCandidates() ([]*Candidate, error) {
 			return nil, err
 		}
 		candidates = append(candidates, &Candidate{
-			NodeMaster: *ptr,
-			Endorsor:   entry.Endorsor,
-			Identity:   entry.Identity,
-			Active:     entry.Active,
+			NodeMaster:   *ptr,
+			Endorsor:     entry.Endorsor,
+			Identity:     entry.Identity,
+			Active:       entry.Active,
+			VrfPublicKey: entry.VrfPublicKey,
 		})
 		ptr = entry.Next
 	}

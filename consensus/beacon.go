@@ -40,7 +40,7 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 	}
 	header, err = c.chain.GetTrunkBlockHeader(last)
 	if err != nil {
-		return thor.BytesToBytes32([]byte(nil)), err
+		return thor.Bytes32{}, err
 	}
 
 	// Backtrack from the last round of the epoch to extract the last block

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"testing"
 )
 
@@ -85,4 +86,26 @@ func BenchmarkVrfProveVerify(b *testing.B) {
 		proof, _ := sk.Prove(msg)
 		pk.Verify(proof, msg)
 	}
+}
+
+func TestProofCompare(t *testing.T) {
+	pArray := make([]*Proof, 10)
+	var b [ProofLen]byte
+
+	for i := 0; i < cap(pArray); i++ {
+		c, _ := rand.Read(b[:])
+		if c != ProofLen {
+			t.Errorf("")
+		}
+
+		pf := Proof(b)
+		pArray[i] = &pf
+	}
+
+	var proofs = Proofs(pArray)
+	fmt.Println(proofs.String())
+	sort.Sort(proofs)
+	fmt.Println(proofs.String())
+
+	return
 }
