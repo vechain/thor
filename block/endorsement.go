@@ -22,19 +22,19 @@ type Endorsement struct {
 
 type endorsementBody struct {
 	BlockSummary *Summary
-	VrfPublicKey *vrf.PublicKey
-	VrfProof     *vrf.Proof
+	// VrfPublicKey *vrf.PublicKey
+	VrfProof *vrf.Proof
 
 	Signature []byte
 }
 
 // NewEndorsement creates a new endorsement without signature
-func NewEndorsement(bs *Summary, pubKey *vrf.PublicKey, proof *vrf.Proof) *Endorsement {
+func NewEndorsement(bs *Summary, proof *vrf.Proof) *Endorsement {
 	return &Endorsement{
 		body: endorsementBody{
 			BlockSummary: bs,
-			VrfPublicKey: pubKey,
-			VrfProof:     proof,
+			// VrfPublicKey: pubKey,
+			VrfProof: proof,
 		},
 	}
 }
@@ -74,7 +74,7 @@ func (ed *Endorsement) SigningHash() (hash thor.Bytes32) {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		ed.body.BlockSummary,
-		ed.body.VrfPublicKey,
+		// ed.body.VrfPublicKey,
 		ed.body.VrfProof,
 	})
 	hw.Sum(hash[:0])
@@ -110,10 +110,10 @@ func (ed *Endorsement) BlockSummary() *Summary {
 	return ed.body.BlockSummary
 }
 
-// VrfPublicKey returns the VRF public key
-func (ed *Endorsement) VrfPublicKey() *vrf.PublicKey {
-	return ed.body.VrfPublicKey
-}
+// // VrfPublicKey returns the VRF public key
+// func (ed *Endorsement) VrfPublicKey() *vrf.PublicKey {
+// 	return ed.body.VrfPublicKey
+// }
 
 // VrfProof returns the VRF proof
 func (ed *Endorsement) VrfProof() *vrf.Proof {

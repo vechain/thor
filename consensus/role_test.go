@@ -131,43 +131,39 @@ func TestValidateBlockSummary(t *testing.T) {
 	best := cons.chain.BestBlock()
 	round := nRound + 1
 
-	var (
-		bs  *block.Summary
-		sig []byte
-		err error
-	)
-
-	// clean case
-	bs = block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round))
-	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs) != nil {
-		t.Errorf("Test clean case failed")
+	type testObj struct {
+		ParentID  thor.Bytes32
+		TxRoot    thor.Bytes32
+		Timestamp uint64
 	}
 
-	// wrong parentID
-	bs = block.NewBlockSummary(best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round))
-	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs) != errParent {
-		t.Errorf("Test errParant failed")
+	tests := []struct {
+		input testObj
+		ret   error
+		msg   string
+	}{
+		{
+			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round)},
+			nil,
+			"clean case",
+		},
+		{
+			testObj{best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round)},
+			errParent,
+			"Invalid parent ID",
+		},
+		{
+			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round) - 1},
+			errTimestamp,
+			"Invalid timestamp",
+		},
 	}
 
-	// wrong timestamp
-	bs = block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round)-1)
-	sig, err = crypto.Sign(bs.SigningHash().Bytes(), privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bs = bs.WithSignature(sig)
-	if cons.ValidateBlockSummary(bs) != errTimestamp {
-		t.Errorf("Test errTimestamp failed")
+	for _, test := range tests {
+		bs := block.NewBlockSummary(test.input.ParentID, test.input.TxRoot, test.input.Timestamp)
+		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), privateKey)
+		bs = bs.WithSignature(sig)
+		assert.Equal(t, cons.ValidateBlockSummary(bs), test.ret, test.msg)
 	}
 }
 
@@ -212,48 +208,61 @@ func TestValidateEndorsement(t *testing.T) {
 	// Get the committee keys and proof
 	beacon := getBeaconFromHeader(cons.chain.GenesisBlock().Header())
 	seed := seed(beacon, 1)
+
 	proof, pk := getValidCommittee(seed)
 	if proof == nil {
 		t.Errorf("Failed to find a valid committee")
 	}
 
-	// Clean case
-	ed1 := block.NewEndorsement(bs, pk, proof)
-	sig, err = crypto.Sign(ed1.SigningHash().Bytes(), ethsk)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ed1 = ed1.WithSignature(sig)
-	if err := cons.ValidateEndorsement(ed1); err != nil {
-		t.Errorf("clean case")
-	}
-
-	// wrong proof
-	var randProof vrf.Proof
-	rand.Read(randProof[:])
-	ed2 := block.NewEndorsement(bs, pk, &randProof)
-	sig, err = crypto.Sign(ed1.SigningHash().Bytes(), ethsk)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ed2 = ed2.WithSignature(sig)
-	if err := cons.ValidateEndorsement(ed2); err != errVrfProof {
-		t.Errorf("errVrfProof")
-	}
-
-	// not committee
-	proof, pk = getInvalidCommittee(seed)
+	_proof, _pk := getInvalidCommittee(seed)
 	if proof == nil {
 		t.Errorf("Failed to find a false committee")
 	}
-	ed3 := block.NewEndorsement(bs, pk, proof)
-	sig, err = crypto.Sign(seed.Bytes(), ethsk)
-	if err != nil {
-		t.Fatal(err)
+
+	var randKey vrf.PublicKey
+	rand.Read(randKey[:])
+
+	var randProof vrf.Proof
+	rand.Read(randProof[:])
+
+	type testObj struct {
+		Summary   *block.Summary
+		Proof     *vrf.Proof
+		PublicKey *vrf.PublicKey
 	}
-	ed3 = ed3.WithSignature(sig)
-	if err := cons.ValidateEndorsement(ed3); err != errNotCommittee {
-		t.Errorf("errNotCommittee")
+
+	tests := []struct {
+		input testObj
+		ret   error
+		msg   string
+	}{
+		{
+			testObj{bs, proof, pk},
+			nil,
+			"clean case",
+		},
+		{
+			testObj{bs, proof, &randKey},
+			errVrfProof,
+			"Random vrf public key",
+		},
+		{
+			testObj{bs, &randProof, pk},
+			errVrfProof,
+			"Random vrf proof",
+		},
+		{
+			testObj{bs, _proof, _pk},
+			errNotCommittee,
+			"Not committee",
+		},
+	}
+
+	for _, test := range tests {
+		ed := block.NewEndorsement(test.input.Summary, test.input.Proof)
+		sig, _ = crypto.Sign(ed.SigningHash().Bytes(), ethsk)
+		ed = ed.WithSignature(sig)
+		assert.Equal(t, cons.ValidateEndorsement(ed, test.input.PublicKey), test.ret, test.msg)
 	}
 }
 

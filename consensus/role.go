@@ -105,7 +105,7 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary) error {
 }
 
 // ValidateEndorsement validates a given endorsement
-func (c *Consensus) ValidateEndorsement(ed *block.Endorsement) error {
+func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf.PublicKey) error {
 	// validate the block summary
 	if err := c.ValidateBlockSummary(ed.BlockSummary()); err != nil {
 		return err
@@ -128,7 +128,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement) error {
 	seed := seed(beacon, round)
 
 	// validate proof
-	if ok, _ := ed.VrfPublicKey().Verify(ed.VrfProof(), seed.Bytes()); !ok {
+	if ok, _ := vrfPublicKey.Verify(ed.VrfProof(), seed.Bytes()); !ok {
 		return errVrfProof
 	}
 
