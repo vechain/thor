@@ -35,8 +35,8 @@ type CustomGenesis struct {
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	launchTime := gen.LaunchTime
 
-	if gen.GasLimit <= 0 {
-		return nil, errors.New("gasLimit must not be 0")
+	if gen.GasLimit == 0 {
+		gen.GasLimit = thor.InitialGasLimit
 	}
 	var executor thor.Address
 	if gen.Params.ExecutorAddress != nil {
@@ -82,16 +82,17 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range gen.Accounts {
-				if a.Balance == nil {
-					return fmt.Errorf("%s: balance must be set", a.Address)
-				}
-				if a.Balance.Sign() < 0 {
-					return fmt.Errorf("%s: balance must be a non-negative integer", a.Address)
-				}
-
-				tokenSupply.Add(tokenSupply, a.Balance)
-				if err := state.SetBalance(a.Address, a.Balance); err != nil {
-					return err
+				if a.Balance != nil {
+					if a.Balance.Sign() < 0 {
+						return fmt.Errorf("%s: balance must be a non-negative integer", a.Address)
+					}
+					tokenSupply.Add(tokenSupply, a.Balance)
+					if err := state.SetBalance(a.Address, a.Balance); err != nil {
+						return err
+					}
+					if err := state.SetEnergy(a.Address, &big.Int{}, launchTime); err != nil {
+						return err
+					}
 				}
 				if a.Energy != nil {
 					if a.Energy.Sign() < 0 {
@@ -124,14 +125,28 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Params.BaseGasPrice.Sign() < 0 {
-		return nil, errors.New("baseGasPrice must be a non-negative integer")
+	if gen.Params.BaseGasPrice != nil {
+		if gen.Params.BaseGasPrice.Sign() < 0 {
+			return nil, errors.New("baseGasPrice must be a non-negative integer")
+		}
+	} else {
+		gen.Params.BaseGasPrice = thor.InitialBaseGasPrice
 	}
-	if gen.Params.RewardRatio.Sign() < 0 {
-		return nil, errors.New("rewardRatio must be a non-negative integer")
+
+	if gen.Params.RewardRatio != nil {
+		if gen.Params.RewardRatio.Sign() < 0 {
+			return nil, errors.New("rewardRatio must be a non-negative integer")
+		}
+	} else {
+		gen.Params.RewardRatio = thor.InitialRewardRatio
 	}
-	if gen.Params.ProposerEndorsement.Sign() < 0 {
-		return nil, errors.New("proposerEndorsement must a non-negative integer")
+
+	if gen.Params.ProposerEndorsement != nil {
+		if gen.Params.ProposerEndorsement.Sign() < 0 {
+			return nil, errors.New("proposerEndorsement must a non-negative integer")
+		}
+	} else {
+		gen.Params.ProposerEndorsement = thor.InitialProposerEndorsement
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
@@ -180,9 +195,9 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 type Account struct {
 	Address thor.Address            `json:"address"`
 	Balance *big.Int                `json:"balance"`
-	Energy  *big.Int                `json:"energy,omitempty"`
-	Code    string                  `json:"code,omitempty"`
-	Storage map[string]thor.Bytes32 `json:"storage,omitempty"`
+	Energy  *big.Int                `json:"energy"`
+	Code    string                  `json:"code"`
+	Storage map[string]thor.Bytes32 `json:"storage"`
 }
 
 // Authority is the authority node info
