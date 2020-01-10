@@ -45,13 +45,13 @@ func (b *Builder) GasLimit(limit uint64) *Builder {
 	return b
 }
 
-// State add a state process
+// State add a state process !!!touch accounts's energy is mandatory if you touch its balance
 func (b *Builder) State(proc func(state *state.State) error) *Builder {
 	b.stateProcs = append(b.stateProcs, proc)
 	return b
 }
 
-// Call add a contrct call.
+// Call add a contract call.
 func (b *Builder) Call(clause *tx.Clause, caller thor.Address) *Builder {
 	b.calls = append(b.calls, call{clause, caller})
 	return b
