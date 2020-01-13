@@ -15,6 +15,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
+	"io"
 )
 
 const (
@@ -34,8 +35,19 @@ type engine interface {
 
 // Options optional parameters for MuxDB.
 type Options struct {
-	FDCache         int // the capacity of the open files caching.
-	TrieCacheSizeMB int // size of trie node cache
+	// EncodedTrieNodeCacheSizeMB is the size of encoded trie node cache.
+	EncodedTrieNodeCacheSizeMB int
+	// DecodedTrieNodeCacheCapacity is max count of cached decoded trie nodes.
+	DecodedTrieNodeCacheCapacity int
+	// OpenFilesCacheCapacity is the capacity of open files caching for underlying database.
+	OpenFilesCacheCapacity int
+	// ReadCacheMB is the size of read cache for underlying database.
+	ReadCacheMB int
+	// WriteBufferMB is the size of write buffer for underlying database.
+	WriteBufferMB int
+	// DisablePageCache Disable page cache for database file.
+	// It's for test purpose only.
+	DisablePageCache bool
 }
 
 // MuxDB is the database to efficiently store state trie and block-chain data.
@@ -43,16 +55,18 @@ type MuxDB struct {
 	engine        engine
 	trieCache     *trieCache
 	trieLiveSpace *trieLiveSpace
+	storageCloser io.Closer
 }
 
 // Open opens or creates DB at the given path.
 func Open(path string, options *Options) (*MuxDB, error) {
 	// prepare leveldb options
 	ldbOpts := opt.Options{
-		OpenFilesCacheCapacity: options.FDCache,
-		BlockCacheCapacity:     256 * opt.MiB,
-		WriteBuffer:            128 * opt.MiB,
+		OpenFilesCacheCapacity: options.OpenFilesCacheCapacity,
+		BlockCacheCapacity:     options.ReadCacheMB * opt.MiB,
+		WriteBuffer:            options.WriteBufferMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
+		BlockSize:              1024 * 32, // balance performance of point reads and compression ratio.
 		DisableSeeksCompaction: true,
 		KeyVolatile: func(key []byte) bool {
 			switch key[0] {
@@ -62,12 +76,19 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			return false
 		},
 	}
+
+	storage, err := openLevelFileStorage(path, false, options.DisablePageCache)
+	if err != nil {
+		return nil, err
+	}
+
 	// open leveldb
-	ldb, err := leveldb.OpenFile(path, &ldbOpts)
+	ldb, err := leveldb.Open(storage, &ldbOpts)
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
-		ldb, err = leveldb.RecoverFile(path, &ldbOpts)
+		ldb, err = leveldb.Recover(storage, &ldbOpts)
 	}
 	if err != nil {
+		storage.Close()
 		return nil, err
 	}
 
@@ -82,15 +103,19 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	}
 
 	return &MuxDB{
-		engine:        engine,
-		trieCache:     newTrieCache(options.TrieCacheSizeMB),
+		engine: engine,
+		trieCache: newTrieCache(
+			options.EncodedTrieNodeCacheSizeMB,
+			options.DecodedTrieNodeCacheCapacity),
 		trieLiveSpace: trieLiveSpace,
+		storageCloser: storage,
 	}, nil
 }
 
 // NewMem creates a memory-backed DB.
 func NewMem() *MuxDB {
-	ldb, _ := leveldb.Open(storage.NewMemStorage(), nil)
+	storage := storage.NewMemStorage()
+	ldb, _ := leveldb.Open(storage, nil)
 
 	engine := newLevelEngine(ldb)
 	propsStore := newNamedStore(engine, propsStoreName)
@@ -98,14 +123,19 @@ func NewMem() *MuxDB {
 
 	return &MuxDB{
 		engine:        newLevelEngine(ldb),
-		trieCache:     newTrieCache(0),
+		trieCache:     newTrieCache(0, 8192),
 		trieLiveSpace: trieLiveSpace,
+		storageCloser: storage,
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	return db.engine.Close()
+	err := db.engine.Close()
+	if err1 := db.storageCloser.Close(); err == nil {
+		err = err1
+	}
+	return err
 }
 
 // NewTrie creates trie either with existing root node.
@@ -144,6 +174,11 @@ func (db *MuxDB) NewTriePruner() *TriePruner {
 // NewStore creates named kv-store.
 func (db *MuxDB) NewStore(name string) kv.Store {
 	return newNamedStore(db.engine, name)
+}
+
+// LowStore returns underlying kv-store. It's for test purpose only.
+func (db *MuxDB) LowStore() kv.Store {
+	return db.engine
 }
 
 // IsNotFound returns if the error indicates key not found.

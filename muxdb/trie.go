@@ -124,14 +124,29 @@ func (t *Trie) Hash() thor.Bytes32 {
 }
 
 // Commit writes all nodes to the trie's database.
-func (t *Trie) Commit() (root thor.Bytes32, err error) {
+func (t *Trie) Commit() (thor.Bytes32, error) {
+	return t.commit(false)
+}
+
+// CommitPermanently writes all nodes directly into permanent space.
+// All nodes committed in this way can not be pruned. It's for test purpose only.
+func (t *Trie) CommitPermanently() (thor.Bytes32, error) {
+	return t.commit(true)
+}
+
+func (t *Trie) commit(permanent bool) (root thor.Bytes32, err error) {
 	obj, err := t.lazyInit()
 	if err != nil {
 		return
 	}
 
+	space := trieSpaceP
+	if !permanent {
+		space = t.liveSpace.Active()
+	}
+
 	err = t.store.Batch(func(putter kv.PutFlusher) error {
-		root, err = t.doCommit(putter, obj)
+		root, err = t.doCommit(putter, obj, space)
 		return err
 	})
 	return
@@ -218,7 +233,7 @@ func (t *Trie) getDecoded(key *trie.NodeKey) (interface{}, func(interface{})) {
 	return nil, nil
 }
 
-func (t *Trie) doCommit(putter kv.Putter, trieObj *trie.Trie) (root thor.Bytes32, err error) {
+func (t *Trie) doCommit(putter kv.Putter, trieObj *trie.Trie, space byte) (root thor.Bytes32, err error) {
 	// save secure key preimages
 	if len(t.secureKeys) > 0 {
 		buf := [1 + 32]byte{trieSecureKeySpace}
@@ -231,7 +246,6 @@ func (t *Trie) doCommit(putter kv.Putter, trieObj *trie.Trie) (root thor.Bytes32
 		t.secureKeys = nil
 	}
 
-	commitSpace := t.liveSpace.Active()
 	return trieObj.CommitTo(&struct {
 		trie.DatabaseWriter
 		putEncodedFunc
@@ -240,7 +254,7 @@ func (t *Trie) doCommit(putter kv.Putter, trieObj *trie.Trie) (root thor.Bytes32
 		// implements trie.DatabaseWriterEx.PutEncoded
 		func(key *trie.NodeKey, enc []byte) error {
 			t.cache.SetEncoded(key.Hash, enc, len(key.Path))
-			return t.keyBuf.Put(putter.Put, key, enc, commitSpace)
+			return t.keyBuf.Put(putter.Put, key, enc, space)
 		},
 	})
 }

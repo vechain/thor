@@ -16,8 +16,7 @@ const (
 	// In practical, it's more efficient if divide the cache into
 	// several segments by node path length.
 	// 8 is the ideal value now.
-	encTrieNodeCacheSeg  = 8
-	decTrieNodeCacheSize = 8192
+	encTrieNodeCacheSeg = 8
 )
 
 type trieCache struct {
@@ -25,14 +24,16 @@ type trieCache struct {
 	dec *lru.Cache                            // for decoded nodes
 }
 
-func newTrieCache(encSizeMB int) *trieCache {
+func newTrieCache(encSizeMB int, decCapacity int) *trieCache {
 	var cache trieCache
 	if encSizeMB > 0 {
 		for i := 0; i < encTrieNodeCacheSeg; i++ {
 			cache.enc[i] = freecache.NewCache(encSizeMB * 1024 * 1024 / encTrieNodeCacheSeg)
 		}
 	}
-	cache.dec, _ = lru.New(decTrieNodeCacheSize)
+	if decCapacity > 0 {
+		cache.dec, _ = lru.New(decCapacity)
+	}
 	return &cache
 }
 
