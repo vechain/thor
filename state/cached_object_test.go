@@ -13,15 +13,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
 )
 
 func TestCachedObject(t *testing.T) {
-	kv, _ := lvldb.NewMem()
+	db := muxdb.NewMem()
+	addr := thor.Address{}
 
-	stgTrie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
+	stgTrie := db.NewSecureTrie(StorageTrieName(thor.Blake2b(addr[:])), thor.Bytes32{})
 	storages := []struct {
 		k thor.Bytes32
 		v rlp.RawValue
@@ -42,7 +42,7 @@ func TestCachedObject(t *testing.T) {
 	rand.Read(code)
 
 	codeHash := crypto.Keccak256(code)
-	kv.Put(codeHash, code)
+	db.NewStore(codeStoreName).Put(codeHash, code)
 
 	account := Account{
 		Balance:     &big.Int{},
@@ -50,15 +50,16 @@ func TestCachedObject(t *testing.T) {
 		StorageRoot: storageRoot[:],
 	}
 
-	obj := newCachedObject(kv, &account)
+	obj := newCachedObject(db, addr, &account)
 
 	assert.Equal(t,
-		M(obj.GetCode()),
-		[]interface{}{code, nil})
+		M(code, nil),
+		M(obj.GetCode()))
 
 	for _, s := range storages {
 		assert.Equal(t,
-			M(obj.GetStorage(s.k)),
-			[]interface{}{s.v, nil})
+			M(s.v, nil),
+			M(obj.GetStorage(s.k)))
+
 	}
 }

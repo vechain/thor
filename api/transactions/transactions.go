@@ -19,30 +19,28 @@ import (
 )
 
 type Transactions struct {
-	chain *chain.Chain
-	pool  *txpool.TxPool
+	repo *chain.Repository
+	pool *txpool.TxPool
 }
 
-func New(chain *chain.Chain, pool *txpool.TxPool) *Transactions {
+func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
-		chain,
+		repo,
 		pool,
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, blockID thor.Bytes32) (*rawTransaction, error) {
-	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (*rawTransaction, error) {
+
+	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
+		if t.repo.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
-	if err != nil {
-		return nil, err
-	}
-	block, err := t.chain.GetBlock(txMeta.BlockID)
+
+	header, _, err := t.repo.GetBlockHeader(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -53,53 +51,50 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, blockID thor.Bytes32
 	return &rawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: TxMeta{
-			BlockID:        block.Header().ID(),
-			BlockNumber:    block.Header().Number(),
-			BlockTimestamp: block.Header().Timestamp(),
+			BlockID:        header.ID(),
+			BlockNumber:    header.Number(),
+			BlockTimestamp: header.Timestamp(),
 		},
 	}, nil
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Bytes32, blockID thor.Bytes32) (*Transaction, error) {
-	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
+func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32) (*Transaction, error) {
+	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
+		if t.repo.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
+
+	h, _, err := t.repo.GetBlockHeader(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
-	h, err := t.chain.GetBlockHeader(txMeta.BlockID)
-	if err != nil {
-		return nil, err
-	}
-	return convertTransaction(tx, h, txMeta.Index)
+	return convertTransaction(tx, h)
 }
 
 //GetTransactionReceiptByID get tx's receipt
-func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, blockID thor.Bytes32) (*Receipt, error) {
-	txMeta, err := t.chain.GetTransactionMeta(txID, blockID)
+func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*Receipt, error) {
+	chain := t.repo.NewChain(head)
+	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
-		if t.chain.IsNotFound(err) {
+		if t.repo.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	tx, err := t.chain.GetTransaction(txMeta.BlockID, txMeta.Index)
+
+	receipt, err := chain.GetTransactionReceipt(txID)
 	if err != nil {
 		return nil, err
 	}
-	h, err := t.chain.GetBlockHeader(txMeta.BlockID)
+
+	h, _, err := t.repo.GetBlockHeader(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
-	receipt, err := t.chain.GetTransactionReceipt(txMeta.BlockID, txMeta.Index)
-	if err != nil {
-		return nil, err
-	}
+
 	return convertReceipt(receipt, h, tx)
 }
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
@@ -136,25 +131,24 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-	h, err := t.chain.GetBlockHeader(head)
-	if err != nil {
-		if t.chain.IsNotFound(err) {
+	if _, _, err := t.repo.GetBlockHeader(head); err != nil {
+		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
-		return err
 	}
+
 	raw := req.URL.Query().Get("raw")
 	if raw != "" && raw != "false" && raw != "true" {
 		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
 	}
 	if raw == "true" {
-		tx, err := t.getRawTransaction(txID, h.ID())
+		tx, err := t.getRawTransaction(txID, head)
 		if err != nil {
 			return err
 		}
 		return utils.WriteJSON(w, tx)
 	}
-	tx, err := t.getTransactionByID(txID, h.ID())
+	tx, err := t.getTransactionByID(txID, head)
 	if err != nil {
 		return err
 	}
@@ -172,14 +166,14 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-	h, err := t.chain.GetBlockHeader(head)
-	if err != nil {
-		if t.chain.IsNotFound(err) {
+
+	if _, _, err := t.repo.GetBlockHeader(head); err != nil {
+		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
-		return err
 	}
-	receipt, err := t.getTransactionReceiptByID(txID, h.ID())
+
+	receipt, err := t.getTransactionReceiptByID(txID, head)
 	if err != nil {
 		return err
 	}
@@ -188,7 +182,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 
 func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 	if head == "" {
-		return t.chain.BestBlock().Header().ID(), nil
+		return t.repo.BestBlock().Header().ID(), nil
 	}
 	h, err := thor.ParseBytes32(head)
 	if err != nil {

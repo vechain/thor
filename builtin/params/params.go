@@ -24,8 +24,8 @@ func New(addr thor.Address, state *state.State) *Params {
 }
 
 // Get native way to get param.
-func (p *Params) Get(key thor.Bytes32) (value *big.Int) {
-	p.state.DecodeStorage(p.addr, key, func(raw []byte) error {
+func (p *Params) Get(key thor.Bytes32) (value *big.Int, err error) {
+	err = p.state.DecodeStorage(p.addr, key, func(raw []byte) error {
 		if len(raw) == 0 {
 			value = &big.Int{}
 			return nil
@@ -36,8 +36,8 @@ func (p *Params) Get(key thor.Bytes32) (value *big.Int) {
 }
 
 // Set native way to set param.
-func (p *Params) Set(key thor.Bytes32, value *big.Int) {
-	p.state.EncodeStorage(p.addr, key, func() ([]byte, error) {
+func (p *Params) Set(key thor.Bytes32, value *big.Int) error {
+	return p.state.EncodeStorage(p.addr, key, func() ([]byte, error) {
 		if value.Sign() == 0 {
 			return nil, nil
 		}

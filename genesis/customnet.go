@@ -35,8 +35,8 @@ type CustomGenesis struct {
 func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	launchTime := gen.LaunchTime
 
-	if gen.GasLimit <= 0 {
-		return nil, errors.New("gasLimit must not be 0")
+	if gen.GasLimit == 0 {
+		gen.GasLimit = thor.InitialGasLimit
 	}
 	var executor thor.Address
 	if gen.Params.ExecutorAddress != nil {
@@ -51,48 +51,66 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
 			for addr := range vm.PrecompiledContractsByzantium {
-				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
+				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
+					return err
+				}
 			}
 
 			// alloc builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
 
 			if len(gen.Executor.Approvers) > 0 {
-				state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
+				if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+					return err
+				}
 			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range gen.Accounts {
-				if a.Balance == nil {
-					return fmt.Errorf("%s: balance must be set", a.Address)
+				if a.Balance != nil {
+					if a.Balance.Sign() < 0 {
+						return fmt.Errorf("%s: balance must be a non-negative integer", a.Address)
+					}
+					tokenSupply.Add(tokenSupply, a.Balance)
+					if err := state.SetBalance(a.Address, a.Balance); err != nil {
+						return err
+					}
+					if err := state.SetEnergy(a.Address, &big.Int{}, launchTime); err != nil {
+						return err
+					}
 				}
-				if a.Balance.Sign() < 1 {
-					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
-				}
-				if a.Balance.Sign() < 1 {
-					return fmt.Errorf("%s: balance must be a non-zero integer", a.Address)
-				}
-
-				tokenSupply.Add(tokenSupply, a.Balance)
-				state.SetBalance(a.Address, a.Balance)
 				if a.Energy != nil {
 					if a.Energy.Sign() < 0 {
 						return fmt.Errorf("%s: energy must be a non-negative integer", a.Address)
 					}
 					energySupply.Add(energySupply, a.Energy)
-					state.SetEnergy(a.Address, a.Energy, launchTime)
+					if err := state.SetEnergy(a.Address, a.Energy, launchTime); err != nil {
+						return err
+					}
 				}
 				if len(a.Code) > 0 {
 					code, err := hexutil.Decode(a.Code)
 					if err != nil {
 						return fmt.Errorf("invalid contract code for address: %s", a.Address)
 					}
-					state.SetCode(a.Address, code)
+					if err := state.SetCode(a.Address, code); err != nil {
+						return err
+					}
 				}
 				if len(a.Storage) > 0 {
 					for k, v := range a.Storage {
@@ -101,21 +119,34 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				}
 			}
 
-			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-			return nil
+			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Params.BaseGasPrice.Sign() < 1 {
-		return nil, errors.New("baseGasPrice must be a non-zero integer")
+	if gen.Params.BaseGasPrice != nil {
+		if gen.Params.BaseGasPrice.Sign() < 0 {
+			return nil, errors.New("baseGasPrice must be a non-negative integer")
+		}
+	} else {
+		gen.Params.BaseGasPrice = thor.InitialBaseGasPrice
 	}
-	if gen.Params.RewardRatio.Sign() < 1 {
-		return nil, errors.New("rewardRatio must be a non-zero integer")
+
+	if gen.Params.RewardRatio != nil {
+		if gen.Params.RewardRatio.Sign() < 0 {
+			return nil, errors.New("rewardRatio must be a non-negative integer")
+		}
+	} else {
+		gen.Params.RewardRatio = thor.InitialRewardRatio
 	}
-	if gen.Params.ProposerEndorsement.Sign() < 1 {
-		return nil, errors.New("proposerEndorsement must be a non-zero integer")
+
+	if gen.Params.ProposerEndorsement != nil {
+		if gen.Params.ProposerEndorsement.Sign() < 0 {
+			return nil, errors.New("proposerEndorsement must a non-negative integer")
+		}
+	} else {
+		gen.Params.ProposerEndorsement = thor.InitialProposerEndorsement
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
@@ -164,9 +195,9 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 type Account struct {
 	Address thor.Address            `json:"address"`
 	Balance *big.Int                `json:"balance"`
-	Energy  *big.Int                `json:"energy,omitempty"`
-	Code    string                  `json:"code,omitempty"`
-	Storage map[string]thor.Bytes32 `json:"storage,omitempty"`
+	Energy  *big.Int                `json:"energy"`
+	Code    string                  `json:"code"`
+	Storage map[string]thor.Bytes32 `json:"storage"`
 }
 
 // Authority is the authority node info

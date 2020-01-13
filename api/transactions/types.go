@@ -84,7 +84,7 @@ type rawTransaction struct {
 }
 
 //convertTransaction convert a raw transaction into a json format transaction
-func convertTransaction(tx *tx.Transaction, header *block.Header, txIndex uint64) (*Transaction, error) {
+func convertTransaction(tx *tx.Transaction, header *block.Header) (*Transaction, error) {
 	//tx origin
 	origin, _ := tx.Origin()
 	delegator, _ := tx.Delegator()

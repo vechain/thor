@@ -19,12 +19,12 @@ import (
 )
 
 type Blocks struct {
-	chain *chain.Chain
+	repo *chain.Repository
 }
 
-func New(chain *chain.Chain) *Blocks {
+func New(repo *chain.Repository) *Blocks {
 	return &Blocks{
-		chain,
+		repo,
 	}
 }
 
@@ -35,7 +35,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	}
 	block, err := b.getBlock(revision)
 	if err != nil {
-		if b.chain.IsNotFound(err) {
+		if b.repo.IsNotFound(err) {
 			return utils.WriteJSON(w, nil)
 		}
 		return err
@@ -75,21 +75,20 @@ func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 func (b *Blocks) getBlock(revision interface{}) (*block.Block, error) {
 	switch revision.(type) {
 	case thor.Bytes32:
-		return b.chain.GetBlock(revision.(thor.Bytes32))
+		return b.repo.GetBlock(revision.(thor.Bytes32))
 	case uint32:
-		return b.chain.GetTrunkBlock(revision.(uint32))
+		return b.repo.NewBestChain().GetBlock(revision.(uint32))
 	default:
-		return b.chain.BestBlock(), nil
+		return b.repo.BestBlock(), nil
 	}
 }
 
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
-	best := b.chain.BestBlock()
-	ancestorID, err := b.chain.GetAncestorBlockID(best.Header().ID(), blkNum)
+	idByNum, err := b.repo.NewBestChain().GetBlockID(blkNum)
 	if err != nil {
 		return false, err
 	}
-	return ancestorID == blkID, nil
+	return blkID == idByNum, nil
 }
 
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {

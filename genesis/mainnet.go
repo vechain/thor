@@ -27,16 +27,30 @@ func NewMainnet() *Genesis {
 		State(func(state *state.State) error {
 			// alloc precompiled contracts
 			for addr := range vm.PrecompiledContractsByzantium {
-				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
+				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
+					return err
+				}
 			}
 
 			// alloc builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
 
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
@@ -44,31 +58,50 @@ func NewMainnet() *Genesis {
 			// alloc tokens for authority node endorsor
 			for _, anode := range initialAuthorityNodes {
 				tokenSupply.Add(tokenSupply, thor.InitialProposerEndorsement)
-				state.SetBalance(anode.endorsorAddress, thor.InitialProposerEndorsement)
-				state.SetEnergy(anode.endorsorAddress, &big.Int{}, launchTime)
+				if err := state.SetBalance(anode.endorsorAddress, thor.InitialProposerEndorsement); err != nil {
+					return err
+				}
+				if err := state.SetEnergy(anode.endorsorAddress, &big.Int{}, launchTime); err != nil {
+					return err
+				}
 			}
 
 			// alloc all other tokens
 			// 21,046,908,616.5 x 4
 			amount := new(big.Int).Mul(big.NewInt(210469086165), big.NewInt(1e17))
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), amount)
-			state.SetEnergy(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), &big.Int{}, launchTime)
+			if err := state.SetBalance(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(thor.MustParseAddress("0x137053dfbe6c0a43f915ad2efefefdcc2708e975"), &big.Int{}, launchTime); err != nil {
+				return err
+			}
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), amount)
-			state.SetEnergy(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), &big.Int{}, launchTime)
+			if err := state.SetBalance(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(thor.MustParseAddress("0xaf111431c1284a5e16d2eecd2daed133ce96820e"), &big.Int{}, launchTime); err != nil {
+				return err
+			}
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), amount)
-			state.SetEnergy(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), &big.Int{}, launchTime)
+			if err := state.SetBalance(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(thor.MustParseAddress("0x997522a4274336f4b86af4a6ed9e45aedcc6d360"), &big.Int{}, launchTime); err != nil {
+				return err
+			}
 
 			tokenSupply.Add(tokenSupply, amount)
-			state.SetBalance(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), amount)
-			state.SetEnergy(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), &big.Int{}, launchTime)
+			if err := state.SetBalance(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(thor.MustParseAddress("0x0bd7b06debd1522e75e4b91ff598f107fd826c8a"), &big.Int{}, launchTime); err != nil {
+				return err
+			}
 
-			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
-			return nil
+			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		})
 
 	///// initialize builtin contracts

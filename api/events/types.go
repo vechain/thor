@@ -7,8 +7,11 @@ package events
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 )
@@ -93,14 +96,18 @@ type EventCriteria struct {
 
 type EventFilter struct {
 	CriteriaSet []*EventCriteria `json:"criteriaSet"`
-	Range       *logdb.Range     `json:"range"`
+	Range       *Range           `json:"range"`
 	Options     *logdb.Options   `json:"options"`
 	Order       logdb.Order      `json:"order"`
 }
 
-func convertEventFilter(filter *EventFilter) *logdb.EventFilter {
+func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
+	rng, err := ConvertRange(chain, filter.Range)
+	if err != nil {
+		return nil, err
+	}
 	f := &logdb.EventFilter{
-		Range:   filter.Range,
+		Range:   rng,
 		Options: filter.Options,
 		Order:   filter.Order,
 	}
@@ -121,5 +128,58 @@ func convertEventFilter(filter *EventFilter) *logdb.EventFilter {
 		}
 		f.CriteriaSet = criterias
 	}
-	return f
+	return f, nil
+}
+
+type RangeType string
+
+const (
+	BlockRangeType RangeType = "block"
+	TimeRangeType  RangeType = "time"
+)
+
+type Range struct {
+	Unit RangeType
+	From uint64
+	To   uint64
+}
+
+func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
+	if r.Unit == TimeRangeType {
+		emptyRange := logdb.Range{
+			From: math.MaxUint32,
+			To:   math.MaxUint32,
+		}
+
+		genesis, err := chain.GetBlockHeader(0)
+		if err != nil {
+			return nil, err
+		}
+		if r.To < genesis.Timestamp() {
+			return &emptyRange, nil
+		}
+		head, err := chain.GetBlockHeader(block.Number(chain.HeadID()))
+		if r.From > head.Timestamp() {
+			return &emptyRange, nil
+		}
+
+		fromHeader, err := chain.FindBlockHeaderByTimestamp(r.From, 1)
+		if err != nil {
+			return nil, err
+		}
+
+		toHeader, err := chain.FindBlockHeaderByTimestamp(r.To, -1)
+		if err != nil {
+			return nil, err
+		}
+
+		return &logdb.Range{
+			From: fromHeader.Number(),
+			To:   toHeader.Number(),
+		}, nil
+	}
+	return &logdb.Range{
+		From: uint32(r.From),
+		To:   uint32(r.To),
+	}, nil
 }

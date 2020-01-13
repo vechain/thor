@@ -12,55 +12,53 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
 func TestStateReadWrite(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	state, _ := New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+
+	state := New(db, thor.Bytes32{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
 
-	assert.False(t, state.Exists(addr))
-	assert.Equal(t, state.GetBalance(addr), &big.Int{})
-	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Bytes32{})
+	assert.Equal(t, M(false, nil), M(state.Exists(addr)))
+	assert.Equal(t, M(&big.Int{}, nil), M(state.GetBalance(addr)))
+	assert.Equal(t, M([]byte(nil), nil), M(state.GetCode(addr)))
+	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetCodeHash(addr)))
+	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetStorage(addr, storageKey)))
 
 	// make account not empty
 	state.SetBalance(addr, big.NewInt(1))
-	assert.Equal(t, state.GetBalance(addr), big.NewInt(1))
+	assert.Equal(t, M(big.NewInt(1), nil), M(state.GetBalance(addr)))
 
 	state.SetMaster(addr, thor.BytesToAddress([]byte("master")))
-	assert.Equal(t, thor.BytesToAddress([]byte("master")), state.GetMaster(addr))
+	assert.Equal(t, M(thor.BytesToAddress([]byte("master")), nil), M(state.GetMaster(addr)))
 
 	state.SetCode(addr, []byte("code"))
-	assert.Equal(t, state.GetCode(addr), []byte("code"))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32(crypto.Keccak256Hash([]byte("code"))))
+	assert.Equal(t, M([]byte("code"), nil), M(state.GetCode(addr)))
+	assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash([]byte("code"))), nil), M(state.GetCodeHash(addr)))
 
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.Bytes32{})
+	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetStorage(addr, storageKey)))
 	state.SetStorage(addr, storageKey, thor.BytesToBytes32([]byte("storageValue")))
-	assert.Equal(t, state.GetStorage(addr, storageKey), thor.BytesToBytes32([]byte("storageValue")))
+	assert.Equal(t, M(thor.BytesToBytes32([]byte("storageValue")), nil), M(state.GetStorage(addr, storageKey)))
 
-	assert.True(t, state.Exists(addr))
+	assert.Equal(t, M(true, nil), M(state.Exists(addr)))
 
 	// delete account
 	state.Delete(addr)
-	assert.False(t, state.Exists(addr))
-	assert.Equal(t, state.GetBalance(addr), &big.Int{})
-	assert.Equal(t, state.GetMaster(addr), thor.Address{})
-	assert.Equal(t, state.GetCode(addr), []byte(nil))
-	assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32{})
-
-	assert.Nil(t, state.Err(), "error is not expected")
-
+	assert.Equal(t, M(false, nil), M(state.Exists(addr)))
+	assert.Equal(t, M(&big.Int{}, nil), M(state.GetBalance(addr)))
+	assert.Equal(t, M(thor.Address{}, nil), M(state.GetMaster(addr)))
+	assert.Equal(t, M([]byte(nil), nil), M(state.GetCode(addr)))
+	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetCodeHash(addr)))
 }
 
 func TestStateRevert(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	state, _ := New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	state := New(db, thor.Bytes32{})
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -85,18 +83,17 @@ func TestStateRevert(t *testing.T) {
 
 	for i := range values {
 		v := values[len(values)-i-1]
-		assert.Equal(t, state.GetBalance(addr), v.balance)
-		assert.Equal(t, state.GetCode(addr), v.code)
-		assert.Equal(t, state.GetCodeHash(addr), thor.Bytes32(crypto.Keccak256Hash(v.code)))
-		assert.Equal(t, state.GetStorage(addr, storageKey), v.storage)
+		assert.Equal(t, M(v.balance, nil), M(state.GetBalance(addr)))
+		assert.Equal(t, M(v.code, nil), M(state.GetCode(addr)))
+		assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash(v.code)), nil), M(state.GetCodeHash(addr)))
+		assert.Equal(t, M(v.storage, nil), M(state.GetStorage(addr, storageKey)))
 		state.RevertTo(chk)
 		chk--
 	}
-	assert.False(t, state.Exists(addr))
-	assert.Nil(t, state.Err(), "error is not expected")
+	assert.Equal(t, M(false, nil), M(state.Exists(addr)))
 
 	//
-	state, _ = New(thor.Bytes32{}, kv)
+	state = New(db, thor.Bytes32{})
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 0)
@@ -104,8 +101,8 @@ func TestStateRevert(t *testing.T) {
 }
 
 func TestEnergy(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	st := New(db, thor.Bytes32{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -115,7 +112,7 @@ func TestEnergy(t *testing.T) {
 	st.SetBalance(acc, vetBal)
 	st.SetEnergy(acc, &big.Int{}, 10)
 
-	bal1 := st.GetEnergy(acc, time1)
+	bal1, _ := st.GetEnergy(acc, time1)
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
 	x.Mul(x, new(big.Int).SetUint64(time1-10))
 	x.Div(x, big.NewInt(1e18))
@@ -124,21 +121,21 @@ func TestEnergy(t *testing.T) {
 }
 
 func TestStorage(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	st := New(db, thor.Bytes32{})
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))
 
 	st.SetStorage(addr, key, thor.BytesToBytes32([]byte{1}))
 	data, _ := rlp.EncodeToBytes([]byte{1})
-	assert.Equal(t, rlp.RawValue(data), st.GetRawStorage(addr, key))
+	assert.Equal(t, M(rlp.RawValue(data), nil), M(st.GetRawStorage(addr, key)))
 
 	st.SetRawStorage(addr, key, data)
-	assert.Equal(t, thor.BytesToBytes32([]byte{1}), st.GetStorage(addr, key))
+	assert.Equal(t, M(thor.BytesToBytes32([]byte{1}), nil), M(st.GetStorage(addr, key)))
 
 	st.SetStorage(addr, key, thor.Bytes32{})
-	assert.Zero(t, len(st.GetRawStorage(addr, key)))
+	assert.Equal(t, M(rlp.RawValue(nil), nil), M(st.GetRawStorage(addr, key)))
 
 	v := struct {
 		V1 uint
@@ -147,5 +144,5 @@ func TestStorage(t *testing.T) {
 	data, _ = rlp.EncodeToBytes(&v)
 	st.SetRawStorage(addr, key, data)
 
-	assert.Equal(t, thor.Blake2b(data), st.GetStorage(addr, key))
+	assert.Equal(t, M(thor.Blake2b(data), nil), M(st.GetStorage(addr, key)))
 }

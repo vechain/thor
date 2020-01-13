@@ -9,67 +9,82 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/chain"
 )
 
 func TestBlockReader(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
+	repo := newTestRepo()
+	b0 := repo.GenesisBlock()
 
-	b1 := newBlock(b0, 2)
-	ch.AddBlock(b1, nil)
+	b1 := newBlock(b0, 10)
+	repo.AddBlock(b1, nil)
 
-	b2 := newBlock(b1, 2)
-	ch.AddBlock(b2, nil)
+	b2 := newBlock(b1, 20)
+	repo.AddBlock(b2, nil)
 
-	b3 := newBlock(b2, 2)
-	ch.AddBlock(b3, nil)
+	b3 := newBlock(b2, 30)
+	repo.AddBlock(b3, nil)
 
-	b4 := newBlock(b3, 2)
-	ch.AddBlock(b4, nil)
+	b4 := newBlock(b3, 40)
+	repo.AddBlock(b4, nil)
 
-	br := ch.NewBlockReader(b2.Header().ID())
+	repo.SetBestBlockID(b4.Header().ID())
 
-	blks, err := br.Read()
-	assert.Nil(t, err)
-	assert.Equal(t, blks[0].Header().ID(), b3.Header().ID())
-	assert.False(t, blks[0].Obsolete)
+	br := repo.NewBlockReader(b2.Header().ID())
 
-	blks, err = br.Read()
-	assert.Nil(t, err)
-	assert.Equal(t, blks[0].Header().ID(), b4.Header().ID())
-	assert.False(t, blks[0].Obsolete)
+	var blks []*chain.ExtendedBlock
+
+	for {
+		r, err := br.Read()
+		if err != nil {
+			panic(err)
+		}
+		if len(r) == 0 {
+			break
+		}
+		blks = append(blks, r...)
+
+	}
+
+	assert.Equal(t, []*chain.ExtendedBlock{{b3, false}, {b4, false}}, blks)
 }
 
 func TestBlockReaderFork(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
+	repo := newTestRepo()
+	b0 := repo.GenesisBlock()
 
-	b1 := newBlock(b0, 2)
-	ch.AddBlock(b1, nil)
+	b1 := newBlock(b0, 10)
+	repo.AddBlock(b1, nil)
 
-	b2 := newBlock(b1, 2)
-	ch.AddBlock(b2, nil)
+	b2 := newBlock(b1, 20)
+	repo.AddBlock(b2, nil)
 
-	b2x := newBlock(b1, 1)
-	ch.AddBlock(b2x, nil)
+	b2x := newBlock(b1, 20)
+	repo.AddBlock(b2x, nil)
 
-	b3 := newBlock(b2, 2)
-	ch.AddBlock(b3, nil)
+	b3 := newBlock(b2, 30)
+	repo.AddBlock(b3, nil)
 
-	b4 := newBlock(b3, 2)
-	ch.AddBlock(b4, nil)
+	b4 := newBlock(b3, 40)
+	repo.AddBlock(b4, nil)
 
-	br := ch.NewBlockReader(b2x.Header().ID())
+	repo.SetBestBlockID(b4.Header().ID())
 
-	blks, err := br.Read()
-	assert.Nil(t, err)
-	assert.Equal(t, blks[0].Header().ID(), b2x.Header().ID())
-	assert.True(t, blks[0].Obsolete)
-	assert.Equal(t, blks[1].Header().ID(), b2.Header().ID())
-	assert.False(t, blks[1].Obsolete)
+	br := repo.NewBlockReader(b2x.Header().ID())
 
-	blks, err = br.Read()
-	assert.Nil(t, err)
-	assert.Equal(t, blks[0].Header().ID(), b3.Header().ID())
-	assert.False(t, blks[0].Obsolete)
+	var blks []*chain.ExtendedBlock
+
+	for {
+		r, err := br.Read()
+		if err != nil {
+			panic(err)
+		}
+		if len(r) == 0 {
+			break
+		}
+
+		blks = append(blks, r...)
+	}
+
+	assert.Equal(t, []*chain.ExtendedBlock{{b2x, true}, {b2, false}, {b3, false}, {b4, false}}, blks)
 }

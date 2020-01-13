@@ -16,18 +16,17 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/kv"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
-func newChain(kv kv.GetPutter) *chain.Chain {
+func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 	gene := genesis.NewDevnet()
-	b0, _, _ := gene.Build(state.NewCreator(kv))
-	chain, _ := chain.New(kv, b0)
-	return chain
+	b0, _, _, _ := gene.Build(state.NewStater(db))
+	repo, _ := chain.NewRepository(db, b0)
+	return repo
 }
 
 func signTx(tx *tx.Transaction, acc genesis.DevAccount) *tx.Transaction {
@@ -79,12 +78,12 @@ func TestResolve(t *testing.T) {
 func TestExecutable(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 
-	kv, _ := lvldb.NewMem()
-	chain := newChain(kv)
-	b0 := chain.GenesisBlock()
+	db := muxdb.NewMem()
+	repo := newChainRepo(db)
+	b0 := repo.GenesisBlock()
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	chain.AddBlock(b1, nil)
-	st, _ := state.New(chain.GenesisBlock().Header().StateRoot(), kv)
+	repo.AddBlock(b1, nil)
+	st := state.New(db, repo.GenesisBlock().Header().StateRoot())
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -102,7 +101,7 @@ func TestExecutable(t *testing.T) {
 		txObj, err := resolveTx(tt.tx)
 		assert.Nil(t, err)
 
-		exe, err := txObj.Executable(chain, st, b1.Header())
+		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header())
 		if tt.expectedErr != "" {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {

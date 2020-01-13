@@ -10,14 +10,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
+func M(a ...interface{}) []interface{} {
+	return a
+}
+
 func TestEnergy(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -26,23 +30,21 @@ func TestEnergy(t *testing.T) {
 		ret      interface{}
 		expected interface{}
 	}{
-		{eng.Get(acc), &big.Int{}},
-		{func() bool { eng.Add(acc, big.NewInt(10)); return true }(), true},
-		{eng.Get(acc), big.NewInt(10)},
-		{eng.Sub(acc, big.NewInt(5)), true},
-		{eng.Sub(acc, big.NewInt(6)), false},
+		{M(eng.Get(acc)), M(&big.Int{}, nil)},
+		{eng.Add(acc, big.NewInt(10)), nil},
+		{M(eng.Get(acc)), M(big.NewInt(10), nil)},
+		{M(eng.Sub(acc, big.NewInt(5))), M(true, nil)},
+		{M(eng.Sub(acc, big.NewInt(6))), M(false, nil)},
 	}
 
 	for _, tt := range tests {
 		assert.Equal(t, tt.expected, tt.ret)
 	}
-
-	assert.Nil(t, st.Err())
 }
 
 func TestEnergyGrowth(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -51,15 +53,15 @@ func TestEnergyGrowth(t *testing.T) {
 	vetBal := big.NewInt(1e18)
 	st.SetBalance(acc, vetBal)
 
-	bal1 := New(thor.Address{}, st, 1000).
+	bal1, err := New(thor.Address{}, st, 1000).
 		Get(acc)
+
+	assert.Nil(t, err)
 
 	x := new(big.Int).Mul(thor.EnergyGrowthRate, vetBal)
 	x.Mul(x, new(big.Int).SetUint64(1000-10))
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
-
-	assert.Nil(t, st.Err())
 
 }

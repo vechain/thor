@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
@@ -61,8 +62,8 @@ func emptyAccount() *Account {
 
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie trieReader, addr thor.Address) (*Account, error) {
-	data, err := trie.TryGet(addr[:])
+func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
+	data, err := trie.Get(addr[:])
 	if err != nil {
 		return nil, err
 	}
@@ -78,30 +79,26 @@ func loadAccount(trie trieReader, addr thor.Address) (*Account, error) {
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie trieWriter, addr thor.Address, a *Account) error {
+func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.TryDelete(addr[:])
+		return trie.Update(addr[:], nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		return err
 	}
-	return trie.TryUpdate(addr[:], data)
+	return trie.Update(addr[:], data)
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie trieReader, key thor.Bytes32) (rlp.RawValue, error) {
-	return trie.TryGet(key[:])
+func loadStorage(trie *muxdb.Trie, key thor.Bytes32) (rlp.RawValue, error) {
+	return trie.Get(key[:])
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
-func saveStorage(trie trieWriter, key thor.Bytes32, data rlp.RawValue) error {
-	if len(data) == 0 {
-		// release storage if data is zero length
-		return trie.TryDelete(key[:])
-	}
-	return trie.TryUpdate(key[:], data)
+func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
+	return trie.Update(key[:], data)
 }
