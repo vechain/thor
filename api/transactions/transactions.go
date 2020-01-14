@@ -40,7 +40,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (
 		return nil, err
 	}
 
-	header, _, err := t.repo.GetBlockHeader(meta.BlockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,9 +51,9 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (
 	return &rawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
 		Meta: TxMeta{
-			BlockID:        header.ID(),
-			BlockNumber:    header.Number(),
-			BlockTimestamp: header.Timestamp(),
+			BlockID:        summary.Header.ID(),
+			BlockNumber:    summary.Header.Number(),
+			BlockTimestamp: summary.Header.Timestamp(),
 		},
 	}, nil
 }
@@ -67,11 +67,11 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32) 
 		return nil, err
 	}
 
-	h, _, err := t.repo.GetBlockHeader(meta.BlockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
-	return convertTransaction(tx, h)
+	return convertTransaction(tx, summary.Header)
 }
 
 //GetTransactionReceiptByID get tx's receipt
@@ -90,12 +90,12 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	h, _, err := t.repo.GetBlockHeader(meta.BlockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
 
-	return convertReceipt(receipt, h, tx)
+	return convertReceipt(receipt, summary.Header, tx)
 }
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
@@ -131,7 +131,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-	if _, _, err := t.repo.GetBlockHeader(head); err != nil {
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
@@ -167,7 +167,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
 
-	if _, _, err := t.repo.GetBlockHeader(head); err != nil {
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}

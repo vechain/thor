@@ -128,10 +128,11 @@ func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, 
 			break
 		}
 
-		header, _, err = repo.GetBlockHeader(header.ParentID())
+		summary, err := repo.GetBlockSummary(header.ParentID())
 		if err != nil {
 			return 0, err
 		}
+		header = summary.Header
 	}
 	return block.Number(header.ID()) + 1, nil
 

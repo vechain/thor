@@ -41,9 +41,9 @@ type Repository struct {
 	tick    co.Signal
 
 	caches struct {
-		headers  *cache
-		txs      *cache
-		receipts *cache
+		summaries *cache
+		txs       *cache
+		receipts  *cache
 	}
 }
 
@@ -65,9 +65,9 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		tag:     genesisID[31],
 	}
 
-	repo.caches.headers = newCache(1024)
-	repo.caches.txs = newCache(512)
-	repo.caches.receipts = newCache(512)
+	repo.caches.summaries = newCache(512)
+	repo.caches.txs = newCache(2048)
+	repo.caches.receipts = newCache(2048)
 
 	if val, err := repo.props.Get(bestBlockIDKey); err != nil {
 		if !repo.props.IsNotFound(err) {
@@ -142,39 +142,52 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 }
 
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
-	var (
-		header    = block.Header()
-		id        = header.ID()
-		txs       = block.Transactions()
-		extHeader = extendedHeader{header, indexRoot}
-	)
-	if err := r.data.Batch(func(putter kv.PutFlusher) error {
-		if err := saveTransactions(putter, id, txs); err != nil {
+	return r.data.Batch(func(putter kv.PutFlusher) error {
+		var (
+			header  = block.Header()
+			id      = header.ID()
+			txs     = block.Transactions()
+			summary = BlockSummary{header, indexRoot, nil, uint64(block.Size())}
+		)
+
+		if n := len(txs); n > 0 {
+			summary.Txs = make([]thor.Bytes32, n)
+			key := makeTxKey(id, txInfix)
+			for i, tx := range txs {
+				key.SetIndex(uint64(i))
+				if err := saveTransaction(putter, key, tx); err != nil {
+					return err
+				}
+				r.caches.txs.Add(key, tx)
+				summary.Txs[i] = tx.ID()
+			}
+			key = makeTxKey(id, receiptInfix)
+			for i, receipt := range receipts {
+				key.SetIndex(uint64(i))
+				if err := saveReceipt(putter, key, receipt); err != nil {
+					return err
+				}
+				r.caches.receipts.Add(key, receipt)
+			}
+		}
+		if err := saveBlockSummary(putter, &summary); err != nil {
 			return err
 		}
-		if err := saveReceipts(putter, id, receipts); err != nil {
-			return err
-		}
-		return saveBlockHeader(putter, &extHeader)
-	}); err != nil {
-		return err
-	}
-	r.caches.headers.Add(id, &extHeader)
-	r.caches.txs.Add(id, txs)
-	r.caches.receipts.Add(id, receipts)
-	return nil
+		r.caches.summaries.Add(id, &summary)
+		return nil
+	})
 }
 
 // AddBlock add a new block with its receipts into repository.
 func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error {
-	_, parentIndexRoot, err := r.GetBlockHeader(newBlock.Header().ParentID())
+	parentSummary, err := r.GetBlockSummary(newBlock.Header().ParentID())
 	if err != nil {
 		if r.IsNotFound(err) {
 			return errors.New("parent missing")
 		}
 		return err
 	}
-	indexRoot, err := r.indexBlock(parentIndexRoot, newBlock, receipts)
+	indexRoot, err := r.indexBlock(parentSummary.IndexRoot, newBlock, receipts)
 	if err != nil {
 		return err
 	}
@@ -185,35 +198,52 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 	return nil
 }
 
-// GetBlockHeader get block header by block id.
-func (r *Repository) GetBlockHeader(id thor.Bytes32) (header *block.Header, indexRoot thor.Bytes32, err error) {
+// GetBlockSummary get block summary by block id.
+func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
 	var cached interface{}
-	if cached, err = r.caches.headers.GetOrLoad(id, func() (interface{}, error) {
-		return loadBlockHeader(r.data, id)
+	if cached, err = r.caches.summaries.GetOrLoad(id, func() (interface{}, error) {
+		return loadBlockSummary(r.data, id)
 	}); err != nil {
 		return
 	}
-
-	extHeader := cached.(*extendedHeader)
-	header = extHeader.Header
-	indexRoot = extHeader.IndexRoot
-	return
+	return cached.(*BlockSummary), nil
 }
 
-// GetBlockTransactions get all transactions of the block for given block id.
-func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, error) {
-	cached, err := r.caches.txs.GetOrLoad(id, func() (interface{}, error) {
-		return loadTransactions(r.data, id)
+func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
+	cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
+		return loadTransaction(r.data, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(tx.Transactions), nil
+	return cached.(*tx.Transaction), nil
+}
+
+// GetBlockTransactions get all transactions of the block for given block id.
+func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, error) {
+	summary, err := r.GetBlockSummary(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if n := len(summary.Txs); n > 0 {
+		txs := make(tx.Transactions, n)
+		key := makeTxKey(id, txInfix)
+		for i := range summary.Txs {
+			key.SetIndex(uint64(i))
+			txs[i], err = r.getTransaction(key)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return txs, nil
+	}
+	return nil, nil
 }
 
 // GetBlock get block by id.
 func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
-	header, _, err := r.GetBlockHeader(id)
+	summary, err := r.GetBlockSummary(id)
 	if err != nil {
 		return nil, err
 	}
@@ -221,18 +251,39 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	return block.Compose(header, txs), nil
+	return block.Compose(summary.Header, txs), nil
 }
 
-// GetBlockReceipts get all tx receipts of the block for given block id.
-func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
-	cached, err := r.caches.receipts.GetOrLoad(id, func() (interface{}, error) {
-		return loadReceipts(r.data, id)
+func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
+	cached, err := r.caches.receipts.GetOrLoad(key, func() (interface{}, error) {
+		return loadReceipt(r.data, key)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(tx.Receipts), nil
+	return cached.(*tx.Receipt), nil
+}
+
+// GetBlockReceipts get all tx receipts of the block for given block id.
+func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
+	summary, err := r.GetBlockSummary(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if n := len(summary.Txs); n > 0 {
+		receipts := make(tx.Receipts, n)
+		key := makeTxKey(id, receiptInfix)
+		for i := range summary.Txs {
+			key.SetIndex(uint64(i))
+			receipts[i], err = r.getReceipt(key)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return receipts, nil
+	}
+	return nil, nil
 }
 
 // IsNotFound returns if the given error means not found.

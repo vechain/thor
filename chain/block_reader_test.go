@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 )
 
@@ -46,7 +47,10 @@ func TestBlockReader(t *testing.T) {
 
 	}
 
-	assert.Equal(t, []*chain.ExtendedBlock{{b3, false}, {b4, false}}, blks)
+	assert.Equal(t, []*chain.ExtendedBlock{
+		{block.Compose(b3.Header(), b3.Transactions()), false},
+		{block.Compose(b4.Header(), b4.Transactions()), false}},
+		blks)
 }
 
 func TestBlockReaderFork(t *testing.T) {
@@ -86,5 +90,10 @@ func TestBlockReaderFork(t *testing.T) {
 		blks = append(blks, r...)
 	}
 
-	assert.Equal(t, []*chain.ExtendedBlock{{b2x, true}, {b2, false}, {b3, false}, {b4, false}}, blks)
+	assert.Equal(t, []*chain.ExtendedBlock{
+		{block.Compose(b2x.Header(), b2x.Transactions()), true},
+		{block.Compose(b2.Header(), b2.Transactions()), false},
+		{block.Compose(b3.Header(), b3.Transactions()), false},
+		{block.Compose(b4.Header(), b4.Transactions()), false}},
+		blks)
 }

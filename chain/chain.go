@@ -44,7 +44,6 @@ type Chain struct {
 
 func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 	var (
-		indexRoot thor.Bytes32
 		indexTrie *muxdb.Trie
 		initErr   error
 	)
@@ -54,8 +53,9 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 		headID,
 		func() (*muxdb.Trie, error) {
 			if indexTrie == nil && initErr == nil {
-				if _, indexRoot, initErr = repo.GetBlockHeader(headID); initErr == nil {
-					indexTrie = repo.db.NewTrie(IndexTrieName, indexRoot)
+				var summary *BlockSummary
+				if summary, initErr = repo.GetBlockSummary(headID); initErr == nil {
+					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot)
 				}
 			}
 			return indexTrie, initErr
@@ -116,8 +116,11 @@ func (c *Chain) GetBlockHeader(num uint32) (*block.Header, error) {
 	if err != nil {
 		return nil, err
 	}
-	h, _, err := c.repo.GetBlockHeader(id)
-	return h, err
+	summary, err := c.repo.GetBlockSummary(id)
+	if err != nil {
+		return nil, err
+	}
+	return summary.Header, nil
 }
 
 // GetBlock returns block by given block number.
@@ -135,11 +138,14 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 	if err != nil {
 		return nil, nil, err
 	}
-	txs, err := c.repo.GetBlockTransactions(txMeta.BlockID)
+
+	key := makeTxKey(txMeta.BlockID, txInfix)
+	key.SetIndex(txMeta.Index)
+	tx, err := c.repo.getTransaction(key)
 	if err != nil {
 		return nil, nil, err
 	}
-	return txs[txMeta.Index], txMeta, nil
+	return tx, txMeta, nil
 }
 
 // GetTransactionReceipt returns tx receipt by given tx id.
@@ -148,11 +154,14 @@ func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	receipts, err := c.repo.GetBlockReceipts(txMeta.BlockID)
+
+	key := makeTxKey(txMeta.BlockID, receiptInfix)
+	key.SetIndex(txMeta.Index)
+	receipt, err := c.repo.getReceipt(key)
 	if err != nil {
 		return nil, err
 	}
-	return receipts[txMeta.Index], nil
+	return receipt, nil
 }
 
 // HasBlock check if the block with given id belongs to the chain.

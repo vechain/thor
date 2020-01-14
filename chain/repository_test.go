@@ -50,29 +50,43 @@ func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Blo
 }
 
 func TestRepository(t *testing.T) {
-	repo := newTestRepo()
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	assert.Equal(t, repo.GenesisBlock(), repo.BestBlock())
-	assert.Equal(t, repo.GenesisBlock().Header().ID()[31], repo.ChainTag())
+	repo1, err := NewRepository(db, b0)
+	if err != nil {
+		panic(err)
+	}
+
+	assert.Equal(t, repo1.GenesisBlock(), repo1.BestBlock())
+	assert.Equal(t, repo1.GenesisBlock().Header().ID()[31], repo1.ChainTag())
 
 	tx1 := new(tx.Builder).Build()
 	receipt1 := &tx.Receipt{}
 
-	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
-	assert.Nil(t, repo.AddBlock(b1, tx.Receipts{receipt1}))
+	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
+	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}))
 
 	// best block not set, so still 0
-	assert.Equal(t, uint32(0), repo.BestBlock().Header().Number())
+	assert.Equal(t, uint32(0), repo1.BestBlock().Header().Number())
 
-	repo.SetBestBlockID(b1.Header().ID())
-	assert.Equal(t, b1, repo.BestBlock())
+	repo1.SetBestBlockID(b1.Header().ID())
+	repo2, _ := NewRepository(db, b0)
+	for _, repo := range []*Repository{repo1, repo2} {
 
-	h, _, err := repo.GetBlockHeader(b1.Header().ID())
-	assert.Nil(t, err)
-	assert.Equal(t, b1.Header(), h)
+		assert.Equal(t, b1.Header().ID(), repo.BestBlock().Header().ID())
+		s, err := repo.GetBlockSummary(b1.Header().ID())
+		assert.Nil(t, err)
+		assert.Equal(t, b1.Header().ID(), s.Header.ID())
+		assert.Equal(t, 1, len(s.Txs))
+		assert.Equal(t, tx1.ID(), s.Txs[0])
 
-	assert.Equal(t, M(b1, nil), M(repo.GetBlock(b1.Header().ID())))
+		gotb, _ := repo.GetBlock(b1.Header().ID())
+		assert.Equal(t, b1.Transactions().RootHash(), gotb.Transactions().RootHash())
 
-	assert.Equal(t, M(tx.Transactions{tx1}, nil), M(repo.GetBlockTransactions(b1.Header().ID())))
-	assert.Equal(t, M(tx.Receipts{receipt1}, nil), M(repo.GetBlockReceipts(b1.Header().ID())))
+		gotReceipts, _ := repo.GetBlockReceipts(b1.Header().ID())
+
+		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
+	}
 }
