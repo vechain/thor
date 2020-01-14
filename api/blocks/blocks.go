@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
@@ -33,18 +32,18 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	block, err := b.getBlock(revision)
+	summary, err := b.getBlockSummary(revision)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
 			return utils.WriteJSON(w, nil)
 		}
 		return err
 	}
-	isTrunk, err := b.isTrunk(block.Header().ID(), block.Header().Number())
+	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())
 	if err != nil {
 		return err
 	}
-	blk, err := convertBlock(block, isTrunk)
+	blk, err := convertBlock(summary, isTrunk)
 	if err != nil {
 		return err
 	}
@@ -72,15 +71,21 @@ func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 	return uint32(n), err
 }
 
-func (b *Blocks) getBlock(revision interface{}) (*block.Block, error) {
+func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, err error) {
+	var id thor.Bytes32
 	switch revision.(type) {
 	case thor.Bytes32:
-		return b.repo.GetBlock(revision.(thor.Bytes32))
+		id = revision.(thor.Bytes32)
+		return b.repo.GetBlockSummary(revision.(thor.Bytes32))
 	case uint32:
-		return b.repo.NewBestChain().GetBlock(revision.(uint32))
+		id, err = b.repo.NewBestChain().GetBlockID(revision.(uint32))
+		if err != nil {
+			return
+		}
 	default:
-		return b.repo.BestBlock(), nil
+		id = b.repo.BestBlock().Header().ID()
 	}
+	return b.repo.GetBlockSummary(id)
 }
 
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {

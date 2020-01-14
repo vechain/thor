@@ -320,14 +320,14 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 		if err != nil {
 			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
-		h, _, err := a.repo.GetBlockHeader(blockID)
+		summary, err := a.repo.GetBlockSummary(blockID)
 		if err != nil {
 			if a.repo.IsNotFound(err) {
 				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 			}
 			return nil, err
 		}
-		return h, nil
+		return summary.Header, nil
 	}
 	n, err := strconv.ParseUint(revision, 0, 0)
 	if err != nil {

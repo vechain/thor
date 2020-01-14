@@ -7,7 +7,6 @@ package chain
 
 import (
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/vechain/thor/thor"
 )
 
 type cache struct {
@@ -19,14 +18,14 @@ func newCache(maxSize int) *cache {
 	return &cache{c}
 }
 
-func (c *cache) GetOrLoad(id thor.Bytes32, load func() (interface{}, error)) (interface{}, error) {
-	if value, ok := c.Get(id); ok {
+func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, error) {
+	if value, ok := c.Get(key); ok {
 		return value, nil
 	}
 	value, err := load()
 	if err != nil {
 		return nil, err
 	}
-	c.Add(id, value)
+	c.Add(key, value)
 	return value, nil
 }
