@@ -212,7 +212,7 @@ func soloAction(ctx *cli.Context) error {
 	var logDB *logdb.LogDB
 	var instanceDir string
 
-	if ctx.Bool("persist") {
+	if ctx.Bool(persistFlag.Name) {
 		instanceDir = makeInstanceDir(ctx, gene)
 		mainDB = openMainDB(ctx, instanceDir)
 		logDB = openLogDB(ctx, instanceDir)
@@ -265,8 +265,8 @@ func soloAction(ctx *cli.Context) error {
 		state.NewCreator(mainDB),
 		logDB,
 		txPool,
-		uint64(ctx.Int("gas-limit")),
-		ctx.Bool("on-demand"),
+		uint64(ctx.Int(gasLimitFlag.Name)),
+		ctx.Bool(onDemandFlag.Name),
 		forkConfig).Run(exitSignal)
 }
 
