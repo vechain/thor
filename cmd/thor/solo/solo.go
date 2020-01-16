@@ -38,6 +38,7 @@ type Solo struct {
 	bestBlockCh chan *block.Block
 	gasLimit    uint64
 	onDemand    bool
+	skipLogs    bool
 }
 
 // New returns Solo instance
@@ -48,6 +49,7 @@ func New(
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
+	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
@@ -61,6 +63,7 @@ func New(
 			forkConfig),
 		logDB:    logDB,
 		gasLimit: gasLimit,
+		skipLogs: skipLogs,
 		onDemand: onDemand,
 	}
 }
@@ -172,10 +175,12 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		return errors.WithMessage(err, "set best block")
 	}
 
-	if err := s.logDB.Log(func(w *logdb.Writer) error {
-		return w.Write(b, receipts)
-	}); err != nil {
-		return errors.WithMessage(err, "commit log")
+	if !s.skipLogs {
+		if err := s.logDB.Log(func(w *logdb.Writer) error {
+			return w.Write(b, receipts)
+		}); err != nil {
+			return errors.WithMessage(err, "commit log")
+		}
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
