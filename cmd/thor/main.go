@@ -102,6 +102,7 @@ func main() {
 					verbosityFlag,
 					pprofFlag,
 					verifyLogsFlag,
+					skipLogsFlag,
 					txPoolLengthFlag,
 					txPoolLimitAccountFlag,
 				},
@@ -195,8 +196,7 @@ func defaultAction(ctx *cli.Context) error {
 		p2pcom.comm,
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
 		skipLogs,
-		forkConfig).
-		Run(exitSignal)
+		forkConfig).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
@@ -226,8 +226,13 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("closing log database..."); logDB.Close() }()
 
 	chain := initChain(gene, mainDB, logDB)
-	if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
-		return err
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, chain, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
+			return err
+		}
 	}
 
 	txPoolOption := defaultTxPoolOptions
@@ -247,7 +252,7 @@ func soloAction(ctx *cli.Context) error {
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
-		false,
+		skipLogs,
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
