@@ -46,7 +46,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 
-	if _, _, err := c.repo.GetBlockHeader(header.ID()); err != nil {
+	if _, err := c.repo.GetBlockSummary(header.ID()); err != nil {
 		if !c.repo.IsNotFound(err) {
 			return nil, nil, err
 		}
@@ -54,7 +54,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, errKnownBlock
 	}
 
-	parentHeader, _, err := c.repo.GetBlockHeader(header.ParentID())
+	parentSummary, err := c.repo.GetBlockSummary(header.ParentID())
 	if err != nil {
 		if !c.repo.IsNotFound(err) {
 			return nil, nil, err
@@ -62,7 +62,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, errParentMissing
 	}
 
-	state := c.stater.NewState(parentHeader.StateRoot())
+	state := c.stater.NewState(parentSummary.Header.StateRoot())
 
 	vip191 := c.forkConfig.VIP191
 	if vip191 == 0 {
@@ -84,7 +84,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
 	}
 
-	stage, receipts, err := c.validate(state, blk, parentHeader, nowTimestamp)
+	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,16 +97,16 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 	if err != nil {
 		return nil, err
 	}
-	parentHeader, _, err := c.repo.GetBlockHeader(header.ParentID())
+	parentSummary, err := c.repo.GetBlockSummary(header.ParentID())
 	if err != nil {
 		if !c.repo.IsNotFound(err) {
 			return nil, err
 		}
 		return nil, errParentMissing
 	}
-	state := c.stater.NewState(parentHeader.StateRoot())
+	state := c.stater.NewState(parentSummary.Header.StateRoot())
 	if !skipPoA {
-		if _, err := c.validateProposer(header, parentHeader, state); err != nil {
+		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
 			return nil, err
 		}
 	}

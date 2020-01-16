@@ -6,12 +6,14 @@
 package chain_test
 
 import (
+	"testing"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"testing"
 )
 
 func newTx() *tx.Transaction {
@@ -45,7 +47,7 @@ func TestChain(t *testing.T) {
 	assert.Equal(t, b3.Header().ID(), c.HeadID())
 	assert.Equal(t, M(b3.Header().ID(), nil), M(c.GetBlockID(3)))
 	assert.Equal(t, M(b3.Header(), nil), M(c.GetBlockHeader(3)))
-	assert.Equal(t, M(b3, nil), M(c.GetBlock(3)))
+	assert.Equal(t, M(block.Compose(b3.Header(), b3.Transactions()), nil), M(c.GetBlock(3)))
 
 	_, err := c.GetBlockID(4)
 	assert.True(t, c.IsNotFound(err))

@@ -167,21 +167,25 @@ func (p *Pruner) archiveIndexTrie(pruner *muxdb.TriePruner, n1, n2 uint32) (node
 	var (
 		bestChain              = p.repo.NewBestChain()
 		id1, id2, root1, root2 thor.Bytes32
+		s1, s2                 *chain.BlockSummary
 	)
 
 	if id1, err = bestChain.GetBlockID(n1); err != nil {
 		return
 	}
-	if _, root1, err = p.repo.GetBlockHeader(id1); err != nil {
+	if s1, err = p.repo.GetBlockSummary(id1); err != nil {
 		return
 	}
+	root1 = s1.IndexRoot
 
 	if id2, err = bestChain.GetBlockID(n2); err != nil {
 		return
 	}
-	if _, root2, err = p.repo.GetBlockHeader(id2); err != nil {
+	if s2, err = p.repo.GetBlockSummary(id2); err != nil {
 		return
 	}
+	root2 = s2.IndexRoot
+
 	if n1 == 0 && n2 == 0 {
 		root1 = thor.Bytes32{}
 	}
