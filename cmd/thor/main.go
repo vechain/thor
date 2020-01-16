@@ -99,6 +99,9 @@ func main() {
 					verbosityFlag,
 					pprofFlag,
 					verifyLogsFlag,
+					skipLogsFlag,
+					txPoolLimitFlag,
+					txPoolLimitPerAccountFlag,
 				},
 				Action: soloAction,
 			},
@@ -218,8 +221,7 @@ func defaultAction(ctx *cli.Context) error {
 		p2pcom.comm,
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
 		skipLogs,
-		forkConfig).
-		Run(exitSignal)
+		forkConfig).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
@@ -236,7 +238,7 @@ func soloAction(ctx *cli.Context) error {
 	var instanceDir string
 	var err error
 
-	if ctx.Bool("persist") {
+	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
 			return err
 		}
@@ -258,11 +260,20 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
-		return err
+
+	skipLogs := ctx.Bool(skipLogsFlag.Name)
+
+	if !skipLogs {
+		if err := syncLogDB(exitSignal, repo, logDB, ctx.Bool(verifyLogsFlag.Name)); err != nil {
+			return err
+		}
 	}
 
-	txPool := txpool.New(repo, state.NewStater(mainDB), defaultTxPoolOptions)
+	txPoolOption := defaultTxPoolOptions
+	txPoolOption.Limit = ctx.Int(txPoolLimitFlag.Name)
+	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
+
+	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
 	apiHandler, apiCloser := api.New(
@@ -275,7 +286,7 @@ func soloAction(ctx *cli.Context) error {
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
-		false,
+		skipLogs,
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -291,8 +302,9 @@ func soloAction(ctx *cli.Context) error {
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
-		uint64(ctx.Int("gas-limit")),
-		ctx.Bool("on-demand"),
+		uint64(ctx.Int(gasLimitFlag.Name)),
+		ctx.Bool(onDemandFlag.Name),
+		skipLogs,
 		forkConfig).Run(exitSignal)
 }
 

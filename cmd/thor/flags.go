@@ -128,4 +128,14 @@ var (
 		Name:  "disable-pruner",
 		Usage: "disable state pruner to keep all history",
 	}
+	txPoolLimitFlag = cli.IntFlag{
+		Name:  "txpool-limit",
+		Value: 10000,
+		Usage: "set tx limit in pool",
+	}
+	txPoolLimitPerAccountFlag = cli.IntFlag{
+		Name:  "txpool-limit-per-account",
+		Value: 16,
+		Usage: "set tx limit per account in pool",
+	}
 )
