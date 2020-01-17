@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package node
+package bandwidth
 
 import (
 	"sync"
@@ -13,19 +13,19 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// bandwidth is gas per second.
-type bandwidth struct {
+// Bandwidth is gas per second.
+type Bandwidth struct {
 	value uint64 // gas per second
 	lock  sync.Mutex
 }
 
-func (b *bandwidth) Value() uint64 {
+func (b *Bandwidth) Value() uint64 {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	return b.value
 }
 
-func (b *bandwidth) Update(header *block.Header, elapsed time.Duration) (uint64, bool) {
+func (b *Bandwidth) Update(header *block.Header, elapsed time.Duration) (uint64, bool) {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
@@ -52,7 +52,7 @@ func (b *bandwidth) Update(header *block.Header, elapsed time.Duration) (uint64,
 	return b.value, true
 }
 
-func (b *bandwidth) SuggestGasLimit() uint64 {
+func (b *Bandwidth) SuggestGasLimit() uint64 {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
