@@ -148,6 +148,11 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		features |= tx.DelegationFeature
 	}
 
+	gl := gasLimit
+	if gasLimit == 0 {
+		gl = p.gasLimit(parent.GasLimit())
+	}
+
 	rt := runtime.New(
 		p.repo.NewChain(parent.ID()),
 		state,
@@ -156,7 +161,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 			Signer:      p.nodeMaster,
 			Number:      parent.Number() + 1,
 			Time:        targetTime,
-			GasLimit:    gasLimit,
+			GasLimit:    gl,
 			TotalScore:  parent.TotalScore() + 1,
 		},
 		p.forkConfig)

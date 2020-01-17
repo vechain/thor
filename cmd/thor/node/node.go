@@ -23,6 +23,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/cmd/thor/bandwidth"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/consensus"
@@ -52,7 +53,7 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	logDBFailed    bool
-	bandwidth      bandwidth
+	bandwidth      bandwidth.Bandwidth
 }
 
 func New(
