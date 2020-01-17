@@ -88,6 +88,7 @@ func main() {
 				Usage: "client runs in solo mode for test & dev",
 				Flags: []cli.Flag{
 					dataDirFlag,
+					cacheFlag,
 					apiAddrFlag,
 					apiCorsFlag,
 					apiTimeoutFlag,
