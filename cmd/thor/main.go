@@ -104,6 +104,7 @@ func main() {
 					skipLogsFlag,
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
+					disablePrunerFlag,
 				},
 				Action: soloAction,
 			},
@@ -305,6 +306,11 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return solo.New(repo,
 		state.NewStater(mainDB),
