@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Header contains almost all information about a block, except block body.
@@ -43,6 +44,11 @@ type headerBody struct {
 	TxsRootFeatures txsRootFeatures
 	StateRoot       thor.Bytes32
 	ReceiptsRoot    thor.Bytes32
+
+	Committee         [thor.CommitteeSize]uint8
+	VrfProofs         [thor.CommitteeSize]*vrf.Proof
+	SigOnBlockSummary []byte
+	SigOnEndorsement  [thor.CommitteeSize][]byte
 
 	Signature []byte
 }

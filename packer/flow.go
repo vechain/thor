@@ -44,6 +44,11 @@ func newFlow(
 	}
 }
 
+// Txs ...
+func (f *Flow) Txs() tx.Transactions {
+	return f.txs
+}
+
 // ParentHeader returns parent block header.
 func (f *Flow) ParentHeader() *block.Header {
 	return f.parentHeader

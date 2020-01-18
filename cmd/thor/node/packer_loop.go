@@ -96,9 +96,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
-				continue
-			}
+			// if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
+			// 	continue
+			// }
 
 			// case h := <-newHeaderCh:
 			// case ts := <-newTxSetCh:

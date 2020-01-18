@@ -62,6 +62,11 @@ func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32) (bool, *vrf.
 	return false, nil, nil
 }
 
+// IsCommitteeByProof ...
+func IsCommitteeByProof(proof *vrf.Proof) bool {
+	return isCommitteeByProof(proof)
+}
+
 func isCommitteeByProof(proof *vrf.Proof) bool {
 	// Compute the hash of the proof
 	h := thor.Blake2b(proof[:])
