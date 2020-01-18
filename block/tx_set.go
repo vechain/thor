@@ -26,6 +26,15 @@ type txSetBody struct {
 	Signature []byte
 }
 
+// NewTxSet creates an instance of TxSet
+func NewTxSet(txs tx.Transactions) *TxSet {
+	return &TxSet{
+		body: txSetBody{
+			Txs: txs,
+		},
+	}
+}
+
 // Signer returns the signer
 func (ts *TxSet) Signer() (signer thor.Address, err error) {
 	if cached := ts.cache.signer.Load(); cached != nil {
@@ -52,6 +61,10 @@ func (ts *TxSet) SigningHash() (hash thor.Bytes32) {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { ts.cache.signingHash.Store(hash) }()
+
+	if len(ts.body.Txs) == 0 {
+		return thor.Bytes32{}
+	}
 
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, ts.body.Txs)

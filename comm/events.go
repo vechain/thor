@@ -32,7 +32,9 @@ type NewEndorsementEvent struct {
 }
 
 // NewHeaderEvent ...
-type NewHeaderEvent struct{}
+type NewHeaderEvent struct{
+	*block.Header
+}
 
 // HandleBlockStream to handle the stream of downloaded blocks in sync process.
 type HandleBlockStream func(ctx context.Context, stream <-chan *block.Block) error

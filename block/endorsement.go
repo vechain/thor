@@ -119,3 +119,6 @@ func (ed *Endorsement) BlockSummary() *Summary {
 func (ed *Endorsement) VrfProof() *vrf.Proof {
 	return ed.body.VrfProof
 }
+
+// Endorsements ...
+type Endorsements []*Endorsement

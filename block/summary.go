@@ -17,6 +17,7 @@ type Summary struct {
 	cache struct {
 		signingHash atomic.Value
 		signer      atomic.Value
+		endorseHash atomic.Value
 	}
 }
 
@@ -128,4 +129,17 @@ func (bs *Summary) Timestamp() uint64 {
 // Signature return signature
 func (bs *Summary) Signature() []byte {
 	return bs.body.Signature
+}
+
+// EndorseHash computes the hash for committee member to sign
+func (bs *Summary) EndorseHash() (hash thor.Bytes32) {
+	if cached := bs.cache.endorseHash.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { bs.cache.endorseHash.Store(hash) }()
+
+	hw := thor.NewBlake2b()
+	rlp.Encode(hw, bs.body)
+	hw.Sum(hash[:0])
+	return
 }
