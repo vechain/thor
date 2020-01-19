@@ -72,12 +72,9 @@ func (b *HeaderBuilder) TransactionFeatures(features tx.Features) *HeaderBuilder
 }
 
 // Build build a block object.
-func (b *HeaderBuilder) Build() *Block {
+func (b *HeaderBuilder) Build() *Header {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
 
-	return &Block{
-		header: &header,
-		txs:    b.txs,
-	}
+	return &header
 }

@@ -120,5 +120,7 @@ func (ed *Endorsement) VrfProof() *vrf.Proof {
 	return ed.body.VrfProof
 }
 
-// Endorsements ...
-type Endorsements []*Endorsement
+// Signature returns the signature
+func (ed *Endorsement) Signature() []byte {
+	return ed.body.Signature
+}

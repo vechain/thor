@@ -170,3 +170,43 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	}
 	return newBlock.WithSignature(sig), stage, f.receipts, nil
 }
+
+// PackHeader build the new block header.
+func (f *Flow) PackHeader() (*block.Header, *state.Stage, tx.Receipts, error) {
+	// if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
+	// 	return nil, nil, nil, errors.New("private key mismatch")
+	// }
+
+	if err := f.runtime.Seeker().Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	stage := f.runtime.State().Stage()
+	stateRoot, err := stage.Hash()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	builder := new(block.HeaderBuilder).
+		Beneficiary(f.runtime.Context().Beneficiary).
+		GasLimit(f.runtime.Context().GasLimit).
+		ParentID(f.parentHeader.ID()).
+		Timestamp(f.runtime.Context().Time).
+		TotalScore(f.runtime.Context().TotalScore).
+		GasUsed(f.gasUsed).
+		ReceiptsRoot(f.receipts.RootHash()).
+		StateRoot(stateRoot).
+		TransactionFeatures(f.features)
+
+	for _, tx := range f.txs {
+		builder.Transaction(tx)
+	}
+	header := builder.Build()
+
+	// sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
+	// return newBlock.WithSignature(sig), stage, f.receipts, nil
+	return header, stage, f.receipts, nil
+}
