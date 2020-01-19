@@ -271,10 +271,9 @@ func (s *Solo) loop(ctx context.Context) {
 				flow *packer.Flow
 				done chan struct{}
 
-				blk      *block.Block
+				header   *block.Header
 				stage    *state.Stage
 				receipts tx.Receipts
-				header   *block.Header
 			)
 
 			best := s.chain.BestBlock()
@@ -314,11 +313,10 @@ func (s *Solo) loop(ctx context.Context) {
 			}
 			log.Debug("Endorsing ends")
 
-			blk, stage, receipts, err = flow.Pack(s.sk)
+			header, stage, receipts, err = flow.PackHeader()
 			if err != nil {
 				log.Error("flow.Pack", "error", err)
 			}
-			header = blk.Header()
 		}
 	}
 }

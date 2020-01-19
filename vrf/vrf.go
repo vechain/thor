@@ -174,3 +174,16 @@ func (pfs Proofs) String() string {
 
 	return str
 }
+
+// BytesToProof ...
+func BytesToProof(b []byte) *Proof {
+	var p Proof
+
+	if len(b) > len(p) {
+		b = b[len(b)-ProofLen:]
+	}
+
+	copy(p[ProofLen-len(b):], b)
+
+	return &p
+}
