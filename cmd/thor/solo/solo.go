@@ -38,7 +38,7 @@ type Solo struct {
 	logDB       *logdb.LogDB
 	bestBlockCh chan *block.Block
 	gasLimit    uint64
-	bandwith    bandwidth.Bandwidth
+	bandwidth   bandwidth.Bandwidth
 	onDemand    bool
 	skipLogs    bool
 }
@@ -137,7 +137,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	}()
 
 	if s.gasLimit == 0 {
-		suggested := s.bandwith.SuggestGasLimit()
+		suggested := s.bandwidth.SuggestGasLimit()
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
@@ -192,7 +192,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
-	if v, updated := s.bandwith.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
 		log.Debug("bandwidth updated", "gps", v)
 	}
 
