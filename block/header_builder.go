@@ -72,21 +72,25 @@ func (b *HeaderBuilder) TransactionFeatures(features tx.Features) *HeaderBuilder
 	return b
 }
 
+// Committee ...
 func (b *HeaderBuilder) Committee(c []uint8) *HeaderBuilder {
 	b.headerBody.Committee = c
 	return b
 }
 
+// VrfProofs ...
 func (b *HeaderBuilder) VrfProofs(p []*vrf.Proof) *HeaderBuilder {
 	b.headerBody.VrfProofs = p
 	return b
 }
 
+// SigOnBlockSummary ...
 func (b *HeaderBuilder) SigOnBlockSummary(sig []byte) *HeaderBuilder {
 	b.headerBody.SigOnBlockSummary = sig
 	return b
 }
 
+// SigOnEndorsement ...
 func (b *HeaderBuilder) SigOnEndorsement(sig [][]byte) *HeaderBuilder {
 	b.headerBody.SigOnEndorsement = sig
 	return b

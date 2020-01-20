@@ -50,6 +50,7 @@ func (eds *Endorsements) Signatures() [][]byte {
 	return sigs
 }
 
+// StringVrfProofs ...
 func (eds *Endorsements) StringVrfProofs() string {
 	var s string
 	for _, ed := range eds.vals {
@@ -59,6 +60,7 @@ func (eds *Endorsements) StringVrfProofs() string {
 	return s
 }
 
+// Len ...
 func (eds *Endorsements) Len() int {
 	return len(eds.vals)
 }
