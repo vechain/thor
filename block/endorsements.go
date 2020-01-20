@@ -2,7 +2,6 @@ package block
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
@@ -33,28 +32,6 @@ func (eds *Endorsements) Add(ed *Endorsement) bool {
 	return true
 }
 
-func (eds *Endorsements) Len() int { return len(eds.vals) }
-func (eds *Endorsements) Swap(i, j int) {
-	eds.vals[i], eds.vals[j] = eds.vals[j], eds.vals[i]
-}
-
-// Less returns true if the i'th VRF proof is less than the j'th VRF proof
-func (eds *Endorsements) Less(i, j int) bool {
-	iKey := eds.vals[i].VrfProof().Bytes()
-	jKey := eds.vals[j].VrfProof().Bytes()
-
-	for n, bi := range iKey {
-		bj := jKey[n]
-		if bi < bj {
-			return true
-		}
-	}
-	return false
-}
-
-// Sort sorts all the saved endorsements by their VRF proofs in an ascending order
-func (eds *Endorsements) Sort() { sort.Sort(eds) }
-
 // VrfProofs returns an array of VRF proofs
 func (eds *Endorsements) VrfProofs() []*vrf.Proof {
 	var proofs []*vrf.Proof
@@ -76,7 +53,8 @@ func (eds *Endorsements) Signatures() []byte {
 func (eds *Endorsements) StringVrfProofs() string {
 	var s string
 	for _, ed := range eds.vals {
-		s = s + fmt.Sprintf("0x%x\n", ed.VrfProof().Bytes())
+		b := ed.VrfProof().Bytes()
+		s = s + fmt.Sprintf("%x\n", b[len(b)-2:])
 	}
 	return s
 }
