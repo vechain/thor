@@ -3,6 +3,7 @@ package block
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // HeaderBuilder ...
@@ -68,6 +69,26 @@ func (b *HeaderBuilder) Transaction(tx *tx.Transaction) *HeaderBuilder {
 // TransactionFeatures set supported transaction features
 func (b *HeaderBuilder) TransactionFeatures(features tx.Features) *HeaderBuilder {
 	b.headerBody.TxsRootFeatures.Features = features
+	return b
+}
+
+func (b *HeaderBuilder) Committee(c []uint8) *HeaderBuilder {
+	b.headerBody.Committee = c
+	return b
+}
+
+func (b *HeaderBuilder) VrfProofs(p []*vrf.Proof) *HeaderBuilder {
+	b.headerBody.VrfProofs = p
+	return b
+}
+
+func (b *HeaderBuilder) SigOnBlockSummary(sig []byte) *HeaderBuilder {
+	b.headerBody.SigOnBlockSummary = sig
+	return b
+}
+
+func (b *HeaderBuilder) SigOnEndorsement(sig [][]byte) *HeaderBuilder {
+	b.headerBody.SigOnEndorsement = sig
 	return b
 }
 
