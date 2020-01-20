@@ -76,7 +76,6 @@ func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, e
 	switch revision.(type) {
 	case thor.Bytes32:
 		id = revision.(thor.Bytes32)
-		return b.repo.GetBlockSummary(revision.(thor.Bytes32))
 	case uint32:
 		id, err = b.repo.NewBestChain().GetBlockID(revision.(uint32))
 		if err != nil {
