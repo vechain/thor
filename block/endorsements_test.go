@@ -2,7 +2,6 @@ package block
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -39,20 +38,15 @@ func Test(t *testing.T) {
 		t.Errorf("Add a duplicated endorsement")
 	}
 
-	endorsements.Add(eds[3])
 	endorsements.Add(eds[1])
 	endorsements.Add(eds[2])
+	endorsements.Add(eds[3])
 
-	// endorsements.Swap(3, 0)
-	fmt.Println(endorsements.StringVrfProofs())
-	endorsements.Sort()
-	fmt.Println(endorsements.StringVrfProofs())
-
-	order := []int{2, 0, 1}
 	proofs := endorsements.VrfProofs()
 	for i, p := range proofs {
-		if p != eds[order[i]].VrfProof() {
-			t.Errorf("Incorrect Sort()")
+		_p := eds[i].VrfProof()
+		if *p != *_p {
+			t.Errorf("Incorrect VrfProofs()")
 			break
 		}
 	}
