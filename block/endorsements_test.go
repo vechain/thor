@@ -51,11 +51,11 @@ func Test(t *testing.T) {
 		}
 	}
 
-	var sigs []byte
-	for _, ed := range eds {
-		sigs = append(sigs, ed.Signature()...)
-	}
-	if bytes.Compare(sigs, endorsements.Signatures()) != 0 {
-		t.Errorf("Incorrect Signatures()")
+	sigs := endorsements.Signatures()
+	for i, ed := range eds {
+		if bytes.Compare(sigs[i], ed.Signature()) != 0 {
+			t.Errorf("Incorrect Signatures()")
+			break
+		}
 	}
 }

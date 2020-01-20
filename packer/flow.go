@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Flow the flow of packing a new block.
@@ -178,10 +179,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 }
 
 // PackHeader build the new block header.
-func (f *Flow) PackHeader() (*block.Header, *state.Stage, tx.Receipts, error) {
-	// if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-	// 	return nil, nil, nil, errors.New("private key mismatch")
-	// }
+func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []byte, s2 [][]byte) (*block.Header, *state.Stage, tx.Receipts, error) {
+	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
+		return nil, nil, nil, errors.New("private key mismatch")
+	}
 
 	if err := f.runtime.Seeker().Err(); err != nil {
 		return nil, nil, nil, err
@@ -202,17 +203,13 @@ func (f *Flow) PackHeader() (*block.Header, *state.Stage, tx.Receipts, error) {
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features)
+		TransactionFeatures(f.features).
+		Committee(c).VrfProofs(p).SigOnBlockSummary(s1).SigOnEndorsement(s2)
 
-	for _, tx := range f.txs {
-		builder.Transaction(tx)
-	}
 	header := builder.Build()
-
-	// sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
-	// if err != nil {
-	// 	return nil, nil, nil, err
-	// }
-	// return newBlock.WithSignature(sig), stage, f.receipts, nil
-	return header, stage, f.receipts, nil
+	sig, err := crypto.Sign(header.SigningHash().Bytes(), sk)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return header.WithSignature(sig), stage, f.receipts, nil
 }

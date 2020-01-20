@@ -42,10 +42,10 @@ func (eds *Endorsements) VrfProofs() []*vrf.Proof {
 }
 
 // Signatures returns a combined byte array of signatures
-func (eds *Endorsements) Signatures() []byte {
-	var sigs []byte
+func (eds *Endorsements) Signatures() [][]byte {
+	var sigs [][]byte
 	for _, ed := range eds.vals {
-		sigs = append(sigs, ed.Signature()...)
+		sigs = append(sigs, ed.Signature())
 	}
 	return sigs
 }
@@ -57,4 +57,8 @@ func (eds *Endorsements) StringVrfProofs() string {
 		s = s + fmt.Sprintf("%x\n", b[len(b)-2:])
 	}
 	return s
+}
+
+func (eds *Endorsements) Len() int {
+	return len(eds.vals)
 }

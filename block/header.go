@@ -45,10 +45,10 @@ type headerBody struct {
 	StateRoot       thor.Bytes32
 	ReceiptsRoot    thor.Bytes32
 
-	Committee         [thor.CommitteeSize]uint8
-	VrfProofs         [thor.CommitteeSize]*vrf.Proof
+	Committee         []uint8
+	VrfProofs         []*vrf.Proof
 	SigOnBlockSummary []byte
-	SigOnEndorsement  [thor.CommitteeSize][]byte
+	SigOnEndorsement  [][]byte
 
 	Signature []byte
 }
@@ -159,6 +159,11 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		&h.body.TxsRootFeatures,
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
+
+		h.body.Committee,
+		h.body.VrfProofs,
+		h.body.SigOnBlockSummary,
+		h.body.SigOnEndorsement,
 	})
 	hw.Sum(hash[:0])
 	return
@@ -169,8 +174,8 @@ func (h *Header) Signature() []byte {
 	return append([]byte(nil), h.body.Signature...)
 }
 
-// withSignature create a new Header object with signature set.
-func (h *Header) withSignature(sig []byte) *Header {
+// WithSignature create a new Header object with signature set.
+func (h *Header) WithSignature(sig []byte) *Header {
 	cpy := Header{body: h.body}
 	cpy.body.Signature = append([]byte(nil), sig...)
 	return &cpy
@@ -225,22 +230,36 @@ func (h *Header) String() string {
 		signerStr = signer.String()
 	}
 
-	return fmt.Sprintf(`Header(%v):
-	Number:         %v
-	ParentID:       %v
-	Timestamp:      %v
-	Signer:         %v
-	Beneficiary:    %v
-	GasLimit:       %v
-	GasUsed:        %v
-	TotalScore:     %v
-	TxsRoot:        %v
-	TxsFeatures:    %v
-	StateRoot:      %v
-	ReceiptsRoot:   %v
-	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+	s := fmt.Sprintf(`Header(%v):
+	Number:         	%v
+	ParentID:       	%v
+	Timestamp:      	%v
+	Signer:         	%v
+	Beneficiary:    	%v
+	GasLimit:       	%v
+	GasUsed:        	%v
+	TotalScore:     	%v
+	TxsRoot:        	%v
+	TxsFeatures:    	%v
+	StateRoot:      	%v
+	ReceiptsRoot:   	%v
+	`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot)
+
+	for i, c := range h.body.Committee {
+		s = s + fmt.Sprintf(`{
+		Committee No.: 		%v
+		VRF Proof:			0x%x
+		SigOnBlockSummary: 	0x%x
+		SigOnEndorsement:	0x%x
+		}
+		`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary[i], h.body.SigOnEndorsement[i])
+	}
+	s = s + fmt.Sprintf(`
+	Signature:		0x%x
+	`, h.body.Signature)
+	return s
 }
 
 // BetterThan return if this block is better than other one.
