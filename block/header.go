@@ -243,22 +243,23 @@ func (h *Header) String() string {
 	TxsFeatures:    	%v
 	StateRoot:      	%v
 	ReceiptsRoot:   	%v
+	Signature:      	0x%x
 	`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot,
+		h.body.Signature,
+	)
 
 	for i, c := range h.body.Committee {
-		s = s + fmt.Sprintf(`{
-		Committee No.: 		%v
-		VRF Proof:			0x%x
-		SigOnBlockSummary: 	0x%x
-		SigOnEndorsement:	0x%x
-		}
-		`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary[i], h.body.SigOnEndorsement[i])
+		s = s + fmt.Sprintf(`
+	{
+		Committee No.:      %v
+		VRF Proof:          0x%x
+		SigOnBlockSummary:  0x%x
+		SigOnEndorsement:   0x%x
+	}`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary[i], h.body.SigOnEndorsement[i])
 	}
-	s = s + fmt.Sprintf(`
-	Signature:		0x%x
-	`, h.body.Signature)
+
 	return s
 }
 
