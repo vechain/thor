@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/vechain/thor/thor"
@@ -13,20 +14,16 @@ type Endorsements struct {
 	vals []*Endorsement
 }
 
-// Add store a new endorsement
-func (eds Endorsements) Add(ed *Endorsement) bool {
+// Add adds a new endorsement. It returns false if the endorsement already exists.
+// Endorsements are distinguished by their signing hashes.
+func (eds *Endorsements) Add(ed *Endorsement) bool {
 	if eds.vals == nil {
-		eds.vals = make([]*Endorsement, thor.CommitteeSize)
+		// eds.vals = make([]*Endorsement, 1)
 		eds.keys = make(map[thor.Bytes32]struct{})
 	}
 
 	// Check if it already exists
 	if _, ok := eds.keys[ed.SigningHash()]; ok {
-		return false
-	}
-
-	// Max the number of committee members required for creating a new block
-	if len(eds.keys) >= int(thor.CommitteeSize) {
 		return false
 	}
 
@@ -36,13 +33,15 @@ func (eds Endorsements) Add(ed *Endorsement) bool {
 	return true
 }
 
-func (eds Endorsements) Len() int { return len(eds.vals) }
+func (eds *Endorsements) Len() int { return len(eds.vals) }
+func (eds *Endorsements) Swap(i, j int) {
+	eds.vals[i], eds.vals[j] = eds.vals[j], eds.vals[i]
+}
 
-func (eds Endorsements) Swap(i, j int) { eds.vals[i], eds.vals[j] = eds.vals[j], eds.vals[i] }
-
-func (eds Endorsements) Less(i, j int) bool {
-	iKey := eds.vals[i].SigningHash().Bytes()
-	jKey := eds.vals[j].SigningHash().Bytes()
+// Less returns true if the i'th VRF proof is less than the j'th VRF proof
+func (eds *Endorsements) Less(i, j int) bool {
+	iKey := eds.vals[i].VrfProof().Bytes()
+	jKey := eds.vals[j].VrfProof().Bytes()
 
 	for n, bi := range iKey {
 		bj := jKey[n]
@@ -53,11 +52,11 @@ func (eds Endorsements) Less(i, j int) bool {
 	return false
 }
 
-// Sort ...
-func (eds Endorsements) Sort() { sort.Sort(eds) }
+// Sort sorts all the saved endorsements by their VRF proofs in an ascending order
+func (eds *Endorsements) Sort() { sort.Sort(eds) }
 
-// VrfProofs ...
-func (eds Endorsements) VrfProofs() []*vrf.Proof {
+// VrfProofs returns an array of VRF proofs
+func (eds *Endorsements) VrfProofs() []*vrf.Proof {
 	var proofs []*vrf.Proof
 	for _, ed := range eds.vals {
 		proofs = append(proofs, ed.VrfProof())
@@ -65,11 +64,19 @@ func (eds Endorsements) VrfProofs() []*vrf.Proof {
 	return proofs
 }
 
-// Signatures ...
-func (eds Endorsements) Signatures() []byte {
+// Signatures returns a combined byte array of signatures
+func (eds *Endorsements) Signatures() []byte {
 	var sigs []byte
 	for _, ed := range eds.vals {
 		sigs = append(sigs, ed.Signature()...)
 	}
 	return sigs
+}
+
+func (eds *Endorsements) StringVrfProofs() string {
+	var s string
+	for _, ed := range eds.vals {
+		s = s + fmt.Sprintf("0x%x\n", ed.VrfProof().Bytes())
+	}
+	return s
 }
