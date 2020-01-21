@@ -212,7 +212,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 		return nil
 	}
 	origin, _ := newTx.Origin()
-	if p.blocklist.Contains(origin) {
+	if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 		// tx origin blocked
 		return nil
 	}
@@ -310,7 +310,7 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*txObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
-		if p.blocklist.Contains(origin) {
+		if thor.IsOriginBlocked(origin) || p.blocklist.Contains(origin) {
 			continue
 		}
 		// here we ignore errors
@@ -361,7 +361,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		now               = time.Now().UnixNano()
 	)
 	for _, txObj := range all {
-		if p.blocklist.Contains(txObj.Origin()) {
+		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
 			continue

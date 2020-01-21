@@ -165,8 +165,13 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	}
 
 	for _, tx := range txs {
-		if _, err := tx.Origin(); err != nil {
+		origin, err := tx.Origin()
+		if err != nil {
 			return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
+		}
+
+		if header.Number() >= c.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+			return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
 		}
 
 		switch {

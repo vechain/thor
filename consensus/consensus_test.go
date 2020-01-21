@@ -8,6 +8,7 @@ package consensus
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -114,7 +115,12 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	con := New(c, stateCreator, thor.NoFork)
+	forkConfig := thor.ForkConfig{
+		VIP191:    math.MaxUint32,
+		ETH_CONST: math.MaxUint32,
+		BLOCKLIST: 0,
+	}
+	con := New(c, stateCreator, forkConfig)
 	if _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}
@@ -330,6 +336,21 @@ func (tc *testConsensus) TestValidateBlockBody() {
 			),
 		)
 		expect := consensusError("tx ref future block: ref 100, current 1")
+		tc.assert.Equal(err, expect)
+	}
+	triggers["triggerTxOriginBlocked"] = func() {
+		thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
+		t := txBuilder(tc.tag).Build()
+		sig, _ := crypto.Sign(t.SigningHash().Bytes(), genesis.DevAccounts()[9].PrivateKey)
+		t = t.WithSignature(sig)
+
+		blk := tc.sign(
+			tc.originalBuilder().Transaction(t).Build(),
+		)
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf("tx origin blocked got packed: %v", genesis.DevAccounts()[9].Address),
+		)
 		tc.assert.Equal(err, expect)
 	}
 
