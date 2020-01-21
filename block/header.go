@@ -173,6 +173,10 @@ func (h *Header) Signature() []byte {
 	return append([]byte(nil), h.body.Signature...)
 }
 
+func (h *Header) SigOnBlockSummary() []byte {
+	return append([]byte(nil), h.body.SigOnBlockSummary...)
+}
+
 // WithSignature create a new Header object with signature set.
 func (h *Header) WithSignature(sig []byte) *Header {
 	cpy := Header{body: h.body}
@@ -256,7 +260,7 @@ func (h *Header) String() string {
 		VRF Proof:          0x%x
 		SigOnBlockSummary:  0x%x
 		SigOnEndorsement:   0x%x
-	}`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary[i], h.body.SigOnEndorsement[i])
+	}`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary, h.body.SigOnEndorsement[i])
 	}
 
 	return s

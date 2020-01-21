@@ -279,7 +279,7 @@ func (s *Solo) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, t
 		return nil, nil, err
 	}
 	bs = bs.WithSignature(sig)
-	log.Debug(fmt.Sprintf("bs sig = 0x%x", sig))
+	// log.Debug(fmt.Sprintf("bs sig = 0x%x", bs.Signature()))
 
 	return bs, ts, nil
 }

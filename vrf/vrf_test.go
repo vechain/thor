@@ -3,7 +3,6 @@ package vrf
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"sort"
 	"testing"
@@ -44,8 +43,8 @@ func TestVrf(t *testing.T) {
 	msg := []byte("PositiveMsg")
 	_msg := []byte("NegativeMsg")
 
-	pf, _ := sk.Prove([]byte(nil))
-	fmt.Println(hex.EncodeToString(pf[:]))
+	// pf, _ := sk.Prove([]byte(nil))
+	// fmt.Println(hex.EncodeToString(pf[:]))
 
 	proof, err := sk.Prove(msg)
 	if err != nil {

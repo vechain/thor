@@ -1,7 +1,6 @@
 package vrf
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -115,6 +114,12 @@ func (k *PublicKey) Bytes32() thor.Bytes32 {
 	return thor.BytesToBytes32(k[:])
 }
 
+// Copy returns a VRF proof copy
+func (p *Proof) Copy() *Proof {
+	pf := *p
+	return &pf
+}
+
 // Hash computes hash from VRF proof
 func (p *Proof) Hash() (*Hash, error) {
 	var pf crypto.VrfProof
@@ -144,12 +149,8 @@ func (h hashable) ToBeHashed() (protocol.HashID, []byte) {
 // Proofs defines an array of VRF proofs
 type Proofs []*Proof
 
-// Len ...
-func (pfs Proofs) Len() int {
-	return len(pfs)
-}
-
-// Less ...
+func (pfs Proofs) Len() int      { return len(pfs) }
+func (pfs Proofs) Swap(i, j int) { pfs[i], pfs[j] = pfs[j], pfs[i] }
 func (pfs Proofs) Less(i, j int) bool {
 	for n := 0; n < ProofLen; n++ {
 		if pfs[i][n] < pfs[j][n] {
@@ -162,14 +163,10 @@ func (pfs Proofs) Less(i, j int) bool {
 	return false
 }
 
-func (pfs Proofs) Swap(i, j int) {
-	pfs[i], pfs[j] = pfs[j], pfs[i]
-}
-
 func (pfs Proofs) String() string {
 	var str string
 	for i := 0; i < len(pfs); i++ {
-		str += fmt.Sprintf("%d %s\n", i, hex.EncodeToString(pfs[i][:]))
+		str += fmt.Sprintf("%d %x\n", i, pfs[i])
 	}
 
 	return str

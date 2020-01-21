@@ -74,25 +74,34 @@ func (b *HeaderBuilder) TransactionFeatures(features tx.Features) *HeaderBuilder
 
 // Committee ...
 func (b *HeaderBuilder) Committee(c []uint8) *HeaderBuilder {
+	// b.headerBody.Committee = append([]uint8(nil), c...)
 	b.headerBody.Committee = c
 	return b
 }
 
 // VrfProofs ...
-func (b *HeaderBuilder) VrfProofs(p []*vrf.Proof) *HeaderBuilder {
-	b.headerBody.VrfProofs = p
+func (b *HeaderBuilder) VrfProofs(proofs []*vrf.Proof) *HeaderBuilder {
+	// for _, p := range proofs {
+	// 	b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, p.Copy())
+	// }
+	b.headerBody.VrfProofs = proofs
 	return b
 }
 
 // SigOnBlockSummary ...
 func (b *HeaderBuilder) SigOnBlockSummary(sig []byte) *HeaderBuilder {
+	// b.headerBody.SigOnBlockSummary = append([]byte(nil), sig...)
 	b.headerBody.SigOnBlockSummary = sig
 	return b
 }
 
 // SigOnEndorsement ...
-func (b *HeaderBuilder) SigOnEndorsement(sig [][]byte) *HeaderBuilder {
-	b.headerBody.SigOnEndorsement = sig
+func (b *HeaderBuilder) SigOnEndorsement(sigs [][]byte) *HeaderBuilder {
+	// for _, sig := range sigs {
+	// 	s := append([]byte(nil), sig...)
+	// 	b.headerBody.SigOnEndorsement = append(b.headerBody.SigOnEndorsement, s)
+	// }
+	b.headerBody.SigOnEndorsement = sigs
 	return b
 }
 
@@ -100,6 +109,5 @@ func (b *HeaderBuilder) SigOnEndorsement(sig [][]byte) *HeaderBuilder {
 func (b *HeaderBuilder) Build() *Header {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
-
 	return &header
 }

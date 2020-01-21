@@ -32,9 +32,9 @@ type endorsementBody struct {
 func NewEndorsement(bs *Summary, proof *vrf.Proof) *Endorsement {
 	return &Endorsement{
 		body: endorsementBody{
-			BlockSummary: bs,
+			BlockSummary: bs.Copy(),
 			// VrfPublicKey: pubKey,
-			VrfProof: proof,
+			VrfProof: proof.Copy(),
 		},
 	}
 }

@@ -7,6 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -188,6 +189,8 @@ func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []
 		return nil, nil, nil, err
 	}
 
+	fmt.Printf("Assigned sig = %x\n", s1)
+
 	builder := new(block.HeaderBuilder).
 		Beneficiary(f.runtime.Context().Beneficiary).
 		GasLimit(f.runtime.Context().GasLimit).
@@ -201,6 +204,7 @@ func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []
 		Committee(c).VrfProofs(p).SigOnBlockSummary(s1).SigOnEndorsement(s2)
 
 	header := builder.Build()
+
 	sig, err := crypto.Sign(header.SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, nil, err
