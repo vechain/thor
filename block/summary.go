@@ -42,7 +42,9 @@ func NewBlockSummary(parentID, txRoot thor.Bytes32, timestamp uint64) *Summary {
 
 // Copy copies the current block summary
 func (bs *Summary) Copy() *Summary {
-	return &Summary{body: bs.body}
+	cpy := Summary{body: bs.body}
+	cpy.body.Signature = append([]byte(nil), bs.body.Signature...)
+	return &cpy
 }
 
 // Signer returns the signer
