@@ -7,7 +7,6 @@ package packer
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -194,8 +193,6 @@ func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	fmt.Printf("Assigned sig = %x\n", s1)
 
 	builder := new(block.HeaderBuilder).
 		Beneficiary(f.runtime.Context().Beneficiary).

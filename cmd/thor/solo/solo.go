@@ -8,7 +8,6 @@ package solo
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -138,7 +137,9 @@ func (s *Solo) loop(ctx context.Context) {
 				log.Debug("packTxSetAndBlockSummary", "error", err)
 			}
 
-			log.Debug("Endorsing starts")
+			prepareElapsed := mclock.Now() - startTime
+
+			// log.Debug("Endorsing starts")
 			doneCh2 := make(chan struct{})
 			edCh := make(chan *block.Endorsement, thor.CommitteeSize)
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
@@ -154,11 +155,11 @@ func (s *Solo) loop(ctx context.Context) {
 				select {
 				case ed := <-edCh:
 					if eds.Add(ed) {
-						log.Debug("Collecting endorsement", "#endorsement", eds.Len())
+						// log.Debug("Collecting endorsement", "#endorsement", eds.Len())
 					}
 				}
 			}
-			log.Debug("Endorsing ends")
+			// log.Debug("Endorsing ends")
 
 			header, stage, receipts, err = flow.PackHeader(
 				genesis.DevAccounts()[0].PrivateKey,
@@ -181,17 +182,17 @@ func (s *Solo) loop(ctx context.Context) {
 
 			commitElapsed := mclock.Now() - execElapsed - startTime
 
-			display(b, receipts, execElapsed, commitElapsed)
+			display(b, receipts, prepareElapsed, execElapsed, commitElapsed)
 		}
 	}
 }
 
-func display(b *block.Block, receipts tx.Receipts, execElapsed, commitElapsed mclock.AbsTime) {
+func display(b *block.Block, receipts tx.Receipts, prepareElapsed, execElapsed, commitElapsed mclock.AbsTime) {
 	blockID := b.Header().ID()
 	log.Info("📦 new block packed",
 		"txs", len(receipts),
 		"mgas", float64(b.Header().GasUsed())/1000/1000,
-		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+		"et", fmt.Sprintf("%v|%v|%v", common.PrettyDuration(prepareElapsed), common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
 	log.Debug(b.String())
@@ -233,10 +234,10 @@ func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *blo
 
 			select {
 			case <-done:
-				log.Debug("endorsement done")
+				// log.Debug("endorsement done")
 				return
 			case edCh <- ed:
-				log.Debug("endorsement sent", "id", hex.EncodeToString(ed.SigningHash().Bytes()))
+				// log.Debug("endorsement sent", "id", hex.EncodeToString(ed.SigningHash().Bytes()))
 				return
 			}
 		}
@@ -255,8 +256,11 @@ func (s *Solo) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, t
 	for _, tx := range txs {
 		select {
 		case <-done:
+			// log.Debug("Leave tx adopting loop", "Iter", i)
 			break
+		default:
 		}
+		// log.Debug("Adopting tx", "txid", tx.ID())
 		err := flow.Adopt(tx)
 		switch {
 		case packer.IsGasLimitReached(err):
