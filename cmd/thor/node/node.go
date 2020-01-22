@@ -51,16 +51,6 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	logDBFailed    bool
-
-	// mu       sync.Mutex
-	// beacon   thor.Bytes32
-	// seed     thor.Bytes32
-	// roundNum uint32
-	// epochNum uint32
-
-	// rw  sync.RWMutex
-	// bs  *block.Summary
-	// eds map[thor.Address]*block.Endorsement
 }
 
 func New(
@@ -75,7 +65,6 @@ func New(
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Node {
-	master.deriveVrfPrivateKey()
 	return &Node{
 		packer:         packer.New(chain, stateCreator, master.Address(), master.Beneficiary, forkConfig),
 		cons:           consensus.New(chain, stateCreator, forkConfig),
@@ -96,8 +85,6 @@ func (n *Node) Run(ctx context.Context) error {
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
-
-	// n.goes.Go(func() { n.epochRoundInfoLoop(ctx) })
 
 	n.goes.Wait()
 	return nil

@@ -41,11 +41,6 @@ type Communicator struct {
 	feedScope      event.SubscriptionScope
 	goes           co.Goes
 	onceSynced     sync.Once
-
-	newBlockSummaryFeed event.Feed
-	newEndorsementFeed  event.Feed
-	newTxSetFeed        event.Feed
-	newHeaderFeed       event.Feed
 }
 
 // New create a new Communicator instance.
@@ -225,26 +220,6 @@ func (c *Communicator) runPeer(peer *Peer) {
 		case <-c.ctx.Done():
 		}
 	}
-}
-
-// SubscribeBlockSummary subscribes the event of the arrival of a new block summary
-func (c *Communicator) SubscribeBlockSummary(ch chan *NewBlockSummaryEvent) event.Subscription {
-	return c.feedScope.Track(c.newBlockSummaryFeed.Subscribe(ch))
-}
-
-// SubscribeEndorsement subscribes the event of the arrival of a new endorsement
-func (c *Communicator) SubscribeEndorsement(ch chan *NewEndorsementEvent) event.Subscription {
-	return c.feedScope.Track(c.newEndorsementFeed.Subscribe(ch))
-}
-
-// SubscribeTxSet subscribes the event of the arrival of a new tx set
-func (c *Communicator) SubscribeTxSet(ch chan *NewTxSetEvent) event.Subscription {
-	return c.feedScope.Track(c.newTxSetFeed.Subscribe(ch))
-}
-
-// SubscribeHeader ...
-func (c *Communicator) SubscribeHeader(ch chan *NewHeaderEvent) event.Subscription {
-	return c.feedScope.Track(c.newHeaderFeed.Subscribe(ch))
 }
 
 // SubscribeBlock subscribe the event that new block received.

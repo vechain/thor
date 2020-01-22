@@ -14,8 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -34,83 +32,53 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Info("synchronization process done")
 
 	var (
-		// authorized bool
-		flow   *packer.Flow
-		err    error
-		ticker = time.NewTicker(time.Second)
-
-		bs  *block.Summary
-		eds map[thor.Bytes32]*block.Endorsement
-		// ts  *block.TxSet
+		authorized bool
+		flow       *packer.Flow
+		err        error
+		ticker     = time.NewTicker(time.Second)
 	)
 	defer ticker.Stop()
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
-
-	// newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	// newTxSetCh := make(chan *comm.NewTxSetEvent)
-	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
-	// newHeaderCh := make(chan *comm.NewHeaderEvent)
-
-	round, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
-	epoch, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			best := n.chain.BestBlock()
-			now := uint64(time.Now().Unix())
-
-			r, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
-			e, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
-			if r > round {
-				round = r
-				if e > epoch {
-					epoch = e
-				}
-			}
-
-			if flow == nil {
-				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
-					continue
-				}
-			}
-		// case bs := <-newBlockSummaryCh:
-		case ed := <-newEndorsementCh:
-			if bs == nil {
-				continue
-			}
-
-			if !ed.BlockSummary().IsEqual(bs) {
-				continue
-			}
-
-			if _, ok := eds[ed.Endorsement.SigningHash()]; ok {
-				continue
-			}
-
-			// if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
-			// 	continue
-			// }
-
-			// case h := <-newHeaderCh:
-			// case ts := <-newTxSetCh:
 		}
 
-		// 	if flow.ParentHeader().ID() != best.Header().ID() {
-		// 		flow = nil
-		// 		log.Debug("re-schedule packer due to new best block")
-		// 		continue
-		// 	}
+		best := n.chain.BestBlock()
+		now := uint64(time.Now().Unix())
 
-		// 	if now+1 >= flow.When() {
-		// 		if err := n.pack(flow); err != nil {
-		// 			log.Error("failed to pack block", "err", err)
-		// 		}
-		// 		flow = nil
-		// 	}
+		if flow == nil {
+			if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
+				if authorized {
+					authorized = false
+					log.Warn("unable to pack block", "err", err)
+				}
+				continue
+			}
+			if !authorized {
+				authorized = true
+				log.Info("prepared to pack block")
+			}
+			log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+			continue
+		}
+
+		if flow.ParentHeader().ID() != best.Header().ID() {
+			flow = nil
+			log.Debug("re-schedule packer due to new best block")
+			continue
+		}
+
+		if now+1 >= flow.When() {
+			if err := n.pack(flow); err != nil {
+				log.Error("failed to pack block", "err", err)
+			}
+			flow = nil
+		}
 	}
 }
 
