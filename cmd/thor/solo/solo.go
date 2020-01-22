@@ -91,8 +91,8 @@ func (s *Solo) Run(ctx context.Context) error {
 }
 
 func (s *Solo) loop(ctx context.Context) {
-	tickerBegin := time.NewTicker(time.Duration(10) * time.Second)
-	defer tickerBegin.Stop()
+	ticker := time.NewTicker(time.Duration(10) * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -100,7 +100,7 @@ func (s *Solo) loop(ctx context.Context) {
 			log.Info("stopping packing service......")
 			return
 
-		case <-tickerBegin.C:
+		case <-ticker.C:
 			log.Debug("START")
 			startTime := mclock.Now()
 
@@ -109,6 +109,7 @@ func (s *Solo) loop(ctx context.Context) {
 				ts   *block.TxSet
 				err  error
 				flow *packer.Flow
+				done chan struct{}
 
 				header   *block.Header
 				stage    *state.Stage
@@ -122,12 +123,13 @@ func (s *Solo) loop(ctx context.Context) {
 				log.Error("packer.Mock", "error", err)
 			}
 
-			doneCh1 := make(chan struct{})
+			done = make(chan struct{})
 			go func() {
 				time.Sleep(time.Duration(3) * time.Second)
-				close(doneCh1)
+				// close(done)
+				done <- struct{}{}
 			}()
-			bs, ts, err = s.packTxSetAndBlockSummary(doneCh1, flow, txs)
+			bs, ts, err = s.packTxSetAndBlockSummary(done, flow, txs)
 			if err != nil {
 				log.Debug("packTxSetAndBlockSummary", "error", err)
 			}
@@ -135,16 +137,17 @@ func (s *Solo) loop(ctx context.Context) {
 			prepareElapsed := mclock.Now() - startTime
 
 			// log.Debug("Endorsing starts")
-			doneCh2 := make(chan struct{})
+			done = make(chan struct{})
 			edCh := make(chan *block.Endorsement, thor.CommitteeSize)
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-				go s.endorse(doneCh2, edCh, bs)
+				go s.endorse(done, edCh, bs)
 			}
 
 			var eds block.Endorsements
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
 				if eds.Len() >= int(thor.CommitteeSize) {
-					close(doneCh2)
+					// close(done)
+					done <- struct{}{}
 					break
 				}
 				select {
