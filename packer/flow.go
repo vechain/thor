@@ -28,6 +28,10 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+
+	blockSummary *block.Summary
+	txSet        *block.TxSet
+	endorsements map[thor.Bytes32]*block.Endorsement
 }
 
 func newFlow(
@@ -48,6 +52,40 @@ func newFlow(
 // Txs ...
 func (f *Flow) Txs() tx.Transactions {
 	return f.txs
+}
+
+// PackBlockSummary packs the tx set and block summary
+func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) error {
+	var (
+		sig []byte
+		err error
+	)
+
+	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
+		return errors.New("private key mismatch")
+	}
+
+	// pack tx set
+	ts := block.NewTxSet(f.txs)
+	sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
+	if err != nil {
+		return err
+	}
+	f.txSet = ts.WithSignature(sig)
+
+	// pack block summary
+	best := f.packer.chain.BestBlock()
+	parent := best.Header().ID()
+	root := f.txSet.RootHash()
+	time := best.Header().Timestamp() + thor.BlockInterval
+	bs := block.NewBlockSummary(parent, root, time)
+	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
+	if err != nil {
+		return err
+	}
+	f.blockSummary = bs.WithSignature(sig)
+
+	return nil
 }
 
 // ParentHeader returns parent block header.
@@ -179,7 +217,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 }
 
 // PackHeader build the new block header.
-func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []byte, s2 [][]byte) (*block.Header, *state.Stage, tx.Receipts, error) {
+func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, p []*vrf.Proof, s1 []byte, s2 [][]byte) (*block.Header, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
