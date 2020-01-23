@@ -203,7 +203,8 @@ func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, c []uint8, p []*vrf.Proof, s1 []
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features).
-		Committee(c).VrfProofs(p).SigOnBlockSummary(s1).SigOnEndorsement(s2)
+		// Committee(c).
+		VrfProofs(p).SigOnBlockSummary(s1).SigOnEndorsement(s2)
 
 	header := builder.Build()
 
