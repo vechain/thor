@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -45,7 +46,7 @@ type headerBody struct {
 	StateRoot       thor.Bytes32
 	ReceiptsRoot    thor.Bytes32
 
-	Committee         []uint8
+	// Committee         []uint8
 	VrfProofs         []*vrf.Proof
 	SigOnBlockSummary []byte
 	SigOnEndorsement  [][]byte
@@ -146,6 +147,8 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { h.cache.signingHash.Store(hash) }()
 
+	sort.Sort(vrf.Proofs(h.body.VrfProofs))
+
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
@@ -160,7 +163,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
 
-		h.body.Committee,
+		// h.body.Committee,
 		h.body.VrfProofs,
 		h.body.SigOnBlockSummary,
 		h.body.SigOnEndorsement,
@@ -254,14 +257,13 @@ func (h *Header) String() string {
 		h.body.Signature,
 	)
 
-	for i, c := range h.body.Committee {
+	for i := range h.body.VrfProofs {
 		s = s + fmt.Sprintf(`
 	{
-		Committee No.:      %v
 		VRF Proof:          0x%x
 		SigOnBlockSummary:  0x%x
 		SigOnEndorsement:   0x%x
-	}`, c, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary, h.body.SigOnEndorsement[i])
+	}`, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary, h.body.SigOnEndorsement[i])
 	}
 
 	return s

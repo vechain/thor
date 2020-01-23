@@ -72,12 +72,12 @@ func (b *HeaderBuilder) TransactionFeatures(features tx.Features) *HeaderBuilder
 	return b
 }
 
-// Committee ...
-func (b *HeaderBuilder) Committee(c []uint8) *HeaderBuilder {
-	// b.headerBody.Committee = append([]uint8(nil), c...)
-	b.headerBody.Committee = c
-	return b
-}
+// // Committee ...
+// func (b *HeaderBuilder) Committee(c []uint8) *HeaderBuilder {
+// 	// b.headerBody.Committee = append([]uint8(nil), c...)
+// 	b.headerBody.Committee = c
+// 	return b
+// }
 
 // VrfProofs ...
 func (b *HeaderBuilder) VrfProofs(proofs []*vrf.Proof) *HeaderBuilder {
