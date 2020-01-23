@@ -161,7 +161,6 @@ func (s *Solo) loop(ctx context.Context) {
 
 			header, stage, receipts, err = flow.PackHeader(
 				genesis.DevAccounts()[0].PrivateKey,
-				[]uint8{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 				eds.VrfProofs(),
 				bs.Signature(),
 				eds.Signatures(),

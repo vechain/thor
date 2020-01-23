@@ -60,8 +60,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if flow != nil {
+				continue
+			}
+
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
+			if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
+				continue
+			}
 
 			r, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
 			e, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
@@ -72,11 +79,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 				}
 			}
 
-			if flow == nil {
-				if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
-					continue
-				}
-			}
 		// case bs := <-newBlockSummaryCh:
 		case ed := <-newEndorsementCh:
 			if bs == nil {
@@ -112,6 +114,59 @@ func (n *Node) packerLoop(ctx context.Context) {
 		// 		flow = nil
 		// 	}
 	}
+}
+
+func (n *Node) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, txs tx.Transactions) error {
+	var txsToRemove []*tx.Transaction
+	defer func() {
+		for _, tx := range txsToRemove {
+			n.txPool.Remove(tx.Hash(), tx.ID())
+		}
+	}()
+	for _, tx := range txs {
+		select {
+		case <-done:
+			// log.Debug("Leave tx adopting loop", "Iter", i)
+			break
+		default:
+		}
+		// log.Debug("Adopting tx", "txid", tx.ID())
+		err := flow.Adopt(tx)
+		switch {
+		case packer.IsGasLimitReached(err):
+			break
+		case packer.IsTxNotAdoptableNow(err):
+			continue
+		default:
+			txsToRemove = append(txsToRemove, tx)
+		}
+	}
+
+	err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+	// ts := block.NewTxSet(flow.Txs())
+	// sig, err := crypto.Sign(ts.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	// ts = ts.WithSignature(sig)
+
+	// parent := best.Header().ID()
+	// root := flow.Txs().RootHash()
+	// time := best.Header().Timestamp() + thor.BlockInterval
+	// bs := block.NewBlockSummary(parent, root, time)
+	// sig, err = crypto.Sign(bs.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	// bs = bs.WithSignature(sig)
+	// // log.Debug(fmt.Sprintf("bs sig = 0x%x", bs.Signature()))
+	// return bs, ts, nil
 }
 
 func (n *Node) pack(flow *packer.Flow) error {
