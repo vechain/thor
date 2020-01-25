@@ -97,6 +97,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	return stage, receipts, nil
 }
 
+// NewRuntimeForReplay ...
 func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*runtime.Runtime, error) {
 	signer, err := header.Signer()
 	if err != nil {

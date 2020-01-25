@@ -284,7 +284,7 @@ func (s *Solo) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, t
 	parent := best.Header().ID()
 	root := flow.Txs().RootHash()
 	time := best.Header().Timestamp() + thor.BlockInterval
-	bs := block.NewBlockSummary(parent, root, time)
+	bs := block.NewBlockSummary(parent, root, time, best.Header().TotalScore()+1)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		return nil, nil, err

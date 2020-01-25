@@ -108,19 +108,40 @@ func NewDevnet() *Genesis {
 			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, energySupply)
 		}).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))),
+			tx.NewClause(&builtin.Params.Address).WithData(
+				mustEncodeInput(builtin.Params.ABI, "set",
+					thor.KeyExecutorAddress,
+					new(big.Int).SetBytes(executor[:]),
+				)),
 			thor.Address{}).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, thor.InitialRewardRatio)),
+			tx.NewClause(&builtin.Params.Address).WithData(
+				mustEncodeInput(builtin.Params.ABI, "set",
+					thor.KeyRewardRatio,
+					thor.InitialRewardRatio,
+				)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, thor.InitialBaseGasPrice)),
+			tx.NewClause(&builtin.Params.Address).WithData(
+				mustEncodeInput(builtin.Params.ABI, "set",
+					thor.KeyBaseGasPrice,
+					thor.InitialBaseGasPrice,
+				)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Params.Address).WithData(mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)),
+			tx.NewClause(&builtin.Params.Address).WithData(
+				mustEncodeInput(builtin.Params.ABI, "set",
+					thor.KeyProposerEndorsement,
+					thor.InitialProposerEndorsement,
+				)),
 			executor).
 		Call(
-			tx.NewClause(&builtin.Authority.Address).WithData(mustEncodeInput(builtin.Authority.ABI, "add", soloBlockSigner.Address, soloBlockSigner.Address, thor.BytesToBytes32([]byte("Solo Block Signer")))),
+			tx.NewClause(&builtin.Authority.Address).WithData(
+				mustEncodeInput(builtin.Authority.ABI, "add",
+					soloBlockSigner.Address,
+					soloBlockSigner.Address,
+					thor.BytesToBytes32([]byte("Solo Block Signer")),
+				)),
 			executor)
 
 	id, err := builder.ComputeID()

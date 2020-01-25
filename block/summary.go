@@ -22,20 +22,22 @@ type Summary struct {
 }
 
 type summaryBody struct {
-	ParentID  thor.Bytes32
-	TxRoot    thor.Bytes32
-	Timestamp uint64
+	ParentID   thor.Bytes32
+	TxRoot     thor.Bytes32
+	Timestamp  uint64
+	TotalScore uint64
 
 	Signature []byte
 }
 
 // NewBlockSummary creates a block summary without signature
-func NewBlockSummary(parentID, txRoot thor.Bytes32, timestamp uint64) *Summary {
+func NewBlockSummary(parentID, txRoot thor.Bytes32, timestamp, totalScore uint64) *Summary {
 	return &Summary{
 		body: summaryBody{
-			ParentID:  parentID,
-			TxRoot:    txRoot,
-			Timestamp: timestamp,
+			ParentID:   parentID,
+			TxRoot:     txRoot,
+			Timestamp:  timestamp,
+			TotalScore: totalScore,
 		},
 	}
 }
@@ -131,6 +133,11 @@ func (bs *Summary) Timestamp() uint64 {
 // Signature return signature
 func (bs *Summary) Signature() []byte {
 	return bs.body.Signature
+}
+
+// TotalScore ...
+func (bs *Summary) TotalScore() uint64 {
+	return bs.body.TotalScore
 }
 
 // EndorseHash computes the hash for committee member to sign

@@ -1,11 +1,14 @@
 package consensus
 
 import (
-	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/poa"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
 )
@@ -84,67 +87,6 @@ func (c *Consensus) IsLeader(thor.Address) bool {
 	return false
 }
 
-// ValidateBlockSummary validates a given block summary
-func (c *Consensus) ValidateBlockSummary(bs *block.Summary) error {
-	// timestamp > best_block_timestamp && (timestamp - best_block_timestamp) % block_interval == 0
-	currTime := bs.Timestamp()
-	bestTime := c.chain.BestBlock().Header().Timestamp()
-	if currTime <= bestTime || (currTime-bestTime)%thor.BlockInterval != 0 {
-		return errTimestamp
-	}
-
-	// parent == best block
-	parent := c.chain.BestBlock().Header().ID()
-	if bytes.Compare(parent.Bytes(), bs.ParentID().Bytes()) != 0 {
-		return errParent
-	}
-
-	// Signature should be validated during the check of the
-	// transaction sender
-
-	// if _, err := bs.Signer(); err != nil {
-	// 	return errSig
-	// }
-
-	return nil
-}
-
-// ValidateEndorsement validates a given endorsement
-func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf.PublicKey) error {
-	// validate the block summary
-	if err := c.ValidateBlockSummary(ed.BlockSummary()); err != nil {
-		return err
-	}
-
-	// Signature should be validated during the check of the
-	// transaction sender
-
-	// if _, err := ed.Signer(); err != nil {
-	// 	return errSig
-	// }
-
-	// Compute the VRF seed
-	round, _ := c.RoundNumber(ed.BlockSummary().Timestamp())
-	epoch := EpochNumber(round)
-	beacon, err := c.beacon(epoch)
-	if err != nil {
-		return err
-	}
-	seed := seed(beacon, round)
-
-	// validate proof
-	if ok, _ := vrfPublicKey.Verify(ed.VrfProof(), seed.Bytes()); !ok {
-		return errVrfProof
-	}
-
-	// validate committeeship
-	if !isCommitteeByProof(ed.VrfProof()) {
-		return errNotCommittee
-	}
-
-	return nil
-}
-
 // RoundNumber computes the round number from timestamp
 func (c *Consensus) RoundNumber(timestamp uint64) (uint32, error) {
 	launchTime := c.chain.GenesisBlock().Header().Timestamp()
@@ -176,7 +118,108 @@ func EpochNumber(round uint32) uint32 {
 	return uint32(uint64(round-1)/thor.EpochInterval + 1)
 }
 
+// RoundNumber ...
+func RoundNumber(now, launch uint64) (uint32, error) {
+	if launch > now {
+		return 0, errTimestamp
+	}
+	return uint32((now - launch) / thor.BlockInterval), nil
+}
+
 // Timestamp computes the timestamp for the block generated in that round
 func (c *Consensus) Timestamp(round uint32) uint64 {
 	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(round)
+}
+
+// ValidateBlockSummary validates a given block summary
+func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header, now uint64) error {
+	if bs.ParentID() != parent.ID() {
+		return consensusError("Inconsistent parent block ID")
+	}
+
+	st, err := c.stateCreator.NewState(parent.StateRoot())
+	if err != nil {
+		return err
+	}
+
+	_, err = c.validateLeader(bs, parent, st)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateEndorsement validates a given endorsement
+func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf.PublicKey, parent *block.Header, now uint64) error {
+	// validate the block summary
+	if err := c.ValidateBlockSummary(ed.BlockSummary(), parent, now); err != nil {
+		return err
+	}
+
+	// Compute the VRF seed
+	round, _ := c.RoundNumber(ed.BlockSummary().Timestamp())
+	epoch := EpochNumber(round)
+	beacon, err := c.beacon(epoch)
+	if err != nil {
+		return err
+	}
+	seed := seed(beacon, round)
+
+	// validate proof
+	if ok, _ := vrfPublicKey.Verify(ed.VrfProof(), seed.Bytes()); !ok {
+		return consensusError("Invalid vrf proof")
+	}
+
+	// validate committeeship
+	if !isCommitteeByProof(ed.VrfProof()) {
+		return consensusError("Not a committee member")
+	}
+
+	return nil
+}
+
+// validate:
+// 1. signature
+// 2. leadership
+// 3. total score
+func (c *Consensus) validateLeader(bs *block.Summary, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+	signer, err := bs.Signer()
+	if err != nil {
+		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+	}
+
+	authority := builtin.Authority.Native(st)
+	var candidates *poa.Candidates
+	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
+		candidates = entry.(*poa.Candidates).Copy()
+	} else {
+		candidates = poa.NewCandidates(authority.AllCandidates())
+	}
+
+	proposers := candidates.Pick(st)
+
+	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
+	if err != nil {
+		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+	}
+
+	if !sched.IsTheTime(bs.Timestamp()) {
+		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", bs.Timestamp(), signer))
+	}
+
+	updates, score := sched.Updates(bs.Timestamp())
+	if parent.TotalScore()+score != bs.TotalScore() {
+		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, bs.TotalScore()))
+	}
+
+	for _, u := range updates {
+		authority.Update(u.Address, u.Active)
+		if !candidates.Update(u.Address, u.Active) {
+			// should never happen
+			panic("something wrong with candidates list")
+		}
+	}
+
+	return candidates, nil
 }
