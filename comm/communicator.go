@@ -252,6 +252,19 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 	return c.feedScope.Track(c.newBlockFeed.Subscribe(ch))
 }
 
+// BroadcastBlockSummary broadcasts a block summary to remote peers
+func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
+	parent := c.chain.BestBlock().Header().ID()
+	if bs.ParentID() != parent {
+		return
+	}
+	// now := time.Now()
+
+}
+
+// BroadcastTxSet broadcasts a tx set to remote peers
+func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {}
+
 // BroadcastBlock broadcast a block to remote peers.
 func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {

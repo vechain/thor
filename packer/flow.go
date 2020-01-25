@@ -31,10 +31,12 @@ type Flow struct {
 
 	blockSummary *block.Summary
 	txSet        *block.TxSet
-	endorsements map[thor.Bytes32]*block.Endorsement
+	endorsements block.Endorsements
+	totalScore   uint64
 }
 
-func newFlow(
+// NewFlow ...
+func NewFlow(
 	packer *Packer,
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
@@ -49,13 +51,38 @@ func newFlow(
 	}
 }
 
+// SetBlockSummary ...
+func (f *Flow) SetBlockSummary(bs *block.Summary) {
+	f.blockSummary = bs
+}
+
+// GetBlockSummary ...
+func (f *Flow) GetBlockSummary() *block.Summary {
+	return f.blockSummary
+}
+
+// IsEmpty ...
+func (f *Flow) IsEmpty() bool {
+	return f.packer == nil
+}
+
+// AddEndoresement stores an endorsement
+func (f *Flow) AddEndoresement(ed *block.Endorsement) bool {
+	return f.endorsements.Add(ed)
+}
+
+// NumEndorsement returns how many endorsements having been stored
+func (f *Flow) NumEndorsement() int {
+	return f.endorsements.Len()
+}
+
 // Txs ...
 func (f *Flow) Txs() tx.Transactions {
 	return f.txs
 }
 
-// PackBlockSummary packs the tx set and block summary
-func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) error {
+// PackTxSetAndBlockSummary packs the tx set and block summary
+func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey, totalScore uint64) error {
 	var (
 		sig []byte
 		err error
@@ -78,7 +105,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) error {
 	parent := best.Header().ID()
 	root := f.txSet.RootHash()
 	time := best.Header().Timestamp() + thor.BlockInterval
-	bs := block.NewBlockSummary(parent, root, time)
+	bs := block.NewBlockSummary(parent, root, time, f.totalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
 		return err

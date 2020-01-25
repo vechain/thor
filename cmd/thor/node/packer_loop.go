@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
@@ -38,22 +37,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 		flow   *packer.Flow
 		err    error
 		ticker = time.NewTicker(time.Second)
-
-		bs  *block.Summary
-		eds map[thor.Bytes32]*block.Endorsement
-		// ts  *block.TxSet
 	)
 	defer ticker.Stop()
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
-	// newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
+	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
 	// newTxSetCh := make(chan *comm.NewTxSetEvent)
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	// newHeaderCh := make(chan *comm.NewHeaderEvent)
-
-	round, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
-	epoch, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
 
 	for {
 		select {
@@ -70,28 +62,46 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			r, _ := n.cons.RoundNumber(uint64(time.Now().Unix()))
-			e, _ := n.cons.EpochNumber(uint64(time.Now().Unix()))
-			if r > round {
-				round = r
-				if e > epoch {
-					epoch = e
-				}
-			}
-
-		// case bs := <-newBlockSummaryCh:
-		case ed := <-newEndorsementCh:
-			if bs == nil {
+			maxTxPackingDur := 3
+			if err = n.packTxSetAndBlockSummary(flow, maxTxPackingDur); err != nil {
+				log.Error("Pack tx set and block summary", "err", err)
 				continue
 			}
 
-			if !ed.BlockSummary().IsEqual(bs) {
+		case ev := <-newBlockSummaryCh:
+			if !flow.IsEmpty() {
 				continue
 			}
 
-			if _, ok := eds[ed.Endorsement.SigningHash()]; ok {
+			now := uint64(time.Now().Second())
+			parent := n.chain.BestBlock().Header()
+
+			// Validate proposer
+			// bs := ev.Summary
+			// signer, err := bs.Signer()
+			// if err != nil {
+			// 	log.Error("<-newBlockSummaryCh: signer", "err", err)
+			// }
+
+			// state, err := c.stateCreator.NewState(best.Header().StateRoot())
+			// if err != nil {
+			// 	return log.Error("<-newBlockSummaryCh: new state", "err", err)
+			// }
+
+			if err = n.cons.ValidateBlockSummary(ev.Summary, parent, now); err != nil {
 				continue
 			}
+
+			flow = packer.NewFlow(nil, nil, nil, 0)
+			flow.SetBlockSummary(ev.Summary)
+
+		case ev := <-newEndorsementCh:
+			now := uint64(time.Now().Second())
+			parent := n.chain.BestBlock().Header()
+			if err = n.cons.ValidateEndorsement(ev.Endorsement, parent, now); err != nil {
+				continue
+			}
+			flow.AddEndoresement(ev.Endorsement)
 
 			// if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
 			// 	continue
@@ -116,14 +126,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, txs tx.Transactions) error {
+func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) error {
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
 			n.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
-	for _, tx := range txs {
+
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
+		done <- struct{}{}
+	}()
+
+	for _, tx := range n.txPool.Executables() {
 		select {
 		case <-done:
 			// log.Debug("Leave tx adopting loop", "Iter", i)

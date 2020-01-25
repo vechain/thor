@@ -116,7 +116,10 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	// Assign total score to the flow instance
+	flow.totalScore = parent.TotalScore() + score
+
+	return NewFlow(p, parent, rt, features), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -156,7 +159,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return NewFlow(p, parent, rt, features), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
