@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
@@ -79,7 +78,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	cons := initConsensus()
+	_, cons := initConsensusTest()
 	launchTime := cons.chain.GenesisBlock().Header().Timestamp()
 
 	tests := []struct {
@@ -128,19 +127,19 @@ func TestValidateBlockSummary(t *testing.T) {
 	privateKey := genesis.DevAccounts()[0].PrivateKey
 	signer := genesis.DevAccounts()[0].Address
 
-	cons := initConsensus()
+	packer, cons := initConsensusTest()
 
-	nRound := uint32(10)
-	addEmptyBlocks(cons.chain, privateKey, nRound, make(map[uint32]interface{}))
+	nRound := uint32(1)
+	addEmptyBlocks(packer, cons.chain, privateKey, nRound, make(map[uint32]interface{}))
 
 	best := cons.chain.BestBlock()
 	round := nRound + 1
 
-	st, err := cons.stateCreator.NewState(best.Header().StateRoot())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(builtin.Params.Native(st).Get(thor.KeyProposerEndorsement))
+	// st, err := cons.stateCreator.NewState(best.Header().StateRoot())
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(builtin.Params.Native(st).Get(thor.KeyProposerEndorsement))
 
 	type testObj struct {
 		ParentID   thor.Bytes32
@@ -206,7 +205,7 @@ func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
 func TestValidateEndorsement(t *testing.T) {
 	ethsk, _ := crypto.GenerateKey()
 
-	cons := initConsensus()
+	_, cons := initConsensusTest()
 	gen := cons.chain.GenesisBlock().Header()
 
 	// Create a valid block summary at round 1
@@ -290,7 +289,7 @@ func BenchmarkTestEthSig(b *testing.B) {
 }
 
 func BenchmarkBeacon(b *testing.B) {
-	cons := initConsensus()
+	_, cons := initConsensusTest()
 
 	for i := 0; i < b.N; i++ {
 		cons.beacon(uint32(i + 1))

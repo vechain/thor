@@ -5,16 +5,16 @@ import (
 	"crypto/ecdsa"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
-func initConsensus() *Consensus {
+func initConsensusTest() (*packer.Packer, *Consensus) {
 	kv, _ := lvldb.NewMem()
 	g := genesis.NewDevnet()
 	s := state.NewCreator(kv)
@@ -25,25 +25,40 @@ func initConsensus() *Consensus {
 		panic(err)
 	}
 
-	return New(chain, s, thor.ForkConfig{})
+	cons := New(chain, s, thor.ForkConfig{})
+	packer := packer.New(chain, s,
+		genesis.DevAccounts()[0].Address,
+		&genesis.DevAccounts()[0].Address,
+		thor.ForkConfig{})
+
+	return packer, cons
 }
 
 // n : number of rounds between the parent and current block
-func newBlock(parent *block.Block, n uint64, privateKey *ecdsa.PrivateKey) *block.Block {
+func newBlock(packer *packer.Packer, parent *block.Block, n uint64, privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage) {
 	t := parent.Header().Timestamp() + thor.BlockInterval*uint64(n)
-	s := parent.Header().TotalScore() + 1
-	b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).TotalScore(s).Build()
-	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
-	return b.WithSignature(sig)
+	// s := parent.Header().TotalScore() + 1
+	// b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).TotalScore(s).Build()
+	// sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
+	// return b.WithSignature(sig)
+
+	flow, _ := packer.Mock(parent.Header(), t, thor.InitialGasLimit)
+	flow.IncTotalScore(1)
+	b, stage, _, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	return b, stage
 }
 
 func addEmptyBlocks(
+	packer *packer.Packer,
 	chain *chain.Chain,
 	privateKey *ecdsa.PrivateKey,
 	nRound uint32,
 	roundSkipped map[uint32]interface{},
 ) (map[uint32]*block.Block, error) {
-	var prev, curr *block.Block
+	var (
+		prev, curr *block.Block
+		stage      *state.Stage
+	)
 
 	blks := make(map[uint32]*block.Block)
 
@@ -56,9 +71,11 @@ func addEmptyBlocks(
 			continue
 		}
 
-		curr = newBlock(prev, n, privateKey)
-		_, err := chain.AddBlock(curr, nil)
-		if err != nil {
+		curr, stage = newBlock(packer, prev, n, privateKey)
+		if _, err := stage.Commit(); err != nil {
+			return nil, err
+		}
+		if _, err := chain.AddBlock(curr, nil); err != nil {
 			return nil, err
 		}
 
@@ -82,9 +99,9 @@ func prepareSkippedRoundInfo() map[uint32]interface{} {
 }
 
 func TestBeacon(t *testing.T) {
-	privateKey, _ := crypto.GenerateKey()
+	privateKey := genesis.DevAccounts()[0].PrivateKey
 
-	cons := initConsensus()
+	packer, cons := initConsensusTest()
 	gen := cons.chain.GenesisBlock()
 
 	var (
@@ -97,7 +114,7 @@ func TestBeacon(t *testing.T) {
 	// skip the entire second epoch
 	roundSkipped := prepareSkippedRoundInfo()
 	nRound := uint32(thor.EpochInterval) * 3
-	blocks, err := addEmptyBlocks(cons.chain, privateKey, nRound, roundSkipped)
+	blocks, err := addEmptyBlocks(packer, cons.chain, privateKey, nRound, roundSkipped)
 	if err != nil {
 		t.Fatal(err)
 	}

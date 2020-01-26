@@ -51,6 +51,11 @@ func NewFlow(
 	}
 }
 
+// IncTotalScore ....
+func (f *Flow) IncTotalScore(score uint64) {
+	f.runtime.Context().TotalScore += score
+}
+
 // SetBlockSummary ...
 func (f *Flow) SetBlockSummary(bs *block.Summary) {
 	f.blockSummary = bs
