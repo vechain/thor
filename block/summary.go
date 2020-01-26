@@ -81,6 +81,7 @@ func (bs *Summary) SigningHash() (hash thor.Bytes32) {
 		bs.body.ParentID,
 		bs.body.TxRoot,
 		bs.body.Timestamp,
+		bs.body.TotalScore,
 	})
 	hw.Sum(hash[:0])
 	return

@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"math"
 	"testing"
 
 	"github.com/vechain/thor/block"
@@ -14,38 +15,54 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func initConsensusTest() (*packer.Packer, *Consensus) {
+func initConsensusTest() (*packer.Packer, *Consensus, error) {
 	kv, _ := lvldb.NewMem()
 	g := genesis.NewDevnet()
 	s := state.NewCreator(kv)
-	b0, _, _ := g.Build(s)
+	b0, _, err := g.Build(s)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	chain, err := chain.New(kv, b0)
 	if err != nil {
-		panic(err)
+		return nil, nil, err
+	}
+
+	forkConfig := thor.ForkConfig{
+		VIP191:    0, // enable vip191
+		ETH_CONST: 0, // enable latest evm
+		BLOCKLIST: math.MaxUint32,
 	}
 
 	cons := New(chain, s, thor.ForkConfig{})
 	packer := packer.New(chain, s,
 		genesis.DevAccounts()[0].Address,
 		&genesis.DevAccounts()[0].Address,
-		thor.ForkConfig{})
+		forkConfig)
 
-	return packer, cons
+	return packer, cons, nil
 }
 
 // n : number of rounds between the parent and current block
-func newBlock(packer *packer.Packer, parent *block.Block, n uint64, privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage) {
+func newBlock(packer *packer.Packer, parent *block.Block, n uint64, privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, error) {
 	t := parent.Header().Timestamp() + thor.BlockInterval*uint64(n)
 	// s := parent.Header().TotalScore() + 1
 	// b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).TotalScore(s).Build()
 	// sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
 	// return b.WithSignature(sig)
 
-	flow, _ := packer.Mock(parent.Header(), t, thor.InitialGasLimit)
-	flow.IncTotalScore(1)
-	b, stage, _, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
-	return b, stage
+	// flow, err := packer.Mock(parent.Header(), t, thor.InitialGasLimit)
+	flow, err := packer.Schedule(parent.Header(), t)
+	if err != nil {
+		return nil, nil, err
+	}
+	// flow.IncTotalScore(1)
+	b, stage, _, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	return b, stage, nil
 }
 
 func addEmptyBlocks(
@@ -55,10 +72,7 @@ func addEmptyBlocks(
 	nRound uint32,
 	roundSkipped map[uint32]interface{},
 ) (map[uint32]*block.Block, error) {
-	var (
-		prev, curr *block.Block
-		stage      *state.Stage
-	)
+	var prev *block.Block
 
 	blks := make(map[uint32]*block.Block)
 
@@ -71,7 +85,10 @@ func addEmptyBlocks(
 			continue
 		}
 
-		curr, stage = newBlock(packer, prev, n, privateKey)
+		curr, stage, err := newBlock(packer, prev, n, privateKey)
+		if err != nil {
+			return nil, err
+		}
 		if _, err := stage.Commit(); err != nil {
 			return nil, err
 		}
@@ -101,12 +118,15 @@ func prepareSkippedRoundInfo() map[uint32]interface{} {
 func TestBeacon(t *testing.T) {
 	privateKey := genesis.DevAccounts()[0].PrivateKey
 
-	packer, cons := initConsensusTest()
+	packer, cons, err := initConsensusTest()
+	if err != nil {
+		t.Fatal(err)
+	}
 	gen := cons.chain.GenesisBlock()
 
 	var (
 		// currBlock, prevBlock *block.Block
-		err    error
+		// err    error
 		beacon thor.Bytes32
 		epoch  uint32
 	)
