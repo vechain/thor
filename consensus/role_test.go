@@ -78,7 +78,11 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	_, cons := initConsensusTest()
+	_, cons, err := initConsensusTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	launchTime := cons.chain.GenesisBlock().Header().Timestamp()
 
 	tests := []struct {
@@ -127,7 +131,10 @@ func TestValidateBlockSummary(t *testing.T) {
 	privateKey := genesis.DevAccounts()[0].PrivateKey
 	signer := genesis.DevAccounts()[0].Address
 
-	packer, cons := initConsensusTest()
+	packer, cons, err := initConsensusTest()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	nRound := uint32(1)
 	addEmptyBlocks(packer, cons.chain, privateKey, nRound, make(map[uint32]interface{}))
@@ -142,10 +149,9 @@ func TestValidateBlockSummary(t *testing.T) {
 	// fmt.Println(builtin.Params.Native(st).Get(thor.KeyProposerEndorsement))
 
 	type testObj struct {
-		ParentID   thor.Bytes32
-		TxRoot     thor.Bytes32
-		Timestamp  uint64
-		TotalScore uint64
+		ParentID              thor.Bytes32
+		TxRoot                thor.Bytes32
+		Timestamp, TotalScore uint64
 	}
 
 	tests := []struct {
@@ -154,17 +160,17 @@ func TestValidateBlockSummary(t *testing.T) {
 		msg   string
 	}{
 		{
-			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round), best.Header().TotalScore() + 1},
+			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round), 2},
 			nil,
 			"clean case",
 		},
 		{
-			testObj{best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round), best.Header().TotalScore() + 1},
+			testObj{best.Header().ParentID(), thor.Bytes32{}, cons.Timestamp(round), 2},
 			consensusError("Inconsistent parent block ID"),
 			"Invalid parent ID",
 		},
 		{
-			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round) - 1, best.Header().TotalScore()},
+			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round) - 1, 2},
 			consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", cons.Timestamp(round)-1, signer)),
 			"Invalid timestamp",
 		},
@@ -203,9 +209,13 @@ func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
 }
 
 func TestValidateEndorsement(t *testing.T) {
-	ethsk, _ := crypto.GenerateKey()
+	// ethsk, _ := crypto.GenerateKey()
+	ethsk := genesis.DevAccounts()[0].PrivateKey
 
-	_, cons := initConsensusTest()
+	_, cons, err := initConsensusTest()
+	if err != nil {
+		t.Fatal(err)
+	}
 	gen := cons.chain.GenesisBlock().Header()
 
 	// Create a valid block summary at round 1
@@ -289,7 +299,10 @@ func BenchmarkTestEthSig(b *testing.B) {
 }
 
 func BenchmarkBeacon(b *testing.B) {
-	_, cons := initConsensusTest()
+	_, cons, err := initConsensusTest()
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		cons.beacon(uint32(i + 1))

@@ -122,9 +122,6 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		},
 		p.forkConfig)
 
-	// Assign total score to the flow instance
-	flow.totalScore = parent.TotalScore() + score
-
 	return NewFlow(p, parent, rt, features), nil
 }
 

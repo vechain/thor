@@ -32,7 +32,6 @@ type Flow struct {
 	blockSummary *block.Summary
 	txSet        *block.TxSet
 	endorsements block.Endorsements
-	totalScore   uint64
 }
 
 // NewFlow ...
@@ -51,10 +50,10 @@ func NewFlow(
 	}
 }
 
-// IncTotalScore ....
-func (f *Flow) IncTotalScore(score uint64) {
-	f.runtime.Context().TotalScore += score
-}
+// // IncTotalScore ....
+// func (f *Flow) IncTotalScore(score uint64) {
+// 	f.runtime.Context().TotalScore += score
+// }
 
 // SetBlockSummary ...
 func (f *Flow) SetBlockSummary(bs *block.Summary) {
@@ -110,7 +109,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey, totalScore uint64)
 	parent := best.Header().ID()
 	root := f.txSet.RootHash()
 	time := best.Header().Timestamp() + thor.BlockInterval
-	bs := block.NewBlockSummary(parent, root, time, f.totalScore)
+	bs := block.NewBlockSummary(parent, root, time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
 		return err
