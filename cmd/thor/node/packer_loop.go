@@ -12,13 +12,22 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
+// packerLoop is executed by the leader and committee members to
+// 1. prepare and broadcast block summary & tx set
+// 2. endorse and broadcast block summary
+// 3. pack and broadcast header
+// 4. pack and commit new block
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
@@ -32,18 +41,23 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Info("synchronization process done")
 
 	var (
-		// authorized bool
 		flow   *packer.Flow
-		err    error
 		ticker = time.NewTicker(time.Second)
+
+		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
+
+	defer ticker.Stop()
 
 	n.packer.SetTargetGasLimit(n.targetGasLimit)
 
+	var scope event.SubscriptionScope
+	defer scope.Close()
+
 	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	// newTxSetCh := make(chan *comm.NewTxSetEvent)
+	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
-	// newHeaderCh := make(chan *comm.NewHeaderEvent)
+	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
 	for {
 		select {
@@ -56,90 +70,148 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
-			if flow, err = n.packer.Schedule(best.Header(), now); err != nil {
+			flow, err := n.packer.Schedule(best.Header(), now)
+			if err != nil {
+				log.Error("Schedule", "err", err)
+				flow = nil
 				continue
 			}
 
-			maxTxPackingDur := 3
-			if err = n.packTxSetAndBlockSummary(flow, maxTxPackingDur); err != nil {
-				log.Error("Pack tx set and block summary", "err", err)
+			start = mclock.Now()
+
+			maxTxPackingDur := 3 // max number of seconds allowed to prepare transactions
+			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxPackingDur)
+			if err != nil {
+				log.Error("packTxSetAndBlockSummary", "err", err)
+				flow = nil
 				continue
 			}
+
+			txSetBlockSummaryDone = mclock.Now()
+
+			n.comm.BroadcastBlockSummary(bs)
+			n.comm.BroadcastTxSet(ts)
 
 		case ev := <-newBlockSummaryCh:
-			if !flow.IsEmpty() {
-				continue
-			}
+			bs := ev.Summary
+
+			log.Debug("Incoming block summary:")
+			log.Debug(bs.String())
 
 			now := uint64(time.Now().Second())
 			parent := n.chain.BestBlock().Header()
 
-			// Validate proposer
-			// bs := ev.Summary
-			// signer, err := bs.Signer()
-			// if err != nil {
-			// 	log.Error("<-newBlockSummaryCh: signer", "err", err)
-			// }
-
-			// state, err := c.stateCreator.NewState(best.Header().StateRoot())
-			// if err != nil {
-			// 	return log.Error("<-newBlockSummaryCh: new state", "err", err)
-			// }
-
-			if err = n.cons.ValidateBlockSummary(ev.Summary, parent, now); err != nil {
+			if err := n.cons.ValidateBlockSummary(bs, parent, now); err != nil {
+				log.Error("ValidateBlockSummary", "err", err)
 				continue
 			}
 
-			flow = packer.NewFlow(nil, nil, nil, 0)
-			flow.SetBlockSummary(ev.Summary)
+			n.comm.BroadcastBlockSummary(bs)
+
+			// Check committee membership
+			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
+			if err != nil {
+				log.Error("IsCommittee", "err", err)
+			}
+			if ok {
+				log.Debug("Endorsing", "hash", bs.EndorseHash().Bytes())
+				ed := block.NewEndorsement(bs, proof)
+				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
+				if err != nil {
+					log.Error("Signing endorsement", "err", err)
+					continue
+				}
+				ed = ed.WithSignature(sig)
+				n.comm.BroadcastEndorsement(ed)
+			}
 
 		case ev := <-newEndorsementCh:
+			ed := ev.Endorsement
+			log.Debug("Incoming endoresement:")
+			log.Debug(ed.String())
+
+			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Second())
-			parent := n.chain.BestBlock().Header()
-			if err = n.cons.ValidateEndorsement(ev.Endorsement, parent, now); err != nil {
+			if err := n.cons.ValidateEndorsement(ev.Endorsement, parentHeader, now); err != nil {
 				continue
 			}
-			flow.AddEndoresement(ev.Endorsement)
 
-			// if n.cons.ValidateEndorsement(ed.Endorsement) != nil {
-			// 	continue
-			// }
+			n.comm.BroadcastEndorsement(ed)
 
-			// case h := <-newHeaderCh:
-			// case ts := <-newTxSetCh:
-		}
-		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
-
-		const halfBlockInterval = thor.BlockInterval / 2
-
-		for {
-			now := uint64(time.Now().Unix())
-			if flow.When() > now+halfBlockInterval {
-				delaySec := flow.When() - (now + halfBlockInterval)
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C():
-					if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
-						log.Debug("re-schedule packer due to new best block")
-						goto RE_SCHEDULE
-					}
-				case <-time.After(time.Duration(delaySec) * time.Second):
-					goto PACK
+			if flow != nil {
+				if flow.ParentHeader().ID() != parentHeader.ID() {
+					flow = nil
+					log.Debug("Re-schedule packer due to new best block")
+					continue
 				}
-			} else {
-				goto PACK
+
+				if now >= flow.When()+thor.BlockInterval {
+					flow = nil
+					log.Debug("Current round timeout")
+					continue
+				}
+
+				if ok := flow.AddEndoresement(ed); !ok {
+					log.Debug("Failed to add new endorsement", "#", flow.NumOfEndorsements())
+				} else {
+					log.Debug("Added new endorsement", "#", flow.NumOfEndorsements())
+				}
+
+				if uint64(flow.NumOfEndorsements()) < thor.CommitteeSize {
+					continue
+				}
+
+				endorsementDone = mclock.Now()
+
+				log.Debug("Packing new header")
+				header, stage, receipts, err := flow.PackHeader(n.master.PrivateKey)
+				if err != nil {
+					log.Error("PackHeader", "err", err)
+					flow = nil
+					continue
+				}
+
+				log.Debug("Committing new block")
+				blk := block.Compose(header, flow.Txs())
+
+				blockDone = mclock.Now()
+
+				if err := n.commit(blk, stage, receipts); err != nil {
+					log.Error("commit", "err", err)
+					flow = nil
+					continue
+				}
+
+				commitDone = mclock.Now()
+
+				display(blk, receipts,
+					txSetBlockSummaryDone-start,
+					endorsementDone-txSetBlockSummaryDone,
+					blockDone-endorsementDone,
+					commitDone-blockDone,
+				)
+
+				n.comm.BroadcastHeader(header)
 			}
+			// case ev := <-newTxSetCh:
+			// 	ts := ev.TxSet
+
+			// 	// Check the validity of the local block summary
+			// 	parentHeader := n.chain.BestBlock().Header()
+			// 	now := uint64(time.Now().Second())
+			// 	if err := n.cons.ValidateBlockSummary(blockSummary, parentHeader, now); err != nil {
+			// 		blockSummary = nil
+			// 	}
+
+			// 	// if the local block summary matches the tx set, save and broadcast it
+			// 	if blockSummary != nil && blockSummary.TxRoot() == ts.RootHash() {
+			// 		n.comm.BroadcastTxSet(ts)
+			// 	}
 		}
-	PACK:
-		if err := n.pack(flow); err != nil {
-			log.Error("failed to pack block", "err", err)
-		}
-	RE_SCHEDULE:
 	}
 }
 
-func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) error {
+func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
@@ -172,31 +244,28 @@ func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 		}
 	}
 
-	err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	return nil
+	return bs, ts, nil
+}
 
-	// ts := block.NewTxSet(flow.Txs())
-	// sig, err := crypto.Sign(ts.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	// ts = ts.WithSignature(sig)
-
-	// parent := best.Header().ID()
-	// root := flow.Txs().RootHash()
-	// time := best.Header().Timestamp() + thor.BlockInterval
-	// bs := block.NewBlockSummary(parent, root, time)
-	// sig, err = crypto.Sign(bs.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	// if err != nil {
-	// 	return nil, nil, err
-	// }
-	// bs = bs.WithSignature(sig)
-	// // log.Debug(fmt.Sprintf("bs sig = 0x%x", bs.Signature()))
-	// return bs, ts, nil
+func display(b *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
+	blockID := b.Header().ID()
+	log.Info("📦 new block packed",
+		"txs", len(receipts),
+		"mgas", float64(b.Header().GasUsed())/1000/1000,
+		"et", fmt.Sprintf("%v|%v|%v",
+			common.PrettyDuration(prepareElapsed),
+			common.PrettyDuration(collectElapsed),
+			common.PrettyDuration(packElapsed),
+			common.PrettyDuration(commitElapsed),
+		),
+		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
+	)
+	// log.Debug(b.String())
 }
 
 func (n *Node) pack(flow *packer.Flow) error {
@@ -252,5 +321,28 @@ func (n *Node) pack(flow *packer.Flow) error {
 	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(execElapsed+commitElapsed)); updated {
 		log.Debug("bandwidth updated", "gps", v)
 	}
+	return nil
+}
+
+func (n *Node) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) error {
+	if _, err := stage.Commit(); err != nil {
+		return errors.WithMessage(err, "commit state")
+	}
+
+	// ignore fork when solo
+	_, err := n.chain.AddBlock(b, receipts)
+	if err != nil {
+		return errors.WithMessage(err, "commit block")
+	}
+
+	task := n.logDB.NewTask().ForBlock(b.Header())
+	for i, tx := range b.Transactions() {
+		origin, _ := tx.Origin()
+		task.Write(tx.ID(), origin, receipts[i].Outputs)
+	}
+	if err := task.Commit(); err != nil {
+		return errors.WithMessage(err, "commit log")
+	}
+
 	return nil
 }

@@ -253,17 +253,16 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 }
 
 // BroadcastBlockSummary broadcasts a block summary to remote peers
-func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
-	parent := c.chain.BestBlock().Header().ID()
-	if bs.ParentID() != parent {
-		return
-	}
-	// now := time.Now()
+func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {}
 
-}
+// BroadcastEndorsement broadcasts an endorsement to remote peers
+func (c *Communicator) BroadcastEndorsement(ed *block.Endorsement) {}
 
 // BroadcastTxSet broadcasts a tx set to remote peers
 func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {}
+
+// BroadcastHeader broadcasts a block header to remote peers
+func (c *Communicator) BroadcastHeader(header *block.Header) {}
 
 // BroadcastBlock broadcast a block to remote peers.
 func (c *Communicator) BroadcastBlock(blk *block.Block) {

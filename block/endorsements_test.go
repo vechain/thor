@@ -18,8 +18,8 @@ func newEndorsement(bs *Summary, p []byte) *Endorsement {
 	return ed.WithSignature(sig)
 }
 
-func Test(t *testing.T) {
-	bs := NewBlockSummary(thor.Bytes32{}, thor.Bytes32{}, 0)
+func TestEndorsements(t *testing.T) {
+	bs := NewBlockSummary(thor.Bytes32{}, thor.Bytes32{}, 0, 0)
 
 	var endorsements Endorsements
 

@@ -25,9 +25,14 @@ func getCommitteeThreshold() uint32 {
 }
 
 // IsCommittee checks the committeeship given a VRF private key and round number.
-func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, round uint32) (bool, *vrf.Proof, error) {
+func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Proof, error) {
+	round, err := c.RoundNumber(time)
+	if err != nil {
+		return false, nil, err
+	}
+
 	if round == 0 {
-		return false, nil, errZeroRound
+		return false, nil, consensusError("Cannot be round zero")
 	}
 
 	epoch := EpochNumber(round)
@@ -97,7 +102,7 @@ func (c *Consensus) IsLeader(thor.Address) bool {
 func (c *Consensus) RoundNumber(timestamp uint64) (uint32, error) {
 	launchTime := c.chain.GenesisBlock().Header().Timestamp()
 	if launchTime > timestamp {
-		return 0, errTimestamp
+		return 0, consensusError("earlier than launch time")
 	}
 	return uint32((timestamp - launchTime) / thor.BlockInterval), nil
 }
@@ -139,6 +144,15 @@ func (c *Consensus) Timestamp(round uint32) uint64 {
 
 // ValidateBlockSummary validates a given block summary
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header, now uint64) error {
+	// only validate block summary created in the current round
+	round, err := c.RoundNumber(now)
+	if err != nil {
+		return err
+	}
+	if bs.Timestamp() != c.Timestamp(round) {
+		return consensusError("Invalid timestamp")
+	}
+
 	if bs.ParentID() != parent.ID() {
 		return consensusError("Inconsistent parent block ID")
 	}

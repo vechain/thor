@@ -2,6 +2,7 @@ package block
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -141,6 +142,11 @@ func (bs *Summary) TotalScore() uint64 {
 	return bs.body.TotalScore
 }
 
+// TxRoot ...
+func (bs *Summary) TxRoot() thor.Bytes32 {
+	return bs.body.TxRoot
+}
+
 // EndorseHash computes the hash for committee member to sign
 func (bs *Summary) EndorseHash() (hash thor.Bytes32) {
 	if cached := bs.cache.endorseHash.Load(); cached != nil {
@@ -152,4 +158,23 @@ func (bs *Summary) EndorseHash() (hash thor.Bytes32) {
 	rlp.Encode(hw, bs.body)
 	hw.Sum(hash[:0])
 	return
+}
+
+func (bs *Summary) String() string {
+	var signerStr string
+	if signer, err := bs.Signer(); err != nil {
+		signerStr = "N/A"
+	} else {
+		signerStr = signer.String()
+	}
+
+	s := fmt.Sprintf(`BlockSummary(%v):
+	ParentID:       	%v
+	Timestamp:      	%v
+	Signer:         	%v
+	TxRoot:         	%v
+	Signature:      	0x%x
+	`, bs.EndorseHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxRoot, bs.body.Signature)
+
+	return s
 }
