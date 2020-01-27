@@ -1,6 +1,7 @@
 package block
 
 import (
+	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -123,4 +124,22 @@ func (ed *Endorsement) VrfProof() *vrf.Proof {
 // Signature returns the signature
 func (ed *Endorsement) Signature() []byte {
 	return ed.body.Signature
+}
+
+func (ed *Endorsement) String() string {
+	var signerStr string
+	if signer, err := ed.Signer(); err != nil {
+		signerStr = "N/A"
+	} else {
+		signerStr = signer.String()
+	}
+
+	s := fmt.Sprintf(`Endorsement(%v):
+	BlockSummary:   	%v
+	Signer:         	%v
+	VrfProof:         	0x%x
+	Signature:      	0x%x
+	`, ed.SigningHash(), ed.body.BlockSummary.EndorseHash(), signerStr, ed.body.VrfProof, ed.body.Signature)
+
+	return s
 }

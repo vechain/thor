@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"math"
 	"testing"
 
@@ -129,7 +128,6 @@ func TestEpochNumber(t *testing.T) {
 
 func TestValidateBlockSummary(t *testing.T) {
 	privateKey := genesis.DevAccounts()[0].PrivateKey
-	signer := genesis.DevAccounts()[0].Address
 
 	packer, cons, err := initConsensusTest()
 	if err != nil {
@@ -141,12 +139,6 @@ func TestValidateBlockSummary(t *testing.T) {
 
 	best := cons.chain.BestBlock()
 	round := nRound + 1
-
-	// st, err := cons.stateCreator.NewState(best.Header().StateRoot())
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(builtin.Params.Native(st).Get(thor.KeyProposerEndorsement))
 
 	type testObj struct {
 		ParentID              thor.Bytes32
@@ -171,7 +163,7 @@ func TestValidateBlockSummary(t *testing.T) {
 		},
 		{
 			testObj{best.Header().ID(), thor.Bytes32{}, cons.Timestamp(round) - 1, 2},
-			consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", cons.Timestamp(round)-1, signer)),
+			consensusError("Invalid timestamp"),
 			"Invalid timestamp",
 		},
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vrf"
 )
 
 // Flow the flow of packing a new block.
@@ -50,11 +49,6 @@ func NewFlow(
 	}
 }
 
-// // IncTotalScore ....
-// func (f *Flow) IncTotalScore(score uint64) {
-// 	f.runtime.Context().TotalScore += score
-// }
-
 // SetBlockSummary ...
 func (f *Flow) SetBlockSummary(bs *block.Summary) {
 	f.blockSummary = bs
@@ -75,8 +69,8 @@ func (f *Flow) AddEndoresement(ed *block.Endorsement) bool {
 	return f.endorsements.Add(ed)
 }
 
-// NumEndorsement returns how many endorsements having been stored
-func (f *Flow) NumEndorsement() int {
+// NumOfEndorsements returns how many endorsements having been stored
+func (f *Flow) NumOfEndorsements() int {
 	return f.endorsements.Len()
 }
 
@@ -86,21 +80,21 @@ func (f *Flow) Txs() tx.Transactions {
 }
 
 // PackTxSetAndBlockSummary packs the tx set and block summary
-func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey, totalScore uint64) error {
+func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *block.TxSet, error) {
 	var (
 		sig []byte
 		err error
 	)
 
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
-		return errors.New("private key mismatch")
+		return nil, nil, errors.New("private key mismatch")
 	}
 
 	// pack tx set
 	ts := block.NewTxSet(f.txs)
 	sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	f.txSet = ts.WithSignature(sig)
 
@@ -112,11 +106,11 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey, totalScore uint64)
 	bs := block.NewBlockSummary(parent, root, time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	f.blockSummary = bs.WithSignature(sig)
 
-	return nil
+	return f.blockSummary, f.txSet, nil
 }
 
 // ParentHeader returns parent block header.
@@ -247,7 +241,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 }
 
 // PackHeader build the new block header.
-func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, p []*vrf.Proof, s1 []byte, s2 [][]byte) (*block.Header, *state.Stage, tx.Receipts, error) {
+func (f *Flow) PackHeader(sk *ecdsa.PrivateKey) (*block.Header, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
@@ -272,8 +266,9 @@ func (f *Flow) PackHeader(sk *ecdsa.PrivateKey, p []*vrf.Proof, s1 []byte, s2 []
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features).
-		// Committee(c).
-		VrfProofs(p).SigOnBlockSummary(s1).SigOnEndorsement(s2)
+		VrfProofs(f.endorsements.VrfProofs()).
+		SigOnBlockSummary(f.blockSummary.Signature()).
+		SigOnEndorsement(f.endorsements.Signatures())
 
 	header := builder.Build()
 

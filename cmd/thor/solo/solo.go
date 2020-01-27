@@ -105,8 +105,8 @@ func (s *Solo) loop(ctx context.Context) {
 			startTime := mclock.Now()
 
 			var (
-				bs   *block.Summary
-				ts   *block.TxSet
+				// bs *block.Summary
+				// ts   *block.TxSet
 				err  error
 				flow *packer.Flow
 				done chan struct{}
@@ -117,61 +117,60 @@ func (s *Solo) loop(ctx context.Context) {
 			)
 
 			best := s.chain.BestBlock()
-			txs := s.txPool.Executables()
+			// txs := s.txPool.Executables()
 			flow, err = s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
 			if err != nil {
 				log.Error("packer.Mock", "error", err)
 			}
 
-			done = make(chan struct{})
-			go func() {
-				time.Sleep(time.Duration(3) * time.Second)
-				// close(done)
-				done <- struct{}{}
-			}()
-			bs, ts, err = s.packTxSetAndBlockSummary(done, flow, txs)
-			if err != nil {
-				log.Debug("packTxSetAndBlockSummary", "error", err)
+			// done = make(chan struct{})
+			// go func() {
+			// 	time.Sleep(time.Duration(3) * time.Second)
+			// 	// close(done)
+			// 	done <- struct{}{}
+			// }()
+			// bs, ts, err = s.packTxSetAndBlockSummary(done, flow, txs)
+			// if err != nil {
+			// 	log.Debug("packTxSetAndBlockSummary", "error", err)
+			// }
+			if err := s.packTxSetAndBlockSummary(flow, 3); err != nil {
+				log.Error("PackTxSetAndBlockSummary", "err", err)
+				continue
 			}
 
 			prepareElapsed := mclock.Now() - startTime
 
-			// log.Debug("Endorsing starts")
+			log.Debug("Endorsing starts")
 			done = make(chan struct{})
 			edCh := make(chan *block.Endorsement, thor.CommitteeSize)
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-				go s.endorse(done, edCh, bs)
+				go s.endorse(done, edCh, flow.GetBlockSummary())
 			}
 
-			var eds block.Endorsements
+			// var eds block.Endorsements
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-				if eds.Len() >= int(thor.CommitteeSize) {
+				if flow.NumOfEndorsements() >= int(thor.CommitteeSize) {
 					// close(done)
 					done <- struct{}{}
 					break
 				}
 				select {
 				case ed := <-edCh:
-					if eds.Add(ed) {
-						// log.Debug("Collecting endorsement", "#endorsement", eds.Len())
+					if flow.AddEndoresement(ed) {
+						log.Debug("AddEndoresement", "#", flow.NumOfEndorsements())
 					}
 				}
 			}
-			// log.Debug("Endorsing ends")
+			log.Debug("Endorsing ends")
 
-			header, stage, receipts, err = flow.PackHeader(
-				genesis.DevAccounts()[0].PrivateKey,
-				eds.VrfProofs(),
-				bs.Signature(),
-				eds.Signatures(),
-			)
+			header, stage, receipts, err = flow.PackHeader(genesis.DevAccounts()[0].PrivateKey)
 			if err != nil {
 				log.Error("flow.PackHeader", "error", err)
 			}
 
 			execElapsed := mclock.Now() - startTime
 
-			b := block.Compose(header, ts.Transactions())
+			b := block.Compose(header, flow.Txs())
 			err = s.commit(b, stage, receipts)
 			if err != nil {
 				log.Error("s.pack", "error", err)
@@ -231,26 +230,31 @@ func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *blo
 
 			select {
 			case <-done:
-				// log.Debug("endorsement done")
+				log.Debug("Endorsing finished")
 				return
 			case edCh <- ed:
-				// log.Debug("endorsement sent", "id", hex.EncodeToString(ed.SigningHash().Bytes()))
+				log.Debug("New endorsement", "hash", ed.SigningHash().Bytes())
 				return
 			}
 		}
 	}
 }
 
-func (s *Solo) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, txs tx.Transactions) (*block.Summary, *block.TxSet, error) {
-	best := s.chain.BestBlock()
-
+func (s *Solo) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) error {
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
 			s.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
-	for _, tx := range txs {
+
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
+		done <- struct{}{}
+	}()
+
+	for _, tx := range s.txPool.Executables() {
 		select {
 		case <-done:
 			// log.Debug("Leave tx adopting loop", "Iter", i)
@@ -269,25 +273,12 @@ func (s *Solo) packTxSetAndBlockSummary(done chan struct{}, flow *packer.Flow, t
 		}
 	}
 
-	ts := block.NewTxSet(flow.Txs())
-	sig, err := crypto.Sign(ts.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	_, _, err := flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	ts = ts.WithSignature(sig)
 
-	parent := best.Header().ID()
-	root := flow.Txs().RootHash()
-	time := best.Header().Timestamp() + thor.BlockInterval
-	bs := block.NewBlockSummary(parent, root, time, best.Header().TotalScore()+1)
-	sig, err = crypto.Sign(bs.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		return nil, nil, err
-	}
-	bs = bs.WithSignature(sig)
-	// log.Debug(fmt.Sprintf("bs sig = 0x%x", bs.Signature()))
-
-	return bs, ts, nil
+	return nil
 }
 
 // func (s *Solo) packing(pendingTxs tx.Transactions) error {

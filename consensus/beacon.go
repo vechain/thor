@@ -13,7 +13,7 @@ import (
 // BlockNumber 0 : genesis
 func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 	if epoch == 0 {
-		return thor.BytesToBytes32(nil), errZeroEpoch
+		return thor.BytesToBytes32(nil), consensusError("Cannot be epoch zero")
 	}
 
 	best := c.chain.BestBlock()

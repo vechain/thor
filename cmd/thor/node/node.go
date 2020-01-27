@@ -138,6 +138,11 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	return nil
 }
 
+// houseKeeping handles:
+// 1. receiving new block
+// 2. receiving new header
+// 3. receiving new tx set
+// 4. assemble new block from header and tx set
 func (n *Node) houseKeeping(ctx context.Context) {
 	log.Debug("enter house keeping")
 	defer log.Debug("leave house keeping")
