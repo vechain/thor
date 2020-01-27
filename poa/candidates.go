@@ -9,9 +9,10 @@ import (
 
 // Candidates holds candidates list in memory, and tends to be reused in PoA stage without querying from contract.
 type Candidates struct {
-	list       []*authority.Candidate
-	masters    map[thor.Address]int  // map master address to list index
-	endorsors  map[thor.Address]bool // endorsor bitset
+	list      []*authority.Candidate
+	masters   map[thor.Address]int  // map master address to list index
+	endorsors map[thor.Address]bool // endorsor bitset
+
 	satisfied  []int
 	referenced bool
 }

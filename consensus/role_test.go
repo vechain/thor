@@ -209,81 +209,68 @@ func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
 }
 
 func TestValidateEndorsement(t *testing.T) {
+	var (
+		proof *vrf.Proof
+		err   error
+		ed    *block.Endorsement
+		sig   []byte
+	)
+
 	// ethsk, _ := crypto.GenerateKey()
 	ethsk := genesis.DevAccounts()[0].PrivateKey
+	_, vrfsk := vrf.GenKeyPairFromSeed(ethsk.D.Bytes())
+	if *vrfsk != *genesis.DevAccounts()[0].VrfPrivateKey {
+		t.Errorf("Invalid vrf private key")
+	}
 
 	_, cons, err := initConsensusTest()
 	if err != nil {
 		t.Fatal(err)
 	}
-	gen := cons.chain.GenesisBlock().Header()
+	genHeader := cons.chain.GenesisBlock().Header()
 
 	// Create a valid block summary at round 1
-	bs := block.NewBlockSummary(gen.ID(), thor.Bytes32{}, gen.Timestamp()+thor.BlockInterval, 1)
-	sig, err := crypto.Sign(bs.SigningHash().Bytes(), ethsk)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bs := block.NewBlockSummary(genHeader.ID(), thor.Bytes32{}, genHeader.Timestamp()+thor.BlockInterval, 1)
+	sig, _ = crypto.Sign(bs.SigningHash().Bytes(), ethsk)
 	bs = bs.WithSignature(sig)
 
 	// Get the committee keys and proof
 	beacon := getBeaconFromHeader(cons.chain.GenesisBlock().Header())
 	seed := seed(beacon, 1)
 
-	proof, pk := getValidCommittee(seed)
-	if proof == nil {
-		t.Errorf("Failed to find a valid committee")
+	// Invalid signer
+	proof, _ = vrfsk.Prove(seed.Bytes())
+	ed = block.NewEndorsement(bs, proof)
+	sk, _ := crypto.GenerateKey()
+	sig, _ = crypto.Sign(ed.SigningHash().Bytes(), sk)
+	ed = ed.WithSignature(sig)
+	if err = cons.ValidateEndorsement(ed, genHeader, bs.Timestamp()); err != consensusError("Signer not allowed to participate in consensus") {
+		t.Errorf("Failed to test invalid signer")
 	}
 
-	_proof, _pk := getInvalidCommittee(seed)
-	if proof == nil {
-		t.Errorf("Failed to find a false committee")
+	// Invalid proof
+	rand.Read(proof[:])
+	ed = block.NewEndorsement(bs, proof)
+	sig, _ = crypto.Sign(ed.SigningHash().Bytes(), ethsk)
+	ed = ed.WithSignature(sig)
+	if err = cons.ValidateEndorsement(ed, genHeader, bs.Timestamp()); err != consensusError("Invalid vrf proof") {
+		t.Errorf("Failed to test invalid proof")
 	}
 
-	var randKey vrf.PublicKey
-	rand.Read(randKey[:])
-
-	var randProof vrf.Proof
-	rand.Read(randProof[:])
-
-	type testObj struct {
-		Summary   *block.Summary
-		Proof     *vrf.Proof
-		PublicKey *vrf.PublicKey
-	}
-
-	tests := []struct {
-		input testObj
-		ret   error
-		msg   string
-	}{
-		{
-			testObj{bs, proof, pk},
-			nil,
-			"clean case",
-		},
-		{
-			testObj{bs, proof, &randKey},
-			consensusError("Invalid vrf proof"),
-			"Random vrf public key",
-		},
-		{
-			testObj{bs, &randProof, pk},
-			consensusError("Invalid vrf proof"),
-			"Random vrf proof",
-		},
-		{
-			testObj{bs, _proof, _pk},
-			consensusError("Not a committee member"),
-			"Not committee",
-		},
-	}
-
-	for _, test := range tests {
-		ed := block.NewEndorsement(test.input.Summary, test.input.Proof)
-		sig, _ = crypto.Sign(ed.SigningHash().Bytes(), ethsk)
-		ed = ed.WithSignature(sig)
-		assert.Equal(t, cons.ValidateEndorsement(ed, test.input.PublicKey, gen, test.input.Summary.Timestamp()), test.ret, test.msg)
+	// Invalid committee
+	proof, _ = vrfsk.Prove(seed.Bytes())
+	ed = block.NewEndorsement(bs, proof)
+	sig, _ = crypto.Sign(ed.SigningHash().Bytes(), ethsk)
+	ed = ed.WithSignature(sig)
+	err = cons.ValidateEndorsement(ed, genHeader, bs.Timestamp())
+	if ok := IsCommitteeByProof(proof); !ok {
+		if err != consensusError("Not a committee member") {
+			t.Errorf("Failed to test invalid proof")
+		}
+	} else {
+		if err != nil {
+			t.Errorf("Failed to test valid endorsement")
+		}
 	}
 }
 

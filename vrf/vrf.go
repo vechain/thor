@@ -184,3 +184,10 @@ func BytesToProof(b []byte) *Proof {
 
 	return &p
 }
+
+// Bytes32ToPublicKey converts Byte32 into a vrf public key
+func Bytes32ToPublicKey(b thor.Bytes32) *PublicKey {
+	var pk PublicKey
+	copy(pk[:], b.Bytes())
+	return &pk
+}

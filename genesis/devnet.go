@@ -16,12 +16,15 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/vrf"
 )
 
 // DevAccount account for development.
 type DevAccount struct {
-	Address    thor.Address
-	PrivateKey *ecdsa.PrivateKey
+	Address       thor.Address
+	PrivateKey    *ecdsa.PrivateKey
+	VrfPrivateKey *vrf.PrivateKey
+	VrfPublicKey  *vrf.PublicKey
 }
 
 var devAccounts atomic.Value
@@ -46,12 +49,15 @@ func DevAccounts() []DevAccount {
 		"87e0eba9c86c494d98353800571089f316740b0cb84c9a7cdf2fe5c9997c7966",
 	}
 	for _, str := range privKeys {
-		pk, err := crypto.HexToECDSA(str)
+		sk, err := crypto.HexToECDSA(str)
 		if err != nil {
 			panic(err)
 		}
-		addr := crypto.PubkeyToAddress(pk.PublicKey)
-		accs = append(accs, DevAccount{thor.Address(addr), pk})
+		addr := crypto.PubkeyToAddress(sk.PublicKey)
+
+		vrfpk, vrfsk := vrf.GenKeyPairFromSeed(sk.D.Bytes())
+
+		accs = append(accs, DevAccount{thor.Address(addr), sk, vrfsk, vrfpk})
 	}
 	devAccounts.Store(accs)
 	return accs
@@ -141,6 +147,7 @@ func NewDevnet() *Genesis {
 					soloBlockSigner.Address,
 					soloBlockSigner.Address,
 					thor.BytesToBytes32([]byte("Solo Block Signer")),
+					soloBlockSigner.VrfPublicKey,
 				)),
 			executor)
 
