@@ -7,6 +7,7 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -15,7 +16,12 @@ import (
 
 func getCommitteeThreshold() uint32 {
 	// threshold = (1 << 64 - 1) * committee_size / total_number_of_nodes * factor
-	return uint32(uint64(math.MaxUint32) / thor.MaxBlockProposers * thor.CommitteeSize * thor.CommitteeThresholdFactor)
+	f := thor.CommitteeSize * thor.CommitteeThresholdFactor / thor.MaxBlockProposers
+	if f > 1 {
+		f = 1
+	}
+
+	return uint32(uint64(math.MaxUint32) * f)
 }
 
 // IsCommittee checks the committeeship given a VRF private key and round number.
@@ -137,13 +143,7 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header
 		return consensusError("Inconsistent parent block ID")
 	}
 
-	st, err := c.stateCreator.NewState(parent.StateRoot())
-	if err != nil {
-		return err
-	}
-
-	_, err = c.validateLeader(bs, parent, st)
-	if err != nil {
+	if _, err := c.validateLeader(bs, parent); err != nil {
 		return err
 	}
 
@@ -151,9 +151,23 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header
 }
 
 // ValidateEndorsement validates a given endorsement
-func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf.PublicKey, parent *block.Header, now uint64) error {
+func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *block.Header, now uint64) error {
+	signer, err := ed.Signer()
+	if err != nil {
+		return err
+	}
+
+	candidates, _, st, err := c.getAllCandidates(parentHeader)
+	if err != nil {
+		return err
+	}
+	candidate := candidates.Candidate(st, signer)
+	if candidate == nil {
+		return consensusError("Signer not allowed to participate in consensus")
+	}
+
 	// validate the block summary
-	if err := c.ValidateBlockSummary(ed.BlockSummary(), parent, now); err != nil {
+	if err := c.ValidateBlockSummary(ed.BlockSummary(), parentHeader, now); err != nil {
 		return err
 	}
 
@@ -167,7 +181,8 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf
 	seed := seed(beacon, round)
 
 	// validate proof
-	if ok, _ := vrfPublicKey.Verify(ed.VrfProof(), seed.Bytes()); !ok {
+	vrfPubkey := vrf.Bytes32ToPublicKey(candidate.VrfPublicKey)
+	if ok, _ := vrfPubkey.Verify(ed.VrfProof(), seed.Bytes()); !ok {
 		return consensusError("Invalid vrf proof")
 	}
 
@@ -183,23 +198,19 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, vrfPublicKey *vrf
 // 1. signature
 // 2. leadership
 // 3. total score
-func (c *Consensus) validateLeader(bs *block.Summary, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+func (c *Consensus) validateLeader(bs *block.Summary, parentHeader *block.Header) (*poa.Candidates, error) {
 	signer, err := bs.Signer()
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
-	authority := builtin.Authority.Native(st)
-	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
-	} else {
-		candidates = poa.NewCandidates(authority.AllCandidates())
+	candidates, authority, st, err := c.getAllCandidates(parentHeader)
+	if err != nil {
+		return nil, err
 	}
-
 	proposers := candidates.Pick(st)
 
-	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
+	sched, err := poa.NewScheduler(signer, proposers, parentHeader.Number(), parentHeader.Timestamp())
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
@@ -209,8 +220,8 @@ func (c *Consensus) validateLeader(bs *block.Summary, parent *block.Header, st *
 	}
 
 	updates, score := sched.Updates(bs.Timestamp())
-	if parent.TotalScore()+score != bs.TotalScore() {
-		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, bs.TotalScore()))
+	if parentHeader.TotalScore()+score != bs.TotalScore() {
+		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parentHeader.TotalScore()+score, bs.TotalScore()))
 	}
 
 	for _, u := range updates {
@@ -222,4 +233,22 @@ func (c *Consensus) validateLeader(bs *block.Summary, parent *block.Header, st *
 	}
 
 	return candidates, nil
+}
+
+func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidates, *authority.Authority, *state.State, error) {
+	st, err := c.stateCreator.NewState(parentHeader.StateRoot())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	authority := builtin.Authority.Native(st)
+	var candidates *poa.Candidates
+	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
+		candidates = entry.(*poa.Candidates).Copy()
+	} else {
+		candidates = poa.NewCandidates(authority.AllCandidates())
+		c.candidatesCache.Add(parentHeader.ID(), candidates)
+	}
+
+	return candidates, authority, st, nil
 }

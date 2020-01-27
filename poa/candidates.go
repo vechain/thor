@@ -9,9 +9,10 @@ import (
 
 // Candidates holds candidates list in memory, and tends to be reused in PoA stage without querying from contract.
 type Candidates struct {
-	list       []*authority.Candidate
-	masters    map[thor.Address]int  // map master address to list index
-	endorsors  map[thor.Address]bool // endorsor bitset
+	list      []*authority.Candidate
+	masters   map[thor.Address]int  // map master address to list index
+	endorsors map[thor.Address]bool // endorsor bitset
+
 	satisfied  []int
 	referenced bool
 }
@@ -45,6 +46,44 @@ func (c *Candidates) Copy() *Candidates {
 
 // Pick picks a list of proposers, which satisfy preset conditions.
 func (c *Candidates) Pick(state *state.State) []Proposer {
+	// satisfied := c.satisfied
+	// if len(satisfied) == 0 {
+	// 	// re-pick
+	// 	endorsement := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	// 	satisfied = make([]int, 0, len(c.list))
+	// 	for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers; i++ {
+	// 		if bal := state.GetBalance(c.list[i].Endorsor); bal.Cmp(endorsement) >= 0 {
+	// 			satisfied = append(satisfied, i)
+	// 		}
+	// 	}
+	// 	c.satisfied = satisfied
+	// }
+	c.updateSatisfiedList(state)
+
+	proposers := make([]Proposer, 0, len(c.satisfied))
+	for _, i := range c.satisfied {
+		proposers = append(proposers, Proposer{
+			Address: c.list[i].NodeMaster,
+			Active:  c.list[i].Active,
+		})
+	}
+	return proposers
+}
+
+// Candidate returns the qualified candidate corresponding to the master address
+func (c *Candidates) Candidate(state *state.State, master thor.Address) *authority.Candidate {
+	c.updateSatisfiedList(state)
+
+	for _, i := range c.satisfied {
+		if c.list[i].NodeMaster == master {
+			return c.list[i]
+		}
+	}
+	return nil
+}
+
+// UpdateSatisfiedList updates satisfied list
+func (c *Candidates) updateSatisfiedList(state *state.State) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
 		// re-pick
@@ -57,15 +96,6 @@ func (c *Candidates) Pick(state *state.State) []Proposer {
 		}
 		c.satisfied = satisfied
 	}
-
-	proposers := make([]Proposer, 0, len(satisfied))
-	for _, i := range satisfied {
-		proposers = append(proposers, Proposer{
-			Address: c.list[i].NodeMaster,
-			Active:  c.list[i].Active,
-		})
-	}
-	return proposers
 }
 
 // Update update candidate activity status, by its master address.

@@ -15,6 +15,7 @@ require (
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/go-stack/stack v1.7.0 // indirect
+	github.com/google/keytransparency v0.1.2-alpha
 	github.com/gorilla/handlers v1.3.0
 	github.com/gorilla/mux v1.6.2
 	github.com/gorilla/websocket v1.4.0
