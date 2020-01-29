@@ -73,6 +73,21 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
+	type account struct {
+		ethsk *ecdsa.PrivateKey
+		addr  thor.Address
+		vrfsk *vrf.PrivateKey
+		vrfpk *vrf.PublicKey
+	}
+
+	var accs []*account
+	for i := uint64(0); i < thor.MaxBlockProposers; i++ {
+		ethsk, _ := crypto.GenerateKey()
+		addr := crypto.PubkeyToAddress(ethsk.PublicKey)
+		vrfpk, vrfsk := vrf.GenKeyPair()
+		accs = append(accs, &account{ethsk, thor.BytesToAddress(addr.Bytes()), vrfsk, vrfpk})
+	}
+
 	launchTime := uint64(1526400000)
 	gen := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -81,13 +96,14 @@ func newTestConsensus(t *testing.T) *testConsensus {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
 			builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(genesis.DevAccounts()[0].Address[:]))
-			for _, acc := range genesis.DevAccounts() {
-				state.SetBalance(acc.Address, bal)
-				state.SetEnergy(acc.Address, bal, launchTime)
+			// for _, acc := range genesis.DevAccounts() {
+			for _, acc := range accs {
+				state.SetBalance(acc.addr, bal)
+				state.SetEnergy(acc.addr, bal, launchTime)
 
-				vrfpk, _ := vrf.GenKeyPairFromSeed(crypto.FromECDSA(acc.PrivateKey))
+				// vrfpk, _ := vrf.GenKeyPairFromSeed(crypto.FromECDSA(acc.PrivateKey))
 
-				builtin.Authority.Native(state).Add(acc.Address, acc.Address, thor.Bytes32{}, vrfpk.Bytes32())
+				builtin.Authority.Native(state).Add(acc.addr, acc.addr, thor.Bytes32{}, acc.vrfpk.Bytes32())
 			}
 			return nil
 		})
@@ -103,17 +119,27 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	proposer := genesis.DevAccounts()[0]
-	p := packer.New(c, stateCreator, proposer.Address, &proposer.Address, thor.NoFork)
-	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
-	if err != nil {
-		t.Fatal(err)
+	// proposer := genesis.DevAccounts()[0]
+
+	var flow *packer.Flow
+	var proposer *account
+	now := uint64(time.Now().Unix())
+	for _, acc := range accs {
+		p := packer.New(c, stateCreator, acc.addr, &acc.addr, thor.NoFork)
+		flow, err = p.Schedule(parent.Header(), now)
+		if flow != nil {
+			proposer = acc
+			break
+		}
+	}
+	if flow == nil {
+		t.Fatal("No proposer found")
 	}
 
-	original, _, _, err := flow.Pack(proposer.PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// original, _, _, err := flow.Pack(proposer.PrivateKey)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	forkConfig := thor.ForkConfig{
 		VIP191:    math.MaxUint32,
@@ -121,6 +147,37 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		BLOCKLIST: 0,
 	}
 	con := New(c, stateCreator, forkConfig)
+
+	// block summary
+	bs, ts, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// endorsement
+	for _, acc := range accs {
+		proof, _ := acc.vrfsk.Prove(bs.EndorseHash().Bytes())
+		ed := block.NewEndorsement(bs, proof)
+		if con.ValidateEndorsement(ed, parent.Header(), now) == nil {
+			flow.AddEndoresement(ed)
+		}
+		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
+			break
+		}
+	}
+	if uint64(flow.NumOfEndorsements()) < thor.CommitteeSize {
+		t.Errorf("Not enough endorsements added")
+	}
+
+	// header
+	header, _, _, err := flow.PackBlockHeader(proposer.ethsk)
+	if err != nil {
+		t.Fatal(t)
+	}
+
+	// block
+	original := block.Compose(header, ts.Transactions())
+
 	if _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +187,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		assert:   assert.New(t),
 		con:      con,
 		time:     flow.When(),
-		pk:       proposer.PrivateKey,
+		pk:       proposer.ethsk,
 		parent:   parent,
 		original: original,
 		tag:      c.Tag(),

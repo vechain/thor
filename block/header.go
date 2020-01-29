@@ -48,7 +48,7 @@ type headerBody struct {
 	// Committee         []uint8
 	VrfProofs         []*vrf.Proof
 	SigOnBlockSummary []byte
-	SigOnEndorsement  [][]byte
+	SigsOnEndorsement [][]byte
 
 	Signature []byte
 }
@@ -165,7 +165,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		// h.body.Committee,
 		h.body.VrfProofs,
 		h.body.SigOnBlockSummary,
-		h.body.SigOnEndorsement,
+		h.body.SigsOnEndorsement,
 	})
 	hw.Sum(hash[:0])
 	return
@@ -176,8 +176,18 @@ func (h *Header) Signature() []byte {
 	return append([]byte(nil), h.body.Signature...)
 }
 
+// SigOnBlockSummary returns signature on block summary
 func (h *Header) SigOnBlockSummary() []byte {
 	return append([]byte(nil), h.body.SigOnBlockSummary...)
+}
+
+// VrfProofs returns vrf proofs
+func (h *Header) VrfProofs() []*vrf.Proof {
+	return h.body.VrfProofs
+}
+
+func (h *Header) SigsOnEndoresment() [][]byte {
+	return h.body.SigsOnEndorsement
 }
 
 // WithSignature create a new Header object with signature set.
@@ -262,7 +272,7 @@ func (h *Header) String() string {
 		VRF Proof:          0x%x
 		SigOnBlockSummary:  0x%x
 		SigOnEndorsement:   0x%x
-	}`, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary, h.body.SigOnEndorsement[i])
+	}`, h.body.VrfProofs[i].Bytes(), h.body.SigOnBlockSummary, h.body.SigsOnEndorsement[i])
 	}
 
 	return s

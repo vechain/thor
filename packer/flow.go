@@ -200,9 +200,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
-// Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
-	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
+// // Pack build and sign the new block.
+func (f *Flow) Pack(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
+	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
@@ -225,55 +225,19 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features)
+		TransactionFeatures(f.features).
+		VrfProofs(f.endorsements.VrfProofs()).
+		SigOnBlockSummary(f.blockSummary.Signature()).
+		SigsOnEndorsement(f.endorsements.Signatures())
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
 	}
 	newBlock := builder.Build()
 
-	sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+	sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return newBlock.WithSignature(sig), stage, f.receipts, nil
-}
-
-// PackHeader build the new block header.
-func (f *Flow) PackBlockHeader(sk *ecdsa.PrivateKey) (*block.Header, *state.Stage, tx.Receipts, error) {
-	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
-		return nil, nil, nil, errors.New("private key mismatch")
-	}
-
-	if err := f.runtime.Seeker().Err(); err != nil {
-		return nil, nil, nil, err
-	}
-
-	stage := f.runtime.State().Stage()
-	stateRoot, err := stage.Hash()
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	builder := new(block.HeaderBuilder).
-		Beneficiary(f.runtime.Context().Beneficiary).
-		GasLimit(f.runtime.Context().GasLimit).
-		ParentID(f.parentHeader.ID()).
-		Timestamp(f.runtime.Context().Time).
-		TotalScore(f.runtime.Context().TotalScore).
-		GasUsed(f.gasUsed).
-		ReceiptsRoot(f.receipts.RootHash()).
-		StateRoot(stateRoot).
-		TransactionFeatures(f.features).
-		VrfProofs(f.endorsements.VrfProofs()).
-		SigOnBlockSummary(f.blockSummary.Signature()).
-		SigOnEndorsement(f.endorsements.Signatures())
-
-	header := builder.Build()
-
-	sig, err := crypto.Sign(header.SigningHash().Bytes(), sk)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return header.WithSignature(sig), stage, f.receipts, nil
 }

@@ -101,7 +101,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			log.Debug("Incoming block summary:")
 			log.Debug(bs.String())
 
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 			parent := n.chain.BestBlock().Header()
 
 			if err := n.cons.ValidateBlockSummary(bs, parent, now); err != nil {
@@ -132,7 +132,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			log.Debug(ed.String())
 
 			parentHeader := n.chain.BestBlock().Header()
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, parentHeader, now); err != nil {
 				continue
 			}
@@ -165,21 +165,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 				endorsementDone = mclock.Now()
 
 				log.Debug("Packing new block header")
-				header, stage, receipts, err := flow.PackBlockHeader(n.master.PrivateKey)
+				blk, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 				if err != nil {
 					log.Error("PackBlockHeader", "err", err)
 					flow = nil
 					continue
 				}
-
-				log.Debug("Committing new block")
-				blk := block.Compose(header, flow.Txs())
 				blockDone = mclock.Now()
 
 				// reset flow
 				flow = nil
 
-				// commit new block
+				log.Debug("Committing new block")
 				if err := n.commit(blk, stage, receipts); err != nil {
 					log.Error("commit", "err", err)
 					continue
@@ -193,7 +190,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 					commitDone-blockDone,
 				)
 
-				n.comm.BroadcastBlockHeader(header)
+				n.comm.BroadcastBlockHeader(blk.Header())
 			}
 		}
 	}
@@ -245,7 +242,7 @@ func display(b *block.Block, receipts tx.Receipts, prepareElapsed, collectElapse
 	log.Info("📦 new block packed",
 		"txs", len(receipts),
 		"mgas", float64(b.Header().GasUsed())/1000/1000,
-		"et", fmt.Sprintf("%v|%v|%v",
+		"et", fmt.Sprintf("%v|%v|%v|%v",
 			common.PrettyDuration(prepareElapsed),
 			common.PrettyDuration(collectElapsed),
 			common.PrettyDuration(packElapsed),

@@ -8,6 +8,7 @@ package block
 import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Builder to make it easy to build a block object.
@@ -73,6 +74,35 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 // TransactionFeatures set supported transaction features
 func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	b.headerBody.TxsRootFeatures.Features = features
+	return b
+}
+
+// VrfProofs ...
+func (b *Builder) VrfProofs(proofs []*vrf.Proof) *Builder {
+	b.headerBody.VrfProofs = proofs
+	return b
+}
+
+// VrfProof ...
+func (b *Builder) VrfProof(proof *vrf.Proof) *Builder {
+	b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof)
+	return b
+}
+
+// SigOnBlockSummary ...
+func (b *Builder) SigOnBlockSummary(sig []byte) *Builder {
+	b.headerBody.SigOnBlockSummary = sig
+	return b
+}
+
+// SigsOnEndorsement ...
+func (b *Builder) SigsOnEndorsement(sigs [][]byte) *Builder {
+	b.headerBody.SigsOnEndorsement = sigs
+	return b
+}
+
+func (b *Builder) SigOnEndorsement(sig []byte) *Builder {
+	b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, sig)
 	return b
 }
 

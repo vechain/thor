@@ -198,7 +198,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 		case ev := <-newBlockSummaryCh:
 			bs := ev.Summary
 
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 			parentHeader := n.chain.BestBlock().Header()
 
 			// Only receive one block summary from the same leader once in the same round
@@ -222,7 +222,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			ts := ev.TxSet
 
 			parentHeader := n.chain.BestBlock().Header()
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 
 			// Only receive one tx set from the same leader once in the same round
 			if lts != nil {
@@ -251,7 +251,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			ed := ev.Endorsement
 
 			parentHeader := n.chain.BestBlock().Header()
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 
 			if n.cons.ValidateEndorsement(ed, parentHeader, now) != nil {
 				continue
@@ -263,7 +263,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			header := ev.Header
 
 			parentHeader := n.chain.BestBlock().Header()
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 
 			// Only receive one tx set from the same leader once in the same round
 			if lh != nil {
@@ -287,7 +287,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 		case <-futureTicker.C:
 			// Try to assemble new block
 			parentHeader := n.chain.BestBlock().Header()
-			now := uint64(time.Now().Second())
+			now := uint64(time.Now().Unix())
 			if n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil { // valid header
 				if lts == nil || n.cons.ValidateTxSet(lts, parentHeader, now) == nil { // empty or valid tx set
 					n.assembleNewBlock(lh, lts, parentHeader, now)
