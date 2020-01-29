@@ -165,9 +165,16 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			write(toSend)
 		}
 	case proto.MsgNewBlockSummary:
+		var newBlockSummary *block.Summary
+		if err := msg.Decode(&newBlockSummary); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+
+		c.newEndorsementFeed.Send(&NewBlockEvent{Block: newBlock})
+		write(&struct{}{})
 	case proto.MsgNewTxSet:
 	case proto.MsgNewEndorsement:
-	case proto.MsgNewHeader:
+	case proto.MsgNewBlockHeader:
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}

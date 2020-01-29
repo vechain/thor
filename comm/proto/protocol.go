@@ -27,10 +27,11 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
+	// the followings are defined for vip193
 	MsgNewBlockSummary
 	MsgNewTxSet
 	MsgNewEndorsement
-	MsgNewHeader
+	MsgNewBlockHeader
 )
 
 // MsgName convert msg code to string.
@@ -58,7 +59,7 @@ func MsgName(msgCode uint64) string {
 		return "MsgNewTxSet"
 	case MsgNewEndorsement:
 		return "MsgNewEndorsement"
-	case MsgNewHeader:
+	case MsgNewBlockHeader:
 		return "MsgNewHeader"
 	default:
 		return fmt.Sprintf("unknown msg code(%v)", msgCode)

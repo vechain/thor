@@ -45,7 +45,7 @@ type Communicator struct {
 	newBlockSummaryFeed event.Feed
 	newEndorsementFeed  event.Feed
 	newTxSetFeed        event.Feed
-	newHeaderFeed       event.Feed
+	newBlockHeaderFeed  event.Feed
 }
 
 // New create a new Communicator instance.
@@ -243,8 +243,8 @@ func (c *Communicator) SubscribeTxSet(ch chan *NewTxSetEvent) event.Subscription
 }
 
 // SubscribeHeader ...
-func (c *Communicator) SubscribeHeader(ch chan *NewHeaderEvent) event.Subscription {
-	return c.feedScope.Track(c.newHeaderFeed.Subscribe(ch))
+func (c *Communicator) SubscribeBlockHeader(ch chan *NewHeaderEvent) event.Subscription {
+	return c.feedScope.Track(c.newBlockHeaderFeed.Subscribe(ch))
 }
 
 // SubscribeBlock subscribe the event that new block received.
@@ -253,16 +253,60 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 }
 
 // BroadcastBlockSummary broadcasts a block summary to remote peers
-func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {}
+func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
+	peers := c.peerSet.Slice()
 
-// BroadcastEndorsement broadcasts an endorsement to remote peers
-func (c *Communicator) BroadcastEndorsement(ed *block.Endorsement) {}
+	for _, peer := range peers {
+		c.goes.Go(func() {
+			if err := proto.NotifyNewBlockSummary(c.ctx, peer, bs); err != nil {
+				peer.logger.Debug("failed to broadcast new block summary", "err", err)
+			}
+		})
+	}
+}
 
 // BroadcastTxSet broadcasts a tx set to remote peers
-func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {}
+func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
+	peers := c.peerSet.Slice()
+
+	for _, peer := range peers {
+		c.goes.Go(func() {
+			if err := proto.NotifyNewTxSet(c.ctx, peer, ts); err != nil {
+				peer.logger.Debug("failed to broadcast new tx set", "err", err)
+			}
+		})
+	}
+}
 
 // BroadcastHeader broadcasts a block header to remote peers
-func (c *Communicator) BroadcastHeader(header *block.Header) {}
+func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
+	peers := c.peerSet.Slice()
+
+	for _, peer := range peers {
+		c.goes.Go(func() {
+			if err := proto.NotifyNewBlockHeader(c.ctx, peer, header); err != nil {
+				peer.logger.Debug("failed to broadcast new block header", "err", err)
+			}
+		})
+	}
+}
+
+// BroadcastEndorsement broadcasts an endorsement to remote peers
+func (c *Communicator) BroadcastEndorsement(ed *block.Endorsement) {
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsEndorsementKnown(ed.SigningHash())
+	})
+
+	for _, peer := range peers {
+		peer := peer
+		peer.MarkEndorsement(ed.SigningHash())
+		c.goes.Go(func() {
+			if err := proto.NotifyNewEndorsement(c.ctx, peer, ed); err != nil {
+				peer.logger.Debug("failed to broadcast new endorsement", "err", err)
+			}
+		})
+	}
+}
 
 // BroadcastBlock broadcast a block to remote peers.
 func (c *Communicator) BroadcastBlock(blk *block.Block) {

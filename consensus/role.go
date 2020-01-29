@@ -142,44 +142,79 @@ func (c *Consensus) Timestamp(round uint32) uint64 {
 	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(round)
 }
 
-// ValidateBlockSummary validates a given block summary
+// ValidateBlockSummary validates a block summary
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
-	// only validate block summary created in the current round
-	round, err := c.RoundNumber(now)
-	if err != nil {
-		return err
+	if bs == nil {
+		return consensusError("Empty block summary")
 	}
-	if bs.Timestamp() != c.Timestamp(round) {
-		return consensusError("Invalid timestamp")
+
+	// only validate block summary created in the current round
+	if err := c.validateTimestamp(bs.Timestamp(), now); err != nil {
+		return err
 	}
 
 	if bs.ParentID() != parentHeader.ID() {
 		return consensusError("Inconsistent parent block ID")
 	}
 
-	if _, err := c.validateLeader(bs, parentHeader); err != nil {
+	// Valdiate signature
+	signer, err := bs.Signer()
+	if err != nil {
+		return consensusError(fmt.Sprintf("Signer unavailable: %v", err))
+	}
+
+	// validate leader
+	if _, err := c.validateLeader(signer, parentHeader, bs.Timestamp(), bs.TotalScore()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c *Consensus) ValidateTxSet(ts *block.TxSet, parentHeader *block.Header, now uint64) error {
-	// only validate block summary created in the current round
+// ValidateTimestamp validates the input timestamp against the current time.
+// The timestamp is often from the new block summary, tx set, endorsement or header
+func (c *Consensus) validateTimestamp(timestamp, now uint64) error {
 	round, err := c.RoundNumber(now)
 	if err != nil {
 		return err
 	}
-	if ts.Timestamp() != c.Timestamp(round) {
-		return consensusError("Invalid timestamp")
+	if timestamp != c.Timestamp(round) {
+		return consensusError(fmt.Sprintf("Invalid timestamp, timestamp=%v, now=%v", timestamp, now))
 	}
-
+	return nil
 }
 
-// ValidateEndorsement validates a given endorsement
-func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *block.Header, now uint64) error {
-	signer, err := ed.Signer()
+// ValidateTxSet validates a tx set
+func (c *Consensus) ValidateTxSet(ts *block.TxSet, parentHeader *block.Header, now uint64) error {
+	if ts == nil {
+		return consensusError("Empty tx set")
+	}
+
+	if err := c.validateTimestamp(ts.Timestamp(), now); err != nil {
+		return err
+	}
+
+	// Valdiate signature
+	signer, err := ts.Signer()
 	if err != nil {
+		return consensusError(fmt.Sprintf("Signer unavailable: %v", err))
+	}
+
+	if _, err := c.validateLeader(signer, parentHeader, ts.Timestamp(), ts.TotalScore()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateEndorsement validates an endorsement
+func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *block.Header, now uint64) error {
+	if ed == nil {
+		return consensusError("Empty endorsement")
+	}
+
+	// validate the block summary
+	if err := c.ValidateBlockSummary(ed.BlockSummary(), parentHeader, now); err != nil {
 		return err
 	}
 
@@ -187,14 +222,15 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 	if err != nil {
 		return err
 	}
+
+	signer, err := ed.Signer()
+	if err != nil {
+		return consensusError(fmt.Sprintf("Signer unvailable: %v", err))
+	}
+
 	candidate := candidates.Candidate(st, signer)
 	if candidate == nil {
 		return consensusError("Signer not allowed to participate in consensus")
-	}
-
-	// validate the block summary
-	if err := c.ValidateBlockSummary(ed.BlockSummary(), parentHeader, now); err != nil {
-		return err
 	}
 
 	// Compute the VRF seed
@@ -224,12 +260,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 // 1. signature
 // 2. leadership
 // 3. total score
-func (c *Consensus) validateLeader(bs *block.Summary, parentHeader *block.Header) (*poa.Candidates, error) {
-	signer, err := bs.Signer()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
-	}
-
+func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Header, timestamp, totalScore uint64) (*poa.Candidates, error) {
 	candidates, authority, st, err := c.getAllCandidates(parentHeader)
 	if err != nil {
 		return nil, err
@@ -241,13 +272,13 @@ func (c *Consensus) validateLeader(bs *block.Summary, parentHeader *block.Header
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
-	if !sched.IsTheTime(bs.Timestamp()) {
-		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", bs.Timestamp(), signer))
+	if !sched.IsTheTime(timestamp) {
+		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", timestamp, signer))
 	}
 
-	updates, score := sched.Updates(bs.Timestamp())
-	if parentHeader.TotalScore()+score != bs.TotalScore() {
-		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parentHeader.TotalScore()+score, bs.TotalScore()))
+	updates, score := sched.Updates(timestamp)
+	if parentHeader.TotalScore()+score != totalScore {
+		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parentHeader.TotalScore()+score, totalScore))
 	}
 
 	for _, u := range updates {
