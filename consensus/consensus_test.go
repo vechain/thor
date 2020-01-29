@@ -119,6 +119,13 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
+	forkConfig := thor.ForkConfig{
+		VIP191:    math.MaxUint32,
+		ETH_CONST: math.MaxUint32,
+		BLOCKLIST: 0,
+	}
+	con := New(c, stateCreator, forkConfig)
+
 	// proposer := genesis.DevAccounts()[0]
 
 	var flow *packer.Flow
@@ -127,7 +134,12 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	for _, acc := range accs {
 		p := packer.New(c, stateCreator, acc.addr, &acc.addr, thor.NoFork)
 		flow, err = p.Schedule(parent.Header(), now)
-		if flow != nil {
+		if err != nil {
+			continue
+		}
+
+		t, _ := con.TimestampFromCurrTime(now)
+		if flow.When() == t {
 			proposer = acc
 			break
 		}
@@ -135,13 +147,6 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	if flow == nil {
 		t.Fatal("No proposer found")
 	}
-
-	forkConfig := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-	}
-	con := New(c, stateCreator, forkConfig)
 
 	// block summary
 	bs, _, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
@@ -151,10 +156,10 @@ func newTestConsensus(t *testing.T) *testConsensus {
 
 	// endorsement
 	for _, acc := range accs {
-		proof, _ := acc.vrfsk.Prove(bs.EndorseHash().Bytes())
-		ed := block.NewEndorsement(bs, proof)
-		if con.ValidateEndorsement(ed, parent.Header(), now) == nil {
-			flow.AddEndoresement(ed)
+		if ok, proof, _ := con.IsCommittee(acc.vrfsk, now); ok {
+			ed := block.NewEndorsement(bs, proof)
+			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
+			flow.AddEndoresement(ed.WithSignature(sig))
 		}
 		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
 			break

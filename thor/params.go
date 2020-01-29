@@ -37,7 +37,7 @@ const (
 	MaxBackTrackingBlockNumber = 65535
 
 	CommitteeSize            uint64 = 10
-	CommitteeThresholdFactor uint64 = 2
+	CommitteeThresholdFactor uint64 = 5
 	EpochInterval            uint64 = 10
 )
 

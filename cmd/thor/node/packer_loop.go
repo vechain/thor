@@ -43,6 +43,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	var (
 		flow   *packer.Flow
+		err    error
 		ticker = time.NewTicker(time.Second)
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
@@ -60,6 +61,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
+	var lbs *block.Summary
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -71,10 +74,25 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
-			flow, err := n.packer.Schedule(best.Header(), now)
-			if err != nil {
-				log.Error("Schedule", "err", err)
+
+			if flow == nil {
+				// Schedule a round to be the leader
+				flow, err = n.packer.Schedule(best.Header(), now)
+				if err != nil {
+					log.Error("Schedule", "err", err)
+					continue
+				}
+			}
+
+			// Check whether the best block has changed
+			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
+				log.Debug("re-schedule packer due to new best block")
+				continue
+			}
+
+			// Check whether it is the scheduled round for producing a new block
+			if now+1 < flow.When() || now > flow.When()+thor.BlockInterval {
 				continue
 			}
 
@@ -98,24 +116,33 @@ func (n *Node) packerLoop(ctx context.Context) {
 		case ev := <-newBlockSummaryCh:
 			bs := ev.Summary
 
-			log.Debug("Incoming block summary:")
-			log.Debug(bs.String())
+			// log.Debug("Incoming block summary:")
+			// log.Debug(bs.String())
 
 			now := uint64(time.Now().Unix())
-			parent := n.chain.BestBlock().Header()
+			best := n.chain.BestBlock()
 
-			if err := n.cons.ValidateBlockSummary(bs, parent, now); err != nil {
+			// Only receive one block summary from the same leader once in the same round
+			if lbs != nil {
+				if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
+					continue
+				}
+				lbs = nil
+			}
+
+			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
 				log.Error("ValidateBlockSummary", "err", err)
 				continue
 			}
 
-			// Check committee membership
+			// Check the committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
 			if err != nil {
 				log.Error("IsCommittee", "err", err)
+				continue
 			}
 			if ok {
-				log.Debug("Endorsing", "hash", bs.EndorseHash().Bytes())
+				// Endorse the block summary
 				ed := block.NewEndorsement(bs, proof)
 				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
 				if err != nil {
@@ -131,67 +158,65 @@ func (n *Node) packerLoop(ctx context.Context) {
 			log.Debug("Incoming endoresement:")
 			log.Debug(ed.String())
 
-			parentHeader := n.chain.BestBlock().Header()
+			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
-			if err := n.cons.ValidateEndorsement(ev.Endorsement, parentHeader, now); err != nil {
+
+			// Check whether the best block has changed
+			if flow.ParentHeader().ID() != best.Header().ID() {
+				flow = nil
+				log.Debug("re-schedule packer due to new best block")
 				continue
 			}
 
-			// n.comm.BroadcastEndorsement(ed)
-
-			if flow != nil {
-				if flow.ParentHeader().ID() != parentHeader.ID() {
-					flow = nil
-					log.Debug("Re-schedule packer due to new best block")
-					continue
-				}
-
-				if now >= flow.When()+thor.BlockInterval {
-					flow = nil
-					log.Debug("Current round timeout")
-					continue
-				}
-
-				if ok := flow.AddEndoresement(ed); !ok {
-					log.Debug("Failed to add new endorsement", "#", flow.NumOfEndorsements())
-				} else {
-					log.Debug("Added new endorsement", "#", flow.NumOfEndorsements())
-				}
-
-				if uint64(flow.NumOfEndorsements()) < thor.CommitteeSize {
-					continue
-				}
-
-				endorsementDone = mclock.Now()
-
-				log.Debug("Packing new block header")
-				blk, stage, receipts, err := flow.Pack(n.master.PrivateKey)
-				if err != nil {
-					log.Error("PackBlockHeader", "err", err)
-					flow = nil
-					continue
-				}
-				blockDone = mclock.Now()
-
-				// reset flow
-				flow = nil
-
-				log.Debug("Committing new block")
-				if err := n.commit(blk, stage, receipts); err != nil {
-					log.Error("commit", "err", err)
-					continue
-				}
-				commitDone = mclock.Now()
-
-				display(blk, receipts,
-					txSetBlockSummaryDone-start,
-					endorsementDone-txSetBlockSummaryDone,
-					blockDone-endorsementDone,
-					commitDone-blockDone,
-				)
-
-				n.comm.BroadcastBlockHeader(blk.Header())
+			// Check whether it is the scheduled round for producing a new block
+			if now+1 < flow.When() || now > flow.When()+thor.BlockInterval {
+				continue
 			}
+
+			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
+				continue
+			}
+
+			if ok := flow.AddEndoresement(ed); !ok {
+				log.Debug("Failed to add new endorsement", "#", flow.NumOfEndorsements())
+			} else {
+				log.Debug("Added new endorsement", "#", flow.NumOfEndorsements())
+			}
+
+			// Pack a new block if there have been enough endorsements collected
+			if uint64(flow.NumOfEndorsements()) < thor.CommitteeSize {
+				continue
+			}
+
+			endorsementDone = mclock.Now()
+
+			log.Debug("Packing new block header")
+			blk, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+			if err != nil {
+				log.Error("PackBlockHeader", "err", err)
+				flow = nil
+				continue
+			}
+			blockDone = mclock.Now()
+
+			// reset flow
+			flow = nil
+
+			log.Debug("Committing new block")
+			if err := n.commit(blk, stage, receipts); err != nil {
+				log.Error("commit", "err", err)
+				continue
+			}
+			commitDone = mclock.Now()
+
+			display(blk, receipts,
+				txSetBlockSummaryDone-start,
+				endorsementDone-txSetBlockSummaryDone,
+				blockDone-endorsementDone,
+				commitDone-blockDone,
+			)
+
+			n.comm.BroadcastBlockHeader(blk.Header())
 		}
 	}
 }
