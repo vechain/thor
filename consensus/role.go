@@ -143,7 +143,7 @@ func (c *Consensus) Timestamp(round uint32) uint64 {
 }
 
 // ValidateBlockSummary validates a given block summary
-func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header, now uint64) error {
+func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
 	// only validate block summary created in the current round
 	round, err := c.RoundNumber(now)
 	if err != nil {
@@ -153,15 +153,27 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parent *block.Header
 		return consensusError("Invalid timestamp")
 	}
 
-	if bs.ParentID() != parent.ID() {
+	if bs.ParentID() != parentHeader.ID() {
 		return consensusError("Inconsistent parent block ID")
 	}
 
-	if _, err := c.validateLeader(bs, parent); err != nil {
+	if _, err := c.validateLeader(bs, parentHeader); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (c *Consensus) ValidateTxSet(ts *block.TxSet, parentHeader *block.Header, now uint64) error {
+	// only validate block summary created in the current round
+	round, err := c.RoundNumber(now)
+	if err != nil {
+		return err
+	}
+	if ts.Timestamp() != c.Timestamp(round) {
+		return consensusError("Invalid timestamp")
+	}
+
 }
 
 // ValidateEndorsement validates a given endorsement

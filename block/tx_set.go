@@ -23,14 +23,16 @@ type TxSet struct {
 
 type txSetBody struct {
 	Txs       tx.Transactions
+	Timestamp uint64
 	Signature []byte
 }
 
 // NewTxSet creates an instance of TxSet
-func NewTxSet(txs tx.Transactions) *TxSet {
+func NewTxSet(txs tx.Transactions, timestamp uint64) *TxSet {
 	return &TxSet{
 		body: txSetBody{
-			Txs: txs,
+			Txs:       txs,
+			Timestamp: timestamp,
 		},
 	}
 }
@@ -67,7 +69,7 @@ func (ts *TxSet) SigningHash() (hash thor.Bytes32) {
 	}
 
 	hw := thor.NewBlake2b()
-	rlp.Encode(hw, ts.body.Txs)
+	rlp.Encode(hw, []interface{}{ts.body.Txs, ts.body.Timestamp})
 	hw.Sum(hash[:0])
 	return
 }
@@ -96,9 +98,9 @@ func (ts *TxSet) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// RootHash computes the root of the Merkle tree constructed
+// TxRoot computes the root of the Merkle tree constructed
 // from the transactions
-func (ts *TxSet) RootHash() (root thor.Bytes32) {
+func (ts *TxSet) TxRoot() (root thor.Bytes32) {
 	if cached := ts.cache.root.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
@@ -111,4 +113,9 @@ func (ts *TxSet) RootHash() (root thor.Bytes32) {
 // Transactions returns transactions
 func (ts *TxSet) Transactions() tx.Transactions {
 	return ts.body.Txs
+}
+
+// Timestamp returns timestamp
+func (ts *TxSet) Timestamp() uint64 {
+	return ts.body.Timestamp
 }

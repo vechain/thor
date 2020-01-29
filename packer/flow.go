@@ -91,7 +91,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *
 	}
 
 	// pack tx set
-	ts := block.NewTxSet(f.txs)
+	ts := block.NewTxSet(f.txs, f.runtime.Context().Time)
 	sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, err
@@ -101,9 +101,8 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *
 	// pack block summary
 	best := f.packer.chain.BestBlock()
 	parent := best.Header().ID()
-	root := f.txSet.RootHash()
-	time := best.Header().Timestamp() + thor.BlockInterval
-	bs := block.NewBlockSummary(parent, root, time, f.runtime.Context().TotalScore)
+	root := f.txSet.TxRoot()
+	bs := block.NewBlockSummary(parent, root, f.runtime.Context().Time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, err

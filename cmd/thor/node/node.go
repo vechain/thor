@@ -146,6 +146,8 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 // 2. receiving new header
 // 3. receiving new tx set
 // 4. assemble new block from header and tx set
+// 5. receiving and broadcast new block summary
+// 6. receiving and broadcast new endorsement
 func (n *Node) houseKeeping(ctx context.Context) {
 	log.Debug("enter house keeping")
 	defer log.Debug("leave house keeping")
@@ -155,6 +157,14 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 	newBlockCh := make(chan *comm.NewBlockEvent)
 	scope.Track(n.comm.SubscribeBlock(newBlockCh))
+	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
+	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
+	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
+	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
+	newTxSetCh := make(chan *comm.NewTxSetEvent)
+	scope.Track(n.comm.SubscribeTxSet(newTxSetCh))
+	newHeaderCh := make(chan *comm.NewHeaderEvent)
+	scope.Track(n.comm.SubscribeHeader(newHeaderCh))
 
 	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer futureTicker.Stop()
@@ -162,7 +172,11 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	connectivityTicker := time.NewTicker(time.Second)
 	defer connectivityTicker.Stop()
 
-	var noPeerTimes int
+	var (
+		noPeerTimes int
+		lbs         *block.Summary // locally stored block summary
+		lts         *block.TxSet   // locally stored tx set
+	)
 
 	futureBlocks := cache.NewRandCache(32)
 
@@ -182,6 +196,58 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				n.comm.BroadcastBlock(newBlock.Block)
 				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
+
+		case ev := <-newBlockSummaryCh:
+			bs := ev.Summary
+
+			now := uint64(time.Now().Second())
+			parentHeader := n.chain.BestBlock().Header()
+
+			// Only receive one block summary from the same leader once
+			if err := n.cons.ValidateBlockSummary(lbs, parentHeader, now); err == nil {
+				lbs = nil
+				continue
+			}
+
+			if err := n.cons.ValidateBlockSummary(bs, parentHeader, now); err != nil {
+				continue
+			}
+
+			log.Debug("Broadcasting block summary", "hash", bs.EndorseHash())
+			lbs = bs
+			n.comm.BroadcastBlockSummary(bs)
+
+		case ev := <-newTxSetCh:
+			ts := ev.TxSet
+
+			// Check the validity of the local block summary
+			parentHeader := n.chain.BestBlock().Header()
+			now := uint64(time.Now().Second())
+			if err := n.cons.ValidateBlockSummary(lbs, parentHeader, now); err != nil {
+				lbs = nil
+			}
+
+			if lbs != nil {
+				// Only reject the new tx set when lbs is valid AND the set does not match lbs.
+				if lbs.TxRoot() != ts.TxRoot() {
+					continue
+				} else {
+					n.comm.BroadcastTxSet(ts)
+				}
+			}
+
+			lts = ts
+
+		case ev := <-newHeaderCh:
+			header := ev.Header
+
+			// Check the validity of the local block summary
+			parentHeader := n.chain.BestBlock().Header()
+			now := uint64(time.Now().Second())
+			if err := n.cons.ValidateBlockHeader(header, parentHeader, now); err != nil {
+				continue
+			}
+
 		case <-futureTicker.C:
 			// process future blocks
 			var blocks []*block.Block

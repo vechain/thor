@@ -88,6 +88,11 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
+// ValidateBlockHeader ...
+func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
+	return c.validateBlockHeader(header, parentHeader, nowTimestamp)
+}
+
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
@@ -292,27 +297,3 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 	return stage, receipts, nil
 }
-
-// func (c *Consensus) validateTimestamp(time uint64) error {
-// 	launchTime := c.chain.GenesisBlock().Header().Timestamp()
-// 	if (time-launchTime)%thor.BlockInterval != 0 {
-// 		return errTimestamp
-// 	}
-// 	return nil
-// }
-
-// func validateTimestamp(curr, parent, now uint64) error {
-// 	if curr <= parent {
-// 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent, curr))
-// 	}
-
-// 	if (curr-parent)%thor.BlockInterval != 0 {
-// 		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent, curr))
-// 	}
-
-// 	if curr > now+thor.BlockInterval {
-// 		return errFutureBlock
-// 	}
-
-// 	return nil
-// }
