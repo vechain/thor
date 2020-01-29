@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/vrf"
 )
 
+// Master ...
 type Master struct {
 	PrivateKey  *ecdsa.PrivateKey
 	Beneficiary *thor.Address
@@ -27,6 +28,7 @@ func (m *Master) deriveVrfPrivateKey() {
 	_, m.VrfPrivateKey = vrf.GenKeyPairFromSeed(m.PrivateKey.D.Bytes())
 }
 
+// Address ...
 func (m *Master) Address() thor.Address {
 	return thor.Address(crypto.PubkeyToAddress(m.PrivateKey.PublicKey))
 }

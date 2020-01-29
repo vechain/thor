@@ -142,6 +142,16 @@ func (c *Consensus) Timestamp(round uint32) uint64 {
 	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(round)
 }
 
+// TimestampFromCurrTime ...
+func (c *Consensus) TimestampFromCurrTime(now uint64) (uint64, error) {
+	round, err := c.RoundNumber(now)
+	if err != nil {
+		return 0, err
+	}
+
+	return c.Timestamp(round), nil
+}
+
 // ValidateBlockSummary validates a block summary
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
 	if bs == nil {
