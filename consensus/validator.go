@@ -132,7 +132,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	// reconstuct and validate endoresements
-	sigs := header.SigOnEndoresment()
+	sigs := header.SigsOnEndoresment()
 	for i, proof := range header.VrfProofs() {
 		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
 		if c.ValidateEndorsement(ed, parent, nowTimestamp) != nil {

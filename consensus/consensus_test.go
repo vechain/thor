@@ -133,11 +133,6 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal("No proposer found")
 	}
 
-	// original, _, _, err := flow.Pack(proposer.PrivateKey)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-
 	forkConfig := thor.ForkConfig{
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,
@@ -146,7 +141,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	con := New(c, stateCreator, forkConfig)
 
 	// block summary
-	bs, ts, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
+	bs, _, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,14 +161,11 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Errorf("Not enough endorsements added")
 	}
 
-	// header
-	header, _, _, err := flow.PackBlockHeader(proposer.ethsk)
+	// block
+	original, _, _, err := flow.Pack(proposer.ethsk)
 	if err != nil {
 		t.Fatal(t)
 	}
-
-	// block
-	original := block.Compose(header, ts.Transactions())
 
 	if _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
@@ -209,7 +201,11 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 		GasUsed(header.GasUsed()).
 		Beneficiary(header.Beneficiary()).
 		StateRoot(header.StateRoot()).
-		ReceiptsRoot(header.ReceiptsRoot())
+		ReceiptsRoot(header.ReceiptsRoot()).
+		// vip193 features
+		SigOnBlockSummary(header.SigOnBlockSummary()).
+		SigsOnEndorsement(header.SigsOnEndoresment()).
+		VrfProofs(header.VrfProofs())
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
