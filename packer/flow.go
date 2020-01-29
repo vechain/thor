@@ -91,7 +91,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *
 	}
 
 	// pack tx set
-	ts := block.NewTxSet(f.txs, f.runtime.Context().Time)
+	ts := block.NewTxSet(f.txs, f.runtime.Context().Time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, err
@@ -101,7 +101,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *
 	// pack block summary
 	best := f.packer.chain.BestBlock()
 	parent := best.Header().ID()
-	root := f.txSet.TxRoot()
+	root := f.txSet.TxsRoot()
 	bs := block.NewBlockSummary(parent, root, f.runtime.Context().Time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
@@ -241,7 +241,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 }
 
 // PackHeader build the new block header.
-func (f *Flow) PackHeader(sk *ecdsa.PrivateKey) (*block.Header, *state.Stage, tx.Receipts, error) {
+func (f *Flow) PackBlockHeader(sk *ecdsa.PrivateKey) (*block.Header, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}

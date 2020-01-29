@@ -90,6 +90,9 @@ func (c *Consensus) validate(
 
 // ValidateBlockHeader ...
 func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
+	if header == nil {
+		return consensusError("Empty header")
+	}
 	return c.validateBlockHeader(header, parentHeader, nowTimestamp)
 }
 

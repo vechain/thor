@@ -90,7 +90,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 			txSetBlockSummaryDone = mclock.Now()
 
 			n.comm.BroadcastBlockSummary(bs)
-			n.comm.BroadcastTxSet(ts)
+			if !ts.IsEmpty() {
+				n.comm.BroadcastTxSet(ts)
+			}
 
 		case ev := <-newBlockSummaryCh:
 			bs := ev.Summary
@@ -134,7 +136,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			n.comm.BroadcastEndorsement(ed)
+			// n.comm.BroadcastEndorsement(ed)
 
 			if flow != nil {
 				if flow.ParentHeader().ID() != parentHeader.ID() {
@@ -161,25 +163,26 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				endorsementDone = mclock.Now()
 
-				log.Debug("Packing new header")
-				header, stage, receipts, err := flow.PackHeader(n.master.PrivateKey)
+				log.Debug("Packing new block header")
+				header, stage, receipts, err := flow.PackBlockHeader(n.master.PrivateKey)
 				if err != nil {
-					log.Error("PackHeader", "err", err)
+					log.Error("PackBlockHeader", "err", err)
 					flow = nil
 					continue
 				}
 
 				log.Debug("Committing new block")
 				blk := block.Compose(header, flow.Txs())
-
 				blockDone = mclock.Now()
 
+				// reset flow
+				flow = nil
+
+				// commit new block
 				if err := n.commit(blk, stage, receipts); err != nil {
 					log.Error("commit", "err", err)
-					flow = nil
 					continue
 				}
-
 				commitDone = mclock.Now()
 
 				display(blk, receipts,
@@ -189,7 +192,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 					commitDone-blockDone,
 				)
 
-				n.comm.BroadcastHeader(header)
+				n.comm.BroadcastBlockHeader(header)
 			}
 		}
 	}

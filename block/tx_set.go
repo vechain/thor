@@ -22,17 +22,19 @@ type TxSet struct {
 }
 
 type txSetBody struct {
-	Txs       tx.Transactions
-	Timestamp uint64
-	Signature []byte
+	Txs        tx.Transactions
+	Timestamp  uint64
+	TotalScore uint64
+	Signature  []byte
 }
 
 // NewTxSet creates an instance of TxSet
-func NewTxSet(txs tx.Transactions, timestamp uint64) *TxSet {
+func NewTxSet(txs tx.Transactions, timestamp, totalScore uint64) *TxSet {
 	return &TxSet{
 		body: txSetBody{
-			Txs:       txs,
-			Timestamp: timestamp,
+			Txs:        txs,
+			Timestamp:  timestamp,
+			TotalScore: totalScore,
 		},
 	}
 }
@@ -100,7 +102,7 @@ func (ts *TxSet) DecodeRLP(s *rlp.Stream) error {
 
 // TxRoot computes the root of the Merkle tree constructed
 // from the transactions
-func (ts *TxSet) TxRoot() (root thor.Bytes32) {
+func (ts *TxSet) TxsRoot() (root thor.Bytes32) {
 	if cached := ts.cache.root.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
@@ -118,4 +120,13 @@ func (ts *TxSet) Transactions() tx.Transactions {
 // Timestamp returns timestamp
 func (ts *TxSet) Timestamp() uint64 {
 	return ts.body.Timestamp
+}
+
+// TotalScore returns total score
+func (ts *TxSet) TotalScore() uint64 {
+	return ts.body.TotalScore
+}
+
+func (ts *TxSet) IsEmpty() bool {
+	return len(ts.body.Txs) == 0
 }

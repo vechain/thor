@@ -24,7 +24,7 @@ type Summary struct {
 
 type summaryBody struct {
 	ParentID   thor.Bytes32
-	TxRoot     thor.Bytes32
+	TxsRoot    thor.Bytes32
 	Timestamp  uint64
 	TotalScore uint64
 
@@ -32,11 +32,11 @@ type summaryBody struct {
 }
 
 // NewBlockSummary creates a block summary without signature
-func NewBlockSummary(parentID, txRoot thor.Bytes32, timestamp, totalScore uint64) *Summary {
+func NewBlockSummary(parentID, txsRoot thor.Bytes32, timestamp, totalScore uint64) *Summary {
 	return &Summary{
 		body: summaryBody{
 			ParentID:   parentID,
-			TxRoot:     txRoot,
+			TxsRoot:    txsRoot,
 			Timestamp:  timestamp,
 			TotalScore: totalScore,
 		},
@@ -80,7 +80,7 @@ func (bs *Summary) SigningHash() (hash thor.Bytes32) {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		bs.body.ParentID,
-		bs.body.TxRoot,
+		bs.body.TxsRoot,
 		bs.body.Timestamp,
 		bs.body.TotalScore,
 	})
@@ -143,8 +143,8 @@ func (bs *Summary) TotalScore() uint64 {
 }
 
 // TxRoot ...
-func (bs *Summary) TxRoot() thor.Bytes32 {
-	return bs.body.TxRoot
+func (bs *Summary) TxsRoot() thor.Bytes32 {
+	return bs.body.TxsRoot
 }
 
 // EndorseHash computes the hash for committee member to sign
@@ -174,7 +174,7 @@ func (bs *Summary) String() string {
 	Signer:         	%v
 	TxRoot:         	%v
 	Signature:      	0x%x
-	`, bs.EndorseHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxRoot, bs.body.Signature)
+	`, bs.EndorseHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxsRoot, bs.body.Signature)
 
 	return s
 }

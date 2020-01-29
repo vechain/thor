@@ -23,6 +23,7 @@ const (
 	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
+	maxKnownEndorsement   = int(thor.CommitteeSize * thor.CommitteeThresholdFactor)
 )
 
 func init() {
@@ -35,10 +36,11 @@ type Peer struct {
 	*rpc.RPC
 	logger log15.Logger
 
-	createdTime mclock.AbsTime
-	knownTxs    *lru.Cache
-	knownBlocks *lru.Cache
-	head        struct {
+	createdTime       mclock.AbsTime
+	knownTxs          *lru.Cache
+	knownBlocks       *lru.Cache
+	knownEndorsements *lru.Cache // remember known endorsements
+	head              struct {
 		sync.Mutex
 		id         thor.Bytes32
 		totalScore uint64
@@ -56,13 +58,15 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 	knownTxs, _ := lru.New(maxKnownTxs)
 	knownBlocks, _ := lru.New(maxKnownBlocks)
+	knownEndorsements, _ := lru.New(maxKnownEndorsement)
 	return &Peer{
-		Peer:        peer,
-		RPC:         rpc.New(peer, rw),
-		logger:      log.New(ctx...),
-		createdTime: mclock.Now(),
-		knownTxs:    knownTxs,
-		knownBlocks: knownBlocks,
+		Peer:              peer,
+		RPC:               rpc.New(peer, rw),
+		logger:            log.New(ctx...),
+		createdTime:       mclock.Now(),
+		knownTxs:          knownTxs,
+		knownBlocks:       knownBlocks,
+		knownEndorsements: knownEndorsements,
 	}
 }
 
@@ -92,6 +96,11 @@ func (p *Peer) MarkBlock(id thor.Bytes32) {
 	p.knownBlocks.Add(id, struct{}{})
 }
 
+// MarkEndorsement marks an endorsement to known.
+func (p *Peer) MarkEndorsement(id thor.Bytes32) {
+	p.knownEndorsements.Add(id, struct{}{})
+}
+
 // IsTransactionKnown returns if the transaction is known.
 func (p *Peer) IsTransactionKnown(hash thor.Bytes32) bool {
 	ts, ok := p.knownTxs.Get(hash)
@@ -104,6 +113,11 @@ func (p *Peer) IsTransactionKnown(hash thor.Bytes32) bool {
 // IsBlockKnown returns if the block is known.
 func (p *Peer) IsBlockKnown(id thor.Bytes32) bool {
 	return p.knownBlocks.Contains(id)
+}
+
+// IsEndorsementKnown returns if the endorsement is known.
+func (p *Peer) IsEndorsementKnown(id thor.Bytes32) bool {
+	return p.knownEndorsements.Contains(id)
 }
 
 // Duration returns duration of connection.
