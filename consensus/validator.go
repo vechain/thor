@@ -120,6 +120,26 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
+
+	// reconstruct and validate the block summary
+	bs := block.NewBlockSummary(
+		header.ParentID(),
+		header.TxsRoot(),
+		header.Timestamp(),
+		header.TotalScore()).WithSignature(header.SigOnBlockSummary())
+	if c.ValidateBlockSummary(bs, parent, nowTimestamp) != nil {
+		return consensusError("reconstructed block summary invalid")
+	}
+
+	// reconstuct and validate endoresements
+	sigs := header.SigOnEndoresment()
+	for i, proof := range header.VrfProofs() {
+		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
+		if c.ValidateEndorsement(ed, parent, nowTimestamp) != nil {
+			return consensusError(fmt.Sprintf("reconstructed #%v endoresement invalid", i))
+		}
+	}
+
 	return nil
 }
 
