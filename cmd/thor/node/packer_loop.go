@@ -25,10 +25,10 @@ import (
 )
 
 // packerLoop is executed by the leader and committee members to
-// 1. prepare and broadcast block summary & tx set
-// 2. endorse and broadcast block summary
-// 3. pack and broadcast header
-// 4. pack and commit new block
+// 1. prepare and broadcast block summary & tx set as leader
+// 2. prepare and broadcast endorsements as committee members
+// 3. pack and broadcast header as leader
+// 4. pack and commit new block as leader
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
@@ -106,8 +106,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 				log.Error("ValidateBlockSummary", "err", err)
 				continue
 			}
-
-			n.comm.BroadcastBlockSummary(bs)
 
 			// Check committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
@@ -194,20 +192,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				n.comm.BroadcastHeader(header)
 			}
-			// case ev := <-newTxSetCh:
-			// 	ts := ev.TxSet
-
-			// 	// Check the validity of the local block summary
-			// 	parentHeader := n.chain.BestBlock().Header()
-			// 	now := uint64(time.Now().Second())
-			// 	if err := n.cons.ValidateBlockSummary(blockSummary, parentHeader, now); err != nil {
-			// 		blockSummary = nil
-			// 	}
-
-			// 	// if the local block summary matches the tx set, save and broadcast it
-			// 	if blockSummary != nil && blockSummary.TxRoot() == ts.RootHash() {
-			// 		n.comm.BroadcastTxSet(ts)
-			// 	}
 		}
 	}
 }
