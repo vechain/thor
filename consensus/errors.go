@@ -7,6 +7,7 @@ package consensus
 
 import (
 	"errors"
+	"fmt"
 )
 
 var (
@@ -31,6 +32,70 @@ type consensusError string
 
 func (err consensusError) Error() string {
 	return string(err)
+}
+
+const (
+	strErrTimestampVsParent  = "invalid timestamp: parent = %v, curr = %v"
+	strErrTimestampVsNow     = "invalid timestamp: timestamp = %v, now = %v"
+	strErrParentID           = "invalid parent block ID"
+	strErrGasLimit           = "invalid gas limit: parent = %v, curr = %v"
+	strErrGasExceed          = "gas used exceeds limit: limit %v, used %v"
+	strErrTotalScoreVsParent = "invalid total score: parent = %v, curr = %v"
+	strErrCompSigner         = "signer unavailable: %v"
+	strErrSigner             = "invalid signer: signer = %v, err = %v"
+	strErrTimestampUnsched   = "timestamp unscheduled: timestamp = %v, signer = %v"
+	strErrTotalScore         = "invalid total score: expected =  %v, curr = %v"
+	strErrTxsRoot            = "block txs root mismatch: expected = %v, curr = %v"
+	strErrBlockedTx          = "tx origin blocked got packed: %v"
+	strErrChainTag           = "tx chain tag mismatch: expected = %v, curr = %v"
+	strErrFutureTx           = "tx ref future block: ref %v, current %v"
+	strErrExpiredTx          = "tx expired: ref %v, current %v, expiration %v"
+	strErrStateRoot          = "block state root mismatch: expected = %v, curr = %v"
+	strErrReceiptsRoot       = "block receipts root mismatch: expected = %v, curr = %v"
+	strErrGasUsed            = "block gas used mismatch: expected = %v, curr = %v"
+
+	strErrZeroRound    = "zero round number"
+	strErrZeroEpoch    = "zero epoch number"
+	strErrNotCommittee = "not a committee member"
+	strErrProof        = "invalid vrf proof"
+	strErrNotCandidate = "not a candidate: %v"
+)
+
+type consensusType uint8
+
+const (
+	ctBlock consensusType = iota
+	ctBlockBody
+	ctHeader
+	ctBlockSummary
+	ctEndorsement
+	ctTxSet
+	ctProposer
+	ctLeader
+	ctNil
+)
+
+// newConsensusError ...
+func newConsensusError(t consensusType, strErr string, args ...interface{}) consensusError {
+	switch t {
+	case ctBlock:
+		strErr += "block: "
+	case ctBlockSummary:
+		strErr += "block summary: "
+	case ctHeader:
+		strErr += "block header: "
+	case ctEndorsement:
+		strErr += "endorsement: "
+	case ctTxSet:
+		strErr += "tx set: "
+	case ctProposer:
+		strErr += "proposer: "
+	case ctLeader:
+		strErr += "leader: "
+	default:
+		// panic("invalid consensus type")
+	}
+	return consensusError(fmt.Sprintf(strErr, args...))
 }
 
 // IsFutureBlock returns if the error indicates that the block should be
