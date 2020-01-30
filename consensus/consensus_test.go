@@ -161,7 +161,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 			flow.AddEndoresement(ed)
 
 			// signer, _ := ed.Signer()
-			fmt.Printf("orig: %x\n", *ed.VrfProof())
+			// fmt.Printf("orig: %x\n", *ed.VrfProof())
 		}
 		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
 			break
@@ -230,13 +230,14 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 
 		blk := tc.sign(build.Timestamp(tc.parent.Header().Timestamp()).Build())
 		err := tc.consent(blk)
-		expect := consensusError(
-			fmt.Sprintf(
-				"block timestamp behind parents: parent %v, current %v",
-				tc.parent.Header().Timestamp(),
-				blk.Header().Timestamp(),
-			),
-		)
+		// expect := consensusError(
+		// 	fmt.Sprintf(
+		// 		"block timestamp behind parents: parent %v, current %v",
+		// 		tc.parent.Header().Timestamp(),
+		// 		blk.Header().Timestamp(),
+		// 	),
+		// )
+		expect := newConsensusError(ctHeader, strErrTimestampVsParent, tc.parent.Header().Timestamp(), blk.Header().Timestamp())
 		tc.assert.Equal(err, expect)
 
 		blk = tc.sign(build.Timestamp(tc.parent.Header().Timestamp() - 1).Build())
@@ -308,6 +309,14 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		)
 		tc.assert.Equal(err, expect)
 	}
+	// triggers["triggerInvalidSigOnBlockSummary"] = func() {
+	// 	build := tc.originalBuilder()
+	// 	sig := tc.original.Header().SigOnBlockSummary()
+	// 	sig[0] += 1
+	// 	blk := tc.sign(build.SigOnBlockSummary(sig).Build())
+	// 	err := tc.consent(blk)
+	// 	expected:= consensusError("")
+	// }
 
 	for _, trigger := range triggers {
 		trigger()
