@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -146,8 +145,6 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { h.cache.signingHash.Store(hash) }()
 
-	sort.Sort(vrf.Proofs(h.body.VrfProofs))
-
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		h.body.ParentID,
@@ -183,11 +180,19 @@ func (h *Header) SigOnBlockSummary() []byte {
 
 // VrfProofs returns vrf proofs
 func (h *Header) VrfProofs() []*vrf.Proof {
-	return h.body.VrfProofs
+	var pfs []*vrf.Proof
+	for _, proof := range h.body.VrfProofs {
+		pfs = append(pfs, proof.Copy())
+	}
+	return pfs
 }
 
 func (h *Header) SigsOnEndoresment() [][]byte {
-	return h.body.SigsOnEndorsement
+	var sigs [][]byte
+	for _, sig := range h.body.SigsOnEndorsement {
+		sigs = append(sigs, append([]byte(nil), sig...))
+	}
+	return sigs
 }
 
 // WithSignature create a new Header object with signature set.

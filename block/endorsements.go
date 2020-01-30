@@ -15,7 +15,7 @@ type Endorsements struct {
 
 // Add adds a new endorsement. It returns false if the endorsement already exists.
 // Endorsements are distinguished by their signing hashes.
-func (eds *Endorsements) Add(ed *Endorsement) bool {
+func (eds *Endorsements) AddEndorsement(ed *Endorsement) bool {
 	if eds.vals == nil {
 		// eds.vals = make([]*Endorsement, 1)
 		eds.keys = make(map[thor.Bytes32]struct{})
@@ -36,7 +36,7 @@ func (eds *Endorsements) Add(ed *Endorsement) bool {
 func (eds *Endorsements) VrfProofs() []*vrf.Proof {
 	var proofs []*vrf.Proof
 	for _, ed := range eds.vals {
-		proofs = append(proofs, ed.VrfProof())
+		proofs = append(proofs, ed.VrfProof().Copy())
 	}
 	return proofs
 }
@@ -45,7 +45,7 @@ func (eds *Endorsements) VrfProofs() []*vrf.Proof {
 func (eds *Endorsements) Signatures() [][]byte {
 	var sigs [][]byte
 	for _, ed := range eds.vals {
-		sigs = append(sigs, ed.Signature())
+		sigs = append(sigs, append([]byte(nil), ed.Signature()...))
 	}
 	return sigs
 }
@@ -54,8 +54,8 @@ func (eds *Endorsements) Signatures() [][]byte {
 func (eds *Endorsements) StringVrfProofs() string {
 	var s string
 	for _, ed := range eds.vals {
-		b := ed.VrfProof().Bytes()
-		s = s + fmt.Sprintf("%x\n", b[len(b)-2:])
+		// b := ed.VrfProof().Bytes()
+		s = s + fmt.Sprintf("%x\n", *ed.VrfProof())
 	}
 	return s
 }
@@ -63,4 +63,8 @@ func (eds *Endorsements) StringVrfProofs() string {
 // Len ...
 func (eds *Endorsements) Len() int {
 	return len(eds.vals)
+}
+
+func (eds *Endorsements) List() []*Endorsement {
+	return eds.vals
 }

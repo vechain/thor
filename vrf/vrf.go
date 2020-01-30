@@ -2,11 +2,12 @@ package vrf
 
 import (
 	"errors"
-	"fmt"
+	"io"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -140,37 +141,51 @@ func (p *Proof) Bytes() []byte {
 	return append([]byte(nil), p[:]...)
 }
 
+func (p *Proof) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, p.Bytes())
+}
+
+func (p *Proof) DecodeRLP(s *rlp.Stream) error {
+	var b []byte
+
+	if err := s.Decode(&b); err != nil {
+		return err
+	}
+	copy(p[:], b)
+	return nil
+}
+
 type hashable []byte
 
 func (h hashable) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.HashID(""), h[:]
 }
 
-// Proofs defines an array of VRF proofs
-type Proofs []*Proof
+// // Proofs defines an array of VRF proofs
+// type Proofs []*Proof
 
-func (pfs Proofs) Len() int      { return len(pfs) }
-func (pfs Proofs) Swap(i, j int) { pfs[i], pfs[j] = pfs[j], pfs[i] }
-func (pfs Proofs) Less(i, j int) bool {
-	for n := 0; n < ProofLen; n++ {
-		if pfs[i][n] < pfs[j][n] {
-			return true
-		} else if pfs[i][n] > pfs[j][n] {
-			return false
-		}
-	}
+// func (pfs Proofs) Len() int      { return len(pfs) }
+// func (pfs Proofs) Swap(i, j int) { pfs[i], pfs[j] = pfs[j], pfs[i] }
+// func (pfs Proofs) Less(i, j int) bool {
+// 	for n := 0; n < ProofLen; n++ {
+// 		if pfs[i][n] < pfs[j][n] {
+// 			return true
+// 		} else if pfs[i][n] > pfs[j][n] {
+// 			return false
+// 		}
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-func (pfs Proofs) String() string {
-	var str string
-	for i := 0; i < len(pfs); i++ {
-		str += fmt.Sprintf("%d %x\n", i, pfs[i])
-	}
+// func (pfs Proofs) String() string {
+// 	var str string
+// 	for i := 0; i < len(pfs); i++ {
+// 		str += fmt.Sprintf("%d %x\n", i, pfs[i])
+// 	}
 
-	return str
-}
+// 	return str
+// }
 
 // BytesToProof ...
 func BytesToProof(b []byte) *Proof {

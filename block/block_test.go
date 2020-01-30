@@ -6,6 +6,7 @@
 package block_test
 
 import (
+	"crypto/rand"
 	"fmt"
 	"testing"
 	"time"
@@ -17,7 +18,14 @@ import (
 	. "github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
+
+func getRndBytes32() thor.Bytes32 {
+	var b thor.Bytes32
+	rand.Read(b[:])
+	return b
+}
 
 func TestBlock(t *testing.T) {
 
@@ -34,7 +42,29 @@ func TestBlock(t *testing.T) {
 		totalScore  uint64       = 101
 		emptyRoot   thor.Bytes32 = thor.BytesToBytes32([]byte("0"))
 		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
+		parentID    thor.Bytes32 = getRndBytes32()
+		stateRoot   thor.Bytes32 = getRndBytes32()
+		receiptRoot thor.Bytes32 = getRndBytes32()
+		txsRoot     thor.Bytes32 = tx.Transactions{tx1, tx2}.RootHash()
 	)
+
+	var pfs []*vrf.Proof
+	for i := 0; i < 5; i++ {
+		pf := &vrf.Proof{}
+		rand.Read(pf[:])
+		pfs = append(pfs, pf)
+	}
+
+	bs := NewBlockSummary(parentID, txsRoot, totalScore, now)
+	key, _ := crypto.HexToECDSA(privKey)
+	sig, _ := crypto.Sign(bs.EndorseHash().Bytes(), key)
+
+	var sigs [][]byte
+	for i := 0; i < 5; i++ {
+		ed := NewEndorsement(bs, pfs[i])
+		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), key)
+		sigs = append(sigs, sig)
+	}
 
 	block := new(Builder).
 		GasUsed(gasUsed).
@@ -42,11 +72,12 @@ func TestBlock(t *testing.T) {
 		Transaction(tx2).
 		GasLimit(gasLimit).
 		TotalScore(totalScore).
-		StateRoot(emptyRoot).
-		ReceiptsRoot(emptyRoot).
+		StateRoot(stateRoot).
+		ReceiptsRoot(receiptRoot).
 		Timestamp(now).
-		ParentID(emptyRoot).
+		ParentID(parentID).
 		Beneficiary(beneficiary).
+		SigOnBlockSummary(sig).SigsOnEndorsement(sigs).VrfProofs(pfs).
 		Build()
 
 	h := block.Header()
@@ -62,28 +93,55 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
-	assert.Equal(t, emptyRoot, h.StateRoot())
-	assert.Equal(t, emptyRoot, h.ReceiptsRoot())
+	assert.Equal(t, stateRoot, h.StateRoot())
+	assert.Equal(t, receiptRoot, h.ReceiptsRoot())
 	assert.Equal(t, now, h.Timestamp())
-	assert.Equal(t, emptyRoot, h.ParentID())
+	assert.Equal(t, parentID, h.ParentID())
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 
-	key, _ := crypto.HexToECDSA(privKey)
-	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
+	assert.Equal(t, sig, h.SigOnBlockSummary())
+	for i := range pfs {
+		assert.Equal(t, pfs[i], h.VrfProofs()[i])
+		assert.Equal(t, sigs[i], h.SigsOnEndoresment()[i])
+	}
+
+	key, _ = crypto.HexToECDSA(privKey)
+	sig, _ = crypto.Sign(block.Header().SigningHash().Bytes(), key)
 
 	block = block.WithSignature(sig)
+	h = block.Header()
 
 	data, _ := rlp.EncodeToBytes(block)
-	fmt.Println(Raw(data).DecodeHeader())
-	fmt.Println(Raw(data).DecodeBody())
+	// fmt.Println(Raw(data).DecodeHeader())
+	// fmt.Println(Raw(data).DecodeBody())
+	dh, _ := Raw(data).DecodeHeader()
+	assert.Equal(t, dh.GasLimit(), h.GasLimit())
+	assert.Equal(t, dh.GasUsed(), h.GasUsed())
+	assert.Equal(t, dh.TotalScore(), h.TotalScore())
+	assert.Equal(t, dh.StateRoot(), h.StateRoot())
+	assert.Equal(t, dh.ReceiptsRoot(), h.ReceiptsRoot())
+	assert.Equal(t, dh.Timestamp(), h.Timestamp())
+	assert.Equal(t, dh.ParentID(), h.ParentID())
+	assert.Equal(t, dh.Beneficiary(), h.Beneficiary())
+	assert.Equal(t, dh.TxsRoot(), h.TxsRoot())
+	assert.Equal(t, dh.Signature(), h.Signature())
+
+	assert.Equal(t, dh.SigOnBlockSummary(), h.SigOnBlockSummary())
+	for i := range h.VrfProofs() {
+		assert.Equal(t, dh.VrfProofs()[i], h.VrfProofs()[i])
+		assert.Equal(t, dh.SigsOnEndoresment()[i], h.SigsOnEndoresment()[i])
+	}
+
+	body, _ = Raw(data).DecodeBody()
+	assert.Equal(t, body.Txs.RootHash(), block.Transactions().RootHash())
 
 	fmt.Println(block.Size())
 
 	b := Block{}
 	rlp.DecodeBytes(data, &b)
-	fmt.Println(b.Header().ID())
-	fmt.Println(&b)
+	// fmt.Println(b.Header().ID())
+	// fmt.Println(&b)
 
 	block = new(Builder).
 		GasUsed(gasUsed).

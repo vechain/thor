@@ -136,9 +136,13 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	sigs := header.SigsOnEndoresment()
 	for i, proof := range header.VrfProofs() {
 		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
-		if c.ValidateEndorsement(ed, parent, nowTimestamp) != nil {
-			return consensusError(fmt.Sprintf("reconstructed #%v endoresement invalid", i))
-		}
+
+		// signer, _ := ed.Signer()
+		fmt.Printf("Recon: %x\n", *ed.VrfProof())
+
+		// if c.ValidateEndorsement(ed, parent, nowTimestamp) != nil {
+		// 	return consensusError(fmt.Sprintf("reconstructed #%v endoresement invalid", i))
+		// }
 	}
 
 	return nil

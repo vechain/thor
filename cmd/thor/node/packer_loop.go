@@ -92,7 +92,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			// Check whether it is the scheduled round for producing a new block
-			if now+1 < flow.When() || now > flow.When()+thor.BlockInterval {
+			if now+1 < flow.When() {
+				continue
+			}
+
+			// Check timeout
+			if now > flow.When()+thor.BlockInterval {
+				flow = nil
 				continue
 			}
 
@@ -169,7 +175,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			// Check whether it is the scheduled round for producing a new block
-			if now+1 < flow.When() || now > flow.When()+thor.BlockInterval {
+			if now+1 < flow.When() {
+				continue
+			}
+
+			// Check timeout
+			if now > flow.When()+thor.BlockInterval {
+				flow = nil
 				continue
 			}
 

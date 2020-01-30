@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -101,9 +100,8 @@ func newTestConsensus(t *testing.T) *testConsensus {
 				state.SetBalance(acc.addr, bal)
 				state.SetEnergy(acc.addr, bal, launchTime)
 
-				// vrfpk, _ := vrf.GenKeyPairFromSeed(crypto.FromECDSA(acc.PrivateKey))
-
 				builtin.Authority.Native(state).Add(acc.addr, acc.addr, thor.Bytes32{}, acc.vrfpk.Bytes32())
+				fmt.Printf("%x\n", acc.addr)
 			}
 			return nil
 		})
@@ -130,19 +128,19 @@ func newTestConsensus(t *testing.T) *testConsensus {
 
 	var flow *packer.Flow
 	var proposer *account
-	now := uint64(time.Now().Unix())
+	now := launchTime + thor.BlockInterval
 	for _, acc := range accs {
 		p := packer.New(c, stateCreator, acc.addr, &acc.addr, thor.NoFork)
-		flow, err = p.Schedule(parent.Header(), now)
+		flow, err = p.Schedule(parent.Header(), launchTime)
 		if err != nil {
 			continue
 		}
 
-		t, _ := con.TimestampFromCurrTime(now)
-		if flow.When() == t {
+		if flow.When() == now {
 			proposer = acc
 			break
 		}
+		flow = nil
 	}
 	if flow == nil {
 		t.Fatal("No proposer found")
@@ -159,7 +157,11 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		if ok, proof, _ := con.IsCommittee(acc.vrfsk, now); ok {
 			ed := block.NewEndorsement(bs, proof)
 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
-			flow.AddEndoresement(ed.WithSignature(sig))
+			ed = ed.WithSignature(sig)
+			flow.AddEndoresement(ed)
+
+			// signer, _ := ed.Signer()
+			fmt.Printf("orig: %x\n", *ed.VrfProof())
 		}
 		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
 			break

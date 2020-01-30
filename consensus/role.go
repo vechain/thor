@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"reflect"
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
@@ -16,23 +17,19 @@ import (
 
 func getCommitteeThreshold() uint32 {
 	// threshold = (1 << 64 - 1) * committee_size / total_number_of_nodes * factor
-	f := thor.CommitteeSize * thor.CommitteeThresholdFactor / thor.MaxBlockProposers
-	if f > 1 {
-		f = 1
+	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
+	if f > thor.MaxBlockProposers {
+		f = thor.MaxBlockProposers
 	}
 
-	return uint32(uint64(math.MaxUint32) * f)
+	return uint32(uint64(math.MaxUint32) * f / thor.MaxBlockProposers)
 }
 
 // IsCommittee checks the committeeship given a VRF private key and round number.
 func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Proof, error) {
-	round, err := c.RoundNumber(time)
-	if err != nil {
-		return false, nil, err
-	}
-
+	round := c.RoundNumber(time)
 	if round == 0 {
-		return false, nil, consensusError("Cannot be round zero")
+		return false, nil, consensusError("Zero round number")
 	}
 
 	epoch := EpochNumber(round)
@@ -99,26 +96,23 @@ func (c *Consensus) IsLeader(thor.Address) bool {
 }
 
 // RoundNumber computes the round number from timestamp
-func (c *Consensus) RoundNumber(timestamp uint64) (uint32, error) {
+func (c *Consensus) RoundNumber(t uint64) uint32 {
 	launchTime := c.chain.GenesisBlock().Header().Timestamp()
-	if launchTime > timestamp {
-		return 0, consensusError("earlier than launch time")
+	if launchTime > t {
+		return 0
 	}
-	return uint32((timestamp - launchTime) / thor.BlockInterval), nil
+	return uint32((t - launchTime) / thor.BlockInterval)
 }
 
 // EpochNumber computes the epoch number from timestamp
-func (c *Consensus) EpochNumber(timestamp uint64) (uint32, error) {
-	round, err := c.RoundNumber(timestamp)
-	if err != nil {
-		return 0, err
-	}
+func (c *Consensus) EpochNumber(timestamp uint64) uint32 {
+	round := c.RoundNumber(timestamp)
 
 	if round == 0 {
-		return 0, nil
+		return 0
 	}
 
-	return uint32(uint64(round-1)/thor.EpochInterval + 1), nil
+	return uint32(uint64(round-1)/thor.EpochInterval + 1)
 }
 
 // EpochNumber computes the epoch number from time
@@ -130,27 +124,39 @@ func EpochNumber(round uint32) uint32 {
 }
 
 // RoundNumber ...
-func RoundNumber(now, launch uint64) (uint32, error) {
+func RoundNumber(now, launch uint64) uint32 {
 	if launch > now {
-		return 0, errTimestamp
+		return 0
 	}
-	return uint32((now - launch) / thor.BlockInterval), nil
+	return uint32((now - launch) / thor.BlockInterval)
 }
 
-// Timestamp computes the timestamp for the block generated in that round
-func (c *Consensus) Timestamp(round uint32) uint64 {
-	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(round)
-}
-
-// TimestampFromCurrTime ...
-func (c *Consensus) TimestampFromCurrTime(now uint64) (uint64, error) {
-	round, err := c.RoundNumber(now)
-	if err != nil {
-		return 0, err
+// Timestamp computes the round timestamp.
+// [arg] can be either round number (uint32) or time (uint64)
+func (c *Consensus) Timestamp(arg interface{}) uint64 {
+	switch reflect.TypeOf(arg).String() {
+	case "uint32":
+		r := arg.(uint32)
+		return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+	case "uint64":
+		t := arg.(uint64)
+		r := c.RoundNumber(t)
+		return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+	default:
+		panic("Need uint32 or uint64")
 	}
-
-	return c.Timestamp(round), nil
 }
+
+// // NextTimestamp computes the next-round timestamp
+// func (c *Consensus) NextTimestamp(t uint64) uint64 {
+// 	r := c.RoundNumber(t + thor.BlockInterval)
+// 	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+// }
+
+// // TimestampFromCurrTime ...
+// func (c *Consensus) Timestamp(now uint64) uint64 {
+// 	return c.Timestamp(c.RoundNumber(now))
+// }
 
 // ValidateBlockSummary validates a block summary
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
@@ -184,9 +190,9 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.
 // ValidateTimestamp validates the input timestamp against the current time.
 // The timestamp is often from the new block summary, tx set, endorsement or header
 func (c *Consensus) validateTimestamp(timestamp, now uint64) error {
-	round, err := c.RoundNumber(now)
-	if err != nil {
-		return err
+	round := c.RoundNumber(now)
+	if round == 0 {
+		return consensusError("Zero round number")
 	}
 	if timestamp != c.Timestamp(round) {
 		return consensusError(fmt.Sprintf("Invalid timestamp, timestamp=%v, now=%v", timestamp, now))
@@ -238,13 +244,16 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return consensusError(fmt.Sprintf("Signer unvailable: %v", err))
 	}
 
+	fmt.Println(candidates.String())
+	fmt.Printf("%x\n", signer)
+
 	candidate := candidates.Candidate(st, signer)
 	if candidate == nil {
 		return consensusError("Signer not allowed to participate in consensus")
 	}
 
 	// Compute the VRF seed
-	round, _ := c.RoundNumber(ed.BlockSummary().Timestamp())
+	round := c.RoundNumber(ed.BlockSummary().Timestamp())
 	epoch := EpochNumber(round)
 	beacon, err := c.beacon(epoch)
 	if err != nil {
