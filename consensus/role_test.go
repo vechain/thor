@@ -90,32 +90,32 @@ func TestEpochNumber(t *testing.T) {
 		msg      string
 	}{
 		{
-			[]interface{}{uint32(0), errTimestamp},
+			[]interface{}{uint32(0)},
 			M(cons.EpochNumber(launchTime - 1)),
 			"t < launch_time",
 		},
 		{
-			[]interface{}{uint32(0), nil},
+			[]interface{}{uint32(0)},
 			M(cons.EpochNumber(launchTime + 1)),
 			"t = launch_time + 1",
 		},
 		{
-			[]interface{}{uint32(1), nil},
+			[]interface{}{uint32(1)},
 			M(cons.EpochNumber(launchTime + thor.BlockInterval)),
 			"t = launch_time + block_interval",
 		},
 		{
-			[]interface{}{uint32(1), nil},
+			[]interface{}{uint32(1)},
 			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
 			"t = launch_time + block_interval * epoch_interval",
 		},
 		{
-			[]interface{}{uint32(1), nil},
+			[]interface{}{uint32(1)},
 			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
 			"t = launch_time + block_interval * epoch_interval + 1",
 		},
 		{
-			[]interface{}{uint32(2), nil},
+			[]interface{}{uint32(2)},
 			M(cons.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
 			"t = launch_time + block_interval * (epoch_interval + 1)",
 		},

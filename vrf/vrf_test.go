@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"sort"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func TestPublicKey(t *testing.T) {
@@ -60,6 +61,32 @@ func TestVrf(t *testing.T) {
 	}
 }
 
+func TestProofRlp(t *testing.T) {
+	p := Proof{}
+	rand.Read(p[:])
+
+	fmt.Printf("p: %x\n", p)
+
+	buff := bytes.NewBuffer([]byte{})
+	fmt.Printf("buff: %x\n", buff.Bytes())
+	if err := rlp.Encode(buff, &p); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("buff: %x\n", buff.Bytes())
+
+	pp := Proof{}
+	// s := bytes.NewReader(buff.Bytes())
+	if err := rlp.DecodeBytes(buff.Bytes(), &pp); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("p: %x\n", pp)
+
+	if p != pp {
+		t.Errorf("RLP encode/decode test failed")
+	}
+}
+
 func BenchmarkVrfKeyGen(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		GenKeyPair()
@@ -87,24 +114,24 @@ func BenchmarkVrfProveVerify(b *testing.B) {
 	}
 }
 
-func TestProofCompare(t *testing.T) {
-	pArray := make([]*Proof, 10)
-	var b [ProofLen]byte
+// func TestProofCompare(t *testing.T) {
+// 	pArray := make([]*Proof, 10)
+// 	var b [ProofLen]byte
 
-	for i := 0; i < cap(pArray); i++ {
-		c, _ := rand.Read(b[:])
-		if c != ProofLen {
-			t.Errorf("")
-		}
+// 	for i := 0; i < cap(pArray); i++ {
+// 		c, _ := rand.Read(b[:])
+// 		if c != ProofLen {
+// 			t.Errorf("")
+// 		}
 
-		pf := Proof(b)
-		pArray[i] = &pf
-	}
+// 		pf := Proof(b)
+// 		pArray[i] = &pf
+// 	}
 
-	var proofs = Proofs(pArray)
-	fmt.Println(proofs.String())
-	sort.Sort(proofs)
-	fmt.Println(proofs.String())
+// 	var proofs = Proofs(pArray)
+// 	fmt.Println(proofs.String())
+// 	sort.Sort(proofs)
+// 	fmt.Println(proofs.String())
 
-	return
-}
+// 	return
+// }

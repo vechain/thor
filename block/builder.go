@@ -79,30 +79,34 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 
 // VrfProofs ...
 func (b *Builder) VrfProofs(proofs []*vrf.Proof) *Builder {
-	b.headerBody.VrfProofs = proofs
+	for _, proof := range proofs {
+		b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof.Copy())
+	}
 	return b
 }
 
 // VrfProof ...
 func (b *Builder) VrfProof(proof *vrf.Proof) *Builder {
-	b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof)
+	b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof.Copy())
 	return b
 }
 
 // SigOnBlockSummary ...
 func (b *Builder) SigOnBlockSummary(sig []byte) *Builder {
-	b.headerBody.SigOnBlockSummary = sig
+	b.headerBody.SigOnBlockSummary = append(b.headerBody.SigOnBlockSummary, sig...)
 	return b
 }
 
 // SigsOnEndorsement ...
 func (b *Builder) SigsOnEndorsement(sigs [][]byte) *Builder {
-	b.headerBody.SigsOnEndorsement = sigs
+	for _, sig := range sigs {
+		b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, append([]byte(nil), sig...))
+	}
 	return b
 }
 
 func (b *Builder) SigOnEndorsement(sig []byte) *Builder {
-	b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, sig)
+	b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, append([]byte(nil), sig...))
 	return b
 }
 

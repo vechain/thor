@@ -61,7 +61,7 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 		// 	break
 		// }
 
-		round, _ = c.RoundNumber(header.Timestamp())
+		round = c.RoundNumber(header.Timestamp())
 		if round <= lastRound {
 			break
 		}

@@ -1,6 +1,7 @@
 package poa
 
 import (
+	"fmt"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/state"
@@ -103,4 +104,12 @@ func (c *Candidates) IsEndorsor(addr thor.Address) bool {
 // InvalidateCache invalidate the result cache of Pick method.
 func (c *Candidates) InvalidateCache() {
 	c.satisfied = nil
+}
+
+func (c *Candidates) String() string {
+	var s string
+	for i, candidate := range c.list {
+		s += fmt.Sprintf("%-3d %x\n", i, candidate.NodeMaster)
+	}
+	return s
 }

@@ -30,17 +30,17 @@ func TestEndorsements(t *testing.T) {
 		newEndorsement(bs, []byte{0x1, 0x3}),
 	}
 
-	if !endorsements.Add(eds[0]) {
+	if !endorsements.AddEndorsement(eds[0]) {
 		t.Errorf("Add a new endorsement")
 	}
 
-	if endorsements.Add(eds[0]) {
+	if endorsements.AddEndorsement(eds[0]) {
 		t.Errorf("Add a duplicated endorsement")
 	}
 
-	endorsements.Add(eds[1])
-	endorsements.Add(eds[2])
-	endorsements.Add(eds[3])
+	endorsements.AddEndorsement(eds[1])
+	endorsements.AddEndorsement(eds[2])
+	endorsements.AddEndorsement(eds[3])
 
 	proofs := endorsements.VrfProofs()
 	for i, p := range proofs {
