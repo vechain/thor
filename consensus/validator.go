@@ -89,7 +89,7 @@ func (c *Consensus) validate(
 // ValidateBlockHeader ...
 func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
 	if header == nil {
-		return newConsensusError(ctHeader, "empty header")
+		return newConsensusError(trHeader, "empty header", nil, nil, "")
 	}
 	return c.validateBlockHeader(header, parentHeader, nowTimestamp)
 }
@@ -97,12 +97,16 @@ func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *bloc
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 	if header.Timestamp() <= parent.Timestamp() {
 		// return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
-		return newConsensusError(ctHeader, strErrTimestampVsParent, parent.Timestamp(), header.Timestamp())
+		return newConsensusError(trHeader, strErrTimestamp,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parent.Timestamp(), header.Timestamp()}, "")
 	}
 
 	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
 		// return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
-		return newConsensusError(ctHeader, strErrTimestampVsParent, parent.Timestamp(), header.Timestamp())
+		return newConsensusError(trHeader, strErrTimestamp,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parent.Timestamp(), header.Timestamp()}, "")
 	}
 
 	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
@@ -111,17 +115,23 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
 		// return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-		return newConsensusError(ctHeader, strErrGasLimit, parent.GasLimit(), header.GasLimit())
+		return newConsensusError(trHeader, strErrGasLimit,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parent.GasLimit(), header.GasLimit()}, "")
 	}
 
 	if header.GasUsed() > header.GasLimit() {
 		// return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
-		return newConsensusError(ctHeader, strErrGasExceed, header.GasLimit(), header.GasUsed())
+		return newConsensusError(trHeader, strErrGasExceed,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{header.GasLimit(), header.GasUsed()}, "")
 	}
 
 	if header.TotalScore() <= parent.TotalScore() {
 		// return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
-		return newConsensusError(ctHeader, strErrTotalScoreVsParent, parent.TotalScore(), header.TotalScore())
+		return newConsensusError(trHeader, strErrTotalScore,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parent.TotalScore(), header.TotalScore()}, "")
 	}
 
 	// reconstruct and validate the block summary
@@ -131,21 +141,29 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		header.Timestamp(),
 		header.TotalScore()).WithSignature(header.SigOnBlockSummary())
 	if err := c.ValidateBlockSummary(bs, parent, nowTimestamp); err != nil {
-		// return consensusError("reconstructed block summary invalid, err =" + err.Error())
-		return newConsensusError(ctHeader, err.Error())
+		return err.(consensusError).AddTraceInfo(trHeader)
 	}
 
 	// reconstuct and validate endoresements
 	sigs := header.SigsOnEndoresment()
-	for i, proof := range header.VrfProofs() {
+	proofs := header.VrfProofs()
+
+	if len(sigs) != int(thor.CommitteeSize) {
+		return newConsensusError(trHeader, "invalid number of endoresment signatures",
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{int(thor.CommitteeSize), len(sigs)}, "")
+	}
+
+	if len(proofs) != int(thor.CommitteeSize) {
+		return newConsensusError(trHeader, "invalid number of vrf proofs",
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{int(thor.CommitteeSize), len(proofs)}, "")
+	}
+
+	for i, proof := range proofs {
 		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
-
-		// signer, _ := ed.Signer()
-		// fmt.Printf("Recon: %x\n", *ed.VrfProof())
-
 		if err := c.ValidateEndorsement(ed, parent, nowTimestamp); err != nil {
-			// return consensusError(fmt.Sprintf("reconstructed #%v endoresement invalid", i))
-			return newConsensusError(ctHeader, err.Error())
+			return err.(consensusError).AddTraceInfo(trHeader)
 		}
 	}
 
@@ -156,7 +174,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	signer, err := header.Signer()
 	if err != nil {
 		// return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
-		return nil, newConsensusError(ctProposer, strErrCompSigner, err)
+		return nil, newConsensusError(trProposer, strErrSignature, nil, nil, err.Error())
 	}
 
 	authority := builtin.Authority.Native(st)
@@ -179,21 +197,26 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
 		// return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
-		return nil, newConsensusError(ctProposer, strErrSigner, signer, err)
+		return nil, newConsensusError(trProposer, strErrSigner,
+			[]string{strDataAddr},
+			[]interface{}{signer}, err.Error())
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
 		// return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
-		return nil, newConsensusError(ctProposer, strErrTimestampUnsched, header.Timestamp(), signer)
+		return nil, newConsensusError(trProposer, strErrTimestampUnsched,
+			[]string{strDataTimestamp, strDataAddr},
+			[]interface{}{header.Timestamp(), signer}, "")
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
 	if parent.TotalScore()+score != header.TotalScore() {
 		// return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 		return nil, newConsensusError(
-			ctProposer,
+			trProposer,
 			strErrTotalScore,
-			parent.TotalScore()+score, header.TotalScore())
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{parent.TotalScore() + score, header.TotalScore()}, "")
 	}
 
 	for _, u := range updates {
@@ -214,39 +237,45 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
 		// return consensusError(fmt.Sprintf("block txs root mismatch: want %v, have %v", header.TxsRoot(), txs.RootHash()))
-		return newConsensusError(ctBlockBody, strErrTxsRoot, header.TxsRoot(), txs.RootHash())
+		return newConsensusError(trBlockBody, strErrTxsRoot,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{header.TxsRoot(), txs.RootHash()}, "")
 	}
 
 	for _, tx := range txs {
 		origin, err := tx.Origin()
 		if err != nil {
 			// return consensusError(fmt.Sprintf("tx signer unavailable: %v", err))
-			return newConsensusError(ctBlockBody, strErrCompSigner, err)
+			return newConsensusError(trBlockBody, strErrSignature, nil, nil, err.Error())
 		}
 
 		if header.Number() >= c.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
 			// return consensusError(fmt.Sprintf("tx origin blocked got packed: %v", origin))
-			return newConsensusError(ctBlockBody, strErrBlockedTx, origin)
+			return newConsensusError(trBlockBody, strErrBlockedTxOrign,
+				[]string{strDataAddr}, []interface{}{origin}, "")
 		}
 
 		switch {
 		case tx.ChainTag() != c.chain.Tag():
 			// return consensusError(fmt.Sprintf("tx chain tag mismatch: want %v, have %v", c.chain.Tag(), tx.ChainTag()))
-			return newConsensusError(ctBlockBody, strErrChainTag, c.chain.Tag(), tx.ChainTag())
+			return newConsensusError(trBlockBody, strErrChainTag,
+				[]string{strDataExpected, strDataCurr},
+				[]interface{}{c.chain.Tag(), tx.ChainTag()}, "")
 		case header.Number() < tx.BlockRef().Number():
 			// return consensusError(fmt.Sprintf("tx ref future block: ref %v, current %v", tx.BlockRef().Number(), header.Number()))
-			return newConsensusError(ctBlockBody, strErrFutureTx, tx.BlockRef().Number(), header.Number())
+			return newConsensusError(trBlockBody, strErrFutureTx,
+				[]string{strDataRef, strDataCurr},
+				[]interface{}{tx.BlockRef().Number(), header.Number()}, "")
 		case tx.IsExpired(header.Number()):
 			// return consensusError(fmt.Sprintf("tx expired: ref %v, current %v, expiration %v", tx.BlockRef().Number(), header.Number(), tx.Expiration()))
-			return newConsensusError(
-				ctBlockBody,
-				strErrExpiredTx,
-				tx.BlockRef().Number(), header.Number(), tx.Expiration())
+			return newConsensusError(trBlockBody, strErrExpiredTx,
+				[]string{strDataRef, strDataCurr, strDataExp},
+				[]interface{}{tx.BlockRef().Number(), header.Number(), tx.Expiration()}, "")
 		}
 
 		if err := tx.TestFeatures(header.TxsFeatures()); err != nil {
 			// return consensusError("invalid tx: " + err.Error())
-			return newConsensusError(ctBlockBody, "test tx features: "+err.Error())
+			return newConsensusError(trBlockBody, "test tx features", nil, nil, err.Error())
 		}
 	}
 
@@ -295,7 +324,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		if found, _, err := findTx(tx.ID()); err != nil {
 			return nil, nil, err
 		} else if found {
-			return nil, nil, newConsensusError(ctBlock, "tx already exists")
+			return nil, nil, newConsensusError("verifyBlock: ", "tx already exists", nil, nil, "")
 		}
 
 		// check depended tx
@@ -305,11 +334,11 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 				return nil, nil, err
 			}
 			if !found {
-				return nil, nil, newConsensusError(ctBlock, "tx dep broken")
+				return nil, nil, newConsensusError("verifyBlock: ", "tx dep broken", nil, nil, "")
 			}
 
 			if reverted {
-				return nil, nil, newConsensusError(ctBlock, "tx dep reverted")
+				return nil, nil, newConsensusError("verifyBlock: ", "tx dep reverted", nil, nil, "")
 			}
 		}
 
@@ -325,14 +354,18 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 	if header.GasUsed() != totalGasUsed {
 		// return nil, nil, consensusError(fmt.Sprintf("block gas used mismatch: want %v, have %v", header.GasUsed(), totalGasUsed))
-		return nil, nil, newConsensusError(ctBlock, strErrGasUsed, header.GasUsed(), totalGasUsed)
+		return nil, nil, newConsensusError("verifyBlock: ", strErrGasUsed,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{header.GasUsed(), totalGasUsed}, "")
 	}
 
 	receiptsRoot := receipts.RootHash()
 	if header.ReceiptsRoot() != receiptsRoot {
 		if c.correctReceiptsRoots[header.ID().String()] != receiptsRoot.String() {
 			// return nil, nil, consensusError(fmt.Sprintf("block receipts root mismatch: want %v, have %v", header.ReceiptsRoot(), receiptsRoot))
-			return nil, nil, newConsensusError(ctBlock, strErrReceiptsRoot, header.ReceiptsRoot(), receiptsRoot)
+			return nil, nil, newConsensusError("verifyBlock: ", strErrReceiptsRoot,
+				[]string{strDataExpected, strDataCurr},
+				[]interface{}{header.ReceiptsRoot(), receiptsRoot}, "")
 		}
 	}
 
@@ -344,7 +377,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 
 	if blk.Header().StateRoot() != stateRoot {
 		// return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
-		return nil, nil, newConsensusError(ctBlock, strErrStateRoot, header.StateRoot(), stateRoot)
+		return nil, nil, newConsensusError("verifyBlock: ", strErrStateRoot,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{header.StateRoot(), stateRoot}, "")
 	}
 
 	return stage, receipts, nil

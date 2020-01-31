@@ -207,10 +207,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 // // Pack build and sign the new block.
 func (f *Flow) Pack(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
-	// for _, ed := range f.endorsements.List() {
-	// 	signer, _ := ed.Signer()
-	// 	fmt.Printf("Eds: %x\n", signer)
-	// }
+	if f.blockSummary == nil {
+		return nil, nil, nil, errors.New("empty block summary")
+	}
 
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")

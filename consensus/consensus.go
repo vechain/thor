@@ -6,8 +6,6 @@
 package consensus
 
 import (
-	"fmt"
-
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
@@ -86,7 +84,9 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 
 	if header.TxsFeatures() != features {
-		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
+		return nil, nil, newConsensusError("Process: ", strErrTxFeatures,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{features, header.TxsFeatures()}, "")
 	}
 
 	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)

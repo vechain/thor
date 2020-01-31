@@ -134,7 +134,7 @@ func (bs *Summary) Timestamp() uint64 {
 
 // Signature return signature
 func (bs *Summary) Signature() []byte {
-	return bs.body.Signature
+	return append([]byte(nil), bs.body.Signature...)
 }
 
 // TotalScore ...
@@ -147,8 +147,8 @@ func (bs *Summary) TxsRoot() thor.Bytes32 {
 	return bs.body.TxsRoot
 }
 
-// EndorseHash computes the hash for committee member to sign
-func (bs *Summary) EndorseHash() (hash thor.Bytes32) {
+// Hash computes the hash for committee member to sign
+func (bs *Summary) RLPHash() (hash thor.Bytes32) {
 	if cached := bs.cache.endorseHash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
@@ -174,7 +174,7 @@ func (bs *Summary) String() string {
 	Signer:         	%v
 	TxRoot:         	%v
 	Signature:      	0x%x
-	`, bs.EndorseHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxsRoot, bs.body.Signature)
+	`, bs.RLPHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxsRoot, bs.body.Signature)
 
 	return s
 }

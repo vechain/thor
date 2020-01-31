@@ -139,7 +139,7 @@ func (ed *Endorsement) String() string {
 	Signer:         	%v
 	VrfProof:         	0x%x
 	Signature:      	0x%x
-	`, ed.SigningHash(), ed.body.BlockSummary.EndorseHash(), signerStr, ed.body.VrfProof, ed.body.Signature)
+	`, ed.SigningHash(), ed.body.BlockSummary.RLPHash(), signerStr, ed.body.VrfProof, ed.body.Signature)
 
 	return s
 }
