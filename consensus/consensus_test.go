@@ -216,7 +216,12 @@ func (tc *testConsensus) sign(blk *block.Block) *block.Block {
 func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 	header := builder.Build().Header()
 
-	fmt.Printf("%x\n", header.TxsRoot())
+	fmt.Printf(`rebuild:
+	parentID  	=%v
+	txsroot   	=%v
+	timestamp  	=%v
+	totalscore	=%v
+	`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
 
 	bs := block.NewBlockSummary(
 		header.ParentID(),
@@ -268,6 +273,13 @@ func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 
 func (tc *testConsensus) originalBuilder() *block.Builder {
 	header := tc.original.Header()
+
+	fmt.Printf(`originalBuilder():
+	parentID  	=%v
+	txsroot   	=%v
+	timestamp  	=%v
+	totalscore	=%v`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
+
 	return new(block.Builder).
 		ParentID(header.ParentID()).
 		Timestamp(header.Timestamp()).
@@ -429,6 +441,14 @@ func (tc *testConsensus) TestTxAlreadyExists() {
 	fmt.Printf("%x\n", tc.proposer.addr)
 
 	header := blk.Header()
+
+	fmt.Printf(`TestTxAlreadyExists:
+	parentID  	=%v
+	txsroot   	=%v
+	timestamp  	=%v
+	totalscore	=%v
+	`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
+
 	bs := block.NewBlockSummary(
 		header.ParentID(),
 		header.TxsRoot(),
