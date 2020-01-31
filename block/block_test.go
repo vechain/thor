@@ -57,7 +57,7 @@ func TestBlock(t *testing.T) {
 
 	bs := NewBlockSummary(parentID, txsRoot, totalScore, now)
 	key, _ := crypto.HexToECDSA(privKey)
-	sig, _ := crypto.Sign(bs.EndorseHash().Bytes(), key)
+	sig, _ := crypto.Sign(bs.SigningHash().Bytes(), key)
 
 	var sigs [][]byte
 	for i := 0; i < 5; i++ {

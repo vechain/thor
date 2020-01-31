@@ -1,11 +1,11 @@
 package consensus
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -46,17 +46,22 @@ func initConsensusTest() (*packer.Packer, *Consensus, error) {
 
 // n : number of rounds between the parent and current block
 func newBlock(packer *packer.Packer, parent *block.Block, n uint64, privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, error) {
-	t := parent.Header().Timestamp() + thor.BlockInterval*uint64(n)
+	now := parent.Header().Timestamp() + thor.BlockInterval*uint64(n)
 	// s := parent.Header().TotalScore() + 1
 	// b := new(block.Builder).ParentID(parent.Header().ID()).Timestamp(t).TotalScore(s).Build()
 	// sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
 	// return b.WithSignature(sig)
 
 	// flow, err := packer.Mock(parent.Header(), t, thor.InitialGasLimit)
-	flow, err := packer.Schedule(parent.Header(), t)
+	flow, err := packer.Schedule(parent.Header(), now)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	if _, _, err := flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey); err != nil {
+		return nil, nil, err
+	}
+
 	// flow.IncTotalScore(1)
 	b, stage, _, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
@@ -145,9 +150,7 @@ func TestBeacon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Compare(beacon.Bytes(), getBeaconFromHeader(gen.Header()).Bytes()) != 0 {
-		t.Errorf("Test1 failed")
-	}
+	assert.Equal(t, beacon.Bytes(), getBeaconFromHeader(gen.Header()).Bytes())
 
 	// Test beacon for epoch 2 => beacon from the last block of epoch 1
 	epoch = 2
@@ -156,9 +159,7 @@ func TestBeacon(t *testing.T) {
 		t.Fatal(err)
 	}
 	block := blocks[uint32(thor.EpochInterval)]
-	if bytes.Compare(beacon.Bytes(), getBeaconFromHeader(block.Header()).Bytes()) != 0 {
-		t.Errorf("Test2 failed")
-	}
+	assert.Equal(t, beacon.Bytes(), getBeaconFromHeader(block.Header()).Bytes())
 
 	// Test beacon for epoch 3 => beacon from the last block of epoch 1
 	epoch = 3
@@ -166,7 +167,5 @@ func TestBeacon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Compare(beacon.Bytes(), getBeaconFromHeader(block.Header()).Bytes()) != 0 {
-		t.Errorf("Test3 failed")
-	}
+	assert.Equal(t, beacon.Bytes(), getBeaconFromHeader(block.Header()).Bytes())
 }

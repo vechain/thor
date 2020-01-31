@@ -214,7 +214,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				continue
 			}
 
-			// log.Debug("Broadcasting block summary", "hash", bs.EndorseHash())
+			// log.Debug("Broadcasting block summary", "hash", bs.RLPHash())
 			lbs = bs
 			n.comm.BroadcastBlockSummary(bs)
 

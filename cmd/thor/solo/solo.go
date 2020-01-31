@@ -111,9 +111,9 @@ func (s *Solo) loop(ctx context.Context) {
 				flow *packer.Flow
 				done chan struct{}
 
-				header   *block.Header
-				stage    *state.Stage
-				receipts tx.Receipts
+				// blk      *block.Block
+				// stage    *state.Stage
+				// receipts tx.Receipts
 			)
 
 			best := s.chain.BestBlock()
@@ -163,22 +163,22 @@ func (s *Solo) loop(ctx context.Context) {
 			}
 			log.Debug("Endorsing ends")
 
-			header, stage, receipts, err = flow.PackHeader(genesis.DevAccounts()[0].PrivateKey)
+			blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 			if err != nil {
 				log.Error("flow.PackHeader", "error", err)
 			}
 
 			execElapsed := mclock.Now() - startTime
 
-			b := block.Compose(header, flow.Txs())
-			err = s.commit(b, stage, receipts)
+			// b := block.Compose(header, flow.Txs())
+			err = s.commit(blk, stage, receipts)
 			if err != nil {
 				log.Error("s.pack", "error", err)
 			}
 
 			commitElapsed := mclock.Now() - execElapsed - startTime
 
-			display(b, receipts, prepareElapsed, execElapsed, commitElapsed)
+			display(blk, receipts, prepareElapsed, execElapsed, commitElapsed)
 		}
 	}
 }
@@ -218,7 +218,7 @@ func (s *Solo) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) 
 }
 
 func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *block.Summary) {
-	endorseHash := bs.EndorseHash()
+	endorseHash := bs.RLPHash()
 
 	for i := uint64(0); i < thor.CommitteeSize*2; i++ {
 		_, sk := vrf.GenKeyPair()
