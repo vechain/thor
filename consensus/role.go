@@ -251,9 +251,6 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return newConsensusError(trEndorsement, strErrSignature, nil, nil, err.Error())
 	}
 
-	// fmt.Println(candidates.String())
-	// fmt.Printf("%x\n", signer)
-
 	candidate := candidates.Candidate(st, signer)
 	if candidate == nil {
 		// return consensusError("Signer not allowed to participate in consensus")
@@ -296,6 +293,7 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 	if err != nil {
 		return nil, err
 	}
+
 	proposers := candidates.Pick(st)
 
 	sched, err := poa.NewScheduler(signer, proposers, parentHeader.Number(), parentHeader.Timestamp())
@@ -344,7 +342,8 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
 		candidates = poa.NewCandidates(authority.AllCandidates())
-		c.candidatesCache.Add(parentHeader.ID(), candidates)
+		// ADD A COPY
+		c.candidatesCache.Add(parentHeader.ID(), candidates.Copy())
 	}
 
 	return candidates, authority, st, nil

@@ -7,7 +7,6 @@ package consensus
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"math"
 	"math/big"
 	"reflect"
@@ -30,12 +29,9 @@ import (
 
 func TestConsensus(t *testing.T) {
 	ob := newTestConsensus(t)
-
-	// blk := ob.originalBuilder().Build()
-	// sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), ob.pk)
-	// blk = blk.WithSignature(sig)
-	// _, _, err := ob.con.Process(blk, ob.time)
-	// assert.Nil(t, err)
+	ob.newBlock(2, nil)
+	ob.commitNewBlock()
+	ob.newBlock(3, nil)
 
 	obValue := reflect.ValueOf(ob)
 	obType := obValue.Type()
@@ -64,15 +60,20 @@ func txSign(builder *tx.Builder, sk *ecdsa.PrivateKey) *tx.Transaction {
 }
 
 type testConsensus struct {
-	t        *testing.T
-	assert   *assert.Assertions
-	con      *Consensus
-	time     uint64
-	proposer *account
-	nodes    []*account
-	parent   *block.Block
-	original *block.Block
-	tag      byte
+	t            *testing.T
+	assert       *assert.Assertions
+	con          *Consensus
+	time         uint64
+	tag          byte
+	original     *block.Block
+	stage        *state.Stage
+	receipts     tx.Receipts
+	proposer     *account
+	parent       *block.Block
+	nodes        []*account
+	genesisBlock *block.Block
+	chain        *chain.Chain
+	stateCreator *state.Creator
 }
 
 type account struct {
@@ -110,18 +111,17 @@ func newTestConsensus(t *testing.T) *testConsensus {
 				state.SetEnergy(acc.addr, bal, launchTime)
 
 				builtin.Authority.Native(state).Add(acc.addr, acc.addr, thor.Bytes32{}, acc.vrfpk.Bytes32())
-				// fmt.Printf("%x\n", acc.addr)
 			}
 			return nil
 		})
 
 	stateCreator := state.NewCreator(db)
-	parent, _, err := gen.Build(stateCreator)
+	genesisBlock, _, err := gen.Build(stateCreator)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c, err := chain.New(db, parent)
+	c, err := chain.New(db, genesisBlock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,16 +133,35 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	}
 	con := New(c, stateCreator, forkConfig)
 
-	// proposer := genesis.DevAccounts()[0]
+	return &testConsensus{
+		t:            t,
+		assert:       assert.New(t),
+		con:          con,
+		nodes:        accs,
+		tag:          c.Tag(),
+		chain:        c,
+		stateCreator: stateCreator,
+		genesisBlock: genesisBlock,
+	}
+}
 
-	var flow *packer.Flow
-	var proposer *account
-	now := launchTime + thor.BlockInterval
+func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
+	var (
+		flow     *packer.Flow
+		proposer *account
+		err      error
+	)
 
-	// find the proposer
-	for _, acc := range accs {
-		p := packer.New(c, stateCreator, acc.addr, &acc.addr, thor.NoFork)
-		flow, err = p.Schedule(parent.Header(), launchTime)
+	now := tc.con.Timestamp(round)
+	parent := tc.chain.BestBlock()
+
+	if now < parent.Header().Timestamp() {
+		tc.t.Fatal("new block earlier than the best block")
+	}
+
+	for _, acc := range tc.nodes {
+		p := packer.New(tc.chain, tc.stateCreator, acc.addr, &acc.addr, thor.NoFork)
+		flow, err = p.Schedule(parent.Header(), now)
 		if err != nil {
 			continue
 		}
@@ -154,54 +173,67 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		flow = nil
 	}
 	if flow == nil {
-		t.Fatal("No proposer found")
+		tc.t.Fatal("No proposer found")
 	}
 
-	// block summary
+	for _, tx := range txs {
+		flow.Adopt(tx)
+	}
+
+	// pack block summary
 	bs, _, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
 	if err != nil {
-		t.Fatal(err)
+		tc.t.Fatal(err)
 	}
 
-	// endorsement
-	for _, acc := range accs {
-		if ok, proof, _ := con.IsCommittee(acc.vrfsk, now); ok {
+	// pack endorsements
+	for _, acc := range tc.nodes {
+		if ok, proof, _ := tc.con.IsCommittee(acc.vrfsk, now); ok {
 			ed := block.NewEndorsement(bs, proof)
 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
 			ed = ed.WithSignature(sig)
 			flow.AddEndoresement(ed)
 
-			// signer, _ := ed.Signer()
-			// fmt.Printf("orig: %x\n", *ed.VrfProof())
+			// fmt.Printf("%v\n", acc.addr)
 		}
 		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
 			break
 		}
 	}
 	if uint64(flow.NumOfEndorsements()) < thor.CommitteeSize {
-		t.Errorf("Not enough endorsements added")
+		tc.t.Errorf("Not enough endorsements added")
 	}
 
-	// block
-	original, _, _, err := flow.Pack(proposer.ethsk)
+	newBlock, stage, receipts, err := flow.Pack(proposer.ethsk)
 	if err != nil {
-		t.Fatal(t)
+		tc.t.Fatal(err)
 	}
 
-	if _, _, err := con.Process(original, flow.When()); err != nil {
-		t.Fatal(err)
+	if _, _, err := tc.con.Process(newBlock, flow.When()); err != nil {
+		tc.t.Fatal(err)
 	}
 
-	return &testConsensus{
-		t:        t,
-		assert:   assert.New(t),
-		con:      con,
-		time:     flow.When(),
-		proposer: proposer,
-		nodes:    accs,
-		parent:   parent,
-		original: original,
-		tag:      c.Tag(),
+	tc.parent = parent
+	tc.time = now
+	tc.original = newBlock
+	tc.proposer = proposer
+	tc.stage = stage
+	tc.receipts = receipts
+}
+
+func (tc *testConsensus) commitNewBlock() {
+	if _, err := tc.chain.GetBlockHeader(tc.original.Header().ID()); err == nil {
+		tc.t.Fatal("known in-chain block")
+	}
+
+	if _, err := tc.stage.Commit(); err != nil {
+		tc.t.Fatal(err)
+	}
+
+	// ignore fork when solo
+	_, err := tc.chain.AddBlock(tc.original, tc.receipts)
+	if err != nil {
+		tc.t.Fatal(err)
 	}
 }
 
@@ -214,14 +246,8 @@ func (tc *testConsensus) sign(blk *block.Block) *block.Block {
 }
 
 func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
-	header := builder.Build().Header()
-
-	fmt.Printf(`rebuild:
-	parentID  	=%v
-	txsroot   	=%v
-	timestamp  	=%v
-	totalscore	=%v
-	`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
+	blk := builder.Build()
+	header := blk.Header()
 
 	bs := block.NewBlockSummary(
 		header.ParentID(),
@@ -242,21 +268,23 @@ func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 	)
 
 	for _, acc := range tc.nodes {
-		if ok, proof, _ := tc.con.IsCommittee(acc.vrfsk, tc.time); ok {
+		if ok, proof, err := tc.con.IsCommittee(acc.vrfsk, header.Timestamp()); ok {
 			ed := block.NewEndorsement(bs, proof)
 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
 			proofs = append(proofs, proof)
 			sigs = append(sigs, sig)
+		} else if err != nil {
+			tc.t.Fatal(err)
 		}
 		if len(proofs) >= N {
 			break
 		}
 	}
 	if len(sigs) != N {
-		tc.t.Errorf("Not enough endorsements collected")
+		tc.t.Fatal("Not enough endorsements collected")
 	}
 
-	return new(block.Builder).
+	newBuilder := new(block.Builder).
 		ParentID(header.ParentID()).
 		Timestamp(header.Timestamp()).
 		TotalScore(header.TotalScore()).
@@ -269,17 +297,15 @@ func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 		SigOnBlockSummary(sig).
 		SigsOnEndorsement(sigs).
 		VrfProofs(proofs)
+	for _, tx := range blk.Transactions() {
+		newBuilder.Transaction(tx)
+	}
+
+	return newBuilder
 }
 
 func (tc *testConsensus) originalBuilder() *block.Builder {
 	header := tc.original.Header()
-
-	fmt.Printf(`originalBuilder():
-	parentID  	=%v
-	txsroot   	=%v
-	timestamp  	=%v
-	totalscore	=%v`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
-
 	return new(block.Builder).
 		ParentID(header.ParentID()).
 		Timestamp(header.Timestamp()).
@@ -317,9 +343,9 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		// 	),
 		// )
 		expect := newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataParent, strDataNowTime},
-			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "")
-		tc.assert.Equal(err, expect)
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 
 		blk = tc.sign(
 			tc.rebuild(
@@ -333,9 +359,9 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		// 	),
 		// )
 		expect = newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataParent, strDataNowTime},
-			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "")
-		tc.assert.Equal(err, expect)
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerErrInterval"] = func() {
 		build := tc.originalBuilder()
@@ -351,9 +377,9 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		// 	),
 		// )
 		expect := newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataParent, strDataNowTime},
-			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "")
-		tc.assert.Equal(err, expect)
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{tc.parent.Header().Timestamp(), blk.Header().Timestamp()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerErrFutureBlock"] = func() {
 		build := tc.originalBuilder()
@@ -361,7 +387,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 			tc.rebuild(
 				build.Timestamp(tc.time + thor.BlockInterval*2)).Build())
 		err := tc.consent(blk)
-		tc.assert.Equal(err, errFutureBlock)
+		tc.assert.Equal(errFutureBlock, err)
 	}
 	triggers["triggerInvalidGasLimit"] = func() {
 		build := tc.originalBuilder()
@@ -371,8 +397,8 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 			trHeader,
 			strErrGasLimit,
 			[]string{strDataParent, strDataCurr},
-			[]interface{}{tc.parent.Header().GasLimit(), blk.Header().GasLimit()}, "")
-		tc.assert.Equal(err, expect)
+			[]interface{}{tc.parent.Header().GasLimit(), blk.Header().GasLimit()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerExceedGaUsed"] = func() {
 		build := tc.originalBuilder()
@@ -382,8 +408,8 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 			trHeader,
 			strErrGasExceed,
 			[]string{strDataExpected, strDataCurr},
-			[]interface{}{tc.parent.Header().GasLimit(), blk.Header().GasUsed()}, "")
-		tc.assert.Equal(err, expect)
+			[]interface{}{tc.parent.Header().GasLimit(), blk.Header().GasUsed()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerInvalidTotalScore"] = func() {
 		build := tc.originalBuilder()
@@ -392,8 +418,8 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		err := tc.consent(blk)
 		expect := newConsensusError(trHeader, strErrTotalScore,
 			[]string{strDataParent, strDataCurr},
-			[]interface{}{tc.parent.Header().TotalScore(), blk.Header().TotalScore()}, "")
-		tc.assert.Equal(err, expect)
+			[]interface{}{tc.parent.Header().TotalScore(), blk.Header().TotalScore()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	// triggers["triggerInvalidSigOnBlockSummary"] = func() {
 	// 	build := tc.originalBuilder()
@@ -417,17 +443,13 @@ func (tc *testConsensus) TestTxDepBroken() {
 			tc.rebuild(tc.originalBuilder().Transaction(tx)).Build(),
 		),
 	)
-	tc.assert.Equal(err, newConsensusError("verifyBlock: ", "tx dep broken", nil, nil, ""))
+	expect := newConsensusError("verifyBlock: ", "tx dep broken", nil, nil, "").Error()
+	tc.assert.Equal(expect, err.Error())
 }
 
 func (tc *testConsensus) TestKnownBlock() {
 	err := tc.consent(tc.parent)
 	tc.assert.Equal(err, errKnownBlock)
-}
-
-func TestTxAlreadyExists(t *testing.T) {
-	tc := newTestConsensus(t)
-	tc.TestTxAlreadyExists()
 }
 
 func (tc *testConsensus) TestTxAlreadyExists() {
@@ -438,27 +460,9 @@ func (tc *testConsensus) TestTxAlreadyExists() {
 	blk := builder.Build()
 	blk = tc.sign(blk)
 
-	fmt.Printf("%x\n", tc.proposer.addr)
-
-	header := blk.Header()
-
-	fmt.Printf(`TestTxAlreadyExists:
-	parentID  	=%v
-	txsroot   	=%v
-	timestamp  	=%v
-	totalscore	=%v
-	`, header.ParentID(), header.TxsRoot(), header.Timestamp(), header.TotalScore())
-
-	bs := block.NewBlockSummary(
-		header.ParentID(),
-		header.TxsRoot(),
-		header.Timestamp(),
-		header.TotalScore()).WithSignature(header.Signature())
-	signer, _ := bs.Signer()
-	fmt.Printf("%x\n", signer)
-
 	err := tc.consent(blk)
-	tc.assert.Equal(err, newConsensusError("verifyBlock: ", "tx already exists", nil, nil, ""))
+	expect := newConsensusError("verifyBlock: ", "tx already exists", nil, nil, "").Error()
+	tc.assert.Equal(expect, err.Error())
 }
 
 func (tc *testConsensus) TestParentMissing() {
@@ -466,7 +470,7 @@ func (tc *testConsensus) TestParentMissing() {
 	blk := tc.sign(
 		tc.rebuild(build.ParentID(tc.original.Header().ID())).Build())
 	err := tc.consent(blk)
-	tc.assert.Equal(err, errParentMissing)
+	tc.assert.Equal(errParentMissing, err)
 }
 
 func (tc *testConsensus) TestValidateBlockBody() {
@@ -480,8 +484,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 			).Build())
 		err := tc.consent(blk)
 		// expect := consensusError("tx signer unavailable: invalid signature length")
-		expect := strErrSignature
-		tc.assert.Equal(err.(consensusError).ErrorMsg(), expect)
+		expect := newConsensusError(trBlockBody, strErrSignature, nil, nil, "invalid signature length").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 
 	triggers["triggerErrTxsRootMismatch"] = func() {
@@ -496,8 +500,10 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		// 		transactions.RootHash(),
 		// 	),
 		// )
-		expect := strErrTxsRoot
-		tc.assert.Equal(err.(consensusError).ErrorMsg(), expect)
+		expect := newConsensusError(trBlockBody, strErrTxsRoot,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{tc.original.Header().TxsRoot(), transactions.RootHash()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerErrChainTagMismatch"] = func() {
 		err := tc.consent(
@@ -514,21 +520,22 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		// 	),
 		// )
 		expect := strErrChainTag
-		tc.assert.Equal(err.(consensusError).ErrorMsg(), expect)
+		tc.assert.Equal(expect, err.(consensusError).ErrorMsg())
 	}
 	triggers["triggerErrRefFutureBlock"] = func() {
-		err := tc.consent(
-			tc.sign(
-				tc.rebuild(
-					tc.originalBuilder().
-						Transaction(txSign(txBuilder(tc.tag).
-							BlockRef(tx.NewBlockRef(100)), tc.nodes[1].ethsk)),
-				).Build()))
+		blk := tc.sign(
+			tc.rebuild(
+				tc.originalBuilder().
+					Transaction(txSign(txBuilder(tc.tag).
+						BlockRef(tx.NewBlockRef(100)), tc.nodes[1].ethsk)),
+			).Build())
+		err := tc.consent(blk)
+
 		// expect := consensusError("tx ref future block: ref 100, current 1")
 		expect := newConsensusError(trBlockBody, strErrFutureTx,
 			[]string{strDataRef, strDataCurr},
-			[]interface{}{100, 1}, "")
-		tc.assert.Equal(err, expect)
+			[]interface{}{uint32(100), blk.Header().Number()}, "").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerTxOriginBlocked"] = func() {
 		thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
@@ -559,8 +566,8 @@ func (tc *testConsensus) TestValidateProposer() {
 		blk := tc.originalBuilder().Build()
 		err := tc.consent(blk)
 		// expect := consensusError("block signer unavailable: invalid signature length")
-		expect := newConsensusError(trProposer, strErrSignature, nil, nil, "invalid signature length")
-		tc.assert.Equal(err, expect)
+		expect := newConsensusError(trProposer, strErrSignature, nil, nil, "invalid signature length").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerErrSignerInvalid"] = func() {
 		blk := tc.originalBuilder().Build()
@@ -577,8 +584,8 @@ func (tc *testConsensus) TestValidateProposer() {
 		signer, _ := blk.Header().Signer()
 		expect := newConsensusError(trProposer, strErrSigner,
 			[]string{strDataAddr},
-			[]interface{}{signer}, "unauthorized block proposer")
-		tc.assert.Equal(err.(consensusError).ErrorMsg(), expect)
+			[]interface{}{signer}, "unauthorized block proposer").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
 	triggers["triggerErrTimestampUnscheduled"] = func() {
 		blk := tc.originalBuilder().Build()
@@ -592,27 +599,27 @@ func (tc *testConsensus) TestValidateProposer() {
 		// 		thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey)),
 		// 	),
 		// )
-		expect := newConsensusError(trProposer, strErrTimestampUnsched,
-			[]string{strDataTimestamp, strDataAddr},
-			[]interface{}{
-				blk.Header().Timestamp(),
-				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey)),
-			}, "")
-		tc.assert.Equal(err, expect)
+		expect := newConsensusError(trProposer, strErrSigner,
+			[]string{strDataAddr},
+			[]interface{}{thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey))},
+			"unauthorized block proposer").Error()
+		tc.assert.Equal(expect, err.Error())
 	}
-	triggers["triggerTotalScoreInvalid"] = func() {
-		build := tc.originalBuilder()
-		blk := tc.sign(
-			tc.rebuild(
-				build.TotalScore(tc.original.Header().TotalScore() + 100),
-			).Build())
-		err := tc.consent(blk)
-		// expect := consensusError("block total score invalid: want 1, have 101")
-		expect := newConsensusError(trHeader, strErrTotalScore,
-			[]string{strDataParent, strDataCurr},
-			[]interface{}{1, 101}, "")
-		tc.assert.Equal(err, expect)
-	}
+	// Test cancelled since the total score is used to reconstruct and validate
+	// the block summary. The validation would fail if the score is incorrect.
+	// triggers["triggerTotalScoreInvalid"] = func() {
+	// 	build := tc.originalBuilder()
+	// 	blk := tc.sign(
+	// 		build.TotalScore(tc.original.Header().TotalScore() + 100).Build())
+	// 	err := tc.consent(blk)
+	// 	// expect := consensusError("block total score invalid: want 1, have 101")
+	// 	expect := newConsensusError(trHeader, strErrTotalScore,
+	// 		[]string{strDataParent, strDataCurr},
+	// 		[]interface{}{uint64(1), uint64(101)}, "").Error()
+	// 	fmt.Println(expect)
+	// 	fmt.Println(err.Error())
+	// 	tc.assert.Equal(expect, err.Error())
+	// }
 
 	for _, trigger := range triggers {
 		trigger()

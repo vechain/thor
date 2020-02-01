@@ -108,7 +108,7 @@ func (ed *Endorsement) DecodeRLP(s *rlp.Stream) error {
 
 // BlockSummary returns the block summary
 func (ed *Endorsement) BlockSummary() *Summary {
-	return ed.body.BlockSummary
+	return ed.body.BlockSummary.Copy()
 }
 
 // // VrfPublicKey returns the VRF public key
@@ -118,12 +118,12 @@ func (ed *Endorsement) BlockSummary() *Summary {
 
 // VrfProof returns the VRF proof
 func (ed *Endorsement) VrfProof() *vrf.Proof {
-	return ed.body.VrfProof
+	return ed.body.VrfProof.Copy()
 }
 
 // Signature returns the signature
 func (ed *Endorsement) Signature() []byte {
-	return ed.body.Signature
+	return append([]byte(nil), ed.body.Signature...)
 }
 
 func (ed *Endorsement) String() string {

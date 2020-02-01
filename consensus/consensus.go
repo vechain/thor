@@ -6,10 +6,12 @@
 package consensus
 
 import (
+	"fmt"
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -25,11 +27,14 @@ type Consensus struct {
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	candidatesCache      *simplelru.LRU
+	// candidatesCache *lru.Cache
 }
 
 // New create a Consensus instance.
 func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkConfig) *Consensus {
 	candidatesCache, _ := simplelru.NewLRU(16, nil)
+	// candidatesCache, _ := lru.New(16)
+
 	return &Consensus{
 		chain:                chain,
 		stateCreator:         stateCreator,
@@ -37,11 +42,6 @@ func New(chain *chain.Chain, stateCreator *state.Creator, forkConfig thor.ForkCo
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		candidatesCache:      candidatesCache,
 	}
-}
-
-// ProcessBlockSummary processes the given block summary
-func (c *Consensus) ProcessBlockSummary(bs *block.Summary) error {
-	return nil
 }
 
 // Process process a block.
@@ -132,4 +132,16 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			TotalScore:  header.TotalScore(),
 		},
 		c.forkConfig), nil
+}
+
+func (c *Consensus) stringCachedCandidates(id thor.Bytes32) string {
+	candidates, ok := c.candidatesCache.Get(id)
+	if !ok {
+		return "no data cached"
+	}
+	str := fmt.Sprintf("parentID: %v\ncandidates:\n", id)
+	for _, candidate := range candidates.(*poa.Candidates).List() {
+		str += fmt.Sprintf("%v, %v\n", candidate.NodeMaster, candidate.Active)
+	}
+	return str
 }

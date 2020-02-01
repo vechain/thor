@@ -142,12 +142,12 @@ func (bs *Summary) TotalScore() uint64 {
 	return bs.body.TotalScore
 }
 
-// TxRoot ...
+// TxsRoot ...
 func (bs *Summary) TxsRoot() thor.Bytes32 {
 	return bs.body.TxsRoot
 }
 
-// Hash computes the hash for committee member to sign
+// RLPHash computes the hash for committee member to sign
 func (bs *Summary) RLPHash() (hash thor.Bytes32) {
 	if cached := bs.cache.endorseHash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -171,10 +171,11 @@ func (bs *Summary) String() string {
 	s := fmt.Sprintf(`BlockSummary(%v):
 	ParentID:       	%v
 	Timestamp:      	%v
+	TotalScore:      	%v
 	Signer:         	%v
 	TxRoot:         	%v
 	Signature:      	0x%x
-	`, bs.RLPHash(), bs.body.ParentID, bs.body.Timestamp, signerStr, bs.body.TxsRoot, bs.body.Signature)
+	`, bs.RLPHash(), bs.body.ParentID, bs.body.Timestamp, bs.body.TotalScore, signerStr, bs.body.TxsRoot, bs.body.Signature)
 
 	return s
 }

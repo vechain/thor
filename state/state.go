@@ -405,6 +405,11 @@ func (s *State) Stage() *Stage {
 	return newStage(s.root, s.kv, changes)
 }
 
+// // StateRoot ...
+// func (s *State) StateRoot() thor.Bytes32 {
+// 	return s.root
+// }
+
 type (
 	storageKey struct {
 		addr thor.Address

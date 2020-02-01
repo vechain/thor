@@ -42,7 +42,7 @@ func (err consensusError) Error() string {
 		s = fmt.Sprintf(s+": "+err.strData, err.data...)
 	}
 	if len(err.strCause) > 0 {
-		s += "\n\t" + err.strCause
+		s += fmt.Sprintf("\n\tCaused by: ") + err.strCause
 	}
 	return s
 }

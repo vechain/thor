@@ -134,3 +134,8 @@ func (c *Candidates) String() string {
 	}
 	return s
 }
+
+// List ...
+func (c *Candidates) List() []*authority.Candidate {
+	return c.list
+}
