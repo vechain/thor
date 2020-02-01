@@ -83,6 +83,7 @@ type account struct {
 	vrfpk *vrf.PublicKey
 }
 
+// generate thor.MaxBlockProposers key pairs and register them as master nodes
 func newTestConsensus(t *testing.T) *testConsensus {
 	db := muxdb.NewMem()
 
@@ -142,6 +143,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	}
 }
 
+// create a new block without committing to the state
 func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
 	var (
 		flow     *packer.Flow
@@ -156,6 +158,7 @@ func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
 		tc.t.Fatal("new block earlier than the best block")
 	}
 
+	// search for the legit proposer
 	for _, acc := range tc.nodes {
 		p := packer.New(tc.chain, tc.stateCreator, acc.addr, &acc.addr, thor.NoFork)
 		flow, err = p.Schedule(parent.Header(), now)
@@ -173,6 +176,7 @@ func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
 		tc.t.Fatal("No proposer found")
 	}
 
+	// add transactions
 	for _, tx := range txs {
 		flow.Adopt(tx)
 	}
@@ -190,8 +194,6 @@ func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
 			ed = ed.WithSignature(sig)
 			flow.AddEndoresement(ed)
-
-			// fmt.Printf("%v\n", acc.addr)
 		}
 		if uint64(flow.NumOfEndorsements()) >= thor.CommitteeSize {
 			break
@@ -201,11 +203,13 @@ func (tc *testConsensus) newBlock(round uint32, txs []*tx.Transaction) {
 		tc.t.Errorf("Not enough endorsements added")
 	}
 
+	// pack block
 	newBlock, stage, receipts, err := flow.Pack(proposer.ethsk)
 	if err != nil {
 		tc.t.Fatal(err)
 	}
 
+	// validate block
 	if _, _, err := tc.con.Process(newBlock, flow.When()); err != nil {
 		tc.t.Fatal(err)
 	}
@@ -227,7 +231,6 @@ func (tc *testConsensus) commitNewBlock() {
 		tc.t.Fatal(err)
 	}
 
-	// ignore fork when solo
 	_, err := tc.chain.AddBlock(tc.original, tc.receipts)
 	if err != nil {
 		tc.t.Fatal(err)
@@ -242,16 +245,21 @@ func (tc *testConsensus) sign(blk *block.Block) *block.Block {
 	return blk.WithSignature(sig)
 }
 
+/**
+ * rebuild takes the current block builder and re-compute the block summary
+ * and the endorsements. It then update the builder with the correct
+ * signatures and vrf proofs
+ */
 func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 	blk := builder.Build()
 	header := blk.Header()
 
+	// rebuild block summary
 	bs := block.NewBlockSummary(
 		header.ParentID(),
 		header.TxsRoot(),
 		header.Timestamp(),
 		header.TotalScore())
-
 	sig, err := crypto.Sign(bs.SigningHash().Bytes(), tc.proposer.ethsk)
 	if err != nil {
 		tc.t.Fatal(err)
@@ -264,6 +272,7 @@ func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 		N      = int(thor.CommitteeSize)
 	)
 
+	// rebuild endorsements
 	for _, acc := range tc.nodes {
 		if ok, proof, err := tc.con.IsCommittee(acc.vrfsk, header.Timestamp()); ok {
 			ed := block.NewEndorsement(bs, proof)
@@ -291,9 +300,12 @@ func (tc *testConsensus) rebuild(builder *block.Builder) *block.Builder {
 		StateRoot(header.StateRoot()).
 		ReceiptsRoot(header.ReceiptsRoot()).
 		TransactionFeatures(header.TxsFeatures()).
+		// update signatures and vrf proofs
 		SigOnBlockSummary(sig).
 		SigsOnEndorsement(sigs).
 		VrfProofs(proofs)
+
+	// add existing transactions
 	for _, tx := range blk.Transactions() {
 		newBuilder.Transaction(tx)
 	}
@@ -418,14 +430,6 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 			[]interface{}{tc.parent.Header().TotalScore(), blk.Header().TotalScore()}, "").Error()
 		tc.assert.Equal(expect, err.Error())
 	}
-	// triggers["triggerInvalidSigOnBlockSummary"] = func() {
-	// 	build := tc.originalBuilder()
-	// 	sig := tc.original.Header().SigOnBlockSummary()
-	// 	sig[0] += 1
-	// 	blk := tc.sign(build.SigOnBlockSummary(sig).Build())
-	// 	err := tc.consent(blk)
-	// 	expected:= consensusError("")
-	// }
 
 	for _, trigger := range triggers {
 		trigger()
@@ -602,8 +606,10 @@ func (tc *testConsensus) TestValidateProposer() {
 			"unauthorized block proposer").Error()
 		tc.assert.Equal(expect, err.Error())
 	}
-	// Test cancelled since the total score is used to reconstruct and validate
-	// the block summary. The validation would fail if the score is incorrect.
+	/**
+	 * The test below is removed since the total score is used to reconstruct and validate
+	 * the block summary. The validation would fail if the score is incorrect.
+	 */
 	// triggers["triggerTotalScoreInvalid"] = func() {
 	// 	build := tc.originalBuilder()
 	// 	blk := tc.sign(
