@@ -8,6 +8,7 @@ package poa
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/vechain/thor/thor"
 )
@@ -125,6 +126,14 @@ func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint
 
 	score = uint64(len(s.actives)) - uint64(len(toDeactivate))
 	return
+}
+
+func (s *Scheduler) String() string {
+	return fmt.Sprintf(`Scheduler:
+	proposer:         	%v
+	#active:          	%v
+	parentBlockNumber  	%v
+	parentBlockTime   	%v`, s.proposer.Address, len(s.actives), s.parentBlockNumber, s.parentBlockTime)
 }
 
 // dprp deterministic pseudo-random process.

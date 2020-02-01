@@ -3,14 +3,12 @@ package consensus
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vrf"
 )
@@ -78,12 +76,9 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	_, cons, err := initConsensusTest()
-	if err != nil {
-		t.Fatal(err)
-	}
+	tc := newTestConsensus(t)
 
-	launchTime := cons.chain.GenesisBlock().Header().Timestamp()
+	launchTime := tc.genesisBlock.Header().Timestamp()
 
 	tests := []struct {
 		expected interface{}
@@ -92,32 +87,32 @@ func TestEpochNumber(t *testing.T) {
 	}{
 		{
 			[]interface{}{uint32(0)},
-			M(cons.EpochNumber(launchTime - 1)),
+			M(tc.con.EpochNumber(launchTime - 1)),
 			"t < launch_time",
 		},
 		{
 			[]interface{}{uint32(0)},
-			M(cons.EpochNumber(launchTime + 1)),
+			M(tc.con.EpochNumber(launchTime + 1)),
 			"t = launch_time + 1",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(cons.EpochNumber(launchTime + thor.BlockInterval)),
+			M(tc.con.EpochNumber(launchTime + thor.BlockInterval)),
 			"t = launch_time + block_interval",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
+			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
 			"t = launch_time + block_interval * epoch_interval",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(cons.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
+			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
 			"t = launch_time + block_interval * epoch_interval + 1",
 		},
 		{
 			[]interface{}{uint32(2)},
-			M(cons.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
+			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
 			"t = launch_time + block_interval * (epoch_interval + 1)",
 		},
 	}
@@ -128,104 +123,117 @@ func TestEpochNumber(t *testing.T) {
 }
 
 func TestValidateBlockSummary(t *testing.T) {
-	sk := genesis.DevAccounts()[0].PrivateKey
+	tc := newTestConsensus(t)
+	tc.newBlock(1, nil)
 
-	packer, cons, err := initConsensusTest()
-	if err != nil {
-		t.Fatal(err)
-	}
+	cons := tc.con
+	sk := tc.proposer.ethsk
+	header := tc.original.Header()
+	parentHeader := tc.parent.Header()
+	now := header.Timestamp() + 1
 
-	// Create a chain of round 1
-	nRound := uint32(1)
-	addEmptyBlocks(packer, cons.chain, sk, nRound, make(map[uint32]interface{}))
-
-	best := cons.chain.BestBlock()
-	round := nRound + 1
-	now := cons.Timestamp(round) + 1
-
-	type testObj struct {
-		ParentID   thor.Bytes32
-		TxsRoot    thor.Bytes32
-		Timestamp  uint64
-		TotalScore uint64
-	}
-
-	tests := []struct {
-		input testObj
-		ret   error
-		msg   string
-	}{
-		{
-			testObj{
-				ParentID:   best.Header().ID(),
-				TxsRoot:    thor.Bytes32{},
-				Timestamp:  cons.Timestamp(round),
-				TotalScore: 2},
-			nil,
-			"clean case",
-		},
-		{
-			testObj{
-				ParentID:   best.Header().ParentID(),
-				TxsRoot:    thor.Bytes32{},
-				Timestamp:  cons.Timestamp(round),
-				TotalScore: 2},
-			newConsensusError(trBlockSummary, strErrParentID, nil, nil, ""),
-			"Invalid parent ID",
-		},
-		{
-			testObj{
-				ParentID:   best.Header().ID(),
-				TxsRoot:    thor.Bytes32{},
-				Timestamp:  cons.Timestamp(round) - 1,
-				TotalScore: 2},
-			newConsensusError(trBlockSummary, strErrTimestamp,
-				[]string{strDataTimestamp, strDataNowTime},
-				[]interface{}{cons.Timestamp(round) - 1, now}, ""),
-			"Invalid timestamp",
-		},
-		{
-			testObj{
-				ParentID:   best.Header().ID(),
-				TxsRoot:    thor.Bytes32{},
-				Timestamp:  cons.Timestamp(round),
-				TotalScore: 10},
-			newConsensusError(trLeader, strErrTotalScore,
-				[]string{strDataExpected, strDataCurr},
-				[]interface{}{uint64(2), uint64(10)}, "").AddTraceInfo(trBlockSummary),
-			"Invalid total score",
-		},
-	}
-
-	for _, test := range tests {
-		parentID := test.input.ParentID
-		txsRoot := test.input.TxsRoot
-		timestamp := test.input.Timestamp
-		totalScore := test.input.TotalScore
-		bs := block.NewBlockSummary(parentID, txsRoot, timestamp, totalScore)
+	triggers := make(map[string]func())
+	triggers["triggerCleanCase"] = func() {
+		bs := block.NewBlockSummary(
+			header.ParentID(),
+			header.TxsRoot(),
+			header.Timestamp(),
+			header.TotalScore(),
+		)
 		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), sk)
-
 		bs = bs.WithSignature(sig)
+		actual := cons.ValidateBlockSummary(bs, parentHeader, now)
+		assert.Nil(t, actual)
+	}
 
-		actual := cons.ValidateBlockSummary(bs, best.Header(), now)
-		expected := test.ret
-		// assert.Equal(t, cons.ValidateBlockSummary(bs, best.Header(), test.input.Timestamp), test.ret, test.msg)
+	triggers["triggerInvalidParentID"] = func() {
+		bs := block.NewBlockSummary(
+			header.ParentID(),
+			header.TxsRoot(),
+			header.Timestamp(),
+			header.TotalScore(),
+		)
+		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), sk)
+		bs = bs.WithSignature(sig)
+		actual := cons.ValidateBlockSummary(bs, parentHeader, now)
+		assert.Nil(t, actual)
+	}
+
+	triggers["triggerInvalidTotalScore"] = func() {
+		bs := block.NewBlockSummary(
+			header.ParentID(),
+			header.TxsRoot(),
+			header.Timestamp(),
+			header.TotalScore()+1,
+		)
+		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), sk)
+		bs = bs.WithSignature(sig)
+		actual := cons.ValidateBlockSummary(bs, parentHeader, now).Error()
+		expected := newConsensusError(trLeader, strErrTotalScore,
+			[]string{strDataExpected, strDataCurr},
+			[]interface{}{header.TotalScore(), bs.TotalScore()}, "").AddTraceInfo(trBlockSummary).Error()
 		assert.Equal(t, expected, actual)
+	}
 
-		if actual != nil {
-			fmt.Println(actual.Error())
+	triggers["triggerInvalidTimestamp"] = func() {
+		timestamps := []uint64{
+			header.Timestamp() + 1,
+			header.Timestamp() - 1,
+			parentHeader.Timestamp(),
+		}
+
+		for _, timestamp := range timestamps {
+			bs := block.NewBlockSummary(
+				header.ParentID(),
+				header.TxsRoot(),
+				timestamp,
+				header.TotalScore(),
+			)
+			sig, _ := crypto.Sign(bs.SigningHash().Bytes(), sk)
+			bs = bs.WithSignature(sig)
+			actual := cons.ValidateBlockSummary(bs, parentHeader, now).Error()
+			expected := newConsensusError(trBlockSummary, strErrTimestamp,
+				[]string{strDataTimestamp, strDataNowTime},
+				[]interface{}{bs.Timestamp(), now}, "").Error()
+			assert.Equal(t, expected, actual)
 		}
 	}
 
-	test := tests[0]
-	parentID := test.input.ParentID
-	txsRoot := test.input.TxsRoot
-	timestamp := cons.Timestamp(round)
-	totalScore := test.input.TotalScore
-	bs := block.NewBlockSummary(parentID, txsRoot, timestamp, totalScore)
-	actual := cons.ValidateBlockSummary(bs, best.Header(), test.input.Timestamp)
-	expected := newConsensusError(trBlockSummary, strErrSignature, nil, nil, "invalid signature length")
-	assert.Equal(t, expected, actual, "invalid signature")
+	triggers["triggerInvalidSignature"] = func() {
+		bs := block.NewBlockSummary(
+			header.ParentID(),
+			header.TxsRoot(),
+			header.Timestamp(),
+			header.TotalScore(),
+		)
+		actual := cons.ValidateBlockSummary(bs, parentHeader, now).Error()
+		expected := newConsensusError(trBlockSummary, strErrSignature, nil, nil, "invalid signature length").Error()
+		assert.Equal(t, expected, actual)
+	}
+
+	triggers["triggerInvalidSigner"] = func() {
+		bs := block.NewBlockSummary(
+			header.ParentID(),
+			header.TxsRoot(),
+			header.Timestamp(),
+			header.TotalScore(),
+		)
+
+		randKey, _ := crypto.GenerateKey()
+		randSigner := thor.Address(crypto.PubkeyToAddress(randKey.PublicKey))
+
+		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), randKey)
+		bs = bs.WithSignature(sig)
+		actual := cons.ValidateBlockSummary(bs, parentHeader, now).Error()
+		expected := newConsensusError(trLeader, strErrSigner,
+			[]string{strDataAddr},
+			[]interface{}{randSigner}, "unauthorized block proposer").AddTraceInfo(trBlockSummary).Error()
+		assert.Equal(t, expected, actual)
+	}
+
+	for _, trigger := range triggers {
+		trigger()
+	}
 }
 
 func getValidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
@@ -253,50 +261,58 @@ func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
 }
 
 func TestValidateEndorsement(t *testing.T) {
-	ethsk := genesis.DevAccounts()[0].PrivateKey
-	_, vrfsk := vrf.GenKeyPairFromSeed(ethsk.D.Bytes())
-	assert.Equal(t, vrfsk, genesis.DevAccounts()[0].VrfPrivateKey)
+	tc := newTestConsensus(t)
+	tc.newBlock(1, nil)
 
-	_, cons, err := initConsensusTest()
-	if err != nil {
-		t.Fatal(err)
-	}
-	genHeader := cons.chain.GenesisBlock().Header()
+	cons := tc.con
+	header := tc.original.Header()
+	parentHeader := tc.parent.Header()
+	ethsk := tc.proposer.ethsk
+	vrfsk := tc.proposer.vrfsk
 
 	// Create a valid block summary at round 1
-	bs := block.NewBlockSummary(genHeader.ID(), thor.Bytes32{}, genHeader.Timestamp()+thor.BlockInterval, 1)
+	bs := block.NewBlockSummary(
+		header.ParentID(),
+		header.TxsRoot(),
+		header.Timestamp(),
+		header.TotalScore())
 	sig, _ := crypto.Sign(bs.SigningHash().Bytes(), ethsk)
 	bs = bs.WithSignature(sig)
 
 	// compute vrf seed
-	beacon := getBeaconFromHeader(cons.chain.GenesisBlock().Header())
+	beacon := getBeaconFromHeader(parentHeader)
 	seed := seed(beacon, 1)
 
 	triggers := make(map[string]func())
 	triggers["triggerErrNotMasterNode"] = func() {
 		proof, _ := vrfsk.Prove(seed.Bytes())
 		ed := block.NewEndorsement(bs, proof)
-		sk, _ := crypto.GenerateKey()
-		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), sk)
+
+		// random private key
+		randKey, _ := crypto.GenerateKey()
+
+		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), randKey)
 		ed = ed.WithSignature(sig)
 		signer, _ := ed.Signer()
-		actual := cons.ValidateEndorsement(ed, genHeader, bs.Timestamp())
+		actual := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp()).Error()
 		expected := newConsensusError(
 			trEndorsement, strErrNotCandidate,
-			[]string{strDataAddr}, []interface{}{signer}, "")
-		assert.Equal(t, actual, expected)
+			[]string{strDataAddr}, []interface{}{signer}, "").Error()
+		assert.Equal(t, expected, actual)
 	}
 
 	triggers["triggerErrInvalidProof"] = func() {
-		proof := &vrf.Proof{}
-		rand.Read(proof[:])
-		ed := block.NewEndorsement(bs, proof)
+		// random vrf proof
+		randProof := &vrf.Proof{}
+		rand.Read(randProof[:])
+
+		ed := block.NewEndorsement(bs, randProof)
 		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsk)
 		ed = ed.WithSignature(sig)
-		actual := cons.ValidateEndorsement(ed, genHeader, bs.Timestamp())
+		actual := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp()).Error()
 		expected := newConsensusError(
-			trEndorsement, strErrProof, nil, nil, "")
-		assert.Equal(t, actual, expected)
+			trEndorsement, strErrProof, nil, nil, "").Error()
+		assert.Equal(t, expected, actual)
 	}
 
 	triggers["triggerErrNotCommittee"] = func() {
@@ -304,12 +320,13 @@ func TestValidateEndorsement(t *testing.T) {
 		ed := block.NewEndorsement(bs, proof)
 		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsk)
 		ed = ed.WithSignature(sig)
-		actual := cons.ValidateEndorsement(ed, genHeader, bs.Timestamp())
+		err := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp())
 		if ok := IsCommitteeByProof(proof); !ok {
-			expected := newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "")
-			assert.Equal(t, actual, expected)
+			actual := err.Error()
+			expected := newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "").Error()
+			assert.Equal(t, expected, actual)
 		} else {
-			assert.Nil(t, actual)
+			assert.Nil(t, err)
 		}
 	}
 
@@ -330,7 +347,7 @@ func BenchmarkTestEthSig(b *testing.B) {
 }
 
 func BenchmarkBeacon(b *testing.B) {
-	_, cons, err := initConsensusTest()
+	cons, err := simpleConsensus()
 	if err != nil {
 		b.Fatal(err)
 	}
