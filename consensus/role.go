@@ -342,7 +342,9 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
 		candidates = poa.NewCandidates(authority.AllCandidates())
-		// ADD A COPY
+		/**
+		 * MUST ADD A COPY TO CACHE
+		 */
 		c.candidatesCache.Add(parentHeader.ID(), candidates.Copy())
 	}
 
