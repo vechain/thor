@@ -242,8 +242,8 @@ func (c *Communicator) SubscribeTxSet(ch chan *NewTxSetEvent) event.Subscription
 	return c.feedScope.Track(c.newTxSetFeed.Subscribe(ch))
 }
 
-// SubscribeHeader ...
-func (c *Communicator) SubscribeBlockHeader(ch chan *NewHeaderEvent) event.Subscription {
+// SubscribeBlockHeader ...
+func (c *Communicator) SubscribeBlockHeader(ch chan *NewBlockHeaderEvent) event.Subscription {
 	return c.feedScope.Track(c.newBlockHeaderFeed.Subscribe(ch))
 }
 
@@ -278,7 +278,7 @@ func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
 	}
 }
 
-// BroadcastHeader broadcasts a block header to remote peers
+// BroadcastBlockHeader broadcasts a block header to remote peers
 func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
 	peers := c.peerSet.Slice()
 

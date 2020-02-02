@@ -165,16 +165,34 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			write(toSend)
 		}
 	case proto.MsgNewBlockSummary:
-		var newBlockSummary *block.Summary
-		if err := msg.Decode(&newBlockSummary); err != nil {
+		var bs *block.Summary
+		if err := msg.Decode(&bs); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-
-		c.newEndorsementFeed.Send(&NewBlockEvent{Block: newBlock})
+		peer.MarkBlock(newBlock.Header().ID())
+		c.newEndorsementFeed.Send(&NewBlockSummaryEvent{Summary: bs})
 		write(&struct{}{})
 	case proto.MsgNewTxSet:
+		var ts *block.TxSet
+		if err := msg.Decode(&ts); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+		c.newEndorsementFeed.Send(&NewTxSetEvent{TxSet: ts})
+		write(&struct{}{})
 	case proto.MsgNewEndorsement:
+		var ed *block.Endorsement
+		if err := msg.Decode(&ed); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+		c.newEndorsementFeed.Send(&NewEndorsementEvent{Endorsement: ed})
+		write(&struct{}{})
 	case proto.MsgNewBlockHeader:
+		var hd *block.Header
+		if err := msg.Decode(&hd); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+		c.newEndorsementFeed.Send(&NewBlockHeaderEvent{Header: hd})
+		write(&struct{}{})
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}

@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/test"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -114,67 +115,83 @@ func TestP(t *testing.T) {
 }
 
 func TestForkVIP191(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	defer kv.Close()
+	// kv, _ := lvldb.NewMem()
+	// defer kv.Close()
 
-	launchTime := uint64(time.Now().Unix())
-	a1 := genesis.DevAccounts()[0]
-	stateCreator := state.NewCreator(kv)
+	// launchTime := uint64(time.Now().Unix())
+	// a1 := genesis.DevAccounts()[0]
+	// stateCreator := state.NewCreator(kv)
 
-	b0, _, err := new(genesis.Builder).
-		GasLimit(thor.InitialGasLimit).
-		Timestamp(launchTime).
-		State(func(state *state.State) error {
-			// setup builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+	// b0, _, err := new(genesis.Builder).
+	// 	GasLimit(thor.InitialGasLimit).
+	// 	Timestamp(launchTime).
+	// 	State(func(state *state.State) error {
+	// 		// setup builtin contracts
+	// 		state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+	// 		state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
 
-			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-			state.SetBalance(a1.Address, bal)
-			state.SetEnergy(a1.Address, bal, launchTime)
+	// 		bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+	// 		state.SetBalance(a1.Address, bal)
+	// 		state.SetEnergy(a1.Address, bal, launchTime)
 
-			_ = builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
-			return nil
-		}).
-		Build(stateCreator)
+	// 		_ = builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
+	// 		return nil
+	// 	}).
+	// 	Build(stateCreator)
 
-	if err != nil {
-		t.Fatal(err)
-	}
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
-	c, _ := chain.New(kv, b0)
+	// c, _ := chain.New(kv, b0)
 
-	best := c.BestBlock()
-	p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
+	// best := c.BestBlock()
+	// p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
+	// 	VIP191: 1,
+	// })
+	// flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	// root, _ := stage.Commit()
+	// assert.Equal(t, root, blk.Header().StateRoot())
+
+	tc, err := test.NewTempChain(thor.ForkConfig{
 		VIP191: 1,
 	})
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
-	root, _ := stage.Commit()
-	assert.Equal(t, root, blk.Header().StateRoot())
-
-	_, _, err = consensus.New(c, stateCreator, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
-	if err != nil {
+	if err := tc.NewBlock(2, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := tc.CommitNewBlock(); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := c.AddBlock(blk, receipts); err != nil {
-		t.Fatal(err)
-	}
+	// _, _, err = consensus.New(c, stateCreator, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
-	headState, err := state.NewCreator(kv).NewState(blk.Header().StateRoot())
+	// if _, err := c.AddBlock(blk, receipts); err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// headState, err := state.NewCreator(kv).NewState(blk.Header().StateRoot())
+
+	blk := tc.Original
+	headState, err := tc.StateCreator.NewState(blk.Header().StateRoot())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Equal(t, headState.GetCode(builtin.Extension.Address), builtin.Extension.V2.RuntimeBytecodes())
 
-	geneState, err := state.NewCreator(kv).NewState(b0.Header().StateRoot())
-
+	// geneState, err := state.NewCreator(kv).NewState(b0.Header().StateRoot())
+	geneState, err := tc.StateCreator.NewState(tc.GenesisBlock.Header().StateRoot())
 	if err != nil {
 		t.Fatal(err)
 	}

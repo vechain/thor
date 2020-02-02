@@ -83,6 +83,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			skipTxPoolBlockList,
+			debugModeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -102,6 +103,7 @@ func main() {
 					verbosityFlag,
 					pprofFlag,
 					verifyLogsFlag,
+					debugModeFlag,
 				},
 				Action: soloAction,
 			},
