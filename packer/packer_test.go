@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/test"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -140,9 +141,14 @@ func TestForkVIP191(t *testing.T) {
 		}).
 		Build(stater)
 
-	if err != nil {
-		t.Fatal(err)
-	}
+	// best := c.BestBlock()
+	// p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
+	// 	VIP191: 1,
+	// })
+	// flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	repo, _ := chain.NewRepository(db, b0)
 
@@ -150,7 +156,6 @@ func TestForkVIP191(t *testing.T) {
 	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
 		VIP191: 1,
 	})
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}

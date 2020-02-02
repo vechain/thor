@@ -80,6 +80,8 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			skipTxPoolBlockList,
+			debugModeFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -104,6 +106,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					debugModeFlag,
 				},
 				Action: soloAction,
 			},

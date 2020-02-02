@@ -31,8 +31,8 @@ type NewEndorsementEvent struct {
 	*block.Endorsement
 }
 
-// NewHeaderEvent ...
-type NewHeaderEvent struct{
+// NewBlockHeaderEvent ...
+type NewBlockHeaderEvent struct {
 	*block.Header
 }
 

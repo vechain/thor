@@ -23,7 +23,10 @@ const (
 	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
-	maxKnownEndorsement   = int(thor.CommitteeSize * thor.CommitteeThresholdFactor)
+	maxKnownBlockSummary  = 1024
+	maxKnownTxSet         = 1024
+	maxKnownEndorsement   = 1024
+	maxKnownBlockHeader   = 1024
 )
 
 func init() {
@@ -36,11 +39,15 @@ type Peer struct {
 	*rpc.RPC
 	logger log15.Logger
 
-	createdTime       mclock.AbsTime
-	knownTxs          *lru.Cache
-	knownBlocks       *lru.Cache
-	knownEndorsements *lru.Cache // remember known endorsements
-	head              struct {
+	createdTime         mclock.AbsTime
+	knownTxs            *lru.Cache
+	knownBlocks         *lru.Cache
+	knownBlockSummaries *lru.Cache
+	knownEndorsements   *lru.Cache
+	knownTxSets         *lru.Cache
+	knownBlockHeaders   *lru.Cache
+
+	head struct {
 		sync.Mutex
 		id         thor.Bytes32
 		totalScore uint64
@@ -58,15 +65,21 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 	knownTxs, _ := lru.New(maxKnownTxs)
 	knownBlocks, _ := lru.New(maxKnownBlocks)
+	knownBlockSummaries, _ := lru.New(maxKnownBlockSummary)
 	knownEndorsements, _ := lru.New(maxKnownEndorsement)
+	knownTxSets, _ := lru.New(maxKnownTxSet)
+	knownBlockHeaders, _ := lru.New(maxKnownBlockHeader)
 	return &Peer{
-		Peer:              peer,
-		RPC:               rpc.New(peer, rw),
-		logger:            log.New(ctx...),
-		createdTime:       mclock.Now(),
-		knownTxs:          knownTxs,
-		knownBlocks:       knownBlocks,
-		knownEndorsements: knownEndorsements,
+		Peer:                peer,
+		RPC:                 rpc.New(peer, rw),
+		logger:              log.New(ctx...),
+		createdTime:         mclock.Now(),
+		knownTxs:            knownTxs,
+		knownBlocks:         knownBlocks,
+		knownBlockSummaries: knownBlockSummaries,
+		knownEndorsements:   knownEndorsements,
+		knownTxSets:         knownTxSets,
+		knownBlockHeaders:   knownBlockHeaders,
 	}
 }
 
@@ -96,6 +109,21 @@ func (p *Peer) MarkBlock(id thor.Bytes32) {
 	p.knownBlocks.Add(id, struct{}{})
 }
 
+// MarkBlockSummary ...
+func (p *Peer) MarkBlockSummary(id thor.Bytes32) {
+	p.knownBlockSummaries.Add(id, struct{}{})
+}
+
+// MarkBlockHeader ...
+func (p *Peer) MarkBlockHeader(id thor.Bytes32) {
+	p.knownBlockHeaders.Add(id, struct{}{})
+}
+
+// MarkTxSet ...
+func (p *Peer) MarkTxSet(id thor.Bytes32) {
+	p.knownTxSets.Add(id, struct{}{})
+}
+
 // MarkEndorsement marks an endorsement to known.
 func (p *Peer) MarkEndorsement(id thor.Bytes32) {
 	p.knownEndorsements.Add(id, struct{}{})
@@ -118,6 +146,21 @@ func (p *Peer) IsBlockKnown(id thor.Bytes32) bool {
 // IsEndorsementKnown returns if the endorsement is known.
 func (p *Peer) IsEndorsementKnown(id thor.Bytes32) bool {
 	return p.knownEndorsements.Contains(id)
+}
+
+// IsBlockSummaryKnown ...
+func (p *Peer) IsBlockSummaryKnown(id thor.Bytes32) bool {
+	return p.knownBlockSummaries.Contains(id)
+}
+
+// IsTxSetKnown ...
+func (p *Peer) IsTxSetKnown(id thor.Bytes32) bool {
+	return p.knownTxSets.Contains(id)
+}
+
+// IsBlockHeaderKnown ...
+func (p *Peer) IsBlockHeaderKnown(id thor.Bytes32) bool {
+	return p.knownBlockHeaders.Contains(id)
 }
 
 // Duration returns duration of connection.

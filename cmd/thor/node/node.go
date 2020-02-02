@@ -156,15 +156,16 @@ func (n *Node) houseKeeping(ctx context.Context) {
 	defer scope.Close()
 
 	newBlockCh := make(chan *comm.NewBlockEvent)
-	scope.Track(n.comm.SubscribeBlock(newBlockCh))
 	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
-	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 	newTxSetCh := make(chan *comm.NewTxSetEvent)
+	newBlockHeaderCh := make(chan *comm.NewBlockHeaderEvent)
+
+	scope.Track(n.comm.SubscribeBlock(newBlockCh))
+	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
+	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 	scope.Track(n.comm.SubscribeTxSet(newTxSetCh))
-	newHeaderCh := make(chan *comm.NewHeaderEvent)
-	scope.Track(n.comm.SubscribeBlockHeader(newHeaderCh))
+	scope.Track(n.comm.SubscribeBlockHeader(newBlockHeaderCh))
 
 	futureTicker := time.NewTicker(time.Duration(thor.BlockInterval) * time.Second)
 	defer futureTicker.Stop()
@@ -262,7 +263,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 			n.comm.BroadcastEndorsement(ed)
 
-		case ev := <-newHeaderCh:
+		case ev := <-newBlockHeaderCh:
 			header := ev.Header
 
 			parentHeader := n.chain.BestBlock().Header()
