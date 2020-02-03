@@ -17,66 +17,52 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 	}
 
 	best := c.chain.BestBlock()
-	// bestRound, _ := c.RoundNumber(best.Header().Timestamp())
-	// bestEpoch := EpochNumber(bestRound)
-	// if bestRound == 0 {
-	// 	return getBeaconFromHeader(c.chain.GenesisBlock().Header()), nil
-	// }
-	// if epoch > bestEpoch+1 {
-	// 	return thor.BytesToBytes32(nil), errFutureEpoch
-	// }
-
-	lastRound := (epoch - 1) * uint32(thor.EpochInterval)
+	lastRoundOfEpoch := (epoch - 1) * uint32(thor.EpochInterval)
+	lastTimestampOfEpoch := c.Timestamp(lastRoundOfEpoch)
 
 	var (
 		header *block.Header
 		err    error
-		round  uint32
 	)
 
-	last := lastRound
+	// Start the search from the block with its number equal to lastRoundOfEpoch.
+	// The actual number may be smaller than lastRoundOfEpoch if there is any
+	// round when no block is produced.
+	last := lastRoundOfEpoch
 	if last > best.Header().Number() {
 		last = best.Header().Number()
 	}
+
 	header, err = c.chain.GetTrunkBlockHeader(last)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	// Backtrack from the last round of the epoch to extract the last block
-	// within the epoch
-	// for i := last; i >= 0; i-- {
-	// header, err = c.chain.GetTrunkBlockHeader(i)
-	// 	if err == nil {
-	// 		break
-	// 	}
-	// }
-
-	// if err != nil {
-	// 	panic("No block found")
-	// }
-
 	for {
-		// if header.Number() == 0 {
-		// 	break
-		// }
-
-		round = c.RoundNumber(header.Timestamp())
-		if round <= lastRound {
+		// Check whether the block is within the epoch
+		if header.Timestamp() <= lastTimestampOfEpoch {
 			break
 		}
 
+		// Get the parent header
 		header, err = c.chain.GetBlockHeader(header.ParentID())
 		if err != nil {
-			// hex := hex.EncodeToString(header.ParentID().Bytes())
-			// return thor.BytesToBytes32(nil), errors.New("Block " + hex + " not found")
 			panic("Parent not found")
 		}
 	}
 
-	return getBeaconFromHeader(header), nil
+	return compBeacon(header), nil
 }
 
-func getBeaconFromHeader(header *block.Header) thor.Bytes32 {
-	return header.ID()
+// beacon = hash(concat(header.VrfProofs()...))
+func compBeacon(header *block.Header) thor.Bytes32 {
+	var beacon thor.Bytes32
+
+	hw := thor.NewBlake2b()
+	for _, proof := range header.VrfProofs() {
+		hw.Write(proof.Bytes())
+	}
+	hw.Sum(beacon[:0])
+
+	return beacon
 }

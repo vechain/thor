@@ -260,7 +260,7 @@ func TestValidateEndorsement(t *testing.T) {
 	bs = bs.WithSignature(sig)
 
 	// compute vrf seed
-	beacon := getBeaconFromHeader(parentHeader)
+	beacon := compBeacon(parentHeader)
 	seed := seed(beacon, 1)
 
 	triggers := make(map[string]func())

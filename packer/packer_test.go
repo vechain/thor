@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/test"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -158,7 +157,7 @@ func TestForkVIP191(t *testing.T) {
 	// root, _ := stage.Commit()
 	// assert.Equal(t, root, blk.Header().StateRoot())
 
-	tc, err := test.NewTempChain(thor.ForkConfig{
+	tc, err := consensus.NewTempChain(thor.ForkConfig{
 		VIP191: 1,
 	})
 	if err != nil {
