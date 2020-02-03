@@ -74,7 +74,8 @@ func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32, th uint32) (
 }
 
 // IsCommitteeByProof ...
-func IsCommitteeByProof(proof *vrf.Proof, th uint32) bool {
+func IsCommitteeByProof(proof *vrf.Proof) bool {
+	th := getCommitteeThreshold()
 	return isCommitteeByProof(proof, th)
 }
 

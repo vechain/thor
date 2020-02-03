@@ -15,9 +15,9 @@ type TxSet struct {
 	body txSetBody
 
 	cache struct {
-		root        atomic.Value
-		signer      atomic.Value
-		signingHash atomic.Value
+		root   atomic.Value
+		signer atomic.Value
+		id     atomic.Value
 	}
 }
 
@@ -61,19 +61,20 @@ func (ts *TxSet) Signer() (signer thor.Address, err error) {
 
 // SigningHash computes the hash to be signed
 func (ts *TxSet) SigningHash() (hash thor.Bytes32) {
-	if cached := ts.cache.signingHash.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() { ts.cache.signingHash.Store(hash) }()
+	// if cached := ts.cache.signingHash.Load(); cached != nil {
+	// 	return cached.(thor.Bytes32)
+	// }
+	// defer func() { ts.cache.signingHash.Store(hash) }()
 
-	if len(ts.body.Txs) == 0 {
-		return thor.Bytes32{}
-	}
+	// if len(ts.body.Txs) == 0 {
+	// 	return thor.Bytes32{}
+	// }
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{ts.body.Txs, ts.body.Timestamp})
-	hw.Sum(hash[:0])
-	return
+	// hw := thor.NewBlake2b()
+	// rlp.Encode(hw, []interface{}{ts.body.Txs, ts.body.Timestamp})
+	// hw.Sum(hash[:0])
+	// return
+	return ts.TxsRoot()
 }
 
 // WithSignature create a new TxSet object with signature set.
@@ -100,7 +101,7 @@ func (ts *TxSet) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// TxRoot computes the root of the Merkle tree constructed
+// TxsRoot computes the root of the Merkle tree constructed
 // from the transactions
 func (ts *TxSet) TxsRoot() (root thor.Bytes32) {
 	if cached := ts.cache.root.Load(); cached != nil {
@@ -127,6 +128,26 @@ func (ts *TxSet) TotalScore() uint64 {
 	return ts.body.TotalScore
 }
 
+// IsEmpty checks if it is an empty set
 func (ts *TxSet) IsEmpty() bool {
 	return len(ts.body.Txs) == 0
+}
+
+// ID computes the hash for committee member to sign
+func (ts *TxSet) ID() (id thor.Bytes32) {
+	if cached := ts.cache.id.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { ts.cache.id.Store(id) }()
+
+	signer, err := ts.Signer()
+	if err != nil {
+		return
+	}
+
+	hw := thor.NewBlake2b()
+	hw.Write(ts.TxsRoot().Bytes())
+	hw.Write(signer.Bytes())
+	hw.Sum(id[:0])
+	return
 }

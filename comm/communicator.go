@@ -254,7 +254,9 @@ func (c *Communicator) SubscribeBlock(ch chan *NewBlockEvent) event.Subscription
 
 // BroadcastBlockSummary broadcasts a block summary to remote peers
 func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
-	peers := c.peerSet.Slice()
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsBlockSummaryKnown(bs.ID())
+	})
 
 	for _, peer := range peers {
 		c.goes.Go(func() {
@@ -267,7 +269,9 @@ func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
 
 // BroadcastTxSet broadcasts a tx set to remote peers
 func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
-	peers := c.peerSet.Slice()
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsTxSetKnown(ts.ID())
+	})
 
 	for _, peer := range peers {
 		c.goes.Go(func() {
@@ -280,7 +284,9 @@ func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
 
 // BroadcastBlockHeader broadcasts a block header to remote peers
 func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
-	peers := c.peerSet.Slice()
+	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
+		return !p.IsBlockHeaderKnown(header.ID())
+	})
 
 	for _, peer := range peers {
 		c.goes.Go(func() {
@@ -294,7 +300,7 @@ func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
 // BroadcastEndorsement broadcasts an endorsement to remote peers
 func (c *Communicator) BroadcastEndorsement(ed *block.Endorsement) {
 	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
-		return !p.IsEndorsementKnown(ed.SigningHash())
+		return !p.IsEndorsementKnown(ed.ID())
 	})
 
 	for _, peer := range peers {

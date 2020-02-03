@@ -42,7 +42,7 @@ type testConsensus struct {
 }
 
 func newTestConsensus(t *testing.T) (*testConsensus, error) {
-	tc, err := NewTempChain(thor.ForkConfig{0, 0, 0}) // enabling vip191, ethconst and blocklist
+	tc, err := NewTempChain(thor.ForkConfig{}) // enabling vip191, ethconst and blocklist
 	if err != nil {
 		return nil, err
 	}
