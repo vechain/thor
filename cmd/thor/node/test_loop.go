@@ -17,18 +17,25 @@ func randByte32() (b thor.Bytes32) {
 	return
 }
 
-func (n *Node) sendBlockSummaries() {
-	for i := 0; i < 3; i++ {
-		bs := block.NewBlockSummary(
-			randByte32(),
-			randByte32(),
-			uint64(i),
-			uint64(i),
-		)
-		sig, _ := crypto.Sign(bs.SigningHash().Bytes(), n.master.PrivateKey)
-		bs = bs.WithSignature(sig)
-		n.comm.BroadcastBlockSummary(bs)
+func (n *Node) sendBlockSummary() {
+	bs := block.NewBlockSummary(
+		randByte32(),
+		randByte32(),
+		uint64(0),
+		uint64(0),
+	)
+	sig, _ := crypto.Sign(bs.SigningHash().Bytes(), n.master.PrivateKey)
+	bs = bs.WithSignature(sig)
+
+	log.Debug("sent block summary", "status", "valid", "id", bs.ID())
+	n.comm.BroadcastBlockSummary(bs)
+
+	bs = bs.Copy().WithSignature([]byte(nil))
+	if !bs.ID().IsZero() {
+		panic("id should be zero")
 	}
+	log.Debug("sent block summary", "status", "invalid", "id", bs.ID())
+	n.comm.BroadcastBlockSummary(bs)
 }
 
 func (n *Node) simpleHouseKeeping(ctx context.Context) {
@@ -59,16 +66,16 @@ func (n *Node) simpleHouseKeeping(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case dat := <-newBlockSummaryCh:
-			log.Debug("received new block summary", "id", dat.ID())
+			log.Debug("received block summary", "id", dat.ID())
 			n.comm.BroadcastBlockSummary(dat.Summary)
 		case dat := <-newTxSetCh:
-			log.Debug("received new tx set", "id", dat.ID())
+			log.Debug("received tx set", "id", dat.ID())
 			n.comm.BroadcastTxSet(dat.TxSet)
 		case dat := <-newEndorsementCh:
-			log.Debug("received new endorsement", "id", dat.ID())
+			log.Debug("received endorsement", "id", dat.ID())
 			n.comm.BroadcastEndorsement(dat.Endorsement)
 		case dat := <-newBlockHeaderCh:
-			log.Debug("received new block header", "id", dat.ID())
+			log.Debug("received block header", "id", dat.ID())
 			n.comm.BroadcastBlockHeader(dat.Header)
 		}
 	}
