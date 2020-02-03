@@ -37,6 +37,7 @@ import (
 
 var log = log15.New("pkg", "node")
 
+// Node ...
 type Node struct {
 	goes     co.Goes
 	packer   *packer.Packer
@@ -66,6 +67,7 @@ type Node struct {
 	// eds map[thor.Address]*block.Endorsement
 }
 
+// New ...
 func New(
 	master *Master,
 	repo *chain.Repository,
@@ -93,14 +95,17 @@ func New(
 	}
 }
 
+// Run ...
 func (n *Node) Run(ctx context.Context) error {
-	n.comm.Sync(n.handleBlockStream)
+	// n.comm.Sync(n.handleBlockStream)
 
-	n.goes.Go(func() { n.houseKeeping(ctx) })
-	n.goes.Go(func() { n.txStashLoop(ctx) })
-	n.goes.Go(func() { n.packerLoop(ctx) })
+	// n.goes.Go(func() { n.houseKeeping(ctx) })
+	// n.goes.Go(func() { n.txStashLoop(ctx) })
+	// n.goes.Go(func() { n.packerLoop(ctx) })
 
-	// n.goes.Go(func() { n.epochRoundInfoLoop(ctx) })
+	n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
+
+	n.sendBlockSummaries()
 
 	n.goes.Wait()
 	return nil
