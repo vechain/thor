@@ -49,6 +49,9 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 
+		if newBlock.Header().ID().IsZero() {
+			return errors.New("zero block id")
+		}
 		peer.MarkBlock(newBlock.Header().ID())
 		peer.UpdateHead(newBlock.Header().ID(), newBlock.Header().TotalScore())
 		c.newBlockFeed.Send(&NewBlockEvent{Block: newBlock})
@@ -169,7 +172,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&bs); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkBlockSummary(bs.RLPHash())
+		if bs.ID().IsZero() {
+			return errors.New("zero block summary id")
+		}
+		peer.MarkBlockSummary(bs.ID())
 		c.newEndorsementFeed.Send(&NewBlockSummaryEvent{Summary: bs})
 		write(&struct{}{})
 	case proto.MsgNewTxSet:
@@ -177,6 +183,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&ts); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
+		if ts.ID().IsZero() {
+			return errors.New("zero tx set id")
+		}
+		peer.MarkTxSet(ts.ID())
 		c.newEndorsementFeed.Send(&NewTxSetEvent{TxSet: ts})
 		write(&struct{}{})
 	case proto.MsgNewEndorsement:
@@ -184,6 +194,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&ed); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
+		if ed.ID().IsZero() {
+			return errors.New("zero endorsement id")
+		}
+		peer.MarkEndorsement(ed.ID())
 		c.newEndorsementFeed.Send(&NewEndorsementEvent{Endorsement: ed})
 		write(&struct{}{})
 	case proto.MsgNewBlockHeader:
@@ -191,6 +205,10 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&hd); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
+		if hd.ID().IsZero() {
+			return errors.New("zero block header id")
+		}
+		peer.MarkBlockHeader(hd.ID())
 		c.newEndorsementFeed.Send(&NewBlockHeaderEvent{Header: hd})
 		write(&struct{}{})
 	default:

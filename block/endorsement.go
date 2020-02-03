@@ -18,6 +18,7 @@ type Endorsement struct {
 	cache struct {
 		signer      atomic.Value
 		signingHash atomic.Value
+		id          atomic.Value
 	}
 }
 
@@ -75,7 +76,6 @@ func (ed *Endorsement) SigningHash() (hash thor.Bytes32) {
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, []interface{}{
 		ed.body.BlockSummary,
-		// ed.body.VrfPublicKey,
 		ed.body.VrfProof,
 	})
 	hw.Sum(hash[:0])
@@ -111,11 +111,6 @@ func (ed *Endorsement) BlockSummary() *Summary {
 	return ed.body.BlockSummary.Copy()
 }
 
-// // VrfPublicKey returns the VRF public key
-// func (ed *Endorsement) VrfPublicKey() *vrf.PublicKey {
-// 	return ed.body.VrfPublicKey
-// }
-
 // VrfProof returns the VRF proof
 func (ed *Endorsement) VrfProof() *vrf.Proof {
 	return ed.body.VrfProof.Copy()
@@ -139,7 +134,26 @@ func (ed *Endorsement) String() string {
 	Signer:         	%v
 	VrfProof:         	0x%x
 	Signature:      	0x%x
-	`, ed.SigningHash(), ed.body.BlockSummary.RLPHash(), signerStr, ed.body.VrfProof, ed.body.Signature)
+	`, ed.SigningHash(), ed.body.BlockSummary.ID(), signerStr, ed.body.VrfProof, ed.body.Signature)
 
 	return s
+}
+
+// ID ...
+func (ed *Endorsement) ID() (id thor.Bytes32) {
+	if cached := ed.cache.id.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { ed.cache.id.Store(id) }()
+
+	signer, err := ed.Signer()
+	if err != nil {
+		return
+	}
+
+	hw := thor.NewBlake2b()
+	hw.Write(ed.SigningHash().Bytes())
+	hw.Write(signer.Bytes())
+	hw.Sum(id[:0])
+	return
 }

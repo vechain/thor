@@ -322,6 +322,7 @@ func (tc *TempChain) OriginalBuilder() *block.Builder {
 		VrfProofs(header.VrfProofs())
 }
 
+// Consent ...
 func (tc *TempChain) Consent(blk *block.Block) error {
 	if _, _, err := tc.Con.Process(blk, tc.Time); err != nil {
 		return err

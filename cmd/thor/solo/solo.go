@@ -218,11 +218,9 @@ func (s *Solo) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) 
 }
 
 func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *block.Summary) {
-	endorseHash := bs.RLPHash()
-
 	for i := uint64(0); i < thor.CommitteeSize*2; i++ {
 		_, sk := vrf.GenKeyPair()
-		proof, _ := sk.Prove(endorseHash.Bytes())
+		proof, _ := sk.Prove(bs.ID().Bytes())
 		if consensus.IsCommitteeByProof(proof) {
 			ed := block.NewEndorsement(bs, proof)
 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)

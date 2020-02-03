@@ -301,7 +301,7 @@ func TestValidateEndorsement(t *testing.T) {
 		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsk)
 		ed = ed.WithSignature(sig)
 		err := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp())
-		if ok := IsCommitteeByProof(proof, getCommitteeThreshold()); !ok {
+		if ok := IsCommitteeByProof(proof); !ok {
 			actual := err.Error()
 			expected := newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "").Error()
 			assert.Equal(t, expected, actual)

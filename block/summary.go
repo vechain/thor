@@ -18,7 +18,7 @@ type Summary struct {
 	cache struct {
 		signingHash atomic.Value
 		signer      atomic.Value
-		endorseHash atomic.Value
+		id          atomic.Value
 	}
 }
 
@@ -147,16 +147,22 @@ func (bs *Summary) TxsRoot() thor.Bytes32 {
 	return bs.body.TxsRoot
 }
 
-// RLPHash computes the hash for committee member to sign
-func (bs *Summary) RLPHash() (hash thor.Bytes32) {
-	if cached := bs.cache.endorseHash.Load(); cached != nil {
+// ID ...
+func (bs *Summary) ID() (id thor.Bytes32) {
+	if cached := bs.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
-	defer func() { bs.cache.endorseHash.Store(hash) }()
+	defer func() { bs.cache.id.Store(id) }()
+
+	signer, err := bs.Signer()
+	if err != nil {
+		return
+	}
 
 	hw := thor.NewBlake2b()
-	rlp.Encode(hw, bs.body)
-	hw.Sum(hash[:0])
+	hw.Write(bs.SigningHash().Bytes())
+	hw.Write(signer.Bytes())
+	hw.Sum(id[:0])
 	return
 }
 
@@ -175,7 +181,7 @@ func (bs *Summary) String() string {
 	Signer:         	%v
 	TxRoot:         	%v
 	Signature:      	0x%x
-	`, bs.RLPHash(), bs.body.ParentID, bs.body.Timestamp, bs.body.TotalScore, signerStr, bs.body.TxsRoot, bs.body.Signature)
+	`, bs.ID(), bs.body.ParentID, bs.body.Timestamp, bs.body.TotalScore, signerStr, bs.body.TxsRoot, bs.body.Signature)
 
 	return s
 }
