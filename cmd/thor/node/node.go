@@ -105,7 +105,7 @@ func (n *Node) Run(ctx context.Context) error {
 
 	n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
 
-	n.sendBlockSummaries()
+	n.sendBlockSummary()
 
 	n.goes.Wait()
 	return nil
