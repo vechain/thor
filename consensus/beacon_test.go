@@ -67,7 +67,7 @@ func simpleConsensus() (*Consensus, error) {
 // 	return b, stage, nil
 // }
 
-func addEmptyBlocks(tc *testConsensus, nRound uint32, roundSkipped map[uint32]interface{}) map[uint32]*block.Block {
+func addEmptyBlocks(tc *TempChain, nRound uint32, roundSkipped map[uint32]interface{}) (map[uint32]*block.Block, error) {
 	blks := make(map[uint32]*block.Block)
 
 	for r := uint32(1); r <= nRound; r++ {
@@ -75,11 +75,17 @@ func addEmptyBlocks(tc *testConsensus, nRound uint32, roundSkipped map[uint32]in
 			continue
 		}
 
-		tc.newBlock(r, nil)
-		tc.commitNewBlock()
+		if err := tc.NewBlock(r, nil); err != nil {
+			return blks, err
+		}
+		if err := tc.CommitNewBlock(); err != nil {
+			return blks, err
+		}
+
+		blks[r] = tc.Original
 	}
 
-	return blks
+	return blks, nil
 }
 
 func prepareSkippedRoundInfo() map[uint32]interface{} {
@@ -94,31 +100,37 @@ func prepareSkippedRoundInfo() map[uint32]interface{} {
 }
 
 func TestBeacon(t *testing.T) {
-	tc := newTestConsensus(t)
-
 	var (
-		// currBlock, prevBlock *block.Block
-		// err    error
+		tc     *TempChain
 		beacon thor.Bytes32
 		epoch  uint32
+		err    error
 	)
+
+	tc, err = NewTempChain(thor.NoFork)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// skip the entire second epoch
 	roundSkipped := prepareSkippedRoundInfo()
 	nRound := uint32(thor.EpochInterval) * 3
-	blocks := addEmptyBlocks(tc, nRound, roundSkipped)
-
-	// Test beacon for epoch 1
-	epoch = 1
-	beacon, err := tc.con.beacon(epoch)
+	blocks, err := addEmptyBlocks(tc, nRound, roundSkipped)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, beacon.Bytes(), getBeaconFromHeader(tc.genesisBlock.Header()).Bytes())
+
+	// Test beacon for epoch 1
+	epoch = 1
+	beacon, err = tc.Con.beacon(epoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, beacon.Bytes(), getBeaconFromHeader(tc.GenesisBlock.Header()).Bytes())
 
 	// Test beacon for epoch 2 => beacon from the last block of epoch 1
 	epoch = 2
-	beacon, err = tc.con.beacon(epoch)
+	beacon, err = tc.Con.beacon(epoch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +139,7 @@ func TestBeacon(t *testing.T) {
 
 	// Test beacon for epoch 3 => beacon from the last block of epoch 1
 	epoch = 3
-	beacon, err = tc.con.beacon(epoch)
+	beacon, err = tc.Con.beacon(epoch)
 	if err != nil {
 		t.Fatal(err)
 	}

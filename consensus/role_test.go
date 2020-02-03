@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"bytes"
 	"crypto/rand"
 	"math"
 	"testing"
@@ -35,40 +34,21 @@ func TestIsCommitteeByPrivateKey(t *testing.T) {
 	)
 
 	// Get a positive sample
-	for {
-		rand.Read(msg)
-		proof, err = sk.Prove(msg)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if isCommitteeByProof(proof) {
-			break
-		}
+	rand.Read(msg)
+	proof, err = sk.Prove(msg)
+	if err != nil {
+		t.Error(err)
 	}
 
-	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg))
-	if err != nil || !ok || pf == nil || bytes.Compare(pf[:], proof[:]) != 0 {
-		t.Errorf("Testing positive sample failed")
-	}
+	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg), math.MaxUint32)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, proof, pf)
 
-	// Get a negative sample
-	for {
-		rand.Read(msg)
-		proof, err = sk.Prove(msg)
-		if err != nil {
-			t.Error(err)
-		}
-
-		if !isCommitteeByProof(proof) {
-			break
-		}
-	}
-
-	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg))
-	if err != nil || ok || pf != nil {
-		t.Errorf("Testing negative sample failed")
-	}
+	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg), 0)
+	assert.Nil(t, err)
+	assert.False(t, ok)
+	assert.Nil(t, pf)
 }
 
 func M(a ...interface{}) []interface{} {
@@ -76,9 +56,9 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	tc := newTestConsensus(t)
+	tc, _ := NewTempChain(thor.NoFork)
 
-	launchTime := tc.genesisBlock.Header().Timestamp()
+	launchTime := tc.GenesisBlock.Header().Timestamp()
 
 	tests := []struct {
 		expected interface{}
@@ -87,32 +67,32 @@ func TestEpochNumber(t *testing.T) {
 	}{
 		{
 			[]interface{}{uint32(0)},
-			M(tc.con.EpochNumber(launchTime - 1)),
+			M(tc.Con.EpochNumber(launchTime - 1)),
 			"t < launch_time",
 		},
 		{
 			[]interface{}{uint32(0)},
-			M(tc.con.EpochNumber(launchTime + 1)),
+			M(tc.Con.EpochNumber(launchTime + 1)),
 			"t = launch_time + 1",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(tc.con.EpochNumber(launchTime + thor.BlockInterval)),
+			M(tc.Con.EpochNumber(launchTime + thor.BlockInterval)),
 			"t = launch_time + block_interval",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
+			M(tc.Con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval)),
 			"t = launch_time + block_interval * epoch_interval",
 		},
 		{
 			[]interface{}{uint32(1)},
-			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
+			M(tc.Con.EpochNumber(launchTime + thor.BlockInterval*thor.EpochInterval + 1)),
 			"t = launch_time + block_interval * epoch_interval + 1",
 		},
 		{
 			[]interface{}{uint32(2)},
-			M(tc.con.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
+			M(tc.Con.EpochNumber(launchTime + thor.BlockInterval*(thor.EpochInterval+1))),
 			"t = launch_time + block_interval * (epoch_interval + 1)",
 		},
 	}
@@ -123,13 +103,13 @@ func TestEpochNumber(t *testing.T) {
 }
 
 func TestValidateBlockSummary(t *testing.T) {
-	tc := newTestConsensus(t)
-	tc.newBlock(1, nil)
+	tc, _ := NewTempChain(thor.NoFork)
+	tc.NewBlock(1, nil)
 
-	cons := tc.con
-	sk := tc.proposer.ethsk
-	header := tc.original.Header()
-	parentHeader := tc.parent.Header()
+	cons := tc.Con
+	sk := tc.Proposer.Ethsk
+	header := tc.Original.Header()
+	parentHeader := tc.Parent.Header()
 	now := header.Timestamp() + 1
 
 	triggers := make(map[string]func())
@@ -236,39 +216,39 @@ func TestValidateBlockSummary(t *testing.T) {
 	}
 }
 
-func getValidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
-	maxIter := 1000
-	for i := 0; i < maxIter; i++ {
-		pk, sk := vrf.GenKeyPair()
-		proof, _ := sk.Prove(seed.Bytes())
-		if isCommitteeByProof(proof) {
-			return proof, pk
-		}
-	}
-	return nil, nil
-}
+// func getValidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
+// 	maxIter := 1000
+// 	for i := 0; i < maxIter; i++ {
+// 		pk, sk := vrf.GenKeyPair()
+// 		proof, _ := sk.Prove(seed.Bytes())
+// 		if isCommitteeByProof(proof) {
+// 			return proof, pk
+// 		}
+// 	}
+// 	return nil, nil
+// }
 
-func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
-	maxIter := 1000
-	for i := 0; i < maxIter; i++ {
-		pk, sk := vrf.GenKeyPair()
-		proof, _ := sk.Prove(seed.Bytes())
-		if !isCommitteeByProof(proof) {
-			return proof, pk
-		}
-	}
-	return nil, nil
-}
+// func getInvalidCommittee(seed thor.Bytes32) (*vrf.Proof, *vrf.PublicKey) {
+// 	maxIter := 1000
+// 	for i := 0; i < maxIter; i++ {
+// 		pk, sk := vrf.GenKeyPair()
+// 		proof, _ := sk.Prove(seed.Bytes())
+// 		if !isCommitteeByProof(proof) {
+// 			return proof, pk
+// 		}
+// 	}
+// 	return nil, nil
+// }
 
 func TestValidateEndorsement(t *testing.T) {
-	tc := newTestConsensus(t)
-	tc.newBlock(1, nil)
+	tc, _ := NewTempChain(thor.NoFork)
+	tc.NewBlock(1, nil)
 
-	cons := tc.con
-	header := tc.original.Header()
-	parentHeader := tc.parent.Header()
-	ethsk := tc.proposer.ethsk
-	vrfsk := tc.proposer.vrfsk
+	cons := tc.Con
+	header := tc.Original.Header()
+	parentHeader := tc.Parent.Header()
+	ethsk := tc.Proposer.Ethsk
+	vrfsk := tc.Proposer.Vrfsk
 
 	// Create a valid block summary at round 1
 	bs := block.NewBlockSummary(
@@ -321,7 +301,7 @@ func TestValidateEndorsement(t *testing.T) {
 		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsk)
 		ed = ed.WithSignature(sig)
 		err := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp())
-		if ok := IsCommitteeByProof(proof); !ok {
+		if ok := IsCommitteeByProof(proof, getCommitteeThreshold()); !ok {
 			actual := err.Error()
 			expected := newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "").Error()
 			assert.Equal(t, expected, actual)
@@ -335,24 +315,24 @@ func TestValidateEndorsement(t *testing.T) {
 	}
 }
 
-func BenchmarkTestEthSig(b *testing.B) {
-	sk, _ := crypto.GenerateKey()
+// func BenchmarkTestEthSig(b *testing.B) {
+// 	sk, _ := crypto.GenerateKey()
 
-	msg := make([]byte, 32)
+// 	msg := make([]byte, 32)
 
-	for i := 0; i < b.N; i++ {
-		rand.Read(msg)
-		crypto.Sign(msg, sk)
-	}
-}
+// 	for i := 0; i < b.N; i++ {
+// 		rand.Read(msg)
+// 		crypto.Sign(msg, sk)
+// 	}
+// }
 
-func BenchmarkBeacon(b *testing.B) {
-	cons, err := simpleConsensus()
-	if err != nil {
-		b.Fatal(err)
-	}
+// func BenchmarkBeacon(b *testing.B) {
+// 	cons, err := simpleConsensus()
+// 	if err != nil {
+// 		b.Fatal(err)
+// 	}
 
-	for i := 0; i < b.N; i++ {
-		cons.beacon(uint32(i + 1))
-	}
-}
+// 	for i := 0; i < b.N; i++ {
+// 		cons.beacon(uint32(i + 1))
+// 	}
+// }

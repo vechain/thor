@@ -38,7 +38,8 @@ func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Pro
 	}
 
 	seed := seed(beacon, round)
-	return isCommitteeByPrivateKey(sk, seed)
+	th := getCommitteeThreshold()
+	return isCommitteeByPrivateKey(sk, seed, th)
 }
 
 // Seed computes the random seed for each round
@@ -49,7 +50,7 @@ func seed(beacon thor.Bytes32, round uint32) thor.Bytes32 {
 	return thor.Blake2b(beacon.Bytes(), b)
 }
 
-func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32) (bool, *vrf.Proof, error) {
+func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32, th uint32) (bool, *vrf.Proof, error) {
 	// Compute VRF proof
 	proof, err := sk.Prove(seed.Bytes())
 	if err != nil {
@@ -65,7 +66,7 @@ func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32) (bool, *vrf.
 	// 	return proof, nil
 	// }
 
-	if isCommitteeByProof(proof) {
+	if isCommitteeByProof(proof, th) {
 		return true, proof, nil
 	}
 
@@ -73,15 +74,15 @@ func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32) (bool, *vrf.
 }
 
 // IsCommitteeByProof ...
-func IsCommitteeByProof(proof *vrf.Proof) bool {
-	return isCommitteeByProof(proof)
+func IsCommitteeByProof(proof *vrf.Proof, th uint32) bool {
+	return isCommitteeByProof(proof, th)
 }
 
-func isCommitteeByProof(proof *vrf.Proof) bool {
+func isCommitteeByProof(proof *vrf.Proof, th uint32) bool {
 	// Compute the hash of the proof
 	h := thor.Blake2b(proof[:])
 	// Get the threshold
-	th := getCommitteeThreshold()
+	// th := getCommitteeThreshold()
 	// Is a committee member if the hash is no larger than the threshold
 	if binary.BigEndian.Uint32(h.Bytes()) <= th {
 		return true
@@ -276,7 +277,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 	}
 
 	// validate committeeship
-	if !isCommitteeByProof(ed.VrfProof()) {
+	if !isCommitteeByProof(ed.VrfProof(), getCommitteeThreshold()) {
 		// return consensusError("Not a committee member")
 		return newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "")
 	}
