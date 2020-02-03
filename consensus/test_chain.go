@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package test
+package consensus
 
 import (
 	"crypto/ecdsa"
@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/packer"
@@ -45,7 +44,7 @@ func TxSign(builder *tx.Builder, sk *ecdsa.PrivateKey) *tx.Transaction {
 
 // TempChain ...
 type TempChain struct {
-	Con          *consensus.Consensus
+	Con          *Consensus
 	Time         uint64
 	Tag          byte
 	Original     *block.Block
@@ -61,10 +60,10 @@ type TempChain struct {
 }
 
 type account struct {
-	ethsk *ecdsa.PrivateKey
-	addr  thor.Address
-	vrfsk *vrf.PrivateKey
-	vrfpk *vrf.PublicKey
+	Ethsk *ecdsa.PrivateKey
+	Addr  thor.Address
+	Vrfsk *vrf.PrivateKey
+	Vrfpk *vrf.PublicKey
 }
 
 // NewTempChain generates thor.MaxBlockProposers key pairs and register them as master nodes
@@ -97,10 +96,10 @@ func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
 
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 			for _, acc := range accs {
-				state.SetBalance(acc.addr, bal)
-				state.SetEnergy(acc.addr, bal, launchTime)
+				state.SetBalance(acc.Addr, bal)
+				state.SetEnergy(acc.Addr, bal, launchTime)
 
-				builtin.Authority.Native(state).Add(acc.addr, acc.addr, thor.Bytes32{}, acc.vrfpk.Bytes32())
+				builtin.Authority.Native(state).Add(acc.Addr, acc.Addr, thor.Bytes32{}, acc.Vrfpk.Bytes32())
 			}
 			return nil
 		})
@@ -116,7 +115,7 @@ func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
 		return nil, err
 	}
 
-	con := consensus.New(c, stateCreator, forkConfig)
+	con := New(c, stateCreator, forkConfig)
 
 	return &TempChain{
 		Con:          con,
@@ -146,7 +145,7 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 
 	// search for the legit proposer
 	for _, acc := range tc.Nodes {
-		p := packer.New(tc.Chain, tc.StateCreator, acc.addr, &acc.addr, tc.forkConfig)
+		p := packer.New(tc.Chain, tc.StateCreator, acc.Addr, &acc.Addr, tc.forkConfig)
 		flow, err = p.Schedule(parent.Header(), now)
 		if err != nil {
 			continue
@@ -168,16 +167,16 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 	}
 
 	// pack block summary
-	bs, _, err := flow.PackTxSetAndBlockSummary(proposer.ethsk)
+	bs, _, err := flow.PackTxSetAndBlockSummary(proposer.Ethsk)
 	if err != nil {
 		return err
 	}
 
 	// pack endorsements
 	for _, acc := range tc.Nodes {
-		if ok, proof, _ := tc.Con.IsCommittee(acc.vrfsk, now); ok {
+		if ok, proof, _ := tc.Con.IsCommittee(acc.Vrfsk, now); ok {
 			ed := block.NewEndorsement(bs, proof)
-			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
+			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.Ethsk)
 			ed = ed.WithSignature(sig)
 			flow.AddEndoresement(ed)
 		}
@@ -190,7 +189,7 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 	}
 
 	// pack block
-	newBlock, stage, receipts, err := flow.Pack(proposer.ethsk)
+	newBlock, stage, receipts, err := flow.Pack(proposer.Ethsk)
 	if err != nil {
 		return err
 	}
@@ -229,7 +228,7 @@ func (tc *TempChain) CommitNewBlock() error {
 
 // Sign ...
 func (tc *TempChain) Sign(blk *block.Block) (*block.Block, error) {
-	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.Proposer.ethsk)
+	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.Proposer.Ethsk)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +251,7 @@ func (tc *TempChain) Rebuild(builder *block.Builder) (*block.Builder, error) {
 		header.TxsRoot(),
 		header.Timestamp(),
 		header.TotalScore())
-	sig, err := crypto.Sign(bs.SigningHash().Bytes(), tc.Proposer.ethsk)
+	sig, err := crypto.Sign(bs.SigningHash().Bytes(), tc.Proposer.Ethsk)
 	if err != nil {
 		return nil, err
 	}
@@ -266,9 +265,9 @@ func (tc *TempChain) Rebuild(builder *block.Builder) (*block.Builder, error) {
 
 	// rebuild endorsements
 	for _, acc := range tc.Nodes {
-		if ok, proof, err := tc.Con.IsCommittee(acc.vrfsk, header.Timestamp()); ok {
+		if ok, proof, err := tc.Con.IsCommittee(acc.Vrfsk, header.Timestamp()); ok {
 			ed := block.NewEndorsement(bs, proof)
-			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.ethsk)
+			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), acc.Ethsk)
 			proofs = append(proofs, proof)
 			sigs = append(sigs, sig)
 		} else if err != nil {
@@ -321,4 +320,11 @@ func (tc *TempChain) OriginalBuilder() *block.Builder {
 		SigOnBlockSummary(header.SigOnBlockSummary()).
 		SigsOnEndorsement(header.SigsOnEndoresment()).
 		VrfProofs(header.VrfProofs())
+}
+
+func (tc *TempChain) Consent(blk *block.Block) error {
+	if _, _, err := tc.Con.Process(blk, tc.Time); err != nil {
+		return err
+	}
+	return nil
 }
