@@ -172,7 +172,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&bs); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkBlock(newBlock.Header().ID())
+		peer.MarkBlockSummary(bs.RLPHash())
 		c.newEndorsementFeed.Send(&NewBlockSummaryEvent{Summary: bs})
 		write(&struct{}{})
 	case proto.MsgNewTxSet:

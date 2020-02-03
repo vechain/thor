@@ -53,11 +53,6 @@ type headerBody struct {
 	Signature []byte
 }
 
-// Seed returns a random seed for computing the beacon
-func (h *Header) Seed() thor.Bytes32 {
-	return h.ID()
-}
-
 // ParentID returns id of parent block.
 func (h *Header) ParentID() thor.Bytes32 {
 	return h.body.ParentID

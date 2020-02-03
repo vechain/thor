@@ -21,7 +21,6 @@ import (
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/test"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
