@@ -27,12 +27,6 @@ package.json
 
 .fake_gopath_suffix
 
-<<<<<<< HEAD
-/tmp/
-/cmd/thor/thor
-/cmd/thor/log
-/cmd/vrfkey/vrfkey
-=======
 /cmd/thor/log
 /cmd/thor/thor
 /cmd/vrfkey/vrfkey
@@ -42,4 +36,3 @@ package.json
 /tmp/node3/
 /tmp/launch_node*.sh
 /tmp/test.json
->>>>>>> custom network config
