@@ -82,7 +82,7 @@ func New(chain *chain.Chain, stateCreator *state.Creator, options Options) *TxPo
 	}
 
 	pool.goes.Go(pool.housekeeping)
-	pool.goes.Go(pool.fetchBlocklistLoop)
+	// pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
 }
 
