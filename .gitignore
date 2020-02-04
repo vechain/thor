@@ -25,7 +25,7 @@ package.json
 /.vscode/
 /vendor/
 
-.fake_gopath_suffix
+# .fake_gopath_suffix
 
 /cmd/thor/log
 /cmd/thor/thor
@@ -34,5 +34,5 @@ package.json
 /tmp/node1/
 /tmp/node2/
 /tmp/node3/
-/tmp/launch_node*.sh
+# /tmp/launch_node*.sh
 /tmp/test.json

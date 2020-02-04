@@ -1,8 +1,10 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -17,25 +19,40 @@ func randByte32() (b thor.Bytes32) {
 	return
 }
 
-func (n *Node) sendBlockSummary() {
-	bs := block.NewBlockSummary(
-		randByte32(),
-		randByte32(),
-		uint64(0),
-		uint64(0),
-	)
-	sig, _ := crypto.Sign(bs.SigningHash().Bytes(), n.master.PrivateKey)
-	bs = bs.WithSignature(sig)
-
-	log.Debug("sent block summary", "status", "valid", "id", bs.ID())
-	n.comm.BroadcastBlockSummary(bs)
-
-	bs = bs.Copy().WithSignature([]byte(nil))
-	if !bs.ID().IsZero() {
-		panic("id should be zero")
+func (n *Node) sendBlockSummary(ctx context.Context) {
+	addr, _ := hex.DecodeString("c684d01c75b55f97342f7d6308c6bb6a9044049b")
+	if bytes.Compare(n.master.Address().Bytes(), addr) != 0 {
+		return
 	}
-	log.Debug("sent block summary", "status", "invalid", "id", bs.ID())
-	n.comm.BroadcastBlockSummary(bs)
+
+	ticker := time.NewTicker(time.Second * 5)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			bs := block.NewBlockSummary(
+				randByte32(),
+				randByte32(),
+				uint64(0),
+				uint64(0),
+			)
+			sig, _ := crypto.Sign(bs.SigningHash().Bytes(), n.master.PrivateKey)
+			bs = bs.WithSignature(sig)
+
+			log.Debug("sent block summary", "status", "valid", "id", bs.ID())
+			n.comm.BroadcastBlockSummary(bs)
+
+			bs = bs.Copy().WithSignature([]byte(nil))
+			if !bs.ID().IsZero() {
+				panic("id should be zero")
+			}
+			log.Debug("sent block summary", "status", "invalid", "id", bs.ID())
+			n.comm.BroadcastBlockSummary(bs)
+		}
+	}
 }
 
 func (n *Node) simpleHouseKeeping(ctx context.Context) {

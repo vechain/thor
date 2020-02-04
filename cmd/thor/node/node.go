@@ -100,9 +100,8 @@ func (n *Node) Run(ctx context.Context) error {
 	// n.goes.Go(func() { n.txStashLoop(ctx) })
 	// n.goes.Go(func() { n.packerLoop(ctx) })
 
-	// n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
-
-	// n.sendBlockSummary()
+	n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
+	n.goes.Go(func() { n.sendBlockSummary(ctx) })
 
 	n.goes.Wait()
 	return nil
