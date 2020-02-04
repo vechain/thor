@@ -82,7 +82,6 @@ func main() {
 			skipLogsFlag,
 			pprofFlag,
 			verifyLogsFlag,
-			skipTxPoolBlockList,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -153,10 +152,6 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
-	if skipBlockList := ctx.Bool(skipTxPoolBlockList.Name); !skipBlockList {
-		txpoolOpt.BlocklistCacheFilePath = filepath.Join(instanceDir, "blocklist")
-		txpoolOpt.BlocklistFetchURL = "https://env.vechain.org/blocklist.txt"
-	}
 	txPool := txpool.New(chain, state.NewCreator(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
