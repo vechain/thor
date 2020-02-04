@@ -97,15 +97,15 @@ func New(
 
 // Run ...
 func (n *Node) Run(ctx context.Context) error {
-	// n.comm.Sync(n.handleBlockStream)
+	n.comm.Sync(n.handleBlockStream)
 
 	// n.goes.Go(func() { n.houseKeeping(ctx) })
 	// n.goes.Go(func() { n.txStashLoop(ctx) })
 	// n.goes.Go(func() { n.packerLoop(ctx) })
 
-	n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
+	// n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
 
-	n.sendBlockSummary()
+	// n.sendBlockSummary()
 
 	n.goes.Wait()
 	return nil

@@ -45,6 +45,16 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		executor = builtin.Executor.Address
 	}
 
+	if gen.Params.BaseGasPrice == nil {
+		gen.Params.BaseGasPrice = new(big.Int)
+	}
+	if gen.Params.RewardRatio == nil {
+		gen.Params.RewardRatio = new(big.Int)
+	}
+	if gen.Params.ProposerEndorsement == nil {
+		gen.Params.ProposerEndorsement = new(big.Int).SetInt64(0)
+	}
+
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
@@ -166,7 +176,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
-		data := mustEncodeInput(builtin.Authority.ABI, "add", anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		data := mustEncodeInput(builtin.Authority.ABI, "add",
+			anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 
@@ -205,6 +216,7 @@ type Authority struct {
 	MasterAddress   thor.Address `json:"masterAddress"`
 	EndorsorAddress thor.Address `json:"endorsorAddress"`
 	Identity        thor.Bytes32 `json:"identity"`
+	VrfPublicKey    thor.Bytes32 `json:"vrfPublicKey"`
 }
 
 // Executor is the params for executor info

@@ -81,7 +81,7 @@ func New(repo *chain.Repository, stater *state.Stater, options Options) *TxPool 
 	}
 
 	pool.goes.Go(pool.housekeeping)
-	pool.goes.Go(pool.fetchBlocklistLoop)
+	// pool.goes.Go(pool.fetchBlocklistLoop)
 	return pool
 }
 
