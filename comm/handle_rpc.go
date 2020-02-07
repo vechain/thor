@@ -176,7 +176,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.New("zero block summary id")
 		}
 		peer.MarkBlockSummary(bs.ID())
-		c.newEndorsementFeed.Send(&NewBlockSummaryEvent{Summary: bs})
+		c.newBlockSummaryFeed.Send(&NewBlockSummaryEvent{Summary: bs})
 		write(&struct{}{})
 	case proto.MsgNewTxSet:
 		var ts *block.TxSet
@@ -187,7 +187,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.New("zero tx set id")
 		}
 		peer.MarkTxSet(ts.ID())
-		c.newEndorsementFeed.Send(&NewTxSetEvent{TxSet: ts})
+		c.newTxSetFeed.Send(&NewTxSetEvent{TxSet: ts})
 		write(&struct{}{})
 	case proto.MsgNewEndorsement:
 		var ed *block.Endorsement
@@ -209,7 +209,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.New("zero block header id")
 		}
 		peer.MarkBlockHeader(hd.ID())
-		c.newEndorsementFeed.Send(&NewBlockHeaderEvent{Header: hd})
+		c.newBlockHeaderFeed.Send(&NewBlockHeaderEvent{Header: hd})
 		write(&struct{}{})
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)

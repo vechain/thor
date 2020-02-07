@@ -101,7 +101,7 @@ func (n *Node) Run(ctx context.Context) error {
 	// n.goes.Go(func() { n.packerLoop(ctx) })
 
 	n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
-	n.goes.Go(func() { n.sendBlockSummary(ctx) })
+	n.goes.Go(func() { n.sendNewStructObj(ctx) })
 
 	n.goes.Wait()
 	return nil

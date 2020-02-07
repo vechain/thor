@@ -69,6 +69,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	knownEndorsements, _ := lru.New(maxKnownEndorsement)
 	knownTxSets, _ := lru.New(maxKnownTxSet)
 	knownBlockHeaders, _ := lru.New(maxKnownBlockHeader)
+
 	return &Peer{
 		Peer:                peer,
 		RPC:                 rpc.New(peer, rw),

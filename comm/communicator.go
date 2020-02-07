@@ -259,6 +259,7 @@ func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
 	})
 
 	for _, peer := range peers {
+		peer.MarkBlockSummary(bs.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockSummary(c.ctx, peer, bs); err != nil {
 				peer.logger.Debug("failed to broadcast new block summary", "err", err)
@@ -274,6 +275,7 @@ func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
 	})
 
 	for _, peer := range peers {
+		peer.MarkTxSet(ts.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewTxSet(c.ctx, peer, ts); err != nil {
 				peer.logger.Debug("failed to broadcast new tx set", "err", err)
@@ -289,6 +291,7 @@ func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
 	})
 
 	for _, peer := range peers {
+		peer.MarkBlockHeader(header.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockHeader(c.ctx, peer, header); err != nil {
 				peer.logger.Debug("failed to broadcast new block header", "err", err)
@@ -305,7 +308,7 @@ func (c *Communicator) BroadcastEndorsement(ed *block.Endorsement) {
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkEndorsement(ed.SigningHash())
+		peer.MarkEndorsement(ed.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewEndorsement(c.ctx, peer, ed); err != nil {
 				peer.logger.Debug("failed to broadcast new endorsement", "err", err)
@@ -325,6 +328,7 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 	toAnnounce := peers[p:]
 
 	for _, peer := range toPropagate {
+		log.Info("sending block", "peer", peer.ID())
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
