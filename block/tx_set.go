@@ -86,7 +86,7 @@ func (ts *TxSet) WithSignature(sig []byte) *TxSet {
 
 // EncodeRLP implements rlp.Encoder
 func (ts *TxSet) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, ts.body)
+	return rlp.Encode(w, &ts.body)
 }
 
 // DecodeRLP implements rlp.Decoder.

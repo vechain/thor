@@ -92,7 +92,7 @@ func (ed *Endorsement) WithSignature(sig []byte) *Endorsement {
 
 // EncodeRLP implements rlp.Encoder
 func (ed *Endorsement) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, ed.body)
+	return rlp.Encode(w, &ed.body)
 }
 
 // DecodeRLP implements rlp.Decoder.
