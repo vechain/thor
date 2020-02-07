@@ -34,5 +34,6 @@ package.json
 /tmp/node1/
 /tmp/node2/
 /tmp/node3/
-/tmp/launch_node*.sh
 /tmp/test.json
+
+__debug_bin

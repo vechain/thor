@@ -97,7 +97,7 @@ func (bs *Summary) WithSignature(sig []byte) *Summary {
 
 // EncodeRLP implements rlp.Encoder
 func (bs *Summary) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, bs.body)
+	return rlp.Encode(w, &bs.body)
 }
 
 // DecodeRLP implements rlp.Decoder.
