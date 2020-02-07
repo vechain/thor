@@ -11,9 +11,12 @@ import (
 
 // Constants
 const (
-	Name              = "thor"
-	Version    uint   = 1
-	Length     uint64 = 8
+	Name         = "thor"
+	Version uint = 1
+	/**
+	 * INCREASE LENGTH FOR NEW TYPES OF MSGS
+	 */
+	Length     uint64 = 12 //8
 	MaxMsgSize        = 10 * 1024 * 1024
 )
 
@@ -60,7 +63,7 @@ func MsgName(msgCode uint64) string {
 	case MsgNewEndorsement:
 		return "MsgNewEndorsement"
 	case MsgNewBlockHeader:
-		return "MsgNewHeader"
+		return "MsgNewBlockHeader"
 	default:
 		return fmt.Sprintf("unknown msg code(%v)", msgCode)
 	}
