@@ -145,6 +145,9 @@ type Range struct {
 }
 
 func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
+	if r == nil {
+		return nil, nil
+	}
 	if r.Unit == TimeRangeType {
 		emptyRange := logdb.Range{
 			From: math.MaxUint32,
