@@ -92,5 +92,4 @@ fi
 if [ "$ID" == "3" ]; then
     CMD="$CMD --api-addr localhost:8671"
 fi
-
 $CMD
