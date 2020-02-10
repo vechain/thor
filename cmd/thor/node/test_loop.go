@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
-	"encoding/hex"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -22,11 +21,11 @@ func randByte32() (b thor.Bytes32) {
 	return
 }
 
-// sendNewStructObj randomly creates and broadcast instances of
+// testBroadcasting randomly creates and broadcast instances of
 // the structs defined for vip193. It is used for testing the
 // sending/receiving functions.
-func (n *Node) sendNewStructObj(ctx context.Context) {
-	ticker := time.NewTicker(time.Second * 20)
+func (n *Node) testBroadcasting(ctx context.Context) {
+	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
 	<-ticker.C
@@ -48,13 +47,7 @@ func (n *Node) sendNewStructObj(ctx context.Context) {
 	n.comm.BroadcastBlockHeader(header)
 }
 
-// sendBlockComponets creates components of a block and send them
-// to other nodes to assemble the block. It is used to test the
-// assembling function of the modified housekeeping loop.
-//
-// Note that it requires to set parameters to allow other nodes
-// to be certainly selected as committee members
-func (n *Node) sendBlockComponets() {
+func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 	// Ubuntu
 	hexKeys := []string{
 		"9394eda09b27bba53362d88c1c7aac18463468492b86e0ff7a6aa9bfd9753bd5",
@@ -63,29 +56,29 @@ func (n *Node) sendBlockComponets() {
 	}
 
 	var (
-		ethsk []*ecdsa.PrivateKey
-		vrfsk []*vrf.PrivateKey
+		ethsks []*ecdsa.PrivateKey
+		vrfsks []*vrf.PrivateKey
 	)
 
 	for _, key := range hexKeys {
-		esk, _ := crypto.HexToECDSA(key)
-		ethsk = append(ethsk, esk)
-		_, vsk := vrf.GenKeyPairFromSeed(esk.D.Bytes())
-		vrfsk = append(vrfsk, vsk)
+		ethsk, _ := crypto.HexToECDSA(key)
+		ethsks = append(ethsks, ethsk)
+		_, vrfsk := vrf.GenKeyPairFromSeed(ethsk.D.Bytes())
+		vrfsks = append(vrfsks, vrfsk)
 	}
 
-	addr, _ := hex.DecodeString("")
-	if bytes.Compare(n.master.Address().Bytes(), addr) != 0 {
+	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
 		return
 	}
 
 	best := n.chain.BestBlock()
-
 	flow, err := n.packer.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		log.Error("Schedule", "err", err)
 		return
 	}
+
+	<-time.NewTicker(time.Second * 20).C
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -93,6 +86,8 @@ func (n *Node) sendBlockComponets() {
 loop:
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-ticker.C:
 			now := uint64(time.Now().Unix())
 			if now < flow.When() {
@@ -103,19 +98,52 @@ loop:
 		}
 	}
 
-	log.Debug("begin to pack")
-	t1 := mclock.Now()
+	log.Info("packing new block")
+	launchTime := mclock.Now()
 
-	bs, _, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
-	log.Debug("packed block summary", "id", bs.ID())
+	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+	summaryDone := mclock.Now()
 
-	ethsk, _ := crypto.HexToECDSA("")
-	_, vrfsk := vrf.GenKeyPairFromSeed(ethsk.D.Bytes())
+	for i, vrfsk := range vrfsks {
+		ok, proof, err := n.cons.IsCommittee(vrfsk, uint64(time.Now().Unix()))
+		if err != nil || !ok {
+			panic("Not a committee")
+		}
 
+		ed := block.NewEndorsement(bs, proof)
+		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsks[i])
+		ed = ed.WithSignature(sig)
+
+		flow.AddEndoresement(ed)
+	}
+	endorsementDone := mclock.Now()
+
+	block, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+	blockDone := mclock.Now()
+
+	log.Debug("Committing new block")
+	if err := n.commit(block, stage, receipts); err != nil {
+		panic(err)
+	}
+	commitDone := mclock.Now()
+
+	display(block, receipts,
+		summaryDone-launchTime,
+		endorsementDone-summaryDone,
+		blockDone-endorsementDone,
+		commitDone-blockDone,
+	)
+
+	log.Info("broadcasting block header", "id", block.Header().ID())
+	n.comm.BroadcastBlockHeader(block.Header())
+	if ts.IsEmpty() {
+		log.Info("broadcasting tx set", "id", ts.ID())
+		n.comm.BroadcastTxSet(ts)
+	}
 }
 
 func (n *Node) simpleHouseKeeping(ctx context.Context) {
-	log.Debug("entering simple house-keeping loop")
+	log.Info("entering simple house-keeping loop")
 	defer log.Info("leaving simple house-keeping loop")
 
 	var scope event.SubscriptionScope
