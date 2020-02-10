@@ -353,12 +353,12 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 // BroadcastBlockID ...
 func (c *Communicator) BroadcastBlockID(id thor.Bytes32) {
 	peers := c.peerSet.Slice().Filter(func(p *Peer) bool {
-		return !p.IsBlockKnown(blk.Header().ID())
+		return !p.IsBlockKnown(id)
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkBlock(id)
+		// peer.MarkBlock(id)
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockID(c.ctx, peer, id); err != nil {
 				peer.logger.Debug("failed to broadcast new block id", "err", err)
