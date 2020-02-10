@@ -86,40 +86,7 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-// ValidateBlockHeader validates a block header of the CURRENT round
-func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
-	if header == nil {
-		return newConsensusError(trHeader, "empty header", nil, nil, "")
-	}
-
-	// Check if the header is of the current round
-	if c.Timestamp(nowTimestamp) != header.Timestamp() {
-		return newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataExpected, strDataCurr, strDataNowTime},
-			[]interface{}{c.Timestamp(nowTimestamp), header.Timestamp(), nowTimestamp}, "")
-	}
-
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		// return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
-		return newConsensusError(trHeader, strErrGasLimit,
-			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.GasLimit(), header.GasLimit()}, "")
-	}
-
-	if header.GasUsed() > header.GasLimit() {
-		// return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
-		return newConsensusError(trHeader, strErrGasExceed,
-			[]string{strDataExpected, strDataCurr},
-			[]interface{}{header.GasLimit(), header.GasUsed()}, "")
-	}
-
-	if header.TotalScore() <= parent.TotalScore() {
-		// return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
-		return newConsensusError(trHeader, strErrTotalScore,
-			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.TotalScore(), header.TotalScore()}, "")
-	}
-
+func (c *Consensus) validateBlockHeaderVip193(header *block.Header, parentHeader *block.Header) error {
 	// reconstruct and validate the block summary
 	bs := block.NewBlockSummary(
 		header.ParentID(),
@@ -127,7 +94,7 @@ func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *bloc
 		header.Timestamp(),
 		header.TotalScore()).WithSignature(header.SigOnBlockSummary())
 
-	if err := c.ValidateBlockSummary(bs, parent, header.Timestamp()); err != nil {
+	if err := c.ValidateBlockSummary(bs, parentHeader, header.Timestamp()); err != nil {
 		return err.(consensusError).AddTraceInfo(trHeader)
 	}
 
@@ -149,7 +116,7 @@ func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *bloc
 
 	for i, proof := range proofs {
 		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
-		if err := c.ValidateEndorsement(ed, parent, header.Timestamp()); err != nil {
+		if err := c.ValidateEndorsement(ed, parentHeader, header.Timestamp()); err != nil {
 			return err.(consensusError).AddTraceInfo(trHeader)
 		}
 	}
@@ -157,30 +124,24 @@ func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *bloc
 	return nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
-	if header.Timestamp() <= parent.Timestamp() {
-		// return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
+// ValidateBlockHeader validates a block header of the CURRENT round
+func (c *Consensus) ValidateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
+	if header == nil {
+		return newConsensusError(trHeader, "empty header", nil, nil, "")
+	}
+
+	// Check if the header is in the current round
+	if c.Timestamp(nowTimestamp) != header.Timestamp() {
 		return newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.Timestamp(), header.Timestamp()}, "")
+			[]string{strDataExpected, strDataCurr, strDataNowTime},
+			[]interface{}{c.Timestamp(nowTimestamp), header.Timestamp(), nowTimestamp}, "")
 	}
 
-	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
-		// return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
-		return newConsensusError(trHeader, strErrTimestamp,
-			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.Timestamp(), header.Timestamp()}, "")
-	}
-
-	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
-		return errFutureBlock
-	}
-
-	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
+	if !block.GasLimit(header.GasLimit()).IsValid(parentHeader.GasLimit()) {
 		// return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 		return newConsensusError(trHeader, strErrGasLimit,
 			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.GasLimit(), header.GasLimit()}, "")
+			[]interface{}{parentHeader.GasLimit(), header.GasLimit()}, "")
 	}
 
 	if header.GasUsed() > header.GasLimit() {
@@ -190,55 +151,57 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 			[]interface{}{header.GasLimit(), header.GasUsed()}, "")
 	}
 
-	if header.TotalScore() <= parent.TotalScore() {
+	if header.TotalScore() <= parentHeader.TotalScore() {
 		// return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 		return newConsensusError(trHeader, strErrTotalScore,
 			[]string{strDataParent, strDataCurr},
-			[]interface{}{parent.TotalScore(), header.TotalScore()}, "")
+			[]interface{}{parentHeader.TotalScore(), header.TotalScore()}, "")
 	}
 
-	// reconstruct and validate the block summary
-	bs := block.NewBlockSummary(
-		header.ParentID(),
-		header.TxsRoot(),
-		header.Timestamp(),
-		header.TotalScore()).WithSignature(header.SigOnBlockSummary())
-	/**
-	 * The header doesn't have to be in the current round and the timestamp
-	 * input to ValidateBlockSummary SHOULD NOT be nowTimestamp
-	 */
-	if err := c.ValidateBlockSummary(bs, parent, header.Timestamp()); err != nil {
-		return err.(consensusError).AddTraceInfo(trHeader)
+	return c.validateBlockHeaderVip193(header, parentHeader)
+}
+
+func (c *Consensus) validateBlockHeader(header *block.Header, parentHeader *block.Header, nowTimestamp uint64) error {
+	if header.Timestamp() <= parentHeader.Timestamp() {
+		// return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
+		return newConsensusError(trHeader, strErrTimestamp,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parentHeader.Timestamp(), header.Timestamp()}, "")
 	}
 
-	// reconstuct and validate endoresements
-	sigs := header.SigsOnEndoresment()
-	proofs := header.VrfProofs()
+	if (header.Timestamp()-parentHeader.Timestamp())%thor.BlockInterval != 0 {
+		// return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
+		return newConsensusError(trHeader, strErrTimestamp,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parentHeader.Timestamp(), header.Timestamp()}, "")
+	}
 
-	if len(sigs) != int(thor.CommitteeSize) {
-		return newConsensusError(trHeader, "invalid number of endoresment signatures",
+	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
+		return errFutureBlock
+	}
+
+	if !block.GasLimit(header.GasLimit()).IsValid(parentHeader.GasLimit()) {
+		// return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+		return newConsensusError(trHeader, strErrGasLimit,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parentHeader.GasLimit(), header.GasLimit()}, "")
+	}
+
+	if header.GasUsed() > header.GasLimit() {
+		// return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
+		return newConsensusError(trHeader, strErrGasExceed,
 			[]string{strDataExpected, strDataCurr},
-			[]interface{}{int(thor.CommitteeSize), len(sigs)}, "")
+			[]interface{}{header.GasLimit(), header.GasUsed()}, "")
 	}
 
-	if len(proofs) != int(thor.CommitteeSize) {
-		return newConsensusError(trHeader, "invalid number of vrf proofs",
-			[]string{strDataExpected, strDataCurr},
-			[]interface{}{int(thor.CommitteeSize), len(proofs)}, "")
+	if header.TotalScore() <= parentHeader.TotalScore() {
+		// return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
+		return newConsensusError(trHeader, strErrTotalScore,
+			[]string{strDataParent, strDataCurr},
+			[]interface{}{parentHeader.TotalScore(), header.TotalScore()}, "")
 	}
 
-	for i, proof := range proofs {
-		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
-		/**
-		 * The header doesn't have to be in the current round and the timestamp
-		 * input to ValidateBlockSummary SHOULD NOT be nowTimestamp
-		 */
-		if err := c.ValidateEndorsement(ed, parent, header.Timestamp()); err != nil {
-			return err.(consensusError).AddTraceInfo(trHeader)
-		}
-	}
-
-	return nil
+	return c.validateBlockHeaderVip193(header, parentHeader)
 }
 
 func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {

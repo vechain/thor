@@ -46,29 +46,24 @@ THOR="$THORDIR/cmd/thor/thor"
 DIR="$THORDIR/tmp/node$ID"
 JSON="$THORDIR/tmp/test.json"
 
-# Ubuntu
-BOOTNODE="enode://eb08ccf2668296b135e89d658f9a1a33408d8c7c9fe6c50b3501ff27265b2f8debc7f6d31e54e10d3faa47b9dcd919fa2e89cb05e0d8389e42909233baca89df@127.0.0.1:"
-# Mac
-# BOOTNODE="enode://d047959848c3139b718a65ecce3eb4823accf05ccfa0be14d2ac552840582890c4c047c495152232d99f5c5ce670e82be154e280bc290d7dcebd7de67786400c@127.0.0.1:"
+if [ "$(uname)" == "Darwin" ]; then 
+    # Mac
+    BOOTNODE="enode://d047959848c3139b718a65ecce3eb4823accf05ccfa0be14d2ac552840582890c4c047c495152232d99f5c5ce670e82be154e280bc290d7dcebd7de67786400c@127.0.0.1:"
+else
+    # Ubuntu
+    BOOTNODE="enode://eb08ccf2668296b135e89d658f9a1a33408d8c7c9fe6c50b3501ff27265b2f8debc7f6d31e54e10d3faa47b9dcd919fa2e89cb05e0d8389e42909233baca89df@127.0.0.1:"
+fi
 
-# PORT=11235
-# while [ ! -z "$(sudo netstat -p udp | grep $PORT)" ]
-# do
-#     ((PORT=PORT+1))
-# done
-
+# remove peer cache files
 FILE=$(find $THORDIR/tmp/node1/ -iname peers.cache)
-# echo "file1=$FILE"
 if [ ! -z "$FILE" ]; then 
     rm $FILE
 fi
 FILE=$(find $THORDIR/tmp/node2/ -iname peers.cache)
-# echo "file2=$FILE"
 if [ ! -z "$FILE" ]; then 
     rm $FILE
 fi
 FILE=$(find $THORDIR/tmp/node3/ -iname peers.cache)
-# echo "file3=$FILE"
 if [ ! -z "$FILE" ]; then 
     rm $FILE
 fi
@@ -88,8 +83,8 @@ fi
 if [ "$ID" == "2" ]; then
     CMD="$CMD --api-addr localhost:8670"
 fi
-
 if [ "$ID" == "3" ]; then
     CMD="$CMD --api-addr localhost:8671"
 fi
-$CMD
+
+ $CMD
