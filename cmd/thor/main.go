@@ -198,6 +198,7 @@ func defaultAction(ctx *cli.Context) error {
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
+<<<<<<< HEAD
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
@@ -209,6 +210,16 @@ func defaultAction(ctx *cli.Context) error {
 	if err := p2pcom.Start(); err != nil {
 		return err
 	}
+=======
+	apiURL, srvCloser := startAPIServer(ctx, apiHandler, chain.GenesisBlock().Header().ID())
+	defer func() { log.Info("stopping API server..."); srvCloser() }()
+
+	printStartupMessage2(apiURL, getNodeID(ctx))
+
+	fmt.Printf("NODEID=%v\n", getNodeID(ctx))
+
+	p2pcom.Start()
+>>>>>>> routine
 	defer p2pcom.Stop()
 
 	if !ctx.Bool(disablePrunerFlag.Name) {
