@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -12,7 +13,9 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/vrf"
 )
 
@@ -47,18 +50,25 @@ func (n *Node) testBroadcasting(ctx context.Context) {
 	n.comm.BroadcastBlockHeader(header)
 }
 
-func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
-	// Ubuntu
-	hexKeys := []string{
-		"9394eda09b27bba53362d88c1c7aac18463468492b86e0ff7a6aa9bfd9753bd5",
-		"0276397acb72009048bcf3e91fda656fc87511b685f28b181e620817b1806e71",
-		"19e4a1bb4ccd861ba4aedb6c74f4b94165d2dbb4eea6acc9a701bfb5b6adc843",
-	}
+func getKeys() (ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey) {
+	var hexKeys []string
 
-	var (
-		ethsks []*ecdsa.PrivateKey
-		vrfsks []*vrf.PrivateKey
-	)
+	switch runtime.GOOS {
+	case "linux":
+		hexKeys = []string{
+			"9394eda09b27bba53362d88c1c7aac18463468492b86e0ff7a6aa9bfd9753bd5",
+			"0276397acb72009048bcf3e91fda656fc87511b685f28b181e620817b1806e71",
+			"19e4a1bb4ccd861ba4aedb6c74f4b94165d2dbb4eea6acc9a701bfb5b6adc843",
+		}
+	case "darwin":
+		hexKeys = []string{
+			"edfeb374eee0c7293bacd4b0a66b472f3bd73bedf91c59365d53efca9e304e8c",
+			"b59e57175c45c85463ac948cdfc7f669e70922d3c6ae56843022dac76855f552",
+			"a0ca961e7e98ff17b2593195c39e4bc21472c29f215ac056930cbd7b06084a27",
+		}
+	default:
+		panic("unrecognized os")
+	}
 
 	for _, key := range hexKeys {
 		ethsk, _ := crypto.HexToECDSA(key)
@@ -67,6 +77,101 @@ func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 		vrfsks = append(vrfsks, vrfsk)
 	}
 
+	return
+}
+
+func (n *Node) testSync(ctx context.Context) {
+	ethsks, vrfsks := getKeys()
+	// exit if it is not node 1
+	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
+		return
+	}
+
+	blk, stage, receipts, err := n.newLocalBlock(ctx, ethsks, vrfsks, nil)
+	if err != nil {
+		panic(err)
+	}
+	if err := n.commit(blk, stage, receipts); err != nil {
+		panic(err)
+	}
+	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+
+	blk, stage, receipts, err = n.newLocalBlock(ctx, ethsks, vrfsks, nil)
+	if err != nil {
+		panic(err)
+	}
+	if err := n.commit(blk, stage, receipts); err != nil {
+		panic(err)
+	}
+	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (n *Node) newLocalBlock(ctx context.Context,
+	ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey,
+	txs tx.Transactions) (
+	blk *block.Block, stage *state.Stage, receipts tx.Receipts, err error,
+) {
+	best := n.chain.BestBlock()
+	flow, err := n.packer.Schedule(best.Header(), uint64(time.Now().Unix()))
+	if err != nil {
+		return
+	}
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			now := uint64(time.Now().Unix())
+			if now < flow.When() {
+				continue
+			} else {
+				break loop
+			}
+		}
+	}
+
+	for _, tx := range txs {
+		if err := flow.Adopt(tx); err != nil {
+			log.Warn("failed to add tx", "id", tx.ID())
+		}
+	}
+	bs, _, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+
+	for i, vrfsk := range vrfsks {
+		ok, proof, err := n.cons.IsCommittee(vrfsk, uint64(time.Now().Unix()))
+		if err != nil || !ok {
+			panic("Not a committee")
+		}
+
+		ed := block.NewEndorsement(bs, proof)
+		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsks[i])
+		ed = ed.WithSignature(sig)
+
+		flow.AddEndoresement(ed)
+	}
+
+	blk, stage, receipts, err = flow.Pack(n.master.PrivateKey)
+	return
+}
+
+func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
+	ethsks, vrfsks := getKeys()
+	// exit if it is not node 1
 	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
 		return
 	}
