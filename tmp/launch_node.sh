@@ -46,7 +46,10 @@ THOR="$THORDIR/cmd/thor/thor"
 DIR="$THORDIR/tmp/node$ID"
 JSON="$THORDIR/tmp/test.json"
 
-BOOTNODE="enode://eb08ccf2668296b135e89d658f9a1a33408d8c7c9fe6c50b3501ff27265b2f8debc7f6d31e54e10d3faa47b9dcd919fa2e89cb05e0d8389e42909233baca89df@127.0.0.1:"
+# Ubuntu
+# BOOTNODE="enode://eb08ccf2668296b135e89d658f9a1a33408d8c7c9fe6c50b3501ff27265b2f8debc7f6d31e54e10d3faa47b9dcd919fa2e89cb05e0d8389e42909233baca89df@127.0.0.1:"
+# Mac
+BOOTNODE="enode://d047959848c3139b718a65ecce3eb4823accf05ccfa0be14d2ac552840582890c4c047c495152232d99f5c5ce670e82be154e280bc290d7dcebd7de67786400c@127.0.0.1:"
 
 # PORT=11235
 # while [ ! -z "$(sudo netstat -p udp | grep $PORT)" ]
