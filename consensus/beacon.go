@@ -11,23 +11,33 @@ import (
 // Round 0 : genesis
 // Epoch 1 : round [1, epoch_interval]
 // BlockNumber 0 : genesis
-func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
+func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 	if epoch == 0 {
 		return thor.BytesToBytes32(nil), newConsensusError(trNil, strErrZeroEpoch, nil, nil, "")
 	}
+
+	if beacon, ok := c.beaconCache.Get(epoch); ok {
+		return beacon.(thor.Bytes32), nil
+	}
+	defer func() {
+		if err == nil {
+			c.beaconCache.Add(epoch, beacon)
+		}
+	}()
 
 	best := c.chain.BestBlock()
 	lastRoundOfEpoch := (epoch - 1) * uint32(thor.EpochInterval)
 	lastTimestampOfEpoch := c.Timestamp(lastRoundOfEpoch)
 
-	var (
-		header *block.Header
-		err    error
-	)
+	var header *block.Header
 
 	// Start the search from the block with its number equal to lastRoundOfEpoch.
 	// The actual number may be smaller than lastRoundOfEpoch if there is any
-	// round when no block is produced.
+	// round when no block is produced. Therefore, we choose
+	//
+	// min(lastRoundOfEpoch, bestBlockNum)
+	//
+	// as the searching starting point
 	last := lastRoundOfEpoch
 	if last > best.Header().Number() {
 		last = best.Header().Number()
@@ -51,7 +61,8 @@ func (c *Consensus) beacon(epoch uint32) (thor.Bytes32, error) {
 		}
 	}
 
-	return compBeacon(header), nil
+	beacon = compBeacon(header)
+	return
 }
 
 // beacon = hash(concat(header.VrfProofs()...))

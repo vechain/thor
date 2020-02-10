@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/hex"
 	"time"
@@ -21,6 +22,9 @@ func randByte32() (b thor.Bytes32) {
 	return
 }
 
+// sendNewStructObj randomly creates and broadcast instances of
+// the structs defined for vip193. It is used for testing the
+// sending/receiving functions.
 func (n *Node) sendNewStructObj(ctx context.Context) {
 	ticker := time.NewTicker(time.Second * 20)
 	defer ticker.Stop()
@@ -44,7 +48,32 @@ func (n *Node) sendNewStructObj(ctx context.Context) {
 	n.comm.BroadcastBlockHeader(header)
 }
 
+// sendBlockComponets creates components of a block and send them
+// to other nodes to assemble the block. It is used to test the
+// assembling function of the modified housekeeping loop.
+//
+// Note that it requires to set parameters to allow other nodes
+// to be certainly selected as committee members
 func (n *Node) sendBlockComponets() {
+	// Ubuntu
+	hexKeys := []string{
+		"9394eda09b27bba53362d88c1c7aac18463468492b86e0ff7a6aa9bfd9753bd5",
+		"0276397acb72009048bcf3e91fda656fc87511b685f28b181e620817b1806e71",
+		"19e4a1bb4ccd861ba4aedb6c74f4b94165d2dbb4eea6acc9a701bfb5b6adc843",
+	}
+
+	var (
+		ethsk []*ecdsa.PrivateKey
+		vrfsk []*vrf.PrivateKey
+	)
+
+	for _, key := range hexKeys {
+		esk, _ := crypto.HexToECDSA(key)
+		ethsk = append(ethsk, esk)
+		_, vsk := vrf.GenKeyPairFromSeed(esk.D.Bytes())
+		vrfsk = append(vrfsk, vsk)
+	}
+
 	addr, _ := hex.DecodeString("")
 	if bytes.Compare(n.master.Address().Bytes(), addr) != 0 {
 		return
