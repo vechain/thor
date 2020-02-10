@@ -110,7 +110,6 @@ bin/thor -h
 - `--bootnode value`            comma separated list of bootnode IDs
 - `--skip-logs`                 skip writing event|transfer logs (/logs API will be disabled)
 - `--pprof`                     turn on go-pprof
-- `--skip-txpool-blocklist`     skip applying txpool blocklist
 - `--disable-pruner`            disable state pruner to keep all history
 - `--help, -h`                  show help
 - `--version, -v`               print the version
