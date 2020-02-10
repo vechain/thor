@@ -80,31 +80,7 @@ func getKeys() (ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey) {
 	return
 }
 
-func (n *Node) testSync(ctx context.Context) {
-	ethsks, vrfsks := getKeys()
-	// exit if it is not node 1
-	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
-		return
-	}
-
-	blk, stage, receipts, err := n.newLocalBlock(ctx, ethsks, vrfsks, nil)
-	if err != nil {
-		panic(err)
-	}
-	if err := n.commit(blk, stage, receipts); err != nil {
-		panic(err)
-	}
-	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
-
-	blk, stage, receipts, err = n.newLocalBlock(ctx, ethsks, vrfsks, nil)
-	if err != nil {
-		panic(err)
-	}
-	if err := n.commit(blk, stage, receipts); err != nil {
-		panic(err)
-	}
-	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
-
+func emptyLoop(ctx context.Context) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -169,6 +145,33 @@ loop:
 	return
 }
 
+func (n *Node) testSync(ctx context.Context) {
+	ethsks, vrfsks := getKeys()
+	// exit if it is not node 1
+	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
+		return
+	}
+
+	<-time.NewTimer(time.Second * 10).C
+
+	blk, _, _, err := n.newLocalBlock(ctx, ethsks, vrfsks, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	var stats blockStats
+	isTrunk, err := n.processBlock(blk, &stats)
+	if err != nil {
+		panic(err)
+	}
+	if isTrunk {
+		n.comm.BroadcastBlockID(blk.Header().ID())
+		log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+	} else {
+		panic("not trunk")
+	}
+}
+
 func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 	ethsks, vrfsks := getKeys()
 	// exit if it is not node 1
@@ -206,7 +209,7 @@ loop:
 	log.Info("packing new block")
 	launchTime := mclock.Now()
 
-	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+	bs, _, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 	summaryDone := mclock.Now()
 
 	for i, vrfsk := range vrfsks {
@@ -223,27 +226,27 @@ loop:
 	}
 	endorsementDone := mclock.Now()
 
-	block, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+	block, _, receipts, err := flow.Pack(n.master.PrivateKey)
 	blockDone := mclock.Now()
 
 	log.Debug("Committing new block")
-	if err := n.commit(block, stage, receipts); err != nil {
+	isTrunk, err := n.processBlock(block, new(blockStats))
+	if err != nil {
 		panic(err)
 	}
 	commitDone := mclock.Now()
 
-	display(block, receipts,
-		summaryDone-launchTime,
-		endorsementDone-summaryDone,
-		blockDone-endorsementDone,
-		commitDone-blockDone,
-	)
-
-	log.Info("broadcasting block header", "id", block.Header().ID())
-	n.comm.BroadcastBlockHeader(block.Header())
-	if ts.IsEmpty() {
-		log.Info("broadcasting tx set", "id", ts.ID())
-		n.comm.BroadcastTxSet(ts)
+	if isTrunk {
+		display(block, receipts,
+			summaryDone-launchTime,
+			endorsementDone-summaryDone,
+			blockDone-endorsementDone,
+			commitDone-blockDone,
+		)
+		log.Info("broadcasting block header", "id", block.Header().ID())
+		n.comm.BroadcastBlockHeader(block.Header())
+	} else {
+		panic("not trunk")
 	}
 }
 

@@ -111,6 +111,7 @@ func (n *Node) Run(ctx context.Context) error {
 	case 3: // testing sync, node 1 is made to locally commit two blocks
 		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.testSync(ctx) })
+		n.goes.Go(func() { emptyLoop(ctx) })
 	case 4: // testing empty block assembling
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.testEmptyBlockAssembling(ctx) })
@@ -436,7 +437,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err):
 			stats.UpdateQueued(1)
 		case consensus.IsCritical(err):
-			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, blk.Header())
+			msg := fmt.Sprintf("failed to process block due to consensus failure \n%v\n", blk.Header())
 			log.Error(msg, "err", err)
 		default:
 			log.Error("failed to process block", "err", err)

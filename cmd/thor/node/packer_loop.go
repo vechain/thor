@@ -14,11 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -214,20 +212,26 @@ func (n *Node) packerLoop(ctx context.Context) {
 			flow = nil
 
 			log.Debug("Committing new block")
-			if err := n.commit(blk, stage, receipts); err != nil {
-				log.Error("commit", "err", err)
-				continue
+			if _, err := stage.Commit(); err != nil {
+				log.Error("commit state", "err", err)
+			}
+
+			fork, err := n.commitBlock(blk, receipts)
+			if err != nil {
+				log.Error("commit block", "err", err)
 			}
 			commitDone = mclock.Now()
 
-			display(blk, receipts,
-				txSetBlockSummaryDone-start,
-				endorsementDone-txSetBlockSummaryDone,
-				blockDone-endorsementDone,
-				commitDone-blockDone,
-			)
+			if len(fork.Trunk) > 0 {
+				display(blk, receipts,
+					txSetBlockSummaryDone-start,
+					endorsementDone-txSetBlockSummaryDone,
+					blockDone-endorsementDone,
+					commitDone-blockDone,
+				)
 
-			n.comm.BroadcastBlockHeader(blk.Header())
+				n.comm.BroadcastBlockHeader(blk.Header())
+			}
 		}
 	}
 }
@@ -273,11 +277,11 @@ func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 	return bs, ts, nil
 }
 
-func display(b *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
-	blockID := b.Header().ID()
+func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
+	blockID := blk.Header().ID()
 	log.Info("📦 new block packed",
 		"txs", len(receipts),
-		"mgas", float64(b.Header().GasUsed())/1000/1000,
+		"mgas", float64(blk.Header().GasUsed())/1000/1000,
 		"et", fmt.Sprintf("%v|%v|%v|%v",
 			common.PrettyDuration(prepareElapsed),
 			common.PrettyDuration(collectElapsed),
@@ -345,25 +349,67 @@ func (n *Node) pack(flow *packer.Flow) error {
 	return nil
 }
 
-func (n *Node) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) error {
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
-	}
+// func (n *Node) pack(flow *packer.Flow) error {
+// 	txs := n.txPool.Executables()
+// 	var txsToRemove []*tx.Transaction
+// 	defer func() {
+// 		for _, tx := range txsToRemove {
+// 			n.txPool.Remove(tx.Hash(), tx.ID())
+// 		}
+// 	}()
 
-	// ignore fork when solo
-	_, err := n.chain.AddBlock(b, receipts)
-	if err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
+// 	startTime := mclock.Now()
+// 	for _, tx := range txs {
+// 		if err := flow.Adopt(tx); err != nil {
+// 			if packer.IsGasLimitReached(err) {
+// 				break
+// 			}
+// 			if packer.IsTxNotAdoptableNow(err) {
+// 				continue
+// 			}
+// 			txsToRemove = append(txsToRemove, tx)
+// 		}
+// 	}
 
-	task := n.logDB.NewTask().ForBlock(b.Header())
-	for i, tx := range b.Transactions() {
-		origin, _ := tx.Origin()
-		task.Write(tx.ID(), origin, receipts[i].Outputs)
-	}
-	if err := task.Commit(); err != nil {
-		return errors.WithMessage(err, "commit log")
-	}
+// 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	execElapsed := mclock.Now() - startTime
 
-	return nil
-}
+// 	if _, err := stage.Commit(); err != nil {
+// 		return errors.WithMessage(err, "commit state")
+// 	}
+
+// 	fork, err := n.commitBlock(newBlock, receipts)
+// 	if err != nil {
+// 		return errors.WithMessage(err, "commit block")
+// 	}
+// 	commitElapsed := mclock.Now() - startTime - execElapsed
+
+// 	n.processFork(fork)
+
+// 	if len(fork.Trunk) > 0 {
+// 		n.comm.BroadcastBlock(newBlock)
+// 		log.Info("📦 new block packed",
+// 			"txs", len(receipts),
+// 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
+// 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
+// 			"id", shortID(newBlock.Header().ID()),
+// 		)
+// 	}
+
+// 	if n.targetGasLimit == 0 {
+// 		n.packer.SetTargetGasLimit(0)
+// 		if execElapsed > 0 {
+// 			gasUsed := newBlock.Header().GasUsed()
+// 			// calc target gas limit only if gas used above third of gas limit
+// 			if gasUsed > newBlock.Header().GasLimit()/3 {
+// 				targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
+// 				n.packer.SetTargetGasLimit(targetGasLimit)
+// 				log.Debug("reset target gas limit", "value", targetGasLimit)
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
