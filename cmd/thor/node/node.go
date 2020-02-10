@@ -84,11 +84,12 @@ func New(
 
 // Run ...
 func (n *Node) Run(ctx context.Context) error {
-	mode := 3
+	n.comm.Sync(n.handleBlockStream)
+
+	mode := 4
 
 	switch mode {
 	case 1: // normal case
-		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
 		n.goes.Go(func() { n.packerLoop(ctx) })
@@ -96,7 +97,6 @@ func (n *Node) Run(ctx context.Context) error {
 		n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
 		n.goes.Go(func() { n.testBroadcasting(ctx) })
 	case 3: // testing sync, node 1 is made to locally commit two blocks
-		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.testSync(ctx) })
 		n.goes.Go(func() { emptyLoop(ctx) })
 	case 4: // testing empty block assembling
@@ -226,7 +226,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 		case ev := <-newTxSetCh:
 			ts := ev.TxSet
-			log.Info("received new tx set", "id", ts.ID())
+			log.Debug("received new tx set", "id", ts.ID())
 
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
@@ -241,25 +241,25 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 			// validate the new tx set
 			if n.cons.ValidateTxSet(ts, parentHeader, now) != nil {
-				log.Info("invalid new tx set", "id", ts.ID())
+				log.Debug("invalid new tx set", "id", ts.ID())
 				continue
 			}
 
 			if lbs != nil {
 				// only reject the new tx set if the locally save block summary is valid and they do not match
 				if n.cons.ValidateBlockSummary(lbs, parentHeader, now) == nil && lbs.TxsRoot() != ts.TxsRoot() {
-					log.Info("new tx set rejected", "txsetid", ts.ID(), "bsid", lbs.ID())
+					log.Debug("new tx set rejected", "txsetid", ts.ID(), "bsid", lbs.ID())
 					continue
 				}
 			}
 
 			lts = ts
-			log.Info("broadcasting tx set", "id", ts.ID())
+			log.Debug("broadcasting tx set", "id", ts.ID())
 			n.comm.BroadcastTxSet(ts)
 
 			// assemble the block if the header has been received
 			if lh != nil && n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil && lh.TxsRoot() == ts.TxsRoot() {
-				log.Info("assembling new block", "id", lh.ID())
+				log.Debug("assembling new block", "id", lh.ID())
 				n.assembleNewBlock(lh, lts, parentHeader, now)
 			}
 
@@ -270,15 +270,16 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			now := uint64(time.Now().Unix())
 
 			if n.cons.ValidateEndorsement(ed, parentHeader, now) != nil {
-				log.Info("invalid new endorsement", "id", ed.ID())
+				log.Debug("invalid new endorsement", "id", ed.ID())
 				continue
 			}
 
+			log.Debug("broadcasting endorsement", "id", ed.ID())
 			n.comm.BroadcastEndorsement(ed)
 
 		case ev := <-newBlockHeaderCh:
 			header := ev.Header
-			log.Info("received new block header", "id", header.ID())
+			log.Debug("received new block header", "id", header.ID())
 
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
@@ -291,13 +292,13 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				lh = nil
 			}
 
-			if n.cons.ValidateBlockHeader(header, parentHeader, now) != nil {
-				log.Info("invalid new block header", "id", header.ID())
+			if err := n.cons.ValidateBlockHeader(header, parentHeader, now); err != nil {
+				log.Debug("invalid new block header", "id", header.ID(), "err", err)
 				continue
 			}
 
 			lh = header
-			log.Info("broadcasting new block header", "id", header.ID())
+			log.Debug("broadcasting new block header", "id", header.ID())
 			n.comm.BroadcastBlockHeader(header)
 
 			// assemble the block either when there is an empty transaction list or
@@ -306,7 +307,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if (lts == nil && header.TxsRoot().IsZero()) ||
 				(lts != nil && lts.TxsRoot() == header.TxsRoot() &&
 					n.cons.ValidateTxSet(lts, parentHeader, now) == nil) {
-				log.Info("assembling new block", "id", header.ID())
+				log.Debug("assembling new block", "id", header.ID())
 				n.assembleNewBlock(lh, lts, parentHeader, now)
 			}
 

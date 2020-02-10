@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/block"
@@ -165,8 +164,9 @@ func (n *Node) testSync(ctx context.Context) {
 		panic(err)
 	}
 	if isTrunk {
+		log.Debug("broadcast block id", "id", blk.Header().ID())
 		n.comm.BroadcastBlockID(blk.Header().ID())
-		log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+		// log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
 	} else {
 		panic("not trunk")
 	}
@@ -179,72 +179,20 @@ func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 		return
 	}
 
-	best := n.chain.BestBlock()
-	flow, err := n.packer.Schedule(best.Header(), uint64(time.Now().Unix()))
-	if err != nil {
-		log.Error("Schedule", "err", err)
-		return
-	}
+	<-time.NewTimer(time.Second * 20).C
 
-	<-time.NewTicker(time.Second * 20).C
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			now := uint64(time.Now().Unix())
-			if now < flow.When() {
-				continue
-			} else {
-				break loop
-			}
-		}
-	}
-
-	log.Info("packing new block")
-	launchTime := mclock.Now()
-
-	bs, _, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
-	summaryDone := mclock.Now()
-
-	for i, vrfsk := range vrfsks {
-		ok, proof, err := n.cons.IsCommittee(vrfsk, uint64(time.Now().Unix()))
-		if err != nil || !ok {
-			panic("Not a committee")
-		}
-
-		ed := block.NewEndorsement(bs, proof)
-		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsks[i])
-		ed = ed.WithSignature(sig)
-
-		flow.AddEndoresement(ed)
-	}
-	endorsementDone := mclock.Now()
-
-	block, _, receipts, err := flow.Pack(n.master.PrivateKey)
-	blockDone := mclock.Now()
-
-	log.Debug("Committing new block")
-	isTrunk, err := n.processBlock(block, new(blockStats))
+	blk, _, _, err := n.newLocalBlock(ctx, ethsks, vrfsks, nil)
 	if err != nil {
 		panic(err)
 	}
-	commitDone := mclock.Now()
 
+	isTrunk, err := n.processBlock(blk, new(blockStats))
+	if err != nil {
+		panic(err)
+	}
 	if isTrunk {
-		display(block, receipts,
-			summaryDone-launchTime,
-			endorsementDone-summaryDone,
-			blockDone-endorsementDone,
-			commitDone-blockDone,
-		)
-		log.Info("broadcasting block header", "id", block.Header().ID())
-		n.comm.BroadcastBlockHeader(block.Header())
+		log.Debug("broad new block header", "id", blk.Header().ID())
+		n.comm.BroadcastBlockHeader(blk.Header())
 	} else {
 		panic("not trunk")
 	}
