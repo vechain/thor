@@ -1,3 +1,8 @@
+// Copyright (c) 2019 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package node
 
 import (
@@ -8,8 +13,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
 	"github.com/vechain/thor/tx"
 )
 
@@ -20,7 +26,7 @@ func newTx() *tx.Transaction {
 }
 
 func TestTxStash(t *testing.T) {
-	db, _ := lvldb.NewMem()
+	db, _ := leveldb.Open(storage.NewMemStorage(), nil)
 	defer db.Close()
 
 	stash := newTxStash(db, 10)

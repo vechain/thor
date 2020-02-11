@@ -21,7 +21,7 @@ import (
 
 type Subscriptions struct {
 	backtraceLimit uint32
-	chain          *chain.Chain
+	repo           *chain.Repository
 	upgrader       *websocket.Upgrader
 	done           chan struct{}
 	wg             sync.WaitGroup
@@ -35,10 +35,10 @@ var (
 	log = log15.New("pkg", "subscriptions")
 )
 
-func New(chain *chain.Chain, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
 	return &Subscriptions{
 		backtraceLimit: backtraceLimit,
-		chain:          chain,
+		repo:           repo,
 		upgrader: &websocket.Upgrader{
 			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
@@ -63,7 +63,7 @@ func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		return nil, err
 	}
-	return newBlockReader(s.chain, position), nil
+	return newBlockReader(s.repo, position), nil
 }
 
 func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Request) (*eventReader, error) {
@@ -103,7 +103,7 @@ func (s *Subscriptions) handleEventReader(w http.ResponseWriter, req *http.Reque
 		Topic3:  t3,
 		Topic4:  t4,
 	}
-	return newEventReader(s.chain, position, eventFilter), nil
+	return newEventReader(s.repo, position, eventFilter), nil
 }
 
 func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Request) (*transferReader, error) {
@@ -128,7 +128,7 @@ func (s *Subscriptions) handleTransferReader(w http.ResponseWriter, req *http.Re
 		Sender:    sender,
 		Recipient: recipient,
 	}
-	return newTransferReader(s.chain, position, transferFilter), nil
+	return newTransferReader(s.repo, position, transferFilter), nil
 }
 
 func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Request) (*beatReader, error) {
@@ -136,7 +136,7 @@ func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	return newBeatReader(s.chain, position), nil
+	return newBeatReader(s.repo, position), nil
 }
 
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
@@ -208,7 +208,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 			}
 		}
 	}()
-	ticker := s.chain.NewTicker()
+	ticker := s.repo.NewTicker()
 	for {
 		msgs, hasMore, err := reader.Read()
 		if err != nil {
@@ -240,7 +240,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 }
 
 func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
-	bestID := s.chain.BestBlock().Header().ID()
+	bestID := s.repo.BestBlock().Header().ID()
 	if posStr == "" {
 		return bestID, nil
 	}

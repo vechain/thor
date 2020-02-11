@@ -6,7 +6,6 @@
 package packer
 
 import (
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -20,8 +19,8 @@ import (
 
 // Packer to pack txs and build new blocks.
 type Packer struct {
-	chain          *chain.Chain
-	stateCreator   *state.Creator
+	repo           *chain.Repository
+	stater         *state.Stater
 	nodeMaster     thor.Address
 	beneficiary    *thor.Address
 	targetGasLimit uint64
@@ -31,15 +30,15 @@ type Packer struct {
 // New create a new Packer instance.
 // The beneficiary is optional, it defaults to endorsor if not set.
 func New(
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
 	forkConfig thor.ForkConfig) *Packer {
 
 	return &Packer{
-		chain,
-		stateCreator,
+		repo,
+		stater,
 		nodeMaster,
 		beneficiary,
 		0,
@@ -49,10 +48,7 @@ func New(
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
 func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
-	state, err := p.stateCreator.NewState(parent.StateRoot())
-	if err != nil {
-		return nil, errors.Wrap(err, "state")
-	}
+	state := p.stater.NewState(parent.StateRoot())
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
 	vip191 := p.forkConfig.VIP191
@@ -60,7 +56,9 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		vip191 = 1
 	}
 	if parent.Number()+1 == vip191 {
-		state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			return nil, err
+		}
 	}
 
 	var features tx.Features
@@ -68,10 +66,16 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		features |= tx.DelegationFeature
 	}
 
+	authority := builtin.Authority.Native(state)
+	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	if err != nil {
+		return nil, err
+	}
+	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
 	var (
-		endorsement = builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
-		authority   = builtin.Authority.Native(state)
-		candidates  = authority.Candidates(endorsement, thor.MaxBlockProposers)
 		proposers   = make([]poa.Proposer, 0, len(candidates))
 		beneficiary thor.Address
 	)
@@ -100,11 +104,13 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
-		authority.Update(u.Address, u.Active)
+		if _, err := authority.Update(u.Address, u.Active); err != nil {
+			return nil, err
+		}
 	}
 
 	rt := runtime.New(
-		p.chain.NewSeeker(parent.ID()),
+		p.repo.NewChain(parent.ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
@@ -123,10 +129,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
 func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) (*Flow, error) {
-	state, err := p.stateCreator.NewState(parent.StateRoot())
-	if err != nil {
-		return nil, errors.Wrap(err, "state")
-	}
+	state := p.stater.NewState(parent.StateRoot())
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
 	vip191 := p.forkConfig.VIP191
@@ -135,7 +138,9 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 	}
 
 	if parent.Number()+1 == vip191 {
-		state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			return nil, err
+		}
 	}
 
 	var features tx.Features
@@ -143,15 +148,20 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		features |= tx.DelegationFeature
 	}
 
+	gl := gasLimit
+	if gasLimit == 0 {
+		gl = p.gasLimit(parent.GasLimit())
+	}
+
 	rt := runtime.New(
-		p.chain.NewSeeker(parent.ID()),
+		p.repo.NewChain(parent.ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: p.nodeMaster,
 			Signer:      p.nodeMaster,
 			Number:      parent.Number() + 1,
 			Time:        targetTime,
-			GasLimit:    gasLimit,
+			GasLimit:    gl,
 			TotalScore:  parent.TotalScore() + 1,
 		},
 		p.forkConfig)

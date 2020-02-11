@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The VeChainThor developers
+// Copyright (c) 2019 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
@@ -12,108 +12,60 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
-func initChain() *chain.Chain {
-	kv, _ := lvldb.NewMem()
-	g := genesis.NewDevnet()
-	b0, _, _ := g.Build(state.NewCreator(kv))
-
-	chain, err := chain.New(kv, b0)
-	if err != nil {
-		panic(err)
-	}
-	return chain
+func newTx() *tx.Transaction {
+	tx := new(tx.Builder).Build()
+	pk, _ := crypto.GenerateKey()
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), pk)
+	return tx.WithSignature(sig)
 }
 
-var privateKey, _ = crypto.GenerateKey()
+func TestChain(t *testing.T) {
+	tx1 := newTx()
 
-func newBlock(parent *block.Block, score uint64) *block.Block {
-	b := new(block.Builder).ParentID(parent.Header().ID()).TotalScore(parent.Header().TotalScore() + score).Build()
-	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), privateKey)
-	return b.WithSignature(sig)
-}
+	repo := newTestRepo()
 
-func TestAdd(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
-	b1 := newBlock(b0, 1)
-	b2 := newBlock(b1, 1)
-	b3 := newBlock(b2, 1)
-	b4 := newBlock(b3, 1)
-	b4x := newBlock(b3, 2)
+	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
+	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
+	tx1Receipt := &tx.Receipt{}
+	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
 
-	tests := []struct {
-		newBlock *block.Block
-		fork     *chain.Fork
-		best     *block.Header
-	}{
-		{b1, &chain.Fork{Ancestor: b0.Header(), Trunk: []*block.Header{b1.Header()}}, b1.Header()},
-		{b2, &chain.Fork{Ancestor: b1.Header(), Trunk: []*block.Header{b2.Header()}}, b2.Header()},
-		{b3, &chain.Fork{Ancestor: b2.Header(), Trunk: []*block.Header{b3.Header()}}, b3.Header()},
-		{b4, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4.Header()}}, b4.Header()},
-		{b4x, &chain.Fork{Ancestor: b3.Header(), Trunk: []*block.Header{b4x.Header()}, Branch: []*block.Header{b4.Header()}}, b4x.Header()},
-	}
+	b2 := newBlock(b1, 20)
+	repo.AddBlock(b2, nil)
 
-	for _, tt := range tests {
-		fork, err := ch.AddBlock(tt.newBlock, nil)
-		assert.Nil(t, err)
-		assert.Equal(t, tt.best.ID(), ch.BestBlock().Header().ID())
+	b3 := newBlock(b2, 30)
+	repo.AddBlock(b3, nil)
 
-		assert.Equal(t, tt.fork.Ancestor.ID(), fork.Ancestor.ID())
-		assert.Equal(t, len(tt.fork.Branch), len(fork.Branch))
-		assert.Equal(t, len(tt.fork.Trunk), len(fork.Trunk))
-		for i, b := range fork.Branch {
-			assert.Equal(t, tt.fork.Branch[i].ID(), b.ID())
-		}
-		for i, b := range fork.Trunk {
-			assert.Equal(t, tt.fork.Trunk[i].ID(), b.ID())
-		}
-	}
-}
+	b3x := newBlock(b2, 30)
+	repo.AddBlock(b3x, nil)
 
-func TestIterator(t *testing.T) {
-	ch := initChain()
-	b0 := ch.GenesisBlock()
-	nextB := b0
-	for i := 0; i < 100; i++ {
-		nextB = newBlock(nextB, 1)
-		ch.AddBlock(nextB, nil)
-	}
+	c := repo.NewChain(b3.Header().ID())
 
-	var ids []thor.Bytes32
+	assert.Equal(t, b3.Header().ID(), c.HeadID())
+	assert.Equal(t, M(b3.Header().ID(), nil), M(c.GetBlockID(3)))
+	assert.Equal(t, M(b3.Header(), nil), M(c.GetBlockHeader(3)))
+	assert.Equal(t, M(block.Compose(b3.Header(), b3.Transactions()), nil), M(c.GetBlock(3)))
 
-	it := ch.NewIterator(16)
-	for it.Next() {
-		ids = append(ids, it.Block().Header().ID())
-	}
-	assert.Nil(t, it.Error())
-	assert.Equal(t, func() []thor.Bytes32 {
-		var ret []thor.Bytes32
-		for i := uint32(0); i <= ch.BestBlock().Header().Number(); i++ {
-			id, _ := ch.GetTrunkBlockID(i)
-			ret = append(ret, id)
-		}
-		return ret
-	}(), ids)
+	_, err := c.GetBlockID(4)
+	assert.True(t, c.IsNotFound(err))
 
-	// fromNum == head
-	ids = nil
-	it = ch.NewIterator(16)
-	it.Seek(ch.BestBlock().Header().Number())
-	for it.Next() {
-		ids = append(ids, it.Block().Header().ID())
-	}
-	assert.Nil(t, it.Error())
-	assert.Equal(t, []thor.Bytes32{ch.BestBlock().Header().ID()}, ids)
+	assert.Equal(t, M(tx1Meta, nil), M(c.GetTransactionMeta(tx1.ID())))
+	assert.Equal(t, M(tx1, tx1Meta, nil), M(c.GetTransaction(tx1.ID())))
+	assert.Equal(t, M(tx1Receipt, nil), M(c.GetTransactionReceipt(tx1.ID())))
 
-	// fromNum beyond head
-	it = ch.NewIterator(16)
-	it.Seek(ch.BestBlock().Header().Number() + 1)
-	assert.False(t, it.Next())
-	assert.Nil(t, it.Error())
+	assert.Equal(t, M(true, nil), M(c.HasBlock(b1.Header().ID())))
+	assert.Equal(t, M(false, nil), M(c.HasBlock(b3x.Header().ID())))
+
+	assert.Equal(t, M(b3.Header(), nil), M(c.FindBlockHeaderByTimestamp(25, 1)))
+	assert.Equal(t, M(b2.Header(), nil), M(c.FindBlockHeaderByTimestamp(25, -1)))
+	_, err = c.FindBlockHeaderByTimestamp(25, 0)
+	assert.True(t, c.IsNotFound(err))
+
+	c1, c2 := repo.NewChain(b3.Header().ID()), repo.NewChain(b3x.Header().ID())
+
+	assert.Equal(t, M([]thor.Bytes32{b3.Header().ID()}, nil), M(c1.Exclude(c2)))
+	assert.Equal(t, M([]thor.Bytes32{b3x.Header().ID()}, nil), M(c2.Exclude(c1)))
 }

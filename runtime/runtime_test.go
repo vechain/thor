@@ -17,7 +17,7 @@ import (
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -25,17 +25,18 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
+func M(a ...interface{}) []interface{} {
+	return a
+}
 func TestContractSuicide(t *testing.T) {
-	assert := assert.New(t)
-	kv, _ := lvldb.NewMem()
+	db := muxdb.NewMem()
 
 	g := genesis.NewDevnet()
-	stateCreator := state.NewCreator(kv)
-	b0, _, err := g.Build(stateCreator)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ch, _ := chain.New(kv, b0)
+	stater := state.NewStater(db)
+	b0, _, _, err := g.Build(stater)
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
 
 	// contract:
 	//
@@ -49,7 +50,7 @@ func TestContractSuicide(t *testing.T) {
 	data, _ := hex.DecodeString("608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063085da1b3146044575b600080fd5b348015604f57600080fd5b5060566058565b005b3373ffffffffffffffffffffffffffffffffffffffff16ff00a165627a7a723058204cb70b653a3d1821e00e6ade869638e80fa99719931c9fa045cec2189d94086f0029")
 	time := b0.Header().Timestamp()
 	addr := thor.BytesToAddress([]byte("acc01"))
-	state, _ := stateCreator.NewState(b0.Header().StateRoot())
+	state := stater.NewState(b0.Header().StateRoot())
 	state.SetCode(addr, data)
 	state.SetEnergy(addr, big.NewInt(100), time)
 	state.SetBalance(addr, big.NewInt(200))
@@ -71,19 +72,19 @@ func TestContractSuicide(t *testing.T) {
 	}
 
 	origin := genesis.DevAccounts()[0].Address
-	out := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, thor.NoFork).
-		ExecuteClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
-	if out.VMErr != nil {
-		t.Fatal(out.VMErr)
-	}
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, thor.NoFork).
+		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	assert.Nil(t, out.VMErr)
 
 	expectedTransfer := &tx.Transfer{
 		Sender:    addr,
 		Recipient: origin,
 		Amount:    big.NewInt(200),
 	}
-	assert.Equal(1, len(out.Transfers))
-	assert.Equal(expectedTransfer, out.Transfers[0])
+	assert.Equal(t, 1, len(out.Transfers))
+	assert.Equal(t, expectedTransfer, out.Transfers[0])
 
 	event, _ := builtin.Energy.ABI.EventByName("Transfer")
 	expectedEvent := &tx.Event{
@@ -91,50 +92,44 @@ func TestContractSuicide(t *testing.T) {
 		Topics:  []thor.Bytes32{event.ID(), thor.BytesToBytes32(addr.Bytes()), thor.BytesToBytes32(origin.Bytes())},
 		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100},
 	}
-	assert.Equal(1, len(out.Events))
-	assert.Equal(expectedEvent, out.Events[0])
+	assert.Equal(t, 1, len(out.Events))
+	assert.Equal(t, expectedEvent, out.Events[0])
 
-	assert.Equal(big.NewInt(0), state.GetBalance(addr))
-	assert.Equal(big.NewInt(0), state.GetEnergy(addr, time))
+	assert.Equal(t, M(big.NewInt(0), nil), M(state.GetBalance(addr)))
+	assert.Equal(t, M(big.NewInt(0), nil), M(state.GetEnergy(addr, time)))
 
 	bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-	assert.Equal(new(big.Int).Add(bal, big.NewInt(200)), state.GetBalance(origin))
-	assert.Equal(new(big.Int).Add(bal, big.NewInt(100)), state.GetEnergy(origin, time))
+	assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(200)), nil), M(state.GetBalance(origin)))
+	assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(100)), nil), M(state.GetEnergy(origin, time)))
 }
 
 func TestCall(t *testing.T) {
-	kv, _ := lvldb.NewMem()
+	db := muxdb.NewMem()
 
 	g := genesis.NewDevnet()
-	b0, _, err := g.Build(state.NewCreator(kv))
-	if err != nil {
-		t.Fatal(err)
-	}
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
 
-	ch, _ := chain.New(kv, b0)
+	repo, _ := chain.NewRepository(db, b0)
 
-	state, _ := state.New(b0.Header().StateRoot(), kv)
+	state := state.New(db, b0.Header().StateRoot())
 
-	rt := runtime.New(ch.NewSeeker(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 
 	method, _ := builtin.Params.ABI.MethodByName("executor")
 	data, err := method.EncodeInput()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 
-	out := rt.ExecuteClause(
+	exec, _ := rt.PrepareClause(
 		tx.NewClause(&builtin.Params.Address).WithData(data),
 		0, math.MaxUint64, &xenv.TransactionContext{})
-
-	if out.VMErr != nil {
-		t.Fatal(out.VMErr)
-	}
+	out, _, err := exec()
+	assert.Nil(t, err)
+	assert.Nil(t, out.VMErr)
 
 	var addr common.Address
-	if err := method.DecodeOutput(out.Data, &addr); err != nil {
-		t.Fatal(err)
-	}
+	err = method.DecodeOutput(out.Data, &addr)
+	assert.Nil(t, err)
 
 	assert.Equal(t, thor.Address(addr), genesis.DevAccounts()[0].Address)
 
@@ -151,9 +146,11 @@ func TestCall(t *testing.T) {
 		interrupt()
 	}()
 
-	out, interrupted := exec()
+	out, interrupted, err := exec()
+
 	assert.NotNil(t, out)
 	assert.True(t, interrupted)
+	assert.Nil(t, err)
 }
 
 func TestExecuteTransaction(t *testing.T) {

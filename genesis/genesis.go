@@ -23,15 +23,15 @@ type Genesis struct {
 }
 
 // Build build the genesis block.
-func (g *Genesis) Build(stateCreator *state.Creator) (blk *block.Block, events tx.Events, err error) {
-	block, events, err := g.builder.Build(stateCreator)
+func (g *Genesis) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
+	block, events, transfers, err := g.builder.Build(stater)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if block.Header().ID() != g.id {
 		panic("built genesis ID incorrect")
 	}
-	return block, events, nil
+	return block, events, transfers, nil
 }
 
 // ID returns genesis block ID.

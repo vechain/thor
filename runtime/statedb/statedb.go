@@ -37,12 +37,12 @@ type (
 
 // New create a statedb object.
 func New(state *state.State) *StateDB {
-	getter := func(k interface{}) (interface{}, bool) {
+	getter := func(k interface{}) (interface{}, bool, error) {
 		switch k.(type) {
 		case suicideFlagKey:
-			return false, true
+			return false, true, nil
 		case refundKey:
-			return uint64(0), true
+			return uint64(0), true, nil
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -56,7 +56,7 @@ func New(state *state.State) *StateDB {
 
 // GetRefund returns total refund during VM life-cycle.
 func (s *StateDB) GetRefund() uint64 {
-	v, _ := s.repo.Get(refundKey{})
+	v, _, _ := s.repo.Get(refundKey{})
 	return v.(uint64)
 }
 
@@ -91,7 +91,11 @@ func (s *StateDB) CreateAccount(addr common.Address) {}
 
 // GetBalance stub.
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	return s.state.GetBalance(thor.Address(addr))
+	bal, err := s.state.GetBalance(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return bal
 }
 
 // SubBalance stub.
@@ -99,8 +103,13 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	balance := s.state.GetBalance(thor.Address(addr))
-	s.state.SetBalance(thor.Address(addr), new(big.Int).Sub(balance, amount))
+	balance, err := s.state.GetBalance(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	if err := s.state.SetBalance(thor.Address(addr), new(big.Int).Sub(balance, amount)); err != nil {
+		panic(err)
+	}
 }
 
 // AddBalance stub.
@@ -108,8 +117,13 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	if amount.Sign() == 0 {
 		return
 	}
-	balance := s.state.GetBalance(thor.Address(addr))
-	s.state.SetBalance(thor.Address(addr), new(big.Int).Add(balance, amount))
+	balance, err := s.state.GetBalance(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	if err := s.state.SetBalance(thor.Address(addr), new(big.Int).Add(balance, amount)); err != nil {
+		panic(err)
+	}
 }
 
 // GetNonce stub.
@@ -120,37 +134,54 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {}
 
 // GetCodeHash stub.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	return common.Hash(s.state.GetCodeHash(thor.Address(addr)))
+	hash, err := s.state.GetCodeHash(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return common.Hash(hash)
 }
 
 // GetCode stub.
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	return s.state.GetCode(thor.Address(addr))
+	code, err := s.state.GetCode(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return code
 }
 
 // GetCodeSize stub.
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	hash := s.state.GetCodeHash(thor.Address(addr))
+	hash, err := s.state.GetCodeHash(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
 	if hash.IsZero() {
 		return 0
 	}
 	if v, ok := codeSizeCache.Get(hash); ok {
 		return v.(int)
 	}
-	size := len(s.state.GetCode(thor.Address(addr)))
+	code, err := s.state.GetCode(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	size := len(code)
 	codeSizeCache.Add(hash, size)
 	return size
 }
 
 // SetCode stub.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	s.state.SetCode(thor.Address(addr), code)
+	if err := s.state.SetCode(thor.Address(addr), code); err != nil {
+		panic(err)
+	}
 }
 
 // HasSuicided stub.
 func (s *StateDB) HasSuicided(addr common.Address) bool {
 	// only check suicide flag here
-	v, _ := s.repo.Get(suicideFlagKey(addr))
+	v, _, _ := s.repo.Get(suicideFlagKey(addr))
 	return v.(bool)
 }
 
@@ -159,7 +190,11 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 // 1, delete account
 // 2, set suicide flag
 func (s *StateDB) Suicide(addr common.Address) bool {
-	if !s.state.Exists(thor.Address(addr)) {
+	exist, err := s.state.Exists(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	if !exist {
 		return false
 	}
 	s.state.Delete(thor.Address(addr))
@@ -169,7 +204,11 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 // GetState stub.
 func (s *StateDB) GetState(addr common.Address, key common.Hash) common.Hash {
-	return common.Hash(s.state.GetStorage(thor.Address(addr), thor.Bytes32(key)))
+	val, err := s.state.GetStorage(thor.Address(addr), thor.Bytes32(key))
+	if err != nil {
+		panic(err)
+	}
+	return common.Hash(val)
 }
 
 // SetState stub.
@@ -179,17 +218,21 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 
 // Exist stub.
 func (s *StateDB) Exist(addr common.Address) bool {
-	return s.state.Exists(thor.Address(addr))
+	b, err := s.state.Exists(thor.Address(addr))
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
 
 // Empty stub.
 func (s *StateDB) Empty(addr common.Address) bool {
-	return !s.state.Exists(thor.Address(addr))
+	return !s.Exist(addr)
 }
 
 // AddRefund stub.
 func (s *StateDB) AddRefund(gas uint64) {
-	v, _ := s.repo.Get(refundKey{})
+	v, _, _ := s.repo.Get(refundKey{})
 	total := v.(uint64) + gas
 	s.repo.Put(refundKey{}, total)
 }
@@ -218,7 +261,7 @@ func (s *StateDB) Snapshot() int {
 // RevertToSnapshot stub.
 func (s *StateDB) RevertToSnapshot(rev int) {
 	s.repo.PopTo(rev)
-	if srev, ok := s.repo.Get(stateRevKey{}); ok {
+	if srev, ok, _ := s.repo.Get(stateRevKey{}); ok {
 		s.state.RevertTo(srev.(int))
 	} else {
 		panic("state checkpoint missing")

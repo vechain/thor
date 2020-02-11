@@ -1,3 +1,8 @@
+// Copyright (c) 2019 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package builtin
 
 import (
@@ -30,7 +35,10 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			output := env.Seeker().GetID(blockNum)
+			output, err := env.Chain().GetBlockID(blockNum)
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{output}
 		}},
 		{"native_blockTotalScore", func(env *xenv.Environment) []interface{} {
@@ -46,10 +54,11 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			id := env.Seeker().GetID(blockNum)
-
 			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(id)
+			header, err := env.Chain().GetBlockHeader(blockNum)
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{header.TotalScore()}
 		}},
 		{"native_blockTime", func(env *xenv.Environment) []interface{} {
@@ -65,10 +74,11 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			id := env.Seeker().GetID(blockNum)
-
 			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(id)
+			header, err := env.Chain().GetBlockHeader(blockNum)
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{header.Timestamp()}
 		}},
 		{"native_blockSigner", func(env *xenv.Environment) []interface{} {
@@ -84,16 +94,23 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			id := env.Seeker().GetID(blockNum)
-
 			env.UseGas(thor.SloadGas)
-			header := env.Seeker().GetHeader(id)
-			signer, _ := header.Signer()
+			header, err := env.Chain().GetBlockHeader(blockNum)
+			if err != nil {
+				panic(err)
+			}
+			signer, err := header.Signer()
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{signer}
 		}},
 		{"native_totalSupply", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			output := Energy.Native(env.State(), env.BlockContext().Time).TokenTotalSupply()
+			output, err := Energy.Native(env.State(), env.BlockContext().Time).TokenTotalSupply()
+			if err != nil {
+				panic(err)
+			}
 			return []interface{}{output}
 		}},
 		{"native_txProvedWork", func(env *xenv.Environment) []interface{} {

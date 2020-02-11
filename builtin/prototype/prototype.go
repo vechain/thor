@@ -48,20 +48,19 @@ func (b *Binding) curSponsorKey() thor.Bytes32 {
 	return thor.Blake2b(b.self.Bytes(), []byte("cur-sponsor"))
 }
 
-func (b *Binding) getUserObject(user thor.Address) *userObject {
-	var uo userObject
-	b.state.DecodeStorage(b.addr, b.userKey(user), func(raw []byte) error {
+func (b *Binding) getUserObject(user thor.Address) (uo *userObject, err error) {
+	err = b.state.DecodeStorage(b.addr, b.userKey(user), func(raw []byte) error {
 		if len(raw) == 0 {
-			uo = userObject{&big.Int{}, 0}
+			uo = &userObject{&big.Int{}, 0}
 			return nil
 		}
 		return rlp.DecodeBytes(raw, &uo)
 	})
-	return &uo
+	return
 }
 
-func (b *Binding) setUserObject(user thor.Address, uo *userObject) {
-	b.state.EncodeStorage(b.addr, b.userKey(user), func() ([]byte, error) {
+func (b *Binding) setUserObject(user thor.Address, uo *userObject) error {
+	return b.state.EncodeStorage(b.addr, b.userKey(user), func() ([]byte, error) {
 		if uo.IsEmpty() {
 			return nil, nil
 		}
@@ -69,20 +68,19 @@ func (b *Binding) setUserObject(user thor.Address, uo *userObject) {
 	})
 }
 
-func (b *Binding) getCreditPlan() *creditPlan {
-	var cp creditPlan
-	b.state.DecodeStorage(b.addr, b.creditPlanKey(), func(raw []byte) error {
+func (b *Binding) getCreditPlan() (cp *creditPlan, err error) {
+	err = b.state.DecodeStorage(b.addr, b.creditPlanKey(), func(raw []byte) error {
 		if len(raw) == 0 {
-			cp = creditPlan{&big.Int{}, &big.Int{}}
+			cp = &creditPlan{&big.Int{}, &big.Int{}}
 			return nil
 		}
 		return rlp.DecodeBytes(raw, &cp)
 	})
-	return &cp
+	return
 }
 
-func (b *Binding) setCreditPlan(cp *creditPlan) {
-	b.state.EncodeStorage(b.addr, b.creditPlanKey(), func() ([]byte, error) {
+func (b *Binding) setCreditPlan(cp *creditPlan) error {
+	return b.state.EncodeStorage(b.addr, b.creditPlanKey(), func() ([]byte, error) {
 		if cp.IsEmpty() {
 			return nil, nil
 		}
@@ -90,47 +88,64 @@ func (b *Binding) setCreditPlan(cp *creditPlan) {
 	})
 }
 
-func (b *Binding) IsUser(user thor.Address) bool {
-	return !b.getUserObject(user).IsEmpty()
-}
-
-func (b *Binding) AddUser(user thor.Address, blockTime uint64) {
-	b.setUserObject(user, &userObject{&big.Int{}, blockTime})
-}
-
-func (b *Binding) RemoveUser(user thor.Address) {
-	// set to empty
-	b.setUserObject(user, &userObject{&big.Int{}, 0})
-}
-
-func (b *Binding) UserCredit(user thor.Address, blockTime uint64) *big.Int {
-	uo := b.getUserObject(user)
-	if uo.IsEmpty() {
-		return &big.Int{}
+func (b *Binding) IsUser(user thor.Address) (bool, error) {
+	uo, err := b.getUserObject(user)
+	if err != nil {
+		return false, err
 	}
-	return uo.Credit(b.getCreditPlan(), blockTime)
+	return !uo.IsEmpty(), nil
 }
 
-func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockTime uint64) {
-	up := b.getCreditPlan()
+func (b *Binding) AddUser(user thor.Address, blockTime uint64) error {
+	return b.setUserObject(user, &userObject{&big.Int{}, blockTime})
+}
+
+func (b *Binding) RemoveUser(user thor.Address) error {
+	// set to empty
+	return b.setUserObject(user, &userObject{&big.Int{}, 0})
+}
+
+func (b *Binding) UserCredit(user thor.Address, blockTime uint64) (*big.Int, error) {
+	uo, err := b.getUserObject(user)
+	if err != nil {
+		return nil, err
+	}
+	if uo.IsEmpty() {
+		return &big.Int{}, nil
+	}
+	cp, err := b.getCreditPlan()
+	if err != nil {
+		return nil, err
+	}
+	return uo.Credit(cp, blockTime), nil
+}
+
+func (b *Binding) SetUserCredit(user thor.Address, credit *big.Int, blockTime uint64) error {
+	up, err := b.getCreditPlan()
+	if err != nil {
+		return err
+	}
 	used := new(big.Int).Sub(up.Credit, credit)
 	if used.Sign() < 0 {
 		used = &big.Int{}
 	}
-	b.setUserObject(user, &userObject{used, blockTime})
+	return b.setUserObject(user, &userObject{used, blockTime})
 }
 
-func (b *Binding) CreditPlan() (credit, recoveryRate *big.Int) {
-	cp := b.getCreditPlan()
-	return cp.Credit, cp.RecoveryRate
+func (b *Binding) CreditPlan() (credit, recoveryRate *big.Int, err error) {
+	cp, err := b.getCreditPlan()
+	if err != nil {
+		return nil, nil, err
+	}
+	return cp.Credit, cp.RecoveryRate, nil
 }
 
-func (b *Binding) SetCreditPlan(credit, recoveryRate *big.Int) {
-	b.setCreditPlan(&creditPlan{credit, recoveryRate})
+func (b *Binding) SetCreditPlan(credit, recoveryRate *big.Int) error {
+	return b.setCreditPlan(&creditPlan{credit, recoveryRate})
 }
 
-func (b *Binding) Sponsor(sponsor thor.Address, flag bool) {
-	b.state.EncodeStorage(b.addr, b.sponsorKey(sponsor), func() ([]byte, error) {
+func (b *Binding) Sponsor(sponsor thor.Address, flag bool) error {
+	return b.state.EncodeStorage(b.addr, b.sponsorKey(sponsor), func() ([]byte, error) {
 		if !flag {
 			return nil, nil
 		}
@@ -138,8 +153,8 @@ func (b *Binding) Sponsor(sponsor thor.Address, flag bool) {
 	})
 }
 
-func (b *Binding) IsSponsor(sponsor thor.Address) (flag bool) {
-	b.state.DecodeStorage(b.addr, b.sponsorKey(sponsor), func(raw []byte) error {
+func (b *Binding) IsSponsor(sponsor thor.Address) (flag bool, err error) {
+	err = b.state.DecodeStorage(b.addr, b.sponsorKey(sponsor), func(raw []byte) error {
 		if len(raw) == 0 {
 			return nil
 		}
@@ -152,6 +167,10 @@ func (b *Binding) SelectSponsor(sponsor thor.Address) {
 	b.state.SetStorage(b.addr, b.curSponsorKey(), thor.BytesToBytes32(sponsor.Bytes()))
 }
 
-func (b *Binding) CurrentSponsor() thor.Address {
-	return thor.BytesToAddress(b.state.GetStorage(b.addr, b.curSponsorKey()).Bytes())
+func (b *Binding) CurrentSponsor() (thor.Address, error) {
+	val, err := b.state.GetStorage(b.addr, b.curSponsorKey())
+	if err != nil {
+		return thor.Address{}, err
+	}
+	return thor.BytesToAddress(val.Bytes()), nil
 }

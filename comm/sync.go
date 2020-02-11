@@ -76,8 +76,8 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 						queue <- func() {
 							tx.ID()
 							tx.UnprovedWork()
-							tx.IntrinsicGas()
-							tx.Delegator()
+							_, _ = tx.IntrinsicGas()
+							_, _ = tx.Delegator()
 						}
 					}
 				}
@@ -113,7 +113,7 @@ func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, e
 		if err != nil {
 			return false, err
 		}
-		id, err := c.chain.GetTrunkBlockID(num)
+		id, err := c.repo.NewBestChain().GetBlockID(num)
 		if err != nil {
 			return false, err
 		}
@@ -195,7 +195,7 @@ func (c *Communicator) syncTxs(peer *Peer) {
 
 		for _, tx := range result {
 			peer.MarkTransaction(tx.Hash())
-			c.txPool.StrictlyAdd(tx)
+			_ = c.txPool.StrictlyAdd(tx)
 			select {
 			case <-c.ctx.Done():
 				return

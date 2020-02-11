@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/cmd/thor/bandwidth"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/logdb"
@@ -27,40 +28,44 @@ import (
 	"github.com/vechain/thor/txpool"
 )
 
-var log = log15.New()
+var log = log15.New("pkg", "solo")
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	chain       *chain.Chain
+	repo        *chain.Repository
 	txPool      *txpool.TxPool
 	packer      *packer.Packer
 	logDB       *logdb.LogDB
 	bestBlockCh chan *block.Block
 	gasLimit    uint64
+	bandwidth   bandwidth.Bandwidth
 	onDemand    bool
+	skipLogs    bool
 }
 
 // New returns Solo instance
 func New(
-	chain *chain.Chain,
-	stateCreator *state.Creator,
+	repo *chain.Repository,
+	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
+	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
-		chain:  chain,
+		repo:   repo,
 		txPool: txPool,
 		packer: packer.New(
-			chain,
-			stateCreator,
+			repo,
+			stater,
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
 		logDB:    logDB,
 		gasLimit: gasLimit,
+		skipLogs: skipLogs,
 		onDemand: onDemand,
 	}
 }
@@ -123,13 +128,18 @@ func (s *Solo) loop(ctx context.Context) {
 }
 
 func (s *Solo) packing(pendingTxs tx.Transactions) error {
-	best := s.chain.BestBlock()
+	best := s.repo.BestBlock()
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
 			s.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
+
+	if s.gasLimit == 0 {
+		suggested := s.bandwidth.SuggestGasLimit()
+		s.packer.SetTargetGasLimit(suggested)
+	}
 
 	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
 	if err != nil {
@@ -165,21 +175,26 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	}
 
 	// ignore fork when solo
-	_, err = s.chain.AddBlock(b, receipts)
-	if err != nil {
+	if err := s.repo.AddBlock(b, receipts); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
-
-	task := s.logDB.NewTask().ForBlock(b.Header())
-	for i, tx := range b.Transactions() {
-		origin, _ := tx.Origin()
-		task.Write(tx.ID(), origin, receipts[i].Outputs)
+	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
+		return errors.WithMessage(err, "set best block")
 	}
-	if err := task.Commit(); err != nil {
-		return errors.WithMessage(err, "commit log")
+
+	if !s.skipLogs {
+		if err := s.logDB.Log(func(w *logdb.Writer) error {
+			return w.Write(b, receipts)
+		}); err != nil {
+			return errors.WithMessage(err, "commit log")
+		}
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
+
+	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+		log.Debug("bandwidth updated", "gps", v)
+	}
 
 	blockID := b.Header().ID()
 	log.Info("📦 new block packed",

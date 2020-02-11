@@ -10,17 +10,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 )
 
 func TestTestnetGenesis(t *testing.T) {
-	kv, _ := lvldb.NewMem()
+	db := muxdb.NewMem()
 	gene := genesis.NewTestnet()
 
-	b0, _, err := gene.Build(state.NewCreator(kv))
+	b0, _, _, err := gene.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
-	_, err = state.New(b0.Header().StateRoot(), kv)
+	st := state.New(db, b0.Header().StateRoot())
+
+	v, err := st.Exists(thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d"))
 	assert.Nil(t, err)
+	assert.True(t, v)
 }

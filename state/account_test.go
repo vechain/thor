@@ -11,9 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/trie"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -39,10 +38,8 @@ func TestAccount(t *testing.T) {
 	assert.True(t, acc.IsEmpty())
 }
 
-func newTrie() *trie.SecureTrie {
-	kv, _ := lvldb.NewMem()
-	trie, _ := trie.NewSecure(thor.Bytes32{}, kv, 0)
-	return trie
+func newTrie() *muxdb.Trie {
+	return muxdb.NewMem().NewSecureTrie("", thor.Bytes32{})
 }
 func TestTrie(t *testing.T) {
 	trie := newTrie()
@@ -50,7 +47,7 @@ func TestTrie(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
 		M(loadAccount(trie, addr)),
-		[]interface{}{emptyAccount(), nil},
+		M(emptyAccount(), nil),
 		"should load an empty account")
 
 	acc1 := Account{
@@ -64,12 +61,12 @@ func TestTrie(t *testing.T) {
 	saveAccount(trie, addr, &acc1)
 	assert.Equal(t,
 		M(loadAccount(trie, addr)),
-		[]interface{}{&acc1, nil})
+		M(&acc1, nil))
 
 	saveAccount(trie, addr, emptyAccount())
 	assert.Equal(t,
-		M(trie.TryGet(addr[:])),
-		[]interface{}{[]byte(nil), nil},
+		M(trie.Get(addr[:])),
+		M([]byte(nil), nil),
 		"empty account should be deleted")
 }
 
@@ -79,17 +76,17 @@ func TestStorageTrie(t *testing.T) {
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
-		[]interface{}{rlp.RawValue(nil), nil})
+		M(rlp.RawValue(nil), nil))
 
 	value := rlp.RawValue("value")
 	saveStorage(trie, key, value)
 	assert.Equal(t,
 		M(loadStorage(trie, key)),
-		[]interface{}{value, nil})
+		M(value, nil))
 
 	saveStorage(trie, key, nil)
 	assert.Equal(t,
-		M(trie.TryGet(key[:])),
-		[]interface{}{[]byte(nil), nil},
+		M(trie.Get(key[:])),
+		M([]byte(nil), nil),
 		"empty storage value should be deleted")
 }

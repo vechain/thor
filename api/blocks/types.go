@@ -6,7 +6,7 @@
 package blocks
 
 import (
-	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
@@ -30,21 +30,14 @@ type Block struct {
 	Transactions []thor.Bytes32 `json:"transactions"`
 }
 
-func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
-	if b == nil {
-		return nil, nil
-	}
-	signer, err := b.Header().Signer()
+func convertBlock(summary *chain.BlockSummary, isTrunk bool) (*Block, error) {
+	header := summary.Header
+
+	signer, err := header.Signer()
 	if err != nil {
 		return nil, err
 	}
-	txs := b.Transactions()
-	txIds := make([]thor.Bytes32, len(txs))
-	for i, tx := range txs {
-		txIds[i] = tx.ID()
-	}
 
-	header := b.Header()
 	return &Block{
 		Number:       header.Number(),
 		ID:           header.ID(),
@@ -55,12 +48,12 @@ func convertBlock(b *block.Block, isTrunk bool) (*Block, error) {
 		GasUsed:      header.GasUsed(),
 		Beneficiary:  header.Beneficiary(),
 		Signer:       signer,
-		Size:         uint32(b.Size()),
+		Size:         uint32(summary.Size),
 		StateRoot:    header.StateRoot(),
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
 		TxsFeatures:  uint32(header.TxsFeatures()),
 		IsTrunk:      isTrunk,
-		Transactions: txIds,
+		Transactions: summary.Txs,
 	}, nil
 }

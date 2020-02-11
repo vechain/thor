@@ -10,21 +10,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 )
 
 func TestParamsGetSet(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	st, _ := state.New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{})
 	setv := big.NewInt(10)
 	key := thor.BytesToBytes32([]byte("key"))
 	p := New(thor.BytesToAddress([]byte("par")), st)
 	p.Set(key, setv)
 
-	getv := p.Get(key)
+	getv, err := p.Get(key)
+	assert.Nil(t, err)
 	assert.Equal(t, setv, getv)
-
-	assert.Nil(t, st.Err())
 }

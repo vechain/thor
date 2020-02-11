@@ -6,21 +6,21 @@
 package state
 
 import (
-	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
-// Creator state creator to cut-off kv dependency.
-type Creator struct {
-	kv kv.GetPutter
+// Stater is the state creator.
+type Stater struct {
+	db *muxdb.MuxDB
 }
 
-// NewCreator create a new state creator.
-func NewCreator(kv kv.GetPutter) *Creator {
-	return &Creator{kv}
+// NewStater create a new stater.
+func NewStater(db *muxdb.MuxDB) *Stater {
+	return &Stater{db}
 }
 
 // NewState create a new state object.
-func (c *Creator) NewState(root thor.Bytes32) (*State, error) {
-	return New(root, c.kv)
+func (s *Stater) NewState(root thor.Bytes32) *State {
+	return New(s.db, root)
 }

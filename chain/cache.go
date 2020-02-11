@@ -10,23 +10,19 @@ import (
 )
 
 type cache struct {
-	*lru.Cache
-	loader func(key interface{}) (interface{}, error)
+	*lru.ARCCache
 }
 
-func newCache(maxSize int, loader func(key interface{}) (interface{}, error)) *cache {
-	c, err := lru.New(maxSize)
-	if err != nil {
-		panic(err)
-	}
-	return &cache{c, loader}
+func newCache(maxSize int) *cache {
+	c, _ := lru.NewARC(maxSize)
+	return &cache{c}
 }
 
-func (c *cache) GetOrLoad(key interface{}) (interface{}, error) {
+func (c *cache) GetOrLoad(key interface{}, load func() (interface{}, error)) (interface{}, error) {
 	if value, ok := c.Get(key); ok {
 		return value, nil
 	}
-	value, err := c.loader(key)
+	value, err := load()
 	if err != nil {
 		return nil, err
 	}

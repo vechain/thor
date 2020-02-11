@@ -11,13 +11,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
 func TestStage(t *testing.T) {
-	kv, _ := lvldb.NewMem()
-	state, _ := New(thor.Bytes32{}, kv)
+	db := muxdb.NewMem()
+
+	state := New(db, thor.Bytes32{})
 
 	addr := thor.BytesToAddress([]byte("acc1"))
 
@@ -35,21 +36,23 @@ func TestStage(t *testing.T) {
 		state.SetStorage(addr, k, v)
 	}
 
-	stage := state.Stage()
-
-	hash, err := stage.Hash()
+	stage, err := state.Stage()
 	assert.Nil(t, err)
+
+	hash := stage.Hash()
+
 	root, err := stage.Commit()
 	assert.Nil(t, err)
 
 	assert.Equal(t, hash, root)
 
-	state, _ = New(root, kv)
+	state = New(db, root)
 
-	assert.Equal(t, balance, state.GetBalance(addr))
-	assert.Equal(t, code, state.GetCode(addr))
-	assert.Equal(t, thor.Bytes32(crypto.Keccak256Hash(code)), state.GetCodeHash(addr))
+	assert.Equal(t, M(balance, nil), M(state.GetBalance(addr)))
+	assert.Equal(t, M(code, nil), M(state.GetCode(addr)))
+	assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash(code)), nil), M(state.GetCodeHash(addr)))
+
 	for k, v := range storage {
-		assert.Equal(t, v, state.GetStorage(addr, k))
+		assert.Equal(t, M(v, nil), M(state.GetStorage(addr, k)))
 	}
 }

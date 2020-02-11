@@ -20,11 +20,11 @@ func NewTestnet() *Genesis {
 	launchTime := uint64(1530014400) // 'Tue Jun 26 2018 20:00:00 GMT+0800 (CST)'
 
 	// use this address as executor instead of builtin one, for test purpose
-	executor, _ := thor.ParseAddress("0xB5A34b62b63A6f1EE99DFD30b133B657859f8d79")
-	acccount0, _ := thor.ParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
+	executor := thor.MustParseAddress("0xB5A34b62b63A6f1EE99DFD30b133B657859f8d79")
+	acccount0 := thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d")
 
-	master0, _ := thor.ParseAddress("0x25AE0ef84dA4a76D5a1DFE80D3789C2c46FeE30a")
-	endorser0, _ := thor.ParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
+	master0 := thor.MustParseAddress("0x25AE0ef84dA4a76D5a1DFE80D3789C2c46FeE30a")
+	endorser0 := thor.MustParseAddress("0xb4094c25f86d628fdD571Afc4077f0d0196afB48")
 
 	builder := new(Builder).
 		Timestamp(launchTime).
@@ -34,30 +34,49 @@ func NewTestnet() *Genesis {
 
 			// alloc precompiled contracts
 			for addr := range vm.PrecompiledContractsByzantium {
-				state.SetCode(thor.Address(addr), emptyRuntimeBytecode)
+				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
+					return err
+				}
 			}
 
 			// setup builtin contracts
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
-			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
-			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
-			state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes())
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes()); err != nil {
+				return err
+			}
+			if err := state.SetCode(builtin.Extension.Address, builtin.Extension.RuntimeBytecodes()); err != nil {
+				return err
+			}
 
 			// 50 billion for account0
 			amount := new(big.Int).Mul(big.NewInt(1e18), big.NewInt(50*1000*1000*1000))
-			state.SetBalance(acccount0, amount)
-			state.SetEnergy(acccount0, &big.Int{}, launchTime)
+			if err := state.SetBalance(acccount0, amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(acccount0, &big.Int{}, launchTime); err != nil {
+				return err
+			}
 			tokenSupply.Add(tokenSupply, amount)
 
 			// 25 million for endorser0
 			amount = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25*1000*1000))
-			state.SetBalance(endorser0, amount)
-			state.SetEnergy(endorser0, &big.Int{}, launchTime)
+			if err := state.SetBalance(endorser0, amount); err != nil {
+				return err
+			}
+			if err := state.SetEnergy(endorser0, &big.Int{}, launchTime); err != nil {
+				return err
+			}
 			tokenSupply.Add(tokenSupply, amount)
 
-			builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, &big.Int{})
-			return nil
+			return builtin.Energy.Native(state, launchTime).SetInitialSupply(tokenSupply, &big.Int{})
 		}).
 		// set initial params
 		// use an external account as executor to manage testnet easily

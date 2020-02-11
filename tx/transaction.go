@@ -360,30 +360,32 @@ func (t *Transaction) GasPrice(baseGasPrice *big.Int) *big.Int {
 // ProvedWork returns proved work.
 // Unproved work will be considered as proved work if block ref is do the prefix of a block's ID,
 // and tx delay is less equal to MaxTxWorkDelay.
-func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
+func (t *Transaction) ProvedWork(headBlockNum uint32, getBlockID func(uint32) (thor.Bytes32, error)) (*big.Int, error) {
 	ref := t.BlockRef()
 	refNum := ref.Number()
 	if refNum >= headBlockNum {
-		return &big.Int{}
+		return &big.Int{}, nil
 	}
 
 	if delay := headBlockNum - refNum; delay > thor.MaxTxWorkDelay {
-		return &big.Int{}
+		return &big.Int{}, nil
 	}
 
-	id := getBlockID(refNum)
-	if bytes.HasPrefix(id[:], ref[:]) {
-		return t.UnprovedWork()
+	id, err := getBlockID(refNum)
+	if err != nil {
+		return nil, err
 	}
-	return &big.Int{}
+	if bytes.HasPrefix(id[:], ref[:]) {
+		return t.UnprovedWork(), nil
+	}
+	return &big.Int{}, nil
 }
 
 // OverallGasPrice calculate overall gas price.
 // overallGasPrice = gasPrice + baseGasPrice * wgas/gas.
-func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, headBlockNum uint32, getBlockID func(uint32) thor.Bytes32) *big.Int {
+func (t *Transaction) OverallGasPrice(baseGasPrice *big.Int, provedWork *big.Int) *big.Int {
 	gasPrice := t.GasPrice(baseGasPrice)
 
-	provedWork := t.ProvedWork(headBlockNum, getBlockID)
 	if provedWork.Sign() == 0 {
 		return gasPrice
 	}

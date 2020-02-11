@@ -11,16 +11,16 @@ import (
 )
 
 type transferReader struct {
-	chain       *chain.Chain
+	repo        *chain.Repository
 	filter      *TransferFilter
 	blockReader chain.BlockReader
 }
 
-func newTransferReader(chain *chain.Chain, position thor.Bytes32, filter *TransferFilter) *transferReader {
+func newTransferReader(repo *chain.Repository, position thor.Bytes32, filter *TransferFilter) *transferReader {
 	return &transferReader{
-		chain:       chain,
+		repo:        repo,
 		filter:      filter,
-		blockReader: chain.NewBlockReader(position),
+		blockReader: repo.NewBlockReader(position),
 	}
 }
 
@@ -31,7 +31,7 @@ func (tr *transferReader) Read() ([]interface{}, bool, error) {
 	}
 	var msgs []interface{}
 	for _, block := range blocks {
-		receipts, err := tr.chain.GetBlockReceipts(block.Header().ID())
+		receipts, err := tr.repo.GetBlockReceipts(block.Header().ID())
 		if err != nil {
 			return nil, false, err
 		}

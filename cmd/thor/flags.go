@@ -87,7 +87,7 @@ var (
 	gasLimitFlag = cli.IntFlag{
 		Name:  "gas-limit",
 		Value: 10000000,
-		Usage: "block gas limit",
+		Usage: "block gas limit(adaptive if set to 0)",
 	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",
@@ -121,7 +121,21 @@ var (
 	}
 	cacheFlag = cli.IntFlag{
 		Name:  "cache",
-		Usage: "megabytes of ram allocated to internal caching",
-		Value: 4096,
+		Usage: "megabytes of ram allocated to trie nodes cache",
+		Value: 1024,
+	}
+	disablePrunerFlag = cli.BoolFlag{
+		Name:  "disable-pruner",
+		Usage: "disable state pruner to keep all history",
+	}
+	txPoolLimitFlag = cli.IntFlag{
+		Name:  "txpool-limit",
+		Value: 10000,
+		Usage: "set tx limit in pool",
+	}
+	txPoolLimitPerAccountFlag = cli.IntFlag{
+		Name:  "txpool-limit-per-account",
+		Value: 16,
+		Usage: "set tx limit per account in pool",
 	}
 )

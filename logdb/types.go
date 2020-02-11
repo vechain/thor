@@ -6,6 +6,7 @@
 package logdb
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/vechain/thor/thor"
@@ -39,13 +40,6 @@ type Transfer struct {
 	Amount      *big.Int
 }
 
-type RangeType string
-
-const (
-	Block RangeType = "block"
-	Time  RangeType = "time"
-)
-
 type Order string
 
 const (
@@ -54,9 +48,8 @@ const (
 )
 
 type Range struct {
-	Unit RangeType
-	From uint64
-	To   uint64
+	From uint32
+	To   uint32
 }
 
 type Options struct {
@@ -67,6 +60,21 @@ type Options struct {
 type EventCriteria struct {
 	Address *thor.Address // always a contract address
 	Topics  [5]*thor.Bytes32
+}
+
+func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
+	cond = "1"
+	if c.Address != nil {
+		cond += " AND address = " + refIDQuery
+		args = append(args, c.Address.Bytes())
+	}
+	for i, topic := range c.Topics {
+		if topic != nil {
+			cond += fmt.Sprintf(" AND topic%v = ", i) + refIDQuery
+			args = append(args, topic.Bytes())
+		}
+	}
+	return
 }
 
 //EventFilter filter
@@ -83,8 +91,24 @@ type TransferCriteria struct {
 	Recipient *thor.Address //who recieved tokens
 }
 
+func (c *TransferCriteria) toWhereCondition() (cond string, args []interface{}) {
+	cond = "1"
+	if c.TxOrigin != nil {
+		cond += " AND txOrigin = " + refIDQuery
+		args = append(args, c.TxOrigin.Bytes())
+	}
+	if c.Sender != nil {
+		cond += " AND sender = " + refIDQuery
+		args = append(args, c.Sender.Bytes())
+	}
+	if c.Recipient != nil {
+		cond += " AND recipient = " + refIDQuery
+		args = append(args, c.Recipient.Bytes())
+	}
+	return
+}
+
 type TransferFilter struct {
-	TxID        *thor.Bytes32
 	CriteriaSet []*TransferCriteria
 	Range       *Range
 	Options     *Options

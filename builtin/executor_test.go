@@ -16,13 +16,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/lvldb"
+	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/xenv"
 )
+
+func M(a ...interface{}) []interface{} {
+	return a
+}
 
 func approverEvent(approver thor.Address, action string) *tx.Event {
 	ev, _ := builtin.Executor.ABI.EventByName("Approver")
@@ -60,8 +64,8 @@ func votingContractEvent(addr thor.Address, action string) *tx.Event {
 }
 
 func initExectorTest() *ctest {
-	kv, _ := lvldb.NewMem()
-	b0 := buildGenesis(kv, func(state *state.State) error {
+	db := muxdb.NewMem()
+	b0 := buildGenesis(db, func(state *state.State) error {
 		state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
 		state.SetCode(builtin.Executor.Address, builtin.Executor.RuntimeBytecodes())
 		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
@@ -69,11 +73,11 @@ func initExectorTest() *ctest {
 		return nil
 	})
 
-	c, _ := chain.New(kv, b0)
-	st, _ := state.New(b0.Header().StateRoot(), kv)
-	seeker := c.NewSeeker(b0.Header().ID())
+	repo, _ := chain.NewRepository(db, b0)
+	st := state.New(db, b0.Header().StateRoot())
+	chain := repo.NewChain(b0.Header().ID())
 
-	rt := runtime.New(seeker, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, thor.NoFork)
+	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, thor.NoFork)
 
 	return &ctest{
 		rt:  rt,
@@ -104,7 +108,7 @@ func TestExecutorApprover(t *testing.T) {
 			Caller(builtin.Executor.Address).
 			ShouldLog(approverEvent(a, "added")).
 			Assert(t)
-		assert.True(t, builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(a))
+		assert.Equal(t, M(true, nil), M(builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(a)))
 	}
 
 	test.Case("approverCount").
@@ -131,7 +135,7 @@ func TestExecutorApprover(t *testing.T) {
 			Caller(builtin.Executor.Address).
 			ShouldLog(approverEvent(a, "revoked")).
 			Assert(t)
-		assert.False(t, builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(a))
+		assert.Equal(t, M(false, nil), M(builtin.Prototype.Native(test.rt.State()).Bind(test.to).IsUser(a)))
 	}
 	test.Case("approverCount").
 		ShouldOutput(uint8(0)).
@@ -251,5 +255,5 @@ func TestExecutorProposal(t *testing.T) {
 			data).
 		Assert(t)
 
-	assert.Equal(t, builtin.Params.Native(test.rt.State()).Get(thor.BytesToBytes32([]byte("paramKey"))), big.NewInt(12345))
+	assert.Equal(t, M(big.NewInt(12345), nil), M(builtin.Params.Native(test.rt.State()).Get(thor.BytesToBytes32([]byte("paramKey")))))
 }

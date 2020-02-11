@@ -59,8 +59,8 @@ func (c *Communicator) announcementLoop() {
 }
 
 func (c *Communicator) fetchBlockByID(peer *Peer, newBlockID thor.Bytes32) {
-	if _, err := c.chain.GetBlockHeader(newBlockID); err != nil {
-		if !c.chain.IsNotFound(err) {
+	if _, err := c.repo.GetBlockSummary(newBlockID); err != nil {
+		if !c.repo.IsNotFound(err) {
 			peer.logger.Error("failed to get block header", "err", err)
 		}
 	} else {

@@ -76,7 +76,7 @@ type TransactionExecutor struct {
 // Runtime bases on EVM and VeChain Thor builtins.
 type Runtime struct {
 	vmConfig    vm.Config
-	seeker      *chain.Seeker
+	chain       *chain.Chain
 	state       *state.State
 	ctx         *xenv.BlockContext
 	forkConfig  thor.ForkConfig
@@ -85,7 +85,7 @@ type Runtime struct {
 
 // New create a Runtime object.
 func New(
-	seeker *chain.Seeker,
+	chain *chain.Chain,
 	state *state.State,
 	ctx *xenv.BlockContext,
 	forkConfig thor.ForkConfig,
@@ -93,7 +93,7 @@ func New(
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	rt := Runtime{
-		seeker:      seeker,
+		chain:       chain,
 		state:       state,
 		ctx:         ctx,
 		forkConfig:  forkConfig,
@@ -102,7 +102,7 @@ func New(
 	return &rt
 }
 
-func (rt *Runtime) Seeker() *chain.Seeker       { return rt.seeker }
+func (rt *Runtime) Chain() *chain.Chain         { return rt.chain }
 func (rt *Runtime) State() *state.State         { return rt.state }
 func (rt *Runtime) Context() *xenv.BlockContext { return rt.ctx }
 
@@ -125,10 +125,21 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 			// touch energy balance when token balance changed
 			// SHOULD be performed before transfer
-			rt.state.SetEnergy(thor.Address(sender),
-				rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time), rt.ctx.Time)
-			rt.state.SetEnergy(thor.Address(recipient),
-				rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time), rt.ctx.Time)
+			senderEnergy, err := rt.state.GetEnergy(thor.Address(sender), rt.ctx.Time)
+			if err != nil {
+				panic(err)
+			}
+			recipientEnergy, err := rt.state.GetEnergy(thor.Address(recipient), rt.ctx.Time)
+			if err != nil {
+				panic(err)
+			}
+
+			if err := rt.state.SetEnergy(thor.Address(sender), senderEnergy, rt.ctx.Time); err != nil {
+				panic(err)
+			}
+			if err := rt.state.SetEnergy(thor.Address(recipient), recipientEnergy, rt.ctx.Time); err != nil {
+				panic(err)
+			}
 
 			stateDB.SubBalance(common.Address(sender), amount)
 			stateDB.AddBalance(common.Address(recipient), amount)
@@ -140,7 +151,11 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			})
 		},
 		GetHash: func(num uint64) common.Hash {
-			return common.Hash(rt.seeker.GetID(uint32(num)))
+			id, err := rt.chain.GetBlockID(uint32(num))
+			if err != nil {
+				panic(err)
+			}
+			return common.Hash(id)
 		},
 		NewContractAddress: func(_ *vm.EVM, counter uint32) common.Address {
 			return common.Address(thor.CreateContractAddress(txCtx.ID, clauseIndex, counter))
@@ -180,12 +195,14 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.seeker, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
 			// set master for created contract
-			rt.state.SetMaster(thor.Address(contractAddr), thor.Address(caller))
+			if err := rt.state.SetMaster(thor.Address(contractAddr), thor.Address(caller)); err != nil {
+				panic(err)
+			}
 
 			data, err := prototypeSetMasterEvent.Encode(caller)
 			if err != nil {
@@ -200,13 +217,23 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		},
 		OnSuicideContract: func(_ *vm.EVM, contractAddr, tokenReceiver common.Address) {
 			// it's IMPORTANT to process energy before token
-			if amount := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time); amount.Sign() != 0 {
+			amount, err := rt.state.GetEnergy(thor.Address(contractAddr), rt.ctx.Time)
+			if err != nil {
+				panic(err)
+			}
+			if amount.Sign() != 0 {
 				// add remained energy of suiciding contract to receiver.
 				// no need to clear contract's energy, vm will delete the whole contract later.
-				rt.state.SetEnergy(
+				receiverEnergy, err := rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time)
+				if err != nil {
+					panic(err)
+				}
+				if err := rt.state.SetEnergy(
 					thor.Address(tokenReceiver),
-					new(big.Int).Add(rt.state.GetEnergy(thor.Address(tokenReceiver), rt.ctx.Time), amount),
-					rt.ctx.Time)
+					new(big.Int).Add(receiverEnergy, amount),
+					rt.ctx.Time); err != nil {
+					panic(err)
+				}
 
 				// see ERC20's Transfer event
 				topics := []common.Hash{
@@ -247,18 +274,6 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 
-// ExecuteClause executes single clause.
-func (rt *Runtime) ExecuteClause(
-	clause *tx.Clause,
-	clauseIndex uint32,
-	gas uint64,
-	txCtx *xenv.TransactionContext,
-) *Output {
-	exec, _ := rt.PrepareClause(clause, clauseIndex, gas, txCtx)
-	output, _ := exec()
-	return output
-}
-
 // PrepareClause prepare to execute clause.
 // It allows to interrupt execution.
 func (rt *Runtime) PrepareClause(
@@ -266,7 +281,7 @@ func (rt *Runtime) PrepareClause(
 	clauseIndex uint32,
 	gas uint64,
 	txCtx *xenv.TransactionContext,
-) (exec func() (output *Output, interrupted bool), interrupt func()) {
+) (exec func() (output *Output, interrupted bool, err error), interrupt func()) {
 	var (
 		stateDB       = statedb.New(rt.state)
 		evm           = rt.newEVM(stateDB, clauseIndex, txCtx)
@@ -277,7 +292,14 @@ func (rt *Runtime) PrepareClause(
 		interruptFlag uint32
 	)
 
-	exec = func() (*Output, bool) {
+	exec = func() (output *Output, interrupted bool, err error) {
+		defer func() {
+			if e := recover(); e != nil {
+				// caught state error
+				err = e.(error)
+			}
+		}()
+
 		if clause.To() == nil {
 			var caddr common.Address
 			data, caddr, leftOverGas, vmErr = evm.Create(vm.AccountRef(txCtx.Origin), clause.Data(), gas, clause.Value())
@@ -286,8 +308,8 @@ func (rt *Runtime) PrepareClause(
 			data, leftOverGas, vmErr = evm.Call(vm.AccountRef(txCtx.Origin), common.Address(*clause.To()), clause.Data(), gas, clause.Value())
 		}
 
-		interrupted := atomic.LoadUint32(&interruptFlag) != 0
-		output := &Output{
+		interrupted = atomic.LoadUint32(&interruptFlag) != 0
+		output = &Output{
 			Data:            data,
 			LeftOverGas:     leftOverGas,
 			RefundGas:       stateDB.GetRefund(),
@@ -295,7 +317,7 @@ func (rt *Runtime) PrepareClause(
 			ContractAddress: contractAddr,
 		}
 		output.Events, output.Transfers = stateDB.GetLogs()
-		return output, interrupted
+		return output, interrupted, nil
 	}
 
 	interrupt = func() {
@@ -332,12 +354,15 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 		return nil, err
 	}
 
+	txCtx, err := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.chain.GetBlockID)
+	if err != nil {
+		return nil, err
+	}
+
 	// ResolveTransaction has checked that tx.Gas() >= IntrinsicGas
 	leftOverGas := tx.Gas() - resolvedTx.IntrinsicGas
 	// checkpoint to be reverted when clause failure.
 	checkpoint := rt.state.NewCheckpoint()
-
-	txCtx := resolvedTx.ToContext(gasPrice, payer, rt.ctx.Number, rt.seeker.GetID)
 
 	txOutputs := make([]*Tx.Output, 0, len(resolvedTx.Clauses))
 	reverted := false
@@ -350,11 +375,12 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 	return &TransactionExecutor{
 		HasNextClause: hasNext,
 		NextClause: func() (gasUsed uint64, output *Output, err error) {
-			if !hasNext() {
-				return 0, nil, errors.New("no more clause")
-			}
 			nextClauseIndex := uint32(len(txOutputs))
-			output = rt.ExecuteClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
+			exec, _ := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
+			output, _, err = exec()
+			if err != nil {
+				return 0, nil, err
+			}
 			gasUsed = leftOverGas - output.LeftOverGas
 			leftOverGas = output.LeftOverGas
 
@@ -396,17 +422,28 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 
 			receipt.Paid = new(big.Int).Mul(new(big.Int).SetUint64(receipt.GasUsed), gasPrice)
 
-			returnGas(leftOverGas)
+			if err := returnGas(leftOverGas); err != nil {
+				return nil, err
+			}
 
 			// reward
-			rewardRatio := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
-			overallGasPrice := tx.OverallGasPrice(baseGasPrice, rt.ctx.Number-1, rt.Seeker().GetID)
+			rewardRatio, err := builtin.Params.Native(rt.state).Get(thor.KeyRewardRatio)
+			if err != nil {
+				return nil, err
+			}
+			provedWork, err := tx.ProvedWork(rt.ctx.Number-1, rt.chain.GetBlockID)
+			if err != nil {
+				return nil, err
+			}
+			overallGasPrice := tx.OverallGasPrice(baseGasPrice, provedWork)
 
 			reward := new(big.Int).SetUint64(receipt.GasUsed)
 			reward.Mul(reward, overallGasPrice)
 			reward.Mul(reward, rewardRatio)
 			reward.Div(reward, big.NewInt(1e18))
-			builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward)
+			if err := builtin.Energy.Native(rt.state, rt.ctx.Time).Add(rt.ctx.Beneficiary, reward); err != nil {
+				return nil, err
+			}
 
 			receipt.Reward = reward
 			return receipt, nil

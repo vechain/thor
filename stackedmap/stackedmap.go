@@ -30,7 +30,7 @@ type journalEntry struct {
 }
 
 // MapGetter defines getter method of map.
-type MapGetter func(key interface{}) (value interface{}, exist bool)
+type MapGetter func(key interface{}) (value interface{}, exist bool, err error)
 
 // New create an instance of StackedMap.
 // src acts as source of data.
@@ -78,11 +78,11 @@ func (sm *StackedMap) PopTo(depth int) {
 
 // Get gets value for given key.
 // The second return value indicates whether the given key is found.
-func (sm *StackedMap) Get(key interface{}) (interface{}, bool) {
+func (sm *StackedMap) Get(key interface{}) (interface{}, bool, error) {
 	if revs, ok := sm.keyRevisionMap[key]; ok {
 		lvl := sm.mapStack[revs.top().(int)].(*level)
 		if v, ok := lvl.kvs[key]; ok {
-			return v, true
+			return v, true, nil
 		}
 	}
 	return sm.src(key)
