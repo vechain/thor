@@ -32,9 +32,8 @@ package.json
 /cmd/vrfkey/vrfkey
 /cmd/disco/disco
 
-/tmp/node1/
-/tmp/node2/
-/tmp/node3/
-/tmp/test.json
+/tmp/node*/
+/tmp/tnode*/
+/tmp/*.json
 
 __debug_bin
