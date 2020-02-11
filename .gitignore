@@ -30,6 +30,7 @@ package.json
 /cmd/thor/log
 /cmd/thor/thor
 /cmd/vrfkey/vrfkey
+/cmd/disco/disco
 
 /tmp/node1/
 /tmp/node2/

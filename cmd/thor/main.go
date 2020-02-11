@@ -216,8 +216,6 @@ func defaultAction(ctx *cli.Context) error {
 
 	printStartupMessage2(apiURL, getNodeID(ctx))
 
-	fmt.Printf("NODEID=%v\n", getNodeID(ctx))
-
 	p2pcom.Start()
 >>>>>>> routine
 	defer p2pcom.Stop()
