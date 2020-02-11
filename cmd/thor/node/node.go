@@ -86,9 +86,11 @@ func New(
 func (n *Node) Run(ctx context.Context) error {
 	n.comm.Sync(n.handleBlockStream)
 
-	mode := 4
+	mode := 0
 
 	switch mode {
+	case 0: // empty loop
+		n.goes.Go(func() { emptyLoop(ctx) })
 	case 1: // normal case
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
