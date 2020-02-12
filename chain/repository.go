@@ -147,11 +147,10 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 			header  = block.Header()
 			id      = header.ID()
 			txs     = block.Transactions()
-			summary = BlockSummary{header, indexRoot, nil, uint64(block.Size())}
+			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
 		)
 
 		if n := len(txs); n > 0 {
-			summary.Txs = make([]thor.Bytes32, n)
 			key := makeTxKey(id, txInfix)
 			for i, tx := range txs {
 				key.SetIndex(uint64(i))
@@ -159,7 +158,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 					return err
 				}
 				r.caches.txs.Add(key, tx)
-				summary.Txs[i] = tx.ID()
+				summary.Txs = append(summary.Txs, tx.ID())
 			}
 			key = makeTxKey(id, receiptInfix)
 			for i, receipt := range receipts {

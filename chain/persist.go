@@ -7,6 +7,7 @@ package chain
 
 import (
 	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
@@ -23,7 +24,7 @@ const (
 type BlockSummary struct {
 	Header    *block.Header
 	IndexRoot thor.Bytes32
-	Txs       []thor.Bytes32 `rlp:"nil"`
+	Txs       []thor.Bytes32
 	Size      uint64
 }
 
