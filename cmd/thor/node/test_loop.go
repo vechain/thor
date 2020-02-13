@@ -27,25 +27,25 @@ func randByte32() (b thor.Bytes32) {
 // the structs defined for vip193. It is used for testing the
 // sending/receiving functions.
 func (n *Node) testBroadcasting(ctx context.Context) {
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(time.Second * 20)
 	defer ticker.Stop()
 
 	<-ticker.C
 
 	bs := block.RandBlockSummary()
-	log.Debug("sending new block summary", "id", bs.ID())
+	log.Info("sending new block summary", "id", bs.ID())
 	n.comm.BroadcastBlockSummary(bs)
 
 	ed := block.RandEndorsement(block.RandBlockSummary())
-	log.Debug("sending new endoresement", "id", ed.ID())
+	log.Info("sending new endoresement", "id", ed.ID())
 	n.comm.BroadcastEndorsement(ed)
 
 	ts := block.RandTxSet(10)
-	log.Debug("sending new tx set", "id", ts.ID())
+	log.Info("sending new tx set", "id", ts.ID())
 	n.comm.BroadcastTxSet(ts)
 
 	header := block.RandBlockHeader()
-	log.Debug("sending new block header", "id", header.ID())
+	log.Info("sending new block header", "id", header.ID())
 	n.comm.BroadcastBlockHeader(header)
 }
 
@@ -226,19 +226,19 @@ func (n *Node) simpleHouseKeeping(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case dat := <-newBlockCh:
-			log.Debug("received new block", "id", dat.Header().ID())
+			log.Info("received new block", "id", dat.Header().ID())
 			n.comm.BroadcastBlock(dat.Block)
 		case dat := <-newBlockSummaryCh:
-			log.Debug("received new block summary", "id", dat.ID())
+			log.Info("received new block summary", "id", dat.ID())
 			n.comm.BroadcastBlockSummary(dat.Summary)
 		case dat := <-newTxSetCh:
-			log.Debug("received new tx set", "id", dat.ID())
+			log.Info("received new tx set", "id", dat.ID())
 			n.comm.BroadcastTxSet(dat.TxSet)
 		case dat := <-newEndorsementCh:
-			log.Debug("received new endorsement", "id", dat.ID())
+			log.Info("received new endorsement", "id", dat.ID())
 			n.comm.BroadcastEndorsement(dat.Endorsement)
 		case dat := <-newBlockHeaderCh:
-			log.Debug("received new block header", "id", dat.ID())
+			log.Info("received new block header", "id", dat.ID())
 			n.comm.BroadcastBlockHeader(dat.Header)
 		}
 	}

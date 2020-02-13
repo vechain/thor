@@ -50,7 +50,7 @@ func New(opts *Options) *Server {
 				Name:        opts.Name,
 				PrivateKey:  opts.PrivateKey,
 				MaxPeers:    opts.MaxPeers,
-				NoDiscovery: true,
+				NoDiscovery: true,  // need to set to true to block p2p.Server.Start() to listen to and block the port
 				DiscoveryV5: false, // disable discovery inside p2p.Server instance
 				ListenAddr:  opts.ListenAddr,
 				NetRestrict: opts.NetRestrict,

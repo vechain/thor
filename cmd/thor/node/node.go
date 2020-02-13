@@ -86,7 +86,7 @@ func New(
 func (n *Node) Run(ctx context.Context) error {
 	n.comm.Sync(n.handleBlockStream)
 
-	mode := 0
+	mode := 2
 
 	switch mode {
 	case 0: // empty loop
