@@ -258,7 +258,10 @@ func (c *Communicator) BroadcastBlockSummary(bs *block.Summary) {
 		return !p.IsBlockSummaryKnown(bs.ID())
 	})
 
+	// fmt.Printf("No. peers: %v\n", len(peers))
+
 	for _, peer := range peers {
+		peer := peer // it is to prevent the case that when the go routine starts, "peer" has already been modified by the loop
 		peer.MarkBlockSummary(bs.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockSummary(c.ctx, peer, bs); err != nil {
@@ -275,6 +278,7 @@ func (c *Communicator) BroadcastTxSet(ts *block.TxSet) {
 	})
 
 	for _, peer := range peers {
+		peer := peer
 		peer.MarkTxSet(ts.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewTxSet(c.ctx, peer, ts); err != nil {
@@ -291,6 +295,7 @@ func (c *Communicator) BroadcastBlockHeader(header *block.Header) {
 	})
 
 	for _, peer := range peers {
+		peer := peer
 		peer.MarkBlockHeader(header.ID())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBlockHeader(c.ctx, peer, header); err != nil {
