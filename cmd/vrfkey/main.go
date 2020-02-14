@@ -6,15 +6,17 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/vrf"
 )
 
 func main() {
-	dir := os.Args[1]
-
-	if len(dir) == 0 {
-		panic("master key directory required")
+	if len(os.Args) != 2 {
+		fmt.Println("command: vrfkey <DIR>")
+		return
 	}
+
+	dir := os.Args[1]
 
 	if dir[len(dir)-1:] != "/" {
 		dir += "/"
@@ -23,12 +25,12 @@ func main() {
 	file := dir + "master.key"
 	key, err := ioutil.ReadFile(file)
 	if err != nil {
-		panic(err)
+		panic(errors.WithMessage(err, "master.key not found"))
 	}
 
 	sk, err := crypto.HexToECDSA(string(key))
 	if err != nil {
-		panic(err)
+		panic(errors.WithMessage(err, "invalid private key"))
 	}
 
 	vrfpk, vrfsk := vrf.GenKeyPairFromSeed(sk.D.Bytes())

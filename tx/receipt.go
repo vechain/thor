@@ -44,7 +44,7 @@ type Receipts []*Receipt
 func (rs Receipts) RootHash() thor.Bytes32 {
 	if len(rs) == 0 {
 		// optimized
-		return emptyRoot
+		return EmptyRoot
 	}
 	return trie.DeriveRoot(derivableReceipts(rs))
 }

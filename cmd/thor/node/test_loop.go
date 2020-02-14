@@ -55,15 +55,15 @@ func getKeys() (ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey) {
 	switch runtime.GOOS {
 	case "linux":
 		hexKeys = []string{
-			"9394eda09b27bba53362d88c1c7aac18463468492b86e0ff7a6aa9bfd9753bd5",
+			"ebe662faa74cd42422ff0374690798d22d00c2f27cd478ebe43f129bdb53c15c",
 			"0276397acb72009048bcf3e91fda656fc87511b685f28b181e620817b1806e71",
 			"19e4a1bb4ccd861ba4aedb6c74f4b94165d2dbb4eea6acc9a701bfb5b6adc843",
 		}
 	case "darwin":
 		hexKeys = []string{
-			"edfeb374eee0c7293bacd4b0a66b472f3bd73bedf91c59365d53efca9e304e8c",
-			"b59e57175c45c85463ac948cdfc7f669e70922d3c6ae56843022dac76855f552",
-			"a0ca961e7e98ff17b2593195c39e4bc21472c29f215ac056930cbd7b06084a27",
+			// "ebe662faa74cd42422ff0374690798d22d00c2f27cd478ebe43f129bdb53c15c",
+			// "b59e57175c45c85463ac948cdfc7f669e70922d3c6ae56843022dac76855f552",
+			// "a0ca961e7e98ff17b2593195c39e4bc21472c29f215ac056930cbd7b06084a27",
 		}
 	default:
 		panic("unrecognized os")
@@ -163,10 +163,12 @@ func (n *Node) testSync(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+
+	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+
 	if isTrunk {
-		log.Debug("broadcast block id", "id", blk.Header().ID())
+		log.Info("broadcast block id", "id", blk.Header().ID())
 		n.comm.BroadcastBlockID(blk.Header().ID())
-		// log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
 	} else {
 		panic("not trunk")
 	}
@@ -174,12 +176,12 @@ func (n *Node) testSync(ctx context.Context) {
 
 func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 	ethsks, vrfsks := getKeys()
-	// exit if it is not node 1
-	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
+	// exit if it is not node 2
+	if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[1].PublicKey).Bytes()) != 0 {
 		return
 	}
 
-	<-time.NewTimer(time.Second * 20).C
+	<-time.NewTimer(time.Second * 10).C
 
 	blk, _, _, err := n.newLocalBlock(ctx, ethsks, vrfsks, nil)
 	if err != nil {
@@ -190,8 +192,11 @@ func (n *Node) testEmptyBlockAssembling(ctx context.Context) {
 	if err != nil {
 		panic(err)
 	}
+
+	log.Info("created new block", "id", blk.Header().ID())
+
 	if isTrunk {
-		log.Debug("broad new block header", "id", blk.Header().ID())
+		log.Info("broad new block header", "id", blk.Header().ID())
 		n.comm.BroadcastBlockHeader(blk.Header())
 	} else {
 		panic("not trunk")

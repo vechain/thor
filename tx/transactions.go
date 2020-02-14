@@ -11,9 +11,8 @@ import (
 	"github.com/vechain/thor/trie"
 )
 
-var (
-	emptyRoot = trie.DeriveRoot(&derivableTxs{})
-)
+// EmptyRoot defines the root of an empty trie
+var EmptyRoot = trie.DeriveRoot(&derivableTxs{})
 
 // Transactions a slice of transactions.
 type Transactions []*Transaction
@@ -22,7 +21,7 @@ type Transactions []*Transaction
 func (txs Transactions) RootHash() thor.Bytes32 {
 	if len(txs) == 0 {
 		// optimized
-		return emptyRoot
+		return EmptyRoot
 	}
 	return trie.DeriveRoot(derivableTxs(txs))
 }

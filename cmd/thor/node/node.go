@@ -84,24 +84,49 @@ func New(
 
 // Run ...
 func (n *Node) Run(ctx context.Context) error {
-	n.comm.Sync(n.handleBlockStream)
-
-	mode := 2
+	mode := 4
 
 	switch mode {
 	case 0: // empty loop
 		n.goes.Go(func() { emptyLoop(ctx) })
 	case 1: // normal case
+		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
 		n.goes.Go(func() { n.packerLoop(ctx) })
-	case 2: // testing broadcasting functions
+	case 2:
+		/**
+		 * Description: All nodes produce one random instance of
+		 * each of the typtes: block.Summary, block.Endoresement,
+		 * block.TxSet and block.Header and broadcast them to
+		 * other nodes. The test is designed to test the low-level
+		 * broadcasting functions.
+		 *
+		 * Status: PASS
+		 */
 		n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
 		n.goes.Go(func() { n.testBroadcasting(ctx) })
-	case 3: // testing sync, node 1 is made to locally commit two blocks
+	case 3:
+		/**
+		 * Description: It is tested on a three-node local customnet.
+		 * Node1 is made to produce a valid new block and commit
+		 * locally. It then broadcasts the block ID. The test is
+		 * designed to test the sync mechanism.
+		 *
+		 * Status: PASS
+		 */
+		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.testSync(ctx) })
 		n.goes.Go(func() { emptyLoop(ctx) })
-	case 4: // testing empty block assembling
+	case 4:
+		/**
+		 * Description: The test is designed to test the assembly of
+		 * an empty block by the house keeping loop. It is tested on
+		 * a three-node local customnet. Node1 is made to produce a
+		 * new empty block and broadcast its block header.
+		 *
+		 * Status: PASS
+		 */
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.testEmptyBlockAssembling(ctx) })
 	}
@@ -281,7 +306,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 		case ev := <-newBlockHeaderCh:
 			header := ev.Header
-			log.Debug("received new block header", "id", header.ID())
+			log.Info("received new block header", "id", header.ID())
 
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
@@ -295,21 +320,21 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			}
 
 			if err := n.cons.ValidateBlockHeader(header, parentHeader, now); err != nil {
-				log.Debug("invalid new block header", "id", header.ID(), "err", err)
+				log.Info("invalid new block header", "id", header.ID(), "err", err)
 				continue
 			}
 
 			lh = header
-			log.Debug("broadcasting new block header", "id", header.ID())
+			log.Info("broadcasting new block header", "id", header.ID())
 			n.comm.BroadcastBlockHeader(header)
 
 			// assemble the block either when there is an empty transaction list or
 			// when there has been a tx set received and its tx root matches the one
 			// computed from the header
-			if (lts == nil && header.TxsRoot().IsZero()) ||
+			if (lts == nil && header.TxsRoot() == tx.EmptyRoot) ||
 				(lts != nil && lts.TxsRoot() == header.TxsRoot() &&
 					n.cons.ValidateTxSet(lts, parentHeader, now) == nil) {
-				log.Debug("assembling new block", "id", header.ID())
+				log.Info("assembling new block", "id", header.ID())
 				n.assembleNewBlock(lh, lts, parentHeader, now)
 			}
 
@@ -353,17 +378,23 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 // assembleNewBlock is not responsible for validating the input header and tx set
 func (n *Node) assembleNewBlock(header *block.Header, ts *block.TxSet, parentHeader *block.Header, now uint64) {
-	b := block.Compose(header, ts.Transactions())
+	var blk *block.Block
+	if ts == nil {
+		blk = block.Compose(header, tx.Transactions{})
+	} else {
+		blk = block.Compose(header, ts.Transactions())
+	}
+
 	var stats blockStats
-	if isTrunk, err := n.processBlock(b, &stats); err != nil {
+	if isTrunk, err := n.processBlock(blk, &stats); err != nil {
 		// reset locally saved header and tx set
 		header = nil
 		ts = nil
 		log.Error("Failed to proccess the assembled new block", "err", err)
 	} else if isTrunk {
 		// only broadcast the new block id in the current round
-		n.comm.BroadcastBlockID(b.Header().ID())
-		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(b.Header())...)
+		n.comm.BroadcastBlockID(blk.Header().ID())
+		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(blk.Header())...)
 	}
 }
 

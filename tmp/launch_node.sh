@@ -51,19 +51,11 @@ if [ "$(uname)" == "Darwin" ]; then
     BOOTNODE="enode://d047959848c3139b718a65ecce3eb4823accf05ccfa0be14d2ac552840582890c4c047c495152232d99f5c5ce670e82be154e280bc290d7dcebd7de67786400c@127.0.0.1:"
 else
     # Ubuntu
-    BOOTNODE="enode://eb08ccf2668296b135e89d658f9a1a33408d8c7c9fe6c50b3501ff27265b2f8debc7f6d31e54e10d3faa47b9dcd919fa2e89cb05e0d8389e42909233baca89df@127.0.0.1:"
+    BOOTNODE="enode://6508ef8879e64e63f748881c5337b22db092e051235cf5855c2070c78011531f4abd3b9114a2123d0684f6fad1763532571d502dc84ea1028f67a2ab412f576a@127.0.0.1:"
 fi
 
 # remove peer cache files
-FILE=$(find $THORDIR/tmp/node1/ -iname peers.cache)
-if [ ! -z "$FILE" ]; then 
-    rm $FILE
-fi
-FILE=$(find $THORDIR/tmp/node2/ -iname peers.cache)
-if [ ! -z "$FILE" ]; then 
-    rm $FILE
-fi
-FILE=$(find $THORDIR/tmp/node3/ -iname peers.cache)
+FILE=$(find $DIR -iname peers.cache)
 if [ ! -z "$FILE" ]; then 
     rm $FILE
 fi
