@@ -58,19 +58,23 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
-	var lbs *block.Summary // a local copy of the latest block summary
+	var (
+		lbs    *block.Summary // a local copy of the latest block summary
+		active = false
+	)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if flow != nil {
+			if flow != nil && active { // flow must be either nil or not active to proceed
 				continue
 			}
 
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
+			// fmt.Println(now)
 
 			if flow == nil {
 				// Schedule a round to be the leader
@@ -79,6 +83,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 					log.Error("Schedule", "key", "packer", "err", err)
 					continue
 				}
+
+				fmt.Printf("now = %v, when = %v\n", now, flow.When())
 			}
 
 			// Check whether the best block has changed
@@ -96,16 +102,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
+				active = false
 				continue
 			}
 
 			start = mclock.Now()
 
+			active = true // Mark the flow as active
+
 			maxTxPackingDur := 3 // max number of seconds allowed to prepare transactions
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxPackingDur)
 			if err != nil {
 				log.Error("packTxSetAndBlockSummary", "key", "packer", "err", err)
+
 				flow = nil
+				active = false
 				continue
 			}
 			txSetBlockSummaryDone = mclock.Now()
@@ -159,12 +170,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 		case ev := <-newEndorsementCh:
+			if flow == nil || !active { // flow must be active to proceed
+				continue
+			}
+
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
+				active = false
 				log.Debug("re-schedule packer due to new best block")
 				continue
 			}
@@ -177,6 +193,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
+				active = false
 				continue
 			}
 
