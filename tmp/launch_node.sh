@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HELP="launch_node -d [1-3] -b [bootnodeport] -v [0-9]"
+HELP="launch_node -d [1-3] -b [bootnodeport] -t [0-99] -v [0-9]"
 
 while [ -n "$1" ]; do 
     case "$1" in
@@ -21,6 +21,10 @@ while [ -n "$1" ]; do
         PORT=$2
         shift
         ;;
+    -t)
+        MODE=$2
+        shift
+        ;;
     *) 
         echo $HELP
         break
@@ -33,11 +37,17 @@ done
 if [ ! -n "$ID" ]; then
     echo "node id required: 1-3"
     echo $HELP
-    return
+    exit 1
 fi
 
 if [ ! -n "$PORT" ]; then
     PORT="11235"
+fi
+
+if [ ! -n "$MODE" ]; then
+    echo "test mode required: 0-99"
+    echo $HELP
+    exit 1
 fi
 
 # echo "GOPATH=$GOPATH"
@@ -60,7 +70,7 @@ if [ ! -z "$FILE" ]; then
     rm $FILE
 fi
 
-CMD="$THOR --network $JSON --config-dir $DIR --data-dir $DIR --p2p-port $PORT --skip-logs"
+CMD="$THOR --network $JSON --config-dir $DIR --data-dir $DIR --p2p-port $PORT --test-mode $MODE --skip-logs"
 
 echo "p2p port = $PORT"
 
@@ -79,4 +89,4 @@ if [ "$ID" == "3" ]; then
     CMD="$CMD --api-addr localhost:8671"
 fi
 
- $CMD
+$CMD

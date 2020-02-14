@@ -1,14 +1,14 @@
 package block
 
 import (
-	"math/rand"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/vrf"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 func randUint64() uint64 {
@@ -37,7 +37,8 @@ func randTx() *tx.Transaction {
 	return new(tx.Builder).Clause(tx.NewClause(randAddress())).Build()
 }
 
-func randTxs(N int) tx.Transactions {
+// RandTxs ...
+func RandTxs(N int) tx.Transactions {
 	var txs tx.Transactions
 	for i := 0; i < N; i++ {
 		txs = append(txs, randTx())
@@ -69,7 +70,7 @@ func RandEndorsement(raw *Summary) *Endorsement {
 
 // RandTxSet creates random tx set
 func RandTxSet(n int) *TxSet {
-	ts := NewTxSet(randTxs(n), uint64(time.Now().Unix()), randUint64())
+	ts := NewTxSet(RandTxs(n), uint64(time.Now().Unix()), randUint64())
 	sk, _ := crypto.GenerateKey()
 	sig, _ := crypto.Sign(ts.SigningHash().Bytes(), sk)
 	ts = ts.WithSignature(sig)

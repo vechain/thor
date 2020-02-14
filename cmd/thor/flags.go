@@ -138,9 +138,10 @@ var (
 		Value: 16,
 		Usage: "set tx limit per account in pool",
 	}
-	debugModeFlag = cli.StringFlag{
-		Name:  "mode",
-		Usage: "tell the system to go into the designated debug mode",
-		Value: "default",
+	testModeFlag = cli.IntFlag{
+		Name:   "test-mode",
+		Usage:  "tell the system to run which test defined Node.Run",
+		Value:  1,
+		Hidden: true,
 	}
 )
