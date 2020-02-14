@@ -31,6 +31,8 @@ type Flow struct {
 	blockSummary *block.Summary
 	txSet        *block.TxSet
 	endorsements block.Endorsements
+
+	Ongoing bool
 }
 
 // NewFlow ...

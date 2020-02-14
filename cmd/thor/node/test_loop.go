@@ -60,9 +60,9 @@ func getKeys() (ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey) {
 		}
 	case "darwin":
 		hexKeys = []string{
-			// "ebe662faa74cd42422ff0374690798d22d00c2f27cd478ebe43f129bdb53c15c",
-			// "b59e57175c45c85463ac948cdfc7f669e70922d3c6ae56843022dac76855f552",
-			// "a0ca961e7e98ff17b2593195c39e414 ==>72c29f215ac056930cbd7b06084a27",
+			"edfeb374eee0c7293bacd4b0a66b472f3bd73bedf91c59365d53efca9e304e8c",
+			"b59e57175c45c85463ac948cdfc7f669e70922d3c6ae56843022dac76855f552",
+			"a0ca961e7e98ff17b2593195c39e4bc21472c29f215ac056930cbd7b06084a27",
 		}
 	default:
 		panic("unrecognized os")
