@@ -83,7 +83,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			skipTxPoolBlockList,
-			debugModeFlag,
+			testModeFlag, // new flag added for testing
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -103,7 +103,6 @@ func main() {
 					verbosityFlag,
 					pprofFlag,
 					verifyLogsFlag,
-					debugModeFlag,
 				},
 				Action: soloAction,
 			},
@@ -196,7 +195,7 @@ func defaultAction(ctx *cli.Context) error {
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
 		skipLogs,
 		forkConfig).
-		Run(exitSignal)
+		Run(exitSignal, ctx.Int(testModeFlag.Name))
 }
 
 func soloAction(ctx *cli.Context) error {

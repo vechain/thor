@@ -83,8 +83,10 @@ func New(
 }
 
 // Run ...
-func (n *Node) Run(ctx context.Context) error {
-	mode := 4
+func (n *Node) Run(ctx context.Context, mode int) error {
+	if mode != 1 {
+		log.Info("test mode on", "mod", mode)
+	}
 
 	switch mode {
 	case 0: // empty loop
@@ -96,39 +98,119 @@ func (n *Node) Run(ctx context.Context) error {
 		n.goes.Go(func() { n.packerLoop(ctx) })
 	case 2:
 		/**
-		 * Description: All nodes produce one random instance of
-		 * each of the typtes: block.Summary, block.Endoresement,
-		 * block.TxSet and block.Header and broadcast them to
-		 * other nodes. The test is designed to test the low-level
-		 * broadcasting functions.
+		 * Description:  to test the low-level broadcasting funcs
+		 *
+		 * All nodes produce one random instance of each of the
+		 * following typtes: block.Summary, block.Endoresement,
+		 * block.TxSet and block.Header and then broadcast them to
+		 * other nodes.
 		 *
 		 * Status: PASS
 		 */
 		n.goes.Go(func() { n.simpleHouseKeeping(ctx) })
-		n.goes.Go(func() { n.testBroadcasting(ctx) })
+		n.goes.Go(func() { n.testCase2(ctx) })
 	case 3:
 		/**
-		 * Description: It is tested on a three-node local customnet.
+		 * Description: to test sync
+		 *
+		 * It is tested on a three-node local customnet.
+		 *
 		 * Node1 is made to produce a valid new block and commit
-		 * locally. It then broadcasts the block ID. The test is
-		 * designed to test the sync mechanism.
+		 * locally. It then broadcasts the block ID.
 		 *
 		 * Status: PASS
 		 */
 		n.comm.Sync(n.handleBlockStream)
-		n.goes.Go(func() { n.testSync(ctx) })
+		if n.getNodeID() == 1 {
+			n.goes.Go(func() { n.testCase3(ctx) })
+		}
 		n.goes.Go(func() { emptyLoop(ctx) })
 	case 4:
 		/**
-		 * Description: The test is designed to test the assembly of
-		 * an empty block by the house keeping loop. It is tested on
-		 * a three-node local customnet. Node1 is made to produce a
-		 * new empty block and broadcast its block header.
+		 * Description: to test the assembly of a block with the tx set
+		 * arrives EARLIER than the header
+		 *
+		 * It is tested on a three-node customnet.
+		 *
+		 * Node2 is made to produce and broadcast the tx set and header.
 		 *
 		 * Status: PASS
 		 */
 		n.goes.Go(func() { n.houseKeeping(ctx) })
-		n.goes.Go(func() { n.testEmptyBlockAssembling(ctx) })
+		if n.getNodeID() == 2 {
+			n.goes.Go(func() { n.testCase4(ctx) })
+		}
+	case 5:
+		/**
+		 * Description: to test the assembly of a block with the tx set
+		 * arrives LATER than the header
+		 *
+		 * It is tested on a three-node customnet.
+		 *
+		 * Node2 is made to produce and broadcast the tx set and header.
+		 *
+		 * Status: PASS
+		 */
+		n.goes.Go(func() { n.houseKeeping(ctx) })
+		if n.getNodeID() == 2 {
+			n.goes.Go(func() { n.testCase5(ctx) })
+		}
+	case 6:
+		/**
+		 * Description: The test is designed to test the assembly of
+		 * a block with tx with the tx set arrives LATER than the
+		 * hd. It is tested on a three-node customnet.
+		 *
+		 * Node2 is made to produce and broadcast the tx set and hd.
+		 *
+		 * Status: PASS
+		 */
+		n.goes.Go(func() { n.houseKeeping(ctx) })
+		if n.getNodeID() == 2 {
+			n.goes.Go(func() { n.testCase6(ctx) })
+		}
+	case 7:
+		/**
+		 * Description: to test the part of packerLoop that make endorsments.
+		 *
+		 * It is tested on a three-node customnet.
+		 *
+		 * Node2 is made to produce and broadcast two new block summaries and
+		 * expects the other nodes to sent back their endorsement on the
+		 * first one and rejects the second.
+		 *
+		 * The other nodes run endorserLoop that waits any new block summary
+		 * and produces and broadcasts a new endorsement
+		 *
+		 * Status: PASS
+		 */
+		n.comm.Sync(n.handleBlockStream)
+		n.goes.Go(func() { n.houseKeeping(ctx) })
+		if n.getNodeID() == 2 {
+			n.goes.Go(func() { n.testCase7(ctx) })
+		} else {
+			n.goes.Go(func() { n.endorserLoop(ctx) })
+		}
+	case 8:
+		/**
+		 * Description: to test the normal procedure of pack a new block.
+		 *
+		 * It is tested on a three-node customnet.
+		 *
+		 * Node2 starts with packerLoop while the other two nodes starts
+		 * with endorserLoop.
+		 *
+		 * Status:
+		 */
+		n.comm.Sync(n.handleBlockStream)
+		n.goes.Go(func() { n.houseKeeping(ctx) })
+		if n.getNodeID() == 2 {
+			n.goes.Go(func() { n.packerLoop(ctx) })
+		} else {
+			n.goes.Go(func() { n.endorserLoop(ctx) })
+		}
+	default:
+		panic("test does not exist")
 	}
 
 	n.goes.Wait()
@@ -175,8 +257,8 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 // 2. receive & broadcast new header
 // 3. receive & broadcast new tx set
 // 4. assemble new block from header and tx set
-// 5. receive & broadcast new block summary
-// 6. receive & broadcast new endorsement
+// 5. receive & broadcast new bs
+// 6. receive & broadcast new bs
 func (n *Node) houseKeeping(ctx context.Context) {
 	log.Debug("enter house keeping")
 	defer log.Debug("leave house keeping")
@@ -204,12 +286,17 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 	var (
 		noPeerTimes int
-		lbs         *block.Summary // locally stored block summary
+		lbs         *block.Summary // locally stored bs
 		lts         *block.TxSet   // locally stored tx set
-		lh          *block.Header  // locally stored block header
+		lh          *block.Header  // locally stored hd
 	)
 
 	futureBlocks := cache.NewRandCache(32)
+
+	knownBs := cache.NewRandCache(32)
+	knownTs := cache.NewRandCache(32)
+	knownEd := cache.NewRandCache(32)
+	knownHd := cache.NewRandCache(32)
 
 	for {
 		select {
@@ -231,29 +318,46 @@ func (n *Node) houseKeeping(ctx context.Context) {
 		case ev := <-newBlockSummaryCh:
 			bs := ev.Summary
 
+			if _, ok := knownBs.Get(bs.ID()); ok {
+				continue
+			} else {
+				knownBs.Set(bs.ID(), struct{}{})
+			}
+
+			log.Info("<== bs", "key", "house", "id", bs.ID())
+
 			now := uint64(time.Now().Unix())
 			parentHeader := n.chain.BestBlock().Header()
 
-			// Only receive one block summary from the same leader once in the same round
+			// Only receive one bs from the same leader once in the same round
 			if lbs != nil {
 				if n.cons.ValidateBlockSummary(lbs, parentHeader, now) == nil {
 					continue
 				}
+				log.Info("set lbs=nil", "key", "house")
 				lbs = nil
 			}
 
-			// validate the new block summary
-			if n.cons.ValidateBlockSummary(bs, parentHeader, now) != nil {
+			// validate the new bs
+			if err := n.cons.ValidateBlockSummary(bs, parentHeader, now); err != nil {
+				log.Info("invalid bs", "key", "house", "err", err, "id", bs.ID())
 				continue
 			}
 
-			// log.Debug("Broadcasting block summary", "hash", bs.RLPHash())
 			lbs = bs
+			log.Info("bs ==>", "key", "house", "id", bs.ID())
 			n.comm.BroadcastBlockSummary(bs)
 
 		case ev := <-newTxSetCh:
 			ts := ev.TxSet
-			log.Debug("received new tx set", "id", ts.ID())
+
+			if _, ok := knownTs.Get(ts.ID()); ok {
+				continue
+			} else {
+				knownTs.Set(ts.ID(), struct{}{})
+			}
+
+			log.Info("<== ts", "key", "house", "id", ts.ID())
 
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
@@ -263,50 +367,66 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				if n.cons.ValidateTxSet(lts, parentHeader, now) == nil {
 					continue
 				}
+				log.Info("set lts=nil", "key", "house")
 				lts = nil
 			}
 
 			// validate the new tx set
-			if n.cons.ValidateTxSet(ts, parentHeader, now) != nil {
-				log.Debug("invalid new tx set", "id", ts.ID())
+			if err := n.cons.ValidateTxSet(ts, parentHeader, now); err != nil {
+				log.Info("invalid ts", "key", "house", "err", err, "id", ts.ID())
 				continue
 			}
 
 			if lbs != nil {
-				// only reject the new tx set if the locally save block summary is valid and they do not match
+				// only reject the new tx set if the locally save bs is valid and they do not match
 				if n.cons.ValidateBlockSummary(lbs, parentHeader, now) == nil && lbs.TxsRoot() != ts.TxsRoot() {
-					log.Debug("new tx set rejected", "txsetid", ts.ID(), "bsid", lbs.ID())
+					log.Info("ts rejected", "key", "house", "id", ts.ID())
 					continue
 				}
 			}
 
 			lts = ts
-			log.Debug("broadcasting tx set", "id", ts.ID())
+			log.Info("ts ==>", "key", "house", "id", ts.ID())
 			n.comm.BroadcastTxSet(ts)
 
 			// assemble the block if the header has been received
 			if lh != nil && n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil && lh.TxsRoot() == ts.TxsRoot() {
-				log.Debug("assembling new block", "id", lh.ID())
+				log.Info("assembling new block", "key", "house", "id", lh.ID())
 				n.assembleNewBlock(lh, lts, parentHeader, now)
 			}
 
 		case ev := <-newEndorsementCh:
 			ed := ev.Endorsement
 
+			if _, ok := knownEd.Get(ed.ID()); ok {
+				continue
+			} else {
+				knownEd.Set(ed.ID(), struct{}{})
+			}
+
+			log.Info("<== ed", "key", "house", "id", ed.ID())
+
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
 
-			if n.cons.ValidateEndorsement(ed, parentHeader, now) != nil {
-				log.Debug("invalid new endorsement", "id", ed.ID())
+			if err := n.cons.ValidateEndorsement(ed, parentHeader, now); err != nil {
+				log.Info("invalid ed", "key", "house", "err", err, "id", ed.ID())
 				continue
 			}
 
-			log.Debug("broadcasting endorsement", "id", ed.ID())
+			log.Info("ed ==>", "key", "house", "id", ed.ID())
 			n.comm.BroadcastEndorsement(ed)
 
 		case ev := <-newBlockHeaderCh:
 			header := ev.Header
-			log.Info("received new block header", "id", header.ID())
+
+			if _, ok := knownHd.Get(header.ID()); ok {
+				continue
+			} else {
+				knownHd.Set(header.ID(), struct{}{})
+			}
+
+			log.Info("<== hd", "key", "house", "id", header.ID())
 
 			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
@@ -316,16 +436,17 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				if n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil {
 					continue
 				}
+				log.Info("set lh=nil", "key", "house")
 				lh = nil
 			}
 
 			if err := n.cons.ValidateBlockHeader(header, parentHeader, now); err != nil {
-				log.Info("invalid new block header", "id", header.ID(), "err", err)
+				log.Info("invalid hd", "key", "house", "id", header.ID(), "err", err)
 				continue
 			}
 
 			lh = header
-			log.Info("broadcasting new block header", "id", header.ID())
+			log.Info("hd ==>", "key", "header", "id", header.ID())
 			n.comm.BroadcastBlockHeader(header)
 
 			// assemble the block either when there is an empty transaction list or
@@ -334,7 +455,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if (lts == nil && header.TxsRoot() == tx.EmptyRoot) ||
 				(lts != nil && lts.TxsRoot() == header.TxsRoot() &&
 					n.cons.ValidateTxSet(lts, parentHeader, now) == nil) {
-				log.Info("assembling new block", "id", header.ID())
+				log.Info("assembling new block", "key", "header", "id", header.ID())
 				n.assembleNewBlock(lh, lts, parentHeader, now)
 			}
 

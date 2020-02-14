@@ -58,7 +58,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
-	var lbs *block.Summary
+	var lbs *block.Summary // a local copy of the latest block summary
 
 	for {
 		select {
@@ -76,7 +76,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				// Schedule a round to be the leader
 				flow, err = n.packer.Schedule(best.Header(), now)
 				if err != nil {
-					log.Error("Schedule", "err", err)
+					log.Error("Schedule", "key", "packer", "err", err)
 					continue
 				}
 			}
@@ -104,24 +104,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 			maxTxPackingDur := 3 // max number of seconds allowed to prepare transactions
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxPackingDur)
 			if err != nil {
-				log.Error("packTxSetAndBlockSummary", "err", err)
+				log.Error("packTxSetAndBlockSummary", "key", "packer", "err", err)
 				flow = nil
 				continue
 			}
-
 			txSetBlockSummaryDone = mclock.Now()
 
+			lbs = bs // save a local copy of the latest block summary
+			log.Info("bs ==>", "key", "packer", "id", bs.ID())
 			n.comm.BroadcastBlockSummary(bs)
 			if !ts.IsEmpty() {
+				log.Info("ts ==>", "key", "packer", "id", ts.ID())
 				n.comm.BroadcastTxSet(ts)
 			}
 
 		case ev := <-newBlockSummaryCh:
-			bs := ev.Summary
-
-			// log.Debug("Incoming block summary:")
-			// log.Debug(bs.String())
-
 			now := uint64(time.Now().Unix())
 			best := n.chain.BestBlock()
 
@@ -133,15 +130,20 @@ func (n *Node) packerLoop(ctx context.Context) {
 				lbs = nil
 			}
 
+			bs := ev.Summary
+			log.Info("<== bs", "key", "packer", "id", bs.ID())
+
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
-				log.Error("ValidateBlockSummary", "err", err)
+				log.Error("ValidateBlockSummary", "key", "packer", "err", err)
 				continue
 			}
+
+			lbs = bs // save the local copy of the latest received block summary
 
 			// Check the committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
 			if err != nil {
-				log.Error("IsCommittee", "err", err)
+				log.Error("IsCommittee", "key", "packer", "err", err)
 				continue
 			}
 			if ok {
@@ -149,7 +151,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				ed := block.NewEndorsement(bs, proof)
 				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
 				if err != nil {
-					log.Error("Signing endorsement", "err", err)
+					log.Error("Signing endorsement", "key", "packer", "err", err)
 					continue
 				}
 				ed = ed.WithSignature(sig)
@@ -157,10 +159,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 		case ev := <-newEndorsementCh:
-			ed := ev.Endorsement
-			log.Debug("Incoming endoresement:")
-			log.Debug(ed.String())
-
 			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
 
@@ -182,14 +180,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
+			ed := ev.Endorsement
+			log.Info("<== ed", "key", "packer", "id", ed.ID())
+
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
+				log.Info("invalid ed", "key", "packer", "id", ed.ID())
 				continue
 			}
 
 			if ok := flow.AddEndoresement(ed); !ok {
-				log.Debug("Failed to add new endorsement", "#", flow.NumOfEndorsements())
+				log.Info("Failed to add ed", "key", "packer", "#", flow.NumOfEndorsements(), "id", ed.ID())
 			} else {
-				log.Debug("Added new endorsement", "#", flow.NumOfEndorsements())
+				log.Info("Added ed", "key", "packer", "#", flow.NumOfEndorsements(), "id", ed.ID())
 			}
 
 			// Pack a new block if there have been enough endorsements collected
@@ -199,7 +201,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			endorsementDone = mclock.Now()
 
-			log.Debug("Packing new block header")
+			log.Info("Packing new header")
 			blk, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 			if err != nil {
 				log.Error("PackBlockHeader", "err", err)
@@ -211,7 +213,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// reset flow
 			flow = nil
 
-			log.Debug("Committing new block")
+			log.Info("Committing new block")
 			if _, err := stage.Commit(); err != nil {
 				log.Error("commit state", "err", err)
 			}

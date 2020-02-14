@@ -128,9 +128,10 @@ var (
 		Name:  "skip-txpool-blocklist",
 		Usage: "skip applying txpool blocklist",
 	}
-	debugModeFlag = cli.StringFlag{
-		Name:  "mode",
-		Usage: "tell the system to go into the designated debug mode",
-		Value: "default",
+	testModeFlag = cli.IntFlag{
+		Name:   "test-mode",
+		Usage:  "tell the system to run which test defined Node.Run",
+		Value:  1,
+		Hidden: true,
 	}
 )
