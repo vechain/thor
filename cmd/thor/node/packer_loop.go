@@ -28,22 +28,32 @@ import (
 // 3. pack and broadcast header as leader
 // 4. pack and commit new block as leader
 func (n *Node) packerLoop(ctx context.Context) {
-	log.Debug("enter packer loop")
-	defer log.Debug("leave packer loop")
+	debugLog := func(str string, kv ...interface{}) {
+		log.Info(str, append([]interface{}{"key", "packer"}, kv...)...)
+	}
 
-	log.Info("waiting for synchronization...")
+	errLog := func(msg string, kv ...interface{}) {
+		log.Error(msg, append([]interface{}{"key", "packer"}, kv...)...)
+	}
+
+	debugLog("enter packer loop")
+	defer debugLog("leave packer loop")
+
+	debugLog("waiting for synchronization...")
 	select {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
 	}
-	log.Info("synchronization process done")
+	debugLog("synchronization process done")
 
 	var (
 		flow      *packer.Flow
 		activated = false // flow instance will be activated after it starts to pack things
 		err       error
 		ticker    = time.NewTicker(time.Second)
+
+		maxTxAdoptDur = 3 // max number of seconds allowed to prepare transactions
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
@@ -79,22 +89,22 @@ func (n *Node) packerLoop(ctx context.Context) {
 				// Schedule a round to be the leader
 				flow, err = n.packer.Schedule(best.Header(), now)
 				if err != nil {
-					log.Error("Schedule", "key", "packer", "err", err)
+					errLog("Schedule", "err", err)
 					continue
 				}
 
-				fmt.Printf("now = %v, when = %v\n", now, flow.When())
+				// fmt.Printf("now = %v, when = %v\n", now, flow.When())
 			}
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
-				log.Debug("re-schedule packer due to new best block")
+				debugLog("re-schedule packer due to new best block")
 				continue
 			}
 
 			// Check whether it is the scheduled round for producing a new block
-			if now+1 < flow.When() {
+			if now < flow.When() {
 				continue
 			}
 
@@ -109,10 +119,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			activated = true // Mark the flow as activated
 
-			maxTxPackingDur := 3 // max number of seconds allowed to prepare transactions
-			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxPackingDur)
+			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
 			if err != nil {
-				log.Error("packTxSetAndBlockSummary", "key", "packer", "err", err)
+				errLog("packTxSetAndBlockSummary", "err", err)
 
 				flow = nil
 				activated = false
@@ -121,11 +130,36 @@ func (n *Node) packerLoop(ctx context.Context) {
 			txSetBlockSummaryDone = mclock.Now()
 
 			lbs = bs // save a local copy of the latest block summary
-			log.Info("bs ==>", "key", "packer", "id", bs.ID())
+			debugLog("bs ==>", "id", bs.ID())
 			n.comm.BroadcastBlockSummary(bs)
 			if !ts.IsEmpty() {
-				log.Info("ts ==>", "key", "packer", "id", ts.ID())
+				debugLog("ts ==>", "id", ts.ID())
 				n.comm.BroadcastTxSet(ts)
+			}
+
+			// test its committee membership and if elected, endorse the new block summary
+			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
+			if err != nil {
+				errLog("IsCommittee", "err", err)
+				continue
+			}
+			if ok {
+				// Endorse the block summary
+				ed := block.NewEndorsement(bs, proof)
+				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
+				if err != nil {
+					errLog("Signing endorsement", "err", err)
+					continue
+				}
+				ed = ed.WithSignature(sig)
+
+				if ok := flow.AddEndoresement(ed); !ok {
+					debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
+				} else {
+					debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
+					debugLog("ed ==>", "id", ed.ID())
+					n.comm.BroadcastEndorsement(ed)
+				}
 			}
 
 		case ev := <-newBlockSummaryCh:
@@ -141,10 +175,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			bs := ev.Summary
-			log.Info("<== bs", "key", "packer", "id", bs.ID())
+			debugLog("<== bs", "id", bs.ID())
 
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
-				log.Error("ValidateBlockSummary", "key", "packer", "err", err)
+				errLog("ValidateBlockSummary", "err", err, "bs", bs.String())
 				continue
 			}
 
@@ -153,7 +187,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check the committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
 			if err != nil {
-				log.Error("IsCommittee", "key", "packer", "err", err)
+				errLog("IsCommittee", "err", err)
 				continue
 			}
 			if ok {
@@ -161,12 +195,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 				ed := block.NewEndorsement(bs, proof)
 				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
 				if err != nil {
-					log.Error("Signing endorsement", "key", "packer", "err", err)
+					errLog("Signing endorsement", "err", err)
 					continue
 				}
 				ed = ed.WithSignature(sig)
 
-				log.Info("ed ==>", "key", "packer", "id", ed.ID())
+				debugLog("ed ==>", "id", ed.ID())
 				n.comm.BroadcastEndorsement(ed)
 			}
 
@@ -182,12 +216,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
 				activated = false
-				log.Debug("re-schedule packer due to new best block")
+				debugLog("re-schedule packer due to new best block")
 				continue
 			}
 
 			// Check whether it is the scheduled round for producing a new block
-			if now+1 < flow.When() {
+			if now < flow.When() {
 				continue
 			}
 
@@ -199,17 +233,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			ed := ev.Endorsement
-			log.Info("<== ed", "key", "packer", "id", ed.ID())
+			debugLog("<== ed", "id", ed.ID())
 
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
-				log.Info("invalid ed", "key", "packer", "id", ed.ID())
+				debugLog("invalid ed", "id", ed.ID())
 				continue
 			}
 
 			if ok := flow.AddEndoresement(ed); !ok {
-				log.Info("Failed to add ed", "key", "packer", "#", flow.NumOfEndorsements(), "id", ed.ID())
+				debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
 			} else {
-				log.Info("Added ed", "key", "packer", "#", flow.NumOfEndorsements(), "id", ed.ID())
+				debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
 			}
 
 			// Pack a new block if there have been enough endorsements collected
@@ -219,10 +253,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			endorsementDone = mclock.Now()
 
-			log.Info("Packing new header")
+			debugLog("Packing new header")
 			newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 			if err != nil {
-				log.Error("PackBlockHeader", "err", err)
+				errLog("PackBlockHeader", "err", err)
 				flow = nil
 				continue
 			}
@@ -230,15 +264,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// reset flow
 			flow = nil
+			activated = false
 
-			log.Info("Committing new block")
+			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {
-				log.Error("commit state", "err", err)
+				errLog("commit state", "err", err)
 			}
 
 			fork, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
-				log.Error("commit block", "err", err)
+				errLog("commit block", "err", err)
 			}
 			commitDone = mclock.Now()
 
@@ -252,7 +287,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 					commitDone-blockDone,
 				)
 
-				log.Info("hd ==>", "key", "packer", "id", newBlock.Header().ID())
+				debugLog("hd ==>", "id", newBlock.Header().ID())
 				n.comm.BroadcastBlockHeader(newBlock.Header())
 			}
 
@@ -265,7 +300,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 					if gasUsed > newBlock.Header().GasLimit()/3 {
 						targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
 						n.packer.SetTargetGasLimit(targetGasLimit)
-						log.Debug("reset target gas limit", "value", targetGasLimit)
+						debugLog("reset target gas limit", "value", targetGasLimit)
 					}
 				}
 			}
@@ -290,11 +325,11 @@ func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 	for _, tx := range n.txPool.Executables() {
 		select {
 		case <-done:
-			// log.Debug("Leave tx adopting loop", "Iter", i)
+			// debugLog("Leave tx adopting loop", "Iter", i)
 			break
 		default:
 		}
-		// log.Debug("Adopting tx", "txid", tx.ID())
+		// debugLog("Adopting tx", "txid", tx.ID())
 		err := flow.Adopt(tx)
 		switch {
 		case packer.IsGasLimitReached(err):
@@ -428,7 +463,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 
 // 	if len(fork.Trunk) > 0 {
 // 		n.comm.BroadcastBlock(newBlock)
-// 		log.Info("📦 new block packed",
+// 		debugLog("📦 new block packed",
 // 			"txs", len(receipts),
 // 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
 // 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
@@ -444,7 +479,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 // 			if gasUsed > newBlock.Header().GasLimit()/3 {
 // 				targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
 // 				n.packer.SetTargetGasLimit(targetGasLimit)
-// 				log.Debug("reset target gas limit", "value", targetGasLimit)
+// 				debugLog("reset target gas limit", "value", targetGasLimit)
 // 			}
 // 		}
 // 	}

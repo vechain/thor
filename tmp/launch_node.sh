@@ -45,9 +45,10 @@ if [ ! -n "$PORT" ]; then
 fi
 
 if [ ! -n "$MODE" ]; then
-    echo "test mode required: 0-99"
-    echo $HELP
-    exit 1
+    # echo "test mode required: 0-99"
+    # echo $HELP
+    # exit 1
+    MODE="1"
 fi
 
 # echo "GOPATH=$GOPATH"

@@ -65,6 +65,14 @@ func (b *Bytes32) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Abev ...
+func (b Bytes32) Abev() (str string) {
+	hexStr := b.String()
+	l := len(hexStr)
+	str = hexStr[:5] + "..." + hexStr[l-3:]
+	return
+}
+
 // ParseBytes32 convert string presented into Bytes32 type
 func ParseBytes32(s string) (Bytes32, error) {
 	if len(s) == 32*2 {
