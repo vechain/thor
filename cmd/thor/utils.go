@@ -248,7 +248,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		return "", fmt.Errorf("unable to infer default data dir, use -%s to specify", dataDirFlag.Name)
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x", gene.ID().Bytes()[24:]))
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:]))
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
@@ -269,7 +269,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	fdCache := suggestFDCache()
 	log.Debug("fd cache", "n", fdCache)
 
-	path := filepath.Join(dir, "main-v2.db")
+	path := filepath.Join(dir, "main.db")
 	db, err := muxdb.Open(path, &muxdb.Options{
 		EncodedTrieNodeCacheSizeMB:   cacheMB,
 		DecodedTrieNodeCacheCapacity: 8192,
@@ -327,7 +327,7 @@ func suggestFDCache() int {
 }
 
 func openLogDB(ctx *cli.Context, dir string) (*logdb.LogDB, error) {
-	path := filepath.Join(dir, "logs-v3.db")
+	path := filepath.Join(dir, "logs.db")
 	db, err := logdb.New(path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open log database [%v]", path)
