@@ -130,10 +130,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 			txSetBlockSummaryDone = mclock.Now()
 
 			lbs = bs // save a local copy of the latest block summary
-			debugLog("bs ==>", "id", bs.ID())
+			debugLog("bs ==>", "id", bs.ID().Abev())
 			n.comm.BroadcastBlockSummary(bs)
 			if !ts.IsEmpty() {
-				debugLog("ts ==>", "id", ts.ID())
+				debugLog("ts ==>", "id", ts.ID().Abev())
 				n.comm.BroadcastTxSet(ts)
 			}
 
@@ -154,10 +154,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 				ed = ed.WithSignature(sig)
 
 				if ok := flow.AddEndoresement(ed); !ok {
-					debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
+					debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
 				} else {
-					debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
-					debugLog("ed ==>", "id", ed.ID())
+					debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
+					debugLog("ed ==>", "id", ed.ID().Abev())
 					n.comm.BroadcastEndorsement(ed)
 				}
 			}
@@ -175,7 +175,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			bs := ev.Summary
-			debugLog("<== bs", "id", bs.ID())
+			debugLog("<== bs", "id", bs.ID().Abev())
 
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
 				errLog("ValidateBlockSummary", "err", err, "bs", bs.String())
@@ -200,7 +200,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				}
 				ed = ed.WithSignature(sig)
 
-				debugLog("ed ==>", "id", ed.ID())
+				debugLog("ed ==>", "id", ed.ID().Abev())
 				n.comm.BroadcastEndorsement(ed)
 			}
 
@@ -233,17 +233,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 
 			ed := ev.Endorsement
-			debugLog("<== ed", "id", ed.ID())
+			debugLog("<== ed", "id", ed.ID().Abev())
 
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
-				debugLog("invalid ed", "id", ed.ID())
+				debugLog("invalid ed", "id", ed.ID().Abev())
 				continue
 			}
 
 			if ok := flow.AddEndoresement(ed); !ok {
-				debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
+				debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
 			} else {
-				debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID())
+				debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
 			}
 
 			// Pack a new block if there have been enough endorsements collected
@@ -287,7 +287,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 					commitDone-blockDone,
 				)
 
-				debugLog("hd ==>", "id", newBlock.Header().ID())
+				debugLog("hd ==>", "id", newBlock.Header().ID().Abev())
 				n.comm.BroadcastBlockHeader(newBlock.Header())
 			}
 
