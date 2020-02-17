@@ -8,6 +8,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,9 +40,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Info("synchronization process done")
 
 	var (
-		flow   *packer.Flow
-		err    error
-		ticker = time.NewTicker(time.Second)
+		flow      *packer.Flow
+		activated = false // flow instance will be activated after it starts to pack things
+		err       error
+		ticker    = time.NewTicker(time.Second)
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
@@ -58,17 +60,14 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
-	var (
-		lbs    *block.Summary // a local copy of the latest block summary
-		active = false
-	)
+	var lbs *block.Summary // a local copy of the latest block summary
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if flow != nil && active { // flow must be either nil or not active to proceed
+			if flow != nil && activated { // flow must be either nil or not activated to proceed
 				continue
 			}
 
@@ -102,13 +101,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
-				active = false
+				activated = false
 				continue
 			}
 
 			start = mclock.Now()
 
-			active = true // Mark the flow as active
+			activated = true // Mark the flow as activated
 
 			maxTxPackingDur := 3 // max number of seconds allowed to prepare transactions
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxPackingDur)
@@ -116,7 +115,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				log.Error("packTxSetAndBlockSummary", "key", "packer", "err", err)
 
 				flow = nil
-				active = false
+				activated = false
 				continue
 			}
 			txSetBlockSummaryDone = mclock.Now()
@@ -166,11 +165,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 					continue
 				}
 				ed = ed.WithSignature(sig)
+
+				log.Info("ed ==>", "key", "packer", "id", ed.ID())
 				n.comm.BroadcastEndorsement(ed)
 			}
 
 		case ev := <-newEndorsementCh:
-			if flow == nil || !active { // flow must be active to proceed
+			if flow == nil || !activated { // flow must be activated to proceed
 				continue
 			}
 
@@ -180,7 +181,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
-				active = false
+				activated = false
 				log.Debug("re-schedule packer due to new best block")
 				continue
 			}
@@ -193,7 +194,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
-				active = false
+				activated = false
 				continue
 			}
 
@@ -219,7 +220,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			endorsementDone = mclock.Now()
 
 			log.Info("Packing new header")
-			blk, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+			newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 			if err != nil {
 				log.Error("PackBlockHeader", "err", err)
 				flow = nil
@@ -235,21 +236,38 @@ func (n *Node) packerLoop(ctx context.Context) {
 				log.Error("commit state", "err", err)
 			}
 
-			fork, err := n.commitBlock(blk, receipts)
+			fork, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
 				log.Error("commit block", "err", err)
 			}
 			commitDone = mclock.Now()
 
+			n.processFork(fork)
+
 			if len(fork.Trunk) > 0 {
-				display(blk, receipts,
+				display(newBlock, receipts,
 					txSetBlockSummaryDone-start,
 					endorsementDone-txSetBlockSummaryDone,
 					blockDone-endorsementDone,
 					commitDone-blockDone,
 				)
 
-				n.comm.BroadcastBlockHeader(blk.Header())
+				log.Info("hd ==>", "key", "packer", "id", newBlock.Header().ID())
+				n.comm.BroadcastBlockHeader(newBlock.Header())
+			}
+
+			execElapsed := blockDone - endorsementDone
+			if n.targetGasLimit == 0 {
+				n.packer.SetTargetGasLimit(0)
+				if execElapsed > 0 {
+					gasUsed := newBlock.Header().GasUsed()
+					// calc target gas limit only if gas used above third of gas limit
+					if gasUsed > newBlock.Header().GasLimit()/3 {
+						targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
+						n.packer.SetTargetGasLimit(targetGasLimit)
+						log.Debug("reset target gas limit", "value", targetGasLimit)
+					}
+				}
 			}
 		}
 	}
