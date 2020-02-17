@@ -278,6 +278,25 @@ func (h *Header) String() string {
 	return s
 }
 
+// BlockSummary reconstructs the block summary
+func (h *Header) BlockSummary() *Summary {
+	bs := NewBlockSummary(h.body.ParentID, h.TxsRoot(), h.body.Timestamp, h.body.TotalScore)
+	bs = bs.WithSignature(h.body.SigOnBlockSummary)
+	return bs
+}
+
+// Endorsements reconstructs the endorsements
+func (h *Header) Endorsements() []*Endorsement {
+	var eds []*Endorsement
+	bs := h.BlockSummary()
+	for i, proof := range h.body.VrfProofs {
+		ed := NewEndorsement(bs, proof)
+		ed = ed.WithSignature(h.body.SigsOnEndorsement[i])
+		eds = append(eds, ed)
+	}
+	return eds
+}
+
 // Number extract block number from block id.
 func Number(blockID thor.Bytes32) uint32 {
 	// first 4 bytes are over written by block number (big endian).
