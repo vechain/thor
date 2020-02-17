@@ -2,6 +2,7 @@ package poa
 
 import (
 	"fmt"
+
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/state"
@@ -42,6 +43,7 @@ func NewCandidates(list []*authority.Candidate) *Candidates {
 func (c *Candidates) Copy() *Candidates {
 	c.referenced = true
 	copy := *c
+
 	return &copy
 }
 

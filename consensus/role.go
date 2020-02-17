@@ -349,7 +349,7 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 		/**
 		 * MUST ADD A COPY TO CACHE
 		 */
-		c.candidatesCache.Add(parentHeader.ID(), candidates.Copy())
+		// c.candidatesCache.Add(parentHeader.ID(), candidates.Copy())
 	}
 
 	return candidates, authority, st, nil
