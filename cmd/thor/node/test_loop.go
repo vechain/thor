@@ -29,22 +29,26 @@ func randByte32() (b thor.Bytes32) {
 // the structs defined for vip193. It is used for testing the
 // sending/receiving functions.
 func (n *Node) testCase2(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t2"}, kv...)...)
+	}
+
 	<-time.After(time.Second * 10)
 
 	bs := block.RandBlockSummary()
-	log.Info("bs ==>", "id", bs.ID())
+	debugLog("bs ==>", "id", bs.ID())
 	n.comm.BroadcastBlockSummary(bs)
 
 	ed := block.RandEndorsement(block.RandBlockSummary())
-	log.Info("ed ==>", "id", ed.ID())
+	debugLog("ed ==>", "id", ed.ID())
 	n.comm.BroadcastEndorsement(ed)
 
 	ts := block.RandTxSet(10)
-	log.Info("ts ==>", "id", ts.ID())
+	debugLog("ts ==>", "id", ts.ID())
 	n.comm.BroadcastTxSet(ts)
 
 	header := block.RandBlockHeader()
-	log.Info("hd ==>", "id", header.ID())
+	debugLog("hd ==>", "id", header.ID())
 	n.comm.BroadcastBlockHeader(header)
 }
 
@@ -55,7 +59,7 @@ func getKeys() (ethsks []*ecdsa.PrivateKey, vrfsks []*vrf.PrivateKey) {
 	case "linux":
 		hexKeys = []string{
 			"ebe662faa74cd42422ff0374690798d22d00c2f27cd478ebe43f129bdb53c15c",
-			"0276397acb72009048bcf3e91fda656fc87511b685f28b181e620817b1806e71",
+			"d61aed3293dd9c99b5fbe4e4794b26bf6fd1b510264339e30ff8ff7ecde3c4f5",
 			"19e4a1bb4ccd861ba4aedb6c74f4b94165d2dbb4eea6acc9a701bfb5b6adc843",
 		}
 	case "darwin":
@@ -199,6 +203,9 @@ loop:
 }
 
 func (n *Node) testCase3(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t3"}, kv...)...)
+	}
 	ethsks, vrfsks := getKeys()
 	// // exit if it is not node 1
 	// if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[0].PublicKey).Bytes()) != 0 {
@@ -215,10 +222,10 @@ func (n *Node) testCase3(ctx context.Context) {
 		panic(err)
 	}
 
-	log.Info("added new block", "id", blk.Header().ID(), "num", blk.Header().Number())
+	debugLog("added block", "id", blk.Header().ID(), "num", blk.Header().Number())
 
 	if isTrunk {
-		log.Info("bl ==>ock id", "id", blk.Header().ID())
+		debugLog("hd id ==>", "id", blk.Header().ID())
 		n.comm.BroadcastBlockID(blk.Header().ID())
 	} else {
 		panic("not trunk")
@@ -226,6 +233,10 @@ func (n *Node) testCase3(ctx context.Context) {
 }
 
 func (n *Node) testCase4(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t4"}, kv...)...)
+	}
+
 	ethsks, vrfsks := getKeys()
 	// // exit if it is not node 2
 	// if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[1].PublicKey).Bytes()) != 0 {
@@ -241,10 +252,10 @@ func (n *Node) testCase4(ctx context.Context) {
 		panic(err)
 	}
 
-	log.Info("created new block", "id", blk.Header().ID())
+	debugLog("new block", "id", blk.Header().ID())
 
 	if isTrunk {
-		log.Info("hd ==>", "id", blk.Header().ID())
+		debugLog("hd ==>", "id", blk.Header().ID())
 		n.comm.BroadcastBlockHeader(blk.Header())
 	} else {
 		panic("not trunk")
@@ -252,6 +263,10 @@ func (n *Node) testCase4(ctx context.Context) {
 }
 
 func (n *Node) testCase5(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t5"}, kv...)...)
+	}
+
 	ethsks, vrfsks := getKeys()
 	// // exit if it is not node 2
 	// if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[1].PublicKey).Bytes()) != 0 {
@@ -284,15 +299,15 @@ func (n *Node) testCase5(ctx context.Context) {
 		panic(err)
 	}
 
-	log.Info("created new block", "id", blk.Header().ID())
+	debugLog("created new block", "id", blk.Header().ID())
 
 	if isTrunk {
-		log.Info("ts ==>", "id", ts.ID())
+		debugLog("ts ==>", "id", ts.ID())
 		n.comm.BroadcastTxSet(ts)
 
 		<-time.After(time.Second)
 
-		log.Info("hd ==>", "id", blk.Header().ID())
+		debugLog("hd ==>", "id", blk.Header().ID())
 		n.comm.BroadcastBlockHeader(blk.Header())
 	} else {
 		panic("not trunk")
@@ -300,6 +315,10 @@ func (n *Node) testCase5(ctx context.Context) {
 }
 
 func (n *Node) testCase6(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t6"}, kv...)...)
+	}
+
 	ethsks, vrfsks := getKeys()
 	// // exit if it is not node 2
 	// if bytes.Compare(n.master.Address().Bytes(), crypto.PubkeyToAddress(ethsks[1].PublicKey).Bytes()) != 0 {
@@ -332,15 +351,15 @@ func (n *Node) testCase6(ctx context.Context) {
 		panic(err)
 	}
 
-	log.Info("created new block", "id", blk.Header().ID())
+	debugLog("created new block", "id", blk.Header().ID())
 
 	if isTrunk {
-		log.Info("hd ==>", "id", blk.Header().ID())
+		debugLog("hd ==>", "id", blk.Header().ID())
 		n.comm.BroadcastBlockHeader(blk.Header())
 
 		<-time.After(time.Second)
 
-		log.Info("ts ==>", "id", ts.ID())
+		debugLog("ts ==>", "id", ts.ID())
 		n.comm.BroadcastTxSet(ts)
 	} else {
 		panic("not trunk")
@@ -348,10 +367,14 @@ func (n *Node) testCase6(ctx context.Context) {
 }
 
 func (n *Node) testCase7(ctx context.Context) {
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "t7"}, kv...)...)
+	}
+
 	<-time.After(time.Second * 10)
 
 	bs, _, _ := n.newLocalBsTs(ctx, nil)
-	log.Info("bs ==>", "id", bs.ID())
+	debugLog("bs ==>", "key", "t7", "id", bs.ID())
 	n.comm.BroadcastBlockSummary(bs)
 
 	<-time.After(time.Second)
@@ -359,13 +382,17 @@ func (n *Node) testCase7(ctx context.Context) {
 	bs = block.NewBlockSummary(bs.ParentID(), randByte32(), bs.Timestamp(), bs.TotalScore())
 	sig, _ := crypto.Sign(bs.SigningHash().Bytes(), n.master.PrivateKey)
 	bs = bs.WithSignature(sig)
-	log.Info("bs ==>", "id", bs.ID())
+	debugLog("bs ==>", "key", "t7", "id", bs.ID())
 	n.comm.BroadcastBlockSummary(bs)
 }
 
 func (n *Node) simpleHouseKeeping(ctx context.Context) {
-	log.Info("entering simple house-keeping loop")
-	defer log.Info("leaving simple house-keeping loop")
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "simple"}, kv...)...)
+	}
+
+	debugLog("entering simple house-keeping loop")
+	defer debugLog("leaving simple house-keeping loop")
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
@@ -391,35 +418,39 @@ func (n *Node) simpleHouseKeeping(ctx context.Context) {
 			return
 		case <-ticker.C:
 		case dat := <-newBlockCh:
-			log.Info("<== blk", "id", dat.Header().ID())
+			debugLog("<== blk", "id", dat.Header().ID())
 			n.comm.BroadcastBlock(dat.Block)
 		case dat := <-newBlockSummaryCh:
-			log.Info("<== bs", "id", dat.ID())
+			debugLog("<== bs", "id", dat.ID())
 			n.comm.BroadcastBlockSummary(dat.Summary)
 		case dat := <-newTxSetCh:
-			log.Info("<== ts", "id", dat.ID())
+			debugLog("<== ts", "id", dat.ID())
 			n.comm.BroadcastTxSet(dat.TxSet)
 		case dat := <-newEndorsementCh:
-			log.Info("<== ed", "id", dat.ID())
+			debugLog("<== ed", "id", dat.ID())
 			n.comm.BroadcastEndorsement(dat.Endorsement)
 		case dat := <-newBlockHeaderCh:
-			log.Info("<== hd", "id", dat.ID())
+			debugLog("<== hd", "id", dat.ID())
 			n.comm.BroadcastBlockHeader(dat.Header)
 		}
 	}
 }
 
 func (n *Node) endorserLoop(ctx context.Context) {
-	log.Info("started endorsement loop")
-	defer log.Info("leaving endorsement loop")
+	debugLog := func(str string, kv ...interface{}) {
+		log.Debug(str, append([]interface{}{"key", "edloop"}, kv...)...)
+	}
 
-	log.Info("waiting for synchronization...")
+	debugLog("started endorsement loop")
+	defer debugLog("leaving endorsement loop")
+
+	debugLog("waiting for synchronization...")
 	select {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
 	}
-	log.Info("synchronization process done")
+	debugLog("synchronization process done")
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
@@ -436,7 +467,7 @@ func (n *Node) endorserLoop(ctx context.Context) {
 
 		case ev := <-newBlockSummaryCh:
 			bs := ev.Summary
-			log.Info("<== bs", "key", "eder", "id", bs.ID())
+			debugLog("<== bs", "id", bs.ID())
 
 			now := uint64(time.Now().Unix())
 			best := n.chain.BestBlock()
@@ -444,7 +475,7 @@ func (n *Node) endorserLoop(ctx context.Context) {
 			// Only receive one block summary from the same leader once in the same round
 			if lbs != nil {
 				if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
-					log.Info("bs rejected", "key", "eder", "id", bs.ID())
+					debugLog("bs rejected", "id", bs.ID())
 					continue
 				}
 				lbs = nil
@@ -467,7 +498,7 @@ func (n *Node) endorserLoop(ctx context.Context) {
 				sig, _ := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
 				ed = ed.WithSignature(sig)
 
-				log.Info("ed ==>", "key", "eder", "id", ed.ID())
+				debugLog("ed ==>", "id", ed.ID())
 				n.comm.BroadcastEndorsement(ed)
 			} else {
 				panic("not a committee member")

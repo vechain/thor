@@ -174,7 +174,9 @@ func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.
 
 	if bs.ParentID() != parentHeader.ID() {
 		// return consensusError("Inconsistent parent block ID")
-		return newConsensusError(trBlockSummary, strErrParentID, nil, nil, "")
+		return newConsensusError(trBlockSummary, strErrParentID,
+			[]string{strDataLocal, strDataCurr},
+			[]interface{}{parentHeader.ID().Abev(), bs.ParentID().Abev()}, "")
 	}
 
 	// Valdiate signature

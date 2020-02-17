@@ -91,6 +91,7 @@ const (
 	strDataExpected  = "expected=%v"
 	strDataRef       = "ref=%v"
 	strDataExp       = "exp=%v"
+	strDataLocal     = "local=%v"
 )
 
 // Trace where the error is generated
