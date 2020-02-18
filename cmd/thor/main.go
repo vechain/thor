@@ -80,7 +80,6 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			skipTxPoolBlockList,
 			testModeFlag, // new flag added for testing
 		},
 		Action: defaultAction,
@@ -106,7 +105,6 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
-					debugModeFlag,
 				},
 				Action: soloAction,
 			},

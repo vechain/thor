@@ -8,13 +8,13 @@ package node
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
@@ -81,7 +81,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			best := n.chain.BestBlock()
+			best := n.repo.BestBlock()
 			now := uint64(time.Now().Unix())
 			// fmt.Println(now)
 
@@ -164,7 +164,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		case ev := <-newBlockSummaryCh:
 			now := uint64(time.Now().Unix())
-			best := n.chain.BestBlock()
+			best := n.repo.BestBlock()
 
 			// Only receive one block summary from the same leader once in the same round
 			if lbs != nil {
@@ -209,7 +209,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			best := n.chain.BestBlock()
+			best := n.repo.BestBlock()
 			now := uint64(time.Now().Unix())
 
 			// Check whether the best block has changed
@@ -271,15 +271,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 				errLog("commit state", "err", err)
 			}
 
-			fork, err := n.commitBlock(newBlock, receipts)
+			prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
-				errLog("commit block", "err", err)
+				panic(errors.WithMessage(err, "commit block"))
 			}
 			commitDone = mclock.Now()
 
-			n.processFork(fork)
+			n.processFork(prevTrunk, curTrunk)
 
-			if len(fork.Trunk) > 0 {
+			if prevTrunk.HeadID() != curTrunk.HeadID() {
 				display(newBlock, receipts,
 					txSetBlockSummaryDone-start,
 					endorsementDone-txSetBlockSummaryDone,
@@ -291,18 +291,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 				n.comm.BroadcastBlockHeader(newBlock.Header())
 			}
 
-			execElapsed := blockDone - endorsementDone
-			if n.targetGasLimit == 0 {
-				n.packer.SetTargetGasLimit(0)
-				if execElapsed > 0 {
-					gasUsed := newBlock.Header().GasUsed()
-					// calc target gas limit only if gas used above third of gas limit
-					if gasUsed > newBlock.Header().GasLimit()/3 {
-						targetGasLimit := uint64(math.Log2(float64(newBlock.Header().Number()+1))*float64(thor.TolerableBlockPackingTime)*float64(gasUsed)) / (32 * uint64(execElapsed))
-						n.packer.SetTargetGasLimit(targetGasLimit)
-						debugLog("reset target gas limit", "value", targetGasLimit)
-					}
-				}
+			if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(commitDone-start)); updated {
+				log.Debug("bandwidth updated", "gps", v)
 			}
 		}
 	}

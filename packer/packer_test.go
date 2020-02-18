@@ -135,7 +135,7 @@ func TestForkVIP191(t *testing.T) {
 			state.SetBalance(a1.Address, bal)
 			state.SetEnergy(a1.Address, bal, launchTime)
 
-			builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
+			builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}), thor.BytesToBytes32([]byte{}))
 			return nil
 		}).
 		Build(stater)
@@ -155,6 +155,7 @@ func TestForkVIP191(t *testing.T) {
 	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
 		VIP191: 1,
 	})
+	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}

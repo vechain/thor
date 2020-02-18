@@ -40,15 +40,11 @@ func init() {
 			ok, err := Authority.Native(env.State()).Add(
 				thor.Address(args.NodeMaster),
 				thor.Address(args.Endorsor),
-<<<<<<< HEAD
-				thor.Bytes32(args.Identity))
+				thor.Bytes32(args.Identity),
+				thor.Bytes32(args.VrfPublicKey))
 			if err != nil {
 				panic(err)
 			}
-=======
-				thor.Bytes32(args.Identity),
-				thor.Bytes32(args.VrfPublicKey))
->>>>>>> add vrf public key to authority
 
 			if ok {
 				env.UseGas(thor.SstoreSetGas)
@@ -75,7 +71,10 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, identity, active, vrfPublicKey := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			listed, endorsor, identity, active, vrfPublicKey, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
 
 			return []interface{}{listed, endorsor, identity, active, vrfPublicKey}
 		}},
@@ -109,7 +108,10 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, _, _, _ := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			listed, endorsor, _, _, _, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
 			if !listed {
 				return []interface{}{false}
 			}

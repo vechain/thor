@@ -21,11 +21,11 @@ var (
 	p5 = thor.BytesToAddress([]byte("p5"))
 
 	proposers = []poa.Proposer{
-		{p1, false},
-		{p2, true},
-		{p3, false},
-		{p4, false},
-		{p5, false},
+		{p1, false, thor.Bytes32{}},
+		{p2, true, thor.Bytes32{}},
+		{p3, false, thor.Bytes32{}},
+		{p4, false, thor.Bytes32{}},
+		{p5, false, thor.Bytes32{}},
 	}
 
 	parentTime = uint64(1001)

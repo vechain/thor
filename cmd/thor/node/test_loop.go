@@ -111,7 +111,7 @@ func emptyLoop(ctx context.Context) {
 func (n *Node) newLocalBsTs(ctx context.Context, txs tx.Transactions) (
 	bs *block.Summary, ts *block.TxSet, flow *packer.Flow) {
 
-	best := n.chain.BestBlock()
+	best := n.repo.BestBlock()
 	flow, err := n.packer.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		return
@@ -154,7 +154,7 @@ func (n *Node) newLocalBlock(
 	txs tx.Transactions,
 ) (blk *block.Block, stage *state.Stage, receipts tx.Receipts, bs *block.Summary, ts *block.TxSet) {
 
-	best := n.chain.BestBlock()
+	best := n.repo.BestBlock()
 	flow, err := n.packer.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		return
@@ -283,7 +283,7 @@ func (n *Node) testCase5(ctx context.Context) {
 		tx := new(tx.Builder).
 			Clause(tx.NewClause(&addr)).
 			Gas(21000).
-			ChainTag(n.chain.Tag()).
+			ChainTag(n.repo.ChainTag()).
 			Expiration(100).
 			Nonce(mathrand.Uint64()).
 			Build()
@@ -335,7 +335,7 @@ func (n *Node) testCase6(ctx context.Context) {
 		tx := new(tx.Builder).
 			Clause(tx.NewClause(&addr)).
 			Gas(21000).
-			ChainTag(n.chain.Tag()).
+			ChainTag(n.repo.ChainTag()).
 			Expiration(100).
 			Nonce(mathrand.Uint64()).
 			Build()
@@ -470,7 +470,7 @@ func (n *Node) endorserLoop(ctx context.Context) {
 			debugLog("<== bs", "id", bs.ID())
 
 			now := uint64(time.Now().Unix())
-			best := n.chain.BestBlock()
+			best := n.repo.BestBlock()
 
 			// Only receive one block summary from the same leader once in the same round
 			if lbs != nil {

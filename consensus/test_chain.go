@@ -11,11 +11,14 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/lvldb"
+
+	"github.com/vechain/thor/muxdb"
+
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -54,8 +57,8 @@ type TempChain struct {
 	Parent       *block.Block
 	Nodes        []*account
 	GenesisBlock *block.Block
-	Chain        *chain.Chain
-	StateCreator *state.Creator
+	Repo         *chain.Repository
+	Stater       *state.Stater
 	forkConfig   thor.ForkConfig
 }
 
@@ -68,10 +71,7 @@ type account struct {
 
 // NewTempChain generates thor.MaxBlockProposers key pairs and register them as master nodes
 func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
-	db, err := lvldb.NewMem()
-	if err != nil {
-		return nil, err
-	}
+	db := muxdb.NewMem()
 
 	var accs []*account
 	for i := uint64(0); i < thor.MaxBlockProposers; i++ {
@@ -104,25 +104,25 @@ func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
 			return nil
 		})
 
-	stateCreator := state.NewCreator(db)
-	genesisBlock, _, err := gen.Build(stateCreator)
+	stater := state.NewStater(db)
+	genesisBlock, _, _, err := gen.Build(stater)
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := chain.New(db, genesisBlock)
+	repo, err := chain.NewRepository(db, genesisBlock)
 	if err != nil {
 		return nil, err
 	}
 
-	con := New(c, stateCreator, forkConfig)
+	con := New(repo, stater, forkConfig)
 
 	return &TempChain{
 		Con:          con,
 		Nodes:        accs,
-		Tag:          c.Tag(),
-		Chain:        c,
-		StateCreator: stateCreator,
+		Tag:          repo.ChainTag(),
+		Repo:         repo,
+		Stater:       stater,
 		GenesisBlock: genesisBlock,
 		forkConfig:   forkConfig,
 	}, nil
@@ -137,7 +137,7 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 	)
 
 	now := tc.Con.Timestamp(round)
-	parent := tc.Chain.BestBlock()
+	parent := tc.Repo.BestBlock()
 
 	if now < parent.Header().Timestamp() {
 		return errors.New("new block earlier than the best block")
@@ -145,7 +145,7 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 
 	// search for the legit proposer
 	for _, acc := range tc.Nodes {
-		p := packer.New(tc.Chain, tc.StateCreator, acc.Addr, &acc.Addr, tc.forkConfig)
+		p := packer.New(tc.Repo, tc.Stater, acc.Addr, &acc.Addr, tc.forkConfig)
 		flow, err = p.Schedule(parent.Header(), now)
 		if err != nil {
 			continue
@@ -211,7 +211,7 @@ func (tc *TempChain) NewBlock(round uint32, txs []*tx.Transaction) error {
 
 // CommitNewBlock ...
 func (tc *TempChain) CommitNewBlock() error {
-	if _, err := tc.Chain.GetBlockHeader(tc.Original.Header().ID()); err == nil {
+	if _, err := tc.Repo.GetBlockSummary(tc.Original.Header().ID()); err == nil {
 		return errors.New("known in-chain block")
 	}
 
@@ -219,7 +219,7 @@ func (tc *TempChain) CommitNewBlock() error {
 		return err
 	}
 
-	if _, err := tc.Chain.AddBlock(tc.Original, tc.Receipts); err != nil {
+	if err := tc.Repo.AddBlock(tc.Original, tc.Receipts); err != nil {
 		return err
 	}
 

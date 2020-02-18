@@ -101,7 +101,7 @@ func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *
 	f.txSet = ts.WithSignature(sig)
 
 	// pack block summary
-	best := f.packer.chain.BestBlock()
+	best := f.packer.repo.BestBlock()
 	parent := best.Header().ID()
 	root := f.txSet.TxsRoot()
 	bs := block.NewBlockSummary(parent, root, f.runtime.Context().Time, f.runtime.Context().TotalScore)

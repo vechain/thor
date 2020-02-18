@@ -11,6 +11,7 @@ import (
 
 // Proposer address with status.
 type Proposer struct {
-	Address thor.Address
-	Active  bool
+	Address      thor.Address
+	Active       bool
+	VrfPublicKey thor.Bytes32
 }

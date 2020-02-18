@@ -73,8 +73,9 @@ func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 	proposers := make([]Proposer, 0, len(satisfied))
 	for _, i := range satisfied {
 		proposers = append(proposers, Proposer{
-			Address: c.list[i].NodeMaster,
-			Active:  c.list[i].Active,
+			Address:      c.list[i].NodeMaster,
+			Active:       c.list[i].Active,
+			VrfPublicKey: c.list[i].VrfPublicKey,
 		})
 	}
 	return proposers, nil

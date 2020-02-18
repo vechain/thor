@@ -25,7 +25,8 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 		}
 	}()
 
-	best := c.chain.BestBlock()
+	// best := c.chain.BestBlock()
+	best := c.repo.BestBlock()
 	lastRoundOfEpoch := (epoch - 1) * uint32(thor.EpochInterval)
 	lastTimestampOfEpoch := c.Timestamp(lastRoundOfEpoch)
 
@@ -43,7 +44,8 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 		last = best.Header().Number()
 	}
 
-	header, err = c.chain.GetTrunkBlockHeader(last)
+	// header, err = c.chain.GetTrunkBlockHeader(last)
+	header, err = c.repo.
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -55,10 +57,11 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 		}
 
 		// Get the parent header
-		header, err = c.chain.GetBlockHeader(header.ParentID())
+		s, err := c.repo.GetBlockSummary(header.ParentID())
 		if err != nil {
 			panic("Parent not found")
 		}
+		header = s.Header
 	}
 
 	beacon = compBeacon(header)

@@ -73,7 +73,7 @@ func New(
 		gasLimit: gasLimit,
 		skipLogs: skipLogs,
 		onDemand: onDemand,
-		cons:     consensus.New(chain, stateCreator, forkConfig),
+		cons:     consensus.New(repo, stater, forkConfig),
 	}
 }
 
@@ -121,7 +121,7 @@ func (s *Solo) loop(ctx context.Context) {
 				// receipts tx.Receipts
 			)
 
-			best := s.chain.BestBlock()
+			best := s.repo.BestBlock()
 			// txs := s.txPool.Executables()
 			flow, err = s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
 			if err != nil {
@@ -183,6 +183,14 @@ func (s *Solo) loop(ctx context.Context) {
 
 			commitElapsed := mclock.Now() - execElapsed - startTime
 
+			if !s.skipLogs {
+				if err := s.logDB.Log(func(w *logdb.Writer) error {
+					return w.Write(blk, receipts)
+				}); err != nil {
+					panic(errors.WithMessage(err, "commit log"))
+				}
+			}
+
 			display(blk, receipts, prepareElapsed, execElapsed, commitElapsed)
 		}
 	}
@@ -205,18 +213,11 @@ func (s *Solo) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) 
 	}
 
 	// ignore fork when solo
-	_, err := s.chain.AddBlock(b, receipts)
-	if err != nil {
+	if err := s.repo.AddBlock(b, receipts); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
-
-	task := s.logDB.NewTask().ForBlock(b.Header())
-	for i, tx := range b.Transactions() {
-		origin, _ := tx.Origin()
-		task.Write(tx.ID(), origin, receipts[i].Outputs)
-	}
-	if err := task.Commit(); err != nil {
-		return errors.WithMessage(err, "commit log")
+	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
+		return errors.WithMessage(err, "set best block")
 	}
 
 	return nil

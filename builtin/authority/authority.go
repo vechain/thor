@@ -71,13 +71,13 @@ func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) error {
 }
 
 // Get get candidate by node master address.
-func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, err error) {
+func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, vrfPublicKey thor.Bytes32, err error) {
 	var entry *entry
 	if entry, err = a.getEntry(nodeMaster); err != nil {
 		return
 	}
 	if entry.IsLinked() {
-		return true, entry.Endorsor, entry.Identity, entry.Active, nil
+		return true, entry.Endorsor, entry.Identity, entry.Active, entry.VrfPublicKey, nil
 	}
 	// if it's the only node, IsLinked will be false.
 	// check whether it's the head.
@@ -86,11 +86,11 @@ func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Add
 		return
 	}
 	listed = ptr != nil && *ptr == nodeMaster
-	return listed, entry.Endorsor, entry.Identity, entry.Active, nil
+	return listed, entry.Endorsor, entry.Identity, entry.Active, entry.VrfPublicKey, nil
 }
 
 // Add add a new candidate.
-func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32) (bool, error) {
+func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32, vrfPublicKey thor.Bytes32) (bool, error) {
 	entry, err := a.getEntry(nodeMaster)
 	if err != nil {
 		return false, err

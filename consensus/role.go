@@ -98,7 +98,7 @@ func (c *Consensus) IsLeader(thor.Address) bool {
 
 // RoundNumber computes the round number from timestamp
 func (c *Consensus) RoundNumber(t uint64) uint32 {
-	launchTime := c.chain.GenesisBlock().Header().Timestamp()
+	launchTime := c.repo.GenesisBlock().Header().Timestamp()
 	if launchTime > t {
 		return 0
 	}
@@ -138,11 +138,11 @@ func (c *Consensus) Timestamp(arg interface{}) uint64 {
 	switch reflect.TypeOf(arg).String() {
 	case "uint32":
 		r := arg.(uint32)
-		return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+		return c.repo.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
 	case "uint64":
 		t := arg.(uint64)
 		r := c.RoundNumber(t)
-		return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+		return c.repo.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
 	default:
 		panic("Need uint32 or uint64")
 	}
@@ -151,7 +151,7 @@ func (c *Consensus) Timestamp(arg interface{}) uint64 {
 // // NextTimestamp computes the next-round timestamp
 // func (c *Consensus) NextTimestamp(t uint64) uint64 {
 // 	r := c.RoundNumber(t + thor.BlockInterval)
-// 	return c.chain.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
+// 	return c.repo.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
 // }
 
 // // TimestampFromCurrTime ...
@@ -255,7 +255,19 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return newConsensusError(trEndorsement, strErrSignature, nil, nil, err.Error())
 	}
 
-	candidate := candidates.Candidate(st, signer)
+	// candidate := candidates.Candidate(st, signer)
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return newConsensusError(trEndorsement, "get valid consensus node list", nil, nil, err.Error())
+	}
+
+	var candidate *poa.Proposer
+	for _, proposer := range proposers {
+		if proposer.Address == signer {
+			candidate = &proposer
+			break
+		}
+	}
 	if candidate == nil {
 		// return consensusError("Signer not allowed to participate in consensus")
 		return newConsensusError(trEndorsement, strErrNotCandidate,
@@ -298,7 +310,10 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 		return nil, err
 	}
 
-	proposers := candidates.Pick(st)
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return nil, err
+	}
 
 	sched, err := poa.NewScheduler(signer, proposers, parentHeader.Number(), parentHeader.Timestamp())
 	if err != nil {
@@ -335,21 +350,18 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 }
 
 func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidates, *authority.Authority, *state.State, error) {
-	st, err := c.stateCreator.NewState(parentHeader.StateRoot())
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	st := c.stater.NewState(parentHeader.StateRoot())
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
 	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
-		candidates = poa.NewCandidates(authority.AllCandidates())
-		/**
-		 * MUST ADD A COPY TO CACHE
-		 */
-		// c.candidatesCache.Add(parentHeader.ID(), candidates.Copy())
+		ac, err := authority.AllCandidates()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		candidates = poa.NewCandidates(ac)
 	}
 
 	return candidates, authority, st, nil
