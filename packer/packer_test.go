@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
@@ -140,14 +141,9 @@ func TestForkVIP191(t *testing.T) {
 		}).
 		Build(stater)
 
-	// best := c.BestBlock()
-	// p := packer.New(c, stateCreator, a1.Address, &a1.Address, thor.ForkConfig{
-	// 	VIP191: 1,
-	// })
-	// flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	repo, _ := chain.NewRepository(db, b0)
 
@@ -155,18 +151,25 @@ func TestForkVIP191(t *testing.T) {
 	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
 		VIP191: 1,
 	})
+	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	flow.SetBlockSummary(block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, best.Header().Timestamp()+thor.BlockInterval, 1))
+
 	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// _, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	if err := repo.AddBlock(blk, receipts); err != nil {
 		t.Fatal(err)
