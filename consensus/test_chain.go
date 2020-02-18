@@ -11,14 +11,21 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto"
+<<<<<<< HEAD
 
+=======
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
+<<<<<<< HEAD
 
 	"github.com/vechain/thor/muxdb"
 
+=======
+	"github.com/vechain/thor/lvldb"
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -57,8 +64,13 @@ type TempChain struct {
 	Parent       *block.Block
 	Nodes        []*account
 	GenesisBlock *block.Block
+<<<<<<< HEAD
 	Repo         *chain.Repository
 	Stater       *state.Stater
+=======
+	Chain        *chain.Chain
+	StateCreator *state.Creator
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	forkConfig   thor.ForkConfig
 }
 
@@ -71,7 +83,14 @@ type account struct {
 
 // NewTempChain generates thor.MaxBlockProposers key pairs and register them as master nodes
 func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
+<<<<<<< HEAD
 	db := muxdb.NewMem()
+=======
+	db, err := lvldb.NewMem()
+	if err != nil {
+		return nil, err
+	}
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 
 	var accs []*account
 	for i := uint64(0); i < thor.MaxBlockProposers; i++ {

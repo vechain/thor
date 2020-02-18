@@ -424,7 +424,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 			debugLog("<== ed", "id", ed.ID())
 
-			parentHeader := n.repo.BestBlock().Header()
+			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
 
 			if err := n.cons.ValidateEndorsement(ed, parentHeader, now); err != nil {
@@ -446,7 +446,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 			debugLog("<== hd", "id", header.ID())
 
-			parentHeader := n.repo.BestBlock().Header()
+			parentHeader := n.chain.BestBlock().Header()
 			now := uint64(time.Now().Unix())
 
 			// Only receive one tx set from the same leader once in the same round

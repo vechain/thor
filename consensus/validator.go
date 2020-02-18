@@ -88,12 +88,12 @@ func (c *Consensus) validate(
 
 func (c *Consensus) validateBlockHeaderVip193(header *block.Header, parentHeader *block.Header) error {
 	// reconstruct and validate the block summary
-	// bs := header.BlockSummary()
-	bs := block.NewBlockSummary(
-		header.ParentID(),
-		header.TxsRoot(),
-		header.Timestamp(),
-		header.TotalScore()).WithSignature(header.SigOnBlockSummary())
+	bs := header.BlockSummary()
+	// bs := block.NewBlockSummary(
+	// 	header.ParentID(),
+	// 	header.TxsRoot(),
+	// 	header.Timestamp(),
+	// 	header.TotalScore()).WithSignature(header.SigOnBlockSummary())
 
 	if err := c.ValidateBlockSummary(bs, parentHeader, header.Timestamp()); err != nil {
 		return err.(consensusError).AddTraceInfo(trHeader)
@@ -115,10 +115,10 @@ func (c *Consensus) validateBlockHeaderVip193(header *block.Header, parentHeader
 			[]interface{}{int(thor.CommitteeSize), len(proofs)}, "")
 	}
 
-	// eds := header.Endorsements()
-	// for _, ed := range eds {
-	for i, proof := range proofs {
-		ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
+	eds := header.Endorsements()
+	for _, ed := range eds {
+		// for i, proof := range proofs {
+		// ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
 		if err := c.ValidateEndorsement(ed, parentHeader, header.Timestamp()); err != nil {
 			return err.(consensusError).AddTraceInfo(trHeader)
 		}

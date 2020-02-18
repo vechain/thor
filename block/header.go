@@ -295,6 +295,23 @@ func (h *Header) BetterThan(other *Header) bool {
 	// smaller ID is preferred, since block with smaller ID usually has larger average score.
 	// also, it's a deterministic decision.
 	return bytes.Compare(h.ID().Bytes(), other.ID().Bytes()) < 0
+// BlockSummary reconstructs the block summary
+func (h *Header) BlockSummary() *Summary {
+	bs := NewBlockSummary(h.body.ParentID, h.TxsRoot(), h.body.Timestamp, h.body.TotalScore)
+	bs = bs.WithSignature(h.body.SigOnBlockSummary)
+	return bs
+}
+
+// Endorsements reconstructs the endorsements
+func (h *Header) Endorsements() []*Endorsement {
+	var eds []*Endorsement
+	bs := h.BlockSummary()
+	for i, proof := range h.body.VrfProofs {
+		ed := NewEndorsement(bs, proof)
+		ed = ed.WithSignature(h.body.SigsOnEndorsement[i])
+		eds = append(eds, ed)
+	}
+	return eds
 }
 
 // Number extract block number from block id.

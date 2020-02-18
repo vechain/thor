@@ -40,32 +40,80 @@ func TestAuthority(t *testing.T) {
 		ret      interface{}
 		expected interface{}
 	}{
-		{M(aut.Add(p1, p1, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
-		{M(aut.Add(p2, p2, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Add(p3, p3, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)), M(
-			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
-		)},
-		{M(aut.Candidates(big.NewInt(20), thor.MaxBlockProposers)), M(
-			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
-		)},
-		{M(aut.Candidates(big.NewInt(30), thor.MaxBlockProposers)), M(
-			[]*Candidate{{p3, p3, thor.Bytes32{}, true}}, nil,
-		)},
-		{M(aut.Candidates(big.NewInt(10), 2)), M(
-			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}}, nil,
-		)},
-		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
-		{M(aut.Update(p1, false)), M(true, nil)},
-		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, false, nil)},
-		{M(aut.Update(p1, true)), M(true, nil)},
-		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
-		{M(aut.Revoke(p1)), M(true, nil)},
-		{M(aut.Get(p1)), M(false, p1, thor.Bytes32{}, false, nil)},
-		{M(aut.Candidates(&big.Int{}, thor.MaxBlockProposers)), M(
-			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
-		)},
+		{
+			aut.Add(p1, p1, thor.Bytes32{}, pk1),
+			true,
+		},
+		{
+			M(aut.Get(p1)),
+			[]interface{}{true, p1, thor.Bytes32{}, true, pk1},
+		},
+		{
+			aut.Add(p2, p2, thor.Bytes32{}, pk2),
+			true,
+		},
+		{
+			aut.Add(p3, p3, thor.Bytes32{}, pk3),
+			true,
+		},
+		{
+			M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)),
+			[]interface{}{[]*Candidate{
+				{p1, p1, thor.Bytes32{}, true, pk1},
+				{p2, p2, thor.Bytes32{}, true, pk2},
+				{p3, p3, thor.Bytes32{}, true, pk3}}},
+		},
+		{
+			M(aut.Candidates(big.NewInt(20), thor.MaxBlockProposers)),
+			[]interface{}{[]*Candidate{
+				{p2, p2, thor.Bytes32{}, true, pk2},
+				{p3, p3, thor.Bytes32{}, true, pk3}}},
+		},
+		{
+			M(aut.Candidates(big.NewInt(30), thor.MaxBlockProposers)),
+			[]interface{}{[]*Candidate{{p3, p3, thor.Bytes32{}, true, pk3}}},
+		},
+		{
+			M(aut.Candidates(big.NewInt(10), 2)),
+			[]interface{}{[]*Candidate{
+				{p1, p1, thor.Bytes32{}, true, pk1},
+				{p2, p2, thor.Bytes32{}, true, pk2}}},
+		},
+		{
+			M(aut.Get(p1)),
+			[]interface{}{true, p1, thor.Bytes32{}, true, pk1},
+		},
+		{
+			aut.Update(p1, false),
+			true,
+		},
+		{
+			M(aut.Get(p1)),
+			[]interface{}{true, p1, thor.Bytes32{}, false, pk1},
+		},
+		{
+			aut.Update(p1, true),
+			true,
+		},
+		{
+			M(aut.Get(p1)),
+			[]interface{}{true, p1, thor.Bytes32{}, true, pk1},
+		},
+		{
+			aut.Revoke(p1),
+			true,
+		},
+		{
+			M(aut.Get(p1)),
+			[]interface{}{false, p1, thor.Bytes32{}, false, pk1},
+		},
+		{
+			M(aut.Candidates(&big.Int{}, thor.MaxBlockProposers)),
+			[]interface{}{[]*Candidate{
+				{p2, p2, thor.Bytes32{}, true, pk2},
+				{p3, p3, thor.Bytes32{}, true, pk3}},
+			},
+		},
 	}
 
 	for i, tt := range tests {

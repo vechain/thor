@@ -14,7 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+<<<<<<< HEAD
 	"github.com/pkg/errors"
+=======
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
@@ -164,7 +167,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		case ev := <-newBlockSummaryCh:
 			now := uint64(time.Now().Unix())
-			best := n.repo.BestBlock()
+			best := n.chain.BestBlock()
 
 			// Only receive one block summary from the same leader once in the same round
 			if lbs != nil {
@@ -209,7 +212,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			best := n.repo.BestBlock()
+			best := n.chain.BestBlock()
 			now := uint64(time.Now().Unix())
 
 			// Check whether the best block has changed
@@ -355,8 +358,7 @@ func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElap
 	// log.Debug(b.String())
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
-	txs := n.txPool.Executables()
+func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
@@ -364,51 +366,52 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	startTime := mclock.Now()
-	for _, tx := range txs {
-		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
-				break
-			}
-			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
+		done <- struct{}{}
+	}()
+
+	for _, tx := range n.txPool.Executables() {
+		select {
+		case <-done:
+			// debugLog("Leave tx adopting loop", "Iter", i)
+			break
+		default:
+		}
+		// debugLog("Adopting tx", "txid", tx.ID())
+		err := flow.Adopt(tx)
+		switch {
+		case packer.IsGasLimitReached(err):
+			break
+		case packer.IsTxNotAdoptableNow(err):
+			continue
+		default:
 			txsToRemove = append(txsToRemove, tx)
 		}
 	}
 
-	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 	if err != nil {
-		return err
-	}
-	execElapsed := mclock.Now() - startTime
-
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
+		return nil, nil, err
 	}
 
-	prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
-	if err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	commitElapsed := mclock.Now() - startTime - execElapsed
+	return bs, ts, nil
+}
 
-	n.processFork(prevTrunk, curTrunk)
-
-	if prevTrunk.HeadID() != curTrunk.HeadID() {
-		n.comm.BroadcastBlock(newBlock)
-		log.Info("📦 new block packed",
-			"txs", len(receipts),
-			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
-			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-			"id", shortID(newBlock.Header().ID()),
-		)
-	}
-
-	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(execElapsed+commitElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
-	}
-	return nil
+func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
+	blockID := blk.Header().ID()
+	log.Info("📦 new block packed",
+		"txs", len(receipts),
+		"mgas", float64(blk.Header().GasUsed())/1000/1000,
+		"et", fmt.Sprintf("%v|%v|%v|%v",
+			common.PrettyDuration(prepareElapsed),
+			common.PrettyDuration(collectElapsed),
+			common.PrettyDuration(packElapsed),
+			common.PrettyDuration(commitElapsed),
+		),
+		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
+	)
 }
 
 // func (n *Node) pack(flow *packer.Flow) error {

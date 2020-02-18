@@ -144,4 +144,10 @@ var (
 		Value:  1,
 		Hidden: true,
 	}
+	testModeFlag = cli.IntFlag{
+		Name:   "test-mode",
+		Usage:  "tell the system to run which test defined Node.Run",
+		Value:  1,
+		Hidden: true,
+	}
 )

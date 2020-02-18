@@ -43,7 +43,10 @@ type Solo struct {
 	gasLimit    uint64
 	bandwidth   bandwidth.Bandwidth
 	onDemand    bool
+<<<<<<< HEAD
 	skipLogs    bool
+=======
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 
 	cons *consensus.Consensus
 	sk   *ecdsa.PrivateKey
@@ -73,7 +76,11 @@ func New(
 		gasLimit: gasLimit,
 		skipLogs: skipLogs,
 		onDemand: onDemand,
+<<<<<<< HEAD
 		cons:     consensus.New(repo, stater, forkConfig),
+=======
+		cons:     consensus.New(chain, stateCreator, forkConfig),
+>>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	}
 }
 
@@ -281,87 +288,6 @@ func (s *Solo) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 	if err != nil {
 		return err
 	}
-
-	return nil
-}
-
-func (s *Solo) packing(pendingTxs tx.Transactions) error {
-	best := s.repo.BestBlock()
-	var txsToRemove []*tx.Transaction
-	defer func() {
-		for _, tx := range txsToRemove {
-			s.txPool.Remove(tx.Hash(), tx.ID())
-		}
-	}()
-
-	if s.gasLimit == 0 {
-		suggested := s.bandwidth.SuggestGasLimit()
-		s.packer.SetTargetGasLimit(suggested)
-	}
-
-	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
-	if err != nil {
-		return errors.WithMessage(err, "mock packer")
-	}
-
-	startTime := mclock.Now()
-	for _, tx := range pendingTxs {
-		err := flow.Adopt(tx)
-		switch {
-		case packer.IsGasLimitReached(err):
-			break
-		case packer.IsTxNotAdoptableNow(err):
-			continue
-		default:
-			txsToRemove = append(txsToRemove, tx)
-		}
-	}
-
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		return errors.WithMessage(err, "pack")
-	}
-	execElapsed := mclock.Now() - startTime
-
-	// If there is no tx packed in the on-demand mode then skip
-	if s.onDemand && len(b.Transactions()) == 0 {
-		return nil
-	}
-
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
-	}
-
-	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts); err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
-	}
-
-	if !s.skipLogs {
-		if err := s.logDB.Log(func(w *logdb.Writer) error {
-			return w.Write(b, receipts)
-		}); err != nil {
-			return errors.WithMessage(err, "commit log")
-		}
-	}
-
-	commitElapsed := mclock.Now() - startTime - execElapsed
-
-	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
-	}
-
-	blockID := b.Header().ID()
-	log.Info("📦 new block packed",
-		"txs", len(receipts),
-		"mgas", float64(b.Header().GasUsed())/1000/1000,
-		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
-	)
-	log.Debug(b.String())
 
 	return nil
 }
