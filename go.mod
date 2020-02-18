@@ -3,21 +3,13 @@ module github.com/vechain/thor
 go 1.12
 
 require (
-<<<<<<< HEAD
 	github.com/algorand/go-algorand v0.0.0-20200215120240-67eac24f46fb
-=======
-	github.com/algorand/go-algorand v0.0.0-20191230215342-ddd8f75bccdd
-	github.com/allegro/bigcache v1.2.1
->>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
 	github.com/beevik/ntp v0.2.0
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
-<<<<<<< HEAD
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/coocood/freecache v1.1.1-0.20191203093230-cf06d5fa0ac1
-=======
->>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v0.0.0-20171013212420-1d4478f51bed // indirect
 	github.com/elastic/gosigar v0.10.5

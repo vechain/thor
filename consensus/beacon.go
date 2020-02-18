@@ -45,7 +45,7 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 	}
 
 	// header, err = c.chain.GetTrunkBlockHeader(last)
-	header, err = c.repo.
+	header, err = c.repo.NewBestChain().GetBlockHeader(last)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}

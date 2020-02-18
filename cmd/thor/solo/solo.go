@@ -43,10 +43,7 @@ type Solo struct {
 	gasLimit    uint64
 	bandwidth   bandwidth.Bandwidth
 	onDemand    bool
-<<<<<<< HEAD
 	skipLogs    bool
-=======
->>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 
 	cons *consensus.Consensus
 	sk   *ecdsa.PrivateKey
@@ -76,11 +73,7 @@ func New(
 		gasLimit: gasLimit,
 		skipLogs: skipLogs,
 		onDemand: onDemand,
-<<<<<<< HEAD
 		cons:     consensus.New(repo, stater, forkConfig),
-=======
-		cons:     consensus.New(chain, stateCreator, forkConfig),
->>>>>>> 77ca1929b1e9a125ba5c827eedb712af4ad9eb71
 	}
 }
 
@@ -113,38 +106,20 @@ func (s *Solo) loop(ctx context.Context) {
 			return
 
 		case <-ticker.C:
-			log.Debug("START")
 			startTime := mclock.Now()
 
 			var (
-				// bs *block.Summary
-				// ts   *block.TxSet
 				err  error
 				flow *packer.Flow
 				done chan struct{}
-
-				// blk      *block.Block
-				// stage    *state.Stage
-				// receipts tx.Receipts
 			)
 
 			best := s.repo.BestBlock()
-			// txs := s.txPool.Executables()
 			flow, err = s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
 			if err != nil {
 				log.Error("packer.Mock", "error", err)
 			}
 
-			// done = make(chan struct{})
-			// go func() {
-			// 	time.Sleep(time.Duration(3) * time.Second)
-			// 	// close(done)
-			// 	done <- struct{}{}
-			// }()
-			// bs, ts, err = s.packTxSetAndBlockSummary(done, flow, txs)
-			// if err != nil {
-			// 	log.Debug("packTxSetAndBlockSummary", "error", err)
-			// }
 			if err := s.packTxSetAndBlockSummary(flow, 3); err != nil {
 				log.Error("PackTxSetAndBlockSummary", "err", err)
 				continue
@@ -152,7 +127,6 @@ func (s *Solo) loop(ctx context.Context) {
 
 			prepareElapsed := mclock.Now() - startTime
 
-			log.Debug("Endorsing starts")
 			done = make(chan struct{})
 			edCh := make(chan *block.Endorsement, thor.CommitteeSize)
 			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
@@ -173,7 +147,6 @@ func (s *Solo) loop(ctx context.Context) {
 					}
 				}
 			}
-			log.Debug("Endorsing ends")
 
 			blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 			if err != nil {
@@ -241,10 +214,10 @@ func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *blo
 
 			select {
 			case <-done:
-				log.Debug("Endorsing finished")
+				// log.Debug("Endorsing finished")
 				return
 			case edCh <- ed:
-				log.Debug("New endorsement", "hash", ed.SigningHash().Bytes())
+				// log.Debug("New endorsement", "hash", ed.SigningHash().Bytes())
 				return
 			}
 		}
@@ -268,11 +241,9 @@ func (s *Solo) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 	for _, tx := range s.txPool.Executables() {
 		select {
 		case <-done:
-			// log.Debug("Leave tx adopting loop", "Iter", i)
 			break
 		default:
 		}
-		// log.Debug("Adopting tx", "txid", tx.ID())
 		err := flow.Adopt(tx)
 		switch {
 		case packer.IsGasLimitReached(err):
@@ -291,74 +262,3 @@ func (s *Solo) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) 
 
 	return nil
 }
-
-// func (s *Solo) packing(pendingTxs tx.Transactions) error {
-// 	best := s.chain.BestBlock()
-// 	var txsToRemove []*tx.Transaction
-// 	defer func() {
-// 		for _, tx := range txsToRemove {
-// 			s.txPool.Remove(tx.Hash(), tx.ID())
-// 		}
-// 	}()
-
-// 	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
-// 	if err != nil {
-// 		return errors.WithMessage(err, "mock packer")
-// 	}
-
-// 	startTime := mclock.Now()
-// 	for _, tx := range pendingTxs {
-// 		err := flow.Adopt(tx)
-// 		switch {
-// 		case packer.IsGasLimitReached(err):
-// 			break
-// 		case packer.IsTxNotAdoptableNow(err):
-// 			continue
-// 		default:
-// 			txsToRemove = append(txsToRemove, tx)
-// 		}
-// 	}
-
-// 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
-// 	if err != nil {
-// 		return errors.WithMessage(err, "pack")
-// 	}
-// 	execElapsed := mclock.Now() - startTime
-
-// 	// If there is no tx packed in the on-demand mode then skip
-// 	if s.onDemand && len(b.Transactions()) == 0 {
-// 		return nil
-// 	}
-
-// 	if _, err := stage.Commit(); err != nil {
-// 		return errors.WithMessage(err, "commit state")
-// 	}
-
-// 	// ignore fork when solo
-// 	_, err = s.chain.AddBlock(b, receipts)
-// 	if err != nil {
-// 		return errors.WithMessage(err, "commit block")
-// 	}
-
-// 	task := s.logDB.NewTask().ForBlock(b.Header())
-// 	for i, tx := range b.Transactions() {
-// 		origin, _ := tx.Origin()
-// 		task.Write(tx.ID(), origin, receipts[i].Outputs)
-// 	}
-// 	if err := task.Commit(); err != nil {
-// 		return errors.WithMessage(err, "commit log")
-// 	}
-
-// 	commitElapsed := mclock.Now() - startTime - execElapsed
-
-// 	blockID := b.Header().ID()
-// 	log.Info("📦 new block packed",
-// 		"txs", len(receipts),
-// 		"mgas", float64(b.Header().GasUsed())/1000/1000,
-// 		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
-// 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
-// 	)
-// 	log.Debug(b.String())
-
-// 	return nil
-// }

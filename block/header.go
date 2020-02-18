@@ -295,6 +295,8 @@ func (h *Header) BetterThan(other *Header) bool {
 	// smaller ID is preferred, since block with smaller ID usually has larger average score.
 	// also, it's a deterministic decision.
 	return bytes.Compare(h.ID().Bytes(), other.ID().Bytes()) < 0
+}
+
 // BlockSummary reconstructs the block summary
 func (h *Header) BlockSummary() *Summary {
 	bs := NewBlockSummary(h.body.ParentID, h.TxsRoot(), h.body.Timestamp, h.body.TotalScore)
