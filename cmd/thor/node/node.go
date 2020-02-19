@@ -218,10 +218,9 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		 */
 		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
+		n.goes.Go(func() { n.endorserLoop(ctx) })
 		if n.getNodeID() == 2 {
 			n.goes.Go(func() { n.packerLoop(ctx) })
-		} else {
-			n.goes.Go(func() { n.endorserLoop(ctx) })
 		}
 	default:
 		panic("test does not exist")
@@ -275,7 +274,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 // 6. receive & broadcast new bs
 func (n *Node) houseKeeping(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Debug(str, append([]interface{}{"key", "house"}, kv...)...)
+		log.Info(str, append([]interface{}{"key", "house"}, kv...)...)
 	}
 
 	debugLog("enter house keeping")
@@ -311,10 +310,9 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 	futureBlocks := cache.NewRandCache(32)
 
-	knownBs := cache.NewRandCache(32)
-	knownTs := cache.NewRandCache(32)
-	knownEd := cache.NewRandCache(32)
-	knownHd := cache.NewRandCache(32)
+	knownBSSender := cache.NewRandCache(32)
+	knownTSSender := cache.NewRandCache(32)
+	knownHDSender := cache.NewRandCache(32)
 
 	for {
 		select {
@@ -324,8 +322,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
-					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					debugLog("future block added", "id", newBlock.Header().ID())
+					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID().Abev())) {
+					debugLog("future block added", "id", newBlock.Header().ID().Abev())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
@@ -334,148 +332,184 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			}
 
 		case ev := <-newBlockSummaryCh:
+			now := uint64(time.Now().Unix())
 			bs := ev.Summary
 
-			if _, ok := knownBs.Get(bs.ID()); ok {
+			signer, err := bs.Signer()
+			if err != nil {
 				continue
-			} else {
-				knownBs.Set(bs.ID(), struct{}{})
 			}
-
-			debugLog("<== bs", "id", bs.ID())
-
-			now := uint64(time.Now().Unix())
-			parentHeader := n.repo.BestBlock().Header()
-
-			// Only receive one bs from the same leader once in the same round
-			if lbs != nil {
-				if n.cons.ValidateBlockSummary(lbs, parentHeader, now) == nil {
+			if time, ok := knownBSSender.Get(signer); ok {
+				if time.(uint64) == n.cons.Timestamp(now) {
+					debugLog("reject bs from the same leader", "id", bs.ID().Abev())
 					continue
 				}
-				debugLog("set lbs=nil")
-				lbs = nil
 			}
 
+			// // Only receive one bs from the same leader once in the same round
+			// if lbs != nil {
+			// 	if n.cons.ValidateBlockSummary(lbs, best, now) == nil {
+			// 		debugLog("reject incoming bs", "id", bs.ID().Abev())
+			// 		continue
+			// 	}
+			// 	lbs = nil
+			// }
+
+			debugLog("<== bs", "id", bs.ID().Abev())
+			best := n.repo.BestBlock().Header()
+
 			// validate the new bs
-			if err := n.cons.ValidateBlockSummary(bs, parentHeader, now); err != nil {
-				debugLog("invalid bs", "err", err, "id", bs.ID())
+			if err := n.cons.ValidateBlockSummary(bs, best, now); err != nil {
+				debugLog("invalid bs", "err", err, "id", bs.ID().Abev())
 				continue
 			}
 
+			knownBSSender.Set(signer, bs.Timestamp())
 			lbs = bs
-			debugLog("bs ==>", "id", bs.ID())
+
+			debugLog("bs ==>", "id", bs.ID().Abev())
 			n.comm.BroadcastBlockSummary(bs)
 
 		case ev := <-newTxSetCh:
+			now := uint64(time.Now().Unix())
 			ts := ev.TxSet
 
-			if _, ok := knownTs.Get(ts.ID()); ok {
+			signer, err := ts.Signer()
+			if err != nil {
 				continue
-			} else {
-				knownTs.Set(ts.ID(), struct{}{})
 			}
-
-			debugLog("<== ts", "id", ts.ID())
-
-			parentHeader := n.repo.BestBlock().Header()
-			now := uint64(time.Now().Unix())
-
-			// Only receive one tx set from the same leader once in the same round
-			if lts != nil {
-				if n.cons.ValidateTxSet(lts, parentHeader, now) == nil {
+			if time, ok := knownTSSender.Get(signer); ok {
+				if time.(uint64) == n.cons.Timestamp(now) {
+					debugLog("reject ts from the same leader", "id", ts.ID().Abev())
 					continue
 				}
-				debugLog("set lts=nil")
-				lts = nil
 			}
 
+			debugLog("<== ts", "id", ts.ID().Abev())
+
+			best := n.repo.BestBlock().Header()
+
+			// if lts != nil {
+			// 	if n.cons.ValidateTxSet(lts, best, now) == nil {
+			// 		debugLog("reject incoming ts", "id", ts.ID().Abev())
+			// 		continue
+			// 	}
+			// 	lts = nil
+			// }
+
 			// validate the new tx set
-			if err := n.cons.ValidateTxSet(ts, parentHeader, now); err != nil {
-				debugLog("invalid ts", "err", err, "id", ts.ID())
+			if err := n.cons.ValidateTxSet(ts, best, now); err != nil {
+				debugLog("invalid ts", "err", err, "id", ts.ID().Abev())
 				continue
 			}
 
 			if lbs != nil {
-				// only reject the new tx set if the locally save bs is valid and they do not match
-				if n.cons.ValidateBlockSummary(lbs, parentHeader, now) == nil && lbs.TxsRoot() != ts.TxsRoot() {
-					debugLog("ts rejected", "id", ts.ID())
+				// reject the new tx set if the locally save bs is valid and they do not match
+				if n.cons.ValidateBlockSummary(lbs, best, now) == nil {
+					if lbs.TxsRoot() != ts.TxsRoot() {
+						debugLog("reject ts inconsistent with saved bs", "id", ts.ID().Abev())
+						continue
+					}
+				} else {
+					lbs = nil
+				}
+			}
+
+			knownTSSender.Set(signer, ts.Timestamp())
+			lts = ts
+
+			debugLog("ts ==>", "id", ts.ID().Abev())
+			n.comm.BroadcastTxSet(ts)
+
+			// assemble the block if the header has been received and it's still valid
+			if lh != nil {
+				if n.cons.ValidateBlockHeader(lh, best, now) != nil {
+					lh = nil
+					continue
+				}
+				if lh.TxsRoot() != ts.TxsRoot() {
 					continue
 				}
 			}
 
-			lts = ts
-			debugLog("ts ==>", "id", ts.ID())
-			n.comm.BroadcastTxSet(ts)
-
-			// assemble the block if the header has been received
-			if lh != nil && n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil && lh.TxsRoot() == ts.TxsRoot() {
-				debugLog("assembling new block", "id", lh.ID())
-				n.assembleNewBlock(lh, lts, parentHeader, now)
-			}
+			debugLog("assembling new block", "id", lh.ID().Abev())
+			n.assembleNewBlock(lh, lts, best, now)
 
 		case ev := <-newEndorsementCh:
+			now := uint64(time.Now().Unix())
 			ed := ev.Endorsement
 
-			if _, ok := knownEd.Get(ed.ID()); ok {
-				continue
-			} else {
-				knownEd.Set(ed.ID(), struct{}{})
-			}
+			debugLog("<== ed", "id", ed.ID().Abev())
 
-			debugLog("<== ed", "id", ed.ID())
+			best := n.repo.BestBlock().Header()
 
-			parentHeader := n.repo.BestBlock().Header()
-			now := uint64(time.Now().Unix())
-
-			if err := n.cons.ValidateEndorsement(ed, parentHeader, now); err != nil {
-				debugLog("invalid ed", "err", err, "id", ed.ID())
+			if err := n.cons.ValidateEndorsement(ed, best, now); err != nil {
+				debugLog("invalid ed", "err", err, "id", ed.ID().Abev())
 				continue
 			}
 
-			debugLog("ed ==>", "id", ed.ID())
+			debugLog("ed ==>", "id", ed.ID().Abev())
 			n.comm.BroadcastEndorsement(ed)
 
 		case ev := <-newBlockHeaderCh:
+			now := uint64(time.Now().Unix())
 			header := ev.Header
 
-			if _, ok := knownHd.Get(header.ID()); ok {
+			signer, err := header.Signer()
+			if err != nil {
 				continue
-			} else {
-				knownHd.Set(header.ID(), struct{}{})
 			}
-
-			debugLog("<== hd", "id", header.ID())
-
-			parentHeader := n.repo.BestBlock().Header()
-			now := uint64(time.Now().Unix())
-
-			// Only receive one tx set from the same leader once in the same round
-			if lh != nil {
-				if n.cons.ValidateBlockHeader(lh, parentHeader, now) == nil {
+			if time, ok := knownHDSender.Get(signer); ok {
+				if time.(uint64) == n.cons.Timestamp(now) {
+					debugLog("reject header from the same leader", "id", header.ID().Abev())
 					continue
 				}
-				debugLog("set lh=nil")
-				lh = nil
 			}
 
-			if err := n.cons.ValidateBlockHeader(header, parentHeader, now); err != nil {
-				debugLog("invalid hd", "id", header.ID(), "err", err)
+			debugLog("<== hd", "id", header.ID().Abev())
+
+			best := n.repo.BestBlock().Header()
+
+			// // Only receive one tx set from the same leader once in the same round
+			// if lh != nil {
+			// 	if n.cons.ValidateBlockHeader(lh, best, now) == nil {
+			// 		debugLog("reject incoming header", "id", header.ID().Abev())
+			// 		continue
+			// 	}
+			// 	// debugLog("set lh=nil")
+			// 	lh = nil
+			// }
+
+			if err := n.cons.ValidateBlockHeader(header, best, now); err != nil {
+				debugLog("invalid hd", "id", header.ID().Abev, "err", err)
 				continue
 			}
 
+			knownHDSender.Set(signer, header.Timestamp())
 			lh = header
-			debugLog("hd ==>", "key", "header", "id", header.ID())
+
+			debugLog("hd ==>", "key", "header", "id", header.ID().Abev())
 			n.comm.BroadcastBlockHeader(header)
 
 			// assemble the block either when there is an empty transaction list or
-			// when there has been a tx set received and its tx root matches the one
-			// computed from the header
-			if (lts == nil && header.TxsRoot() == tx.EmptyRoot) ||
-				(lts != nil && lts.TxsRoot() == header.TxsRoot() &&
-					n.cons.ValidateTxSet(lts, parentHeader, now) == nil) {
-				debugLog("assembling new block", "key", "header", "id", header.ID())
-				n.assembleNewBlock(lh, lts, parentHeader, now)
+			// when there has been a tx set received, its tx root matches the one
+			// computed from the header and it's still valid
+			if lts == nil {
+				if header.TxsRoot() != tx.EmptyRoot {
+					continue
+				}
+			} else {
+				if n.cons.ValidateTxSet(lts, best, now) != nil {
+					lts = nil
+					continue
+				}
+				if lts.TxsRoot() != header.TxsRoot() {
+					continue
+				}
 			}
+
+			debugLog("assembling new block", "key", "header", "id", header.ID().Abev())
+			n.assembleNewBlock(lh, lts, best, now)
 
 		case <-futureTicker.C:
 			// process future blocks
@@ -574,7 +608,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 			if err := stash.Save(txEv.Tx); err != nil {
 				log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
 			} else {
-				log.Debug("stashed tx", "id", txEv.Tx.ID())
+				log.Debug("stashed tx", "id", txEv.Tx.ID().Abev())
 			}
 		}
 	}
@@ -707,7 +741,7 @@ side-chain:   %v  %v`,
 		}
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
-				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID().Abev())
 			}
 		}
 	}

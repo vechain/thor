@@ -359,15 +359,15 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	// if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
-	// 	candidates = entry.(*poa.Candidates).Copy()
-	// } else {
-	ac, err := authority.AllCandidates()
-	if err != nil {
-		return nil, nil, nil, err
+	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
+		candidates = entry.(*poa.Candidates).Copy()
+	} else {
+		ac, err := authority.AllCandidates()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		candidates = poa.NewCandidates(ac)
 	}
-	candidates = poa.NewCandidates(ac)
-	// }
 
 	return candidates, authority, st, nil
 }

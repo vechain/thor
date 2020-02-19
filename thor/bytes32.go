@@ -69,7 +69,7 @@ func (b *Bytes32) UnmarshalJSON(data []byte) error {
 func (b Bytes32) Abev() (str string) {
 	hexStr := b.String()
 	l := len(hexStr)
-	str = hexStr[:7] + "..." + hexStr[l-5:]
+	str = "0x…" + hexStr[l-6:]
 	return
 }
 

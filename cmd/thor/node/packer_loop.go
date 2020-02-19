@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
@@ -48,10 +47,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 	debugLog("synchronization process done")
 
 	var (
-		flow      *packer.Flow
-		activated = false // flow is activated if it packs bs and ts and is in its scheduled round
-		err       error
-		ticker    = time.NewTicker(time.Second)
+		flow *packer.Flow
+		// flow is activated if it packs bs and ts and is in its scheduled round
+		err    error
+		ticker = time.NewTicker(time.Second)
 
 		maxTxAdoptDur = 3 // max number of seconds allowed to prepare transactions
 
@@ -65,12 +64,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 	var scope event.SubscriptionScope
 	defer scope.Close()
 
-	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
-	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
-
-	// var lbs *block.Summary // a local copy of the latest block summary
 
 	for {
 		select {
@@ -92,8 +87,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
-				activated = false
-
 				debugLog("re-schedule packer due to new best block")
 				continue
 			}
@@ -106,12 +99,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// if timeout, reset
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
-				activated = false
+				debugLog("re-schedule packer due to timeout")
 				continue
 			}
 
 			// do nothing if having already packed bs and ts
-			if activated {
+			if flow.HasPackedBlockSummary() {
 				continue
 			}
 
@@ -119,21 +112,19 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
 			if err != nil {
-				errLog("pack bs and ts", "err", err)
-
 				flow = nil
-				activated = false
+				errLog("pack bs and ts", "err", err)
 				continue
 			}
 
-			activated = true // Mark the flow as activated
+			// activated = true // Mark the flow as activated
 
 			txSetBlockSummaryDone = mclock.Now()
 
 			// lbs = bs // save a local copy of the latest block summary
 			debugLog("bs ==>", "id", bs.ID().Abev())
 			n.comm.BroadcastBlockSummary(bs)
-			if !ts.IsEmpty() {
+			if ts != nil {
 				debugLog("ts ==>", "id", ts.ID().Abev())
 				n.comm.BroadcastTxSet(ts)
 			}
@@ -163,57 +154,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 				}
 			}
 
-		case ev := <-newBlockSummaryCh:
-			now := uint64(time.Now().Unix())
-			best := n.repo.BestBlock()
-
-			// // Only receive block summary from the same leader once in the same round
-			// if lbs != nil {
-			// 	if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
-			// 		debugLog("reject bs", "id", bs.ID().Abev())
-			// 		continue
-			// 	}
-			// 	lbs = nil
-			// }
-
-			bs := ev.Summary
-			// reject the incoming bs if the node is the current round's leader
-			if flow != nil && flow.When() == n.cons.Timestamp(now) {
-				debugLog("reject incoming bs", "id", bs.ID().Abev())
-				continue
-			}
-			debugLog("<== bs", "id", bs.ID().Abev())
-
-			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
-				errLog("invalid bs", "err", err)
-				fmt.Println(bs.String())
-				continue
-			}
-
-			// lbs = bs // save the local copy of the latest received block summary
-
-			// Check the committee membership
-			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
-			if err != nil {
-				errLog("check committee", "err", err)
-				continue
-			}
-			if ok {
-				// Endorse the block summary
-				ed := block.NewEndorsement(bs, proof)
-				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
-				if err != nil {
-					errLog("Signing endorsement", "err", err)
-					continue
-				}
-				ed = ed.WithSignature(sig)
-
-				debugLog("ed ==>", "id", ed.ID().Abev())
-				n.comm.BroadcastEndorsement(ed)
-			}
-
 		case ev := <-newEndorsementCh:
-			if flow == nil || !activated { // flow must be activated to proceed
+			// proceed only when the node has already packed a block summary
+			if flow == nil || !flow.HasPackedBlockSummary() {
 				continue
 			}
 
@@ -223,20 +166,14 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
-				activated = false
 				debugLog("re-schedule packer due to new best block")
-				continue
-			}
-
-			// Check whether it is the scheduled round for producing a new block
-			if now < flow.When() {
 				continue
 			}
 
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
-				activated = false
+				debugLog("re-schedule packer due to timeout")
 				continue
 			}
 
@@ -244,8 +181,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			debugLog("<== ed", "id", ed.ID().Abev())
 
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
-				debugLog("invalid ed", "id", ed.ID().Abev())
-				fmt.Println(ed.String())
+				debugLog("invalid ed", "err", err, "id", ed.ID().Abev())
+				// fmt.Println(ed.String())
 				continue
 			}
 
@@ -273,16 +210,19 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// reset flow
 			flow = nil
-			activated = false
 
 			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {
 				errLog("commit state", "err", err)
+				flow = nil
+				continue
 			}
 
 			prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
-				panic(errors.WithMessage(err, "commit block"))
+				errLog("commit block", "err", err)
+				flow = nil
+				continue
 			}
 			commitDone = mclock.Now()
 

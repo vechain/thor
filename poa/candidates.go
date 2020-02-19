@@ -42,9 +42,25 @@ func NewCandidates(list []*authority.Candidate) *Candidates {
 // Copy make a copy.
 func (c *Candidates) Copy() *Candidates {
 	c.referenced = true
-	copy := *c
+	// copy := *c
 
-	return &copy
+	copy := new(Candidates)
+	copy.masters = make(map[thor.Address]int)
+	for k, v := range c.masters {
+		copy.masters[k] = v
+	}
+
+	copy.endorsors = make(map[thor.Address]bool)
+	for k, v := range c.endorsors {
+		copy.endorsors[k] = v
+	}
+
+	for _, candidate := range c.list {
+		c := *candidate
+		copy.list = append(copy.list, &c)
+	}
+
+	return copy
 }
 
 // Pick picks a list of proposers, which satisfy preset conditions.

@@ -29,7 +29,7 @@ type Flow struct {
 	features     tx.Features
 
 	blockSummary *block.Summary
-	txSet        *block.TxSet
+	// txSet        *block.TxSet
 	endorsements block.Endorsements
 
 	Ongoing bool
@@ -53,12 +53,17 @@ func NewFlow(
 
 // SetBlockSummary ...
 func (f *Flow) SetBlockSummary(bs *block.Summary) {
-	f.blockSummary = bs
+	f.blockSummary = bs.Copy()
 }
 
 // GetBlockSummary ...
 func (f *Flow) GetBlockSummary() *block.Summary {
-	return f.blockSummary
+	return f.blockSummary.Copy()
+}
+
+// HasPackedBlockSummary ...
+func (f *Flow) HasPackedBlockSummary() bool {
+	return f.blockSummary != nil
 }
 
 // IsEmpty ...
@@ -82,36 +87,44 @@ func (f *Flow) Txs() tx.Transactions {
 }
 
 // PackTxSetAndBlockSummary packs the tx set and block summary
-func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (*block.Summary, *block.TxSet, error) {
-	var (
-		sig []byte
-		err error
-	)
+func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (bs *block.Summary, ts *block.TxSet, err error) {
+	var sig []byte
 
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
 		return nil, nil, errors.New("private key mismatch")
 	}
 
 	// pack tx set
-	ts := block.NewTxSet(f.txs, f.runtime.Context().Time, f.runtime.Context().TotalScore)
-	sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
-	if err != nil {
-		return nil, nil, err
+	if len(f.txs) > 0 {
+		ts = block.NewTxSet(f.txs, f.runtime.Context().Time, f.runtime.Context().TotalScore)
+		sig, err = crypto.Sign(ts.SigningHash().Bytes(), sk)
+		if err != nil {
+			return nil, nil, err
+		}
+		ts = ts.WithSignature(sig)
 	}
-	f.txSet = ts.WithSignature(sig)
 
 	// pack block summary
 	best := f.packer.repo.BestBlock()
 	parent := best.Header().ID()
-	root := f.txSet.TxsRoot()
-	bs := block.NewBlockSummary(parent, root, f.runtime.Context().Time, f.runtime.Context().TotalScore)
+	var root thor.Bytes32
+	if ts != nil {
+		root = ts.TxsRoot()
+	} else {
+		root = tx.EmptyRoot
+	}
+
+	bs = block.NewBlockSummary(parent, root, f.runtime.Context().Time, f.runtime.Context().TotalScore)
 	sig, err = crypto.Sign(bs.SigningHash().Bytes(), sk)
 	if err != nil {
 		return nil, nil, err
 	}
-	f.blockSummary = bs.WithSignature(sig)
+	bs = bs.WithSignature(sig)
 
-	return f.blockSummary, f.txSet, nil
+	f.blockSummary = bs
+	// f.txSet = ts
+
+	return
 }
 
 // ParentHeader returns parent block header.
@@ -207,7 +220,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
-// // Pack build and sign the new block.
+// Pack build and sign the new block.
 func (f *Flow) Pack(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.blockSummary == nil {
 		return nil, nil, nil, errors.New("empty block summary")

@@ -128,10 +128,10 @@ func (ts *TxSet) TotalScore() uint64 {
 	return ts.body.TotalScore
 }
 
-// IsEmpty checks if it is an empty set
-func (ts *TxSet) IsEmpty() bool {
-	return len(ts.body.Txs) == 0
-}
+// // IsEmpty checks if it is an empty set
+// func (ts *TxSet) IsEmpty() bool {
+// 	return len(ts.body.Txs) == 0
+// }
 
 // ID computes the hash for committee member to sign
 func (ts *TxSet) ID() (id thor.Bytes32) {
