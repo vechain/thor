@@ -109,6 +109,10 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// VIP 193
+	flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey)
+
 	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)

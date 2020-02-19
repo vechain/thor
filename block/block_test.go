@@ -99,6 +99,7 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 
+	// vip193
 	assert.Equal(t, sig, h.SigOnBlockSummary())
 	for i := range pfs {
 		assert.Equal(t, pfs[i], h.VrfProofs()[i])

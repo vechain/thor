@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HELP="launch_node -d [1-3] -b [bootnodeport] -t [0-99] -v [0-9]"
+HELP="launch_node -d [1-4] -b [bootnodeport] -t [0-99] -v [0-9]"
 
 while [ -n "$1" ]; do 
     case "$1" in
@@ -35,7 +35,7 @@ done
 
 # check node id (1-3)
 if [ ! -n "$ID" ]; then
-    echo "node id required: 1-3"
+    echo "node id required: 1-4"
     echo $HELP
     exit 1
 fi
@@ -73,7 +73,7 @@ fi
 
 CMD="$THOR --network $JSON --config-dir $DIR --data-dir $DIR --p2p-port $PORT --test-mode $MODE --skip-logs"
 
-echo "p2p port = $PORT"
+# echo "p2p port = $PORT"
 
 if [ -n "$VERB" ]; then
     CMD="$CMD --verbosity $VERB"
@@ -83,11 +83,7 @@ if [ -n "$BOOTNODEPORT" ]; then
     CMD="$CMD --bootnode $BOOTNODE$BOOTNODEPORT"
 fi
 
-if [ "$ID" == "2" ]; then
-    CMD="$CMD --api-addr localhost:8670"
-fi
-if [ "$ID" == "3" ]; then
-    CMD="$CMD --api-addr localhost:8671"
-fi
+API=$(($ID + 8668))
+CMD="$CMD --api-addr localhost:$API"
 
-$CMD
+echo $CMD

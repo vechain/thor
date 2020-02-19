@@ -152,6 +152,10 @@ func initTransactionServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// vip193
+	flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey)
+
 	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)

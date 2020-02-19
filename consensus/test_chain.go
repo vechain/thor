@@ -66,12 +66,12 @@ type account struct {
 	Vrfpk *vrf.PublicKey
 }
 
-// NewTempChain generates thor.MaxBlockProposers key pairs and register them as master nodes
-func NewTempChain(forkConfig thor.ForkConfig) (*TempChain, error) {
+// NewTempChain generates N key pairs and register them as master nodes
+func NewTempChain(N int, forkConfig thor.ForkConfig) (*TempChain, error) {
 	db := muxdb.NewMem()
 
 	var accs []*account
-	for i := uint64(0); i < thor.MaxBlockProposers; i++ {
+	for i := 0; i < N; i++ {
 		ethsk, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(ethsk.PublicKey)
 		vrfpk, vrfsk := vrf.GenKeyPair()

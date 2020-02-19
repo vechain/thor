@@ -13,42 +13,27 @@ import (
 )
 
 func TestThreshold(t *testing.T) {
-	th := getCommitteeThreshold()
-	// ratio = threhsold / (1 << 32 - 1) <= amp_factor * #committee / #node
-	ratio := float64(th) / float64(math.MaxUint32)
-	if ratio > float64(thor.CommitteeSize)/float64(thor.MaxBlockProposers)*float64(thor.CommitteeThresholdFactor) {
-		t.Errorf("Invalid threshold")
-	}
-}
-
-func TestIsCommitteeByPrivateKey(t *testing.T) {
-	_, sk := vrf.GenKeyPair()
-
 	// th := getCommitteeThreshold()
+	// // ratio = threhsold / (1 << 32 - 1) <= amp_factor * #committee / #node
+	// ratio := float64(th) / float64(math.MaxUint32)
+	// if ratio > float64(thor.CommitteeSize)/float64(thor.MaxBlockProposers)*float64(thor.CommitteeThresholdFactor) {
+	// 	t.Errorf("Invalid threshold")
+	// }
 
-	var (
-		msg       = make([]byte, 32)
-		proof, pf *vrf.Proof
-		err       error
-		ok        bool
-	)
+	numOfNode := 10
 
-	// Get a positive sample
-	rand.Read(msg)
-	proof, err = sk.Prove(msg)
-	if err != nil {
-		t.Error(err)
+	tc, _ := NewTempChain(numOfNode, thor.NoFork)
+
+	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
+	if f > uint64(numOfNode) {
+		f = uint64(numOfNode)
 	}
-
-	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg), math.MaxUint32)
-	assert.Nil(t, err)
-	assert.True(t, ok)
-	assert.Equal(t, proof, pf)
-
-	ok, pf, err = isCommitteeByPrivateKey(sk, thor.BytesToBytes32(msg), 0)
-	assert.Nil(t, err)
-	assert.False(t, ok)
-	assert.Nil(t, pf)
+	expected := uint32(uint64(math.MaxUint32) * f / uint64(numOfNode))
+	actual, err := tc.Con.getCommitteeThreshold()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expected, actual)
 }
 
 func M(a ...interface{}) []interface{} {
@@ -56,7 +41,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	tc, _ := NewTempChain(thor.NoFork)
+	tc, _ := NewTempChain(10, thor.NoFork)
 
 	launchTime := tc.GenesisBlock.Header().Timestamp()
 
@@ -103,7 +88,7 @@ func TestEpochNumber(t *testing.T) {
 }
 
 func TestValidateBlockSummary(t *testing.T) {
-	tc, _ := NewTempChain(thor.NoFork)
+	tc, _ := NewTempChain(10, thor.NoFork)
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con
@@ -241,7 +226,7 @@ func TestValidateBlockSummary(t *testing.T) {
 // }
 
 func TestValidateEndorsement(t *testing.T) {
-	tc, _ := NewTempChain(thor.NoFork)
+	tc, _ := NewTempChain(10, thor.NoFork)
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con
@@ -301,7 +286,13 @@ func TestValidateEndorsement(t *testing.T) {
 		sig, _ := crypto.Sign(ed.SigningHash().Bytes(), ethsk)
 		ed = ed.WithSignature(sig)
 		err := cons.ValidateEndorsement(ed, parentHeader, bs.Timestamp())
-		if ok := IsCommitteeByProof(proof); !ok {
+
+		th, err1 := cons.getCommitteeThreshold()
+		if err1 != nil {
+			t.Fatal(err1)
+		}
+
+		if ok := isCommitteeByProof(proof, th); !ok {
 			actual := err.Error()
 			expected := newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "").Error()
 			assert.Equal(t, expected, actual)

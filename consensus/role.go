@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
 	"reflect"
 
@@ -14,14 +15,44 @@ import (
 	"github.com/vechain/thor/vrf"
 )
 
-func getCommitteeThreshold() uint32 {
-	// threshold = (1 << 64 - 1) * committee_size / total_number_of_nodes * factor
-	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
-	if f > thor.MaxBlockProposers {
-		f = thor.MaxBlockProposers
+// func getCommitteeThreshold() uint32 {
+// 	// threshold = (1 << 64 - 1) * committee_size / total_number_of_nodes * factor
+// 	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
+// 	if f > thor.MaxBlockProposers {
+// 		f = thor.MaxBlockProposers
+// 	}
+
+// 	return uint32(uint64(math.MaxUint32) * f / thor.MaxBlockProposers)
+// }
+
+// threshold is determined by the current number of qualified consensus nodes
+// not the fixed max number of nodes allowed.
+func (c *Consensus) getCommitteeThreshold() (uint32, error) {
+	candidates, _, st, err := c.getAllCandidates(c.repo.BestBlock().Header())
+	if err != nil {
+		return 0, err
 	}
 
-	return uint32(uint64(math.MaxUint32) * f / thor.MaxBlockProposers)
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return 0, err
+	}
+
+	N := uint64(len(proposers))
+	if N == 0 {
+		return 0, errors.New("zero number of consensus nodes")
+	}
+
+	// if N < thor.CommitteeSize {
+	// 	return 0, errors.New("number of consensus nodes less than the required committee size")
+	// }
+
+	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
+	if f > N {
+		f = N
+	}
+
+	return uint32(uint64(math.MaxUint32) * f / N), nil
 }
 
 // IsCommittee checks the committeeship given a VRF private key and round number.
@@ -38,8 +69,18 @@ func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Pro
 	}
 
 	seed := seed(beacon, round)
-	th := getCommitteeThreshold()
-	return isCommitteeByPrivateKey(sk, seed, th)
+	th, err := c.getCommitteeThreshold()
+	if err != nil {
+		return false, nil, err
+	}
+	// return isCommitteeByPrivateKey(sk, seed, th)
+
+	proof, err := sk.Prove(seed.Bytes())
+	if isCommitteeByProof(proof, th) {
+		return true, proof, nil
+	}
+
+	return false, nil, nil
 }
 
 // Seed computes the random seed for each round
@@ -48,35 +89,6 @@ func seed(beacon thor.Bytes32, round uint32) thor.Bytes32 {
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, round)
 	return thor.Blake2b(beacon.Bytes(), b)
-}
-
-func isCommitteeByPrivateKey(sk *vrf.PrivateKey, seed thor.Bytes32, th uint32) (bool, *vrf.Proof, error) {
-	// Compute VRF proof
-	proof, err := sk.Prove(seed.Bytes())
-	if err != nil {
-		return false, nil, err
-	}
-
-	// // Compute the hash of the proof
-	// h := thor.Blake2b(proof[:])
-	// // Get the threshold
-	// th := getCommitteeThreshold()
-	// // Is a committee member if the hash is no larger than the threshold
-	// if binary.BigEndian.Uint32(h.Bytes()) <= th {
-	// 	return proof, nil
-	// }
-
-	if isCommitteeByProof(proof, th) {
-		return true, proof, nil
-	}
-
-	return false, nil, nil
-}
-
-// IsCommitteeByProof ...
-func IsCommitteeByProof(proof *vrf.Proof) bool {
-	th := getCommitteeThreshold()
-	return isCommitteeByProof(proof, th)
 }
 
 func isCommitteeByProof(proof *vrf.Proof, th uint32) bool {
@@ -147,17 +159,6 @@ func (c *Consensus) Timestamp(arg interface{}) uint64 {
 		panic("Need uint32 or uint64")
 	}
 }
-
-// // NextTimestamp computes the next-round timestamp
-// func (c *Consensus) NextTimestamp(t uint64) uint64 {
-// 	r := c.RoundNumber(t + thor.BlockInterval)
-// 	return c.repo.GenesisBlock().Header().Timestamp() + thor.BlockInterval*uint64(r)
-// }
-
-// // TimestampFromCurrTime ...
-// func (c *Consensus) Timestamp(now uint64) uint64 {
-// 	return c.Timestamp(c.RoundNumber(now))
-// }
 
 // ValidateBlockSummary validates a block summary
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
@@ -292,7 +293,11 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 	}
 
 	// validate committeeship
-	if !isCommitteeByProof(ed.VrfProof(), getCommitteeThreshold()) {
+	th, err := c.getCommitteeThreshold()
+	if err != nil {
+		return err
+	}
+	if !isCommitteeByProof(ed.VrfProof(), th) {
 		// return consensusError("Not a committee member")
 		return newConsensusError(trEndorsement, strErrNotCommittee, nil, nil, "")
 	}
@@ -354,15 +359,15 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
-	} else {
-		ac, err := authority.AllCandidates()
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		candidates = poa.NewCandidates(ac)
+	// if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
+	// 	candidates = entry.(*poa.Candidates).Copy()
+	// } else {
+	ac, err := authority.AllCandidates()
+	if err != nil {
+		return nil, nil, nil, err
 	}
+	candidates = poa.NewCandidates(ac)
+	// }
 
 	return candidates, authority, st, nil
 }

@@ -121,7 +121,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
 			if err != nil {
-				errLog("packTxSetAndBlockSummary", "err", err)
+				errLog("pack bs and ts", "err", err)
 
 				flow = nil
 				activated = false
@@ -140,7 +140,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// test its committee membership and if elected, endorse the new block summary
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
 			if err != nil {
-				errLog("IsCommittee", "err", err)
+				errLog("check committee", "err", err)
 				continue
 			}
 			if ok {
@@ -169,6 +169,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Only receive one block summary from the same leader once in the same round
 			if lbs != nil {
 				if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
+					debugLog("reject bs", "id", bs.ID().Abev())
 					continue
 				}
 				lbs = nil
@@ -178,7 +179,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			debugLog("<== bs", "id", bs.ID().Abev())
 
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
-				errLog("ValidateBlockSummary", "err", err, "bs", bs.String())
+				errLog("invalid bs", "err", err)
+				fmt.Println(bs.String())
 				continue
 			}
 
@@ -187,7 +189,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check the committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
 			if err != nil {
-				errLog("IsCommittee", "err", err)
+				errLog("check committee", "err", err)
 				continue
 			}
 			if ok {
@@ -237,6 +239,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
 				debugLog("invalid ed", "id", ed.ID().Abev())
+				fmt.Println(ed.String())
 				continue
 			}
 
@@ -256,7 +259,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			debugLog("Packing new header")
 			newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 			if err != nil {
-				errLog("PackBlockHeader", "err", err)
+				errLog("pack block", "err", err)
 				flow = nil
 				continue
 			}
@@ -280,15 +283,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.processFork(prevTrunk, curTrunk)
 
 			if prevTrunk.HeadID() != curTrunk.HeadID() {
+				debugLog("hd ==>", "id", newBlock.Header().ID().Abev())
+				n.comm.BroadcastBlockHeader(newBlock.Header())
+
 				display(newBlock, receipts,
 					txSetBlockSummaryDone-start,
 					endorsementDone-txSetBlockSummaryDone,
 					blockDone-endorsementDone,
 					commitDone-blockDone,
 				)
-
-				debugLog("hd ==>", "id", newBlock.Header().ID().Abev())
-				n.comm.BroadcastBlockHeader(newBlock.Header())
 			}
 
 			if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(commitDone-start)); updated {
@@ -352,61 +355,4 @@ func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElap
 		),
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
-	// log.Debug(b.String())
 }
-
-// func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
-// 	var txsToRemove []*tx.Transaction
-// 	defer func() {
-// 		for _, tx := range txsToRemove {
-// 			n.txPool.Remove(tx.Hash(), tx.ID())
-// 		}
-// 	}()
-
-// 	done := make(chan struct{})
-// 	go func() {
-// 		time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
-// 		done <- struct{}{}
-// 	}()
-
-// 	for _, tx := range n.txPool.Executables() {
-// 		select {
-// 		case <-done:
-// 			// debugLog("Leave tx adopting loop", "Iter", i)
-// 			break
-// 		default:
-// 		}
-// 		// debugLog("Adopting tx", "txid", tx.ID())
-// 		err := flow.Adopt(tx)
-// 		switch {
-// 		case packer.IsGasLimitReached(err):
-// 			break
-// 		case packer.IsTxNotAdoptableNow(err):
-// 			continue
-// 		default:
-// 			txsToRemove = append(txsToRemove, tx)
-// 		}
-// 	}
-
-// 	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
-// 	if err != nil {
-// 		return nil, nil, err
-// 	}
-
-// 	return bs, ts, nil
-// }
-
-// func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
-// 	blockID := blk.Header().ID()
-// 	log.Info("📦 new block packed",
-// 		"txs", len(receipts),
-// 		"mgas", float64(blk.Header().GasUsed())/1000/1000,
-// 		"et", fmt.Sprintf("%v|%v|%v|%v",
-// 			common.PrettyDuration(prepareElapsed),
-// 			common.PrettyDuration(collectElapsed),
-// 			common.PrettyDuration(packElapsed),
-// 			common.PrettyDuration(commitElapsed),
-// 		),
-// 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
-// 	)
-// }

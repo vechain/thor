@@ -14,7 +14,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
@@ -97,6 +96,9 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
+		// vip193
+		flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey)
+
 		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
@@ -156,7 +158,8 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flow.SetBlockSummary(block.NewBlockSummary(best.Header().ID(), thor.Bytes32{}, best.Header().Timestamp()+thor.BlockInterval, 1))
+	// VIP 193
+	flow.PackTxSetAndBlockSummary(a1.PrivateKey)
 
 	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
 	if err != nil {
@@ -166,6 +169,7 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
+	// Commented due to VIP-193
 	// _, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
 	// if err != nil {
 	// 	t.Fatal(err)
