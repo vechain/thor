@@ -109,6 +109,7 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
 		n.goes.Go(func() { n.packerLoop(ctx) })
+		n.goes.Go(func() { n.endorsorLoop(ctx) })
 	case 2:
 		/**
 		 * To test the low-level broadcasting funcs
@@ -204,7 +205,7 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		if n.getNodeID() == 2 {
 			n.goes.Go(func() { n.testCase7(ctx) })
 		}
-		n.goes.Go(func() { n.endorserLoop(ctx) })
+		n.goes.Go(func() { n.endorsorLoop(ctx) })
 	case 8:
 		/**
 		 * To test the normal procedure of pack a new block.
@@ -218,7 +219,7 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		 */
 		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
-		n.goes.Go(func() { n.endorserLoop(ctx) })
+		n.goes.Go(func() { n.endorsorLoop(ctx) })
 		if n.getNodeID() == 2 {
 			n.goes.Go(func() { n.packerLoop(ctx) })
 		}

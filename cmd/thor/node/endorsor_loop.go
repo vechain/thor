@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/comm"
 )
 
-func (n *Node) endorserLoop(ctx context.Context) {
+func (n *Node) endorsorLoop(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
 		log.Info(str, append([]interface{}{"key", "edlp"}, kv...)...)
 	}
