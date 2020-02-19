@@ -49,7 +49,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 	var (
 		flow      *packer.Flow
-		activated = false // flow instance will be activated after it starts to pack things
+		activated = false // flow is activated if it packs bs and ts and is in its scheduled round
 		err       error
 		ticker    = time.NewTicker(time.Second)
 
@@ -70,20 +70,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 	newEndorsementCh := make(chan *comm.NewEndorsementEvent)
 	scope.Track(n.comm.SubscribeEndorsement(newEndorsementCh))
 
-	var lbs *block.Summary // a local copy of the latest block summary
+	// var lbs *block.Summary // a local copy of the latest block summary
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if flow != nil && activated { // flow must be either nil or not activated to proceed
-				continue
-			}
-
-			best := n.repo.BestBlock()
 			now := uint64(time.Now().Unix())
-			// fmt.Println(now)
+			best := n.repo.BestBlock()
 
 			if flow == nil {
 				// Schedule a round to be the leader
@@ -92,32 +87,35 @@ func (n *Node) packerLoop(ctx context.Context) {
 					errLog("Schedule", "err", err)
 					continue
 				}
-
-				// fmt.Printf("now = %v, when = %v\n", now, flow.When())
 			}
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
+				activated = false
+
 				debugLog("re-schedule packer due to new best block")
 				continue
 			}
 
-			// Check whether it is the scheduled round for producing a new block
+			// wait until the scheduled the time
 			if now < flow.When() {
 				continue
 			}
 
-			// Check timeout
+			// if timeout, reset
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
 				activated = false
 				continue
 			}
 
-			start = mclock.Now()
+			// do nothing if having already packed bs and ts
+			if activated {
+				continue
+			}
 
-			activated = true // Mark the flow as activated
+			start = mclock.Now()
 
 			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
 			if err != nil {
@@ -127,9 +125,12 @@ func (n *Node) packerLoop(ctx context.Context) {
 				activated = false
 				continue
 			}
+
+			activated = true // Mark the flow as activated
+
 			txSetBlockSummaryDone = mclock.Now()
 
-			lbs = bs // save a local copy of the latest block summary
+			// lbs = bs // save a local copy of the latest block summary
 			debugLog("bs ==>", "id", bs.ID().Abev())
 			n.comm.BroadcastBlockSummary(bs)
 			if !ts.IsEmpty() {
@@ -166,16 +167,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 			now := uint64(time.Now().Unix())
 			best := n.repo.BestBlock()
 
-			// Only receive one block summary from the same leader once in the same round
-			if lbs != nil {
-				if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
-					debugLog("reject bs", "id", bs.ID().Abev())
-					continue
-				}
-				lbs = nil
-			}
+			// // Only receive block summary from the same leader once in the same round
+			// if lbs != nil {
+			// 	if n.cons.ValidateBlockSummary(lbs, best.Header(), now) == nil {
+			// 		debugLog("reject bs", "id", bs.ID().Abev())
+			// 		continue
+			// 	}
+			// 	lbs = nil
+			// }
 
 			bs := ev.Summary
+			// reject the incoming bs if the node is the current round's leader
+			if flow != nil && flow.When() == n.cons.Timestamp(now) {
+				debugLog("reject incoming bs", "id", bs.ID().Abev())
+				continue
+			}
 			debugLog("<== bs", "id", bs.ID().Abev())
 
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
@@ -184,7 +190,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 				continue
 			}
 
-			lbs = bs // save the local copy of the latest received block summary
+			// lbs = bs // save the local copy of the latest received block summary
 
 			// Check the committee membership
 			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)

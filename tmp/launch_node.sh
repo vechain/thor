@@ -86,4 +86,4 @@ fi
 API=$(($ID + 8668))
 CMD="$CMD --api-addr localhost:$API"
 
-echo $CMD
+$CMD
