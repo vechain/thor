@@ -150,9 +150,7 @@ func TestForkVIP191(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 
 	best := repo.BestBlock()
-	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
-		VIP191: 1,
-	})
+	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{VIP191: 1})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)

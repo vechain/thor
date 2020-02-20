@@ -9,6 +9,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/thor"
 )
 
 func (n *Node) endorsorLoop(ctx context.Context) {
@@ -37,7 +38,7 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
 	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
 
-	endorsedLeader := cache.NewRandCache(32)
+	endorsedLeader := cache.NewRandCache(int(thor.MaxBlockProposers))
 
 	for {
 		select {
@@ -88,11 +89,14 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 				ed = ed.WithSignature(sig)
 
 				// remember the leader
-				leader, _ := bs.Signer()
 				endorsedLeader.Set(leader, bs.Timestamp())
 
 				debugLog("ed ==>", "id", ed.ID().Abev())
-				n.comm.BroadcastEndorsement(ed)
+				if leader == n.master.Address() { // if the node is the leader, send the endorsement back to packerLoop
+					n.comm.SendEndorsementToFeed(ed)
+				} else {
+					n.comm.BroadcastEndorsement(ed)
+				}
 			}
 		}
 	}

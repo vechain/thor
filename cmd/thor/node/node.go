@@ -275,7 +275,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 // 6. receive & broadcast new bs
 func (n *Node) houseKeeping(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Info(str, append([]interface{}{"key", "house"}, kv...)...)
+		log.Debug(str, append([]interface{}{"key", "house"}, kv...)...)
 	}
 
 	debugLog("enter house keeping")
@@ -311,9 +311,9 @@ func (n *Node) houseKeeping(ctx context.Context) {
 
 	futureBlocks := cache.NewRandCache(32)
 
-	knownBSSender := cache.NewRandCache(32)
-	knownTSSender := cache.NewRandCache(32)
-	knownHDSender := cache.NewRandCache(32)
+	knownBSSender := cache.NewRandCache(int(thor.MaxBlockProposers))
+	knownTSSender := cache.NewRandCache(int(thor.MaxBlockProposers))
+	knownHDSender := cache.NewRandCache(int(thor.MaxBlockProposers))
 
 	for {
 		select {
@@ -340,6 +340,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if err != nil {
 				continue
 			}
+
+			// only receive new block summary once from the same leader in the current round
 			if time, ok := knownBSSender.Get(signer); ok {
 				if time.(uint64) == n.cons.Timestamp(now) {
 					debugLog("reject bs from the same leader", "id", bs.ID().Abev())
@@ -379,6 +381,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if err != nil {
 				continue
 			}
+
+			// only receive new tx set once from the same leader at the current round
 			if time, ok := knownTSSender.Get(signer); ok {
 				if time.(uint64) == n.cons.Timestamp(now) {
 					debugLog("reject ts from the same leader", "id", ts.ID().Abev())
@@ -460,6 +464,8 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if err != nil {
 				continue
 			}
+
+			// only receive new block header from the same leader once in the current round
 			if time, ok := knownHDSender.Get(signer); ok {
 				if time.(uint64) == n.cons.Timestamp(now) {
 					debugLog("reject header from the same leader", "id", header.ID().Abev())

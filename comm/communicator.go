@@ -402,3 +402,8 @@ func (c *Communicator) PeersStats() []*PeerStats {
 func (c *Communicator) SendBlockSummaryToFeed(bs *block.Summary) {
 	c.newBlockSummaryFeed.Send(&NewBlockSummaryEvent{bs})
 }
+
+// SendEndorsementToFeed ...
+func (c *Communicator) SendEndorsementToFeed(ed *block.Endorsement) {
+	c.newEndorsementFeed.Send(&NewEndorsementEvent{ed})
+}

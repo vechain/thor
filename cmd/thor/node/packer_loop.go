@@ -20,11 +20,10 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-// packerLoop is executed by the leader and committee members to
-// 1. prepare and broadcast block summary & tx set as leader
-// 2. prepare and broadcast endorsements as committee members
-// 3. pack and broadcast header as leader
-// 4. pack and commit new block as leader
+// packerLoop is executed by the leader
+// 1. prepare and broadcast block summary & tx set
+// 2. pack and broadcast header
+// 3. pack and commit new block
 func (n *Node) packerLoop(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
 		log.Info(str, append([]interface{}{"key", "packer"}, kv...)...)
@@ -251,6 +250,49 @@ func (n *Node) packerLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
+	var txsToRemove []*tx.Transaction
+	defer func() {
+		for _, tx := range txsToRemove {
+			n.txPool.Remove(tx.Hash(), tx.ID())
+		}
+	}()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	// record txs that have been handled
+	knownTxs := make(map[thor.Bytes32]struct{})
+
+	for {
+		select {
+		case <-ctx.Done():
+			// debugLog("Leave tx adopting loop", "Iter", i)
+			return
+		case <-ticker.C:
+			for _, tx := range n.txPool.Executables() {
+				// debugLog("Adopting tx", "txid", tx.ID())
+
+				if _, ok := knownTxs[tx.ID()]; ok {
+					continue
+				}
+				knownTxs[tx.ID()] = struct{}{}
+
+				err := flow.Adopt(tx)
+				switch {
+				case packer.IsGasLimitReached(err):
+					return
+				case packer.IsTxNotAdoptableNow(err):
+					continue
+				default:
+					txsToRemove = append(txsToRemove, tx)
+				}
+			}
+		}
+	}
+
 }
 
 func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
