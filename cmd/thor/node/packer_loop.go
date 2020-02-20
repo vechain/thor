@@ -285,8 +285,11 @@ func (n *Node) packerLoop(ctx context.Context) {
 }
 
 func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
-	fmt.Println("starting adopting txs")
-	defer fmt.Println("ending adopting txs")
+	start := uint64(time.Now().Unix())
+	defer func() {
+		dur := uint64(time.Now().Unix()) - start
+		fmt.Printf("func adoptTxs lasts %v seconds\n", dur)
+	}()
 
 	var txsToRemove []*tx.Transaction
 	defer func() {

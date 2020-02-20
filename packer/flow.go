@@ -32,7 +32,7 @@ type Flow struct {
 	// txSet        *block.TxSet
 	endorsements block.Endorsements
 
-	blockClose chan struct{}
+	blockClose chan interface{}
 }
 
 // NewFlow ...
@@ -42,16 +42,16 @@ func NewFlow(
 	runtime *runtime.Runtime,
 	features tx.Features,
 ) *Flow {
-	f := Flow{
+	f := &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		blockClose:   make(chan struct{}),
+		blockClose:   make(chan interface{}),
 	}
-	f.blockClose <- struct{}{}
-	return &f
+	go func() { f.blockClose <- struct{}{} }()
+	return f
 }
 
 // Close waits for blockClose and set packer == nil
