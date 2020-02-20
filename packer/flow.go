@@ -31,6 +31,8 @@ type Flow struct {
 	blockSummary *block.Summary
 	// txSet        *block.TxSet
 	endorsements block.Endorsements
+
+	blockClose chan struct{}
 }
 
 // NewFlow ...
@@ -40,19 +42,31 @@ func NewFlow(
 	runtime *runtime.Runtime,
 	features tx.Features,
 ) *Flow {
-	return &Flow{
+	f := Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		blockClose:   make(chan struct{}),
 	}
+	f.blockClose <- struct{}{}
+	return &f
 }
 
-// SetBlockSummary ...
-func (f *Flow) SetBlockSummary(bs *block.Summary) {
-	f.blockSummary = bs.Copy()
+// Close waits for blockClose and set packer == nil
+func (f *Flow) Close() {
+	<-f.blockClose
+
+	f.packer = nil
+
+	return
 }
+
+// // SetBlockSummary ...
+// func (f *Flow) SetBlockSummary(bs *block.Summary) {
+// 	f.blockSummary = bs.Copy()
+// }
 
 // GetBlockSummary ...
 func (f *Flow) GetBlockSummary() *block.Summary {
@@ -79,10 +93,10 @@ func (f *Flow) NumOfEndorsements() int {
 	return f.endorsements.Len()
 }
 
-// Txs ...
-func (f *Flow) Txs() tx.Transactions {
-	return f.txs
-}
+// // Txs ...
+// func (f *Flow) Txs() tx.Transactions {
+// 	return f.txs
+// }
 
 // PackTxSetAndBlockSummary packs the tx set and block summary
 func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (bs *block.Summary, ts *block.TxSet, err error) {
@@ -158,6 +172,12 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // If the tx is valid and can be executed on current state (regardless of VM error),
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
+	// f.Adopt(tx) is called by the go routine that executes func (n *Node) adoptTxs(ctx, flow).
+	// It is possible that flow is closed while this function is still on. Therefore, we need to
+	// block f.Close() during the execution of f.Adopt(tx)
+	<-f.blockClose
+	defer func() { f.blockClose <- struct{}{} }()
+
 	origin, _ := tx.Origin()
 	if f.runtime.Context().Number >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
@@ -215,6 +235,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	f.gasUsed += receipt.GasUsed
 	f.receipts = append(f.receipts, receipt)
 	f.txs = append(f.txs, tx)
+
 	return nil
 }
 

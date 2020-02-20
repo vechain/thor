@@ -45,7 +45,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 	debugLog("synchronization process done")
 
 	var (
-		flow *packer.Flow
+		flow = new(packer.Flow)
 		// flow is activated if it packs bs and ts and is in its scheduled round
 		err    error
 		ticker = time.NewTicker(time.Second)
@@ -54,7 +54,6 @@ func (n *Node) packerLoop(ctx context.Context) {
 		minTxAdoptDur uint64 = 2 // minimum duration (sec) needs to adopt txs from txPool
 		txAdoptStart  uint64     // starting time of the loop that adopts txs
 		cancel        context.CancelFunc
-		// goes          co.Goes
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
@@ -77,7 +76,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			now := uint64(time.Now().Unix())
 			best := n.repo.BestBlock()
 
-			if flow == nil {
+			if flow.IsEmpty() {
 				// Schedule a round to be the leader
 				flow, err = n.packer.Schedule(best.Header(), now)
 				if err != nil {
@@ -93,8 +92,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
-				flow = nil
 				cancel()
+				flow.Close()
+				// flow = nil
 
 				debugLog("re-schedule packer due to new best block")
 				continue
@@ -108,7 +108,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// if timeout, reset
 			if now > flow.When()+thor.BlockInterval {
 				cancel()
-				flow = nil
+				flow.Close()
+				// flow = nil
 
 				debugLog("re-schedule packer due to timeout")
 				continue
@@ -130,7 +131,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			cancel()
 			bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 			if err != nil {
-				flow = nil
+				// flow = nil
+				flow.Close()
 				errLog("pack bs and ts", "err", err)
 				continue
 			}
@@ -181,7 +183,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		case ev := <-newEndorsementCh:
 			// proceed only when the node has already packed a block summary
-			if flow == nil || !flow.HasPackedBlockSummary() {
+			if flow.IsEmpty() || !flow.HasPackedBlockSummary() {
 				continue
 			}
 
@@ -190,8 +192,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
-				flow = nil
 				cancel()
+				flow.Close()
+				// flow = nil
 
 				debugLog("re-schedule packer due to new best block")
 				continue
@@ -199,8 +202,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
-				flow = nil
 				cancel()
+				flow.Close()
+				// flow = nil
 
 				debugLog("re-schedule packer due to timeout")
 				continue
@@ -232,25 +236,29 @@ func (n *Node) packerLoop(ctx context.Context) {
 			newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 			if err != nil {
 				errLog("pack block", "err", err)
-				flow = nil
+				flow.Close()
+				// flow = nil
 				continue
 			}
 			blockDone = mclock.Now()
 
 			// reset flow
-			flow = nil
+			flow.Close()
+			// flow = nil
 
 			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {
 				errLog("commit state", "err", err)
-				flow = nil
+				flow.Close()
+				// flow = nil
 				continue
 			}
 
 			prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
 				errLog("commit block", "err", err)
-				flow = nil
+				flow.Close()
+				// flow = nil
 				continue
 			}
 			commitDone = mclock.Now()
@@ -314,10 +322,6 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 					continue
 				}
 				knownTxs[tx.ID()] = struct{}{}
-
-				if flow == nil {
-					return
-				}
 
 				err := flow.Adopt(tx)
 				switch {
