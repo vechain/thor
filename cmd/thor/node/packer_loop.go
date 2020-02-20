@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
@@ -122,37 +121,44 @@ func (n *Node) packerLoop(ctx context.Context) {
 			txSetBlockSummaryDone = mclock.Now()
 
 			// lbs = bs // save a local copy of the latest block summary
+
 			debugLog("bs ==>", "id", bs.ID().Abev())
-			n.comm.BroadcastBlockSummary(bs)
+			// n.comm.BroadcastBlockSummary(bs)
+
+			// send the new block summary to comm.newBlockSummaryCh to send it to housekeeping
+			// and endorsor loops for broadcasting and endorsement, respectively. packer loop
+			// does not take the responsibility of endorsing block summary
+			n.comm.SendBlockSummaryToFeed(bs)
+
 			if ts != nil {
 				debugLog("ts ==>", "id", ts.ID().Abev())
 				n.comm.BroadcastTxSet(ts)
 			}
 
-			// test its committee membership and if elected, endorse the new block summary
-			ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
-			if err != nil {
-				errLog("check committee", "err", err)
-				continue
-			}
-			if ok {
-				// Endorse the block summary
-				ed := block.NewEndorsement(bs, proof)
-				sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
-				if err != nil {
-					errLog("Signing endorsement", "err", err)
-					continue
-				}
-				ed = ed.WithSignature(sig)
+			// // test its committee membership and if elected, endorse the new block summary
+			// ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
+			// if err != nil {
+			// 	errLog("check committee", "err", err)
+			// 	continue
+			// }
+			// if ok {
+			// 	// Endorse the block summary
+			// 	ed := block.NewEndorsement(bs, proof)
+			// 	sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
+			// 	if err != nil {
+			// 		errLog("Signing endorsement", "err", err)
+			// 		continue
+			// 	}
+			// 	ed = ed.WithSignature(sig)
 
-				if ok := flow.AddEndoresement(ed); !ok {
-					debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
-				} else {
-					debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
-					debugLog("ed ==>", "id", ed.ID().Abev())
-					n.comm.BroadcastEndorsement(ed)
-				}
-			}
+			// 	if ok := flow.AddEndoresement(ed); !ok {
+			// 		debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
+			// 	} else {
+			// 		debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
+			// 		debugLog("ed ==>", "id", ed.ID().Abev())
+			// 		n.comm.BroadcastEndorsement(ed)
+			// 	}
+			// }
 
 		case ev := <-newEndorsementCh:
 			// proceed only when the node has already packed a block summary

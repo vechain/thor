@@ -397,3 +397,8 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	})
 	return stats
 }
+
+// SendBlockSummaryToFeed ...
+func (c *Communicator) SendBlockSummaryToFeed(bs *block.Summary) {
+	c.newBlockSummaryFeed.Send(&NewBlockSummaryEvent{bs})
+}
