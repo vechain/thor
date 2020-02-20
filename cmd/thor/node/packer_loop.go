@@ -50,7 +50,11 @@ func (n *Node) packerLoop(ctx context.Context) {
 		err    error
 		ticker = time.NewTicker(time.Second)
 
-		maxTxAdoptDur = 3 // max number of seconds allowed to prepare transactions
+		// maxTxAdoptDur = 3 // max number of seconds allowed to prepare transactions
+		minTxAdoptDur uint64 = 2 // minimum duration (sec) needs to adopt txs from txPool
+		txAdoptStart  uint64     // starting time of the loop that adopts txs
+		cancel        context.CancelFunc
+		// goes          co.Goes
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
@@ -80,11 +84,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 					errLog("Schedule", "err", err)
 					continue
 				}
+
+				_ctx, _cancel := context.WithCancel(ctx)
+				go n.adoptTxs(_ctx, flow)
+				cancel = _cancel
+				txAdoptStart = now
 			}
 
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
+				cancel()
+
 				debugLog("re-schedule packer due to new best block")
 				continue
 			}
@@ -96,7 +107,9 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			// if timeout, reset
 			if now > flow.When()+thor.BlockInterval {
+				cancel()
 				flow = nil
+
 				debugLog("re-schedule packer due to timeout")
 				continue
 			}
@@ -108,7 +121,14 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 			start = mclock.Now()
 
-			bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
+			// bs, ts, err := n.packTxSetAndBlockSummary(flow, maxTxAdoptDur)
+
+			waitTime := minTxAdoptDur - (now - txAdoptStart)
+			if waitTime > 0 {
+				<-time.NewTimer(time.Second * time.Duration(waitTime)).C
+			}
+			cancel()
+			bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 			if err != nil {
 				flow = nil
 				errLog("pack bs and ts", "err", err)
@@ -171,6 +191,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check whether the best block has changed
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				flow = nil
+				cancel()
+
 				debugLog("re-schedule packer due to new best block")
 				continue
 			}
@@ -178,6 +200,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			// Check timeout
 			if now > flow.When()+thor.BlockInterval {
 				flow = nil
+				cancel()
+
 				debugLog("re-schedule packer due to timeout")
 				continue
 			}
@@ -253,12 +277,18 @@ func (n *Node) packerLoop(ctx context.Context) {
 }
 
 func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
+	fmt.Println("starting adopting txs")
+	defer fmt.Println("ending adopting txs")
+
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
 			n.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
+
+	// timer := time.NewTimer(time.Second * maxDur)
+	// defer timer.Stop()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -269,16 +299,25 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 	for {
 		select {
 		case <-ctx.Done():
-			// debugLog("Leave tx adopting loop", "Iter", i)
 			return
+		// case <-timer.C:
+		// 	return
 		case <-ticker.C:
 			for _, tx := range n.txPool.Executables() {
-				// debugLog("Adopting tx", "txid", tx.ID())
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
 
 				if _, ok := knownTxs[tx.ID()]; ok {
 					continue
 				}
 				knownTxs[tx.ID()] = struct{}{}
+
+				if flow == nil {
+					return
+				}
 
 				err := flow.Adopt(tx)
 				switch {
@@ -295,46 +334,49 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 
 }
 
-func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
-	var txsToRemove []*tx.Transaction
-	defer func() {
-		for _, tx := range txsToRemove {
-			n.txPool.Remove(tx.Hash(), tx.ID())
-		}
-	}()
+// func (n *Node) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) (*block.Summary, *block.TxSet, error) {
+// var txsToRemove []*tx.Transaction
+// defer func() {
+// 	for _, tx := range txsToRemove {
+// 		n.txPool.Remove(tx.Hash(), tx.ID())
+// 	}
+// }()
 
-	done := make(chan struct{})
-	go func() {
-		time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
-		done <- struct{}{}
-	}()
+// done := make(chan struct{})
+// go func() {
+// 	time.Sleep(time.Duration(maxTxPackingDur) * time.Second)
+// 	done <- struct{}{}
+// }()
 
-	for _, tx := range n.txPool.Executables() {
-		select {
-		case <-done:
-			// debugLog("Leave tx adopting loop", "Iter", i)
-			break
-		default:
-		}
-		// debugLog("Adopting tx", "txid", tx.ID())
-		err := flow.Adopt(tx)
-		switch {
-		case packer.IsGasLimitReached(err):
-			break
-		case packer.IsTxNotAdoptableNow(err):
-			continue
-		default:
-			txsToRemove = append(txsToRemove, tx)
-		}
-	}
+// for _, tx := range n.txPool.Executables() {
+// 	select {
+// 	case <-done:
+// 		// debugLog("Leave tx adopting loop", "Iter", i)
+// 		break
+// 	default:
+// 	}
+// 	// debugLog("Adopting tx", "txid", tx.ID())
+// 	err := flow.Adopt(tx)
+// 	switch {
+// 	case packer.IsGasLimitReached(err):
+// 		break
+// 	case packer.IsTxNotAdoptableNow(err):
+// 		continue
+// 	default:
+// 		txsToRemove = append(txsToRemove, tx)
+// 	}
+// }
 
-	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
-	if err != nil {
-		return nil, nil, err
-	}
+// 	<-time.NewTimer(time.Second * waitTime)
+// 	cancel()
 
-	return bs, ts, nil
-}
+// 	bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
+// 	if err != nil {
+// 		return nil, nil, err
+// 	}
+
+// 	return bs, ts, nil
+// }
 
 func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
 	blockID := blk.Header().ID()

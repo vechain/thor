@@ -14,7 +14,7 @@ import (
 
 func (n *Node) endorsorLoop(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Info(str, append([]interface{}{"key", "edlp"}, kv...)...)
+		log.Debug(str, append([]interface{}{"key", "edlp"}, kv...)...)
 	}
 
 	errLog := func(str string, kv ...interface{}) {
