@@ -11,6 +11,14 @@ import (
 
 type (
 	entry struct {
+		Endorsor thor.Address
+		Identity thor.Bytes32
+		Active   bool
+		Prev     *thor.Address `rlp:"nil"`
+		Next     *thor.Address `rlp:"nil"`
+	}
+
+	entry2 struct {
 		Endorsor     thor.Address
 		Identity     thor.Bytes32
 		Active       bool
@@ -34,11 +42,24 @@ func (e *entry) IsEmpty() bool {
 	return e.Endorsor.IsZero() &&
 		e.Identity.IsZero() &&
 		!e.Active &&
-		e.VrfPublicKey.IsZero() &&
 		e.Prev == nil &&
 		e.Next == nil
 }
 
 func (e *entry) IsLinked() bool {
+	return e.Prev != nil || e.Next != nil
+}
+
+// IsEmpty returns whether the entry can be treated as empty.
+func (e *entry2) IsEmpty() bool {
+	return e.Endorsor.IsZero() &&
+		e.Identity.IsZero() &&
+		!e.Active &&
+		e.VrfPublicKey.IsZero() &&
+		e.Prev == nil &&
+		e.Next == nil
+}
+
+func (e *entry2) IsLinked() bool {
 	return e.Prev != nil || e.Next != nil
 }

@@ -21,7 +21,10 @@ import (
 // Builtin contracts binding.
 var (
 	Params    = &paramsContract{mustLoadContract("Params")}
-	Authority = &authorityContract{mustLoadContract("Authority")}
+	Authority = &authorityContract{
+		mustLoadContract("Authority"),
+		mustLoadContract("AuthorityV2"),
+	}
 	Energy    = &energyContract{mustLoadContract("Energy")}
 	Executor  = &executorContract{mustLoadContract("Executor")}
 	Prototype = &prototypeContract{mustLoadContract("Prototype")}
@@ -34,7 +37,10 @@ var (
 
 type (
 	paramsContract    struct{ *contract }
-	authorityContract struct{ *contract }
+	authorityContract struct {
+		*contract
+		V2 *contract
+	}
 	energyContract    struct{ *contract }
 	executorContract  struct{ *contract }
 	prototypeContract struct{ *contract }

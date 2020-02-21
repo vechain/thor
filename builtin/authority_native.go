@@ -29,6 +29,29 @@ func init() {
 		}},
 		{"native_add", func(env *xenv.Environment) []interface{} {
 			var args struct {
+				NodeMaster common.Address
+				Endorsor   common.Address
+				Identity   common.Hash
+			}
+			env.ParseArgs(&args)
+
+			env.UseGas(thor.SloadGas)
+			ok, err := Authority.Native(env.State()).Add(
+				thor.Address(args.NodeMaster),
+				thor.Address(args.Endorsor),
+				thor.Bytes32(args.Identity))
+			if err != nil {
+				panic(err)
+			}
+
+			if ok {
+				env.UseGas(thor.SstoreSetGas)
+				env.UseGas(thor.SstoreResetGas)
+			}
+			return []interface{}{ok}
+		}},
+		{"native_add2", func(env *xenv.Environment) []interface{} {
+			var args struct {
 				NodeMaster   common.Address
 				Endorsor     common.Address
 				Identity     common.Hash
@@ -37,7 +60,7 @@ func init() {
 			env.ParseArgs(&args)
 
 			env.UseGas(thor.SloadGas)
-			ok, err := Authority.Native(env.State()).Add(
+			ok, err := Authority.Native(env.State()).Add2(
 				thor.Address(args.NodeMaster),
 				thor.Address(args.Endorsor),
 				thor.Bytes32(args.Identity),
@@ -57,7 +80,18 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			ok, err := Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
+
+			var (
+				ok  bool
+				err error
+			)
+
+			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
+				ok, err = Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
+			} else {
+				ok, err = Authority.Native(env.State()).Revoke2(thor.Address(nodeMaster))
+			}
+
 			if err != nil {
 				panic(err)
 			}
@@ -71,7 +105,21 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, identity, active, vrfPublicKey, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+
+			listed, endorsor, identity, active, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			if err != nil {
+				panic(err)
+			}
+
+			return []interface{}{listed, endorsor, identity, active}
+		}},
+		{"native_get2", func(env *xenv.Environment) []interface{} {
+			var nodeMaster common.Address
+			env.ParseArgs(&nodeMaster)
+
+			env.UseGas(thor.SloadGas * 2)
+
+			listed, endorsor, identity, active, vrfPublicKey, err := Authority.Native(env.State()).Get2(thor.Address(nodeMaster))
 			if err != nil {
 				panic(err)
 			}
@@ -94,7 +142,18 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas)
-			next, err := Authority.Native(env.State()).Next(thor.Address(nodeMaster))
+
+			var (
+				next *thor.Address
+				err  error
+			)
+
+			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
+				next, err = Authority.Native(env.State()).Next(thor.Address(nodeMaster))
+			} else {
+				next, err = Authority.Native(env.State()).Next2(thor.Address(nodeMaster))
+			}
+
 			if err != nil {
 				panic(err)
 			}
@@ -108,7 +167,19 @@ func init() {
 			env.ParseArgs(&nodeMaster)
 
 			env.UseGas(thor.SloadGas * 2)
-			listed, endorsor, _, _, _, err := Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+
+			var (
+				listed   bool
+				endorsor thor.Address
+				err      error
+			)
+
+			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
+				listed, endorsor, _, _, err = Authority.Native(env.State()).Get(thor.Address(nodeMaster))
+			} else {
+				listed, endorsor, _, _, _, err = Authority.Native(env.State()).Get2(thor.Address(nodeMaster))
+			}
+
 			if err != nil {
 				panic(err)
 			}
@@ -130,7 +201,7 @@ func init() {
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
-	abi := Authority.NativeABI()
+	abi := Authority.V2.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{

@@ -249,12 +249,7 @@ func TestAuthorityNative(t *testing.T) {
 		master3   = thor.BytesToAddress([]byte("master3"))
 		endorsor3 = thor.BytesToAddress([]byte("endorsor3"))
 		identity3 = thor.BytesToBytes32([]byte("identity3"))
-
-		executor = thor.BytesToAddress([]byte("e"))
-
-		vk1 = thor.BytesToBytes32([]byte("vk1"))
-		vk2 = thor.BytesToBytes32([]byte("vk2"))
-		vk3 = thor.BytesToBytes32([]byte("vk3"))
+		executor  = thor.BytesToAddress([]byte("e"))
 	)
 
 	db := muxdb.NewMem()
@@ -299,19 +294,140 @@ func TestAuthorityNative(t *testing.T) {
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("add", master1, endorsor1, identity1, vk1).
+	test.Case("add", master1, endorsor1, identity1).
 		ShouldLog(candidateEvent(master1, "added")).
 		Assert(t)
 
-	test.Case("add", master2, endorsor2, identity2, vk2).
+	test.Case("add", master2, endorsor2, identity2).
 		ShouldLog(candidateEvent(master2, "added")).
 		Assert(t)
 
-	test.Case("add", master3, endorsor3, identity3, vk3).
+	test.Case("add", master3, endorsor3, identity3).
 		ShouldLog(candidateEvent(master3, "added")).
 		Assert(t)
 
 	test.Case("get", master1).
+		ShouldOutput(true, endorsor1, identity1, true).
+		Assert(t)
+
+	test.Case("first").
+		ShouldOutput(master1).
+		Assert(t)
+
+	test.Case("next", master1).
+		ShouldOutput(master2).
+		Assert(t)
+
+	test.Case("next", master2).
+		ShouldOutput(master3).
+		Assert(t)
+
+	test.Case("next", master3).
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("add", master1, endorsor1, identity1).
+		Caller(thor.BytesToAddress([]byte("other"))).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("add", master1, endorsor1, identity1).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	test.Case("revoke", master1).
+		ShouldLog(candidateEvent(master1, "revoked")).
+		Assert(t)
+
+	// duped even revoked
+	test.Case("add", master1, endorsor1, identity1).
+		ShouldVMError(errReverted).
+		Assert(t)
+
+	// any one can revoke a candidate if out of endorsement
+	st.SetBalance(endorsor2, big.NewInt(1))
+	test.Case("revoke", master2).
+		Caller(thor.BytesToAddress([]byte("some one"))).
+		Assert(t)
+
+}
+
+func TestAuthorityV2Native(t *testing.T) {
+	var (
+		master1   = thor.BytesToAddress([]byte("master1"))
+		endorsor1 = thor.BytesToAddress([]byte("endorsor1"))
+		identity1 = thor.BytesToBytes32([]byte("identity1"))
+
+		master2   = thor.BytesToAddress([]byte("master2"))
+		endorsor2 = thor.BytesToAddress([]byte("endorsor2"))
+		identity2 = thor.BytesToBytes32([]byte("identity2"))
+
+		master3   = thor.BytesToAddress([]byte("master3"))
+		endorsor3 = thor.BytesToAddress([]byte("endorsor3"))
+		identity3 = thor.BytesToBytes32([]byte("identity3"))
+
+		executor = thor.BytesToAddress([]byte("e"))
+
+		vk1 = thor.BytesToBytes32([]byte("vk1"))
+		vk2 = thor.BytesToBytes32([]byte("vk2"))
+		vk3 = thor.BytesToBytes32([]byte("vk3"))
+	)
+
+	db := muxdb.NewMem()
+	b0 := buildGenesis(db, func(state *state.State) error {
+		state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes())
+		state.SetBalance(thor.Address(endorsor1), thor.InitialProposerEndorsement)
+		state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
+		builtin.Params.Native(state).Set(thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
+		builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement)
+		return nil
+	})
+	repo, _ := chain.NewRepository(db, b0)
+	st := state.New(db, b0.Header().StateRoot())
+	chain := repo.NewChain(b0.Header().ID())
+
+	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
+
+	candidateEvent := func(nodeMaster thor.Address, action string) *tx.Event {
+		ev, _ := builtin.Authority.V2.ABI.EventByName("Candidate")
+		var b32 thor.Bytes32
+		copy(b32[:], action)
+		data, _ := ev.Encode(b32)
+		return &tx.Event{
+			Address: builtin.Authority.Address,
+			Topics:  []thor.Bytes32{ev.ID(), thor.BytesToBytes32(nodeMaster[:])},
+			Data:    data,
+		}
+	}
+
+	test := &ctest{
+		rt:     rt,
+		abi:    builtin.Authority.V2.ABI,
+		to:     builtin.Authority.Address,
+		caller: executor,
+	}
+
+	test.Case("executor").
+		ShouldOutput(executor).
+		Assert(t)
+
+	test.Case("first").
+		ShouldOutput(thor.Address{}).
+		Assert(t)
+
+	test.Case("add2", master1, endorsor1, identity1, vk1).
+		ShouldLog(candidateEvent(master1, "added")).
+		Assert(t)
+
+	test.Case("add2", master2, endorsor2, identity2, vk2).
+		ShouldLog(candidateEvent(master2, "added")).
+		Assert(t)
+
+	test.Case("add2", master3, endorsor3, identity3, vk3).
+		ShouldLog(candidateEvent(master3, "added")).
+		Assert(t)
+
+	test.Case("get2", master1).
 		ShouldOutput(true, endorsor1, identity1, true, vk1).
 		Assert(t)
 
@@ -331,12 +447,12 @@ func TestAuthorityNative(t *testing.T) {
 		ShouldOutput(thor.Address{}).
 		Assert(t)
 
-	test.Case("add", master1, endorsor1, identity1, vk1).
+	test.Case("add2", master1, endorsor1, identity1, vk1).
 		Caller(thor.BytesToAddress([]byte("other"))).
 		ShouldVMError(errReverted).
 		Assert(t)
 
-	test.Case("add", master1, endorsor1, identity1, vk1).
+	test.Case("add2", master1, endorsor1, identity1, vk1).
 		ShouldVMError(errReverted).
 		Assert(t)
 
@@ -345,7 +461,7 @@ func TestAuthorityNative(t *testing.T) {
 		Assert(t)
 
 	// duped even revoked
-	test.Case("add", master1, endorsor1, identity1, vk1).
+	test.Case("add2", master1, endorsor1, identity1, vk1).
 		ShouldVMError(errReverted).
 		Assert(t)
 

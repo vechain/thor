@@ -79,6 +79,7 @@ func (env *Environment) TransactionContext() *TransactionContext { return env.tx
 func (env *Environment) BlockContext() *BlockContext             { return env.blockCtx }
 func (env *Environment) Caller() thor.Address                    { return thor.Address(env.contract.Caller()) }
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
+func (env *Environment) Contract() *vm.Contract                  { return env.contract }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {

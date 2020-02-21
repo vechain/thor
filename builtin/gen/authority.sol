@@ -11,14 +11,13 @@ contract Authority {
         return AuthorityNative(this).native_executor();
     }
 
-    function add(address _nodeMaster, address _endorsor, bytes32 _identity, bytes32 _vrfPublicKey) public {
+    function add(address _nodeMaster, address _endorsor, bytes32 _identity) public {
         require(_nodeMaster != 0, "builtin: invalid node master");
         require(_endorsor != 0, "builtin: invalid endorsor");
         require(_identity != 0, "builtin: invalid identity");
-        require(_vrfPublicKey != 0, "builtin: invalid vrf public key");
         require(msg.sender == executor(), "builtin: executor required");
 
-        require(AuthorityNative(this).native_add(_nodeMaster, _endorsor, _identity, _vrfPublicKey), "builtin: already exists");
+        require(AuthorityNative(this).native_add(_nodeMaster, _endorsor, _identity), "builtin: already exists");
 
         emit Candidate(_nodeMaster, "added");
     }
@@ -30,7 +29,7 @@ contract Authority {
         emit Candidate(_nodeMaster, "revoked");
     }
 
-    function get(address _nodeMaster) public view returns(bool listed, address endorsor, bytes32 identity, bool active, bytes32 vrfPublicKey) {
+    function get(address _nodeMaster) public view returns(bool listed, address endorsor, bytes32 identity, bool active) {
         return AuthorityNative(this).native_get(_nodeMaster);
     }
 
@@ -47,9 +46,9 @@ contract Authority {
 
 contract AuthorityNative {
     function native_executor() public view returns(address);
-    function native_add(address nodeMaster, address endorsor, bytes32 identity, bytes32 vrfPublicKey) public returns(bool);
+    function native_add(address nodeMaster, address endorsor, bytes32 identity) public returns(bool);
     function native_revoke(address nodeMaster) public returns(bool);
-    function native_get(address nodeMaster) public view returns(bool, address, bytes32, bool, bytes32);
+    function native_get(address nodeMaster) public view returns(bool, address, bytes32, bool);
     function native_first() public view returns(address);
     function native_next(address nodeMaster) public view returns(address);
     function native_isEndorsed(address nodeMaster) public view returns(bool);

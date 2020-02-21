@@ -42,7 +42,29 @@ func (a *Authority) getEntry(nodeMaster thor.Address) (*entry, error) {
 	return &entry, nil
 }
 
+func (a *Authority) getEntry2(nodeMaster thor.Address) (*entry2, error) {
+	var entry entry2
+	if err := a.state.DecodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func(raw []byte) error {
+		if len(raw) == 0 {
+			return nil
+		}
+		return rlp.DecodeBytes(raw, &entry)
+	}); err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
 func (a *Authority) setEntry(nodeMaster thor.Address, entry *entry) error {
+	return a.state.EncodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func() ([]byte, error) {
+		if entry.IsEmpty() {
+			return nil, nil
+		}
+		return rlp.EncodeToBytes(entry)
+	})
+}
+
+func (a *Authority) setEntry2(nodeMaster thor.Address, entry *entry2) error {
 	return a.state.EncodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func() ([]byte, error) {
 		if entry.IsEmpty() {
 			return nil, nil
@@ -71,9 +93,28 @@ func (a *Authority) setAddressPtr(key thor.Bytes32, addr *thor.Address) error {
 }
 
 // Get get candidate by node master address.
-func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, vrfPublicKey thor.Bytes32, err error) {
+func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, err error) {
 	var entry *entry
 	if entry, err = a.getEntry(nodeMaster); err != nil {
+		return
+	}
+	if entry.IsLinked() {
+		return true, entry.Endorsor, entry.Identity, entry.Active, nil
+	}
+	// if it's the only node, IsLinked will be false.
+	// check whether it's the head.
+	var ptr *thor.Address
+	if ptr, err = a.getAddressPtr(headKey); err != nil {
+		return
+	}
+	listed = ptr != nil && *ptr == nodeMaster
+	return listed, entry.Endorsor, entry.Identity, entry.Active, nil
+}
+
+// Get2 get candidate by node master address. (vip193)
+func (a *Authority) Get2(nodeMaster thor.Address) (listed bool, endorsor thor.Address, identity thor.Bytes32, active bool, vrfPublicKey thor.Bytes32, err error) {
+	var entry *entry2
+	if entry, err = a.getEntry2(nodeMaster); err != nil {
 		return
 	}
 	if entry.IsLinked() {
@@ -90,7 +131,7 @@ func (a *Authority) Get(nodeMaster thor.Address) (listed bool, endorsor thor.Add
 }
 
 // Add add a new candidate.
-func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32, vrfPublicKey thor.Bytes32) (bool, error) {
+func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32) (bool, error) {
 	entry, err := a.getEntry(nodeMaster)
 	if err != nil {
 		return false, err
@@ -102,7 +143,7 @@ func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity
 	entry.Endorsor = endorsor
 	entry.Identity = identity
 	entry.Active = true // defaults to active
-	entry.VrfPublicKey = vrfPublicKey
+	// entry.VrfPublicKey = vrfPublicKey
 
 	tailPtr, err := a.getAddressPtr(tailKey)
 	if err != nil {
@@ -129,6 +170,51 @@ func (a *Authority) Add(nodeMaster thor.Address, endorsor thor.Address, identity
 	}
 
 	if err := a.setEntry(nodeMaster, entry); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// Add2 add a new candidate. (vip193)
+func (a *Authority) Add2(nodeMaster thor.Address, endorsor thor.Address, identity thor.Bytes32, vrfPublicKey thor.Bytes32) (bool, error) {
+	entry, err := a.getEntry2(nodeMaster)
+	if err != nil {
+		return false, err
+	}
+	if !entry.IsEmpty() {
+		return false, nil
+	}
+
+	entry.Endorsor = endorsor
+	entry.Identity = identity
+	entry.Active = true // defaults to active
+	entry.VrfPublicKey = vrfPublicKey
+
+	tailPtr, err := a.getAddressPtr(tailKey)
+	if err != nil {
+		return false, err
+	}
+	entry.Prev = tailPtr
+
+	if err := a.setAddressPtr(tailKey, &nodeMaster); err != nil {
+		return false, err
+	}
+	if tailPtr == nil {
+		if err := a.setAddressPtr(headKey, &nodeMaster); err != nil {
+			return false, err
+		}
+	} else {
+		tailEntry, err := a.getEntry2(*tailPtr)
+		if err != nil {
+			return false, err
+		}
+		tailEntry.Next = &nodeMaster
+		if err := a.setEntry2(*tailPtr, tailEntry); err != nil {
+			return false, err
+		}
+	}
+
+	if err := a.setEntry2(nodeMaster, entry); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -184,6 +270,55 @@ func (a *Authority) Revoke(nodeMaster thor.Address) (bool, error) {
 	return true, nil
 }
 
+// Revoke2 revoke candidate by given node master address. (vip193)
+func (a *Authority) Revoke2(nodeMaster thor.Address) (bool, error) {
+	entry, err := a.getEntry2(nodeMaster)
+	if err != nil {
+		return false, err
+	}
+	if !entry.IsLinked() {
+		return false, nil
+	}
+
+	if entry.Prev == nil {
+		if err := a.setAddressPtr(headKey, entry.Next); err != nil {
+			return false, err
+		}
+	} else {
+		prevEntry, err := a.getEntry2(*entry.Prev)
+		if err != nil {
+			return false, err
+		}
+		prevEntry.Next = entry.Next
+		if err := a.setEntry2(*entry.Prev, prevEntry); err != nil {
+			return false, err
+		}
+	}
+
+	if entry.Next == nil {
+		if err := a.setAddressPtr(tailKey, entry.Prev); err != nil {
+			return false, err
+		}
+	} else {
+		nextEntry, err := a.getEntry2(*entry.Next)
+		if err != nil {
+			return false, err
+		}
+		nextEntry.Prev = entry.Prev
+		if err := a.setEntry2(*entry.Next, nextEntry); err != nil {
+			return false, err
+		}
+	}
+
+	entry.Next = nil
+	entry.Prev = nil     // unlist
+	entry.Active = false // and set to inactive
+	if err := a.setEntry2(nodeMaster, entry); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Update update candidate's status.
 func (a *Authority) Update(nodeMaster thor.Address, active bool) (bool, error) {
 	entry, err := a.getEntry(nodeMaster)
@@ -200,6 +335,22 @@ func (a *Authority) Update(nodeMaster thor.Address, active bool) (bool, error) {
 	return true, nil
 }
 
+// Update2 update candidate's status. (vip193)
+func (a *Authority) Update2(nodeMaster thor.Address, active bool) (bool, error) {
+	entry, err := a.getEntry2(nodeMaster)
+	if err != nil {
+		return false, err
+	}
+	if !entry.IsLinked() {
+		return false, nil
+	}
+	entry.Active = active
+	if err := a.setEntry2(nodeMaster, entry); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Candidates picks a batch of candidates up to limit, that satisfy given endorsement.
 func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate, error) {
 	ptr, err := a.getAddressPtr(headKey)
@@ -209,6 +360,36 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate
 	candidates := make([]*Candidate, 0, limit)
 	for ptr != nil && uint64(len(candidates)) < limit {
 		entry, err := a.getEntry(*ptr)
+		if err != nil {
+			return nil, err
+		}
+		bal, err := a.state.GetBalance(entry.Endorsor)
+		if err != nil {
+			return nil, err
+		}
+		if bal.Cmp(endorsement) >= 0 {
+			candidates = append(candidates, &Candidate{
+				NodeMaster: *ptr,
+				Endorsor:   entry.Endorsor,
+				Identity:   entry.Identity,
+				Active:     entry.Active,
+				// VrfPublicKey: entry.VrfPublicKey,
+			})
+		}
+		ptr = entry.Next
+	}
+	return candidates, nil
+}
+
+// Candidates2 picks a batch of candidates up to limit, that satisfy given endorsement. (vip193)
+func (a *Authority) Candidates2(endorsement *big.Int, limit uint64) ([]*Candidate, error) {
+	ptr, err := a.getAddressPtr(headKey)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]*Candidate, 0, limit)
+	for ptr != nil && uint64(len(candidates)) < limit {
+		entry, err := a.getEntry2(*ptr)
 		if err != nil {
 			return nil, err
 		}
@@ -243,6 +424,30 @@ func (a *Authority) AllCandidates() ([]*Candidate, error) {
 			return nil, err
 		}
 		candidates = append(candidates, &Candidate{
+			NodeMaster: *ptr,
+			Endorsor:   entry.Endorsor,
+			Identity:   entry.Identity,
+			Active:     entry.Active,
+			// VrfPublicKey: entry.VrfPublicKey,
+		})
+		ptr = entry.Next
+	}
+	return candidates, nil
+}
+
+// AllCandidates2 lists all registered candidates. (vip193)
+func (a *Authority) AllCandidates2() ([]*Candidate, error) {
+	ptr, err := a.getAddressPtr(headKey)
+	if err != nil {
+		return nil, err
+	}
+	var candidates []*Candidate
+	for ptr != nil {
+		entry, err := a.getEntry2(*ptr)
+		if err != nil {
+			return nil, err
+		}
+		candidates = append(candidates, &Candidate{
 			NodeMaster:   *ptr,
 			Endorsor:     entry.Endorsor,
 			Identity:     entry.Identity,
@@ -262,6 +467,15 @@ func (a *Authority) First() (*thor.Address, error) {
 // Next returns address of next node master address after given node master address.
 func (a *Authority) Next(nodeMaster thor.Address) (*thor.Address, error) {
 	entry, err := a.getEntry(nodeMaster)
+	if err != nil {
+		return nil, err
+	}
+	return entry.Next, nil
+}
+
+// Next2 returns address of next node master address after given node master address. (vip193)
+func (a *Authority) Next2(nodeMaster thor.Address) (*thor.Address, error) {
+	entry, err := a.getEntry2(nodeMaster)
 	if err != nil {
 		return nil, err
 	}
