@@ -344,7 +344,7 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 	}
 
 	for _, u := range updates {
-		authority.Update(u.Address, u.Active)
+		authority.Update2(u.Address, u.Active)
 		if !candidates.Update(u.Address, u.Active) {
 			// should never happen
 			panic("something wrong with candidates list")
@@ -362,7 +362,7 @@ func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidate
 	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
-		ac, err := authority.AllCandidates()
+		ac, err := authority.AllCandidates2()
 		if err != nil {
 			return nil, nil, nil, err
 		}

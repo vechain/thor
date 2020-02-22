@@ -55,16 +55,7 @@ type Node struct {
 	skipLogs       bool
 	logDBFailed    bool
 	bandwidth      bandwidth.Bandwidth
-
-	// mu       sync.Mutex
-	// beacon   thor.Bytes32
-	// seed     thor.Bytes32
-	// roundNum uint32
-	// epochNum uint32
-
-	// rw  sync.RWMutex
-	// bs  *block.Summary
-	// eds map[thor.Address]*block.Endorsement
+	forkConfig     thor.ForkConfig
 }
 
 // New ...
@@ -92,6 +83,7 @@ func New(
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
 	}
 }
 
@@ -109,7 +101,22 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
 		n.goes.Go(func() { n.packerLoop(ctx) })
-		n.goes.Go(func() { n.endorsorLoop(ctx) })
+
+		ticker := time.NewTicker(time.Second)
+	FOR:
+		for {
+			select {
+			case <-ctx.Done():
+				break FOR
+			case <-ticker.C:
+				if !n.isNextBlockVip193() {
+					continue
+				}
+				n.goes.Go(func() { n.endorsorLoop(ctx) })
+				n.goes.Go(func() { n.packerLoopVip193(ctx) })
+				break FOR
+			}
+		}
 	case 2:
 		/**
 		 * To test the low-level broadcasting funcs
@@ -221,7 +228,7 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.endorsorLoop(ctx) })
 		if n.getNodeID() == 2 {
-			n.goes.Go(func() { n.packerLoop(ctx) })
+			n.goes.Go(func() { n.packerLoopVip193(ctx) })
 		}
 	default:
 		panic("test does not exist")
@@ -333,6 +340,10 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			}
 
 		case ev := <-newBlockSummaryCh:
+			if !n.isNextBlockVip193() {
+				continue
+			}
+
 			now := uint64(time.Now().Unix())
 			bs := ev.Summary
 
@@ -374,6 +385,10 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			n.comm.BroadcastBlockSummary(bs)
 
 		case ev := <-newTxSetCh:
+			if !n.isNextBlockVip193() {
+				continue
+			}
+
 			now := uint64(time.Now().Unix())
 			ts := ev.TxSet
 
@@ -441,6 +456,10 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			n.assembleNewBlock(lh, lts, best, now)
 
 		case ev := <-newEndorsementCh:
+			if !n.isNextBlockVip193() {
+				continue
+			}
+
 			now := uint64(time.Now().Unix())
 			ed := ev.Endorsement
 
@@ -457,6 +476,10 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			n.comm.BroadcastEndorsement(ed)
 
 		case ev := <-newBlockHeaderCh:
+			if !n.isNextBlockVip193() {
+				continue
+			}
+
 			now := uint64(time.Now().Unix())
 			header := ev.Header
 
@@ -752,6 +775,14 @@ side-chain:   %v  %v`,
 			}
 		}
 	}
+}
+
+func (n *Node) isNextBlockVip193() bool {
+	vip193 := n.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
+	}
+	return n.repo.BestBlock().Header().Number()+1 >= vip193
 }
 
 func checkClockOffset() {

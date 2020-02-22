@@ -8,6 +8,7 @@ package packer
 import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
@@ -55,6 +56,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	if vip191 == 0 {
 		vip191 = 1
 	}
+
 	if parent.Number()+1 == vip191 {
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			return nil, err
@@ -66,15 +68,27 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		features |= tx.DelegationFeature
 	}
 
-	authority := builtin.Authority.Native(state)
+	aut := builtin.Authority.Native(state)
 	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+
+	var candidates []*authority.Candidate
+	vip193 := p.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
+	}
+	isVip193 := parent.Number()+1 >= vip193
+	if !isVip193 {
+		candidates, err = aut.Candidates(endorsement, thor.MaxBlockProposers)
+	} else {
+		candidates, err = aut.Candidates2(endorsement, thor.MaxBlockProposers)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	var (
 		proposers   = make([]poa.Proposer, 0, len(candidates))
 		beneficiary thor.Address
@@ -104,8 +118,14 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	updates, score := sched.Updates(newBlockTime)
 
 	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
+		if !isVip193 {
+			if _, err := aut.Update(u.Address, u.Active); err != nil {
+				return nil, err
+			}
+		} else {
+			if _, err := aut.Update2(u.Address, u.Active); err != nil {
+				return nil, err
+			}
 		}
 	}
 

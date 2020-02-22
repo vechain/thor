@@ -48,7 +48,7 @@ func TestBeacon(t *testing.T) {
 		err    error
 	)
 
-	tc, err = NewTempChain(10, thor.NoFork)
+	tc, err = NewTempChain(10, thor.ForkConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}

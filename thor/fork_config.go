@@ -16,6 +16,7 @@ type ForkConfig struct {
 	VIP191    uint32
 	ETH_CONST uint32
 	BLOCKLIST uint32
+	VIP193    uint32
 }
 
 func (fc ForkConfig) String() string {
@@ -29,6 +30,7 @@ func (fc ForkConfig) String() string {
 	push("VIP191", fc.VIP191)
 	push("ETH_CONST", fc.ETH_CONST)
 	push("BLOCKLIST", fc.BLOCKLIST)
+	push("VIP193", fc.VIP193)
 
 	return strings.Join(strs, ", ")
 }
@@ -38,6 +40,7 @@ var NoFork = ForkConfig{
 	VIP191:    math.MaxUint32,
 	ETH_CONST: math.MaxUint32,
 	BLOCKLIST: math.MaxUint32,
+	VIP193:    math.MaxInt32,
 }
 
 // for well-known networks

@@ -55,6 +55,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		gen.Params.ProposerEndorsement = new(big.Int).SetInt64(0)
 	}
 
+	vip193 := gen.ForkConfig.VIP193 == 0 || gen.ForkConfig.VIP193 == 1
+
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
@@ -67,9 +69,16 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			}
 
 			// alloc builtin contracts
-			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
-				return err
+			if !vip193 {
+				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+					return err
+				}
+			} else {
+				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
+					return err
+				}
 			}
+
 			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
 				return err
 			}
@@ -176,8 +185,15 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	}
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
-		data := mustEncodeInput(builtin.Authority.ABI, "add",
-			anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
+		var data []byte
+		if !vip193 {
+			data = mustEncodeInput(builtin.Authority.ABI, "add",
+				anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		} else {
+			data = mustEncodeInput(builtin.Authority.ABI, "add2",
+				anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
+		}
+
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
 

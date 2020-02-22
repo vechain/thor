@@ -8,6 +8,7 @@ package consensus
 import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/builtin/authority"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -204,7 +205,15 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parentHeader *bloc
 			[]interface{}{parentHeader.TotalScore(), header.TotalScore()}, "")
 	}
 
-	return c.validateBlockHeaderVip193(header, parentHeader)
+	vip193 := c.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
+	}
+	isVip193 := header.Number() >= vip193
+	if isVip193 {
+		return c.validateBlockHeaderVip193(header, parentHeader)
+	}
+	return nil
 }
 
 func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
@@ -214,12 +223,27 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return nil, newConsensusError(trProposer, strErrSignature, nil, nil, err.Error())
 	}
 
-	authority := builtin.Authority.Native(st)
+	vip193 := c.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
+	}
+	isVip193 := header.Number() >= vip193
+
+	aut := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
 	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
-		list, err := authority.AllCandidates()
+		var (
+			list []*authority.Candidate
+			err  error
+		)
+		if !isVip193 {
+			list, err = aut.AllCandidates()
+		} else {
+			list, err = aut.AllCandidates2()
+		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -257,8 +281,14 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	}
 
 	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
+		if !isVip193 {
+			if _, err := aut.Update(u.Address, u.Active); err != nil {
+				return nil, err
+			}
+		} else {
+			if _, err := aut.Update2(u.Address, u.Active); err != nil {
+				return nil, err
+			}
 		}
 		if !candidates.Update(u.Address, u.Active) {
 			// should never happen

@@ -96,9 +96,6 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		// vip193
-		flow.PackTxSetAndBlockSummary(genesis.DevAccounts()[0].PrivateKey)
-
 		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
@@ -138,7 +135,7 @@ func TestForkVIP191(t *testing.T) {
 			state.SetBalance(a1.Address, bal)
 			state.SetEnergy(a1.Address, bal, launchTime)
 
-			builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}), thor.BytesToBytes32([]byte{}))
+			builtin.Authority.Native(state).Add(a1.Address, a1.Address, thor.BytesToBytes32([]byte{}))
 			return nil
 		}).
 		Build(stater)
@@ -150,28 +147,25 @@ func TestForkVIP191(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 
 	best := repo.BestBlock()
-	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{VIP191: 1})
+	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
+		VIP191: 1,
+		VIP193: math.MaxUint32,
+	})
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// VIP 193
-	flow.PackTxSetAndBlockSummary(a1.PrivateKey)
-
 	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	// Commented due to VIP-193
-	// _, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	_, _, err = consensus.New(repo, stater, thor.ForkConfig{
+		VIP193: math.MaxUint32,
+	}).Process(blk, uint64(time.Now().Unix()*2))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if err := repo.AddBlock(blk, receipts); err != nil {
 		t.Fatal(err)
@@ -203,6 +197,7 @@ func TestBlocklist(t *testing.T) {
 		VIP191:    math.MaxUint32,
 		ETH_CONST: math.MaxUint32,
 		BLOCKLIST: 0,
+		VIP193:    math.MaxUint32,
 	}
 
 	thor.MockBlocklist([]string{a0.Address.String()})

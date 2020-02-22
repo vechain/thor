@@ -78,12 +78,21 @@ func NewTempChain(N int, forkConfig thor.ForkConfig) (*TempChain, error) {
 		accs = append(accs, &account{ethsk, thor.BytesToAddress(addr.Bytes()), vrfsk, vrfpk})
 	}
 
+	vip193 := true
+	if forkConfig.VIP193 > 1 {
+		vip193 = false
+	}
+
 	launchTime := uint64(1526400000)
 	gen := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			if !vip193 {
+				state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			} else {
+				state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes())
+			}
 			state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes())
 			state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes())
 			state.SetCode(builtin.Prototype.Address, builtin.Prototype.RuntimeBytecodes())
@@ -96,7 +105,23 @@ func NewTempChain(N int, forkConfig thor.ForkConfig) (*TempChain, error) {
 				state.SetBalance(acc.Addr, bal)
 				state.SetEnergy(acc.Addr, bal, launchTime)
 
-				builtin.Authority.Native(state).Add(acc.Addr, acc.Addr, thor.Bytes32{}, acc.Vrfpk.Bytes32())
+				if !vip193 {
+					ok, err := builtin.Authority.Native(state).Add(acc.Addr, acc.Addr, thor.Bytes32{})
+					if !ok {
+						panic("failed to add consensus node")
+					}
+					if err != nil {
+						panic(err)
+					}
+				} else {
+					ok, err := builtin.Authority.Native(state).Add2(acc.Addr, acc.Addr, thor.Bytes32{}, acc.Vrfpk.Bytes32())
+					if !ok {
+						panic("failed to add consensus node")
+					}
+					if err != nil {
+						panic(err)
+					}
+				}
 			}
 			return nil
 		})

@@ -22,7 +22,7 @@ func TestThreshold(t *testing.T) {
 
 	numOfNode := 10
 
-	tc, _ := NewTempChain(numOfNode, thor.NoFork)
+	tc, _ := NewTempChain(numOfNode, thor.ForkConfig{})
 
 	f := thor.CommitteeSize * thor.CommitteeThresholdFactor
 	if f > uint64(numOfNode) {
@@ -41,7 +41,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.NoFork)
+	tc, _ := NewTempChain(10, thor.ForkConfig{})
 
 	launchTime := tc.GenesisBlock.Header().Timestamp()
 
@@ -88,7 +88,7 @@ func TestEpochNumber(t *testing.T) {
 }
 
 func TestValidateBlockSummary(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.NoFork)
+	tc, _ := NewTempChain(10, thor.ForkConfig{})
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con
@@ -226,7 +226,7 @@ func TestValidateBlockSummary(t *testing.T) {
 // }
 
 func TestValidateEndorsement(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.NoFork)
+	tc, _ := NewTempChain(10, thor.ForkConfig{})
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con

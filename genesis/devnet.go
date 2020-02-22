@@ -147,7 +147,7 @@ func NewDevnet() *Genesis {
 					soloBlockSigner.Address,
 					soloBlockSigner.Address,
 					thor.BytesToBytes32([]byte("Solo Block Signer")),
-					soloBlockSigner.VrfPublicKey,
+					// soloBlockSigner.VrfPublicKey,
 				)),
 			executor)
 
