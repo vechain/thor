@@ -119,7 +119,6 @@ func NewTestnet() *Genesis {
 				master0,
 				endorser0,
 				thor.BytesToBytes32([]byte("master0")),
-				thor.BytesToBytes32([]byte("vrfpubkey0")),
 			)),
 			executor)
 

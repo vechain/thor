@@ -100,7 +100,10 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
-		n.goes.Go(func() { n.packerLoop(ctx) })
+
+		if !n.isNextBlockVip193() {
+			n.goes.Go(func() { n.packerLoop(ctx) })
+		}
 
 		ticker := time.NewTicker(time.Second)
 	FOR:
