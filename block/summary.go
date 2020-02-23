@@ -1,7 +1,6 @@
 package block
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -112,15 +111,15 @@ func (bs *Summary) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// IsEqual ...
-func (bs *Summary) IsEqual(_bs *Summary) bool {
-	var buff, _buff bytes.Buffer
+// // IsEqual ...
+// func (bs *Summary) IsEqual(_bs *Summary) bool {
+// 	var buff, _buff bytes.Buffer
 
-	bs.EncodeRLP(&buff)
-	_bs.EncodeRLP(&_buff)
+// 	bs.EncodeRLP(&buff)
+// 	_bs.EncodeRLP(&_buff)
 
-	return bytes.Compare(buff.Bytes(), _buff.Bytes()) == 0
-}
+// 	return bytes.Compare(buff.Bytes(), _buff.Bytes()) == 0
+// }
 
 // ParentID returns paraent ID
 func (bs *Summary) ParentID() thor.Bytes32 {
@@ -137,17 +136,17 @@ func (bs *Summary) Signature() []byte {
 	return append([]byte(nil), bs.body.Signature...)
 }
 
-// TotalScore ...
+// TotalScore returns total score
 func (bs *Summary) TotalScore() uint64 {
 	return bs.body.TotalScore
 }
 
-// TxsRoot ...
+// TxsRoot returns merkle root of transactions
 func (bs *Summary) TxsRoot() thor.Bytes32 {
 	return bs.body.TxsRoot
 }
 
-// ID ...
+// ID computes block summary ID. ID = hash(signing_hash || signer)
 func (bs *Summary) ID() (id thor.Bytes32) {
 	if cached := bs.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)

@@ -13,7 +13,7 @@ type Endorsements struct {
 	vals []*Endorsement
 }
 
-// Add adds a new endorsement. It returns false if the endorsement already exists.
+// AddEndorsement adds a new endorsement. It returns false if the endorsement already exists.
 // Endorsements are distinguished by their signing hashes.
 func (eds *Endorsements) AddEndorsement(ed *Endorsement) bool {
 	if eds.vals == nil {
@@ -50,8 +50,7 @@ func (eds *Endorsements) Signatures() [][]byte {
 	return sigs
 }
 
-// StringVrfProofs ...
-func (eds *Endorsements) StringVrfProofs() string {
+func (eds *Endorsements) String() string {
 	var s string
 	for _, ed := range eds.vals {
 		// b := ed.VrfProof().Bytes()
@@ -60,11 +59,11 @@ func (eds *Endorsements) StringVrfProofs() string {
 	return s
 }
 
-// Len ...
+// Len returns the number of vrf proofs included
 func (eds *Endorsements) Len() int {
 	return len(eds.vals)
 }
 
-func (eds *Endorsements) List() []*Endorsement {
-	return eds.vals
-}
+// func (eds *Endorsements) List() []*Endorsement {
+// 	return eds.vals
+// }

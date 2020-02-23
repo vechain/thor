@@ -21,10 +21,11 @@ import (
 // 	if f > thor.MaxBlockProposers {
 // 		f = thor.MaxBlockProposers
 // 	}
-
 // 	return uint32(uint64(math.MaxUint32) * f / thor.MaxBlockProposers)
 // }
 
+// getCommitteeThreshold computes the max hash(vrf_proof) value for committee member.
+//
 // threshold is determined by the current number of qualified consensus nodes
 // not the fixed max number of nodes allowed.
 func (c *Consensus) getCommitteeThreshold() (uint32, error) {
@@ -55,7 +56,7 @@ func (c *Consensus) getCommitteeThreshold() (uint32, error) {
 	return uint32(uint64(math.MaxUint32) * f / N), nil
 }
 
-// IsCommittee checks the committeeship given a VRF private key and round number.
+// IsCommittee checks the committeeship given a VRF private key and timestamp.
 func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Proof, error) {
 	round := c.RoundNumber(time)
 	if round == 0 {
@@ -73,7 +74,6 @@ func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Pro
 	if err != nil {
 		return false, nil, err
 	}
-	// return isCommitteeByPrivateKey(sk, seed, th)
 
 	proof, err := sk.Prove(seed.Bytes())
 	if isCommitteeByProof(proof, th) {
@@ -84,19 +84,17 @@ func (c *Consensus) IsCommittee(sk *vrf.PrivateKey, time uint64) (bool, *vrf.Pro
 }
 
 // Seed computes the random seed for each round
+//
+// seed = H(epoch_seed || round_number)
 func seed(beacon thor.Bytes32, round uint32) thor.Bytes32 {
-	// round_seed = H(epoch_seed || round_number)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, round)
 	return thor.Blake2b(beacon.Bytes(), b)
 }
 
+// isCommitteeByProof checks committeeship based on vrf proof and threshold
 func isCommitteeByProof(proof *vrf.Proof, th uint32) bool {
-	// Compute the hash of the proof
 	h := thor.Blake2b(proof[:])
-	// Get the threshold
-	// th := getCommitteeThreshold()
-	// Is a committee member if the hash is no larger than the threshold
 	if binary.BigEndian.Uint32(h.Bytes()) <= th {
 		return true
 	}
@@ -144,8 +142,7 @@ func RoundNumber(now, launch uint64) uint32 {
 	return uint32((now - launch) / thor.BlockInterval)
 }
 
-// Timestamp computes the round timestamp.
-// [arg] can be either round number (uint32) or time (uint64)
+// Timestamp computes timestamp given either round number (uint32) or local time (uint64)
 func (c *Consensus) Timestamp(arg interface{}) uint64 {
 	switch reflect.TypeOf(arg).String() {
 	case "uint32":
@@ -161,6 +158,12 @@ func (c *Consensus) Timestamp(arg interface{}) uint64 {
 }
 
 // ValidateBlockSummary validates a block summary
+//
+// check:
+// 1. timestamp
+// 2. parentID
+// 3. signature
+// 4. leadership
 func (c *Consensus) ValidateBlockSummary(bs *block.Summary, parentHeader *block.Header, now uint64) error {
 	if bs == nil {
 		return newConsensusError(trBlockSummary, "empty block summary", nil, nil, "")
@@ -209,6 +212,11 @@ func (c *Consensus) isValidTimestamp(timestamp, now uint64) bool {
 }
 
 // ValidateTxSet validates a tx set
+//
+// Check:
+// 1. timestamp
+// 2. signature
+// 3. leadership
 func (c *Consensus) ValidateTxSet(ts *block.TxSet, parentHeader *block.Header, now uint64) error {
 	if ts == nil {
 		return newConsensusError(trTxSet, "Empty tx set", nil, nil, "")
@@ -235,6 +243,13 @@ func (c *Consensus) ValidateTxSet(ts *block.TxSet, parentHeader *block.Header, n
 }
 
 // ValidateEndorsement validates an endorsement
+//
+// check:
+// 1. block summary
+// 2. signature
+// 3. registered consensus node
+// 4. validity of vrf proof
+// 5. committee
 func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *block.Header, now uint64) error {
 	if ed == nil {
 		return newConsensusError(trEndorsement, "Empty endorsement", nil, nil, "")
@@ -245,18 +260,18 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return err.(consensusError).AddTraceInfo(trEndorsement)
 	}
 
-	candidates, _, st, err := c.getAllCandidates(parentHeader)
-	if err != nil {
-		return newConsensusError(trEndorsement, "get all candidates", nil, nil, err.Error())
-	}
-
+	// signature
 	signer, err := ed.Signer()
 	if err != nil {
 		// return consensusError(fmt.Sprintf("Signer unvailable: %v", err))
 		return newConsensusError(trEndorsement, strErrSignature, nil, nil, err.Error())
 	}
 
-	// candidate := candidates.Candidate(st, signer)
+	// check whether is a registered consensus node
+	candidates, _, st, err := c.getAllCandidates(parentHeader)
+	if err != nil {
+		return newConsensusError(trEndorsement, "get all candidates", nil, nil, err.Error())
+	}
 	proposers, err := candidates.Pick(st)
 	if err != nil {
 		return newConsensusError(trEndorsement, "get valid consensus node list", nil, nil, err.Error())
@@ -276,7 +291,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 			[]interface{}{signer}, "")
 	}
 
-	// Compute the VRF seed
+	// Compute random seed
 	round := c.RoundNumber(ed.BlockSummary().Timestamp())
 	epoch := EpochNumber(round)
 	beacon, err := c.beacon(epoch)
@@ -305,7 +320,9 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 	return nil
 }
 
-// validate:
+// validateLeader validates leadership
+//
+// check:
 // 1. signature
 // 2. leadership
 // 3. total score

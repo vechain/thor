@@ -12,6 +12,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+// endorsorLoop is the loop dedicated to endorsing incoming block summaries
 func (n *Node) endorsorLoop(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
 		log.Debug(str, append([]interface{}{"key", "edlp"}, kv...)...)
@@ -24,13 +25,13 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 	debugLog("started endorser loop")
 	defer debugLog("leaving endorser loop")
 
-	debugLog("waiting for synchronization...")
-	select {
-	case <-ctx.Done():
-		return
-	case <-n.comm.Synced():
-	}
-	debugLog("synchronization process done")
+	// debugLog("waiting for synchronization...")
+	// select {
+	// case <-ctx.Done():
+	// 	return
+	// case <-n.comm.Synced():
+	// }
+	// debugLog("synchronization process done")
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
@@ -38,6 +39,8 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 	newBlockSummaryCh := make(chan *comm.NewBlockSummaryEvent)
 	scope.Track(n.comm.SubscribeBlockSummary(newBlockSummaryCh))
 
+	// cache that stores (leader_address, timestamp) kv pairs
+	// In each round, the node only endorse one valid block summary from the same leader.
 	endorsedLeader := cache.NewRandCache(int(thor.MaxBlockProposers))
 
 	for {
@@ -68,7 +71,6 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 
 			if err := n.cons.ValidateBlockSummary(bs, best.Header(), now); err != nil {
 				debugLog("invalid bs", "err", err, "id", bs.ID().Abev())
-				// fmt.Println(bs.String())
 				continue
 			}
 
@@ -88,11 +90,13 @@ func (n *Node) endorsorLoop(ctx context.Context) {
 				}
 				ed = ed.WithSignature(sig)
 
-				// remember the leader
+				// update cache
 				endorsedLeader.Set(leader, bs.Timestamp())
 
 				debugLog("ed ==>", "id", ed.ID().Abev())
-				if leader == n.master.Address() { // if the node is the leader, send the endorsement back to packerLoop
+				// if the node is the leader, send the endorsement back to packerLoop
+				// for packing block and to housekeeping for broadcasting
+				if leader == n.master.Address() {
 					n.comm.SendEndorsementToFeed(ed)
 				} else {
 					n.comm.BroadcastEndorsement(ed)

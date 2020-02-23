@@ -77,7 +77,7 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	return b
 }
 
-// VrfProofs ...
+// VrfProofs sets all vrf proofs at once
 func (b *Builder) VrfProofs(proofs []*vrf.Proof) *Builder {
 	for _, proof := range proofs {
 		b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof.Copy())
@@ -85,19 +85,19 @@ func (b *Builder) VrfProofs(proofs []*vrf.Proof) *Builder {
 	return b
 }
 
-// VrfProof ...
+// VrfProof sets one vrf proof
 func (b *Builder) VrfProof(proof *vrf.Proof) *Builder {
 	b.headerBody.VrfProofs = append(b.headerBody.VrfProofs, proof.Copy())
 	return b
 }
 
-// SigOnBlockSummary ...
+// SigOnBlockSummary sets signature on the block summary
 func (b *Builder) SigOnBlockSummary(sig []byte) *Builder {
 	b.headerBody.SigOnBlockSummary = append(b.headerBody.SigOnBlockSummary, sig...)
 	return b
 }
 
-// SigsOnEndorsement ...
+// SigsOnEndorsement sets signatures on endorsements at once
 func (b *Builder) SigsOnEndorsement(sigs [][]byte) *Builder {
 	for _, sig := range sigs {
 		b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, append([]byte(nil), sig...))
@@ -105,6 +105,7 @@ func (b *Builder) SigsOnEndorsement(sigs [][]byte) *Builder {
 	return b
 }
 
+// SigOnEndorsement sets one signature on an endorsement
 func (b *Builder) SigOnEndorsement(sig []byte) *Builder {
 	b.headerBody.SigsOnEndorsement = append(b.headerBody.SigsOnEndorsement, append([]byte(nil), sig...))
 	return b

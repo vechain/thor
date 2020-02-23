@@ -50,6 +50,7 @@ func init() {
 			}
 			return []interface{}{ok}
 		}},
+		// vip193
 		{"native_add2", func(env *xenv.Environment) []interface{} {
 			var args struct {
 				NodeMaster   common.Address
@@ -86,6 +87,7 @@ func init() {
 				err error
 			)
 
+			// check contract code length to choose between func Revoke and Revoke2
 			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
 				ok, err = Authority.Native(env.State()).Revoke(thor.Address(nodeMaster))
 			} else {
@@ -113,6 +115,7 @@ func init() {
 
 			return []interface{}{listed, endorsor, identity, active}
 		}},
+		// vip193
 		{"native_get2", func(env *xenv.Environment) []interface{} {
 			var nodeMaster common.Address
 			env.ParseArgs(&nodeMaster)
@@ -148,6 +151,7 @@ func init() {
 				err  error
 			)
 
+			// check contract code length to choose between func Next and Next2
 			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
 				next, err = Authority.Native(env.State()).Next(thor.Address(nodeMaster))
 			} else {
@@ -174,6 +178,7 @@ func init() {
 				err      error
 			)
 
+			// check contract code length to choose between func Get and Get2
 			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
 				listed, endorsor, _, _, err = Authority.Native(env.State()).Get(thor.Address(nodeMaster))
 			} else {
@@ -201,7 +206,7 @@ func init() {
 			return []interface{}{bal.Cmp(endorsement) >= 0}
 		}},
 	}
-	abi := Authority.V2.NativeABI()
+	abi := Authority.V2.NativeABI() // vip193
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Authority.Address, method.ID()}] = &nativeMethod{

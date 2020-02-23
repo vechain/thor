@@ -37,7 +37,7 @@ func randTx() *tx.Transaction {
 	return new(tx.Builder).Clause(tx.NewClause(randAddress())).Build()
 }
 
-// RandTxs ...
+// RandTxs creates the designated number of random transactions
 func RandTxs(N int) tx.Transactions {
 	var txs tx.Transactions
 	for i := 0; i < N; i++ {

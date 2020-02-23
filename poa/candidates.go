@@ -39,7 +39,7 @@ func NewCandidates(list []*authority.Candidate) *Candidates {
 	}
 }
 
-// Copy make a copy.
+// Copy makes a deep copy.
 func (c *Candidates) Copy() *Candidates {
 	c.referenced = true
 	// copy := *c
@@ -133,7 +133,6 @@ func (c *Candidates) String() string {
 	return s
 }
 
-// List ...
-func (c *Candidates) List() []*authority.Candidate {
-	return c.list
-}
+// func (c *Candidates) List() []*authority.Candidate {
+// 	return c.list
+// }

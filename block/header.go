@@ -45,7 +45,7 @@ type headerBody struct {
 	StateRoot       thor.Bytes32
 	ReceiptsRoot    thor.Bytes32
 
-	// Committee         []uint8
+	// vip193
 	VrfProofs         []*vrf.Proof
 	SigOnBlockSummary []byte
 	SigsOnEndorsement [][]byte
@@ -183,6 +183,7 @@ func (h *Header) VrfProofs() []*vrf.Proof {
 	return pfs
 }
 
+// SigsOnEndoresment returns signatures on endorsements
 func (h *Header) SigsOnEndoresment() [][]byte {
 	var sigs [][]byte
 	for _, sig := range h.body.SigsOnEndorsement {

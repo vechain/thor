@@ -25,13 +25,13 @@ func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
 
-	log.Info("waiting for synchronization...")
-	select {
-	case <-ctx.Done():
-		return
-	case <-n.comm.Synced():
-	}
-	log.Info("synchronization process done")
+	// log.Info("waiting for synchronization...")
+	// select {
+	// case <-ctx.Done():
+	// 	return
+	// case <-n.comm.Synced():
+	// }
+	// log.Info("synchronization process done")
 
 	var (
 		authorized bool
@@ -49,11 +49,8 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		vip193 := n.forkConfig.VIP193
-		if vip193 == 0 {
-			vip193 = 1
-		}
-		if n.repo.BestBlock().Header().Number()+1 >= vip193 {
+		// terminates the loop if the current height is vip193
+		if n.isNextBlockVip193() {
 			return
 		}
 
@@ -162,7 +159,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 	return nil
 }
 
-// packerLoop is executed by the leader
 // 1. prepare and broadcast block summary & tx set
 // 2. pack and broadcast header
 // 3. pack and commit new block
@@ -178,24 +174,22 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 	debugLog("enter vip193 packer loop")
 	defer debugLog("leave vip193 packer loop")
 
-	debugLog("waiting for synchronization...")
-	select {
-	case <-ctx.Done():
-		return
-	case <-n.comm.Synced():
-	}
-	debugLog("synchronization process done")
+	// debugLog("waiting for synchronization...")
+	// select {
+	// case <-ctx.Done():
+	// 	return
+	// case <-n.comm.Synced():
+	// }
+	// debugLog("synchronization process done")
 
 	var (
-		flow = new(packer.Flow)
-		// flow is activated if it packs bs and ts and is in its scheduled round
+		flow   = new(packer.Flow)
 		err    error
 		ticker = time.NewTicker(time.Second)
 
-		// maxTxAdoptDur = 3 // max number of seconds allowed to prepare transactions
-		minTxAdoptDur uint64 = 2 // minimum duration (sec) needs to adopt txs from txPool
-		txAdoptStart  uint64     // starting time of the loop that adopts txs
-		cancel        context.CancelFunc
+		minTxAdoptDur uint64             = 2 // minimum duration (sec) needs to adopt txs from txPool
+		txAdoptStart  uint64                 // starting time of the loop that adopts txs
+		cancel        context.CancelFunc     // cancel the go routine that adopts txs
 
 		start, txSetBlockSummaryDone, endorsementDone, blockDone, commitDone mclock.AbsTime
 	)
@@ -226,6 +220,7 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 					continue
 				}
 
+				// start the go routine for adopting txs right afer flow is renewed
 				_ctx, _cancel := context.WithCancel(ctx)
 				go n.adoptTxs(_ctx, flow)
 				cancel = _cancel
@@ -236,13 +231,12 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				cancel()
 				flow.Close()
-				// flow = nil
 
 				debugLog("re-schedule packer due to new best block")
 				continue
 			}
 
-			// wait until the scheduled the time
+			// wait until the scheduled time
 			if now < flow.When() {
 				continue
 			}
@@ -251,7 +245,6 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if now > flow.When()+thor.BlockInterval {
 				cancel()
 				flow.Close()
-				// flow = nil
 
 				debugLog("re-schedule packer due to timeout")
 				continue
@@ -264,29 +257,27 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 
 			start = mclock.Now()
 
+			// Compute how long the adoptTx go routine can continue to run.
+			// The go routine is guaranteed to run for at least the duration
+			// defined by [minTxAdoptDur].
 			waitTime := minTxAdoptDur - (now - txAdoptStart)
 			if waitTime > 0 {
-				<-time.NewTimer(time.Second * time.Duration(waitTime)).C
+				<-time.After(time.Second * time.Duration(waitTime))
 			}
 			cancel()
 			bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 			if err != nil {
-				// flow = nil
+
 				flow.Close()
 				errLog("pack bs and ts", "err", err)
 				continue
 			}
 
-			// activated = true // Mark the flow as activated
-
 			txSetBlockSummaryDone = mclock.Now()
 
-			// lbs = bs // save a local copy of the latest block summary
-
 			debugLog("bs ==>", "id", bs.ID().Abev())
-			// n.comm.BroadcastBlockSummary(bs)
 
-			// send the new block summary to comm.newBlockSummaryCh to send it to housekeeping
+			// send the new block summary via comm.newBlockSummaryCh to the housekeeping
 			// and endorsor loops for broadcasting and endorsement, respectively. packer loop
 			// does not take the responsibility of endorsing block summary
 			n.comm.SendBlockSummaryToFeed(bs)
@@ -295,31 +286,6 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 				debugLog("ts ==>", "id", ts.ID().Abev())
 				n.comm.BroadcastTxSet(ts)
 			}
-
-			// // test its committee membership and if elected, endorse the new block summary
-			// ok, proof, err := n.cons.IsCommittee(n.master.VrfPrivateKey, now)
-			// if err != nil {
-			// 	errLog("check committee", "err", err)
-			// 	continue
-			// }
-			// if ok {
-			// 	// Endorse the block summary
-			// 	ed := block.NewEndorsement(bs, proof)
-			// 	sig, err := crypto.Sign(ed.SigningHash().Bytes(), n.master.PrivateKey)
-			// 	if err != nil {
-			// 		errLog("Signing endorsement", "err", err)
-			// 		continue
-			// 	}
-			// 	ed = ed.WithSignature(sig)
-
-			// 	if ok := flow.AddEndoresement(ed); !ok {
-			// 		debugLog("Failed to add ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
-			// 	} else {
-			// 		debugLog("Added ed", "#", flow.NumOfEndorsements(), "id", ed.ID().Abev())
-			// 		debugLog("ed ==>", "id", ed.ID().Abev())
-			// 		n.comm.BroadcastEndorsement(ed)
-			// 	}
-			// }
 
 		case ev := <-newEndorsementCh:
 			// proceed only when the node has already packed a block summary
@@ -334,7 +300,6 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if flow.ParentHeader().ID() != best.Header().ID() {
 				cancel()
 				flow.Close()
-				// flow = nil
 
 				debugLog("re-schedule packer due to new best block")
 				continue
@@ -344,7 +309,6 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if now > flow.When()+thor.BlockInterval {
 				cancel()
 				flow.Close()
-				// flow = nil
 
 				debugLog("re-schedule packer due to timeout")
 				continue
@@ -355,7 +319,6 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 
 			if err := n.cons.ValidateEndorsement(ev.Endorsement, best.Header(), now); err != nil {
 				debugLog("invalid ed", "err", err, "id", ed.ID().Abev())
-				// fmt.Println(ed.String())
 				continue
 			}
 
@@ -377,20 +340,19 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if err != nil {
 				errLog("pack block", "err", err)
 				flow.Close()
-				// flow = nil
+
 				continue
 			}
 			blockDone = mclock.Now()
 
 			// reset flow
 			flow.Close()
-			// flow = nil
 
 			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {
 				errLog("commit state", "err", err)
 				flow.Close()
-				// flow = nil
+
 				continue
 			}
 
@@ -398,7 +360,7 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			if err != nil {
 				errLog("commit block", "err", err)
 				flow.Close()
-				// flow = nil
+
 				continue
 			}
 			commitDone = mclock.Now()
@@ -428,7 +390,7 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 	start := uint64(time.Now().Unix())
 	defer func() {
 		dur := uint64(time.Now().Unix()) - start
-		fmt.Printf("func adoptTxs lasts %v seconds\n", dur)
+		log.Debug("having adopted txs for %v seconds\n", dur)
 	}()
 
 	var txsToRemove []*tx.Transaction
@@ -437,9 +399,6 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 			n.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
-
-	// timer := time.NewTimer(time.Second * maxDur)
-	// defer timer.Stop()
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -451,8 +410,6 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 		select {
 		case <-ctx.Done():
 			return
-		// case <-timer.C:
-		// 	return
 		case <-ticker.C:
 			for _, tx := range n.txPool.Executables() {
 				select {
@@ -483,7 +440,7 @@ func (n *Node) adoptTxs(ctx context.Context, flow *packer.Flow) {
 
 func display(blk *block.Block, receipts tx.Receipts, prepareElapsed, collectElapsed, packElapsed, commitElapsed mclock.AbsTime) {
 	blockID := blk.Header().ID()
-	log.Info("📦 new block packed",
+	log.Info("📦 new vip193 block packed",
 		"txs", len(receipts),
 		"mgas", float64(blk.Header().GasUsed())/1000/1000,
 		"et", fmt.Sprintf("%v|%v|%v|%v",

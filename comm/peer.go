@@ -149,17 +149,17 @@ func (p *Peer) IsEndorsementKnown(id thor.Bytes32) bool {
 	return p.knownEndorsements.Contains(id)
 }
 
-// IsBlockSummaryKnown ...
+// IsBlockSummaryKnown returns if the block summary is known
 func (p *Peer) IsBlockSummaryKnown(id thor.Bytes32) bool {
 	return p.knownBlockSummaries.Contains(id)
 }
 
-// IsTxSetKnown ...
+// IsTxSetKnown returns if the tx set is known
 func (p *Peer) IsTxSetKnown(id thor.Bytes32) bool {
 	return p.knownTxSets.Contains(id)
 }
 
-// IsBlockHeaderKnown ...
+// IsBlockHeaderKnown returns if the block header is known
 func (p *Peer) IsBlockHeaderKnown(id thor.Bytes32) bool {
 	return p.knownBlockHeaders.Contains(id)
 }

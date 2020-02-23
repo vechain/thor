@@ -16,7 +16,7 @@ const (
 	/**
 	 * INCREASE LENGTH FOR NEW TYPES OF MSGS
 	 */
-	Length     uint64 = 12 //8
+	Length     uint64 = 12 // increase the number of msg types from 8 to 12
 	MaxMsgSize        = 10 * 1024 * 1024
 )
 
@@ -30,7 +30,7 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
-	// the followings are defined for vip193
+	// new message types defined for for vip193
 	MsgNewBlockSummary
 	MsgNewTxSet
 	MsgNewEndorsement

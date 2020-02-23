@@ -6,14 +6,11 @@
 package consensus
 
 import (
-	"fmt"
-
 	"github.com/hashicorp/golang-lru/simplelru"
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
@@ -133,14 +130,14 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		c.forkConfig), nil
 }
 
-func (c *Consensus) stringCachedCandidates(id thor.Bytes32) string {
-	candidates, ok := c.candidatesCache.Get(id)
-	if !ok {
-		return "no data cached"
-	}
-	str := fmt.Sprintf("parentID: %v\ncandidates:\n", id)
-	for _, candidate := range candidates.(*poa.Candidates).List() {
-		str += fmt.Sprintf("%v, %v\n", candidate.NodeMaster, candidate.Active)
-	}
-	return str
-}
+// func (c *Consensus) stringCachedCandidates(id thor.Bytes32) string {
+// 	candidates, ok := c.candidatesCache.Get(id)
+// 	if !ok {
+// 		return "no data cached"
+// 	}
+// 	str := fmt.Sprintf("parentID: %v\ncandidates:\n", id)
+// 	for _, candidate := range candidates.(*poa.Candidates).List() {
+// 		str += fmt.Sprintf("%v, %v\n", candidate.NodeMaster, candidate.Active)
+// 	}
+// 	return str
+// }

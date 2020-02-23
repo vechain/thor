@@ -133,7 +133,7 @@ func (ts *TxSet) TotalScore() uint64 {
 // 	return len(ts.body.Txs) == 0
 // }
 
-// ID computes the hash for committee member to sign
+// ID computes the tx set ID. ID = hash(txRoot || signer)
 func (ts *TxSet) ID() (id thor.Bytes32) {
 	if cached := ts.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)

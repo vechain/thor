@@ -5,17 +5,19 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// beacon computes the random seed for the given epoch
+// beacon computes the epoch beacon beacon
 //
-// block_timestamp = launch_time + block_interval * round_number
-// Round 0 : genesis
-// Epoch 1 : round [1, epoch_interval]
-// BlockNumber 0 : genesis
+// block_timestamp == launch_time + block_interval * round_number
+// round 0 == genesis
+// epoch 1 == [1, epoch_interval] (round)
+// block number of genesis == 0
 func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
+	// epoch number must be greater than zero
 	if epoch == 0 {
 		return thor.BytesToBytes32(nil), newConsensusError(trNil, strErrZeroEpoch, nil, nil, "")
 	}
 
+	// cache
 	if beacon, ok := c.beaconCache.Get(epoch); ok {
 		return beacon.(thor.Bytes32), nil
 	}
@@ -25,34 +27,32 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 		}
 	}()
 
-	// best := c.chain.BestBlock()
-	best := c.repo.BestBlock()
-	lastRoundOfEpoch := (epoch - 1) * uint32(thor.EpochInterval)
-	lastTimestampOfEpoch := c.Timestamp(lastRoundOfEpoch)
+	var (
+		header    *block.Header
+		best      = c.repo.BestBlock()
+		lastRound = (epoch - 1) * uint32(thor.EpochInterval)
+	)
 
-	var header *block.Header
-
-	// Start the search from the block with its number equal to lastRoundOfEpoch.
-	// The actual number may be smaller than lastRoundOfEpoch if there is any
+	// Start the search from the block with its number equal to [last].
+	// The actual number may be smaller than lastRound if there is any
 	// round when no block is produced. Therefore, we choose
 	//
-	// min(lastRoundOfEpoch, bestBlockNum)
+	// min(lastRound, bestBlockNum)
 	//
 	// as the searching starting point
-	last := lastRoundOfEpoch
+	last := lastRound
 	if last > best.Header().Number() {
 		last = best.Header().Number()
 	}
 
-	// header, err = c.chain.GetTrunkBlockHeader(last)
 	header, err = c.repo.NewBestChain().GetBlockHeader(last)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
 
 	for {
-		// Check whether the block is within the epoch
-		if header.Timestamp() <= lastTimestampOfEpoch {
+		// Check whether the block is valid
+		if header.Timestamp() <= c.Timestamp(lastRound) {
 			break
 		}
 
@@ -68,7 +68,7 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 	return
 }
 
-// beacon = hash(concat(header.VrfProofs()...))
+// beacon = hash(vrf_proof1 || vrf_proof2 || ...)
 func compBeacon(header *block.Header) thor.Bytes32 {
 	var beacon thor.Bytes32
 

@@ -37,9 +37,9 @@ const (
 	MaxStateHistory            = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 	MaxBackTrackingBlockNumber = 65535
 
-	CommitteeSize            uint64 = 3 //10
-	CommitteeThresholdFactor uint64 = 2
-	EpochInterval            uint64 = 10
+	CommitteeSize            uint64 = 3  // committee size
+	CommitteeThresholdFactor uint64 = 2  // factor * committee_size == expected number of nodes qualifed as a committee member
+	EpochInterval            uint64 = 10 // number of rounds in each epoch
 )
 
 // Keys of governance params.

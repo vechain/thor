@@ -45,17 +45,17 @@ func NotifyNewBlockSummary(ctx context.Context, rpc RPC, bs *block.Summary) erro
 	return rpc.Notify(ctx, MsgNewBlockSummary, bs)
 }
 
-// NotifyNewTxSet ...
+// NotifyNewTxSet notifies new tx set
 func NotifyNewTxSet(ctx context.Context, rpc RPC, ts *block.TxSet) error {
 	return rpc.Notify(ctx, MsgNewTxSet, ts)
 }
 
-// NotifyNewEndorsement ...
+// NotifyNewEndorsement notifies new endorsement
 func NotifyNewEndorsement(ctx context.Context, rpc RPC, ed *block.Endorsement) error {
 	return rpc.Notify(ctx, MsgNewEndorsement, ed)
 }
 
-// NotifyNewBlockHeader ...
+// NotifyNewBlockHeader notifies new block header
 func NotifyNewBlockHeader(ctx context.Context, rpc RPC, header *block.Header) error {
 	return rpc.Notify(ctx, MsgNewBlockHeader, header)
 }

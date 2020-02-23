@@ -32,7 +32,7 @@ type Flow struct {
 	// txSet        *block.TxSet
 	endorsements block.Endorsements
 
-	blockClose chan interface{}
+	blockAdopt chan interface{}
 }
 
 // NewFlow ...
@@ -48,7 +48,7 @@ func NewFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		blockClose:   make(chan interface{}, 1),
+		blockAdopt:   make(chan interface{}, 1),
 	}
 	// go func() {
 	// 	f.blockClose <- struct{}{}
@@ -58,7 +58,8 @@ func NewFlow(
 
 // Close waits for blockClose and set packer == nil
 func (f *Flow) Close() {
-	f.blockClose <- struct{}{}
+	// wait until f.Adopt finishes
+	f.blockAdopt <- struct{}{}
 
 	f.packer = nil
 
@@ -102,6 +103,9 @@ func (f *Flow) NumOfEndorsements() int {
 
 // PackTxSetAndBlockSummary packs the tx set and block summary
 func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (bs *block.Summary, ts *block.TxSet, err error) {
+	// wait until f.Adopt finishes
+	f.blockAdopt <- struct{}{}
+
 	var sig []byte
 
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(sk.PublicKey)) {
@@ -175,10 +179,11 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
 	// f.Adopt(tx) is called by the go routine that executes func (n *Node) adoptTxs(ctx, flow).
-	// It is possible that flow is closed while this function is still on. Therefore, we need to
-	// block f.Close() during the execution of f.Adopt(tx)
-	f.blockClose <- struct{}{}
-	defer func() { <-f.blockClose }()
+	// It is to prevent data race between:
+	// 1. f.Adopt(tx) and f.Close()
+	// 2. f.Adopt(fx) and f.PackTxSetAndBlockSummary()
+	f.blockAdopt <- struct{}{}
+	defer func() { <-f.blockAdopt }()
 
 	origin, _ := tx.Origin()
 	if f.runtime.Context().Number >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {

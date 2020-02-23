@@ -87,35 +87,32 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
+// validateBlockHeaderVip193 validates the parts of the block header related to vip193
 func (c *Consensus) validateBlockHeaderVip193(header *block.Header, parentHeader *block.Header) error {
 	// reconstruct and validate the block summary
 	bs := header.BlockSummary()
-	// bs := block.NewBlockSummary(
-	// 	header.ParentID(),
-	// 	header.TxsRoot(),
-	// 	header.Timestamp(),
-	// 	header.TotalScore()).WithSignature(header.SigOnBlockSummary())
-
 	if err := c.ValidateBlockSummary(bs, parentHeader, header.Timestamp()); err != nil {
 		return err.(consensusError).AddTraceInfo(trHeader)
 	}
 
-	// reconstuct and validate endoresements
 	sigs := header.SigsOnEndoresment()
 	proofs := header.VrfProofs()
 
+	// check the number of endorsement signatures
 	if len(sigs) != int(thor.CommitteeSize) {
 		return newConsensusError(trHeader, "invalid number of endoresment signatures",
 			[]string{strDataExpected, strDataCurr},
 			[]interface{}{int(thor.CommitteeSize), len(sigs)}, "")
 	}
 
+	// check the number of vrf proofs
 	if len(proofs) != int(thor.CommitteeSize) {
 		return newConsensusError(trHeader, "invalid number of vrf proofs",
 			[]string{strDataExpected, strDataCurr},
 			[]interface{}{int(thor.CommitteeSize), len(proofs)}, "")
 	}
 
+	// reconstuct and validate endoresements
 	eds := header.Endorsements()
 	for _, ed := range eds {
 		// for i, proof := range proofs {

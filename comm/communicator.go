@@ -398,12 +398,12 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	return stats
 }
 
-// SendBlockSummaryToFeed ...
+// SendBlockSummaryToFeed sends a block summary to the feed
 func (c *Communicator) SendBlockSummaryToFeed(bs *block.Summary) {
 	c.newBlockSummaryFeed.Send(&NewBlockSummaryEvent{bs})
 }
 
-// SendEndorsementToFeed ...
+// SendEndorsementToFeed sends an endorsement to the feed
 func (c *Communicator) SendEndorsementToFeed(ed *block.Endorsement) {
 	c.newEndorsementFeed.Send(&NewEndorsementEvent{ed})
 }

@@ -136,15 +136,17 @@ func (p *Proof) Hash() (*Hash, error) {
 	return &hash, nil
 }
 
-// Bytes ...
+// Bytes returns the proof as a byte array
 func (p *Proof) Bytes() []byte {
 	return append([]byte(nil), p[:]...)
 }
 
+// EncodeRLP peroforms rlp encoding
 func (p *Proof) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, p.Bytes())
 }
 
+// DecodeRLP performs rlp decoding
 func (p *Proof) DecodeRLP(s *rlp.Stream) error {
 	var b []byte
 

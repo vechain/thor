@@ -28,6 +28,7 @@ type (
 	}
 
 	// Candidate candidate of block proposer.
+	// For pre-vip193 version, VrfPublicKey == thor.Bytes32{}
 	Candidate struct {
 		NodeMaster   thor.Address
 		Endorsor     thor.Address

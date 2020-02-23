@@ -139,7 +139,7 @@ func (ed *Endorsement) String() string {
 	return s
 }
 
-// ID ...
+// ID computes the endorsement ID. ID = hash(signing_hash || signer)
 func (ed *Endorsement) ID() (id thor.Bytes32) {
 	if cached := ed.cache.id.Load(); cached != nil {
 		return cached.(thor.Bytes32)

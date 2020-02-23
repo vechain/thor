@@ -101,6 +101,14 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		n.goes.Go(func() { n.houseKeeping(ctx) })
 		n.goes.Go(func() { n.txStashLoop(ctx) })
 
+		log.Info("waiting for synchronization...")
+		select {
+		case <-ctx.Done():
+			break
+		case <-n.comm.Synced():
+		}
+		log.Info("synchronization process done")
+
 		if !n.isNextBlockVip193() {
 			n.goes.Go(func() { n.packerLoop(ctx) })
 		}
