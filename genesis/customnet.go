@@ -190,7 +190,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			data = mustEncodeInput(builtin.Authority.ABI, "add",
 				anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		} else {
-			data = mustEncodeInput(builtin.Authority.ABI, "add2",
+			data = mustEncodeInput(builtin.Authority.V2.ABI, "add2",
 				anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
 		}
 
