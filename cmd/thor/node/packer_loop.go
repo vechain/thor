@@ -164,7 +164,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 // 3. pack and commit new block
 func (n *Node) packerLoopVip193(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Info(str, append([]interface{}{"key", "packer"}, kv...)...)
+		log.Debug(str, append([]interface{}{"key", "packer"}, kv...)...)
 	}
 
 	errLog := func(msg string, kv ...interface{}) {
@@ -265,9 +265,9 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 				<-time.After(time.Second * time.Duration(waitTime))
 			}
 			cancel()
+
 			bs, ts, err := flow.PackTxSetAndBlockSummary(n.master.PrivateKey)
 			if err != nil {
-
 				flow.Close()
 				errLog("pack bs and ts", "err", err)
 				continue
@@ -351,16 +351,12 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {
 				errLog("commit state", "err", err)
-				flow.Close()
-
 				continue
 			}
 
 			prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
 			if err != nil {
 				errLog("commit block", "err", err)
-				flow.Close()
-
 				continue
 			}
 			commitDone = mclock.Now()

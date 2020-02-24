@@ -341,13 +341,13 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
-					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID().Abev())) {
-					debugLog("future block added", "id", newBlock.Header().ID().Abev())
+					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					debugLog("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
 				n.comm.BroadcastBlock(newBlock.Block)
-				debugLog(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
 
 		case ev := <-newBlockSummaryCh:

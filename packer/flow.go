@@ -7,6 +7,7 @@ package packer
 
 import (
 	"crypto/ecdsa"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -32,7 +33,8 @@ type Flow struct {
 	// txSet        *block.TxSet
 	endorsements block.Endorsements
 
-	blockAdopt chan interface{}
+	// blockAdopt chan interface{}
+	mux sync.Mutex
 }
 
 // NewFlow ...
@@ -48,7 +50,7 @@ func NewFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		blockAdopt:   make(chan interface{}, 1),
+		// blockAdopt:   make(chan interface{}, 1),
 	}
 	// go func() {
 	// 	f.blockClose <- struct{}{}
@@ -56,27 +58,28 @@ func NewFlow(
 	return f
 }
 
-// Close waits for blockClose and set packer == nil
-func (f *Flow) Close() {
-	// wait until f.Adopt finishes
-	f.blockAdopt <- struct{}{}
-
-	f.packer = nil
-
-	return
-}
-
-// // SetBlockSummary ...
-// func (f *Flow) SetBlockSummary(bs *block.Summary) {
-// 	f.blockSummary = bs.Copy()
+// // WaitAndBlockAdopt waits for any ongoing Adopt() to finish
+// // and block any of its future call
+// func (f *Flow) WaitAndBlockAdopt() {
+// 	// wait until f.Adopt finishes
+// 	f.blockAdopt <- struct{}{}
+// 	return
 // }
 
-// GetBlockSummary ...
+// Close voids the current flow object
+func (f *Flow) Close() {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
+	f.packer = nil
+}
+
+// GetBlockSummary returns the current block summary
 func (f *Flow) GetBlockSummary() *block.Summary {
 	return f.blockSummary.Copy()
 }
 
-// HasPackedBlockSummary ...
+// HasPackedBlockSummary checks whether there is a block summary packed
 func (f *Flow) HasPackedBlockSummary() bool {
 	return f.blockSummary != nil
 }
@@ -103,8 +106,11 @@ func (f *Flow) NumOfEndorsements() int {
 
 // PackTxSetAndBlockSummary packs the tx set and block summary
 func (f *Flow) PackTxSetAndBlockSummary(sk *ecdsa.PrivateKey) (bs *block.Summary, ts *block.TxSet, err error) {
-	// wait until f.Adopt finishes
-	f.blockAdopt <- struct{}{}
+	// // wait until f.Adopt finishes
+	// f.blockAdopt <- struct{}{}
+
+	f.mux.Lock()
+	defer f.mux.Unlock()
 
 	var sig []byte
 
@@ -179,11 +185,14 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
 	// f.Adopt(tx) is called by the go routine that executes func (n *Node) adoptTxs(ctx, flow).
-	// It is to prevent data race between:
+	// there may be a data race between:
 	// 1. f.Adopt(tx) and f.Close()
 	// 2. f.Adopt(fx) and f.PackTxSetAndBlockSummary()
-	f.blockAdopt <- struct{}{}
-	defer func() { <-f.blockAdopt }()
+
+	// f.blockAdopt <- struct{}{}
+	// defer func() { <-f.blockAdopt }()
+	f.mux.Lock()
+	defer f.mux.Unlock()
 
 	origin, _ := tx.Origin()
 	if f.runtime.Context().Number >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
