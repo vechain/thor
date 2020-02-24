@@ -44,7 +44,10 @@ func (a *Authority) getEntry(nodeMaster thor.Address) (*entry, error) {
 
 func (a *Authority) getEntry2(nodeMaster thor.Address) (*entry2, error) {
 	var entry entry2
-	if err := a.state.DecodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func(raw []byte) error {
+
+	key := thor.BytesToBytes32(append([]byte("vip193"), nodeMaster.Bytes()...))
+
+	if err := a.state.DecodeStorage(a.addr, key, func(raw []byte) error {
 		if len(raw) == 0 {
 			return nil
 		}
@@ -56,7 +59,9 @@ func (a *Authority) getEntry2(nodeMaster thor.Address) (*entry2, error) {
 }
 
 func (a *Authority) setEntry(nodeMaster thor.Address, entry *entry) error {
-	return a.state.EncodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func() ([]byte, error) {
+	key := thor.BytesToBytes32(append([]byte("vip193"), nodeMaster.Bytes()...))
+
+	return a.state.EncodeStorage(a.addr, key, func() ([]byte, error) {
 		if entry.IsEmpty() {
 			return nil, nil
 		}

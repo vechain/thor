@@ -30,7 +30,7 @@ func (err consensusError) Error() string {
 	s := strings.Join(err.trace, ": ")
 	if len(err.strData) > 0 {
 		// s = fmt.Sprintf(s+": "+err.strData, err.data...)
-		s = fmt.Sprintf(strings.Join(err.strData, ", "), err.data...)
+		s = fmt.Sprintf(strings.Join(err.strData, "=%v, ")+"=%v", err.data...)
 	}
 	if len(err.strCause) > 0 {
 		s += fmt.Sprintf("\n\tCaused by: ") + err.strCause
@@ -73,16 +73,16 @@ const (
 	strErrProof        = "invalid vrf proof"
 	strErrNotCandidate = "not a candidate"
 
-	strDataParent    = "parent=%v"
-	strDataTimestamp = "timestamp=%v"
-	strDataNowTime   = "now=%v"
-	strDataAddr      = "signer=%v"
-	strDataSingleVal = "%v"
-	strDataCurr      = "curr=%v"
-	strDataExpected  = "expected=%v"
-	strDataRef       = "ref=%v"
-	strDataExp       = "exp=%v"
-	strDataLocal     = "local=%v"
+	strDataParent    = "parent"
+	strDataTimestamp = "timestamp"
+	strDataNowTime   = "now"
+	strDataAddr      = "signer"
+	strDataSingleVal = ""
+	strDataCurr      = "curr"
+	strDataExpected  = "expected"
+	strDataRef       = "ref"
+	strDataExp       = "exp"
+	strDataLocal     = "local"
 )
 
 // Trace where the error is generated

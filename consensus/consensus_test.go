@@ -13,7 +13,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/builtin/authority"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/muxdb"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -352,4 +357,56 @@ func (tc *testConsensus) TestValidateProposer() {
 	for _, trigger := range triggers {
 		trigger()
 	}
+}
+
+func TestUpdateConsensusNodeForVip193(t *testing.T) {
+	candidates := []authority.Candidate{
+		{
+			thor.MustParseAddress("0x2a02604a8b7aaa84991c21d7de1c3238046c5275"),
+			thor.MustParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"),
+			thor.Bytes32{},
+			true,
+			thor.MustParseBytes32("0x96893d6f2d785dbdf75d635d74ee53b85a3e7837150d321c4965de3def134182"),
+		},
+		{
+			thor.MustParseAddress("0x86fd9eb1cf082d7d6b0c6033fc89ccfcbf648549"),
+			thor.MustParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"),
+			thor.Bytes32{},
+			true,
+			thor.MustParseBytes32("0x97b182c4d88435c3781bf5f29a59c169a91564acbf193c9ba95a4db3fa703f26"),
+		},
+		{
+			thor.MustParseAddress("0x8f53d18bb03c84ed92abe0b6a9a8c277dbbf719f"),
+			thor.MustParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed"),
+			thor.Bytes32{},
+			true,
+			thor.MustParseBytes32("0x2ab534b885f45e7e628e3bea8bb1a7e914f0009d077a44ac2d4461e7731fcb2c"),
+		},
+	}
+
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	gen, _, _, err := new(genesis.Builder).State(func(st *state.State) error {
+		st.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+
+		aut := builtin.Authority.Native(st)
+		for _, c := range candidates {
+			ok, err := aut.Add(c.NodeMaster, c.Endorsor, c.Identity)
+			assert.True(t, ok)
+			assert.Nil(t, err)
+		}
+		return nil
+	}).Build(stater)
+	assert.Nil(t, err)
+
+	repo, err := chain.NewRepository(db, gen)
+	assert.Nil(t, err)
+	cons := New(repo, stater, thor.ForkConfig{
+		VIP193: 1,
+	})
+
+	header := new(block.Builder).ParentID(thor.Bytes32{}).Build().Header()
+
+	err = cons.UpdateConsensusNodesForVip193(header)
+	assert.Nil(t, err)
 }

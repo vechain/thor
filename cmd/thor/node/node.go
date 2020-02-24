@@ -87,7 +87,7 @@ func New(
 	}
 }
 
-// Run ...
+// Run launches loops
 func (n *Node) Run(ctx context.Context, mode int) error {
 	if mode != 1 {
 		log.Info("test mode on", "mod", mode)

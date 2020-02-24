@@ -83,9 +83,22 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 
 	if header.TxsFeatures() != features {
-		return nil, nil, newConsensusError("Process: ", strErrTxFeatures,
+		return nil, nil, newConsensusError("Process", strErrTxFeatures,
 			[]string{strDataExpected, strDataCurr},
 			[]interface{}{features, header.TxsFeatures()}, "")
+	}
+
+	vip193 := c.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
+	}
+	if header.Number() == vip193 {
+		if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
+			return nil, nil, newConsensusError("Process", "failed to add authority v2 bytecode", nil, nil, err.Error())
+		}
+		if err := c.UpdateConsensusNodesForVip193(header); err != nil {
+			return nil, nil, err.(consensusError).AddTraceInfo("Process")
+		}
 	}
 
 	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)
@@ -130,14 +143,66 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		c.forkConfig), nil
 }
 
-// func (c *Consensus) stringCachedCandidates(id thor.Bytes32) string {
-// 	candidates, ok := c.candidatesCache.Get(id)
-// 	if !ok {
-// 		return "no data cached"
-// 	}
-// 	str := fmt.Sprintf("parentID: %v\ncandidates:\n", id)
-// 	for _, candidate := range candidates.(*poa.Candidates).List() {
-// 		str += fmt.Sprintf("%v, %v\n", candidate.NodeMaster, candidate.Active)
-// 	}
-// 	return str
-// }
+// UpdateConsensusNodesForVip193 adds vrf public key for each existing consensus node
+func (c *Consensus) UpdateConsensusNodesForVip193(header *block.Header) error {
+	if c.forkConfig.VIP193 != header.Number() {
+		return newConsensusError("UpdateNode", "block number inconsistent with vip193",
+			[]string{strDataExp, strDataCurr},
+			[]interface{}{c.forkConfig.VIP193, header.Number()}, "")
+	}
+
+	st := c.stater.NewState(header.ID())
+	aut := builtin.Authority.Native(st)
+	candidates, err := aut.AllCandidates()
+	if err != nil {
+		return err
+	}
+
+	for i, candidate := range candidates {
+		vrfpk := thor.GetVrfPuiblicKey(candidate.NodeMaster)
+		if vrfpk.IsZero() {
+			return newConsensusError("UpdateNode", "vrf public key not found",
+				[]string{"node"}, []interface{}{candidate.NodeMaster}, "")
+		}
+
+		candidate.VrfPublicKey = vrfpk
+
+		ok, err := aut.Add2(candidate.NodeMaster, candidate.Endorsor, candidate.Identity, candidate.VrfPublicKey)
+		var causeMsg string
+		if err != nil {
+			causeMsg = err.Error()
+		}
+		if !ok || err != nil {
+			return newConsensusError("UpdateNode", "failed to add node",
+				[]string{"node"}, []interface{}{candidate.NodeMaster}, causeMsg)
+		}
+
+		if !candidate.Active {
+			ok, err := aut.Update2(candidate.NodeMaster, false)
+			var causeMsg string
+			if err != nil {
+				causeMsg = err.Error()
+			}
+			if (!ok && i > 0) || err != nil {
+				return newConsensusError("UpdateNode", "failed to update node status",
+					[]string{"node"}, []interface{}{candidate.NodeMaster}, causeMsg)
+			}
+		}
+	}
+
+	// Update again the status of the first node because when it is added to the state
+	// it is unlinked and therefore, its status is not updated
+	if !candidates[0].Active {
+		ok, err := aut.Update2(candidates[0].NodeMaster, false)
+		var causeMsg string
+		if err != nil {
+			causeMsg = err.Error()
+		}
+		if !ok || err != nil {
+			return newConsensusError("UpdateNode", "failed to update node status",
+				[]string{"node"}, []interface{}{candidates[0].NodeMaster}, causeMsg)
+		}
+	}
+
+	return nil
+}
