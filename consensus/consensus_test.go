@@ -404,6 +404,8 @@ func TestUpdateConsensusNodeForVip193(t *testing.T) {
 	cons := New(repo, stater, thor.ForkConfig{
 		VIP193: 1,
 	})
+	err = state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes())
+	assert.Nil(t, err)
 
 	header := new(block.Builder).ParentID(thor.Bytes32{}).Build().Header()
 
