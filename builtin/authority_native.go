@@ -131,7 +131,18 @@ func init() {
 		}},
 		{"native_first", func(env *xenv.Environment) []interface{} {
 			env.UseGas(thor.SloadGas)
-			nodeMaster, err := Authority.Native(env.State()).First()
+
+			var (
+				nodeMaster *thor.Address
+				err        error
+			)
+
+			// check contract code length to choose between func Next and Next2
+			if len(env.Contract().Code) == len(Authority.RuntimeBytecodes()) {
+				nodeMaster, err = Authority.Native(env.State()).First()
+			} else {
+				nodeMaster, err = Authority.Native(env.State()).First2()
+			}
 			if err != nil {
 				panic(err)
 			}

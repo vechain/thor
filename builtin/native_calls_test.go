@@ -407,10 +407,6 @@ func TestAuthorityV2Native(t *testing.T) {
 		caller: executor,
 	}
 
-	test.Case("executor").
-		ShouldOutput(executor).
-		Assert(t)
-
 	test.Case("first").
 		ShouldOutput(thor.Address{}).
 		Assert(t)

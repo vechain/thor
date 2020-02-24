@@ -16,6 +16,9 @@ import (
 var (
 	headKey = thor.Blake2b([]byte("head"))
 	tailKey = thor.Blake2b([]byte("tail"))
+
+	headKey2 = thor.Blake2b([]byte("head2"))
+	tailKey2 = thor.Blake2b([]byte("tail2"))
 )
 
 // Authority implements native methods of `Authority` contract.
@@ -59,9 +62,7 @@ func (a *Authority) getEntry2(nodeMaster thor.Address) (*entry2, error) {
 }
 
 func (a *Authority) setEntry(nodeMaster thor.Address, entry *entry) error {
-	key := thor.BytesToBytes32(append([]byte("vip193"), nodeMaster.Bytes()...))
-
-	return a.state.EncodeStorage(a.addr, key, func() ([]byte, error) {
+	return a.state.EncodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func() ([]byte, error) {
 		if entry.IsEmpty() {
 			return nil, nil
 		}
@@ -70,7 +71,9 @@ func (a *Authority) setEntry(nodeMaster thor.Address, entry *entry) error {
 }
 
 func (a *Authority) setEntry2(nodeMaster thor.Address, entry *entry2) error {
-	return a.state.EncodeStorage(a.addr, thor.BytesToBytes32(nodeMaster[:]), func() ([]byte, error) {
+	key := thor.BytesToBytes32(append([]byte("vip193"), nodeMaster.Bytes()...))
+
+	return a.state.EncodeStorage(a.addr, key, func() ([]byte, error) {
 		if entry.IsEmpty() {
 			return nil, nil
 		}
@@ -128,7 +131,7 @@ func (a *Authority) Get2(nodeMaster thor.Address) (listed bool, endorsor thor.Ad
 	// if it's the only node, IsLinked will be false.
 	// check whether it's the head.
 	var ptr *thor.Address
-	if ptr, err = a.getAddressPtr(headKey); err != nil {
+	if ptr, err = a.getAddressPtr(headKey2); err != nil {
 		return
 	}
 	listed = ptr != nil && *ptr == nodeMaster
@@ -195,17 +198,17 @@ func (a *Authority) Add2(nodeMaster thor.Address, endorsor thor.Address, identit
 	entry.Active = true // defaults to active
 	entry.VrfPublicKey = vrfPublicKey
 
-	tailPtr, err := a.getAddressPtr(tailKey)
+	tailPtr, err := a.getAddressPtr(tailKey2)
 	if err != nil {
 		return false, err
 	}
 	entry.Prev = tailPtr
 
-	if err := a.setAddressPtr(tailKey, &nodeMaster); err != nil {
+	if err := a.setAddressPtr(tailKey2, &nodeMaster); err != nil {
 		return false, err
 	}
 	if tailPtr == nil {
-		if err := a.setAddressPtr(headKey, &nodeMaster); err != nil {
+		if err := a.setAddressPtr(headKey2, &nodeMaster); err != nil {
 			return false, err
 		}
 	} else {
@@ -286,7 +289,7 @@ func (a *Authority) Revoke2(nodeMaster thor.Address) (bool, error) {
 	}
 
 	if entry.Prev == nil {
-		if err := a.setAddressPtr(headKey, entry.Next); err != nil {
+		if err := a.setAddressPtr(headKey2, entry.Next); err != nil {
 			return false, err
 		}
 	} else {
@@ -301,7 +304,7 @@ func (a *Authority) Revoke2(nodeMaster thor.Address) (bool, error) {
 	}
 
 	if entry.Next == nil {
-		if err := a.setAddressPtr(tailKey, entry.Prev); err != nil {
+		if err := a.setAddressPtr(tailKey2, entry.Prev); err != nil {
 			return false, err
 		}
 	} else {
@@ -442,7 +445,7 @@ func (a *Authority) AllCandidates() ([]*Candidate, error) {
 
 // AllCandidates2 lists all registered candidates. (vip193)
 func (a *Authority) AllCandidates2() ([]*Candidate, error) {
-	ptr, err := a.getAddressPtr(headKey)
+	ptr, err := a.getAddressPtr(headKey2)
 	if err != nil {
 		return nil, err
 	}
@@ -467,6 +470,11 @@ func (a *Authority) AllCandidates2() ([]*Candidate, error) {
 // First returns node master address of first entry.
 func (a *Authority) First() (*thor.Address, error) {
 	return a.getAddressPtr(headKey)
+}
+
+// First2 returns node master address of first entry (vip193).
+func (a *Authority) First2() (*thor.Address, error) {
+	return a.getAddressPtr(headKey2)
 }
 
 // Next returns address of next node master address after given node master address.
