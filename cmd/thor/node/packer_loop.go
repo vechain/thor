@@ -131,6 +131,10 @@ func (n *Node) pack(flow *packer.Flow) error {
 	}
 	execElapsed := mclock.Now() - startTime
 
+	if _, _, err := n.cons.Process(newBlock, uint64(time.Now().Unix())); err != nil {
+		panic(err)
+	}
+
 	if _, err := stage.Commit(); err != nil {
 		return errors.WithMessage(err, "commit state")
 	}
@@ -164,7 +168,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 // 3. pack and commit new block
 func (n *Node) packerLoopVip193(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Debug(str, append([]interface{}{"key", "packer"}, kv...)...)
+		log.Info(str, append([]interface{}{"key", "packer"}, kv...)...)
 	}
 
 	errLog := func(msg string, kv ...interface{}) {
@@ -219,6 +223,7 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 					errLog("Schedule", "err", err)
 					continue
 				}
+				debugLog(fmt.Sprintf("scheduled time in %v", flow.When()-now))
 
 				// start the go routine for adopting txs right afer flow is renewed
 				_ctx, _cancel := context.WithCancel(ctx)
@@ -347,6 +352,10 @@ func (n *Node) packerLoopVip193(ctx context.Context) {
 
 			// reset flow
 			flow.Close()
+
+			if _, _, err := n.cons.Process(newBlock, now); err != nil {
+				panic(err)
+			}
 
 			debugLog("Committing new block")
 			if _, err := stage.Commit(); err != nil {

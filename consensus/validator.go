@@ -29,6 +29,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
+	// update the node status to the state
 	candidates, err := c.validateProposer(header, parentHeader, state)
 	if err != nil {
 		return nil, nil, err
@@ -38,6 +39,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
+	// execute txs and update the state
 	stage, receipts, err := c.verifyBlock(block, state)
 	if err != nil {
 		return nil, nil, err
@@ -206,8 +208,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parentHeader *bloc
 	if vip193 == 0 {
 		vip193 = 1
 	}
-	isVip193 := header.Number() >= vip193
-	if isVip193 {
+	if header.Number() >= vip193 {
 		return c.validateBlockHeaderVip193(header, parentHeader)
 	}
 	return nil
@@ -224,7 +225,6 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	if vip193 == 0 {
 		vip193 = 1
 	}
-	isVip193 := header.Number() >= vip193
 
 	aut := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
@@ -235,7 +235,9 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 			list []*authority.Candidate
 			err  error
 		)
-		if !isVip193 {
+
+		// Get candidates from the PARENT block
+		if parent.Number() < vip193 {
 			list, err = aut.AllCandidates()
 		} else {
 			list, err = aut.AllCandidates2()
@@ -277,8 +279,9 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 			[]interface{}{parent.TotalScore() + score, header.TotalScore()}, "")
 	}
 
+	// Update node status for the CURRENT block
 	for _, u := range updates {
-		if !isVip193 {
+		if parent.Number()+1 < vip193 {
 			if _, err := aut.Update(u.Address, u.Active); err != nil {
 				return nil, err
 			}

@@ -64,7 +64,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, errParentMissing
 	}
 
-	state := c.stater.NewState(parentSummary.Header.StateRoot())
+	st := c.stater.NewState(parentSummary.Header.StateRoot())
 
 	vip191 := c.forkConfig.VIP191
 	if vip191 == 0 {
@@ -92,18 +92,17 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	if vip193 == 0 {
 		vip193 = 1
 	}
+
+	// add vrf public keys before validating the last non-vip193 block
 	if header.Number() == vip193 {
-		if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
-			return nil, nil, newConsensusError("Process", "failed to add authority v2 bytecode", nil, nil, err.Error())
-		}
-		if err := c.UpdateConsensusNodesForVip193(state); err != nil {
-			return nil, nil, err.(consensusError).AddTraceInfo("Process")
+		if err := updateConsensusNodesForVip193(st); err != nil {
+			return nil, nil, err
 		}
 	}
 
-	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)
+	stage, receipts, err := c.validate(st, blk, parentSummary.Header, nowTimestamp)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, err.(consensusError).AddTraceInfo("Process")
 	}
 
 	return stage, receipts, nil
@@ -143,22 +142,11 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		c.forkConfig), nil
 }
 
-// UpdateConsensusNodesForVip193 adds vrf public key for each existing consensus node
-func (c *Consensus) UpdateConsensusNodesForVip193(st *state.State) error {
-	// if c.forkConfig.VIP193 != header.Number() {
-	// 	return newConsensusError("UpdateNode", "block number inconsistent with vip193",
-	// 		[]string{strDataExp, strDataCurr},
-	// 		[]interface{}{c.forkConfig.VIP193, header.Number()}, "")
-	// }
-
-	// parent, err := c.repo.GetBlock(header.ParentID())
-	// if err != nil {
-	// 	return newConsensusError("UpdateNode", "failed to get parent block",
-	// 		[]string{strDataParent},
-	// 		[]interface{}{header.ParentID()}, err.Error())
-	// }
-
-	// st := c.stater.NewState(parent.Header().StateRoot())
+// updateConsensusNodesForVip193 adds vrf public key for each existing consensus node
+func updateConsensusNodesForVip193(st *state.State) error {
+	if err := st.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
+		return newConsensusError("UpdateNode", "failed to add authority v2 bytecode", nil, nil, err.Error())
+	}
 
 	aut := builtin.Authority.Native(st)
 	candidates, err := aut.AllCandidates()
@@ -197,20 +185,5 @@ func (c *Consensus) UpdateConsensusNodesForVip193(st *state.State) error {
 			}
 		}
 	}
-
-	// // Update again the status of the first node because when it is added to the state
-	// // it is unlinked and therefore, its status is not updated
-	// if len(candidates) > 1 && !candidates[0].Active {
-	// 	ok, err := aut.Update2(candidates[0].NodeMaster, false)
-	// 	var causeMsg string
-	// 	if err != nil {
-	// 		causeMsg = err.Error()
-	// 	}
-	// 	if !ok || err != nil {
-	// 		return newConsensusError("UpdateNode", "failed to update node status",
-	// 			[]string{"node"}, []interface{}{candidates[0].NodeMaster}, causeMsg)
-	// 	}
-	// }
-
 	return nil
 }

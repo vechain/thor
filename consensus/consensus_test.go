@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/authority"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
@@ -86,6 +85,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		expected := newConsensusError(trHeader, strErrTimestamp,
 			[]string{strDataParent, strDataCurr},
 			[]interface{}{tc.Parent.Header().Timestamp(), blk.Header().Timestamp()}, "").Error()
+
 		assert.Equal(tc.t, actual, expected)
 
 		rebuild, err = tc.Rebuild(build.Timestamp(tc.Parent.Header().Timestamp() - 1))
@@ -407,11 +407,11 @@ func TestUpdateConsensusNodeForVip193(t *testing.T) {
 	}).Build(stater)
 	assert.Nil(t, err)
 
-	repo, err := chain.NewRepository(db, gen)
-	assert.Nil(t, err)
-	cons := New(repo, stater, thor.ForkConfig{
-		VIP193: 1,
-	})
+	// repo, err := chain.NewRepository(db, gen)
+	// assert.Nil(t, err)
+	// cons := New(repo, stater, thor.ForkConfig{
+	// 	VIP193: 1,
+	// })
 
 	st := stater.NewState(gen.Header().StateRoot())
 
@@ -421,7 +421,7 @@ func TestUpdateConsensusNodeForVip193(t *testing.T) {
 	err = st.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes())
 	assert.Nil(t, err)
 
-	err = cons.UpdateConsensusNodesForVip193(st)
+	err = updateConsensusNodesForVip193(st)
 	assert.Nil(t, err)
 
 	_candidates, err := builtin.Authority.Native(st).AllCandidates2()

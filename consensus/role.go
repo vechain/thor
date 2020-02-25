@@ -268,7 +268,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 	}
 
 	// check whether is a registered consensus node
-	candidates, _, st, err := c.getAllCandidates(parentHeader)
+	candidates, st, err := c.getAllCandidates(parentHeader)
 	if err != nil {
 		return newConsensusError(trEndorsement, "get all candidates", nil, nil, err.Error())
 	}
@@ -327,7 +327,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 // 2. leadership
 // 3. total score
 func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Header, timestamp, totalScore uint64) (*poa.Candidates, error) {
-	candidates, authority, st, err := c.getAllCandidates(parentHeader)
+	candidates, st, err := c.getAllCandidates(parentHeader)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 			[]interface{}{timestamp, signer}, "")
 	}
 
-	updates, score := sched.Updates(timestamp)
+	_, score := sched.Updates(timestamp)
 	if parentHeader.TotalScore()+score != totalScore {
 		// return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parentHeader.TotalScore()+score, totalScore))
 		return nil, newConsensusError(trLeader, strErrTotalScore,
@@ -360,31 +360,45 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 			[]interface{}{parentHeader.TotalScore() + score, totalScore}, "")
 	}
 
-	for _, u := range updates {
-		authority.Update2(u.Address, u.Active)
-		if !candidates.Update(u.Address, u.Active) {
-			// should never happen
-			panic("something wrong with candidates list")
-		}
-	}
+	// for _, u := range updates {
+	// 	authority.Update2(u.Address, u.Active)
+	// 	if !candidates.Update(u.Address, u.Active) {
+	// 		// should never happen
+	// 		panic("something wrong with candidates list")
+	// 	}
+	// }
 
 	return candidates, nil
 }
 
-func (c *Consensus) getAllCandidates(parentHeader *block.Header) (*poa.Candidates, *authority.Authority, *state.State, error) {
-	st := c.stater.NewState(parentHeader.StateRoot())
+func (c *Consensus) getAllCandidates(header *block.Header) (*poa.Candidates, *state.State, error) {
+	st := c.stater.NewState(header.StateRoot())
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parentHeader.ID()); ok {
+	if entry, ok := c.candidatesCache.Get(header.ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
-		ac, err := authority.AllCandidates2()
+		var (
+			list []*authority.Candidate
+			err  error
+		)
+
+		vip193 := c.forkConfig.VIP193
+		if vip193 == 0 {
+			vip193 = 1
+		}
+		if parent.Number() < vip193 {
+			list, err = authority.AllCandidates()
+		}
+		else {
+			list, err = authority.AllCandidates2()
+		}
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		candidates = poa.NewCandidates(ac)
+		candidates = poa.NewCandidates(list)
 	}
 
-	return candidates, authority, st, nil
+	return candidates, st, nil
 }

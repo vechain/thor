@@ -8,6 +8,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -237,9 +238,41 @@ func (n *Node) Run(ctx context.Context, mode int) error {
 		 */
 		n.comm.Sync(n.handleBlockStream)
 		n.goes.Go(func() { n.houseKeeping(ctx) })
-		n.goes.Go(func() { n.endorsorLoop(ctx) })
-		if n.getNodeID() == 2 {
-			n.goes.Go(func() { n.packerLoopVip193(ctx) })
+
+		// log.Info("waiting for synchronization...")
+		// select {
+		// case <-ctx.Done():
+		// 	break
+		// case <-n.comm.Synced():
+		// }
+		// log.Info("synchronization process done")
+
+		if !n.isNextBlockVip193() {
+			if n.getNodeID() == 2 {
+				n.goes.Go(func() { n.packerLoop(ctx) })
+			}
+		}
+
+		ticker := time.NewTicker(time.Second)
+
+		if n.forkConfig.VIP193 == math.MaxUint32 {
+			break
+		}
+	CASE8:
+		for {
+			select {
+			case <-ctx.Done():
+				break CASE8
+			case <-ticker.C:
+				if !n.isNextBlockVip193() {
+					continue
+				}
+				n.goes.Go(func() { n.endorsorLoop(ctx) })
+				if n.getNodeID() == 2 {
+					n.goes.Go(func() { n.packerLoopVip193(ctx) })
+				}
+				break CASE8
+			}
 		}
 	default:
 		panic("test does not exist")
@@ -793,7 +826,9 @@ func (n *Node) isNextBlockVip193() bool {
 	if vip193 == 0 {
 		vip193 = 1
 	}
-	return n.repo.BestBlock().Header().Number()+1 >= vip193
+
+	next := n.repo.BestBlock().Header().Number() + 1
+	return next >= vip193
 }
 
 func checkClockOffset() {

@@ -27,13 +27,13 @@ type consensusError struct {
 
 func (err consensusError) Error() string {
 	// s := err.trace + err.strErr
-	s := strings.Join(err.trace, ": ")
+	s := strings.Join(err.trace, ">") + ", " + err.strErr
 	if len(err.strData) > 0 {
 		// s = fmt.Sprintf(s+": "+err.strData, err.data...)
-		s = fmt.Sprintf(strings.Join(err.strData, "=%v, ")+"=%v", err.data...)
+		s += ": " + fmt.Sprintf(strings.Join(err.strData, "=%v, ")+"=%v", err.data...)
 	}
 	if len(err.strCause) > 0 {
-		s += fmt.Sprintf("\n\tCaused by: ") + err.strCause
+		s += fmt.Sprintf(", caused by: ") + err.strCause
 	}
 	return s
 }

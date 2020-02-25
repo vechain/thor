@@ -6,8 +6,10 @@
 package genesis
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -55,8 +57,6 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 		gen.Params.ProposerEndorsement = new(big.Int).SetInt64(0)
 	}
 
-	vip193 := gen.ForkConfig.VIP193 == 0 || gen.ForkConfig.VIP193 == 1
-
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
@@ -69,7 +69,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			}
 
 			// alloc builtin contracts
-			if !vip193 {
+			if gen.ForkConfig.VIP193 > 1 {
 				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
 					return err
 				}
@@ -77,6 +77,14 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
 					return err
 				}
+			}
+
+			// save vip193 fork value in order to distinguish genesis blocks with the same settings
+			// except the vip193 fork value
+			if gen.ForkConfig.VIP193 < math.MaxUint32 {
+				var b thor.Bytes32
+				binary.BigEndian.PutUint32(b[:], gen.ForkConfig.VIP193)
+				state.SetStorage(builtin.Authority.Address, thor.BytesToBytes32([]byte("vip193")), b)
 			}
 
 			if err := state.SetCode(builtin.Energy.Address, builtin.Energy.RuntimeBytecodes()); err != nil {
@@ -186,7 +194,7 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
 		var data []byte
-		if !vip193 {
+		if gen.ForkConfig.VIP193 > 1 {
 			data = mustEncodeInput(builtin.Authority.ABI, "add",
 				anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
 		} else {

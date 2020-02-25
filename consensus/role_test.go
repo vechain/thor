@@ -12,6 +12,11 @@ import (
 	"github.com/vechain/thor/vrf"
 )
 
+// func TestError(t *testing.T) {
+// 	err := newConsensusError("tr1", "str msg", []string{"dat1", "dat2"}, []interface{}{1, 2}, "cause msg").AddTraceInfo("tr2")
+// 	fmt.Println(err)
+// }
+
 func TestThreshold(t *testing.T) {
 	// th := getCommitteeThreshold()
 	// // ratio = threhsold / (1 << 32 - 1) <= amp_factor * #committee / #node

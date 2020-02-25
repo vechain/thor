@@ -391,7 +391,7 @@ func (a *Authority) Candidates(endorsement *big.Int, limit uint64) ([]*Candidate
 
 // Candidates2 picks a batch of candidates up to limit, that satisfy given endorsement. (vip193)
 func (a *Authority) Candidates2(endorsement *big.Int, limit uint64) ([]*Candidate, error) {
-	ptr, err := a.getAddressPtr(headKey)
+	ptr, err := a.getAddressPtr(headKey2)
 	if err != nil {
 		return nil, err
 	}

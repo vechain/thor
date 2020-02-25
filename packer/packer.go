@@ -6,6 +6,7 @@
 package packer
 
 import (
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/authority"
@@ -49,7 +50,7 @@ func New(
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
 func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.StateRoot())
+	st := p.stater.NewState(parent.StateRoot())
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
 	vip191 := p.forkConfig.VIP191
@@ -58,7 +59,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	if parent.Number()+1 == vip191 {
-		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+		if err := st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			return nil, err
 		}
 	}
@@ -68,21 +69,31 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		features |= tx.DelegationFeature
 	}
 
-	aut := builtin.Authority.Native(state)
-	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
-	if err != nil {
-		return nil, err
-	}
-
-	var candidates []*authority.Candidate
 	vip193 := p.forkConfig.VIP193
 	if vip193 == 0 {
 		vip193 = 1
 	}
-	isVip193 := parent.Number()+1 >= vip193
-	if !isVip193 {
+
+	if parent.Number()+1 == vip193 {
+		// 1. add authority-v2 runtime code
+		// 2. copy existing node info and add vrf public keys
+		if err := updateConsensusNodesForVip193(st); err != nil {
+			return nil, err
+		}
+	}
+
+	var candidates []*authority.Candidate
+
+	aut := builtin.Authority.Native(st)
+	endorsement, err := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get candidates from the PARENT block
+	if parent.Number() < vip193 { // if the parent block is not a vip193 block
 		candidates, err = aut.Candidates(endorsement, thor.MaxBlockProposers)
-	} else {
+	} else { // if it is
 		candidates, err = aut.Candidates2(endorsement, thor.MaxBlockProposers)
 	}
 	if err != nil {
@@ -117,12 +128,13 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	newBlockTime := sched.Schedule(nowTimestamp)
 	updates, score := sched.Updates(newBlockTime)
 
+	// Update node status for the CURRENT block
 	for _, u := range updates {
-		if !isVip193 {
+		if parent.Number()+1 < vip193 { // if the current block is not a vip193 block
 			if _, err := aut.Update(u.Address, u.Active); err != nil {
 				return nil, err
 			}
-		} else {
+		} else { // if it is
 			if _, err := aut.Update2(u.Address, u.Active); err != nil {
 				return nil, err
 			}
@@ -131,7 +143,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 
 	rt := runtime.New(
 		p.repo.NewChain(parent.ID()),
-		state,
+		st,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
@@ -200,4 +212,45 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 // it as it can.
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
+}
+
+// updateConsensusNodesForVip193 adds vrf public key for each existing consensus node
+func updateConsensusNodesForVip193(st *state.State) error {
+	if err := st.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
+		return errors.WithMessage(err, "failed to add authority v2 bytecode")
+	}
+
+	aut := builtin.Authority.Native(st)
+	candidates, err := aut.AllCandidates()
+	if err != nil {
+		return errors.WithMessage(err, "failed to get candidates")
+	}
+
+	for _, candidate := range candidates {
+		vrfPublicKey := thor.GetVrfPuiblicKey(candidate.NodeMaster)
+		if vrfPublicKey.IsZero() {
+			return errors.New("vrf public key not found")
+		}
+
+		ok, err := aut.Add2(candidate.NodeMaster, candidate.Endorsor, candidate.Identity, vrfPublicKey)
+		if !ok {
+			return errors.New("failed to add consensus node")
+		}
+		if err != nil {
+			return errors.WithMessage(err, "failed to add consensus node")
+		}
+	}
+
+	for _, candidate := range candidates {
+		if !candidate.Active {
+			ok, err := aut.Update2(candidate.NodeMaster, false)
+			if !ok {
+				return errors.New("failed to update consensus node status")
+			}
+			if err != nil {
+				return errors.WithMessage(err, "failed to update consensus node status")
+			}
+		}
+	}
+	return nil
 }

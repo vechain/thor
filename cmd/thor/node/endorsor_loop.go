@@ -15,7 +15,7 @@ import (
 // endorsorLoop is the loop dedicated to endorsing incoming block summaries
 func (n *Node) endorsorLoop(ctx context.Context) {
 	debugLog := func(str string, kv ...interface{}) {
-		log.Debug(str, append([]interface{}{"key", "edlp"}, kv...)...)
+		log.Info(str, append([]interface{}{"key", "edlp"}, kv...)...)
 	}
 
 	errLog := func(str string, kv ...interface{}) {
