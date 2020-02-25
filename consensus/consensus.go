@@ -72,7 +72,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
 	if header.Number() == vip191 {
-		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+		if err := st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			return nil, nil, err
 		}
 	}

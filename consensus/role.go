@@ -29,7 +29,7 @@ import (
 // threshold is determined by the current number of qualified consensus nodes
 // not the fixed max number of nodes allowed.
 func (c *Consensus) getCommitteeThreshold() (uint32, error) {
-	candidates, _, st, err := c.getAllCandidates(c.repo.BestBlock().Header())
+	candidates, st, err := c.getAllCandidates(c.repo.BestBlock().Header())
 	if err != nil {
 		return 0, err
 	}
@@ -267,7 +267,7 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return newConsensusError(trEndorsement, strErrSignature, nil, nil, err.Error())
 	}
 
-	// check whether is a registered consensus node
+	// check whether ed signer is a registered consensus node
 	candidates, st, err := c.getAllCandidates(parentHeader)
 	if err != nil {
 		return newConsensusError(trEndorsement, "get all candidates", nil, nil, err.Error())
@@ -289,6 +289,15 @@ func (c *Consensus) ValidateEndorsement(ed *block.Endorsement, parentHeader *blo
 		return newConsensusError(trEndorsement, strErrNotCandidate,
 			[]string{strDataAddr},
 			[]interface{}{signer}, "")
+	}
+
+	if parentHeader.Number()+1 == c.forkConfig.VIP193 {
+		vpk := thor.GetVrfPuiblicKey(candidate.Address)
+		if vpk.IsZero() {
+			return newConsensusError(trEndorsement, "failed to get the hard-coded vrf public key",
+				[]string{strDataAddr}, []interface{}{candidate.Address}, "")
+		}
+		candidate.VrfPublicKey = vpk
 	}
 
 	// Compute random seed
@@ -374,31 +383,30 @@ func (c *Consensus) validateLeader(signer thor.Address, parentHeader *block.Head
 func (c *Consensus) getAllCandidates(header *block.Header) (*poa.Candidates, *state.State, error) {
 	st := c.stater.NewState(header.StateRoot())
 
-	authority := builtin.Authority.Native(st)
+	aut := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(header.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
-	} else {
-		var (
-			list []*authority.Candidate
-			err  error
-		)
+	// if entry, ok := c.candidatesCache.Get(header.ID()); ok {
+	// 	candidates = entry.(*poa.Candidates).Copy()
+	// } else {
+	var (
+		list []*authority.Candidate
+		err  error
+	)
 
-		vip193 := c.forkConfig.VIP193
-		if vip193 == 0 {
-			vip193 = 1
-		}
-		if parent.Number() < vip193 {
-			list, err = authority.AllCandidates()
-		}
-		else {
-			list, err = authority.AllCandidates2()
-		}
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		candidates = poa.NewCandidates(list)
+	vip193 := c.forkConfig.VIP193
+	if vip193 == 0 {
+		vip193 = 1
 	}
+	if header.Number() < vip193 {
+		list, err = aut.AllCandidates()
+	} else {
+		list, err = aut.AllCandidates2()
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	candidates = poa.NewCandidates(list)
+	// }
 
 	return candidates, st, nil
 }

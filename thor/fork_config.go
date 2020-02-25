@@ -69,6 +69,10 @@ var vrfPublicKeyMap = map[Address]Bytes32{
 	MustParseAddress("0x2a02604a8b7aaa84991c21d7de1c3238046c5275"): MustParseBytes32("0x96893d6f2d785dbdf75d635d74ee53b85a3e7837150d321c4965de3def134182"),
 	MustParseAddress("0x86fd9eb1cf082d7d6b0c6033fc89ccfcbf648549"): MustParseBytes32("0x97b182c4d88435c3781bf5f29a59c169a91564acbf193c9ba95a4db3fa703f26"),
 	MustParseAddress("0x8f53d18bb03c84ed92abe0b6a9a8c277dbbf719f"): MustParseBytes32("0x2ab534b885f45e7e628e3bea8bb1a7e914f0009d077a44ac2d4461e7731fcb2c"),
+
+	MustParseAddress("0xc684d01c75b55f97342f7d6308c6bb6a9044049b"): MustParseBytes32("0x82df9d0359ece4425f3bd9aead531416661e8fde5b9db430575ad500f7457362"),
+	MustParseAddress("0x0ba96f66bc13de23b8bfb6afdf096c96cac09af1"): MustParseBytes32("0x1c5cbbeee8407404edd61fc8f1fc58c8947d1cbb7999910a75874ad1207ab886"),
+	MustParseAddress("0x45c7911e5267e48b073025b4e5e279776a00c377"): MustParseBytes32("0x8c0853b37f51cb1b730d1e1d3e3a7b7b4560ec2d7207294ff767357f179678cf"),
 }
 
 // GetVrfPuiblicKey returns the vrf public key for a given node

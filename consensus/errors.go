@@ -88,10 +88,10 @@ const (
 // Trace where the error is generated
 const (
 	trBlockBody    = "body"
-	trHeader       = "header"
-	trBlockSummary = "summary"
-	trEndorsement  = "endoresement"
-	trTxSet        = "tx set"
+	trHeader       = "HD"
+	trBlockSummary = "BS"
+	trEndorsement  = "ED"
+	trTxSet        = "TS"
 	trProposer     = "proposer"
 	trLeader       = "leader"
 	trNil          = ""

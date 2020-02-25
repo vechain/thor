@@ -228,26 +228,26 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 
 	aut := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
-		candidates = entry.(*poa.Candidates).Copy()
+	// if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
+	// 	candidates = entry.(*poa.Candidates).Copy()
+	// } else {
+	var (
+		list []*authority.Candidate
+		// err  error
+	)
+
+	// Get candidates from the PARENT block
+	if parent.Number() < vip193 {
+		list, err = aut.AllCandidates()
 	} else {
-		var (
-			list []*authority.Candidate
-			err  error
-		)
-
-		// Get candidates from the PARENT block
-		if parent.Number() < vip193 {
-			list, err = aut.AllCandidates()
-		} else {
-			list, err = aut.AllCandidates2()
-		}
-
-		if err != nil {
-			return nil, err
-		}
-		candidates = poa.NewCandidates(list)
+		list, err = aut.AllCandidates2()
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	candidates = poa.NewCandidates(list)
+	// }
 
 	proposers, err := candidates.Pick(st)
 	if err != nil {
