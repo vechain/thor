@@ -8,6 +8,8 @@
 package muxdb
 
 import (
+	"io"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -15,7 +17,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
-	"io"
 )
 
 const (
@@ -62,12 +63,13 @@ type MuxDB struct {
 func Open(path string, options *Options) (*MuxDB, error) {
 	// prepare leveldb options
 	ldbOpts := opt.Options{
-		OpenFilesCacheCapacity: options.OpenFilesCacheCapacity,
-		BlockCacheCapacity:     options.ReadCacheMB * opt.MiB,
-		WriteBuffer:            options.WriteBufferMB * opt.MiB,
-		Filter:                 filter.NewBloomFilter(10),
-		BlockSize:              1024 * 32, // balance performance of point reads and compression ratio.
-		DisableSeeksCompaction: true,
+		OpenFilesCacheCapacity:        options.OpenFilesCacheCapacity,
+		BlockCacheCapacity:            options.ReadCacheMB * opt.MiB,
+		WriteBuffer:                   options.WriteBufferMB * opt.MiB,
+		Filter:                        filter.NewBloomFilter(10),
+		BlockSize:                     1024 * 32, // balance performance of point reads and compression ratio.
+		DisableSeeksCompaction:        true,
+		CompactionTableSizeMultiplier: 2,
 		KeyVolatile: func(key []byte) bool {
 			switch key[0] {
 			case trieSpaceA, trieSpaceB, trieSecureKeySpace:
