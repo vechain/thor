@@ -25,7 +25,7 @@ func TestThreshold(t *testing.T) {
 	// 	t.Errorf("Invalid threshold")
 	// }
 
-	numOfNode := 10
+	numOfNode := 3
 
 	tc, _ := NewTempChain(numOfNode, thor.ForkConfig{})
 
@@ -46,7 +46,7 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestEpochNumber(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.ForkConfig{})
+	tc, _ := NewTempChain(3, thor.ForkConfig{})
 
 	launchTime := tc.GenesisBlock.Header().Timestamp()
 
@@ -93,7 +93,7 @@ func TestEpochNumber(t *testing.T) {
 }
 
 func TestValidateBlockSummary(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.ForkConfig{})
+	tc, _ := NewTempChain(3, thor.ForkConfig{})
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con
@@ -231,7 +231,7 @@ func TestValidateBlockSummary(t *testing.T) {
 // }
 
 func TestValidateEndorsement(t *testing.T) {
-	tc, _ := NewTempChain(10, thor.ForkConfig{})
+	tc, _ := NewTempChain(3, thor.ForkConfig{})
 	tc.NewBlock(1, nil)
 
 	cons := tc.Con

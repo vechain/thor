@@ -102,7 +102,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 
 	stage, receipts, err := c.validate(st, blk, parentSummary.Header, nowTimestamp)
 	if err != nil {
-		return nil, nil, err.(consensusError).AddTraceInfo("Process")
+		return nil, nil, err
 	}
 
 	return stage, receipts, nil

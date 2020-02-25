@@ -12,7 +12,7 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Println("command: vrfkey <DIR>")
+		fmt.Println("command: vrfkey <config-dir>")
 		return
 	}
 

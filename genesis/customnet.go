@@ -69,15 +69,15 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			}
 
 			// alloc builtin contracts
-			if gen.ForkConfig.VIP193 > 1 {
-				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
-					return err
-				}
-			} else {
-				if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
-					return err
-				}
+			// if gen.ForkConfig.VIP193 > 1 {
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				return err
 			}
+			// } else {
+			// 	if err := state.SetCode(builtin.Authority.Address, builtin.Authority.V2.RuntimeBytecodes()); err != nil {
+			// 		return err
+			// 	}
+			// }
 
 			// save vip193 fork value in order to distinguish genesis blocks with the same settings
 			// except the vip193 fork value
@@ -194,13 +194,13 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	// add initial authority nodes
 	for _, anode := range gen.Authority {
 		var data []byte
-		if gen.ForkConfig.VIP193 > 1 {
-			data = mustEncodeInput(builtin.Authority.ABI, "add",
-				anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
-		} else {
-			data = mustEncodeInput(builtin.Authority.V2.ABI, "add2",
-				anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
-		}
+		// if gen.ForkConfig.VIP193 > 1 {
+		data = mustEncodeInput(builtin.Authority.ABI, "add",
+			anode.MasterAddress, anode.EndorsorAddress, anode.Identity)
+		// } else {
+		// 	data = mustEncodeInput(builtin.Authority.V2.ABI, "add2",
+		// 		anode.MasterAddress, anode.EndorsorAddress, anode.Identity, anode.VrfPublicKey)
+		// }
 
 		builder.Call(tx.NewClause(&builtin.Authority.Address).WithData(data), executor)
 	}
@@ -223,6 +223,13 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	if err != nil {
 		panic(err)
 	}
+
+	if gen.ForkConfig.VIP193 != math.MaxUint32 {
+		for _, anode := range gen.Authority {
+			thor.SetVrfPbulicKey(anode.MasterAddress, anode.VrfPublicKey)
+		}
+	}
+
 	return &Genesis{builder, id, "customnet"}, nil
 }
 

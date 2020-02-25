@@ -23,7 +23,7 @@ import (
 )
 
 func TestConsensus(t *testing.T) {
-	ob, err := newTestConsensus(t, 10)
+	ob, err := newTestConsensus(t, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,6 +412,10 @@ func TestUpdateConsensusNodeForVip193(t *testing.T) {
 	// cons := New(repo, stater, thor.ForkConfig{
 	// 	VIP193: 1,
 	// })
+
+	for _, candidate := range candidates {
+		thor.SetVrfPbulicKey(candidate.NodeMaster, candidate.VrfPublicKey)
+	}
 
 	st := stater.NewState(gen.Header().StateRoot())
 
