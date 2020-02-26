@@ -111,7 +111,7 @@ func (s *Solo) loop(ctx context.Context) {
 			var (
 				err  error
 				flow *packer.Flow
-				done chan struct{}
+				// done chan struct{}
 			)
 
 			best := s.repo.BestBlock()
@@ -127,24 +127,28 @@ func (s *Solo) loop(ctx context.Context) {
 
 			prepareElapsed := mclock.Now() - startTime
 
-			done = make(chan struct{})
-			edCh := make(chan *block.Endorsement, thor.CommitteeSize)
-			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-				go s.endorse(done, edCh, flow.GetBlockSummary())
-			}
-
-			// var eds block.Endorsements
-			for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-				if flow.NumOfEndorsements() >= int(thor.CommitteeSize) {
-					// close(done)
-					done <- struct{}{}
-					break
+			// Produce endorsements that are signed by the block producer
+			// but include random generated VRF proofs
+			bs := flow.GetBlockSummary()
+			seed := bs.ID()
+			for flow.NumOfEndorsements() < int(thor.CommitteeSize) {
+				// generate vrf proofs from random vrf private keys
+				_, sk := vrf.GenKeyPair()
+				proof, err := sk.Prove(seed.Bytes())
+				if err != nil {
+					log.Error("failed to produce vrf proof")
+					continue
 				}
-				select {
-				case ed := <-edCh:
-					if flow.AddEndoresement(ed) {
-						log.Debug("AddEndoresement", "#", flow.NumOfEndorsements())
-					}
+
+				ed := block.NewEndorsement(bs, proof)
+				sig, err := crypto.Sign(ed.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+				if err != nil {
+					log.Error("failed to sign the edorsement")
+					continue
+				}
+				ed = ed.WithSignature(sig)
+				if !flow.AddEndoresement(ed) {
+					log.Error("failed to add endorsement")
 				}
 			}
 
@@ -178,7 +182,7 @@ func (s *Solo) loop(ctx context.Context) {
 
 func display(b *block.Block, receipts tx.Receipts, prepareElapsed, execElapsed, commitElapsed mclock.AbsTime) {
 	blockID := b.Header().ID()
-	log.Info("📦 new block packed",
+	log.Info("📦 new vip193 block packed",
 		"txs", len(receipts),
 		"mgas", float64(b.Header().GasUsed())/1000/1000,
 		"et", fmt.Sprintf("%v|%v|%v", common.PrettyDuration(prepareElapsed), common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
@@ -203,27 +207,27 @@ func (s *Solo) commit(b *block.Block, stage *state.Stage, receipts tx.Receipts) 
 	return nil
 }
 
-func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *block.Summary) {
-	for i := uint64(0); i < thor.CommitteeSize*2; i++ {
-		_, sk := vrf.GenKeyPair()
-		ok, proof, err := s.cons.IsCommittee(sk, bs.Timestamp())
-		if err != nil {
-			panic(err)
-		}
-		if ok {
-			ed := block.NewEndorsement(bs, proof)
-			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-			ed = ed.WithSignature(sig)
+// func (s *Solo) endorse(done chan struct{}, edCh chan *block.Endorsement, bs *block.Summary) {
+// 	for i := uint64(0); i < thor.CommitteeSize*2; i++ {
+// 		_, sk := vrf.GenKeyPair()
+// 		ok, proof, err := s.cons.IsCommittee(sk, bs.Timestamp())
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		if ok {
+// 			ed := block.NewEndorsement(bs, proof)
+// 			sig, _ := crypto.Sign(ed.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+// 			ed = ed.WithSignature(sig)
 
-			select {
-			case <-done:
-				return
-			case edCh <- ed:
-				return
-			}
-		}
-	}
-}
+// 			select {
+// 			case <-done:
+// 				return
+// 			case edCh <- ed:
+// 				return
+// 			}
+// 		}
+// 	}
+// }
 
 func (s *Solo) packTxSetAndBlockSummary(flow *packer.Flow, maxTxPackingDur int) error {
 	var txsToRemove []*tx.Transaction
