@@ -28,41 +28,46 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 	}()
 
 	var (
-		header    *block.Header
-		best      = c.repo.BestBlock()
+		// 	header    *block.Header
+		// 	best      = c.repo.BestBlock()
 		lastRound = (epoch - 1) * uint32(thor.EpochInterval)
 	)
 
-	// Start the search from the block with its number equal to [last].
-	// The actual number may be smaller than lastRound if there is any
-	// round when no block is produced. Therefore, we choose
-	//
-	// min(lastRound, bestBlockNum)
-	//
-	// as the searching starting point
-	last := lastRound
-	if last > best.Header().Number() {
-		last = best.Header().Number()
-	}
-
-	header, err = c.repo.NewBestChain().GetBlockHeader(last)
+	header, err := c.repo.NewBestChain().FindBlockHeaderByTimestamp(c.Timestamp(lastRound), -1)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return thor.Bytes32{}, newConsensusError(trNil, "failed to locate the block for computing beacon", nil, nil, err.Error())
 	}
 
-	for {
-		// Check whether the block is valid
-		if header.Timestamp() <= c.Timestamp(lastRound) {
-			break
-		}
+	// // Start the search from the block with its number equal to [last].
+	// // The actual number may be smaller than lastRound if there is any
+	// // round when no block is produced. Therefore, we choose
+	// //
+	// // min(lastRound, bestBlockNum)
+	// //
+	// // as the searching starting point
+	// last := lastRound
+	// if last > best.Header().Number() {
+	// 	last = best.Header().Number()
+	// }
 
-		// Get the parent header
-		s, err := c.repo.GetBlockSummary(header.ParentID())
-		if err != nil {
-			panic("Parent not found")
-		}
-		header = s.Header
-	}
+	// header, err = c.repo.NewBestChain().GetBlockHeader(last)
+	// if err != nil {
+	// 	return thor.Bytes32{}, err
+	// }
+
+	// for {
+	// 	// Check whether the block is valid
+	// 	if header.Timestamp() <= c.Timestamp(lastRound) {
+	// 		break
+	// 	}
+
+	// 	// Get the parent header
+	// 	s, err := c.repo.GetBlockSummary(header.ParentID())
+	// 	if err != nil {
+	// 		panic("Parent not found")
+	// 	}
+	// 	header = s.Header
+	// }
 
 	beacon = compBeacon(header)
 	return
