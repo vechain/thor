@@ -32,7 +32,7 @@ const (
 
 	MaxBlockProposers uint64 = 101
 
-	TolerableBlockPackingTime = time.Second // the indicator to adjust target block gas limit
+	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
 
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 )
