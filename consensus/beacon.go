@@ -72,6 +72,10 @@ func (c *Consensus) beacon(epoch uint32) (beacon thor.Bytes32, err error) {
 func compBeacon(header *block.Header) thor.Bytes32 {
 	var beacon thor.Bytes32
 
+	if header.Number() == 0 {
+		return header.ID()
+	}
+
 	hw := thor.NewBlake2b()
 	for _, proof := range header.VrfProofs() {
 		hw.Write(proof.Bytes())
