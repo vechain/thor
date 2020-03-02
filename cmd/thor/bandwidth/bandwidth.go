@@ -36,7 +36,7 @@ func (b *Bandwidth) Update(header *block.Header, elapsed time.Duration) (uint64,
 	gasLimit := header.GasLimit()
 	gasUsed := header.GasUsed()
 	// ignore low gas used
-	if gasUsed < gasLimit/10 {
+	if gasUsed < gasLimit/10 && gasUsed < thor.MinGasLimit {
 		return b.value, false
 	}
 
