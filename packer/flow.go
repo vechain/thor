@@ -8,7 +8,7 @@ package packer
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -308,24 +308,16 @@ func (f *Flow) pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	return newBlock.WithSignature(sig), stage, f.receipts, nil
 }
 
-type proofs []*vrf.Proof
-
-func (p proofs) Len() int           { return len(p) }
-func (p proofs) Less(i, j int) bool { return bytes.Compare(p[i][:], p[j][:]) == -1 }
-func (p proofs) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p proofs) Print() {
-	for _, proof := range p {
-		fmt.Printf("%p, %x\n", proof, proof[:10])
-	}
+type sortObj struct {
+	proofs []*vrf.Proof
+	sigs   [][]byte
 }
 
-func newProofs(pfs []*vrf.Proof) proofs {
-	var proofs proofs
-	for _, pf := range pfs {
-		proofs = append(proofs, pf.Copy())
-	}
-	// proofs = append(proofs, pfs...)
-	return proofs
+func (s sortObj) Len() int           { return len(s.proofs) }
+func (s sortObj) Less(i, j int) bool { return bytes.Compare(s.proofs[i][:], s.proofs[j][:]) == -1 }
+func (s sortObj) Swap(i, j int) {
+	s.proofs[i], s.proofs[j] = s.proofs[j], s.proofs[i]
+	s.sigs[i], s.sigs[j] = s.sigs[j], s.sigs[i]
 }
 
 // vip193
@@ -344,11 +336,20 @@ func (f *Flow) pack2(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Recei
 	}
 	stateRoot := stage.Hash()
 
-	proofs := newProofs(f.endorsements.VrfProofs())
-	proofs.Print()
-	// sort.Sort(proofs)
+	proofs := f.endorsements.VrfProofs()
+	sigs := f.endorsements.Signatures()
+
+	// for _, proof := range proofs {
+	// 	fmt.Printf("%x\n", proof[:])
+	// }
+	sort.Sort(sortObj{
+		proofs: proofs,
+		sigs:   sigs,
+	})
 	// fmt.Println()
-	// proofs.Print()
+	// for _, proof := range proofs {
+	// 	fmt.Printf("%x\n", proof[:])
+	// }
 
 	builder := new(block.Builder).
 		Beneficiary(f.runtime.Context().Beneficiary).
@@ -363,7 +364,8 @@ func (f *Flow) pack2(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Recei
 		// VrfProofs(f.endorsements.VrfProofs()).
 		VrfProofs(proofs).
 		SigOnBlockSummary(f.blockSummary.Signature()).
-		SigsOnEndorsement(f.endorsements.Signatures())
+		// SigsOnEndorsement(f.endorsements.Signatures())
+		SigsOnEndorsement(sigs)
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)

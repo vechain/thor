@@ -6,6 +6,8 @@
 package consensus
 
 import (
+	"bytes"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/builtin/authority"
@@ -116,9 +118,16 @@ func (c *Consensus) validateBlockHeaderVip193(header *block.Header, parentHeader
 
 	// reconstuct and validate endoresements
 	eds := header.Endorsements()
-	for _, ed := range eds {
+	for i, ed := range eds {
 		// for i, proof := range proofs {
 		// ed := block.NewEndorsement(bs, proof).WithSignature(sigs[i])
+
+		if i > 1 {
+			if bytes.Compare(eds[i-1].VrfProof()[:], ed.VrfProof()[:]) != -1 {
+				return newConsensusError(trHeader, "vrf proofs not in accending order", nil, nil, "")
+			}
+		}
+
 		if err := c.ValidateEndorsement(ed, parentHeader, header.Timestamp()); err != nil {
 			return err.(consensusError).AddTraceInfo(trHeader)
 		}
