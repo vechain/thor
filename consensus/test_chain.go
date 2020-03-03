@@ -8,6 +8,7 @@ package consensus
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -84,8 +85,10 @@ func NewTempChain(N int, forkConfig thor.ForkConfig) (*TempChain, error) {
 	}
 
 	if forkConfig.VIP193 != math.MaxUint32 { // vip193 enabled
+		fmt.Println("save vrf pks")
 		for _, acc := range accs {
 			thor.SetVrfPbulicKey(acc.Addr, acc.Vrfpk.Bytes32())
+			fmt.Printf("%v,%x\n", acc.Addr, acc.Vrfpk[:10])
 		}
 	}
 

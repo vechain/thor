@@ -6,7 +6,9 @@
 package packer
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -16,6 +18,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Flow the flow of packing a new block.
@@ -31,7 +34,7 @@ type Flow struct {
 
 	blockSummary *block.Summary
 	// txSet        *block.TxSet
-	endorsements block.Endorsements
+	endorsements *block.Endorsements
 
 	// blockAdopt chan interface{}
 	mux sync.Mutex
@@ -50,6 +53,7 @@ func NewFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		endorsements: new(block.Endorsements),
 		// blockAdopt:   make(chan interface{}, 1),
 	}
 	// go func() {
@@ -304,6 +308,26 @@ func (f *Flow) pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	return newBlock.WithSignature(sig), stage, f.receipts, nil
 }
 
+type proofs []*vrf.Proof
+
+func (p proofs) Len() int           { return len(p) }
+func (p proofs) Less(i, j int) bool { return bytes.Compare(p[i][:], p[j][:]) == -1 }
+func (p proofs) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p proofs) Print() {
+	for _, proof := range p {
+		fmt.Printf("%p, %x\n", proof, proof[:10])
+	}
+}
+
+func newProofs(pfs []*vrf.Proof) proofs {
+	var proofs proofs
+	for _, pf := range pfs {
+		proofs = append(proofs, pf.Copy())
+	}
+	// proofs = append(proofs, pfs...)
+	return proofs
+}
+
 // vip193
 func (f *Flow) pack2(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.blockSummary == nil {
@@ -320,6 +344,12 @@ func (f *Flow) pack2(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Recei
 	}
 	stateRoot := stage.Hash()
 
+	proofs := newProofs(f.endorsements.VrfProofs())
+	proofs.Print()
+	// sort.Sort(proofs)
+	// fmt.Println()
+	// proofs.Print()
+
 	builder := new(block.Builder).
 		Beneficiary(f.runtime.Context().Beneficiary).
 		GasLimit(f.runtime.Context().GasLimit).
@@ -330,7 +360,8 @@ func (f *Flow) pack2(sk *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Recei
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features).
-		VrfProofs(f.endorsements.VrfProofs()).
+		// VrfProofs(f.endorsements.VrfProofs()).
+		VrfProofs(proofs).
 		SigOnBlockSummary(f.blockSummary.Signature()).
 		SigsOnEndorsement(f.endorsements.Signatures())
 
