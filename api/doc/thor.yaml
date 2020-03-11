@@ -266,7 +266,7 @@ paths:
       summary: Retrieve block
       description: |
         by ID or number, or 'best' for latest block. If `expanded` query option is true, all transactions along with
-        their receipts will be nested under `transaction` field instead of ids.
+        their receipts will be embedded under `transactions` field instead of ids.
       responses:
         '200':
           description: OK
@@ -289,7 +289,7 @@ paths:
                     - $ref: '#/components/schemas/IsTrunk'
                     properties:
                       transactions:
-                        description: nested transactions along with their receipts
+                        description: embedded transactions along with their receipts
                         type: array
                         items:
                           allOf:
