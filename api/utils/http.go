@@ -80,15 +80,10 @@ func ParseJSON(r io.Reader, v interface{}) error {
 	return decoder.Decode(v)
 }
 
-// WriteJSON reponse a object in JSON enconding.
+// WriteJSON response an object in JSON encoding.
 func WriteJSON(w http.ResponseWriter, obj interface{}) error {
-	data, err := json.Marshal(obj)
-	if err != nil {
-		return HTTPError(err, 500)
-	}
 	w.Header().Set("Content-Type", JSONContentType)
-	w.Write(data)
-	return nil
+	return json.NewEncoder(w).Encode(obj)
 }
 
 // M shortcut for type map[string]interface{}.
