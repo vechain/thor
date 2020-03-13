@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package blocks_test
+package blocks
 
 import (
 	"encoding/json"
@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/api/blocks"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
@@ -50,8 +49,8 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 
 	res, statusCode = httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
-	rb := new(blocks.Block)
-	if err := json.Unmarshal(res, &rb); err != nil {
+	rb := new(JSONCollapsedBlock)
+	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
 	}
 	checkBlock(t, blk, rb)
@@ -123,12 +122,12 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	blocks.New(repo).Mount(router, "/blocks")
+	New(repo).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }
 
-func checkBlock(t *testing.T, expBl *block.Block, actBl *blocks.Block) {
+func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
 	header := expBl.Header()
 	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
 	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
