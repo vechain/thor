@@ -6,11 +6,13 @@
 package genesis
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
@@ -82,24 +84,24 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 			tokenSupply := &big.Int{}
 			energySupply := &big.Int{}
 			for _, a := range gen.Accounts {
-				if a.Balance != nil {
-					if a.Balance.Sign() < 0 {
+				if b := (*big.Int)(a.Balance); b != nil {
+					if b.Sign() < 0 {
 						return fmt.Errorf("%s: balance must be a non-negative integer", a.Address)
 					}
-					tokenSupply.Add(tokenSupply, a.Balance)
-					if err := state.SetBalance(a.Address, a.Balance); err != nil {
+					tokenSupply.Add(tokenSupply, b)
+					if err := state.SetBalance(a.Address, b); err != nil {
 						return err
 					}
 					if err := state.SetEnergy(a.Address, &big.Int{}, launchTime); err != nil {
 						return err
 					}
 				}
-				if a.Energy != nil {
-					if a.Energy.Sign() < 0 {
+				if e := (*big.Int)(a.Energy); e != nil {
+					if e.Sign() < 0 {
 						return fmt.Errorf("%s: energy must be a non-negative integer", a.Address)
 					}
-					energySupply.Add(energySupply, a.Energy)
-					if err := state.SetEnergy(a.Address, a.Energy, launchTime); err != nil {
+					energySupply.Add(energySupply, e)
+					if err := state.SetEnergy(a.Address, e, launchTime); err != nil {
 						return err
 					}
 				}
@@ -125,40 +127,43 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	///// initialize builtin contracts
 
 	// initialize params
-	if gen.Params.BaseGasPrice != nil {
-		if gen.Params.BaseGasPrice.Sign() < 0 {
+	bgp := (*big.Int)(gen.Params.BaseGasPrice)
+	if bgp != nil {
+		if bgp.Sign() < 0 {
 			return nil, errors.New("baseGasPrice must be a non-negative integer")
 		}
 	} else {
-		gen.Params.BaseGasPrice = thor.InitialBaseGasPrice
+		bgp = thor.InitialBaseGasPrice
 	}
 
-	if gen.Params.RewardRatio != nil {
-		if gen.Params.RewardRatio.Sign() < 0 {
+	r := (*big.Int)(gen.Params.RewardRatio)
+	if r != nil {
+		if r.Sign() < 0 {
 			return nil, errors.New("rewardRatio must be a non-negative integer")
 		}
 	} else {
-		gen.Params.RewardRatio = thor.InitialRewardRatio
+		r = thor.InitialRewardRatio
 	}
 
-	if gen.Params.ProposerEndorsement != nil {
-		if gen.Params.ProposerEndorsement.Sign() < 0 {
+	e := (*big.Int)(gen.Params.ProposerEndorsement)
+	if e != nil {
+		if e.Sign() < 0 {
 			return nil, errors.New("proposerEndorsement must a non-negative integer")
 		}
 	} else {
-		gen.Params.ProposerEndorsement = thor.InitialProposerEndorsement
+		e = thor.InitialProposerEndorsement
 	}
 
 	data := mustEncodeInput(builtin.Params.ABI, "set", thor.KeyExecutorAddress, new(big.Int).SetBytes(executor[:]))
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), thor.Address{})
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, gen.Params.RewardRatio)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyRewardRatio, r)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, gen.Params.BaseGasPrice)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyBaseGasPrice, bgp)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
-	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, gen.Params.ProposerEndorsement)
+	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, e)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
 	if len(gen.Authority) == 0 {
@@ -194,8 +199,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 // Account is the account will set to the genesis block
 type Account struct {
 	Address thor.Address            `json:"address"`
-	Balance *big.Int                `json:"balance"`
-	Energy  *big.Int                `json:"energy"`
+	Balance *hexOrDecimal256        `json:"balance"`
+	Energy  *hexOrDecimal256        `json:"energy"`
 	Code    string                  `json:"code"`
 	Storage map[string]thor.Bytes32 `json:"storage"`
 }
@@ -220,8 +225,34 @@ type Approver struct {
 
 // Params means the chain params for params contract
 type Params struct {
-	RewardRatio         *big.Int      `json:"rewardRatio"`
-	BaseGasPrice        *big.Int      `json:"baseGasPrice"`
-	ProposerEndorsement *big.Int      `json:"proposerEndorsement"`
-	ExecutorAddress     *thor.Address `json:"executorAddress"`
+	RewardRatio         *hexOrDecimal256 `json:"rewardRatio"`
+	BaseGasPrice        *hexOrDecimal256 `json:"baseGasPrice"`
+	ProposerEndorsement *hexOrDecimal256 `json:"proposerEndorsement"`
+	ExecutorAddress     *thor.Address    `json:"executorAddress"`
+}
+
+// hexOrDecimal256 marshals big.Int as hex or decimal.
+// Copied from go-ethereum/common/math and implement json. Marshaler
+type hexOrDecimal256 big.Int
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (i *hexOrDecimal256) UnmarshalJSON(input []byte) error {
+	var hex string
+	if err := json.Unmarshal(input, &hex); err != nil {
+		if err = (*big.Int)(i).UnmarshalJSON(input); err != nil {
+			return err
+		}
+		return nil
+	}
+	bigint, ok := math.ParseBig256(hex)
+	if !ok {
+		return fmt.Errorf("invalid hex or decimal integer %q", input)
+	}
+	*i = hexOrDecimal256(*bigint)
+	return nil
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (i *hexOrDecimal256) MarshalJSON() ([]byte, error) {
+	return (*math.HexOrDecimal256)(i).MarshalText()
 }
