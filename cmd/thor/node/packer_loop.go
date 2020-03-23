@@ -66,30 +66,24 @@ func (n *Node) packerLoop(ctx context.Context) {
 		}
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
-		const halfBlockInterval = thor.BlockInterval / 2
-
 		for {
-			now := uint64(time.Now().Unix())
-			if flow.When() > now+halfBlockInterval {
-				delaySec := flow.When() - (now + halfBlockInterval)
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C():
-					if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
-						log.Debug("re-schedule packer due to new best block")
-						goto RE_SCHEDULE
-					}
-				case <-time.After(time.Duration(delaySec) * time.Second):
-					goto PACK
+			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
+				// time to pack block
+				// blockInterval/2 early to allow more time for processing txs
+				if err := n.pack(flow); err != nil {
+					log.Error("failed to pack block", "err", err)
 				}
-			} else {
-				goto PACK
+				break
 			}
-		}
-	PACK:
-		if err := n.pack(flow); err != nil {
-			log.Error("failed to pack block", "err", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+				if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+					log.Debug("re-schedule packer due to new best block")
+					goto RE_SCHEDULE
+				}
+			}
 		}
 	RE_SCHEDULE:
 	}
