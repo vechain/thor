@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
@@ -89,46 +88,32 @@ func (s *Solo) Run(ctx context.Context) error {
 }
 
 func (s *Solo) loop(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(10) * time.Second)
-	defer ticker.Stop()
-
-	var scope event.SubscriptionScope
-	defer scope.Close()
-
-	txEvCh := make(chan *txpool.TxEvent, 10)
-	scope.Track(s.txPool.SubscribeTxEvent(txEvCh))
-
-	if err := s.packing(nil); err != nil {
-		log.Error("failed to pack block", "err", err)
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("stopping interval packing service......")
 			return
-		case txEv := <-txEvCh:
-			newTx := txEv.Tx
-			origin, _ := newTx.Origin()
-			log.Info("new Tx", "id", newTx.ID(), "origin", origin)
-			if s.onDemand {
-				if err := s.packing(tx.Transactions{newTx}); err != nil {
+		case <-time.After(time.Duration(1) * time.Second):
+			if left := uint64(time.Now().Unix()) % thor.BlockInterval; left == 0 {
+				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					log.Error("failed to pack block", "err", err)
 				}
-			}
-		case <-ticker.C:
-			if s.onDemand {
-				continue
-			}
-			if err := s.packing(s.txPool.Executables()); err != nil {
-				log.Error("failed to pack block", "err", err)
+			} else if s.onDemand {
+				pendingTxs := s.txPool.Executables()
+				if len(pendingTxs) > 0{
+					if err := s.packing(pendingTxs, true); err != nil {
+						log.Error("failed to pack block", "err", err)
+					}
+				}
 			}
 		}
 	}
 }
 
-func (s *Solo) packing(pendingTxs tx.Transactions) error {
+func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	best := s.repo.BestBlock()
+	now := uint64(time.Now().Unix())
+
 	var txsToRemove []*tx.Transaction
 	defer func() {
 		for _, tx := range txsToRemove {
@@ -141,20 +126,20 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best.Header(), uint64(time.Now().Unix()), s.gasLimit)
+	flow, err := s.packer.Mock(best.Header(), now, s.gasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
 
 	startTime := mclock.Now()
 	for _, tx := range pendingTxs {
-		err := flow.Adopt(tx)
-		switch {
-		case packer.IsGasLimitReached(err):
-			break
-		case packer.IsTxNotAdoptableNow(err):
-			continue
-		default:
+		if err := flow.Adopt(tx); err != nil {
+			if packer.IsGasLimitReached(err) {
+				break
+			}
+			if packer.IsTxNotAdoptableNow(err) {
+				continue
+			}
 			txsToRemove = append(txsToRemove, tx)
 		}
 	}
@@ -165,8 +150,8 @@ func (s *Solo) packing(pendingTxs tx.Transactions) error {
 	}
 	execElapsed := mclock.Now() - startTime
 
-	// If there is no tx packed in the on-demand mode then skip
-	if s.onDemand && len(b.Transactions()) == 0 {
+	// If there is no tx packed in the on-demanded block then skip
+	if onDemand && len(b.Transactions()) == 0 {
 		return nil
 	}
 
