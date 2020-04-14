@@ -206,7 +206,7 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 }
 
 func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
-	if p.all.Contains(newTx.Hash()) {
+	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
 	}
@@ -279,6 +279,14 @@ func (p *TxPool) Add(newTx *tx.Transaction) error {
 	return p.add(newTx, false)
 }
 
+// Get get pooled tx by id.
+func (p *TxPool) Get(id thor.Bytes32) *tx.Transaction {
+	if txObj := p.all.GetByID(id); txObj != nil {
+		return txObj.Transaction
+	}
+	return nil
+}
+
 // StrictlyAdd add new tx into pool. A rejection error will be returned, if tx is not executable at this time.
 func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 	return p.add(newTx, true)
@@ -286,7 +294,7 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 
 // Remove removes tx from pool by its Hash.
 func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
-	if p.all.Remove(txHash) {
+	if p.all.RemoveByHash(txHash) {
 		log.Debug("tx removed", "id", txID)
 		return true
 	}
@@ -335,11 +343,11 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 					break
 				}
 				removed++
-				p.all.Remove(txObj.Hash())
+				p.all.RemoveByHash(txObj.Hash())
 			}
 		} else {
 			for _, txObj := range toRemove {
-				p.all.Remove(txObj.Hash())
+				p.all.RemoveByHash(txObj.Hash())
 			}
 			removed = len(toRemove)
 		}

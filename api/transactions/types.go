@@ -59,7 +59,7 @@ type Transaction struct {
 	Nonce        math.HexOrDecimal64 `json:"nonce"`
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
 	Size         uint32              `json:"size"`
-	Meta         TxMeta              `json:"meta"`
+	Meta         *TxMeta             `json:"meta"`
 }
 
 type RawTx struct {
@@ -80,11 +80,11 @@ func (rtx *RawTx) decode() (*tx.Transaction, error) {
 
 type rawTransaction struct {
 	RawTx
-	Meta TxMeta `json:"meta"`
+	Meta *TxMeta `json:"meta"`
 }
 
 //convertTransaction convert a raw transaction into a json format transaction
-func convertTransaction(tx *tx.Transaction, header *block.Header) (*Transaction, error) {
+func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
 	origin, _ := tx.Origin()
 	delegator, _ := tx.Delegator()
@@ -107,13 +107,16 @@ func convertTransaction(tx *tx.Transaction, header *block.Header) (*Transaction,
 		DependsOn:    tx.DependsOn(),
 		Clauses:      cls,
 		Delegator:    delegator,
-		Meta: TxMeta{
+	}
+
+	if header != nil {
+		t.Meta = &TxMeta{
 			BlockID:        header.ID(),
 			BlockNumber:    header.Number(),
 			BlockTimestamp: header.Timestamp(),
-		},
+		}
 	}
-	return t, nil
+	return t
 }
 
 type TxMeta struct {
