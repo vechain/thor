@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.3.1
+  version: 1.3.2
 
 servers:
   - url: '/'
@@ -171,12 +171,13 @@ paths:
       - $ref: '#/components/parameters/TxIDInPath'
       - $ref: '#/components/parameters/RawInQuery'
       - $ref: '#/components/parameters/HeadInQuery'
+      - $ref: '#/components/parameters/PendingInQuery'
     get:
       tags:
         - Transactions
       summary: Retrieve transaction
       description: |
-        by ID.
+        by ID. When `pending` is true, a pending tx with null `meta` might be returned.
       responses:
         '200':
           description: OK
@@ -188,11 +189,13 @@ paths:
                     - $ref: '#/components/schemas/Tx'
                     properties:
                       meta:
+                        required: false
                         $ref: '#/components/schemas/TxMeta'
                   - allOf:
                     - $ref: '#/components/schemas/RawTx'
                     properties:
                       meta:
+                        required: false
                         $ref: '#/components/schemas/TxMeta'
                     description: raw transaction
                 example:
@@ -1365,3 +1368,11 @@ components:
       schema:
         type: boolean
 
+    PendingInQuery:
+      name: pending
+      in: query
+      required: false
+      description: |
+        whether to return tx, even it's pending
+      schema:
+        type: boolean

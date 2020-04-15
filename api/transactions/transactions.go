@@ -30,11 +30,22 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	}
 }
 
-func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (*rawTransaction, error) {
+func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
 
 	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
+			if allowPending {
+				if pending := t.pool.Get(txID); pending != nil {
+					raw, err := rlp.EncodeToBytes(pending)
+					if err != nil {
+						return nil, err
+					}
+					return &rawTransaction{
+						RawTx: RawTx{hexutil.Encode(raw)},
+					}, nil
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -50,7 +61,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (
 	}
 	return &rawTransaction{
 		RawTx: RawTx{hexutil.Encode(raw)},
-		Meta: TxMeta{
+		Meta: &TxMeta{
 			BlockID:        summary.Header.ID(),
 			BlockNumber:    summary.Header.Number(),
 			BlockTimestamp: summary.Header.Timestamp(),
@@ -58,10 +69,15 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32) (
 	}, nil
 }
 
-func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32) (*Transaction, error) {
+func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*Transaction, error) {
 	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
+			if allowPending {
+				if pending := t.pool.Get(txID); pending != nil {
+					return convertTransaction(pending, nil), nil
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -71,7 +87,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32) 
 	if err != nil {
 		return nil, err
 	}
-	return convertTransaction(tx, summary.Header)
+	return convertTransaction(tx, summary.Header), nil
 }
 
 //GetTransactionReceiptByID get tx's receipt
@@ -141,14 +157,19 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if raw != "" && raw != "false" && raw != "true" {
 		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "raw"))
 	}
+	pending := req.URL.Query().Get("pending")
+	if pending != "" && pending != "false" && pending != "true" {
+		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "pending"))
+	}
+
 	if raw == "true" {
-		tx, err := t.getRawTransaction(txID, head)
+		tx, err := t.getRawTransaction(txID, head, pending == "true")
 		if err != nil {
 			return err
 		}
 		return utils.WriteJSON(w, tx)
 	}
-	tx, err := t.getTransactionByID(txID, head)
+	tx, err := t.getTransactionByID(txID, head, pending == "true")
 	if err != nil {
 		return err
 	}
