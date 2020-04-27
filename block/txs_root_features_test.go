@@ -45,3 +45,19 @@ func TestTrf(t *testing.T) {
 
 	assert.EqualValues(t, obj, obj2)
 }
+
+func TestBackersRoot(t *testing.T) {
+	var obj = backersRoot{
+		emptyRoot,
+		0,
+	}
+	data, err := rlp.EncodeToBytes(&obj)
+	assert.Nil(t, err)
+
+	var b backersRoot
+	err = rlp.DecodeBytes(data, &b)
+	assert.EqualValues(t, obj, b)
+
+	err = rlp.DecodeBytes(rlp.EmptyList, &b)
+	assert.EqualValues(t, obj, b)
+}

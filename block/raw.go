@@ -31,18 +31,26 @@ func (r Raw) DecodeHeader() (*Header, error) {
 
 // DecodeBody decode only the body.
 func (r Raw) DecodeBody() (*Body, error) {
-	content, _, err := rlp.SplitList(r)
-	if err != nil {
+	var (
+		raws    []rlp.RawValue
+		txs     tx.Transactions
+		backers Backers
+	)
+
+	if err := rlp.Decode(bytes.NewReader(r), &raws); err != nil {
+		return nil, err
+	}
+	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return nil, err
 	}
 
-	_, _, rest, err := rlp.Split(content)
-	if err != nil {
-		return nil, err
+	if len(raws) > 2 {
+		if err := rlp.Decode(bytes.NewReader(raws[2]), &backers); err != nil {
+			return nil, err
+		}
+	} else {
+		backers = Backers(nil)
 	}
-	var txs tx.Transactions
-	if err := rlp.Decode(bytes.NewReader(rest), &txs); err != nil {
-		return nil, err
-	}
-	return &Body{txs}, nil
+
+	return &Body{txs, backers}, nil
 }
