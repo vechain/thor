@@ -6,6 +6,7 @@
 package block
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -17,25 +18,28 @@ import (
 
 // Block is an immutable block type.
 type Block struct {
-	header *Header
-	txs    tx.Transactions
-	cache  struct {
+	header  *Header
+	txs     tx.Transactions
+	backers Backers
+	cache   struct {
 		size atomic.Value
 	}
 }
 
 // Body defines body of a block.
 type Body struct {
-	Txs tx.Transactions
+	Txs     tx.Transactions
+	Backers Backers
 }
 
 // Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func Compose(header *Header, txs tx.Transactions) *Block {
+func Compose(header *Header, txs tx.Transactions, backers Backers) *Block {
 	return &Block{
-		header: header,
-		txs:    append(tx.Transactions(nil), txs...),
+		header:  header,
+		txs:     append(tx.Transactions(nil), txs...),
+		backers: append(Backers(nil), backers...),
 	}
 }
 
@@ -57,34 +61,69 @@ func (b *Block) Transactions() tx.Transactions {
 	return append(tx.Transactions(nil), b.txs...)
 }
 
+// Backers returns a copy of backer‘s approval.
+func (b *Block) Backers() Backers {
+	return append(Backers(nil), b.backers...)
+}
+
 // Body returns body of a block.
 func (b *Block) Body() *Body {
-	return &Body{append(tx.Transactions(nil), b.txs...)}
+	return &Body{
+		append(tx.Transactions(nil), b.txs...),
+		append(Backers(nil), b.backers...),
+	}
 }
 
 // EncodeRLP implements rlp.Encoder.
 func (b *Block) EncodeRLP(w io.Writer) error {
+	if b.backers == nil {
+		// backward compatible
+		return rlp.Encode(w, []interface{}{
+			b.header,
+			b.txs,
+		})
+	}
+
 	return rlp.Encode(w, []interface{}{
 		b.header,
 		b.txs,
+		b.backers,
 	})
 }
 
 // DecodeRLP implements rlp.Decoder.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
-	payload := struct {
-		Header Header
-		Txs    tx.Transactions
-	}{}
 
-	if err := s.Decode(&payload); err != nil {
+	var (
+		raws    []rlp.RawValue
+		header  Header
+		txs     tx.Transactions
+		backers Backers
+	)
+
+	if err := s.Decode(&raws); err != nil {
+		return err
+	}
+	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
+		return err
+	}
+	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return err
 	}
 
+	if len(raws) > 2 {
+		if err := rlp.Decode(bytes.NewReader(raws[2]), &backers); err != nil {
+			return err
+		}
+	} else {
+		backers = Backers(nil)
+	}
+
 	*b = Block{
-		header: &payload.Header,
-		txs:    payload.Txs,
+		header:  &header,
+		txs:     txs,
+		backers: backers,
 	}
 	b.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil

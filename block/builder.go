@@ -14,6 +14,7 @@ import (
 type Builder struct {
 	headerBody headerBody
 	txs        tx.Transactions
+	backers    Backers
 }
 
 // ParentID set parent id.
@@ -76,13 +77,22 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	return b
 }
 
+// Backers add an approval
+func (b *Builder) Backers(backers Backers, parentBackerCount uint64) *Builder {
+	b.backers = append(Backers(nil), backers...)
+	b.headerBody.BackersRoot.TotalBackersCount = parentBackerCount + uint64(len(backers))
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
+	header.body.BackersRoot.Root = b.backers.RootHash()
 
 	return &Block{
-		header: &header,
-		txs:    b.txs,
+		header:  &header,
+		txs:     b.txs,
+		backers: b.backers,
 	}
 }
