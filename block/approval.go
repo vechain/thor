@@ -9,16 +9,22 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
+)
+
+var (
+	emptyRoot = trie.DeriveRoot(&derivableApprovals{})
 )
 
 // Approval is the approval of a block
 type Approval struct {
 	body struct {
-		PublicKey []byte
+		PublicKey []byte // Compressed public key
 		Proof     []byte
 	}
 	cache struct {
@@ -45,7 +51,7 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, a)
-	hw.Sum(hash[:])
+	hw.Sum(hash[:0])
 	return
 }
 
@@ -67,7 +73,7 @@ func (a *Approval) Signer() (signer thor.Address, err error) {
 
 // EncodeRLP implements rlp.Encoder
 func (a *Approval) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, a.body)
+	return rlp.Encode(w, &a.body)
 }
 
 // DecodeRLP implements rlp.Decoder
@@ -82,4 +88,30 @@ func (a *Approval) DecodeRLP(s *rlp.Stream) error {
 	}
 	*a = Approval{body: body}
 	return nil
+}
+
+// Approvals is the list of approvals
+type Approvals []*Approval
+
+// RootHash computes merkle root hash of backers
+func (as Approvals) RootHash() thor.Bytes32 {
+	if len(as) == 0 {
+		// optimized
+		return emptyRoot
+	}
+	return trie.DeriveRoot(derivableApprovals(as))
+}
+
+// implements DerivableList
+type derivableApprovals Approvals
+
+func (as derivableApprovals) Len() int {
+	return len(as)
+}
+func (as derivableApprovals) GetRlp(i int) []byte {
+	data, err := rlp.EncodeToBytes(as[i])
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

@@ -67,7 +67,7 @@ func TestBlock(t *testing.T) {
 	fmt.Println(h.ID())
 
 	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, Backers(nil)), block)
+	assert.Equal(t, Compose(h, txs, Approvals(nil)), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -106,7 +106,7 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
-		Backers(Backers{approval}, 10).
+		Backers(Approvals{approval}, 10).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
@@ -156,7 +156,7 @@ func TestEncoding(t *testing.T) {
 	backersRootHash := backers.RootHash()
 
 	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, Backers(nil)), block)
+	assert.Equal(t, Compose(h, txs, Approvals(nil)), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -168,4 +168,6 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 	assert.Equal(t, backersRootHash, h.BackersRoot())
 	assert.Equal(t, uint64(0), h.TotalBackersCount())
+
+	fmt.Prinf("0x%x", rlp.EncodeToBytes(block))
 }

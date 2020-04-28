@@ -20,7 +20,7 @@ import (
 type Block struct {
 	header  *Header
 	txs     tx.Transactions
-	backers Backers
+	backers Approvals
 	cache   struct {
 		size atomic.Value
 	}
@@ -29,17 +29,17 @@ type Block struct {
 // Body defines body of a block.
 type Body struct {
 	Txs     tx.Transactions
-	Backers Backers
+	Backers Approvals
 }
 
 // Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func Compose(header *Header, txs tx.Transactions, backers Backers) *Block {
+func Compose(header *Header, txs tx.Transactions, backers Approvals) *Block {
 	return &Block{
 		header:  header,
 		txs:     append(tx.Transactions(nil), txs...),
-		backers: append(Backers(nil), backers...),
+		backers: append(Approvals(nil), backers...),
 	}
 }
 
@@ -62,15 +62,15 @@ func (b *Block) Transactions() tx.Transactions {
 }
 
 // Backers returns a copy of backer‘s approval.
-func (b *Block) Backers() Backers {
-	return append(Backers(nil), b.backers...)
+func (b *Block) Backers() Approvals {
+	return append(Approvals(nil), b.backers...)
 }
 
 // Body returns body of a block.
 func (b *Block) Body() *Body {
 	return &Body{
 		append(tx.Transactions(nil), b.txs...),
-		append(Backers(nil), b.backers...),
+		append(Approvals(nil), b.backers...),
 	}
 }
 
@@ -99,7 +99,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		raws    []rlp.RawValue
 		header  Header
 		txs     tx.Transactions
-		backers Backers
+		backers Approvals
 	)
 
 	if err := s.Decode(&raws); err != nil {
@@ -117,7 +117,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 			return err
 		}
 	} else {
-		backers = Backers(nil)
+		backers = Approvals(nil)
 	}
 
 	*b = Block{

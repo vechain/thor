@@ -34,7 +34,7 @@ func (r Raw) DecodeBody() (*Body, error) {
 	var (
 		raws    []rlp.RawValue
 		txs     tx.Transactions
-		backers Backers
+		backers Approvals
 	)
 
 	if err := rlp.Decode(bytes.NewReader(r), &raws); err != nil {
@@ -49,7 +49,7 @@ func (r Raw) DecodeBody() (*Body, error) {
 			return nil, err
 		}
 	} else {
-		backers = Backers(nil)
+		backers = Approvals(nil)
 	}
 
 	return &Body{txs, backers}, nil

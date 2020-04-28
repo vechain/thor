@@ -14,7 +14,7 @@ import (
 type Builder struct {
 	headerBody headerBody
 	txs        tx.Transactions
-	backers    Backers
+	backers    Approvals
 }
 
 // ParentID set parent id.
@@ -78,8 +78,8 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 }
 
 // Backers add an approval
-func (b *Builder) Backers(backers Backers, parentBackerCount uint64) *Builder {
-	b.backers = append(Backers(nil), backers...)
+func (b *Builder) Backers(backers Approvals, parentBackerCount uint64) *Builder {
+	b.backers = append(Approvals(nil), backers...)
 	b.headerBody.BackersRoot.TotalBackersCount = parentBackerCount + uint64(len(backers))
 	return b
 }
