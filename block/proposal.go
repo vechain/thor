@@ -121,13 +121,13 @@ func (p *Proposal) Hash() (hash thor.Bytes32) {
 
 	hw := thor.NewBlake2b()
 	rlp.Encode(hw, p)
-	hw.Sum(hash[:])
+	hw.Sum(hash[:0])
 	return
 }
 
 // EncodeRLP implements rlp.Encoder
 func (p *Proposal) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, p.body)
+	return rlp.Encode(w, &p.body)
 }
 
 // DecodeRLP implements rlp.Decoder
