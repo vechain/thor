@@ -50,13 +50,18 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 }
 
 // Signer computes the address from the public key
-func (a *Approval) Signer() (signer thor.Address) {
+func (a *Approval) Signer() (signer thor.Address, err error) {
 	if cached := a.cache.signer.Load(); cached != nil {
-		return cached.(thor.Address)
+		return cached.(thor.Address), nil
 	}
 	defer func() { a.cache.signer.Store(signer) }()
 
-	signer = thor.Address(common.BytesToAddress(crypto.Keccak256(a.body.PublicKey[1:])[12:]))
+	pub, err := btcec.ParsePubKey(a.body.PublicKey[:], btcec.S256())
+	if err != nil {
+		return thor.Address{}, err
+	}
+
+	signer = thor.Address(common.BytesToAddress(crypto.Keccak256(pub.SerializeUncompressed()[1:])[12:]))
 	return
 }
 
