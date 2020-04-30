@@ -219,7 +219,7 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// EncodeRLP implements rlp.Encoder
+// EncodeRLP implements rlp.Encoder.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	if h.body.BackersRoot.TotalBackersCount == 0 {
 		// backward compatible

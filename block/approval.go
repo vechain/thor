@@ -21,7 +21,7 @@ var (
 	emptyRoot = trie.DeriveRoot(&derivableApprovals{})
 )
 
-// Approval is the approval of a block
+// Approval is the approval of a block.
 type Approval struct {
 	body struct {
 		PublicKey []byte // Compressed public key
@@ -33,7 +33,7 @@ type Approval struct {
 	}
 }
 
-// NewApproval creates a new approval
+// NewApproval creates a new approval.
 func NewApproval(pub, proof []byte) *Approval {
 	var a Approval
 	a.body.PublicKey = pub
@@ -42,7 +42,7 @@ func NewApproval(pub, proof []byte) *Approval {
 	return &a
 }
 
-// Hash is the hash of RLP encoded approval
+// Hash is the hash of RLP encoded approval.
 func (a *Approval) Hash() (hash thor.Bytes32) {
 	if cached := a.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -55,7 +55,7 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 	return
 }
 
-// Signer computes the address from the public key
+// Signer computes the address from the public key.
 func (a *Approval) Signer() (signer thor.Address, err error) {
 	if cached := a.cache.signer.Load(); cached != nil {
 		return cached.(thor.Address), nil
@@ -71,12 +71,12 @@ func (a *Approval) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// EncodeRLP implements rlp.Encoder
+// EncodeRLP implements rlp.Encoder.
 func (a *Approval) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &a.body)
 }
 
-// DecodeRLP implements rlp.Decoder
+// DecodeRLP implements rlp.Decoder.
 func (a *Approval) DecodeRLP(s *rlp.Stream) error {
 	var body struct {
 		PublicKey []byte
@@ -90,10 +90,10 @@ func (a *Approval) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// Approvals is the list of approvals
+// Approvals is the list of approvals.
 type Approvals []*Approval
 
-// RootHash computes merkle root hash of backers
+// RootHash computes merkle root hash of backers.
 func (as Approvals) RootHash() thor.Bytes32 {
 	if len(as) == 0 {
 		// optimized
@@ -102,7 +102,7 @@ func (as Approvals) RootHash() thor.Bytes32 {
 	return trie.DeriveRoot(derivableApprovals(as))
 }
 
-// implements DerivableList
+// implements DerivableList.
 type derivableApprovals Approvals
 
 func (as derivableApprovals) Len() int {
@@ -114,4 +114,55 @@ func (as derivableApprovals) GetRlp(i int) []byte {
 		panic(err)
 	}
 	return data
+}
+
+// FullApproval is the block approval with proposal.
+type FullApproval struct {
+	body struct {
+		Proposal *Proposal
+		Approval *Approval
+	}
+	cache struct {
+		hash atomic.Value
+	}
+}
+
+// NewFullApproval creates a new approval with proposal
+func NewFullApproval(p *Proposal, a *Approval) *FullApproval {
+	var full FullApproval
+	full.body.Proposal = p
+	full.body.Approval = a
+	return &full
+}
+
+// Hash is the hash of RLP encoded full approval.
+func (a *FullApproval) Hash() (hash thor.Bytes32) {
+	if cached := a.cache.hash.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { a.cache.hash.Store(hash) }()
+
+	hw := thor.NewBlake2b()
+	rlp.Encode(hw, a)
+	hw.Sum(hash[:0])
+	return
+}
+
+// EncodeRLP implements rlp.Encoder.
+func (a *FullApproval) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &a.body)
+}
+
+// DecodeRLP implements rlp.Decoder.
+func (a *FullApproval) DecodeRLP(s *rlp.Stream) error {
+	var body struct {
+		Proposal *Proposal
+		Approval *Approval
+	}
+
+	if err := s.Decode(&body); err != nil {
+		return err
+	}
+	*a = FullApproval{body: body}
+	return nil
 }

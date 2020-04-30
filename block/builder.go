@@ -71,13 +71,13 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 	return b
 }
 
-// TransactionFeatures set supported transaction features
+// TransactionFeatures set supported transaction features.
 func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	b.headerBody.TxsRootFeatures.Features = features
 	return b
 }
 
-// Backers add an approval
+// Backers add an approval.
 func (b *Builder) Backers(backers Approvals, parentBackerCount uint64) *Builder {
 	b.backers = append(Approvals(nil), backers...)
 	b.headerBody.BackersRoot.TotalBackersCount = parentBackerCount + uint64(len(backers))

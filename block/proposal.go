@@ -14,7 +14,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// Proposal is a block proposal
+// Proposal is a block proposal.
 type Proposal struct {
 	body struct {
 		ParentID  thor.Bytes32
@@ -30,7 +30,7 @@ type Proposal struct {
 	}
 }
 
-// NewProposal creates a new proposal
+// NewProposal creates a new proposal.
 func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Proposal {
 	var p Proposal
 	p.body.ParentID = parentID
@@ -41,32 +41,32 @@ func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Pr
 	return &p
 }
 
-// Number returns the number of the proposed block
+// Number returns the number of the proposed block.
 func (p *Proposal) Number() uint32 {
 	return Number(p.body.ParentID) + 1
 }
 
-// ParentID returns the parent block's ID
+// ParentID returns the parent block's ID.
 func (p *Proposal) ParentID() thor.Bytes32 {
 	return p.body.ParentID
 }
 
-// Timestamp returns the unix timestamp of the proposed block
+// Timestamp returns the unix timestamp of the proposed block.
 func (p *Proposal) Timestamp() uint64 {
 	return p.body.Timestamp
 }
 
-// GasLimit returns the proposed gaslimit
+// GasLimit returns the proposed gaslimit.
 func (p *Proposal) GasLimit() uint64 {
 	return p.body.GasLimit
 }
 
-// TxsRoot returns the merkle root of proposed txs
+// TxsRoot returns the merkle root of proposed txs.
 func (p *Proposal) TxsRoot() thor.Bytes32 {
 	return p.body.TxsRoot
 }
 
-// SigningHash returns the hash of the proposal body without signature
+// SigningHash returns the hash of the proposal body without signature.
 func (p *Proposal) SigningHash() (hash thor.Bytes32) {
 	if cached := p.cache.signingHash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -84,7 +84,7 @@ func (p *Proposal) SigningHash() (hash thor.Bytes32) {
 	return
 }
 
-// Signer extract signer of the proposal from signature
+// Signer extract signer of the proposal from signature.
 func (p *Proposal) Signer() (signer thor.Address, err error) {
 	if cached := p.cache.signer.Load(); cached != nil {
 		return cached.(thor.Address), nil
@@ -104,7 +104,7 @@ func (p *Proposal) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// WithSignature create a new proposal with signature set
+// WithSignature create a new proposal with signature set.
 func (p *Proposal) WithSignature(sig []byte) *Proposal {
 	cpy := Proposal{body: p.body}
 	cpy.body.Signature = append([]byte(nil), sig...)
@@ -112,7 +112,7 @@ func (p *Proposal) WithSignature(sig []byte) *Proposal {
 	return &cpy
 }
 
-// Hash is the hash of RLP encoded proposal
+// Hash is the hash of RLP encoded proposal.
 func (p *Proposal) Hash() (hash thor.Bytes32) {
 	if cached := p.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -125,12 +125,12 @@ func (p *Proposal) Hash() (hash thor.Bytes32) {
 	return
 }
 
-// EncodeRLP implements rlp.Encoder
+// EncodeRLP implements rlp.Encoder.
 func (p *Proposal) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &p.body)
 }
 
-// DecodeRLP implements rlp.Decoder
+// DecodeRLP implements rlp.Decoder.
 func (p *Proposal) DecodeRLP(s *rlp.Stream) error {
 	var body struct {
 		ParentID  thor.Bytes32

@@ -17,7 +17,7 @@ type backersRoot struct {
 
 type _backersRoot backersRoot
 
-// DecodeRLP implements rlp.Decoder
+// DecodeRLP implements rlp.Decoder.
 func (br *backersRoot) DecodeRLP(s *rlp.Stream) error {
 	k, _, _ := s.Kind()
 	if k == rlp.List {
