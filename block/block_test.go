@@ -169,5 +169,4 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, backersRootHash, h.BackersRoot())
 	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
-	fmt.Prinf("0x%x", rlp.EncodeToBytes(block))
 }
