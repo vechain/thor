@@ -167,6 +167,19 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			}
 			write(toSend)
 		}
+	case proto.MsgNewBlockProposal:
+		var proposal block.Proposal
+		if err := msg.Decode(&proposal); err != nil {
+			return errors.WithMessage(err, "decode msg")
+		}
+		peer.MarkProposal(proposal.Hash())
+		c.newProposalFeed.Send(&proposal)
+		write(&struct{}{})
+	case proto.MsgNewBlockApproval:
+		var approval block.FullApproval
+		peer.MarkApproval(approval.Hash())
+		c.newApprovalFeed.Send(&approval)
+		write(&struct{}{})
 	default:
 		return fmt.Errorf("unknown message (%v)", msg.Code)
 	}

@@ -55,6 +55,16 @@ func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 	return rpc.Notify(ctx, MsgNewTx, tx)
 }
 
+// NotifyNewProposal notify new proposal to remote peer.
+func NotifyNewProposal(ctx context.Context, rpc RPC, p *block.Proposal) error {
+	return rpc.Notify(ctx, MsgNewBlockProposal, p)
+}
+
+// NotifyNewApproval notify new approval to remote peer.
+func NotifyNewApproval(ctx context.Context, rpc RPC, a *block.FullApproval) error {
+	return rpc.Notify(ctx, MsgNewBlockApproval, a)
+}
+
 // GetBlockByID query block from remote peer by given block ID.
 // It may return nil block even no error.
 func GetBlockByID(ctx context.Context, rpc RPC, id thor.Bytes32) (rlp.RawValue, error) {
