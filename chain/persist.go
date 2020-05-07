@@ -18,6 +18,7 @@ import (
 const (
 	txInfix      = byte(0)
 	receiptInfix = byte(1)
+	backerSuffix = byte(2)
 )
 
 // BlockSummary presents block summary.
@@ -92,4 +93,16 @@ func loadReceipt(r kv.Getter, key txKey) (*tx.Receipt, error) {
 		return nil, err
 	}
 	return &receipt, nil
+}
+
+func saveBackers(w kv.Putter, id thor.Bytes32, backers block.Approvals) error {
+	return saveRLP(w, append(id.Bytes(), backerSuffix), backers)
+}
+
+func loadBackers(r kv.Getter, id thor.Bytes32) (block.Approvals, error) {
+	var backers block.Approvals
+	if err := loadRLP(r, append(id.Bytes(), backerSuffix), &backers); err != nil {
+		return nil, err
+	}
+	return backers, nil
 }
