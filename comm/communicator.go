@@ -332,11 +332,11 @@ func (c *Communicator) BroadcastApproval(a *block.FullApproval) {
 }
 
 // SubscribeProposal subscribe the event that new proposal received.
-func (c *Communicator) SubscribeProposal(ch chan *block.Proposal) event.Subscription {
+func (c *Communicator) SubscribeProposal(ch chan *NewBlockProposalEvent) event.Subscription {
 	return c.feedScope.Track(c.newProposalFeed.Subscribe(ch))
 }
 
 // SubscribeApproval subscribe the event that new approval received.
-func (c *Communicator) SubscribeApproval(ch chan *block.FullApproval) event.Subscription {
+func (c *Communicator) SubscribeApproval(ch chan *NewBlockApprovalEvent) event.Subscription {
 	return c.feedScope.Track(c.newApprovalFeed.Subscribe(ch))
 }
