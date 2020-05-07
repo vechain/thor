@@ -16,5 +16,15 @@ type NewBlockEvent struct {
 	*block.Block
 }
 
+// NewBlockProposalEvent event emitted when received block proposal.
+type NewBlockProposalEvent struct {
+	*block.Proposal
+}
+
+// NewBlockApprovalEvent event emitted when received block approval.
+type NewBlockApprovalEvent struct {
+	Approval *block.FullApproval
+}
+
 // HandleBlockStream to handle the stream of downloaded blocks in sync process.
 type HandleBlockStream func(ctx context.Context, stream <-chan *block.Block) error
