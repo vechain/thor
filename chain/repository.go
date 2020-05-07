@@ -44,6 +44,7 @@ type Repository struct {
 		summaries *cache
 		txs       *cache
 		receipts  *cache
+		backers   *cache
 	}
 }
 
@@ -68,6 +69,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo.caches.summaries = newCache(512)
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
+	repo.caches.backers = newCache(512)
 
 	if val, err := repo.props.Get(bestBlockIDKey); err != nil {
 		if !repo.props.IsNotFound(err) {
@@ -147,6 +149,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 			header  = block.Header()
 			id      = header.ID()
 			txs     = block.Transactions()
+			backers = block.Backers()
 			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
 		)
 
@@ -169,6 +172,10 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 				r.caches.receipts.Add(key, receipt)
 			}
 		}
+		if err := saveBackers(putter, id, backers); err != nil {
+			return err
+		}
+		r.caches.backers.Add(id, backers)
 		if err := saveBlockSummary(putter, &summary); err != nil {
 			return err
 		}
@@ -240,6 +247,17 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 	return nil, nil
 }
 
+// GetBlockBackers get all backers of a block for given block id.
+func (r *Repository) GetBlockBackers(id thor.Bytes32) (block.Approvals, error) {
+	cached, err := r.caches.backers.GetOrLoad(id, func() (interface{}, error) {
+		return loadBackers(r.data, id)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cached.(block.Approvals), nil
+}
+
 // GetBlock get block by id.
 func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	summary, err := r.GetBlockSummary(id)
@@ -250,7 +268,11 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	return block.Compose(summary.Header, txs), nil
+	backers, err := r.GetBlockBackers(id)
+	if err != nil {
+		return nil, err
+	}
+	return block.Compose(summary.Header, txs, backers), nil
 }
 
 func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
