@@ -35,6 +35,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.1.4
 	github.com/syndtr/goleveldb v1.0.1-0.20190923125748-758128399b1d
+	github.com/vechain/go-ecvrf v0.0.0-20200326080414-5b7e9ee61906
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
