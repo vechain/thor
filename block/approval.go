@@ -6,11 +6,10 @@
 package block
 
 import (
+	"crypto/ecdsa"
 	"io"
 	"sync/atomic"
 
-	"github.com/btcsuite/btcd/btcec"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
@@ -55,6 +54,11 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 	return
 }
 
+// PublickKey is the public key of the backer.
+func (a *Approval) PublickKey() (*ecdsa.PublicKey, error) {
+	return crypto.DecompressPubkey(a.body.PublicKey)
+}
+
 // Signer computes the address from the public key.
 func (a *Approval) Signer() (signer thor.Address, err error) {
 	if cached := a.cache.signer.Load(); cached != nil {
@@ -62,12 +66,12 @@ func (a *Approval) Signer() (signer thor.Address, err error) {
 	}
 	defer func() { a.cache.signer.Store(signer) }()
 
-	pub, err := btcec.ParsePubKey(a.body.PublicKey[:], btcec.S256())
+	pub, err := crypto.DecompressPubkey(a.body.PublicKey)
 	if err != nil {
 		return thor.Address{}, err
 	}
 
-	signer = thor.Address(common.BytesToAddress(crypto.Keccak256(pub.SerializeUncompressed()[1:])[12:]))
+	signer = thor.Address(crypto.PubkeyToAddress(*pub))
 	return
 }
 
