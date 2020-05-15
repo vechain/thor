@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The VeChainThor developers
+// Copyright (c) 2020 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
@@ -52,6 +52,11 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 	rlp.Encode(hw, a)
 	hw.Sum(hash[:0])
 	return
+}
+
+// Proof is the beta of the backer's VRF output.
+func (a *Approval) Proof() []byte {
+	return append([]byte(nil), a.body.Proof...)
 }
 
 // PublickKey is the public key of the backer.
@@ -123,20 +128,31 @@ func (as derivableApprovals) GetRlp(i int) []byte {
 // FullApproval is the block approval with proposal.
 type FullApproval struct {
 	body struct {
-		Proposal *Proposal
-		Approval *Approval
+		ProposalHash thor.Bytes32
+		Approval     *Approval
 	}
 	cache struct {
 		hash atomic.Value
 	}
 }
 
-// NewFullApproval creates a new approval with proposal
-func NewFullApproval(p *Proposal, a *Approval) *FullApproval {
+// NewFullApproval creates a new approval with proposal hash.
+func NewFullApproval(proposalHash thor.Bytes32, a *Approval) *FullApproval {
 	var full FullApproval
-	full.body.Proposal = p
+	full.body.ProposalHash = proposalHash
 	full.body.Approval = a
 	return &full
+}
+
+// ProposalHash returns the hash of the proposal.
+func (a *FullApproval) ProposalHash() thor.Bytes32 {
+	return a.body.ProposalHash
+}
+
+// Approval returns a copy of the approval.
+func (a *FullApproval) Approval() *Approval {
+	cpy := a.body.Approval
+	return cpy
 }
 
 // Hash is the hash of RLP encoded full approval.
@@ -160,8 +176,8 @@ func (a *FullApproval) EncodeRLP(w io.Writer) error {
 // DecodeRLP implements rlp.Decoder.
 func (a *FullApproval) DecodeRLP(s *rlp.Stream) error {
 	var body struct {
-		Proposal *Proposal
-		Approval *Approval
+		ProposalHash thor.Bytes32
+		Approval     *Approval
 	}
 
 	if err := s.Decode(&body); err != nil {
