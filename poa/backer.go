@@ -13,15 +13,16 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// IsBacker computes the VRF output regarding the input(alpha) and evalutes if the output(beta) meets the requirement of backer.
-func IsBacker(privateKey *ecdsa.PrivateKey, alpha []byte) (result bool, proof []byte, err error) {
+// TryApprove tries to compute the VRF output regarding the input(alpha) and the given private key
+// then evalutes if the output(beta) meets the requirement of backer and return the proof.
+func TryApprove(privateKey *ecdsa.PrivateKey, alpha []byte) (lucky bool, proof []byte, err error) {
 	vrf := ecvrf.NewSecp256k1Sha256Tai()
 	beta, proof, err := vrf.Prove(privateKey, alpha)
 	if err != nil {
 		return
 	}
 
-	result = evaluateBeta(beta)
+	lucky = evaluateBeta(beta)
 	return
 }
 
