@@ -18,6 +18,13 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
+type blockMetaReader interface {
+	ParentID() thor.Bytes32
+	Timestamp() uint64
+	GasLimit() uint64
+	Signer() (thor.Address, error)
+}
+
 func (c *Consensus) validate(
 	state *state.State,
 	block *block.Block,
@@ -35,7 +42,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	if err := c.validateBlockBody(block); err != nil {
+	if err := c.validateBlockBody(block, parentHeader); err != nil {
 		return nil, nil, err
 	}
 
@@ -88,7 +95,7 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+func (c *Consensus) validateBlockMeta(header blockMetaReader, parent *block.Header, nowTimestamp uint64) error {
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
@@ -104,21 +111,26 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
 		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
+	return nil
+}
 
+func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+	if err := c.validateBlockMeta(header, parent, nowTimestamp); err != nil {
+		return nil
+	}
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
-
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+func (c *Consensus) validateSchedule(header blockMetaReader, parent *block.Header, st *state.State) (*poa.Candidates, *poa.Scheduler, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+		return nil, nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
 	authority := builtin.Authority.Native(st)
@@ -128,23 +140,32 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 	} else {
 		list, err := authority.AllCandidates()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		candidates = poa.NewCandidates(list)
 	}
 
 	proposers, err := candidates.Pick(st)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
 	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+		return nil, nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
-		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+	}
+
+	return candidates, sched, nil
+}
+
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, state *state.State) (*poa.Candidates, error) {
+	candidates, sched, err := c.validateSchedule(header, parent, state)
+	if err != nil {
+		return nil, err
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
@@ -152,6 +173,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
+	authority := builtin.Authority.Native(state)
 	for _, u := range updates {
 		if _, err := authority.Update(u.Address, u.Active); err != nil {
 			return nil, err
@@ -161,11 +183,60 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 			panic("something wrong with candidates list")
 		}
 	}
-
 	return candidates, nil
 }
 
-func (c *Consensus) validateBlockBody(blk *block.Block) error {
+func (c *Consensus) validateBackers(blk *block.Block, parent *block.Header, candidates *poa.Candidates, state *state.State) error {
+	header := blk.Header()
+
+	if header.Number() >= c.forkConfig.VIP193 {
+		backers := blk.Backers()
+
+		totalBackers := uint64(len(backers)) + parent.TotalBackersCount()
+		if totalBackers != header.TotalBackersCount() {
+			return consensusError(fmt.Sprintf("block total backers count invalid: want %v, have %v", totalBackers, header.TotalBackersCount()))
+		}
+		if header.BackersRoot() != backers.RootHash() {
+			return consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", header.BackersRoot(), backers.RootHash()))
+		}
+		if len(backers) > 0 {
+			proposers, err := candidates.Pick(state)
+			if err != nil {
+				return err
+			}
+			all := make(map[thor.Address]bool, len(proposers))
+			for _, p := range proposers {
+				all[p.Address] = true
+			}
+
+			proposal := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp())
+			alpha := proposal.Hash().Bytes()
+			for _, approval := range backers {
+				signer, err := approval.Signer()
+				if err != nil {
+					return consensusError(fmt.Sprintf("block approval's signer unavailable: %v", err))
+				}
+				if all[signer] == false {
+					return consensusError(fmt.Sprintf("backer: %v not in power", signer))
+				}
+				pub, err := approval.PublickKey()
+				if err != nil {
+					return consensusError(fmt.Sprintf("backer's public key unavailable: %v", err))
+				}
+				isBacker, err := poa.VerifyBacker(pub, alpha, approval.Proof())
+				if err != nil {
+					return err
+				}
+				if isBacker == false {
+					return consensusError(fmt.Sprintf("signer is not qualified to be a backer: %v", signer))
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header) error {
 	header := blk.Header()
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
