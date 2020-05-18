@@ -7,6 +7,7 @@ package consensus
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
@@ -123,4 +124,23 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			TotalScore:  header.TotalScore(),
 		},
 		c.forkConfig), nil
+}
+
+// ValidateProposal validate a block proposal
+func (c *Consensus) ValidateProposal(proposal *block.Proposal) error {
+	parent, err := c.repo.GetBlockSummary(proposal.ParentID())
+	if err != nil {
+		return err
+	}
+
+	if err = c.validateBlockMeta(proposal, parent.Header, uint64(time.Now().Unix())); err != nil {
+		return err
+	}
+
+	state := c.stater.NewState(parent.Header.StateRoot())
+	if _, _, err = c.validateSchedule(proposal, parent.Header, state); err != nil {
+		return err
+	}
+
+	return nil
 }
