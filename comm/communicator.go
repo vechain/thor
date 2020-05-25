@@ -300,7 +300,7 @@ func (c *Communicator) PeersStats() []*PeerStats {
 // BroadcastProposal broadcast a block proposal to remote peers.
 func (c *Communicator) BroadcastProposal(p *block.Proposal) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return peer.IsProposalKnown(p.Hash())
+		return !peer.IsProposalKnown(p.Hash())
 	})
 
 	for _, peer := range peers {
@@ -317,7 +317,7 @@ func (c *Communicator) BroadcastProposal(p *block.Proposal) {
 // BroadcastApproval broadcast a full block approval(with proposal) to remote peers.
 func (c *Communicator) BroadcastApproval(a *block.FullApproval) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return peer.IsApprovalKnown(a.Hash())
+		return !peer.IsApprovalKnown(a.Hash())
 	})
 
 	for _, peer := range peers {
