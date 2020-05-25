@@ -250,7 +250,15 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 // GetBlockBackers get all backers of a block for given block id.
 func (r *Repository) GetBlockBackers(id thor.Bytes32) (block.Approvals, error) {
 	cached, err := r.caches.backers.GetOrLoad(id, func() (interface{}, error) {
-		return loadBackers(r.data, id)
+		backers, err := loadBackers(r.data, id)
+		if err != nil {
+			// backword compatibility
+			if r.IsNotFound(err) {
+				return backers, nil
+			}
+			return nil, err
+		}
+		return backers, nil
 	})
 	if err != nil {
 		return nil, err
