@@ -181,3 +181,40 @@ func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
 func (p *Packer) SetTargetGasLimit(gl uint64) {
 	p.targetGasLimit = gl
 }
+
+// InPower returns true if the given node master meets all requirements of a authority.
+func (p *Packer) InPower(parent *block.Header, master thor.Address) (bool, error) {
+	state := p.stater.NewState(parent.StateRoot())
+
+	authority := builtin.Authority.Native(state)
+	endorsement, err := builtin.Params.Native(state).Get(thor.KeyProposerEndorsement)
+	if err != nil {
+		return false, err
+	}
+
+	listed, endorsor, _, _, err := authority.Get(master)
+	if err != nil {
+		return false, err
+	}
+
+	if listed == false {
+		return false, nil
+	}
+
+	bal, err := state.GetBalance(endorsor)
+	if bal.Cmp(endorsement) < 0 {
+		return false, nil
+	}
+
+	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+	if err != nil {
+		return false, err
+	}
+
+	for _, c := range candidates {
+		if c.NodeMaster == master {
+			return true, nil
+		}
+	}
+	return false, nil
+}

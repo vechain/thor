@@ -27,6 +27,8 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	knownBackers map[thor.Address]bool
+	backers      block.Approvals
 }
 
 func newFlow(
@@ -41,6 +43,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		knownBackers: make(map[thor.Address]bool),
 	}
 }
 
@@ -52,6 +55,11 @@ func (f *Flow) ParentHeader() *block.Header {
 // When the target time to do packing.
 func (f *Flow) When() uint64 {
 	return f.runtime.Context().Time
+}
+
+// Number returns the block number to pack.
+func (f *Flow) Number() uint32 {
+	return f.runtime.Context().Number
 }
 
 // TotalScore returns total score of new block.
@@ -137,6 +145,39 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
+// Propose a block proposal with block meta and txs root hash.
+func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
+	p := block.NewProposal(
+		f.parentHeader.ID(),
+		f.txs.RootHash(),
+		f.runtime.Context().GasLimit,
+		f.runtime.Context().Time,
+	)
+	sig, err := crypto.Sign(p.SigningHash().Bytes(), privateKey)
+	if err != nil {
+		return nil, nil
+	}
+
+	return p.WithSignature(sig), nil
+}
+
+// IsBackerKnown returns true is backer's approval is already added.
+func (f *Flow) IsBackerKnown(backer thor.Address) bool {
+	return f.knownBackers[backer]
+}
+
+// AddApproval adds an approval from backer.
+func (f *Flow) AddApproval(approval *block.Approval) {
+	signer, _ := approval.Signer()
+	if f.IsBackerKnown(signer) == true {
+		return
+	}
+
+	f.knownBackers[signer] = true
+	f.backers = append(f.backers, approval)
+	return
+}
+
 // Pack build and sign the new block.
 func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
@@ -158,7 +199,8 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features)
+		TransactionFeatures(f.features).
+		Backers(f.backers, f.parentHeader.TotalBackersCount())
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
