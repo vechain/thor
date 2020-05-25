@@ -116,7 +116,7 @@ func (c *Consensus) validateBlockMeta(header blockMetaReader, parent *block.Head
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 	if err := c.validateBlockMeta(header, parent, nowTimestamp); err != nil {
-		return nil
+		return err
 	}
 	if header.GasUsed() > header.GasLimit() {
 		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
