@@ -284,7 +284,19 @@ func (h *Header) String() string {
 }
 
 // BetterThan return if this block is better than other one.
-func (h *Header) BetterThan(other *Header) bool {
+func (h *Header) BetterThan(other *Header, forkConfig thor.ForkConfig) bool {
+	if h.Number() >= forkConfig.VIP193 && other.Number() >= forkConfig.VIP193 {
+		c1 := h.TotalBackersCount() + uint64(h.Number())
+		c2 := other.TotalBackersCount() + uint64(other.Number())
+
+		if c1 > c2 {
+			return true
+		}
+		if c1 < c2 {
+			return false
+		}
+		// total confirmation indexes are equal
+	}
 	s1 := h.TotalScore()
 	s2 := other.TotalScore()
 

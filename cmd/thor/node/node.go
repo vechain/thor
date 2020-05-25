@@ -249,7 +249,6 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
-
 	// consensus object is not thread-safe
 	n.consLock.Lock()
 	startTime := mclock.Now()
@@ -303,13 +302,56 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 	if err != nil {
 		return nil, nil, err
 	}
-	if newBlock.Header().BetterThan(best.Header()) {
-		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+
+	prevTrunk := n.repo.NewBestChain()
+	curTrunk := n.repo.NewChain(newBlock.Header().ID())
+	if newBlock.Header().BetterThan(best.Header(), n.forkConfig) {
+		trunk, err := curTrunk.Exclude(prevTrunk)
+		if err != nil {
 			return nil, nil, err
 		}
+		branch, err := prevTrunk.Exclude(curTrunk)
+		if err != nil {
+			return nil, nil, err
+		}
+		/* prevent malicious proposer broadcast a block without approvals and later broadcast the block with higher backer count of the same round
+		 * b0(signer0)--->b1(signer1)--->b2(signer(2))
+		 *	\
+		 *	 \
+		 *	  \--------->b1'(signer1)(higher backer count)
+		 */
+		if len(trunk) > 0 && len(branch) > 0 {
+			b1, err := n.repo.GetBlock(trunk[0])
+			if err != nil {
+				return nil, nil, err
+			}
+			b2, err := n.repo.GetBlock(branch[0])
+			if err != nil {
+				return nil, nil, err
+			}
+			s1, err := b1.Header().Signer()
+			if err != nil {
+				return nil, nil, err
+			}
+			s2, err := b2.Header().Signer()
+			if err != nil {
+				return nil, nil, err
+			}
+			if s1 != s2 {
+				if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+					return nil, nil, err
+				}
+			} else {
+				curTrunk = prevTrunk
+			}
+		} else {
+			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+				return nil, nil, err
+			}
+		}
+	} else {
+		curTrunk = prevTrunk
 	}
-	prevTrunk := n.repo.NewChain(best.Header().ID())
-	curTrunk := n.repo.NewBestChain()
 
 	diff, err := curTrunk.Exclude(prevTrunk)
 	if err != nil {

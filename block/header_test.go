@@ -49,7 +49,7 @@ func TestHeader_BetterThan(t *testing.T) {
 				body:  tt.fields.body,
 				cache: tt.fields.cache,
 			}
-			if got := h.BetterThan(tt.args.other); got != tt.want {
+			if got := h.BetterThan(tt.args.other, thor.NoFork); got != tt.want {
 				t.Errorf("Header.BetterThan() = %v, want %v", got, tt.want)
 			}
 		})
