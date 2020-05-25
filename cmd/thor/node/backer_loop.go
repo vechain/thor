@@ -55,6 +55,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 	var knownProposal = cache.NewPrioCache(10)
 	var unknownApproval = cache.NewPrioCache(100)
+	var lastApproved uint32
 
 	for {
 		select {
@@ -73,6 +74,10 @@ func (n *Node) backerLoop(ctx context.Context) {
 				knownProposal.Set(proposal.Hash(), proposal, float64(proposal.Timestamp()))
 				n.comm.BroadcastProposal(proposal)
 
+				if lastApproved == proposal.Number() {
+					log.Debug("already approved, skip this round", "block number", proposal.Number())
+					continue
+				}
 				inPower, err := n.packer.InPower(best.Header(), n.master.Address())
 				if err != nil {
 					log.Debug("failed to validate master", "err", err)
@@ -91,6 +96,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 					pub := crypto.CompressPubkey(&n.master.PrivateKey.PublicKey)
 					approval := block.NewFullApproval(proposal.Hash(), block.NewApproval(pub, proof))
+					lastApproved = proposal.Number()
 
 					n.comm.BroadcastApproval(approval)
 				}
