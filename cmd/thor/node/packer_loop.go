@@ -18,6 +18,7 @@ import (
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/poa"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -70,7 +71,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
 		for {
-			if uint64(time.Now().Unix()) > flow.When() {
+			if uint64(time.Now().Unix())+thor.BlockInterval > flow.When() {
 				if err := n.pack(flow); err != nil {
 					log.Error("failed to pack block", "err", err)
 				}
@@ -118,7 +119,8 @@ func (n *Node) pack(flow *packer.Flow) error {
 
 	var proposal *block.Proposal
 	if flow.Number() >= n.forkConfig.VIP193 {
-		proposal, err := flow.Propose(n.master.PrivateKey)
+		var err error
+		proposal, err = flow.Propose(n.master.PrivateKey)
 		if err != nil {
 			return nil
 		}
