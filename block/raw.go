@@ -7,6 +7,7 @@ package block
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/tx"
@@ -40,11 +41,13 @@ func (r Raw) DecodeBody() (*Body, error) {
 	if err := rlp.Decode(bytes.NewReader(r), &raws); err != nil {
 		return nil, err
 	}
+	if len(raws) > 3 {
+		return nil, errors.New("rlp:block body has too many fields")
+	}
 	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return nil, err
 	}
-
-	if len(raws) > 2 {
+	if len(raws) == 3 {
 		if err := rlp.Decode(bytes.NewReader(raws[2]), &backers); err != nil {
 			return nil, err
 		}

@@ -7,6 +7,7 @@ package block
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -105,14 +106,16 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&raws); err != nil {
 		return err
 	}
+	if len(raws) > 3 {
+		return errors.New("rlp:block body has too many fields")
+	}
 	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
 		return err
 	}
 	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return err
 	}
-
-	if len(raws) > 2 {
+	if len(raws) == 3 {
 		if err := rlp.Decode(bytes.NewReader(raws[2]), &backers); err != nil {
 			return err
 		}
