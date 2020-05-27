@@ -14,21 +14,23 @@ import (
 )
 
 type JSONBlockSummary struct {
-	Number       uint32       `json:"number"`
-	ID           thor.Bytes32 `json:"id"`
-	Size         uint32       `json:"size"`
-	ParentID     thor.Bytes32 `json:"parentID"`
-	Timestamp    uint64       `json:"timestamp"`
-	GasLimit     uint64       `json:"gasLimit"`
-	Beneficiary  thor.Address `json:"beneficiary"`
-	GasUsed      uint64       `json:"gasUsed"`
-	TotalScore   uint64       `json:"totalScore"`
-	TxsRoot      thor.Bytes32 `json:"txsRoot"`
-	TxsFeatures  uint32       `json:"txsFeatures"`
-	StateRoot    thor.Bytes32 `json:"stateRoot"`
-	ReceiptsRoot thor.Bytes32 `json:"receiptsRoot"`
-	Signer       thor.Address `json:"signer"`
-	IsTrunk      bool         `json:"isTrunk"`
+	Number            uint32       `json:"number"`
+	ID                thor.Bytes32 `json:"id"`
+	Size              uint32       `json:"size"`
+	ParentID          thor.Bytes32 `json:"parentID"`
+	Timestamp         uint64       `json:"timestamp"`
+	GasLimit          uint64       `json:"gasLimit"`
+	Beneficiary       thor.Address `json:"beneficiary"`
+	GasUsed           uint64       `json:"gasUsed"`
+	TotalScore        uint64       `json:"totalScore"`
+	TxsRoot           thor.Bytes32 `json:"txsRoot"`
+	TxsFeatures       uint32       `json:"txsFeatures"`
+	StateRoot         thor.Bytes32 `json:"stateRoot"`
+	ReceiptsRoot      thor.Bytes32 `json:"receiptsRoot"`
+	BackersRoot       thor.Bytes32 `json:"backersRoot"`
+	TotalBackersCount uint64       `json:"totalBackersCount"`
+	Signer            thor.Address `json:"signer"`
+	IsTrunk           bool         `json:"isTrunk"`
 }
 
 type JSONCollapsedBlock struct {
@@ -93,21 +95,23 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool) *JSONBlock
 	signer, _ := header.Signer()
 
 	return &JSONBlockSummary{
-		Number:       header.Number(),
-		ID:           header.ID(),
-		ParentID:     header.ParentID(),
-		Timestamp:    header.Timestamp(),
-		TotalScore:   header.TotalScore(),
-		GasLimit:     header.GasLimit(),
-		GasUsed:      header.GasUsed(),
-		Beneficiary:  header.Beneficiary(),
-		Signer:       signer,
-		Size:         uint32(summary.Size),
-		StateRoot:    header.StateRoot(),
-		ReceiptsRoot: header.ReceiptsRoot(),
-		TxsRoot:      header.TxsRoot(),
-		TxsFeatures:  uint32(header.TxsFeatures()),
-		IsTrunk:      isTrunk,
+		Number:            header.Number(),
+		ID:                header.ID(),
+		ParentID:          header.ParentID(),
+		Timestamp:         header.Timestamp(),
+		TotalScore:        header.TotalScore(),
+		GasLimit:          header.GasLimit(),
+		GasUsed:           header.GasUsed(),
+		Beneficiary:       header.Beneficiary(),
+		Signer:            signer,
+		Size:              uint32(summary.Size),
+		StateRoot:         header.StateRoot(),
+		ReceiptsRoot:      header.ReceiptsRoot(),
+		TxsRoot:           header.TxsRoot(),
+		TxsFeatures:       uint32(header.TxsFeatures()),
+		IsTrunk:           isTrunk,
+		TotalBackersCount: header.TotalBackersCount(),
+		BackersRoot:       header.BackersRoot(),
 	}
 }
 

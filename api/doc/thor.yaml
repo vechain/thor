@@ -314,6 +314,8 @@ paths:
                 txsFeatures: 0
                 stateRoot: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
                 receiptsRoot: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+                backersRoot: "0x1da6517c7c8583cafbe1511fd3f6a5449da361ccfa683f6371dd1e4285c06c41"
+                totalBackersCount: 4457
                 signer: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
                 isTrunk: true
                 transactions:
@@ -736,6 +738,16 @@ components:
           format: bytes32
           description: root hash of transaction receipts
           example: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+        backersRoot:
+          type: string
+          format: bytes32
+          description: root hash of block approvals
+          example: '0x1da6517c7c8583cafbe1511fd3f6a5449da361ccfa683f6371dd1e4285c06c41'
+        totalBackersCount:
+          type: integer
+          format: uint64
+          description: sum of all ancestral blocks' backer count
+          example: 4457
         signer:
           type: string
           format: bytes20
