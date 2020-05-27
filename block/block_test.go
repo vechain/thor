@@ -170,3 +170,20 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 }
+
+func TestDecoding(t *testing.T) {
+	raw, _ := rlp.EncodeToBytes(struct {
+		A uint
+		B uint
+		C uint
+		D uint
+	}{1, 2, 3, 4})
+
+	var bx Block
+
+	err := rlp.DecodeBytes(raw, &bx)
+	assert.EqualError(t, err, "rlp:block body has too many fields")
+
+	_, err = Raw(raw).DecodeBody()
+	assert.EqualError(t, err, "rlp:block body has too many fields")
+}
