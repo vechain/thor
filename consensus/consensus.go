@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/poa"
 
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -29,6 +30,7 @@ type Consensus struct {
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	candidatesCache      *simplelru.LRU
+	seeder               *poa.Seeder
 }
 
 // New create a Consensus instance.
@@ -40,6 +42,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		candidatesCache:      candidatesCache,
+		seeder:               poa.NewSeeder(repo, forkConfig),
 	}
 }
 
@@ -107,7 +110,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 	}
 	state := c.stater.NewState(parentSummary.Header.StateRoot())
 	if !skipPoA {
-		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
+		if _, _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
 			return nil, err
 		}
 	}
@@ -127,20 +130,21 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 }
 
 // ValidateProposal validate a block proposal
-func (c *Consensus) ValidateProposal(proposal *block.Proposal) error {
+func (c *Consensus) ValidateProposal(proposal *block.Proposal) (uint64, error) {
 	parent, err := c.repo.GetBlockSummary(proposal.ParentID())
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if err = c.validateBlockMeta(proposal, parent.Header, uint64(time.Now().Unix())); err != nil {
-		return err
+		return 0, err
 	}
 
 	state := c.stater.NewState(parent.Header.StateRoot())
-	if _, _, err = c.validateSchedule(proposal, parent.Header, state); err != nil {
-		return err
+	_, score, err := c.validateProposer(proposal, parent.Header, state)
+	if err != nil {
+		return 0, err
 	}
 
-	return nil
+	return score, nil
 }

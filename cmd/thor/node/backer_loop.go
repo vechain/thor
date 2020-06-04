@@ -55,7 +55,10 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 	var knownProposal = cache.NewPrioCache(10)
 	var unknownApproval = cache.NewPrioCache(100)
-	var lastApproved uint32
+	var lastApproved struct {
+		Number uint32
+		Score  uint64
+	}
 
 	for {
 		select {
@@ -66,7 +69,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 			proposal := ev.Proposal
 			if best.Header().ID() == proposal.ParentID() {
-				err := n.cons.ValidateProposal(proposal)
+				score, err := n.cons.ValidateProposal(proposal)
 				if err != nil {
 					log.Debug("block proposal is not valid", "err", err)
 					continue
@@ -74,8 +77,8 @@ func (n *Node) backerLoop(ctx context.Context) {
 				knownProposal.Set(proposal.Hash(), proposal, float64(proposal.Timestamp()))
 				n.comm.BroadcastProposal(proposal)
 
-				if lastApproved == proposal.Number() {
-					log.Debug("already approved, skip this round", "block number", proposal.Number())
+				if lastApproved.Number == proposal.Number() && score <= lastApproved.Score {
+					log.Debug("already approved, skip this round", "block number", proposal.Number(), "score", score)
 					continue
 				}
 				inPower, err := n.packer.InPower(best.Header(), n.master.Address())
@@ -96,7 +99,9 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 					pub := crypto.CompressPubkey(&n.master.PrivateKey.PublicKey)
 					approval := block.NewFullApproval(proposal.Hash(), block.NewApproval(pub, proof))
-					lastApproved = proposal.Number()
+
+					lastApproved.Number = proposal.Number()
+					lastApproved.Score = score
 
 					n.comm.BroadcastApproval(approval)
 				}
@@ -143,7 +148,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 }
 
 func (n *Node) validateApproval(parentHeader *block.Header, proposal *block.Proposal, approval *block.Approval) error {
-	if err := n.cons.ValidateProposal(proposal); err != nil {
+	if _, err := n.cons.ValidateProposal(proposal); err != nil {
 		return err
 	}
 
