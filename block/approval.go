@@ -6,12 +6,12 @@
 package block
 
 import (
-	"crypto/ecdsa"
 	"io"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
 )
@@ -29,6 +29,7 @@ type Approval struct {
 	cache struct {
 		hash   atomic.Value
 		signer atomic.Value
+		beta   atomic.Value
 	}
 }
 
@@ -54,14 +55,20 @@ func (a *Approval) Hash() (hash thor.Bytes32) {
 	return
 }
 
-// Proof is the beta of the backer's VRF output.
-func (a *Approval) Proof() []byte {
-	return append([]byte(nil), a.body.Proof...)
-}
+// Validate validates approval's proof and returns the VRF output.
+func (a *Approval) Validate(alpha []byte) (beta []byte, err error) {
+	if cached := a.cache.beta.Load(); cached != nil {
+		return cached.([]byte), nil
+	}
+	defer func() { a.cache.beta.Store(beta) }()
 
-// PublickKey is the public key of the backer.
-func (a *Approval) PublickKey() (*ecdsa.PublicKey, error) {
-	return crypto.DecompressPubkey(a.body.PublicKey)
+	vrf := ecvrf.NewSecp256k1Sha256Tai()
+	pub, err := crypto.DecompressPubkey(a.body.PublicKey)
+	if err != nil {
+		return []byte{}, err
+	}
+	beta, err = vrf.Verify(pub, alpha, a.body.Proof)
+	return
 }
 
 // Signer computes the address from the public key.

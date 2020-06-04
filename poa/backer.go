@@ -22,22 +22,12 @@ func TryApprove(privateKey *ecdsa.PrivateKey, alpha []byte) (lucky bool, proof [
 		return
 	}
 
-	lucky = evaluateBeta(beta)
+	lucky = EvaluateVRF(beta)
 	return
 }
 
-// VerifyBacker verifies the given proof with public public key and evalutes if the output(beta) meets the requirement of backer.
-func VerifyBacker(publicKey *ecdsa.PublicKey, alpha []byte, proof []byte) (bool, error) {
-	vrf := ecvrf.NewSecp256k1Sha256Tai()
-
-	beta, err := vrf.Verify(publicKey, alpha, proof)
-	if err != nil {
-		return false, err
-	}
-	return evaluateBeta(beta), nil
-}
-
-func evaluateBeta(beta []byte) bool {
+// EvaluateVRF evalutes if the VRF output(beta) meets the requirement of backer.
+func EvaluateVRF(beta []byte) bool {
 	if c := bytes.Compare(beta, thor.BackerThreshold.Bytes()); c == -1 {
 		return true
 	}

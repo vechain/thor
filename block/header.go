@@ -27,6 +27,7 @@ type Header struct {
 		signingHash atomic.Value
 		signer      atomic.Value
 		id          atomic.Value
+		proposal    atomic.Value
 	}
 }
 
@@ -113,6 +114,21 @@ func (h *Header) BackersRoot() thor.Bytes32 {
 // TotalBackersCount returns total backers count that cumulated from genesis block to this one.
 func (h *Header) TotalBackersCount() uint64 {
 	return h.body.BackersRoot.TotalBackersCount
+}
+
+// Proposal returns block proposal
+func (h *Header) Proposal() (proposal *Proposal) {
+	if cached := h.cache.proposal.Load(); cached != nil {
+		return cached.(*Proposal)
+	}
+	defer func() { h.cache.proposal.Store(proposal) }()
+
+	proposal = NewProposal(
+		h.ParentID(),
+		h.TxsRoot(),
+		h.GasLimit(),
+		h.Timestamp())
+	return
 }
 
 // ID computes id of block.

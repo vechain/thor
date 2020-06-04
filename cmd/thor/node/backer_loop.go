@@ -157,14 +157,12 @@ func (n *Node) validateApproval(parentHeader *block.Header, proposal *block.Prop
 	}
 
 	alpha := proposal.Hash().Bytes()
-	pub, err := approval.PublickKey()
+	beta, err := approval.Validate(alpha)
 	if err != nil {
 		return err
 	}
-	isBacker, err := poa.VerifyBacker(pub, alpha, approval.Proof())
-	if err != nil {
-		return err
-	}
+
+	isBacker := poa.EvaluateVRF(beta)
 	if isBacker == false {
 		return fmt.Errorf("signer is not qualified to be a backer: %v", signer)
 	}

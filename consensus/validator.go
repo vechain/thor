@@ -209,8 +209,7 @@ func (c *Consensus) validateBackers(blk *block.Block, parent *block.Header, cand
 				all[p.Address] = true
 			}
 
-			proposal := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp())
-			alpha := proposal.Hash().Bytes()
+			alpha := header.Proposal().Hash().Bytes()
 			for _, approval := range backers {
 				signer, err := approval.Signer()
 				if err != nil {
@@ -219,14 +218,11 @@ func (c *Consensus) validateBackers(blk *block.Block, parent *block.Header, cand
 				if all[signer] == false {
 					return consensusError(fmt.Sprintf("backer: %v not in power", signer))
 				}
-				pub, err := approval.PublickKey()
+				beta, err := approval.Validate(alpha)
 				if err != nil {
-					return consensusError(fmt.Sprintf("backer's public key unavailable: %v", err))
+					return consensusError(fmt.Sprintf("failed to verify backer's approval %v", err))
 				}
-				isBacker, err := poa.VerifyBacker(pub, alpha, approval.Proof())
-				if err != nil {
-					return err
-				}
+				isBacker := poa.EvaluateVRF(beta)
 				if isBacker == false {
 					return consensusError(fmt.Sprintf("signer is not qualified to be a backer: %v", signer))
 				}

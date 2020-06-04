@@ -70,7 +70,10 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 			<-co.Parallel(func(queue chan<- func()) {
 				for _, blk := range blocks {
 					h := blk.Header()
-					queue <- func() { h.ID() }
+					queue <- func() {
+						h.ID()
+						h.Proposal().Hash()
+					}
 					for _, tx := range blk.Transactions() {
 						tx := tx
 						queue <- func() {

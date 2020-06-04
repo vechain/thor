@@ -164,14 +164,11 @@ func (n *Node) pack(flow *packer.Flow) error {
 							}
 
 							alpha := proposal.Hash().Bytes()
-							pub, err := approval.PublickKey()
+							beta, err := approval.Validate(alpha)
 							if err != nil {
 								return err
 							}
-							isBacker, err := poa.VerifyBacker(pub, alpha, approval.Proof())
-							if err != nil {
-								return
-							}
+							isBacker := poa.EvaluateVRF(beta)
 							if isBacker == true {
 								flow.AddApproval(approval)
 							} else {

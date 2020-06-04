@@ -20,6 +20,7 @@ func TestHeader_BetterThan(t *testing.T) {
 			signingHash atomic.Value
 			signer      atomic.Value
 			id          atomic.Value
+			proposal    atomic.Value
 		}
 	}
 	type args struct {

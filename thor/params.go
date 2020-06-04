@@ -38,14 +38,15 @@ const (
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 )
 
+// BackerThreshold is the maximum value of VRF output used to determine a backer.
+var BackerThreshold = new(big.Int).Div(math.MaxBig256, big.NewInt(3))
+
 // Keys of governance params.
 var (
 	KeyExecutorAddress     = BytesToBytes32([]byte("executor"))
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
-
-	BackerThreshold = new(big.Int).Div(math.MaxBig256, big.NewInt(3)) // Maximum value of VRF output used to determine a backer.
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
