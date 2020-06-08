@@ -199,8 +199,11 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		GasUsed(f.gasUsed).
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
-		TransactionFeatures(f.features).
-		Backers(f.backers, f.parentHeader.TotalBackersCount())
+		TransactionFeatures(f.features)
+
+	if f.runtime.Context().Number > f.packer.forkConfig.VIP193 {
+		builder.Backers(f.backers, f.parentHeader.TotalBackersCount())
+	}
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
