@@ -6,6 +6,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -303,55 +304,19 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 		return nil, nil, err
 	}
 
-	prevTrunk := n.repo.NewBestChain()
-	curTrunk := n.repo.NewChain(newBlock.Header().ID())
-	if newBlock.Header().BetterThan(best.Header(), n.forkConfig) {
-		trunk, err := curTrunk.Exclude(prevTrunk)
-		if err != nil {
-			return nil, nil, err
-		}
-		branch, err := prevTrunk.Exclude(curTrunk)
-		if err != nil {
-			return nil, nil, err
-		}
-		/* prevent malicious proposer broadcast a block without approvals and later broadcast the block with higher backer count of the same round
-		 * b0(signer0)--->b1(signer1)--->b2(signer(2))
-		 *	\
-		 *	 \
-		 *	  \--------->b1'(signer1)(higher backer count)
-		 */
-		if len(trunk) > 0 && len(branch) > 0 {
-			b1, err := n.repo.GetBlock(trunk[0])
-			if err != nil {
-				return nil, nil, err
-			}
-			b2, err := n.repo.GetBlock(branch[0])
-			if err != nil {
-				return nil, nil, err
-			}
-			s1, err := b1.Header().Signer()
-			if err != nil {
-				return nil, nil, err
-			}
-			s2, err := b2.Header().Signer()
-			if err != nil {
-				return nil, nil, err
-			}
-			if s1 != s2 {
-				if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-					return nil, nil, err
-				}
-			} else {
-				curTrunk = prevTrunk
-			}
-		} else {
-			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-				return nil, nil, err
-			}
-		}
-	} else {
-		curTrunk = prevTrunk
+	better, err := n.compare(n.repo.NewChain(newBlock.Header().ID()), n.repo.NewBestChain())
+	if err != nil {
+		return nil, nil, err
 	}
+
+	if better == true {
+		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	prevTrunk := n.repo.NewChain(best.Header().ID())
+	curTrunk := n.repo.NewBestChain()
 
 	diff, err := curTrunk.Exclude(prevTrunk)
 	if err != nil {
@@ -369,6 +334,80 @@ func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.
 		}
 	}
 	return prevTrunk, curTrunk, nil
+}
+
+// Compare compares two chains, returns true if current is better
+func (n *Node) compare(newChain, bestChain *chain.Chain) (bool, error) {
+	newHead, err := n.repo.GetBlockSummary(newChain.HeadID())
+	if err != nil {
+		return false, err
+	}
+	bestHead, err := n.repo.GetBlockSummary(bestChain.HeadID())
+	if err != nil {
+		return false, err
+	}
+
+	if newHead.Header.Number() >= n.forkConfig.VIP193 && bestHead.Header.Number() >= n.forkConfig.VIP193 {
+		c1 := newHead.Header.TotalBackersCount() + uint64(newHead.Header.Number())
+		c2 := bestHead.Header.TotalBackersCount() + uint64(bestHead.Header.Number())
+
+		if c1 > c2 {
+			trunk, err := newChain.Exclude(bestChain) // assume new chain is the new trunk
+			if err != nil {
+				return false, err
+			}
+			branch, err := bestChain.Exclude(newChain)
+			if err != nil {
+				return false, err
+			}
+			/* prevent malicious proposer broadcast a block without approvals and later broadcast the block with higher backer count of the same round
+			 * b0(signer0)--->b1(signer1)--->b2(signer(2))
+			 *	\
+			 *	 \
+			 *	  \--------->b1'(signer1)(higher backer count)
+			 */
+			if len(trunk) > 0 && len(branch) > 0 {
+				b1, err := n.repo.GetBlock(trunk[0])
+				if err != nil {
+					return false, err
+				}
+				b2, err := n.repo.GetBlock(branch[0])
+				if err != nil {
+					return false, err
+				}
+				s1, err := b1.Header().Signer()
+				if err != nil {
+					return false, err
+				}
+				s2, err := b2.Header().Signer()
+				if err != nil {
+					return false, err
+				}
+				if s1 == s2 {
+					return false, nil
+				}
+			}
+			return true, nil
+		}
+		if c1 < c2 {
+			return false, nil
+		}
+		// total confirmation indexes are equal
+	}
+	s1 := newHead.Header.TotalScore()
+	s2 := bestHead.Header.TotalScore()
+
+	if s1 > s2 {
+		return true, nil
+	}
+	if s1 < s2 {
+		return false, nil
+	}
+	// total scores are equal
+
+	// smaller ID is preferred, since block with smaller ID usually has larger average score.
+	// also, it's a deterministic decision.
+	return bytes.Compare(newChain.HeadID().Bytes(), bestChain.HeadID().Bytes()) < 0, nil
 }
 
 func (n *Node) writeLogs(diff []thor.Bytes32) error {

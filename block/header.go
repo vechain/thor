@@ -6,7 +6,6 @@
 package block
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -297,36 +296,6 @@ func (h *Header) String() string {
 	Signature:      	0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.BackersRoot.Root, h.body.BackersRoot.TotalBackersCount, h.body.Signature)
-}
-
-// BetterThan return if this block is better than other one.
-func (h *Header) BetterThan(other *Header, forkConfig thor.ForkConfig) bool {
-	if h.Number() >= forkConfig.VIP193 && other.Number() >= forkConfig.VIP193 {
-		c1 := h.TotalBackersCount() + uint64(h.Number())
-		c2 := other.TotalBackersCount() + uint64(other.Number())
-
-		if c1 > c2 {
-			return true
-		}
-		if c1 < c2 {
-			return false
-		}
-		// total confirmation indexes are equal
-	}
-	s1 := h.TotalScore()
-	s2 := other.TotalScore()
-
-	if s1 > s2 {
-		return true
-	}
-	if s1 < s2 {
-		return false
-	}
-	// total scores are equal
-
-	// smaller ID is preferred, since block with smaller ID usually has larger average score.
-	// also, it's a deterministic decision.
-	return bytes.Compare(h.ID().Bytes(), other.ID().Bytes()) < 0
 }
 
 // Number extract block number from block id.
