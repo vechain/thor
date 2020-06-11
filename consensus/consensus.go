@@ -136,7 +136,7 @@ func (c *Consensus) ValidateProposal(proposal *block.Proposal) (uint64, error) {
 		return 0, err
 	}
 
-	if err = c.validateBlockMeta(proposal, parent.Header, uint64(time.Now().Unix())); err != nil {
+	if err = c.validateBlockHeader(proposal, parent.Header, uint64(time.Now().Unix())); err != nil {
 		return 0, err
 	}
 

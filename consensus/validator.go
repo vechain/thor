@@ -18,7 +18,7 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
-type blockMetaReader interface {
+type blockHeaderReader interface {
 	ParentID() thor.Bytes32
 	Timestamp() uint64
 	GasLimit() uint64
@@ -95,7 +95,7 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateBlockMeta(header blockMetaReader, parent *block.Header, nowTimestamp uint64) error {
+func (c *Consensus) validateBlockHeader(header blockHeaderReader, parent *block.Header, nowTimestamp uint64) error {
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
@@ -111,27 +111,22 @@ func (c *Consensus) validateBlockMeta(header blockMetaReader, parent *block.Head
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
 		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
+
+	if h, ok := header.(*block.Header); ok == true {
+		if h.GasUsed() > h.GasLimit() {
+			return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", h.GasLimit(), h.GasUsed()))
+		}
+		if h.TotalScore() <= parent.TotalScore() {
+			return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), h.TotalScore()))
+		}
+		if h.TotalBackersCount() < parent.TotalBackersCount() {
+			return consensusError(fmt.Sprintf("block total backer count invalid: parent %v, current %v", parent.TotalBackersCount(), h.TotalBackersCount()))
+		}
+	}
 	return nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
-	if err := c.validateBlockMeta(header, parent, nowTimestamp); err != nil {
-		return err
-	}
-	if header.GasUsed() > header.GasLimit() {
-		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
-	}
-	if header.TotalScore() <= parent.TotalScore() {
-		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
-	}
-	if header.TotalBackersCount() < parent.TotalBackersCount() {
-		return consensusError(fmt.Sprintf("block total backer count invalid: parent %v, current %v", parent.TotalBackersCount(), header.TotalBackersCount()))
-	}
-
-	return nil
-}
-
-func (c *Consensus) validateProposer(header blockMetaReader, parent *block.Header, st *state.State) (*poa.Candidates, uint64, error) {
+func (c *Consensus) validateProposer(header blockHeaderReader, parent *block.Header, st *state.State) (*poa.Candidates, uint64, error) {
 	signer, err := header.Signer()
 	if err != nil {
 		return nil, 0, consensusError(fmt.Sprintf("block signer unavailable: %v", err))

@@ -13,7 +13,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +22,7 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -56,14 +56,15 @@ func txSign(builder *tx.Builder) *tx.Transaction {
 }
 
 type testConsensus struct {
-	t        *testing.T
-	assert   *assert.Assertions
-	con      *Consensus
-	time     uint64
-	pk       *ecdsa.PrivateKey
-	parent   *block.Block
-	original *block.Block
-	tag      byte
+	t          *testing.T
+	assert     *assert.Assertions
+	con        *Consensus
+	time       uint64
+	pk         *ecdsa.PrivateKey
+	parent     *block.Block
+	original   *block.Block
+	tag        byte
+	revertedID thor.Bytes32
 }
 
 func newTestConsensus(t *testing.T) *testConsensus {
@@ -96,9 +97,44 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
+	forkConfig := thor.ForkConfig{
+		VIP191:    0,
+		ETH_CONST: math.MaxUint32,
+		BLOCKLIST: 0,
+		VIP193:    0,
+	}
+
 	proposer := genesis.DevAccounts()[0]
-	p := packer.New(repo, stater, proposer.Address, &proposer.Address, thor.NoFork)
-	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
+
+	//b0---------
+	priv, _ := crypto.GenerateKey()
+	tx := txBuilder(repo.ChainTag()).Build()
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), priv)
+	tx = tx.WithSignature(sig)
+
+	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	flow, err := p.Schedule(parent.Header(), 1591709310)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = flow.Adopt(tx)
+	proposal, _ := flow.Propose(proposer.PrivateKey)
+	_, beta, _ := poa.TryApprove(proposer.PrivateKey, proposal.Hash().Bytes())
+	pub := crypto.CompressPubkey(&proposer.PrivateKey.PublicKey)
+	flow.AddApproval(block.NewApproval(pub, beta))
+	b0, stage, receipts, err := flow.Pack(proposer.PrivateKey)
+	_, err = stage.Commit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = repo.AddBlock(b0, receipts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//-----------
+
+	p = packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
+	flow, err = p.Schedule(b0.Header(), uint64(1591709330))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +144,6 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	forkConfig := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-	}
-
 	con := New(repo, stater, forkConfig)
 
 	if _, _, err := con.Process(original, flow.When()); err != nil {
@@ -121,14 +151,15 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	}
 
 	return &testConsensus{
-		t:        t,
-		assert:   assert.New(t),
-		con:      con,
-		time:     flow.When(),
-		pk:       proposer.PrivateKey,
-		parent:   parent,
-		original: original,
-		tag:      repo.ChainTag(),
+		t:          t,
+		assert:     assert.New(t),
+		con:        con,
+		time:       flow.When(),
+		pk:         proposer.PrivateKey,
+		parent:     b0,
+		original:   original,
+		tag:        repo.ChainTag(),
+		revertedID: tx.ID(),
 	}
 }
 
@@ -141,6 +172,9 @@ func (tc *testConsensus) sign(blk *block.Block) *block.Block {
 }
 
 func (tc *testConsensus) originalBuilder() *block.Builder {
+	var features tx.Features
+	features |= tx.DelegationFeature
+
 	header := tc.original.Header()
 	return new(block.Builder).
 		ParentID(header.ParentID()).
@@ -150,7 +184,9 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 		GasUsed(header.GasUsed()).
 		Beneficiary(header.Beneficiary()).
 		StateRoot(header.StateRoot()).
-		ReceiptsRoot(header.ReceiptsRoot())
+		ReceiptsRoot(header.ReceiptsRoot()).
+		Backers(block.Approvals{}, 1).
+		TransactionFeatures(features)
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
@@ -243,36 +279,37 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		)
 		tc.assert.Equal(expect, err)
 	}
+	triggers["triggerInvalidTxFeatures"] = func() {
+		build := tc.originalBuilder()
+		var features, originFeatures tx.Features
+		originFeatures |= tx.DelegationFeature
+		features |= 2
+		blk := tc.sign(build.TransactionFeatures(features).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block txs features invalid: want %v, have %v",
+				originFeatures,
+				features,
+			),
+		)
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerInvalidBackersCount"] = func() {
+		blk := tc.sign(tc.originalBuilder().Backers(block.Approvals{}, 0).Build())
+		err := tc.consent(blk)
+		expect := consensusError("block total backer count invalid: parent 1, current 0")
+		tc.assert.Equal(expect, err)
+	}
 
 	for _, trigger := range triggers {
 		trigger()
 	}
 }
 
-func (tc *testConsensus) TestTxDepBroken() {
-	txID := txSign(txBuilder(tc.tag)).ID()
-	tx := txSign(txBuilder(tc.tag).DependsOn(&txID))
-	err := tc.consent(
-		tc.sign(
-			tc.originalBuilder().Transaction(tx).Build(),
-		),
-	)
-	tc.assert.Equal(consensusError("tx dep broken"), err)
-}
-
 func (tc *testConsensus) TestKnownBlock() {
 	err := tc.consent(tc.parent)
 	tc.assert.Equal(errKnownBlock, err)
-}
-
-func (tc *testConsensus) TestTxAlreadyExists() {
-	tx := txSign(txBuilder(tc.tag))
-	err := tc.consent(
-		tc.sign(
-			tc.originalBuilder().Transaction(tx).Transaction(tx).Build(),
-		),
-	)
-	tc.assert.Equal(consensusError("tx already exists"), err)
 }
 
 func (tc *testConsensus) TestParentMissing() {
@@ -305,6 +342,35 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		)
 		tc.assert.Equal(expect, err)
 	}
+	triggers["triggerErrGasUsed"] = func() {
+		blk := tc.sign(tc.originalBuilder().GasUsed(100).Build())
+		err := tc.consent(blk)
+		expect := consensusError("block gas used mismatch: want 100, have 0")
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerErrReceiptRootMismatch"] = func() {
+		blk := tc.sign(tc.originalBuilder().ReceiptsRoot(thor.Bytes32{}).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block receipts root mismatch: want %v, have %v",
+				thor.Bytes32{},
+				tc.original.Header().ReceiptsRoot(),
+			),
+		)
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerErrStateRootMismatch"] = func() {
+		blk := tc.sign(tc.originalBuilder().StateRoot(thor.Bytes32{}).Build())
+		err := tc.consent(blk)
+		expect := consensusError(
+			fmt.Sprintf(
+				"block state root mismatch: want %v, have 0xe049292984c1036f3098a3b4c44bb66d9fc1457725fae84db4609071aeab635e",
+				thor.Bytes32{},
+			),
+		)
+		tc.assert.Equal(expect, err)
+	}
 	triggers["triggerErrChainTagMismatch"] = func() {
 		err := tc.consent(
 			tc.sign(
@@ -330,7 +396,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 				).Build(),
 			),
 		)
-		expect := consensusError("tx ref future block: ref 100, current 1")
+		expect := consensusError("tx ref future block: ref 100, current 2")
 		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerTxOriginBlocked"] = func() {
@@ -347,6 +413,56 @@ func (tc *testConsensus) TestValidateBlockBody() {
 			fmt.Sprintf("tx origin blocked got packed: %v", genesis.DevAccounts()[9].Address),
 		)
 		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerTxExpired"] = func() {
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(
+					txSign(txBuilder(tc.tag).BlockRef(tx.NewBlockRef(0)).Expiration(1)),
+				).Build(),
+			),
+		)
+		expect := consensusError("tx expired: ref 0, current 2, expiration 1")
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerInvalidFeatures"] = func() {
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(
+					txSign(txBuilder(tc.tag).Features(2)),
+				).Build(),
+			),
+		)
+		expect := consensusError("invalid tx: unsupported features")
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerTxDepBroken"] = func() {
+		txID := txSign(txBuilder(tc.tag)).ID()
+		tx := txSign(txBuilder(tc.tag).DependsOn(&txID))
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(tx).Build(),
+			),
+		)
+		tc.assert.Equal(consensusError("tx dep broken"), err)
+	}
+	triggers["triggerTxReverted"] = func() {
+		tx := txSign(txBuilder(tc.tag).DependsOn(&tc.revertedID))
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(tx).Build(),
+			),
+		)
+		tc.assert.Equal(consensusError("tx dep reverted"), err)
+	}
+	triggers["triggerTxAlreadyExists"] = func() {
+		tx := txSign(txBuilder(tc.tag))
+		err := tc.consent(
+			tc.sign(
+				tc.originalBuilder().Transaction(tx).Transaction(tx).Build(),
+			),
+		)
+		tc.assert.Equal(consensusError("tx already exists"), err)
 	}
 
 	for _, trigger := range triggers {
@@ -394,7 +510,7 @@ func (tc *testConsensus) TestValidateProposer() {
 		build := tc.originalBuilder()
 		blk := tc.sign(build.TotalScore(tc.original.Header().TotalScore() + 100).Build())
 		err := tc.consent(blk)
-		expect := consensusError("block total score invalid: want 1, have 101")
+		expect := consensusError("block total score invalid: want 2, have 102")
 		tc.assert.Equal(expect, err)
 	}
 
