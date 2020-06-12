@@ -12,8 +12,9 @@ import (
 
 // Builder to make it easy to build a block object.
 type Builder struct {
-	headerBody headerBody
-	txs        tx.Transactions
+	headerBody       headerBody
+	txs              tx.Transactions
+	backerSignatures BackerSignatures
 }
 
 // ParentID set parent id.
@@ -70,9 +71,16 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 	return b
 }
 
-// TransactionFeatures set supported transaction features
+// TransactionFeatures set supported transaction features.
 func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	b.headerBody.TxsRootFeatures.Features = features
+	return b
+}
+
+// BackerSignatures add the list of backer signature.
+func (b *Builder) BackerSignatures(backerSignatures BackerSignatures, parentBackerCount uint64) *Builder {
+	b.backerSignatures = append(BackerSignatures(nil), backerSignatures...)
+	b.headerBody.BackerSignaturesRoot.TotalBackersCount = parentBackerCount + uint64(len(backerSignatures))
 	return b
 }
 
@@ -80,9 +88,11 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
+	header.body.BackerSignaturesRoot.Root = b.backerSignatures.RootHash()
 
 	return &Block{
-		header: &header,
-		txs:    b.txs,
+		header:           &header,
+		txs:              b.txs,
+		backerSignatures: b.backerSignatures,
 	}
 }

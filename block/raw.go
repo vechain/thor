@@ -7,6 +7,7 @@ package block
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/tx"
@@ -31,18 +32,28 @@ func (r Raw) DecodeHeader() (*Header, error) {
 
 // DecodeBody decode only the body.
 func (r Raw) DecodeBody() (*Body, error) {
-	content, _, err := rlp.SplitList(r)
-	if err != nil {
+	var (
+		raws             []rlp.RawValue
+		txs              tx.Transactions
+		backerSignatures BackerSignatures
+	)
+
+	if err := rlp.Decode(bytes.NewReader(r), &raws); err != nil {
 		return nil, err
+	}
+	if len(raws) > 3 {
+		return nil, errors.New("rlp:block body has too many fields")
+	}
+	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
+		return nil, err
+	}
+	if len(raws) == 3 {
+		if err := rlp.Decode(bytes.NewReader(raws[2]), &backerSignatures); err != nil {
+			return nil, err
+		}
+	} else {
+		backerSignatures = BackerSignatures(nil)
 	}
 
-	_, _, rest, err := rlp.Split(content)
-	if err != nil {
-		return nil, err
-	}
-	var txs tx.Transactions
-	if err := rlp.Decode(bytes.NewReader(rest), &txs); err != nil {
-		return nil, err
-	}
-	return &Body{txs}, nil
+	return &Body{txs, backerSignatures}, nil
 }
