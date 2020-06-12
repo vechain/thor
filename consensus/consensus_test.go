@@ -294,7 +294,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	triggers["triggerErrTxsRootMismatch"] = func() {
 		transaction := txSign(txBuilder(tc.tag))
 		transactions := tx.Transactions{transaction}
-		blk := tc.sign(block.Compose(tc.original.Header(), transactions))
+		blk := tc.sign(block.Compose(tc.original.Header(), transactions, nil))
 		err := tc.consent(blk)
 		expect := consensusError(
 			fmt.Sprintf(

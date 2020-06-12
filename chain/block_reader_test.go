@@ -48,8 +48,8 @@ func TestBlockReader(t *testing.T) {
 	}
 
 	assert.Equal(t, []*chain.ExtendedBlock{
-		{block.Compose(b3.Header(), b3.Transactions()), false},
-		{block.Compose(b4.Header(), b4.Transactions()), false}},
+		{block.Compose(b3.Header(), b3.Transactions(), nil), false},
+		{block.Compose(b4.Header(), b4.Transactions(), nil), false}},
 		blks)
 }
 
@@ -91,9 +91,9 @@ func TestBlockReaderFork(t *testing.T) {
 	}
 
 	assert.Equal(t, []*chain.ExtendedBlock{
-		{block.Compose(b2x.Header(), b2x.Transactions()), true},
-		{block.Compose(b2.Header(), b2.Transactions()), false},
-		{block.Compose(b3.Header(), b3.Transactions()), false},
-		{block.Compose(b4.Header(), b4.Transactions()), false}},
+		{block.Compose(b2x.Header(), b2x.Transactions(), nil), true},
+		{block.Compose(b2.Header(), b2.Transactions(), nil), false},
+		{block.Compose(b3.Header(), b3.Transactions(), nil), false},
+		{block.Compose(b4.Header(), b4.Transactions(), nil), false}},
 		blks)
 }

@@ -7,6 +7,7 @@ package block_test
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -19,6 +20,13 @@ import (
 )
 
 func TestBlock(t *testing.T) {
+	var (
+		pub   [33]byte
+		proof [81]byte
+	)
+	rand.Read(pub[:])
+	rand.Read(proof[:])
+	bs := NewBackerSignature(pub[:], proof[:])
 
 	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
 	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
@@ -52,12 +60,14 @@ func TestBlock(t *testing.T) {
 
 	txs := block.Transactions()
 	body := block.Body()
+	bss := block.BackerSignatures()
 	txsRootHash := txs.RootHash()
+	brRootHash := bss.RootHash()
 
 	fmt.Println(h.ID())
 
 	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs), block)
+	assert.Equal(t, Compose(h, txs, BackerSignatures(nil)), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -67,6 +77,8 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, emptyRoot, h.ParentID())
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
+	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
+	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 	key, _ := crypto.HexToECDSA(privKey)
 	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
@@ -94,12 +106,84 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
+		BackerSignatures(BackerSignatures{bs}, 10).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
+	assert.Equal(t, uint64(10+1), block.Header().TotalBackersCount())
+	assert.Equal(t, block.BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
+
 	data, _ = rlp.EncodeToBytes(block)
 	var bx Block
 	assert.Nil(t, rlp.DecodeBytes(data, &bx))
 	assert.Equal(t, block.Header().ID(), bx.Header().ID())
 	assert.Equal(t, block.Header().TxsFeatures(), bx.Header().TxsFeatures())
+}
+
+func TestEncoding(t *testing.T) {
+	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
+	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
+
+	now := uint64(time.Now().UnixNano())
+
+	var (
+		gasUsed     uint64       = 1000
+		gasLimit    uint64       = 14000
+		totalScore  uint64       = 101
+		emptyRoot   thor.Bytes32 = thor.BytesToBytes32([]byte("0"))
+		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
+	)
+
+	block := new(Builder).
+		GasUsed(gasUsed).
+		Transaction(tx1).
+		Transaction(tx2).
+		GasLimit(gasLimit).
+		TotalScore(totalScore).
+		StateRoot(emptyRoot).
+		ReceiptsRoot(emptyRoot).
+		Timestamp(now).
+		ParentID(emptyRoot).
+		Beneficiary(beneficiary).
+		Build()
+
+	h := block.Header()
+
+	txs := block.Transactions()
+	body := block.Body()
+	bss := block.BackerSignatures()
+	txsRootHash := txs.RootHash()
+	brRootHash := bss.RootHash()
+
+	assert.Equal(t, body.Txs, txs)
+	assert.Equal(t, Compose(h, txs, BackerSignatures(nil)), block)
+	assert.Equal(t, gasLimit, h.GasLimit())
+	assert.Equal(t, gasUsed, h.GasUsed())
+	assert.Equal(t, totalScore, h.TotalScore())
+	assert.Equal(t, emptyRoot, h.StateRoot())
+	assert.Equal(t, emptyRoot, h.ReceiptsRoot())
+	assert.Equal(t, now, h.Timestamp())
+	assert.Equal(t, emptyRoot, h.ParentID())
+	assert.Equal(t, beneficiary, h.Beneficiary())
+	assert.Equal(t, txsRootHash, h.TxsRoot())
+	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
+	assert.Equal(t, uint64(0), h.TotalBackersCount())
+
+}
+
+func TestDecoding(t *testing.T) {
+	raw, _ := rlp.EncodeToBytes(struct {
+		A uint
+		B uint
+		C uint
+		D uint
+	}{1, 2, 3, 4})
+
+	var bx Block
+
+	err := rlp.DecodeBytes(raw, &bx)
+	assert.EqualError(t, err, "rlp:block body has too many fields")
+
+	_, err = Raw(raw).DecodeBody()
+	assert.EqualError(t, err, "rlp:block body has too many fields")
 }
