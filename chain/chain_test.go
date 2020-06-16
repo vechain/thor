@@ -47,7 +47,7 @@ func TestChain(t *testing.T) {
 	assert.Equal(t, b3.Header().ID(), c.HeadID())
 	assert.Equal(t, M(b3.Header().ID(), nil), M(c.GetBlockID(3)))
 	assert.Equal(t, M(b3.Header(), nil), M(c.GetBlockHeader(3)))
-	assert.Equal(t, M(block.Compose(b3.Header(), b3.Transactions()), nil), M(c.GetBlock(3)))
+	assert.Equal(t, M(block.Compose(b3.Header(), b3.Transactions(), nil), nil), M(c.GetBlock(3)))
 
 	_, err := c.GetBlockID(4)
 	assert.True(t, c.IsNotFound(err))

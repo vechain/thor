@@ -250,7 +250,7 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	return block.Compose(summary.Header, txs), nil
+	return block.Compose(summary.Header, txs, nil), nil
 }
 
 func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
