@@ -19,37 +19,37 @@ import (
 
 // Block is an immutable block type.
 type Block struct {
-	header           *Header
-	txs              tx.Transactions
-	backerSignatures BackerSignatures
-	cache            struct {
+	header *Header
+	txs    tx.Transactions
+	bss    BackerSignatures
+	cache  struct {
 		size atomic.Value
 	}
 }
 
 // Body defines body of a block.
 type Body struct {
-	Txs              tx.Transactions
-	BackerSignatures BackerSignatures
+	Txs tx.Transactions
+	Bss BackerSignatures
 }
 
 // Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func Compose(header *Header, txs tx.Transactions, backerSignatures BackerSignatures) *Block {
+func Compose(header *Header, txs tx.Transactions, bss BackerSignatures) *Block {
 	return &Block{
-		header:           header,
-		txs:              append(tx.Transactions(nil), txs...),
-		backerSignatures: append(BackerSignatures(nil), backerSignatures...),
+		header: header,
+		txs:    append(tx.Transactions(nil), txs...),
+		bss:    append(BackerSignatures(nil), bss...),
 	}
 }
 
 // WithSignature create a new block object with signature set.
 func (b *Block) WithSignature(sig []byte) *Block {
 	return &Block{
-		header:           b.header.withSignature(sig),
-		txs:              b.txs,
-		backerSignatures: b.backerSignatures,
+		header: b.header.withSignature(sig),
+		txs:    b.txs,
+		bss:    b.bss,
 	}
 }
 
@@ -65,32 +65,29 @@ func (b *Block) Transactions() tx.Transactions {
 
 // BackerSignatures returns a copy of backer signature list.
 func (b *Block) BackerSignatures() BackerSignatures {
-	return append(BackerSignatures(nil), b.backerSignatures...)
+	return append(BackerSignatures(nil), b.bss...)
 }
 
 // Body returns body of a block.
 func (b *Block) Body() *Body {
 	return &Body{
 		append(tx.Transactions(nil), b.txs...),
-		append(BackerSignatures(nil), b.backerSignatures...),
+		append(BackerSignatures(nil), b.bss...),
 	}
 }
 
 // EncodeRLP implements rlp.Encoder.
 func (b *Block) EncodeRLP(w io.Writer) error {
-	if b.backerSignatures == nil {
-		// backward compatible
-		return rlp.Encode(w, []interface{}{
-			b.header,
-			b.txs,
-		})
-	}
-
-	return rlp.Encode(w, []interface{}{
+	input := []interface{}{
 		b.header,
 		b.txs,
-		b.backerSignatures,
-	})
+	}
+
+	if b.Header().TotalBackersCount() > 0 {
+		input = append(input, b.bss)
+	}
+
+	return rlp.Encode(w, input)
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -98,17 +95,17 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
 
 	var (
-		raws             []rlp.RawValue
-		header           Header
-		txs              tx.Transactions
-		backerSignatures BackerSignatures
+		raws   []rlp.RawValue
+		header Header
+		txs    tx.Transactions
+		bss    BackerSignatures
 	)
 
 	if err := s.Decode(&raws); err != nil {
 		return err
 	}
-	if len(raws) > 3 {
-		return errors.New("rlp:block body has too many fields")
+	if len(raws) < 2 {
+		return errors.New("rlp:invalid fields of block body, at least 2")
 	}
 	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
 		return err
@@ -116,18 +113,21 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return err
 	}
-	if len(raws) == 3 {
-		if err := rlp.Decode(bytes.NewReader(raws[2]), &backerSignatures); err != nil {
+
+	if header.TotalBackersCount() > 0 && len(raws) == 3 {
+		if err := rlp.Decode(bytes.NewReader(raws[2]), &bss); err != nil {
 			return err
 		}
+	} else if header.TotalBackersCount() == 0 && len(raws) == 2 {
+		bss = BackerSignatures(nil)
 	} else {
-		backerSignatures = BackerSignatures(nil)
+		return errors.New("rlp:block has too many fields")
 	}
 
 	*b = Block{
-		header:           &header,
-		txs:              txs,
-		backerSignatures: backerSignatures,
+		header: &header,
+		txs:    txs,
+		bss:    bss,
 	}
 	b.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil

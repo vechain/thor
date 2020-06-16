@@ -6,6 +6,7 @@
 package block
 
 import (
+	"errors"
 	"io"
 	"sync/atomic"
 
@@ -23,7 +24,7 @@ var (
 // BackerSignature is the backer's signature of a block proposal by VRF.
 // Composed by [ Compressed Public Key(33bytes) + Proof(81bytes) ]
 type BackerSignature struct {
-	body  [33 + 81]byte
+	body  []byte
 	cache struct {
 		hash   atomic.Value
 		signer atomic.Value
@@ -34,23 +35,20 @@ type BackerSignature struct {
 // NewBackerSignature creates a new backer signature.
 func NewBackerSignature(pub, proof []byte) *BackerSignature {
 	var bs BackerSignature
-
-	copy(bs.body[:], pub)
-	copy(bs.body[33:], proof)
+	bs.body = append(bs.body, pub...)
+	bs.body = append(bs.body, proof...)
 
 	return &bs
 }
 
-// Hash is the hash of RLP encoded backer signature.
+// Hash is the hash of backer signature.
 func (bs *BackerSignature) Hash() (hash thor.Bytes32) {
 	if cached := bs.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { bs.cache.hash.Store(hash) }()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, bs)
-	hw.Sum(hash[:0])
+	hash = thor.Blake2b(bs.body)
 	return
 }
 
@@ -60,6 +58,10 @@ func (bs *BackerSignature) Validate(alpha []byte) (beta []byte, err error) {
 		return cached.([]byte), nil
 	}
 	defer func() { bs.cache.beta.Store(beta) }()
+
+	if len(bs.body) != 81+33 {
+		return []byte{}, errors.New("invalid backer signature length, 113 bytes needed")
+	}
 
 	pub := make([]byte, 33)
 	proof := make([]byte, 81)
@@ -102,7 +104,7 @@ func (bs *BackerSignature) EncodeRLP(w io.Writer) error {
 
 // DecodeRLP implements rlp.Decoder.
 func (bs *BackerSignature) DecodeRLP(s *rlp.Stream) error {
-	var body [33 + 81]byte
+	var body []byte
 
 	if err := s.Decode(&body); err != nil {
 		return err
@@ -135,26 +137,4 @@ func (d derivableBackerSignatures) GetRlp(i int) []byte {
 		panic(err)
 	}
 	return data
-}
-
-// FullBackerSignature is the backer signature with proposal hash, for p2p propgation.
-type FullBackerSignature struct {
-	ProposalHash thor.Bytes32
-	Signature    *BackerSignatures
-	cache        struct {
-		hash atomic.Value
-	}
-}
-
-// Hash is the hash of RLP encoded full backer signature.
-func (bs *FullBackerSignature) Hash() (hash thor.Bytes32) {
-	if cached := bs.cache.hash.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() { bs.cache.hash.Store(hash) }()
-
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, bs)
-	hw.Sum(hash[:0])
-	return
 }

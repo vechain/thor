@@ -6,6 +6,7 @@
 package block_test
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -86,8 +87,8 @@ func TestBlock(t *testing.T) {
 	block = block.WithSignature(sig)
 
 	data, _ := rlp.EncodeToBytes(block)
-	fmt.Println(Raw(data).DecodeHeader())
-	fmt.Println(Raw(data).DecodeBody())
+	// fmt.Println(Raw(data).DecodeHeader())
+	// fmt.Println(Raw(data).DecodeBody())
 
 	fmt.Println(block.Size())
 
@@ -169,21 +170,42 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
 	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
+	var raws []rlp.RawValue
+	data, _ := rlp.EncodeToBytes(block)
+
+	rlp.Decode(bytes.NewReader(data), &raws)
+	assert.Equal(t, 2, len(raws))
 }
 
 func TestDecoding(t *testing.T) {
-	raw, _ := rlp.EncodeToBytes(struct {
+	b0 := new(Builder).BackerSignatures(BackerSignatures{}, 1).Build()
+	b1 := new(Builder).Build()
+
+	raw0, _ := rlp.EncodeToBytes(struct {
 		A uint
-		B uint
-		C uint
-		D uint
-	}{1, 2, 3, 4})
+	}{1})
+
+	raw1, _ := rlp.EncodeToBytes([]interface{}{
+		b0.Header(),
+		b0.Transactions(),
+		uint(1),
+		uint(2),
+	})
+
+	raw2, _ := rlp.EncodeToBytes([]interface{}{
+		b1.Header(),
+		b1.Transactions(),
+		uint(1),
+	})
 
 	var bx Block
 
-	err := rlp.DecodeBytes(raw, &bx)
-	assert.EqualError(t, err, "rlp:block body has too many fields")
+	err := rlp.DecodeBytes(raw0, &bx)
+	assert.EqualError(t, err, "rlp:invalid fields of block body, at least 2")
 
-	_, err = Raw(raw).DecodeBody()
-	assert.EqualError(t, err, "rlp:block body has too many fields")
+	err = rlp.DecodeBytes(raw1, &bx)
+	assert.EqualError(t, err, "rlp:block has too many fields")
+
+	err = rlp.DecodeBytes(raw2, &bx)
+	assert.EqualError(t, err, "rlp:block has too many fields")
 }

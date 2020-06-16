@@ -6,10 +6,10 @@
 package block
 
 import (
+	"encoding/binary"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -44,14 +44,12 @@ func (p *Proposal) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { p.cache.signingHash.Store(hash) }()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
-		p.ParentID,
-		p.TxsRoot,
-		p.GasLimit,
-		p.Timestamp,
-	})
-	hw.Sum(hash[:0])
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b, p.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+
+	// [parentID + txsRoot + Gaslimit + Timestamp]
+	hash = thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b)
 	return
 }
 
@@ -93,8 +91,11 @@ func (p *Proposal) Hash() (hash thor.Bytes32) {
 	}
 	defer func() { p.cache.hash.Store(hash) }()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, p)
-	hw.Sum(hash[:0])
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b, p.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+
+	// [parentID + txsRoot + Gaslimit + Timestamp + Signature]
+	hash = thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, p.Signature)
 	return
 }

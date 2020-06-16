@@ -46,7 +46,7 @@ type headerBody struct {
 
 	Signature []byte
 
-	BackerSignaturesRoot backerSignaturesRoot
+	BssRoot backerSignaturesRoot
 }
 
 // ParentID returns id of parent block.
@@ -107,12 +107,12 @@ func (h *Header) ReceiptsRoot() thor.Bytes32 {
 
 // BackerSignaturesRoot returns merkle root of approvals.
 func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
-	return h.body.BackerSignaturesRoot.Root
+	return h.body.BssRoot.Root
 }
 
 // TotalBackersCount returns total backers count that cumulated from genesis block to this one.
 func (h *Header) TotalBackersCount() uint64 {
-	return h.body.BackerSignaturesRoot.TotalBackersCount
+	return h.body.BssRoot.TotalBackersCount
 }
 
 // ID computes id of block.
@@ -148,36 +148,23 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	hw := thor.NewBlake2b()
-	if h.body.BackerSignaturesRoot.TotalBackersCount == 0 {
-		rlp.Encode(hw, []interface{}{
-			h.body.ParentID,
-			h.body.Timestamp,
-			h.body.GasLimit,
-			h.body.Beneficiary,
+	input := []interface{}{
+		h.body.ParentID,
+		h.body.Timestamp,
+		h.body.GasLimit,
+		h.body.Beneficiary,
 
-			h.body.GasUsed,
-			h.body.TotalScore,
+		h.body.GasUsed,
+		h.body.TotalScore,
 
-			&h.body.TxsRootFeatures,
-			h.body.StateRoot,
-			h.body.ReceiptsRoot,
-		})
-	} else {
-		rlp.Encode(hw, []interface{}{
-			h.body.ParentID,
-			h.body.Timestamp,
-			h.body.GasLimit,
-			h.body.Beneficiary,
-
-			h.body.GasUsed,
-			h.body.TotalScore,
-
-			&h.body.TxsRootFeatures,
-			h.body.StateRoot,
-			h.body.ReceiptsRoot,
-			&h.body.BackerSignaturesRoot,
-		})
+		&h.body.TxsRootFeatures,
+		h.body.StateRoot,
+		h.body.ReceiptsRoot,
 	}
+	if h.TotalBackersCount() > 0 {
+		input = append(input, &h.body.BssRoot)
+	}
+	rlp.Encode(hw, input)
 	hw.Sum(hash[:0])
 	return
 }
@@ -221,7 +208,7 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 
 // EncodeRLP implements rlp.Encoder.
 func (h *Header) EncodeRLP(w io.Writer) error {
-	if h.body.BackerSignaturesRoot.TotalBackersCount == 0 {
+	if h.body.BssRoot.TotalBackersCount == 0 {
 		// backward compatible
 		return rlp.Encode(w, []interface{}{
 
@@ -280,7 +267,7 @@ func (h *Header) String() string {
 	TotalBackersCount		%v
 	Signature:      		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.BackerSignaturesRoot.Root, h.body.BackerSignaturesRoot.TotalBackersCount, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.BssRoot.Root, h.body.BssRoot.TotalBackersCount, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.

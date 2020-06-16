@@ -12,9 +12,9 @@ import (
 
 // Builder to make it easy to build a block object.
 type Builder struct {
-	headerBody       headerBody
-	txs              tx.Transactions
-	backerSignatures BackerSignatures
+	headerBody headerBody
+	txs        tx.Transactions
+	bss        BackerSignatures
 }
 
 // ParentID set parent id.
@@ -78,9 +78,9 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 }
 
 // BackerSignatures add the list of backer signature.
-func (b *Builder) BackerSignatures(backerSignatures BackerSignatures, parentBackerCount uint64) *Builder {
-	b.backerSignatures = append(BackerSignatures(nil), backerSignatures...)
-	b.headerBody.BackerSignaturesRoot.TotalBackersCount = parentBackerCount + uint64(len(backerSignatures))
+func (b *Builder) BackerSignatures(bss BackerSignatures, parentBackerCount uint64) *Builder {
+	b.bss = append(BackerSignatures(nil), bss...)
+	b.headerBody.BssRoot.TotalBackersCount = parentBackerCount + uint64(len(bss))
 	return b
 }
 
@@ -88,11 +88,11 @@ func (b *Builder) BackerSignatures(backerSignatures BackerSignatures, parentBack
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
-	header.body.BackerSignaturesRoot.Root = b.backerSignatures.RootHash()
+	header.body.BssRoot.Root = b.bss.RootHash()
 
 	return &Block{
-		header:           &header,
-		txs:              b.txs,
-		backerSignatures: b.backerSignatures,
+		header: &header,
+		txs:    b.txs,
+		bss:    b.bss,
 	}
 }

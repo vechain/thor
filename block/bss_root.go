@@ -15,13 +15,13 @@ type backerSignaturesRoot struct {
 	TotalBackersCount uint64
 }
 
-type _backerSignaturesRoot backerSignaturesRoot
+type _bssRoot backerSignaturesRoot
 
 // DecodeRLP implements rlp.Decoder.
 func (br *backerSignaturesRoot) DecodeRLP(s *rlp.Stream) error {
 	k, _, _ := s.Kind()
 	if k == rlp.List {
-		var obj _backerSignaturesRoot
+		var obj _bssRoot
 		if err := s.Decode(&obj); err != nil {
 			return err
 		}
