@@ -23,6 +23,12 @@ type (
 		BestBlockID    thor.Bytes32
 		TotalScore     uint64
 	}
+
+	// FullBackerSignature is the backer signature with proposal hash.
+	FullBackerSignature struct {
+		ProposalHash thor.Bytes32
+		Signature    *block.BackerSignature
+	}
 )
 
 // RPC defines RPC interface.
@@ -53,6 +59,16 @@ func NotifyNewBlock(ctx context.Context, rpc RPC, block *block.Block) error {
 // NotifyNewTx notify new tx to remote peer.
 func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 	return rpc.Notify(ctx, MsgNewTx, tx)
+}
+
+// NotifyNewProposal notify new proposal to remote peer.
+func NotifyNewProposal(ctx context.Context, rpc RPC, p *block.Proposal) error {
+	return rpc.Notify(ctx, MsgNewBlockProposal, p)
+}
+
+// NotifyNewBackerSignature notify new backer signature to remote peer.
+func NotifyNewBackerSignature(ctx context.Context, rpc RPC, bs *FullBackerSignature) error {
+	return rpc.Notify(ctx, MsgNewBackerSignature, bs)
 }
 
 // GetBlockByID query block from remote peer by given block ID.
