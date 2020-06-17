@@ -84,7 +84,7 @@ func (p *Proposal) WithSignature(sig []byte) *Proposal {
 	}
 }
 
-// Hash is the hash of RLP encoded proposal.
+// Hash is the hash of proposal body.
 func (p *Proposal) Hash() (hash thor.Bytes32) {
 	if cached := p.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
@@ -95,7 +95,18 @@ func (p *Proposal) Hash() (hash thor.Bytes32) {
 	binary.BigEndian.PutUint64(b, p.GasLimit)
 	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
 
-	// [parentID + txsRoot + Gaslimit + Timestamp + Signature]
+	// [parentID + txsRoot + gaslimit + timestamp + signature]
 	hash = thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, p.Signature)
 	return
+}
+
+// Alpha computes the hash of proposal with signer as the input of VRF function.
+func (p *Proposal) Alpha(signer thor.Address) thor.Bytes32 {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b, p.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+
+	// [parentID + txsRoot + gaslimit + timestamp + signer]
+	alpha := thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, signer.Bytes())
+	return alpha
 }
