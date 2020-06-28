@@ -9,11 +9,22 @@ import (
 	"context"
 
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/comm/proto"
 )
 
 // NewBlockEvent event emitted when received block announcement.
 type NewBlockEvent struct {
 	*block.Block
+}
+
+// NewBlockProposalEvent event emitted when received block proposal.
+type NewBlockProposalEvent struct {
+	*block.Proposal
+}
+
+// NewBackerSignatureEvent event emitted when received backer signature.
+type NewBackerSignatureEvent struct {
+	*proto.FullBackerSignature
 }
 
 // HandleBlockStream to handle the stream of downloaded blocks in sync process.

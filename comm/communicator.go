@@ -30,17 +30,19 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	repo           *chain.Repository
-	txPool         *txpool.TxPool
-	ctx            context.Context
-	cancel         context.CancelFunc
-	peerSet        *PeerSet
-	syncedCh       chan struct{}
-	newBlockFeed   event.Feed
-	announcementCh chan *announcement
-	feedScope      event.SubscriptionScope
-	goes           co.Goes
-	onceSynced     sync.Once
+	repo                   *chain.Repository
+	txPool                 *txpool.TxPool
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	peerSet                *PeerSet
+	syncedCh               chan struct{}
+	newBlockFeed           event.Feed
+	newProposalFeed        event.Feed
+	newBackerSignatureFeed event.Feed
+	announcementCh         chan *announcement
+	feedScope              event.SubscriptionScope
+	goes                   co.Goes
+	onceSynced             sync.Once
 }
 
 // New create a new Communicator instance.
@@ -131,7 +133,16 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 func (c *Communicator) Protocols() []*p2psrv.Protocol {
 	genesisID := c.repo.GenesisBlock().Header().ID()
 	return []*p2psrv.Protocol{
-		&p2psrv.Protocol{
+		{
+			Protocol: p2p.Protocol{
+				Name:    proto.Name,
+				Version: 1,
+				Length:  8,
+				Run:     c.servePeer,
+			},
+			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, 1, genesisID[24:]),
+		},
+		{
 			Protocol: p2p.Protocol{
 				Name:    proto.Name,
 				Version: proto.Version,
@@ -139,7 +150,8 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 				Run:     c.servePeer,
 			},
 			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
-		}}
+		},
+	}
 }
 
 // Start start the communicator.
@@ -283,4 +295,49 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
+}
+
+// BroadcastProposal broadcast a block proposal to remote peers.
+func (c *Communicator) BroadcastProposal(p *block.Proposal) {
+	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
+		return !peer.IsProposalKnown(p.Hash())
+	})
+
+	for _, peer := range peers {
+		peer := peer
+		peer.MarkProposal(p.Hash())
+		c.goes.Go(func() {
+			if err := proto.NotifyNewProposal(c.ctx, peer, p); err != nil {
+				peer.logger.Debug("failed to broadcast new proposal", "err", err)
+			}
+		})
+	}
+}
+
+// BroadcastBackerSignature broadcast a full backer signature(with proposal hash) to remote peers.
+func (c *Communicator) BroadcastBackerSignature(bs *proto.FullBackerSignature) {
+	hash := thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
+	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
+		return !peer.IsBackerSignatureKnown(hash)
+	})
+
+	for _, peer := range peers {
+		peer := peer
+		peer.MarkBackerSignature(hash)
+		c.goes.Go(func() {
+			if err := proto.NotifyNewBackerSignature(c.ctx, peer, bs); err != nil {
+				peer.logger.Debug("failed to broadcast new backer signature", "err", err)
+			}
+		})
+	}
+}
+
+// SubscribeProposal subscribe the event that new proposal received.
+func (c *Communicator) SubscribeProposal(ch chan *NewBlockProposalEvent) event.Subscription {
+	return c.feedScope.Track(c.newProposalFeed.Subscribe(ch))
+}
+
+// SubscribeBackerSignature subscribe the event that new backer signature received.
+func (c *Communicator) SubscribeBackerSignature(ch chan *NewBackerSignatureEvent) event.Subscription {
+	return c.feedScope.Track(c.newBackerSignatureFeed.Subscribe(ch))
 }
