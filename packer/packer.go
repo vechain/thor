@@ -95,7 +95,7 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	// calc the time when it's turn to produce block
-	sched, err := poa.NewScheduler(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
+	sched, err := poa.NewScheduler(p.nodeMaster, proposers, parent.Number(), parent.Timestamp(), nil)
 	if err != nil {
 		return nil, err
 	}

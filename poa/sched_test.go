@@ -33,10 +33,10 @@ var (
 
 func TestSchedule(t *testing.T) {
 
-	_, err := poa.NewScheduler(thor.BytesToAddress([]byte("px")), proposers, 1, parentTime)
+	_, err := poa.NewScheduler(thor.BytesToAddress([]byte("px")), proposers, 1, parentTime, nil)
 	assert.NotNil(t, err)
 
-	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime)
+	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime, nil)
 
 	for i := uint64(0); i < 100; i++ {
 		now := parentTime + i*thor.BlockInterval/2
@@ -47,7 +47,7 @@ func TestSchedule(t *testing.T) {
 }
 
 func TestIsTheTime(t *testing.T) {
-	sched, _ := poa.NewScheduler(p2, proposers, 1, parentTime)
+	sched, _ := poa.NewScheduler(p2, proposers, 1, parentTime, nil)
 
 	tests := []struct {
 		now  uint64
@@ -65,7 +65,7 @@ func TestIsTheTime(t *testing.T) {
 
 func TestUpdates(t *testing.T) {
 
-	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime)
+	sched, _ := poa.NewScheduler(p1, proposers, 1, parentTime, nil)
 
 	tests := []struct {
 		newBlockTime uint64

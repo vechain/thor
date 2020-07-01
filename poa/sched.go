@@ -18,6 +18,7 @@ type Scheduler struct {
 	actives           []Proposer
 	parentBlockNumber uint32
 	parentBlockTime   uint64
+	seed              []byte
 }
 
 // NewScheduler create a Scheduler object.
@@ -27,7 +28,8 @@ func NewScheduler(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
-	parentBlockTime uint64) (*Scheduler, error) {
+	parentBlockTime uint64,
+	seed []byte) (*Scheduler, error) {
 
 	actives := make([]Proposer, 0, len(proposers))
 	listed := false
@@ -51,11 +53,12 @@ func NewScheduler(
 		actives,
 		parentBlockNumber,
 		parentBlockTime,
+		seed,
 	}, nil
 }
 
 func (s *Scheduler) whoseTurn(t uint64) Proposer {
-	index := dprp(s.parentBlockNumber, t) % uint64(len(s.actives))
+	index := dprp(s.parentBlockNumber, t, s.seed) % uint64(len(s.actives))
 	return s.actives[index]
 }
 
@@ -129,7 +132,8 @@ func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint
 
 // dprp deterministic pseudo-random process.
 // H(B, t)[:8]
-func dprp(blockNumber uint32, time uint64) uint64 {
+// After VIP193, H(B,t,seed)[:8]
+func dprp(blockNumber uint32, time uint64, seed []byte) uint64 {
 	var (
 		b4 [4]byte
 		b8 [8]byte
@@ -137,5 +141,5 @@ func dprp(blockNumber uint32, time uint64) uint64 {
 	binary.BigEndian.PutUint32(b4[:], blockNumber)
 	binary.BigEndian.PutUint64(b8[:], time)
 
-	return binary.BigEndian.Uint64(thor.Blake2b(b4[:], b8[:]).Bytes())
+	return binary.BigEndian.Uint64(thor.Blake2b(b4[:], b8[:], seed).Bytes())
 }
