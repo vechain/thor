@@ -27,6 +27,8 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	knownBackers map[thor.Address]bool
+	bss          block.BackerSignatures
 }
 
 func newFlow(
@@ -41,6 +43,8 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		knownBackers: make(map[thor.Address]bool),
+		bss:          block.BackerSignatures{},
 	}
 }
 
@@ -137,6 +141,38 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
+// Propose a block proposal with block meta and txs root hash.
+func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
+	p := block.NewProposal(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
+	sig, err := crypto.Sign(p.SigningHash().Bytes(), privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.WithSignature(sig), nil
+}
+
+// IsBackerKnown returns true is backer's signature is already added.
+func (f *Flow) IsBackerKnown(backer thor.Address) bool {
+	return f.knownBackers[backer]
+}
+
+// AddBackerSignature adds a signature from backer.
+func (f *Flow) AddBackerSignature(bs *block.BackerSignature) bool {
+	signer, _ := bs.Signer()
+	if f.IsBackerKnown(signer) == true {
+		return false
+	}
+
+	if signer == f.packer.nodeMaster {
+		return false
+	}
+
+	f.knownBackers[signer] = true
+	f.bss = append(f.bss, bs)
+	return true
+}
+
 // Pack build and sign the new block.
 func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
@@ -159,6 +195,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features)
+
+	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
+		builder.BackerSignatures(f.bss, f.parentHeader.TotalBackersCount())
+	}
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
