@@ -105,7 +105,7 @@ func (h *Header) ReceiptsRoot() thor.Bytes32 {
 	return h.body.ReceiptsRoot
 }
 
-// BackerSignaturesRoot returns merkle root of approvals.
+// BackerSignaturesRoot returns merkle root of backer signatures.
 func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
 	return h.body.BssRoot.Root
 }
@@ -113,6 +113,15 @@ func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
 // TotalBackersCount returns total backers count that cumulated from genesis block to this one.
 func (h *Header) TotalBackersCount() uint64 {
 	return h.body.BssRoot.TotalBackersCount
+}
+
+// Proposal returns block proposal.
+func (h *Header) Proposal() (proposal *Proposal) {
+	return NewProposal(
+		h.ParentID(),
+		h.TxsRoot(),
+		h.GasLimit(),
+		h.Timestamp())
 }
 
 // ID computes id of block.
