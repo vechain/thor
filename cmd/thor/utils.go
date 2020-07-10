@@ -457,12 +457,12 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 	}, nil
 }
 
-func (p *p2pComm) Start() error { // here
+func (p *p2pComm) Start() error {
 	log.Info("starting P2P networking")
 	if err := p.p2pSrv.Start(p.comm.Protocols()); err != nil {
 		return errors.Wrap(err, "start P2P server")
 	}
-	p.comm.Start() // here
+	p.comm.Start()
 	return nil
 }
 

@@ -62,7 +62,7 @@ type TxPool struct {
 
 	ctx    context.Context
 	cancel func()
-	txFeed event.Feed // here
+	txFeed event.Feed
 	scope  event.SubscriptionScope
 	goes   co.Goes
 }
@@ -202,10 +202,10 @@ func (p *TxPool) Close() {
 
 //SubscribeTxEvent receivers will receive a tx
 func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
-	return p.scope.Track(p.txFeed.Subscribe(ch)) // here
+	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmitted bool) error { // here how to add a tx
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmitted bool) error {
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
@@ -253,7 +253,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 
 		txObj.executable = executable
 		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, &executable}) // here
+			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
 		log.Debug("tx added", "id", newTx.ID(), "executable", executable)
 	} else {
@@ -267,7 +267,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 			return txRejectedError{err.Error()}
 		}
 		log.Debug("tx added", "id", newTx.ID())
-		p.txFeed.Send(&TxEvent{newTx, nil}) // here
+		p.txFeed.Send(&TxEvent{newTx, nil})
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	return nil
@@ -276,7 +276,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 // Add add new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 // And all the Txs from local are marked and treated specially.
-func (p *TxPool) Add(newTx *tx.Transaction, localSubmitted bool) error { // here
+func (p *TxPool) Add(newTx *tx.Transaction, localSubmitted bool) error {
 	return p.add(newTx, false, localSubmitted)
 }
 
@@ -335,7 +335,7 @@ func (p *TxPool) Dump() tx.Transactions {
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
-	var toRemove []*txObject // here queue #1
+	var toRemove []*txObject
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -362,10 +362,10 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 
 	var (
 		chain                         = p.repo.NewChain(headBlock.ID())
-		executableObjs                = make([]*txObject, 0, len(all)) // here queue #2
+		executableObjs                = make([]*txObject, 0, len(all))
 		executableObjsFromLocalIdx    = make([]int, 0, len(all))
 		executableObjsFromLocal       = make([]*txObject, 0, len(all))
-		nonExecutableObjs             = make([]*txObject, 0, len(all)) // here queue #3
+		nonExecutableObjs             = make([]*txObject, 0, len(all))
 		nonExecutableObjsFromLocalIdx = make([]int, 0, len(all))
 		nonExecutableObjsFromLocal    = make([]*txObject, 0, len(all))
 		now                           = time.Now().UnixNano()
@@ -475,7 +475,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	p.goes.Go(func() {
 		for _, tx := range toBroadcast {
 			executable := true
-			p.txFeed.Send(&TxEvent{tx, &executable}) // here
+			p.txFeed.Send(&TxEvent{tx, &executable})
 		}
 	})
 	return executables, 0, nil

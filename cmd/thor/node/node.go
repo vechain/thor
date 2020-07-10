@@ -371,7 +371,7 @@ side-chain:   %v  %v`,
 			return
 		}
 		for _, tx := range b.Transactions() {
-			if err := n.txPool.Add(tx, false); err != nil { // here but its added by block.
+			if err := n.txPool.Add(tx, false); err != nil {
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
