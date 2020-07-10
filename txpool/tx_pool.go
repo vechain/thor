@@ -62,7 +62,7 @@ type TxPool struct {
 
 	ctx    context.Context
 	cancel func()
-	txFeed event.Feed
+	txFeed event.Feed // here
 	scope  event.SubscriptionScope
 	goes   co.Goes
 }
@@ -202,10 +202,10 @@ func (p *TxPool) Close() {
 
 //SubscribeTxEvent receivers will receive a tx
 func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
-	return p.scope.Track(p.txFeed.Subscribe(ch))
+	return p.scope.Track(p.txFeed.Subscribe(ch)) // here
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmitted bool) error { // here how to add a tx
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
@@ -247,13 +247,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 			return txRejectedError{"tx is not executable"}
 		}
 
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, localSubmitted); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
 		txObj.executable = executable
 		p.goes.Go(func() {
-			p.txFeed.Send(&TxEvent{newTx, &executable})
+			p.txFeed.Send(&TxEvent{newTx, &executable}) // here
 		})
 		log.Debug("tx added", "id", newTx.ID(), "executable", executable)
 	} else {
@@ -263,11 +263,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 			return txRejectedError{"pool is full"}
 		}
 
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj, p.options.LimitPerAccount, localSubmitted); err != nil {
 			return txRejectedError{err.Error()}
 		}
 		log.Debug("tx added", "id", newTx.ID())
-		p.txFeed.Send(&TxEvent{newTx, nil})
+		p.txFeed.Send(&TxEvent{newTx, nil}) // here
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	return nil
@@ -275,8 +275,9 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool) error {
 
 // Add add new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
-func (p *TxPool) Add(newTx *tx.Transaction) error {
-	return p.add(newTx, false)
+// And all the Txs from local are marked and treated specially.
+func (p *TxPool) Add(newTx *tx.Transaction, localSubmitted bool) error { // here
+	return p.add(newTx, false, localSubmitted)
 }
 
 // Get get pooled tx by id.
@@ -288,8 +289,8 @@ func (p *TxPool) Get(id thor.Bytes32) *tx.Transaction {
 }
 
 // StrictlyAdd add new tx into pool. A rejection error will be returned, if tx is not executable at this time.
-func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
-	return p.add(newTx, true)
+func (p *TxPool) StrictlyAdd(newTx *tx.Transaction, localSubmitted bool) error {
+	return p.add(newTx, true, localSubmitted)
 }
 
 // Remove removes tx from pool by its Hash.
@@ -310,7 +311,7 @@ func (p *TxPool) Executables() tx.Transactions {
 }
 
 // Fill fills txs into pool.
-func (p *TxPool) Fill(txs tx.Transactions) {
+func (p *TxPool) Fill(txs tx.Transactions, localSubmitted bool) {
 	txObjs := make([]*txObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
@@ -322,7 +323,7 @@ func (p *TxPool) Fill(txs tx.Transactions) {
 			txObjs = append(txObjs, txObj)
 		}
 	}
-	p.all.Fill(txObjs)
+	p.all.Fill(txObjs, localSubmitted)
 }
 
 // Dump dumps all txs in the pool.
@@ -334,7 +335,7 @@ func (p *TxPool) Dump() tx.Transactions {
 // this method should only be called in housekeeping go routine
 func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
-	var toRemove []*txObject
+	var toRemove []*txObject // here queue #1
 	defer func() {
 		if err != nil {
 			// in case of error, simply cut pool size to limit
@@ -360,12 +361,17 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	}
 
 	var (
-		chain             = p.repo.NewChain(headBlock.ID())
-		executableObjs    = make([]*txObject, 0, len(all))
-		nonExecutableObjs = make([]*txObject, 0, len(all))
-		now               = time.Now().UnixNano()
+		chain                         = p.repo.NewChain(headBlock.ID())
+		executableObjs                = make([]*txObject, 0, len(all)) // here queue #2
+		executableObjsFromLocalIdx    = make([]int, 0, len(all))
+		executableObjsFromLocal       = make([]*txObject, 0, len(all))
+		nonExecutableObjs             = make([]*txObject, 0, len(all)) // here queue #3
+		nonExecutableObjsFromLocalIdx = make([]int, 0, len(all))
+		nonExecutableObjsFromLocal    = make([]*txObject, 0, len(all))
+		now                           = time.Now().UnixNano()
 	)
 	for _, txObj := range all {
+		// tx hits the blocklist.
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", "blocked")
@@ -400,9 +406,39 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 	}
 
+	// hand pick the local submitted tx out to another list.
+	for idx, txObj := range executableObjs {
+		if p.all.IsLocalSubmitted(txObj.ID()) {
+			executableObjsFromLocal = append(executableObjsFromLocal, txObj)
+			executableObjsFromLocalIdx = append(executableObjsFromLocalIdx, idx)
+		}
+	}
+
+	// keep the non-local submitted back in the list.
+	// remove those that are local.
+	for _, idx := range executableObjsFromLocalIdx {
+		executableObjs = deleteAtIndex(executableObjs, idx)
+	}
+
+	// hand pick the local submitted tx out to another list.
+	for idx, txObj := range nonExecutableObjs {
+		if p.all.IsLocalSubmitted(txObj.ID()) {
+			nonExecutableObjsFromLocal = append(nonExecutableObjsFromLocal, txObj)
+			nonExecutableObjsFromLocalIdx = append(nonExecutableObjsFromLocalIdx, idx)
+		}
+	}
+
+	// keep the non-local submitted back in the list.
+	// remove those that are local.
+	for _, idx := range nonExecutableObjsFromLocalIdx {
+		nonExecutableObjs = deleteAtIndex(nonExecutableObjs, idx)
+	}
+
 	// sort objs by price from high to low
 	sortTxObjsByOverallGasPriceDesc(executableObjs)
 
+	// this limit doesn't apply to the locally submitted txs.
+	// locally submitted are on a different queue.
 	limit := p.options.Limit
 
 	// remove over limit txs, from non-executables to low priced
@@ -424,10 +460,11 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 	}
 
-	executables = make(tx.Transactions, 0, len(executableObjs))
+	allExecutableObjs := append(executableObjs, executableObjsFromLocal...)
+	executables = make(tx.Transactions, 0, len(allExecutableObjs))
 	var toBroadcast tx.Transactions
 
-	for _, obj := range executableObjs {
+	for _, obj := range allExecutableObjs {
 		executables = append(executables, obj.Transaction)
 		if !obj.executable {
 			obj.executable = true
@@ -438,7 +475,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	p.goes.Go(func() {
 		for _, tx := range toBroadcast {
 			executable := true
-			p.txFeed.Send(&TxEvent{tx, &executable})
+			p.txFeed.Send(&TxEvent{tx, &executable}) // here
 		}
 	})
 	return executables, 0, nil
@@ -450,4 +487,9 @@ func isChainSynced(nowTimestamp, blockTimestamp uint64) bool {
 		timeDiff = blockTimestamp - nowTimestamp
 	}
 	return timeDiff < thor.BlockInterval*6
+}
+
+func deleteAtIndex(s []*txObject, i int) []*txObject {
+	s[len(s)-1], s[i] = s[i], s[len(s)-1]
+	return s[:len(s)-1]
 }

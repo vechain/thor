@@ -113,7 +113,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 
 	return convertReceipt(receipt, summary.Header, tx)
 }
-func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
+func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error { // here, it look more like handle from http.
 	var rawTx *RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -123,7 +123,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	if err := t.pool.Add(tx); err != nil {
+	if err := t.pool.Add(tx, true); err != nil { // here it adds a tx to the transaction pool.
 		if txpool.IsBadTx(err) {
 			return utils.BadRequest(err)
 		}
@@ -215,7 +215,7 @@ func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction)) // here is where the rawTx comes in from the HTTP API.
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }

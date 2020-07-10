@@ -144,7 +144,7 @@ func (c *Communicator) Protocols() []*p2psrv.Protocol {
 
 // Start start the communicator.
 func (c *Communicator) Start() {
-	c.goes.Go(c.txsLoop)
+	c.goes.Go(c.txsLoop) // here
 	c.goes.Go(c.announcementLoop)
 }
 

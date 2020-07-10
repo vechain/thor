@@ -59,7 +59,7 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool.SubscribeTxEvent(txCh)
 
 	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	assert.Nil(t, pool.Add(tx))
+	assert.Nil(t, pool.Add(tx, false))
 
 	v := true
 	assert.Equal(t, &TxEvent{tx, &v}, <-txCh)
@@ -74,7 +74,7 @@ func TestWashTxs(t *testing.T) {
 	assert.Zero(t, len(pool.Executables()))
 
 	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	assert.Nil(t, pool.Add(tx))
+	assert.Nil(t, pool.Add(tx, false))
 
 	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
@@ -120,7 +120,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.Add(tt.tx)
+		err := pool.Add(tt.tx, false)
 		if tt.errStr == "" {
 			assert.Nil(t, err)
 		} else {
@@ -145,7 +145,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.StrictlyAdd(tt.tx)
+		err := pool.StrictlyAdd(tt.tx, false)
 		if tt.errStr == "" {
 			assert.Nil(t, err)
 		} else {
@@ -169,7 +169,7 @@ func TestBeforeVIP191Add(t *testing.T) {
 	})
 	defer pool.Close()
 
-	err := pool.StrictlyAdd(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc))
+	err := pool.StrictlyAdd(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc), false)
 
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }

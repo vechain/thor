@@ -15,17 +15,19 @@ import (
 
 // txObjectMap to maintain mapping of tx hash to tx object, and account quota.
 type txObjectMap struct {
-	lock      sync.RWMutex
-	mapByHash map[thor.Bytes32]*txObject
-	mapByID   map[thor.Bytes32]*txObject
-	quota     map[thor.Address]int
+	lock       sync.RWMutex
+	mapByHash  map[thor.Bytes32]*txObject
+	mapByID    map[thor.Bytes32]*txObject
+	mapByLocal map[thor.Bytes32]*txObject // txID => txObj
+	quota      map[thor.Address]int
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
-		mapByHash: make(map[thor.Bytes32]*txObject),
-		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[thor.Address]int),
+		mapByHash:  make(map[thor.Bytes32]*txObject),
+		mapByID:    make(map[thor.Bytes32]*txObject),
+		mapByLocal: make(map[thor.Bytes32]*txObject),
+		quota:      make(map[thor.Address]int),
 	}
 }
 
@@ -36,7 +38,7 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
+func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int, localSubmitted bool) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -52,6 +54,9 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 	m.quota[txObj.Origin()]++
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
+	if localSubmitted {
+		m.mapByLocal[txObj.ID()] = txObj
+	}
 	return nil
 }
 
@@ -59,6 +64,13 @@ func (m *txObjectMap) GetByID(id thor.Bytes32) *txObject {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	return m.mapByID[id]
+}
+
+func (m *txObjectMap) IsLocalSubmitted(id thor.Bytes32) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	_, ok := m.mapByLocal[id]
+	return ok
 }
 
 func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
@@ -73,6 +85,7 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 		}
 		delete(m.mapByHash, txHash)
 		delete(m.mapByID, txObj.ID())
+		delete(m.mapByLocal, txObj.ID())
 		return true
 	}
 	return false
@@ -100,7 +113,7 @@ func (m *txObjectMap) ToTxs() tx.Transactions {
 	return txs
 }
 
-func (m *txObjectMap) Fill(txObjs []*txObject) {
+func (m *txObjectMap) Fill(txObjs []*txObject, localSubmitted bool) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	for _, txObj := range txObjs {
@@ -112,6 +125,9 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 		m.quota[txObj.Origin()]++
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
+		if localSubmitted {
+			m.mapByLocal[txObj.ID()] = txObj
+		}
 	}
 }
 
