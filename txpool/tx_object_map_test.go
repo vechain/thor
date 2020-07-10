@@ -30,14 +30,17 @@ func TestTxObjMap(t *testing.T) {
 	m := newTxObjectMap()
 	assert.Zero(t, m.Len())
 
-	assert.Nil(t, m.Add(txObj1, 1))
-	assert.Nil(t, m.Add(txObj1, 1), "should no error if exists")
+	assert.Nil(t, m.Add(txObj1, 1, true))
+
+	assert.Equal(t, true, m.IsLocalSubmitted(txObj1.ID()))
+
+	assert.Nil(t, m.Add(txObj1, 1, false), "should be no error even if the same tx exists")
 	assert.Equal(t, 1, m.Len())
 
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, 1))
+	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, 1, false))
 	assert.Equal(t, 1, m.Len())
 
-	assert.Nil(t, m.Add(txObj3, 1))
+	assert.Nil(t, m.Add(txObj3, 1, false))
 	assert.Equal(t, 2, m.Len())
 
 	assert.True(t, m.ContainsHash(tx1.Hash()))
