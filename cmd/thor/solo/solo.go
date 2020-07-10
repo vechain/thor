@@ -35,7 +35,6 @@ type Solo struct {
 	txPool      *txpool.TxPool
 	packer      *packer.Packer
 	logDB       *logdb.LogDB
-	bestBlockCh chan *block.Block
 	gasLimit    uint64
 	bandwidth   bandwidth.Bandwidth
 	onDemand    bool
