@@ -123,7 +123,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	if err := t.pool.Add(tx); err != nil {
+	if err := t.pool.Add(tx, true); err != nil {
 		if txpool.IsBadTx(err) {
 			return utils.BadRequest(err)
 		}

@@ -26,18 +26,20 @@ type txObject struct {
 	timeAdded       int64
 	executable      bool
 	overallGasPrice *big.Int // don't touch this value, it's only be used in pool's housekeeping
+	localSubmitted  bool     // tx is submitted locally on this node, or synced remotely from p2p.
 }
 
-func resolveTx(tx *tx.Transaction) (*txObject, error) {
+func resolveTx(tx *tx.Transaction, localSubmitted bool) (*txObject, error) {
 	resolved, err := runtime.ResolveTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &txObject{
-		Transaction: tx,
-		resolved:    resolved,
-		timeAdded:   time.Now().UnixNano(),
+		Transaction:    tx,
+		resolved:       resolved,
+		timeAdded:      time.Now().UnixNano(),
+		localSubmitted: localSubmitted,
 	}, nil
 }
 

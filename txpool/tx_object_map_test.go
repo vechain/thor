@@ -23,9 +23,9 @@ func TestTxObjMap(t *testing.T) {
 	tx2 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	tx3 := newTx(repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
 
-	txObj1, _ := resolveTx(tx1)
-	txObj2, _ := resolveTx(tx2)
-	txObj3, _ := resolveTx(tx3)
+	txObj1, _ := resolveTx(tx1, false)
+	txObj2, _ := resolveTx(tx2, false)
+	txObj3, _ := resolveTx(tx3, false)
 
 	m := newTxObjectMap()
 	assert.Zero(t, m.Len())

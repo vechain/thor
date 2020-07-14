@@ -67,7 +67,7 @@ func TestResolve(t *testing.T) {
 	acc := genesis.DevAccounts()[0]
 	tx := newTx(0, nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), acc)
 
-	txObj, err := resolveTx(tx)
+	txObj, err := resolveTx(tx, false)
 	assert.Nil(t, err)
 	assert.Equal(t, tx, txObj.Transaction)
 
@@ -98,7 +98,7 @@ func TestExecutable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		txObj, err := resolveTx(tt.tx)
+		txObj, err := resolveTx(tt.tx, false)
 		assert.Nil(t, err)
 
 		exe, err := txObj.Executable(repo.NewChain(b1.Header().ID()), st, b1.Header())

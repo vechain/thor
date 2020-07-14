@@ -217,7 +217,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 
 	{
 		txs := stash.LoadAll()
-		n.txPool.Fill(txs)
+		n.txPool.Fill(txs, false)
 		log.Debug("loaded txs from stash", "count", len(txs))
 	}
 
@@ -371,7 +371,7 @@ side-chain:   %v  %v`,
 			return
 		}
 		for _, tx := range b.Transactions() {
-			if err := n.txPool.Add(tx); err != nil {
+			if err := n.txPool.Add(tx, false); err != nil {
 				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
