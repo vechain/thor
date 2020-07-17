@@ -162,7 +162,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.StrictlyAdd(tt.tx, false)
+		err := pool.StrictlyAdd(tt.tx)
 		if tt.errStr == "" {
 			assert.Nil(t, err)
 		} else {
@@ -186,7 +186,7 @@ func TestBeforeVIP191Add(t *testing.T) {
 	})
 	defer pool.Close()
 
-	err := pool.StrictlyAdd(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc), false)
+	err := pool.StrictlyAdd(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(200), 100, nil, Tx.Features(1), acc))
 
 	assert.Equal(t, "tx rejected: unsupported features", err.Error())
 }

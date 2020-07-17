@@ -293,8 +293,8 @@ func (p *TxPool) Get(id thor.Bytes32) *tx.Transaction {
 }
 
 // StrictlyAdd add new tx into pool. A rejection error will be returned, if tx is not executable at this time.
-func (p *TxPool) StrictlyAdd(newTx *tx.Transaction, localSubmitted bool) error {
-	return p.add(newTx, true, localSubmitted)
+func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
+	return p.add(newTx, true, false)
 }
 
 // Remove removes tx from pool by its Hash.
