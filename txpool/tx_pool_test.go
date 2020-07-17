@@ -62,7 +62,7 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool.SubscribeTxEvent(txCh)
 
 	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	assert.Nil(t, pool.Add(tx, false))
+	assert.Nil(t, pool.Add(tx))
 
 	v := true
 	assert.Equal(t, &TxEvent{tx, &v}, <-txCh)
@@ -78,7 +78,7 @@ func TestWashTxs(t *testing.T) {
 	assert.Zero(t, len(pool.Executables()))
 
 	tx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	assert.Nil(t, pool.Add(tx1, true)) // this tx won't participate in the wash out.
+	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
 	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
@@ -137,7 +137,7 @@ func TestAdd(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		err := pool.Add(tt.tx, false)
+		err := pool.Add(tt.tx)
 		if tt.errStr == "" {
 			assert.Nil(t, err)
 		} else {

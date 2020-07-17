@@ -275,8 +275,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 
 // Add add new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
-func (p *TxPool) Add(newTx *tx.Transaction, localSubmitted bool) error {
-	return p.add(newTx, false, localSubmitted)
+func (p *TxPool) Add(newTx *tx.Transaction) error {
+	return p.add(newTx, false, false)
+}
+
+// AddLocal adds new locally submitted tx into pool.
+func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
+	return p.add(newTx, false, true)
 }
 
 // Get get pooled tx by id.
