@@ -217,7 +217,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 
 	{
 		txs := stash.LoadAll()
-		n.txPool.Fill(txs)
+		n.txPool.Fill(txs, false)
 		log.Debug("loaded txs from stash", "count", len(txs))
 	}
 

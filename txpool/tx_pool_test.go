@@ -22,26 +22,29 @@ import (
 	Tx "github.com/vechain/thor/tx"
 )
 
+const LIMIT = 10
+const LIMIT_PER_ACCOUNT = 2
+
 func init() {
 	log15.Root().SetHandler(log15.DiscardHandler())
 }
 
-func newPool() *TxPool {
+func newPool(limit int, limitPerAccount int) *TxPool {
 	db := muxdb.NewMem()
 	repo := newChainRepo(db)
 	return New(repo, state.NewStater(db), Options{
-		Limit:           10,
-		LimitPerAccount: 2,
+		Limit:           limit,
+		LimitPerAccount: limitPerAccount,
 		MaxLifetime:     time.Hour,
 	})
 }
 func TestNewClose(t *testing.T) {
-	pool := newPool()
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 }
 
 func TestSubscribeNewTx(t *testing.T) {
-	pool := newPool()
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
 	b1 := new(block.Builder).
@@ -66,19 +69,20 @@ func TestSubscribeNewTx(t *testing.T) {
 }
 
 func TestWashTxs(t *testing.T) {
-	pool := newPool()
+	pool := newPool(1, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
+
 	txs, _, err := pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
 
-	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-	assert.Nil(t, pool.Add(tx))
+	tx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
 	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
-	assert.Equal(t, Tx.Transactions{tx}, txs)
+	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
@@ -91,11 +95,24 @@ func TestWashTxs(t *testing.T) {
 
 	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
-	assert.Equal(t, Tx.Transactions{tx}, txs)
+	assert.Equal(t, Tx.Transactions{tx1}, txs)
+
+	tx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[1])
+	txObj2, _ := resolveTx(tx2, false)
+	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+
+	tx3 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[2])
+	txObj3, _ := resolveTx(tx3, false)
+	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+
+	txs, removedCount, err := pool.wash(pool.repo.BestBlock().Header())
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(txs))
+	assert.Equal(t, 1, removedCount)
 }
 
 func TestAdd(t *testing.T) {
-	pool := newPool()
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
