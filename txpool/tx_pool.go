@@ -449,7 +449,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
-		if !obj.executable {
+		if !obj.executable || obj.localSubmitted {
 			obj.executable = true
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
