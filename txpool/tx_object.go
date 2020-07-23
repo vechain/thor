@@ -53,7 +53,8 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, errors.New("gas too large")
 	case o.IsExpired(headBlock.Number()):
 		return false, errors.New("expired")
-	case o.BlockRef().Number() > headBlock.Number()+uint32(3600*24/thor.BlockInterval):
+	case o.BlockRef().Number() > headBlock.Number()+uint32(5*60/thor.BlockInterval):
+		// reject deferred tx which will be applied after 5mins
 		return false, errors.New("block ref out of schedule")
 	}
 

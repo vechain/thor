@@ -380,7 +380,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 
 		// out of lifetime
-		if now > txObj.timeAdded+int64(p.options.MaxLifetime) {
+		if !txObj.localSubmitted && now > txObj.timeAdded+int64(p.options.MaxLifetime) {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", "out of lifetime")
 			continue
