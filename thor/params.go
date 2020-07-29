@@ -32,11 +32,12 @@ const (
 
 	MaxBlockProposers uint64 = 101
 
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
+	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit.
 
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	ElectionThreshold = 8 // Maximum value of VRF output used for backer election(8 of 100).
+	ElectionThreshold = 8    // Maximum value of VRF output used for backer election(8 of 100).
+	EpochInterval     = 8640 // block number interval between two epochs.
 )
 
 // Keys of governance params.

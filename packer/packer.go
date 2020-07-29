@@ -44,7 +44,7 @@ func New(
 		beneficiary,
 		0,
 		forkConfig,
-		poa.NewSeeder(repo, forkConfig),
+		poa.NewSeeder(repo),
 	}
 }
 

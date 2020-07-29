@@ -7,6 +7,7 @@ package poa
 
 import (
 	"bytes"
+	"encoding/binary"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -19,68 +20,79 @@ var emptyRoot = thor.Blake2b(rlp.EmptyString) // This is the known root hash of 
 
 // Seeder generates seed for poa scheduler.
 type Seeder struct {
-	repo       *chain.Repository
-	forkConfig thor.ForkConfig
+	repo  *chain.Repository
+	cache map[thor.Bytes32][]byte
 }
 
 // NewSeeder creates a seeder
-func NewSeeder(repo *chain.Repository, forkConfig thor.ForkConfig) *Seeder {
+func NewSeeder(repo *chain.Repository) *Seeder {
 	return &Seeder{
 		repo,
-		forkConfig,
+		make(map[thor.Bytes32][]byte),
 	}
 }
 
-// Generate creates a seed for the given parent block's header. Seeder will traverse back by parentID.
-// Until there is a block contains at least one backer signature, concatenate the VRF outputs(beta) to create seed.
+// Generate creates a seed for the given parent block's header. If the seed block contains at least one backer signature,
+// concatenate the VRF outputs(beta) to create seed. Otherwise，returns nil.
 func (seeder *Seeder) Generate(parentHeader *block.Header) ([]byte, error) {
-	if parentHeader.Number() <= 1 || parentHeader.Number() <= seeder.forkConfig.VIP193 {
+	blockNum := parentHeader.Number() + 1
+
+	round := blockNum / thor.EpochInterval
+	if round < 1 {
 		return nil, nil
 	}
+	seedNum := (round - 1) * thor.EpochInterval
 
-	b := parentHeader
-	for {
-		summary, err := seeder.repo.GetBlockSummary(b.ParentID())
-		if err != nil {
-			return nil, nil
-		}
-		b = summary.Header
-
-		if b.Number() < seeder.forkConfig.VIP193 || b.Number() == 0 {
-			return nil, nil
-		}
-
-		if b.BackerSignaturesRoot() != emptyRoot {
-			bss, err := seeder.repo.GetBlockBackerSignatures(b.ID())
-			if err != nil {
-				return nil, err
-			}
-
-			signer, err := b.Signer()
-			if err != nil {
-				return nil, err
-			}
-
-			alpha := b.Proposal().Alpha(signer)
-			betas := make([][]byte, len(bss))
-
-			for _, bs := range bss {
-				beta, err := bs.Validate(alpha[:])
-				if err != nil {
-					return nil, err
-				}
-				betas = append(betas, beta)
-			}
-			sort.Slice(betas, func(i, j int) bool {
-				return bytes.Compare(betas[i], betas[j]) < 0
-			})
-
-			var seed []byte
-			for _, b := range betas {
-				seed = append(seed, b...)
-			}
-
-			return seed, nil
-		}
+	seedBlock, err := seeder.repo.NewChain(parentHeader.ID()).GetBlockHeader(seedNum)
+	if err != nil {
+		return nil, err
 	}
+
+	if v, ok := seeder.cache[seedBlock.ID()]; ok == true {
+		return v, nil
+	}
+	var seed []byte
+	if seedBlock.BackerSignaturesRoot() != emptyRoot {
+		bss, err := seeder.repo.GetBlockBackerSignatures(seedBlock.ID())
+		if err != nil {
+			return nil, err
+		}
+
+		signer, err := seedBlock.Signer()
+		if err != nil {
+			return nil, err
+		}
+
+		alpha := seedBlock.Proposal().Alpha(signer)
+		betas := make([][]byte, 0, len(bss))
+
+		for _, bs := range bss {
+			beta, err := bs.Validate(alpha[:])
+			if err != nil {
+				return nil, err
+			}
+			betas = append(betas, beta)
+		}
+		sort.Slice(betas, func(i, j int) bool {
+			return bytes.Compare(betas[i], betas[j]) < 0
+		})
+
+		for _, b := range betas {
+			seed = append(seed, b...)
+		}
+	} else {
+		signer, err := seedBlock.Signer()
+		if err != nil {
+			return nil, err
+		}
+
+		t := make([]byte, 8)
+		binary.BigEndian.PutUint64(t, seedBlock.TotalBackersCount())
+
+		seed = append(seed, signer.Bytes()...)
+		seed = append(seed, t...)
+	}
+
+	seeder.cache[seedBlock.ID()] = seed
+	return seed, nil
 }
