@@ -248,7 +248,12 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		return "", fmt.Errorf("unable to infer default data dir, use -%s to specify", dataDirFlag.Name)
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:]))
+	suffix := ""
+	if ctx.Bool(disablePrunerFlag.Name) {
+		suffix = "-full"
+	}
+
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
