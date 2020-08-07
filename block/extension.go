@@ -13,33 +13,33 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-type backerSignaturesRoot struct {
-	Root              thor.Bytes32
-	TotalBackersCount uint64
+type extension struct {
+	BackerSignaturesRoot thor.Bytes32
+	TotalBackersCount    uint64
 }
 
-type _bssRoot backerSignaturesRoot
+type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
-func (br *backerSignaturesRoot) EncodeRLP(w io.Writer) error {
-	// strictly limit backer signatures root in pre and post 193 fork stage.
-	// before 193: block header must be encoded without BackerSignatureRoot
+func (ex *extension) EncodeRLP(w io.Writer) error {
+	// strictly limit extension in pre and post 193 fork stage.
+	// before 193: block header must be encoded without extension
 	// this is mainly for backward compatibility
 
-	if br.TotalBackersCount != 0 {
-		return rlp.Encode(w, (*_bssRoot)(br))
+	if ex.TotalBackersCount != 0 {
+		return rlp.Encode(w, (*_extension)(ex))
 	}
 	return nil
 }
 
 // DecodeRLP implements rlp.Decoder.
-func (br *backerSignaturesRoot) DecodeRLP(s *rlp.Stream) error {
-	var obj _bssRoot
+func (ex *extension) DecodeRLP(s *rlp.Stream) error {
+	var obj _extension
 	if err := s.Decode(&obj); err != nil {
 		// Error(end-of-list) means this field is not present, return default value
 		// for backward compatibility
 		if err == rlp.EOL {
-			*br = backerSignaturesRoot{
+			*ex = extension{
 				emptyRoot,
 				0,
 			}
@@ -51,6 +51,6 @@ func (br *backerSignaturesRoot) DecodeRLP(s *rlp.Stream) error {
 		// TotalBackersCount equals 0, bss root should be trimmed
 		return errors.New("rlp: BackerSignautreRoot should be trimmed if total backers count is 0")
 	}
-	*br = backerSignaturesRoot(obj)
+	*ex = extension(obj)
 	return nil
 }

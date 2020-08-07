@@ -80,7 +80,7 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 // BackerSignatures add the list of backer signature.
 func (b *Builder) BackerSignatures(bss BackerSignatures, parentBackerCount uint64) *Builder {
 	b.bss = append(BackerSignatures(nil), bss...)
-	b.headerBody.BssRoot.TotalBackersCount = parentBackerCount + uint64(len(bss))
+	b.headerBody.Extension.TotalBackersCount = parentBackerCount + uint64(len(bss))
 	return b
 }
 
@@ -88,7 +88,7 @@ func (b *Builder) BackerSignatures(bss BackerSignatures, parentBackerCount uint6
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
-	header.body.BssRoot.Root = b.bss.RootHash()
+	header.body.Extension.BackerSignaturesRoot = b.bss.RootHash()
 
 	return &Block{
 		header: &header,
