@@ -170,7 +170,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
 	}
-	if h.TotalBackersCount() > 0 {
+	if h.TotalBackersCount() != 0 {
 		input = append(input, &h.body.BssRoot)
 	}
 	rlp.Encode(hw, input)
@@ -217,26 +217,6 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 
 // EncodeRLP implements rlp.Encoder.
 func (h *Header) EncodeRLP(w io.Writer) error {
-	if h.body.BssRoot.TotalBackersCount == 0 {
-		// backward compatible
-		return rlp.Encode(w, []interface{}{
-
-			h.body.ParentID,
-			h.body.Timestamp,
-			h.body.GasLimit,
-			h.body.Beneficiary,
-
-			h.body.GasUsed,
-			h.body.TotalScore,
-
-			&h.body.TxsRootFeatures,
-			h.body.StateRoot,
-			h.body.ReceiptsRoot,
-
-			h.body.Signature,
-		})
-	}
-
 	return rlp.Encode(w, &h.body)
 }
 
