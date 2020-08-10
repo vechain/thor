@@ -290,11 +290,11 @@ func TestDecoding(t *testing.T) {
 	var bx Block
 
 	err := rlp.DecodeBytes(raw0, &bx)
-	assert.EqualError(t, err, "rlp:invalid fields of block body, at least 2")
+	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw1, &bx)
-	assert.EqualError(t, err, "rlp:block has too many fields")
+	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw2, &bx)
-	assert.EqualError(t, err, "rlp:block has too many fields")
+	assert.EqualError(t, err, "rlp:unrecognized block format")
 }

@@ -169,9 +169,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		&h.body.TxsRootFeatures,
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
-	}
-	if h.TotalBackersCount() != 0 {
-		input = append(input, &h.body.Extension)
+		&h.body.Extension,
 	}
 	rlp.Encode(hw, input)
 	hw.Sum(hash[:0])
@@ -240,21 +238,21 @@ func (h *Header) String() string {
 	}
 
 	return fmt.Sprintf(`Header(%v):
-	Number:         		%v
-	ParentID:       		%v
-	Timestamp:      		%v
-	Signer:         		%v
-	Beneficiary:    		%v
-	GasLimit:       		%v
-	GasUsed:        		%v
-	TotalScore:     		%v
-	TxsRoot:        		%v
-	TxsFeatures:    		%v
-	StateRoot:      		%v
-	ReceiptsRoot:   		%v
-	BackerSignaturesRoot:	%v
-	TotalBackersCount		%v
-	Signature:      		0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+	Number:                 %v
+	ParentID:               %v
+	Timestamp:              %v
+	Signer:                 %v
+	Beneficiary:            %v
+	GasLimit:               %v
+	GasUsed:                %v
+	TotalScore:             %v
+	TxsRoot:                %v
+	TxsFeatures:            %v
+	StateRoot:              %v
+	ReceiptsRoot:           %v
+	BackerSignaturesRoot:   %v
+	TotalBackersCount       %v
+	Signature:              0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
 		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.BackerSignaturesRoot, h.body.Extension.TotalBackersCount, h.body.Signature)
 }

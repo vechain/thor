@@ -105,26 +105,28 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&raws); err != nil {
 		return err
 	}
-	if len(raws) < 2 {
-		return errors.New("rlp:invalid fields of block body, at least 2")
+	if len(raws) != 2 && len(raws) != 3 {
+		return errors.New("rlp:invalid fields of block body, want 2 or 3")
 	}
+
 	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
-		return err
-	}
-	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return err
 	}
 
 	// strictly limit the fields of block body in pre and post 193 fork stage.
 	// before 193: block must contain only block header and transactions.
-	if header.TotalBackersCount() != 0 && len(raws) == 3 {
+	if len(raws) == 3 && header.TotalBackersCount() != 0 {
 		if err := rlp.Decode(bytes.NewReader(raws[2]), &bss); err != nil {
 			return err
 		}
-	} else if header.TotalBackersCount() == 0 && len(raws) == 2 {
+	} else if len(raws) == 2 && header.TotalBackersCount() == 0 {
 		bss = BackerSignatures(nil)
 	} else {
-		return errors.New("rlp:block has too many fields")
+		return errors.New("rlp:unrecognized block format")
+	}
+
+	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
+		return err
 	}
 
 	*b = Block{
