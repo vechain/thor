@@ -87,8 +87,6 @@ func TestBlock(t *testing.T) {
 	block = block.WithSignature(sig)
 
 	data, _ := rlp.EncodeToBytes(block)
-	// fmt.Println(Raw(data).DecodeHeader())
-	// fmt.Println(Raw(data).DecodeBody())
 
 	fmt.Println(block.Size())
 
@@ -177,6 +175,97 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, 2, len(raws))
 }
 
+func TestHeaderEncoding(t *testing.T) {
+	block := new(Builder).Build()
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hh Header
+	err = rlp.DecodeBytes(bytes, &hh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes = append(bytes, []byte("just trailing")...)
+	var hhh Header
+	err = rlp.DecodeBytes(bytes, &hhh)
+	assert.EqualError(t, err, "rlp: input contains more than one value")
+}
+
+func TestEncodingBadBssRoot(t *testing.T) {
+	block := new(Builder).Build()
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var h1 Header
+	err = rlp.DecodeBytes(bytes, &h1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 0, h1.TotalBackersCount())
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 10, count)
+
+	var raws []rlp.RawValue
+	_ = rlp.DecodeBytes(bytes, &raws)
+	d, _ := rlp.EncodeToBytes(&struct {
+		Root              thor.Bytes32
+		TotalBackersCount uint64
+	}{
+		thor.Bytes32{},
+		0,
+	})
+	raws = append(raws, d)
+	b, _ := rlp.EncodeToBytes(raws)
+
+	var h2 Header
+	err = rlp.DecodeBytes(b, &h2)
+	assert.EqualError(t, err, "rlp: BackerSignautreRoot should be trimmed if total backers count is 0")
+}
+
+func TestEncodingBssRoot(t *testing.T) {
+	block := new(Builder).BackerSignatures(BackerSignatures{}, 1).Build()
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hh Header
+	err = rlp.DecodeBytes(bytes, &hh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 1, hh.TotalBackersCount())
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 11, count)
+}
+
 func TestDecoding(t *testing.T) {
 	b0 := new(Builder).BackerSignatures(BackerSignatures{}, 1).Build()
 	b1 := new(Builder).Build()
@@ -201,11 +290,11 @@ func TestDecoding(t *testing.T) {
 	var bx Block
 
 	err := rlp.DecodeBytes(raw0, &bx)
-	assert.EqualError(t, err, "rlp:invalid fields of block body, at least 2")
+	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw1, &bx)
-	assert.EqualError(t, err, "rlp:block has too many fields")
+	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw2, &bx)
-	assert.EqualError(t, err, "rlp:block has too many fields")
+	assert.EqualError(t, err, "rlp:unrecognized block format")
 }

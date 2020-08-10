@@ -60,7 +60,7 @@ func (bs *BackerSignature) Validate(alpha []byte) (beta []byte, err error) {
 	defer func() { bs.cache.beta.Store(beta) }()
 
 	if len(bs.body) != 81+33 {
-		return []byte{}, errors.New("invalid backer signature length, 113 bytes needed")
+		return nil, errors.New("invalid backer signature length, 114 bytes needed")
 	}
 
 	pub := make([]byte, 33)
@@ -72,7 +72,7 @@ func (bs *BackerSignature) Validate(alpha []byte) (beta []byte, err error) {
 	vrf := ecvrf.NewSecp256k1Sha256Tai()
 	pubkey, err := crypto.DecompressPubkey(pub)
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 	beta, err = vrf.Verify(pubkey, alpha, proof)
 	return
