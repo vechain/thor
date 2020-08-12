@@ -6,7 +6,9 @@
 package packer
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -27,8 +29,9 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
-	knownBackers map[thor.Address]bool
+	knownBackers []thor.Address
 	bss          block.BackerSignatures
+	alpha        thor.Bytes32
 }
 
 func newFlow(
@@ -43,7 +46,7 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
-		knownBackers: make(map[thor.Address]bool),
+		knownBackers: []thor.Address{},
 		bss:          block.BackerSignatures{},
 	}
 }
@@ -149,12 +152,18 @@ func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
 		return nil, err
 	}
 
+	f.alpha = p.Alpha(f.packer.nodeMaster)
 	return p.WithSignature(sig), nil
 }
 
 // IsBackerKnown returns true is backer's signature is already added.
-func (f *Flow) IsBackerKnown(backer thor.Address) bool {
-	return f.knownBackers[backer]
+func (f *Flow) IsBackerKnown(addr thor.Address) bool {
+	for _, backer := range f.knownBackers {
+		if addr == backer {
+			return true
+		}
+	}
+	return false
 }
 
 // AddBackerSignature adds a signature from backer.
@@ -168,7 +177,7 @@ func (f *Flow) AddBackerSignature(bs *block.BackerSignature) bool {
 		return false
 	}
 
-	f.knownBackers[signer] = true
+	f.knownBackers = append(f.knownBackers, signer)
 	f.bss = append(f.bss, bs)
 	return true
 }
@@ -197,6 +206,22 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		TransactionFeatures(f.features)
 
 	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
+		if len(f.bss) > 0 {
+			betas := make([][]byte, 0, len(f.bss))
+
+			for _, bs := range f.bss {
+				beta, err := bs.Validate(f.alpha.Bytes())
+				if err != nil {
+					return nil, nil, nil, err
+				}
+
+				betas = append(betas, beta)
+			}
+
+			sort.Slice(f.bss, func(i, j int) bool {
+				return bytes.Compare(betas[i], betas[j]) < 0
+			})
+		}
 		builder.BackerSignatures(f.bss, f.parentHeader.TotalBackersCount())
 	}
 

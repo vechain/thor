@@ -6,6 +6,7 @@
 package consensus
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -251,16 +252,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, ca
 				return false
 			}
 
-			knownBackers := make([]thor.Address, 0, len(bss))
-			isKnown := func(addr thor.Address) bool {
-				for _, b := range knownBackers {
-					if b == addr {
-						return true
-					}
-				}
-				return false
-			}
-
+			prev := []byte{}
 			alpha := header.Proposal().Alpha(leader)
 			for _, bs := range bss {
 				backer, err := bs.Signer()
@@ -273,19 +265,19 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, ca
 				if backer == leader {
 					return consensusError("block signer cannot back itself")
 				}
-				if isKnown(backer) == true {
-					return consensusError(fmt.Sprintf("backer: %v already known", backer))
-				}
 				beta, err := bs.Validate(alpha.Bytes())
 				if err != nil {
 					return consensusError(fmt.Sprintf("failed to verify backer's signature: %v", err))
 				}
+				if bytes.Compare(prev, beta) > 0 {
+					return consensusError("backer signatures are not in ascending order(by beta)")
+				}
+				prev = beta
 
 				isLucky := poa.EvaluateVRF(beta)
 				if isLucky == false {
 					return consensusError(fmt.Sprintf("%v's proof is not lucky enough to be a backer", backer))
 				}
-				knownBackers = append(knownBackers, backer)
 			}
 		}
 	}

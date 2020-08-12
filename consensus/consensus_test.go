@@ -116,16 +116,20 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	tx = tx.WithSignature(sig)
 
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
-	flow, err := p.Schedule(parent.Header(), 1591709310)
+	flow, err := p.Schedule(parent.Header(), 1591709330)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = flow.Adopt(tx)
 	proposal, _ := flow.Propose(proposer.PrivateKey)
-	beta, _, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, proposal.Hash().Bytes())
+	alpha := proposal.Alpha(proposer.Address)
+	_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha.Bytes())
 	pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
-	flow.AddBackerSignature(block.NewBackerSignature(pub, beta))
+	flow.AddBackerSignature(block.NewBackerSignature(pub, proof))
 	b0, stage, receipts, err := flow.Pack(proposer.PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = stage.Commit()
 	if err != nil {
 		t.Fatal(err)
@@ -516,22 +520,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		expect := consensusError("block signer cannot back itself")
 		tc.assert.Equal(expect, err)
 	}
-	triggers["triggerKnownBacker"] = func() {
-		gaslimit := uint64(10000006)
-		proof := hexutil.MustDecode("0x02c96e3fd568972e3fa6140ef2aa6c12e299ecab878dd981565d6898b7b107f83453d05429769d12dd8bb1c12d4cb137b2fe1651ddc55f3d4710ff0b83b962816b931b34642b8dd3ee8f6921fda4e93752")
-
-		backer := genesis.DevAccounts()[1]
-		pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
-		bs := block.NewBackerSignature(pub, proof)
-
-		blk := tc.sign(tc.originalBuilder().GasLimit(gaslimit).BackerSignatures(block.BackerSignatures{bs, bs}, tc.parent.Header().TotalBackersCount()).Build())
-
-		err := tc.consent(blk)
-		expect := consensusError("backer: 0xd3ae78222beadb038203be21ed5ce7c9b1bff602 already known")
-		tc.assert.Equal(expect, err)
-	}
 	triggers["triggerBackerNotLucky"] = func() {
-		proof := hexutil.MustDecode("0x02776d6de8602086f1d5be3f30b95308253916fc91f5aad52838b3751b2abd8be05a53882878ca96fa889d18cf236fba5aad53d9c2a0176b67241da14df8297a968226b554bd88a44e0f3da3d6699554e6")
+		proof := hexutil.MustDecode("0x03b002a7366b1b4c02cddd595554645d15709a408146fd9bc7c1304c853395f0c8544c6101eb470c669dd02b1fb9757c51ac3788de0c3ac3ea284f2f1ba3e1ff8da8a6f65a7fb588273ddf1fbc9f1dd705")
 		backer := genesis.DevAccounts()[1]
 
 		pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
@@ -540,6 +530,21 @@ func (tc *testConsensus) TestValidateBlockBody() {
 
 		err := tc.consent(blk)
 		expect := consensusError("0xd3ae78222beadb038203be21ed5ce7c9b1bff602's proof is not lucky enough to be a backer")
+		tc.assert.Equal(expect, err)
+	}
+	triggers["triggerNotSorted"] = func() {
+		p1 := hexutil.MustDecode("0x02fc5e1ffe4256cd9b0bae8eca9132c7657ea19652d9f79f73bc5e13a3eec59b0f754d89004ceece0c65af73e7a469dee7a1e97222ad8109a60e76bc51a3da907fbe9eaf270766b29422409612d5fa85bb")
+		b1 := crypto.CompressPubkey(&genesis.DevAccounts()[1].PrivateKey.PublicKey)
+		bs1 := block.NewBackerSignature(b1, p1)
+
+		p2 := hexutil.MustDecode("0x0216fae1949bb9bca7c6645230c4217a4ca7cc4f8a0e459974acfe02284261c9ae84ff16d5085a2eca503dc41fcf0cc4a4cf21374c57511485848045371ca32ebcf384d395b194a45481107ecd68fd1826")
+		b2 := crypto.CompressPubkey(&genesis.DevAccounts()[6].PrivateKey.PublicKey)
+		bs2 := block.NewBackerSignature(b2, p2)
+
+		blk := tc.sign(tc.originalBuilder().GasLimit(10000043).BackerSignatures(block.BackerSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount()).Build())
+
+		err := tc.consent(blk)
+		expect := consensusError("backer signatures are not in ascending order(by beta)")
 		tc.assert.Equal(expect, err)
 	}
 
