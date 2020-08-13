@@ -6,9 +6,7 @@
 package poa
 
 import (
-	"bytes"
 	"encoding/binary"
-	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -64,21 +62,13 @@ func (seeder *Seeder) Generate(parentHeader *block.Header) ([]byte, error) {
 		}
 
 		alpha := seedBlock.Proposal().Alpha(signer)
-		betas := make([][]byte, 0, len(bss))
 
 		for _, bs := range bss {
 			beta, err := bs.Validate(alpha[:])
 			if err != nil {
 				return nil, err
 			}
-			betas = append(betas, beta)
-		}
-		sort.Slice(betas, func(i, j int) bool {
-			return bytes.Compare(betas[i], betas[j]) < 0
-		})
-
-		for _, b := range betas {
-			seed = append(seed, b...)
+			seed = append(seed, beta...)
 		}
 	} else {
 		signer, err := seedBlock.Signer()
