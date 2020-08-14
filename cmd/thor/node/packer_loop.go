@@ -117,11 +117,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 	}
 	execElapsed := mclock.Now() - startTime
 
-	if _, err := stage.Commit(); err != nil {
-		return errors.WithMessage(err, "commit state")
-	}
-
-	prevTrunk, curTrunk, err := n.commitBlock(newBlock, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
 	if err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
