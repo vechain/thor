@@ -122,7 +122,7 @@ var (
 	cacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "megabytes of ram allocated to trie nodes cache",
-		Value: 1024,
+		Value: 2048,
 	}
 	disablePrunerFlag = cli.BoolFlag{
 		Name:  "disable-pruner",
