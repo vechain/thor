@@ -11,36 +11,38 @@ import (
 )
 
 const (
-	// encTrieNodeCacheSeg number of segments for the encoded trie node cache.
+	// trieNodeCacheSeg number of segments for the trie node cache.
 	//
 	// In practical, it's more efficient if divide the cache into
 	// several segments by node path length.
 	// 8 is the ideal value now.
-	encTrieNodeCacheSeg = 8
+	trieNodeCacheSeg = 8
 )
 
 type trieCache struct {
-	enc [encTrieNodeCacheSeg]*freecache.Cache // for encoded nodes
-	dec *lru.Cache                            // for decoded nodes
+	enc [trieNodeCacheSeg]*freecache.Cache // for encoded nodes
+	dec [trieNodeCacheSeg]*lru.Cache       // for decoded nodes
 }
 
 func newTrieCache(encSizeMB int, decCapacity int) *trieCache {
 	var cache trieCache
 	if encSizeMB > 0 {
-		for i := 0; i < encTrieNodeCacheSeg; i++ {
-			cache.enc[i] = freecache.NewCache(encSizeMB * 1024 * 1024 / encTrieNodeCacheSeg)
+		for i := 0; i < trieNodeCacheSeg; i++ {
+			cache.enc[i] = freecache.NewCache(encSizeMB * 1024 * 1024 / trieNodeCacheSeg)
 		}
 	}
 	if decCapacity > 0 {
-		cache.dec, _ = lru.New(decCapacity)
+		for i := 0; i < trieNodeCacheSeg; i++ {
+			cache.dec[i], _ = lru.New(decCapacity / trieNodeCacheSeg)
+		}
 	}
 	return &cache
 }
 
 func (c *trieCache) GetEncoded(key []byte, pathLen int, peek bool) (val []byte) {
 	i := pathLen
-	if i >= encTrieNodeCacheSeg {
-		i = encTrieNodeCacheSeg - 1
+	if i >= trieNodeCacheSeg {
+		i = trieNodeCacheSeg - 1
 	}
 	if enc := c.enc[i]; enc != nil {
 		if peek {
@@ -48,35 +50,42 @@ func (c *trieCache) GetEncoded(key []byte, pathLen int, peek bool) (val []byte) 
 		} else {
 			val, _ = enc.Get(key)
 		}
-		return val
 	}
 	return
 }
 func (c *trieCache) SetEncoded(key, val []byte, pathLen int) {
 	i := pathLen
-	if i >= encTrieNodeCacheSeg {
-		i = encTrieNodeCacheSeg - 1
+	if i >= trieNodeCacheSeg {
+		i = trieNodeCacheSeg - 1
 	}
 	if enc := c.enc[i]; enc != nil {
 		_ = enc.Set(key, val, 8*3600)
 	}
 }
 
-func (c *trieCache) GetDecoded(key []byte, peek bool) (val interface{}) {
-	if c.dec == nil {
-		return nil
+func (c *trieCache) GetDecoded(key []byte, pathLen int, peek bool) (val interface{}) {
+	i := pathLen
+	if i >= trieNodeCacheSeg {
+		i = trieNodeCacheSeg - 1
 	}
-	if peek {
-		val, _ = c.dec.Peek(string(key))
-	} else {
-		val, _ = c.dec.Get(string(key))
+
+	if dec := c.dec[i]; dec != nil {
+		if peek {
+			val, _ = dec.Peek(string(key))
+		} else {
+			val, _ = dec.Get(string(key))
+		}
 	}
-	return val
+	return
 }
 
-func (c *trieCache) SetDecoded(key []byte, val interface{}) {
-	if c.dec == nil {
-		return
+func (c *trieCache) SetDecoded(key []byte, val interface{}, pathLen int) {
+	i := pathLen
+	if i >= trieNodeCacheSeg {
+		i = trieNodeCacheSeg - 1
 	}
-	c.dec.Add(string(key), val)
+
+	if dec := c.dec[i]; dec != nil {
+		dec.Add(string(key), val)
+	}
 }

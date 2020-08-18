@@ -218,17 +218,12 @@ func (t *Trie) getEncoded(key *trie.NodeKey) (enc []byte, err error) {
 }
 
 func (t *Trie) getDecoded(key *trie.NodeKey) (interface{}, func(interface{})) {
-	// only cache decoded nodes with key path <= 3, which
-	// always have high hit rate.
-	if len(key.Path) > 3 {
-		return nil, nil
-	}
-	if cached := t.cache.GetDecoded(key.Hash, key.Scaning); cached != nil {
+	if cached := t.cache.GetDecoded(key.Hash, len(key.Path), key.Scaning); cached != nil {
 		return cached, nil
 	}
 	if !key.Scaning {
 		// fill cache only if not iterating
-		return nil, func(dec interface{}) { t.cache.SetDecoded(key.Hash, dec) }
+		return nil, func(dec interface{}) { t.cache.SetDecoded(key.Hash, dec, len(key.Path)) }
 	}
 	return nil, nil
 }
