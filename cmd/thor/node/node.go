@@ -270,12 +270,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	if _, err := stage.Commit(); err != nil {
-		log.Error("failed to commit state", "err", err)
-		return false, err
-	}
-
-	prevTrunk, curTrunk, err := n.commitBlock(blk, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(stage, blk, receipts)
 	if err != nil {
 		log.Error("failed to commit block", "err", err)
 		return false, err
@@ -291,42 +286,60 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
 
-func (n *Node) commitBlock(newBlock *block.Block, receipts tx.Receipts) (*chain.Chain, *chain.Chain, error) {
+func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts) (*chain.Chain, *chain.Chain, error) {
 	n.commitLock.Lock()
 	defer n.commitLock.Unlock()
 
-	best := n.repo.BestBlock()
-	err := n.repo.AddBlock(newBlock, receipts)
-	if err != nil {
-		return nil, nil, err
+	var (
+		prevBest      = n.repo.BestBlock()
+		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header())
+		awaitLog      = func() {}
+	)
+	defer awaitLog()
+
+	if becomeNewBest && !n.skipLogs && !n.logDBFailed {
+		done := make(chan struct{})
+		awaitLog = func() { <-done }
+
+		go func() {
+			defer close(done)
+
+			diff, err := n.repo.NewChain(newBlock.Header().ParentID()).Exclude(
+				n.repo.NewChain(prevBest.Header().ID()))
+			if err != nil {
+				n.logDBFailed = true
+				log.Warn("failed to write logs", "err", err)
+				return
+			}
+
+			if err := n.writeLogs(diff, newBlock, receipts); err != nil {
+				n.logDBFailed = true
+				log.Warn("failed to write logs", "err", err)
+				return
+			}
+		}()
 	}
-	if newBlock.Header().BetterThan(best.Header()) {
+
+	if _, err := stage.Commit(); err != nil {
+		return nil, nil, errors.Wrap(err, "commit state")
+	}
+
+	if err := n.repo.AddBlock(newBlock, receipts); err != nil {
+		return nil, nil, errors.Wrap(err, "add block")
+	}
+
+	if becomeNewBest {
+		// to wait for log written
+		awaitLog()
 		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
 			return nil, nil, err
 		}
 	}
-	prevTrunk := n.repo.NewChain(best.Header().ID())
-	curTrunk := n.repo.NewBestChain()
 
-	diff, err := curTrunk.Exclude(prevTrunk)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if !n.skipLogs {
-		if n.logDBFailed {
-			log.Warn("!!!log db skipped due to write failure (restart required to recover)")
-		} else {
-			if err := n.writeLogs(diff); err != nil {
-				n.logDBFailed = true
-				return nil, nil, errors.Wrap(err, "write logs")
-			}
-		}
-	}
-	return prevTrunk, curTrunk, nil
+	return n.repo.NewChain(prevBest.Header().ID()), n.repo.NewBestChain(), nil
 }
 
-func (n *Node) writeLogs(diff []thor.Bytes32) error {
+func (n *Node) writeLogs(diff []thor.Bytes32, newBlock *block.Block, newReceipts tx.Receipts) error {
 	// write full trunk blocks to prevent logs dropped
 	// in rare condition of long fork
 	return n.logDB.Log(func(w *logdb.Writer) error {
@@ -343,7 +356,7 @@ func (n *Node) writeLogs(diff []thor.Bytes32) error {
 				return err
 			}
 		}
-		return nil
+		return w.Write(newBlock, newReceipts)
 	})
 }
 
