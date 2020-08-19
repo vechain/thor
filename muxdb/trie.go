@@ -41,6 +41,7 @@ type Trie struct {
 	liveSpace    *trieLiveSpace
 	lazyInit     func() (*trie.Trie, error)
 	secureKeys   map[thor.Bytes32][]byte
+	permanent    bool
 }
 
 func newTrie(
@@ -50,6 +51,7 @@ func newTrie(
 	cache *trieCache,
 	secure bool,
 	liveSpace *trieLiveSpace,
+	permanent bool,
 ) *Trie {
 	var (
 		tr = &Trie{
@@ -60,6 +62,7 @@ func newTrie(
 			keyBuf:       newTrieNodeKeyBuf(name),
 			secure:       secure,
 			liveSpace:    liveSpace,
+			permanent:    permanent,
 		}
 		trieObj *trie.Trie // the real trie object
 		initErr error
@@ -125,7 +128,7 @@ func (t *Trie) Hash() thor.Bytes32 {
 
 // Commit writes all nodes to the trie's database.
 func (t *Trie) Commit() (thor.Bytes32, error) {
-	return t.commit(false)
+	return t.commit(t.permanent)
 }
 
 // CommitPermanently writes all nodes directly into permanent space.
