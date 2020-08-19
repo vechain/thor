@@ -7,6 +7,7 @@ package consensus
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
@@ -126,4 +127,49 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 			TotalScore:  header.TotalScore(),
 		},
 		c.forkConfig), nil
+}
+
+// ValidateProposal validate a block proposal.
+func (c *Consensus) ValidateProposal(proposal *block.Proposal) (uint64, error) {
+	summary, err := c.repo.GetBlockSummary(proposal.ParentID)
+	if err != nil {
+		return 0, err
+	}
+
+	parent := summary.Header
+	if err = c.validateBlockHeader(block.NewPartialHeader(proposal, c.forkConfig), parent, uint64(time.Now().Unix())); err != nil {
+		return 0, err
+	}
+
+	st := c.stater.NewState(parent.StateRoot())
+	candidates, err := c.candidates(parent, st)
+	if err != nil {
+		return 0, err
+	}
+
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return 0, err
+	}
+
+	var seed []byte
+	if proposal.Number() >= c.forkConfig.VIP193 {
+		seed, err = c.seeder.Generate(parent)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	signer, _ := proposal.Signer()
+	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
+	if err != nil {
+		return 0, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+	}
+
+	if !sched.IsTheTime(proposal.Timestamp) {
+		return 0, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", proposal.Timestamp, signer))
+	}
+
+	_, score := sched.Updates(proposal.Timestamp)
+	return score, nil
 }

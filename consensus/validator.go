@@ -21,6 +21,16 @@ import (
 )
 
 var emptyRoot = thor.Blake2b(rlp.EmptyString) // This is the known root hash of an empty trie.
+type blockHeader interface {
+	Number() uint32
+	Timestamp() uint64
+	GasLimit() uint64
+	Signer() (thor.Address, error)
+	GasUsed() uint64
+	TotalScore() uint64
+	TotalBackersCount() uint64
+	BackerSignaturesRoot() thor.Bytes32
+}
 
 func (c *Consensus) validate(
 	state *state.State,
@@ -92,7 +102,11 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+func (c *Consensus) validateBlockHeader(header blockHeader, parent *block.Header, nowTimestamp uint64) error {
+	if _, err := header.Signer(); err != nil {
+		return consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+	}
+
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
@@ -133,12 +147,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
-	signer, err := header.Signer()
-	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
-	}
-
+func (c *Consensus) candidates(parent *block.Header, st *state.State) (*poa.Candidates, error) {
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
 	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
@@ -149,6 +158,14 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 			return nil, err
 		}
 		candidates = poa.NewCandidates(list)
+	}
+	return candidates, nil
+}
+
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+	candidates, err := c.candidates(parent, st)
+	if err != nil {
+		return nil, err
 	}
 
 	proposers, err := candidates.Pick(st)
@@ -164,6 +181,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		}
 	}
 
+	signer, _ := header.Signer()
 	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp(), seed)
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
@@ -177,13 +195,16 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
 	}
 
-	for _, u := range updates {
-		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
-		}
-		if !candidates.Update(u.Address, u.Active) {
-			// should never happen
-			panic("something wrong with candidates list")
+	if len(updates) > 0 {
+		authority := builtin.Authority.Native(st)
+		for _, u := range updates {
+			if _, err := authority.Update(u.Address, u.Active); err != nil {
+				return nil, err
+			}
+			if !candidates.Update(u.Address, u.Active) {
+				// should never happen
+				panic("something wrong with candidates list")
+			}
 		}
 	}
 

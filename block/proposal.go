@@ -7,6 +7,7 @@ package block
 
 import (
 	"encoding/binary"
+	"math"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -35,6 +36,11 @@ func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Pr
 		GasLimit:  gasLimit,
 		Timestamp: timestamp,
 	}
+}
+
+// Number returns number of the proposal.
+func (p *Proposal) Number() uint32 {
+	return Number(p.ParentID) + 1
 }
 
 // SigningHash returns the hash of the proposal body without signature.
@@ -109,4 +115,64 @@ func (p *Proposal) Alpha(signer thor.Address) thor.Bytes32 {
 	// [parentID + txsRoot + gaslimit + timestamp + signer]
 	alpha := thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, signer.Bytes())
 	return alpha
+}
+
+// PartialHeader is derived from proposal and implements the partial interfaces in block.Header.
+// Which is mainly for code reuse in consensus validation.
+type PartialHeader struct {
+	p                 *Proposal
+	totalBackersCount uint64
+}
+
+// NewPartialHeader derives a PartialHeader from a proposal.
+func NewPartialHeader(p *Proposal, forkConfig thor.ForkConfig) *PartialHeader {
+	var totalBackersCount = uint64(0)
+	if p.Number() >= forkConfig.VIP193 {
+		totalBackersCount = math.MaxUint64
+	}
+
+	return &PartialHeader{
+		p,
+		totalBackersCount,
+	}
+}
+
+// Number returns the number of proposal.
+func (ph *PartialHeader) Number() uint32 {
+	return ph.p.Number()
+}
+
+// Timestamp returns the time stamp of proposal.
+func (ph *PartialHeader) Timestamp() uint64 {
+	return ph.p.Timestamp
+}
+
+// GasLimit returns the gas limit of proposal.
+func (ph *PartialHeader) GasLimit() uint64 {
+	return ph.p.GasLimit
+}
+
+// Signer returns the signer of proposal.
+func (ph *PartialHeader) Signer() (thor.Address, error) {
+	return ph.p.Signer()
+}
+
+// GasUsed returns a safe gas used.
+func (ph *PartialHeader) GasUsed() uint64 {
+	return 0
+}
+
+// TotalScore returns a safe total score.
+func (ph *PartialHeader) TotalScore() uint64 {
+	return math.MaxUint64
+}
+
+// TotalBackersCount returns a safe total backers count.
+func (ph *PartialHeader) TotalBackersCount() uint64 {
+	return ph.totalBackersCount
+}
+
+// BackerSignaturesRoot returns a safe backer signatures root.
+func (ph *PartialHeader) BackerSignaturesRoot() thor.Bytes32 {
+	return emptyRoot
 }
