@@ -277,10 +277,11 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	path := filepath.Join(dir, "main.db")
 	db, err := muxdb.Open(path, &muxdb.Options{
 		EncodedTrieNodeCacheSizeMB:   cacheMB,
-		DecodedTrieNodeCacheCapacity: 8192,
+		DecodedTrieNodeCacheCapacity: 65536,
 		OpenFilesCacheCapacity:       fdCache,
 		ReadCacheMB:                  256, // rely on os page cache other than huge db read cache.
 		WriteBufferMB:                128,
+		PermanentTrie:                ctx.Bool(disablePrunerFlag.Name),
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "open main database [%v]", path)
