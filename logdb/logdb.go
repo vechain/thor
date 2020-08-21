@@ -28,6 +28,7 @@ type LogDB struct {
 	path          string
 	db            *sql.DB
 	driverVersion string
+	stmtCache     *stmtCache
 }
 
 // New create or open log db at given path.
@@ -48,19 +49,21 @@ func New(path string) (logDB *LogDB, err error) {
 
 	driverVer, _, _ := sqlite3.Version()
 	return &LogDB{
-		path,
-		db,
-		driverVer,
+		path:          path,
+		db:            db,
+		driverVersion: driverVer,
+		stmtCache:     newStmtCache(db),
 	}, nil
 }
 
 // NewMem create a log db in ram.
 func NewMem() (*LogDB, error) {
-	return New(":memory:")
+	return New("file::memory:")
 }
 
 // Close close the log db.
 func (db *LogDB) Close() error {
+	db.stmtCache.Clear()
 	return db.db.Close()
 }
 
@@ -186,8 +189,8 @@ FROM (%v) t
 	return db.queryTransfers(ctx, fmt.Sprintf(query, subQuery), args...)
 }
 
-func (db *LogDB) queryEvents(ctx context.Context, stmt string, args ...interface{}) ([]*Event, error) {
-	rows, err := db.db.QueryContext(ctx, stmt, args...)
+func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interface{}) ([]*Event, error) {
+	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -253,8 +256,8 @@ func (db *LogDB) queryEvents(ctx context.Context, stmt string, args ...interface
 	return events, nil
 }
 
-func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interface{}) ([]*Transfer, error) {
-	rows, err := db.db.QueryContext(ctx, stmt, args...)
+func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...interface{}) ([]*Transfer, error) {
+	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +316,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, stmt string, args ...interf
 // NewestBlockID query newest written block id.
 func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 	// select from config if any
-	row := db.db.QueryRow("SELECT value FROM config WHERE key=?", configBlockIDKey)
+	row := db.stmtCache.MustPrepare("SELECT value FROM config WHERE key=?").QueryRow(configBlockIDKey)
 	var data []byte
 	if err := row.Scan(&data); err != nil {
 		if sql.ErrNoRows != err {
@@ -321,11 +324,10 @@ func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 		}
 
 		// no config, query newest block ID from existing records
-		row = db.db.QueryRow(
-			`SELECT MAX(data) FROM (
-SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
-UNION
-SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`)
+		row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
+			SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
+			UNION
+			SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
 
 		if err := row.Scan(&data); err != nil {
 			if sql.ErrNoRows != err {
@@ -338,12 +340,13 @@ SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT
 
 // HasBlockID query whether given block id related logs were written.
 func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
+	const query = `SELECT COUNT(*) FROM (
+		SELECT * FROM (SELECT seq FROM transfer WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1) 
+		UNION
+		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
+
 	seq := newSequence(block.Number(id), 0)
-	row := db.db.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM (
-SELECT * FROM (SELECT seq FROM transfer WHERE seq=? AND blockID=%v LIMIT 1) 
-UNION
-SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=%v LIMIT 1))`, refIDQuery, refIDQuery),
-		seq, id.Bytes(), seq, id.Bytes())
+	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id.Bytes(), seq, id.Bytes())
 	var count int
 	if err := row.Scan(&count); err != nil {
 		// no need to check ErrNoRows
@@ -354,7 +357,7 @@ SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=%v LIMIT 1))`, refI
 
 // Log write logs.
 func (db *LogDB) Log(f func(*Writer) error) error {
-	w := &Writer{db: db.db}
+	w := &Writer{db: db.db, stmtCache: db.stmtCache}
 	if err := f(w); err != nil {
 		if w.tx != nil {
 			_ = w.tx.Rollback()
@@ -374,6 +377,7 @@ func topicValue(topics []thor.Bytes32, i int) []byte {
 // Writer is the transactional log writer.
 type Writer struct {
 	db          *sql.DB
+	stmtCache   *stmtCache
 	tx          *sql.Tx
 	len         int
 	lastBlockID thor.Bytes32
@@ -393,7 +397,10 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 	if num > 0 && w.len == 0 {
 		seq := newSequence(num, 0)
-		if err := w.exec("DELETE from event where seq >= ?;DELETE from transfer where seq >= ?", seq, seq); err != nil {
+		if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
+			return err
+		}
+		if err := w.exec("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
 			return err
 		}
 	}
@@ -529,7 +536,7 @@ func (w *Writer) exec(query string, args ...interface{}) error {
 		w.tx = tx
 	}
 
-	if _, err := w.tx.Exec(query, args...); err != nil {
+	if _, err := w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
 		return err
 	}
 	w.len++
