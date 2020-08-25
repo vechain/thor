@@ -182,8 +182,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		if err := msg.Decode(&bs); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		hash := thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
-		peer.MarkBackerSignature(hash)
+		peer.MarkBackerSignature(bs.Hash())
 		c.newBackerSignatureFeed.Send(&NewBackerSignatureEvent{
 			FullBackerSignature: &bs,
 		})

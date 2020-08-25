@@ -316,14 +316,13 @@ func (c *Communicator) BroadcastProposal(p *block.Proposal) {
 
 // BroadcastBackerSignature broadcast a full backer signature(with proposal hash) to remote peers.
 func (c *Communicator) BroadcastBackerSignature(bs *proto.FullBackerSignature) {
-	hash := thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsBackerSignatureKnown(hash)
+		return !peer.IsBackerSignatureKnown(bs.Hash())
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkBackerSignature(hash)
+		peer.MarkBackerSignature(bs.Hash())
 		c.goes.Go(func() {
 			if err := proto.NotifyNewBackerSignature(c.ctx, peer, bs); err != nil {
 				peer.logger.Debug("failed to broadcast new backer signature", "err", err)

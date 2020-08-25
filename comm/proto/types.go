@@ -7,6 +7,7 @@ package proto
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -28,8 +29,20 @@ type (
 	FullBackerSignature struct {
 		ProposalHash thor.Bytes32
 		Signature    *block.BackerSignature
+		hash         atomic.Value
 	}
 )
+
+// Hash is the hash of full backer signature.
+func (bs *FullBackerSignature) Hash() (hash thor.Bytes32) {
+	if cached := bs.hash.Load(); cached != nil {
+		return cached.(thor.Bytes32)
+	}
+	defer func() { bs.hash.Store(hash) }()
+
+	hash = thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
+	return
+}
 
 // RPC defines RPC interface.
 type RPC interface {
