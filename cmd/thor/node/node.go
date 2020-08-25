@@ -54,6 +54,8 @@ type Node struct {
 	skipLogs       bool
 	logDBFailed    bool
 	bandwidth      bandwidth.Bandwidth
+	forkConfig     thor.ForkConfig
+	stater         *state.Stater
 }
 
 func New(
@@ -79,6 +81,8 @@ func New(
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
+		stater:         stater,
 	}
 }
 
@@ -88,6 +92,7 @@ func (n *Node) Run(ctx context.Context) error {
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
+	n.goes.Go(func() { n.backerLoop(ctx) })
 
 	n.goes.Wait()
 	return nil

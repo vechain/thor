@@ -37,6 +37,11 @@ func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Pr
 	}
 }
 
+// Number returns number of the proposal.
+func (p *Proposal) Number() uint32 {
+	return Number(p.ParentID) + 1
+}
+
 // SigningHash returns the hash of the proposal body without signature.
 func (p *Proposal) SigningHash() (hash thor.Bytes32) {
 	if cached := p.cache.signingHash.Load(); cached != nil {

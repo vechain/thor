@@ -236,7 +236,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, ca
 			return consensusError(fmt.Sprintf("block total backers count invalid: want %v, have %v", header.TotalBackersCount(), totalBackers))
 		}
 
-		leader, _ := header.Signer()
+		proposer, _ := header.Signer()
 		if len(bss) > 0 {
 			proposers, err := candidates.Pick(state)
 			if err != nil {
@@ -253,7 +253,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, ca
 			}
 
 			prev := []byte{}
-			alpha := header.Proposal().Alpha(leader)
+			alpha := header.Proposal().Alpha(proposer)
 			for _, bs := range bss {
 				backer, err := bs.Signer()
 				if err != nil {
@@ -262,7 +262,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, ca
 				if isBacker(backer) == false {
 					return consensusError(fmt.Sprintf("backer: %v is not an authority", backer))
 				}
-				if backer == leader {
+				if backer == proposer {
 					return consensusError("block signer cannot back itself")
 				}
 				beta, err := bs.Validate(alpha.Bytes())
