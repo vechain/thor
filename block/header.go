@@ -115,15 +115,6 @@ func (h *Header) TotalBackersCount() uint64 {
 	return h.body.Extension.TotalBackersCount
 }
 
-// Proposal returns block proposal.
-func (h *Header) Proposal() (proposal *Proposal) {
-	return NewProposal(
-		h.ParentID(),
-		h.TxsRoot(),
-		h.GasLimit(),
-		h.Timestamp())
-}
-
 // ID computes id of block.
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
 func (h *Header) ID() (id thor.Bytes32) {

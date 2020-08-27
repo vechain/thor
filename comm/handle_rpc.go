@@ -167,25 +167,24 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			}
 			write(toSend)
 		}
-	case proto.MsgNewBlockProposal:
-		var proposal block.Proposal
-		if err := msg.Decode(&proposal); err != nil {
+	case proto.MsgNewDeclaration:
+		var dec block.Declaration
+		if err := msg.Decode(&dec); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkProposal(proposal.Hash())
-		c.newProposalFeed.Send(&NewBlockProposalEvent{
-			Proposal: &proposal,
+		peer.MarkDeclaration(dec.Hash())
+		c.newDeclarationFeed.Send(&NewDeclarationEvent{
+			Declaration: &dec,
 		})
 		write(&struct{}{})
-	case proto.MsgNewBackerSignature:
-		var bs proto.FullBackerSignature
-		if err := msg.Decode(&bs); err != nil {
+	case proto.MsgNewAccepted:
+		var acc proto.Accepted
+		if err := msg.Decode(&acc); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		hash := thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
-		peer.MarkBackerSignature(hash)
-		c.newBackerSignatureFeed.Send(&NewBackerSignatureEvent{
-			FullBackerSignature: &bs,
+		peer.MarkAccepted(acc.Hash())
+		c.newAcceptedFeed.Send(&NewAcceptedEvent{
+			Accepted: &acc,
 		})
 		write(&struct{}{})
 	default:

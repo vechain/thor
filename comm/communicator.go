@@ -30,19 +30,19 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	repo                   *chain.Repository
-	txPool                 *txpool.TxPool
-	ctx                    context.Context
-	cancel                 context.CancelFunc
-	peerSet                *PeerSet
-	syncedCh               chan struct{}
-	newBlockFeed           event.Feed
-	newProposalFeed        event.Feed
-	newBackerSignatureFeed event.Feed
-	announcementCh         chan *announcement
-	feedScope              event.SubscriptionScope
-	goes                   co.Goes
-	onceSynced             sync.Once
+	repo               *chain.Repository
+	txPool             *txpool.TxPool
+	ctx                context.Context
+	cancel             context.CancelFunc
+	peerSet            *PeerSet
+	syncedCh           chan struct{}
+	newBlockFeed       event.Feed
+	newDeclarationFeed event.Feed
+	newAcceptedFeed    event.Feed
+	announcementCh     chan *announcement
+	feedScope          event.SubscriptionScope
+	goes               co.Goes
+	onceSynced         sync.Once
 }
 
 // New create a new Communicator instance.
@@ -297,47 +297,46 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	return stats
 }
 
-// BroadcastProposal broadcast a block proposal to remote peers.
-func (c *Communicator) BroadcastProposal(p *block.Proposal) {
+// BroadcastDeclaration broadcast a declaration to remote peers.
+func (c *Communicator) BroadcastDeclaration(d *block.Declaration) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsProposalKnown(p.Hash())
+		return !peer.IsDeclarationKnown(d.Hash())
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkProposal(p.Hash())
+		peer.MarkDeclaration(d.Hash())
 		c.goes.Go(func() {
-			if err := proto.NotifyNewProposal(c.ctx, peer, p); err != nil {
-				peer.logger.Debug("failed to broadcast new proposal", "err", err)
+			if err := proto.NotifyNewDeclaration(c.ctx, peer, d); err != nil {
+				peer.logger.Debug("failed to broadcast new declaration", "err", err)
 			}
 		})
 	}
 }
 
-// BroadcastBackerSignature broadcast a full backer signature(with proposal hash) to remote peers.
-func (c *Communicator) BroadcastBackerSignature(bs *proto.FullBackerSignature) {
-	hash := thor.Blake2b(bs.ProposalHash.Bytes(), bs.Signature.Hash().Bytes())
+// BroadcastAccepted broadcast an accepted message to remote peers.
+func (c *Communicator) BroadcastAccepted(acc *proto.Accepted) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsBackerSignatureKnown(hash)
+		return !peer.IsAcceptedKnown(acc.Hash())
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkBackerSignature(hash)
+		peer.MarkAccepted(acc.Hash())
 		c.goes.Go(func() {
-			if err := proto.NotifyNewBackerSignature(c.ctx, peer, bs); err != nil {
-				peer.logger.Debug("failed to broadcast new backer signature", "err", err)
+			if err := proto.NotifyNewAccepted(c.ctx, peer, acc); err != nil {
+				peer.logger.Debug("failed to broadcast new accepted message", "err", err)
 			}
 		})
 	}
 }
 
-// SubscribeProposal subscribe the event that new proposal received.
-func (c *Communicator) SubscribeProposal(ch chan *NewBlockProposalEvent) event.Subscription {
-	return c.feedScope.Track(c.newProposalFeed.Subscribe(ch))
+// SubscribeDeclaration subscribe the event that new declaration received.
+func (c *Communicator) SubscribeDeclaration(ch chan *NewDeclarationEvent) event.Subscription {
+	return c.feedScope.Track(c.newDeclarationFeed.Subscribe(ch))
 }
 
-// SubscribeBackerSignature subscribe the event that new backer signature received.
-func (c *Communicator) SubscribeBackerSignature(ch chan *NewBackerSignatureEvent) event.Subscription {
-	return c.feedScope.Track(c.newBackerSignatureFeed.Subscribe(ch))
+// SubscribeAccepted subscribe the event that new accepted message received.
+func (c *Communicator) SubscribeAccepted(ch chan *NewAcceptedEvent) event.Subscription {
+	return c.feedScope.Track(c.newAcceptedFeed.Subscribe(ch))
 }

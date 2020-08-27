@@ -248,22 +248,22 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 }
 
 // GetBlockBackerSignatures get all backer signatures of a block for given block id.
-func (r *Repository) GetBlockBackerSignatures(id thor.Bytes32) (block.BackerSignatures, error) {
+func (r *Repository) GetBlockBackerSignatures(id thor.Bytes32) (block.VRFSignatures, error) {
 	cached, err := r.caches.bss.GetOrLoad(id, func() (interface{}, error) {
-		backers, err := loadBackerSignatures(r.data, id)
+		bss, err := loadBackerSignatures(r.data, id)
 		if err != nil {
 			// backword compatibility
 			if r.IsNotFound(err) {
-				return backers, nil
+				return bss, nil
 			}
 			return nil, err
 		}
-		return backers, nil
+		return bss, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(block.BackerSignatures), nil
+	return cached.(block.VRFSignatures), nil
 }
 
 // GetBlock get block by id.

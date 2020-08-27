@@ -95,12 +95,12 @@ func loadReceipt(r kv.Getter, key txKey) (*tx.Receipt, error) {
 	return &receipt, nil
 }
 
-func saveBackerSignatures(w kv.Putter, id thor.Bytes32, bss block.BackerSignatures) error {
+func saveBackerSignatures(w kv.Putter, id thor.Bytes32, bss block.VRFSignatures) error {
 	return saveRLP(w, append(id.Bytes(), bssSuffix), bss)
 }
 
-func loadBackerSignatures(r kv.Getter, id thor.Bytes32) (block.BackerSignatures, error) {
-	var bss block.BackerSignatures
+func loadBackerSignatures(r kv.Getter, id thor.Bytes32) (block.VRFSignatures, error) {
+	var bss block.VRFSignatures
 	if err := loadRLP(r, append(id.Bytes(), bssSuffix), &bss); err != nil {
 		return nil, err
 	}

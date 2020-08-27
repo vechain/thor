@@ -27,7 +27,7 @@ func TestBlock(t *testing.T) {
 	)
 	rand.Read(pub[:])
 	rand.Read(proof[:])
-	bs := NewBackerSignature(pub[:], proof[:])
+	bs := NewVRFSignature(pub[:], proof[:])
 
 	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
 	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
@@ -68,7 +68,7 @@ func TestBlock(t *testing.T) {
 	fmt.Println(h.ID())
 
 	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, BackerSignatures(nil)), block)
+	assert.Equal(t, Compose(h, txs, VRFSignatures(nil)), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -105,7 +105,7 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
-		BackerSignatures(BackerSignatures{bs}, 10).
+		BackerSignatures(VRFSignatures{bs}, 10).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
@@ -155,7 +155,7 @@ func TestEncoding(t *testing.T) {
 	brRootHash := bss.RootHash()
 
 	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, BackerSignatures(nil)), block)
+	assert.Equal(t, Compose(h, txs, VRFSignatures(nil)), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -240,7 +240,7 @@ func TestEncodingBadBssRoot(t *testing.T) {
 }
 
 func TestEncodingBssRoot(t *testing.T) {
-	block := new(Builder).BackerSignatures(BackerSignatures{}, 1).Build()
+	block := new(Builder).BackerSignatures(VRFSignatures{}, 1).Build()
 	h := block.Header()
 
 	bytes, err := rlp.EncodeToBytes(h)
@@ -267,7 +267,7 @@ func TestEncodingBssRoot(t *testing.T) {
 }
 
 func TestDecoding(t *testing.T) {
-	b0 := new(Builder).BackerSignatures(BackerSignatures{}, 1).Build()
+	b0 := new(Builder).BackerSignatures(VRFSignatures{}, 1).Build()
 	b1 := new(Builder).Build()
 
 	raw0, _ := rlp.EncodeToBytes(struct {

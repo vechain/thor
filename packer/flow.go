@@ -19,6 +19,11 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+type bsWithBeta struct {
+	bs   *block.VRFSignature
+	beta []byte
+}
+
 // Flow the flow of packing a new block.
 type Flow struct {
 	packer       *Packer
@@ -30,8 +35,7 @@ type Flow struct {
 	receipts     tx.Receipts
 	features     tx.Features
 	knownBackers []thor.Address
-	bss          block.BackerSignatures
-	alpha        thor.Bytes32
+	bss          []bsWithBeta
 }
 
 func newFlow(
@@ -47,7 +51,7 @@ func newFlow(
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
 		knownBackers: []thor.Address{},
-		bss:          block.BackerSignatures{},
+		bss:          []bsWithBeta{},
 	}
 }
 
@@ -59,6 +63,11 @@ func (f *Flow) ParentHeader() *block.Header {
 // When the target time to do packing.
 func (f *Flow) When() uint64 {
 	return f.runtime.Context().Time
+}
+
+// Number returns the block number to pack.
+func (f *Flow) Number() uint32 {
+	return f.runtime.Context().Number
 }
 
 // TotalScore returns total score of new block.
@@ -144,16 +153,19 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
-// Propose a block proposal with block meta and txs root hash.
-func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
-	p := block.NewProposal(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
-	sig, err := crypto.Sign(p.SigningHash().Bytes(), privateKey)
+// Declare a block declaration with block meta and txs root hash.
+func (f *Flow) Declare(privateKey *ecdsa.PrivateKey) (*block.Declaration, error) {
+	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
+		return nil, errors.New("private key mismatch")
+	}
+
+	dec := block.NewDeclaration(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
+	sig, err := crypto.Sign(dec.SigningHash().Bytes(), privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	f.alpha = p.Alpha(f.packer.nodeMaster)
-	return p.WithSignature(sig), nil
+	return dec.WithSignature(sig), nil
 }
 
 // IsBackerKnown returns true is backer's signature is already added.
@@ -167,7 +179,7 @@ func (f *Flow) IsBackerKnown(addr thor.Address) bool {
 }
 
 // AddBackerSignature adds a signature from backer.
-func (f *Flow) AddBackerSignature(bs *block.BackerSignature) bool {
+func (f *Flow) AddBackerSignature(bs *block.VRFSignature, beta []byte) bool {
 	signer, _ := bs.Signer()
 	if f.IsBackerKnown(signer) == true {
 		return false
@@ -177,8 +189,9 @@ func (f *Flow) AddBackerSignature(bs *block.BackerSignature) bool {
 		return false
 	}
 
+	cpy := *bs
 	f.knownBackers = append(f.knownBackers, signer)
-	f.bss = append(f.bss, bs)
+	f.bss = append(f.bss, bsWithBeta{&cpy, beta})
 	return true
 }
 
@@ -206,23 +219,17 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		TransactionFeatures(f.features)
 
 	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
+		var bss block.VRFSignatures
 		if len(f.bss) > 0 {
-			betas := make([][]byte, 0, len(f.bss))
-
-			for _, bs := range f.bss {
-				beta, err := bs.Validate(f.alpha.Bytes())
-				if err != nil {
-					return nil, nil, nil, err
-				}
-
-				betas = append(betas, beta)
-			}
-
 			sort.Slice(f.bss, func(i, j int) bool {
-				return bytes.Compare(betas[i], betas[j]) < 0
+				return bytes.Compare(f.bss[i].beta, f.bss[j].beta) < 0
 			})
+			for _, b := range f.bss {
+				bss = append(bss, b.bs)
+			}
 		}
-		builder.BackerSignatures(f.bss, f.parentHeader.TotalBackersCount())
+
+		builder.BackerSignatures(bss, f.parentHeader.TotalBackersCount())
 	}
 
 	for _, tx := range f.txs {

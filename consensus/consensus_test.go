@@ -121,11 +121,11 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 	_ = flow.Adopt(tx)
-	proposal, _ := flow.Propose(proposer.PrivateKey)
-	alpha := proposal.Alpha(proposer.Address)
-	_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha.Bytes())
+	dec, _ := flow.Declare(proposer.PrivateKey)
+	alpha := dec.Alpha(proposer.Address)
+	beta, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha.Bytes())
 	pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
-	flow.AddBackerSignature(block.NewBackerSignature(pub, proof))
+	flow.AddBackerSignature(block.NewVRFSignature(pub, proof), beta)
 	b0, stage, receipts, err := flow.Pack(proposer.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
@@ -192,7 +192,7 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 		Beneficiary(header.Beneficiary()).
 		StateRoot(header.StateRoot()).
 		ReceiptsRoot(header.ReceiptsRoot()).
-		BackerSignatures(block.BackerSignatures{}, 1).
+		BackerSignatures(block.VRFSignatures{}, 1).
 		TransactionFeatures(features)
 }
 
@@ -303,7 +303,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerInvalidBackersCount"] = func() {
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.BackerSignatures{}, 0).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.VRFSignatures{}, 0).Build())
 		err := tc.consent(blk)
 		expect := consensusError("block total backers count invalid: parent 1, current 0")
 		tc.assert.Equal(expect, err)
@@ -472,13 +472,13 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		tc.assert.Equal(consensusError("tx already exists"), err)
 	}
 	triggers["triggerInvalidBackersCount"] = func() {
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.BackerSignatures{}, 2).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.VRFSignatures{}, 2).Build())
 		err := tc.consent(blk)
 		expect := consensusError("block total backers count invalid: want 2, have 1")
 		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerInvalidBackersRootCount"] = func() {
-		b := tc.sign(tc.originalBuilder().BackerSignatures(block.BackerSignatures{}, 2).Build())
+		b := tc.sign(tc.originalBuilder().BackerSignatures(block.VRFSignatures{}, 2).Build())
 
 		var (
 			pub   [33]byte
@@ -487,7 +487,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		rand.Read(pub[:])
 		rand.Read(proof[:])
 
-		as := block.BackerSignatures{block.NewBackerSignature(pub[:], proof[:])}
+		as := block.VRFSignatures{block.NewVRFSignature(pub[:], proof[:])}
 		blk := block.Compose(b.Header(), tx.Transactions{}, as)
 		err := tc.consent(blk)
 		expect := consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", b.Header().BackerSignaturesRoot(), as.RootHash()))
@@ -500,7 +500,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		priv, _ := crypto.GenerateKey()
 		pub := crypto.CompressPubkey(&priv.PublicKey)
 
-		as := block.BackerSignatures{block.NewBackerSignature(pub[:], proof[:])}
+		as := block.VRFSignatures{block.NewVRFSignature(pub[:], proof[:])}
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(as, tc.parent.Header().TotalBackersCount()).Build())
 
@@ -512,7 +512,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		var proof [81]byte
 		rand.Read(proof[:])
 		pub := crypto.CompressPubkey(&genesis.DevAccounts()[0].PrivateKey.PublicKey)
-		bs := block.BackerSignatures{block.NewBackerSignature(pub[:], proof[:])}
+		bs := block.VRFSignatures{block.NewVRFSignature(pub[:], proof[:])}
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(bs, tc.parent.Header().TotalBackersCount()).Build())
 
@@ -525,8 +525,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		backer := genesis.DevAccounts()[1]
 
 		pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
-		bs := block.NewBackerSignature(pub, proof)
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.BackerSignatures{bs}, tc.parent.Header().TotalBackersCount()).Build())
+		bs := block.NewVRFSignature(pub, proof)
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.VRFSignatures{bs}, tc.parent.Header().TotalBackersCount()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError("0xd3ae78222beadb038203be21ed5ce7c9b1bff602's proof is not lucky enough to be a backer")
@@ -535,13 +535,13 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	triggers["triggerNotSorted"] = func() {
 		p1 := hexutil.MustDecode("0x02fc5e1ffe4256cd9b0bae8eca9132c7657ea19652d9f79f73bc5e13a3eec59b0f754d89004ceece0c65af73e7a469dee7a1e97222ad8109a60e76bc51a3da907fbe9eaf270766b29422409612d5fa85bb")
 		b1 := crypto.CompressPubkey(&genesis.DevAccounts()[1].PrivateKey.PublicKey)
-		bs1 := block.NewBackerSignature(b1, p1)
+		bs1 := block.NewVRFSignature(b1, p1)
 
 		p2 := hexutil.MustDecode("0x0216fae1949bb9bca7c6645230c4217a4ca7cc4f8a0e459974acfe02284261c9ae84ff16d5085a2eca503dc41fcf0cc4a4cf21374c57511485848045371ca32ebcf384d395b194a45481107ecd68fd1826")
 		b2 := crypto.CompressPubkey(&genesis.DevAccounts()[6].PrivateKey.PublicKey)
-		bs2 := block.NewBackerSignature(b2, p2)
+		bs2 := block.NewVRFSignature(b2, p2)
 
-		blk := tc.sign(tc.originalBuilder().GasLimit(10000043).BackerSignatures(block.BackerSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount()).Build())
+		blk := tc.sign(tc.originalBuilder().GasLimit(10000043).BackerSignatures(block.VRFSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError("backer signatures are not in ascending order(by beta)")
