@@ -61,9 +61,9 @@ func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 	return rpc.Notify(ctx, MsgNewTx, tx)
 }
 
-// NotifyNewProposal notify new proposal to remote peer.
-func NotifyNewProposal(ctx context.Context, rpc RPC, p *block.Proposal) error {
-	return rpc.Notify(ctx, MsgNewBlockProposal, p)
+// NotifyNewDeclaration notify a declaration to remote peer.
+func NotifyNewDeclaration(ctx context.Context, rpc RPC, d *block.Declaration) error {
+	return rpc.Notify(ctx, MsgNewDeclaration, d)
 }
 
 // NotifyNewBackerSignature notify new backer signature to remote peer.

@@ -121,8 +121,8 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 	_ = flow.Adopt(tx)
-	proposal, _ := flow.Propose(proposer.PrivateKey)
-	alpha := proposal.Alpha(proposer.Address)
+	dec, _ := flow.Declare(proposer.PrivateKey)
+	alpha := dec.Alpha(proposer.Address)
 	_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha.Bytes())
 	pub := crypto.CompressPubkey(&backer.PrivateKey.PublicKey)
 	flow.AddBackerSignature(block.NewBackerSignature(pub, proof))

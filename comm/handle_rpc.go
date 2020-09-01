@@ -167,14 +167,14 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			}
 			write(toSend)
 		}
-	case proto.MsgNewBlockProposal:
-		var proposal block.Proposal
-		if err := msg.Decode(&proposal); err != nil {
+	case proto.MsgNewDeclaration:
+		var dec block.Declaration
+		if err := msg.Decode(&dec); err != nil {
 			return errors.WithMessage(err, "decode msg")
 		}
-		peer.MarkProposal(proposal.Hash())
-		c.newProposalFeed.Send(&NewBlockProposalEvent{
-			Proposal: &proposal,
+		peer.MarkDeclaration(dec.Hash())
+		c.newDeclarationFeed.Send(&NewDeclarationEvent{
+			Declaration: &dec,
 		})
 		write(&struct{}{})
 	case proto.MsgNewBackerSignature:

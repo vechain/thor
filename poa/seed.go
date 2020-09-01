@@ -61,8 +61,7 @@ func (seeder *Seeder) Generate(parentHeader *block.Header) ([]byte, error) {
 			return nil, err
 		}
 
-		alpha := seedBlock.Proposal().Alpha(signer)
-
+		alpha := block.NewDeclaration(seedBlock.ParentID(), seedBlock.TxsRoot(), seedBlock.GasLimit(), seedBlock.Timestamp()).Alpha(signer)
 		for _, bs := range bss {
 			beta, err := bs.Validate(alpha[:])
 			if err != nil {

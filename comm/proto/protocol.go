@@ -27,7 +27,7 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
-	MsgNewBlockProposal
+	MsgNewDeclaration
 	MsgNewBackerSignature
 )
 
@@ -50,8 +50,8 @@ func MsgName(msgCode uint64) string {
 		return "MsgGetBlocksFromNumber"
 	case MsgGetTxs:
 		return "MsgGetTxs"
-	case MsgNewBlockProposal:
-		return "MsgNewBlockProposal"
+	case MsgNewDeclaration:
+		return "MsgNewDeclaration"
 	case MsgNewBackerSignature:
 		return "MsgNewBackerSignature"
 	default:

@@ -144,9 +144,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	return nil
 }
 
-// Propose a block proposal with block meta and txs root hash.
-func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
-	p := block.NewProposal(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
+// Declare a block declaration with block meta and txs root hash.
+func (f *Flow) Declare(privateKey *ecdsa.PrivateKey) (*block.Declaration, error) {
+	p := block.NewDeclaration(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
 	sig, err := crypto.Sign(p.SigningHash().Bytes(), privateKey)
 	if err != nil {
 		return nil, err

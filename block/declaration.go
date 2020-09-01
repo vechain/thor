@@ -13,23 +13,22 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// Proposal is block proposal.
-type Proposal struct {
+// Declaration is block declaration.
+type Declaration struct {
 	ParentID  thor.Bytes32
 	TxsRoot   thor.Bytes32
 	GasLimit  uint64
 	Timestamp uint64
 	Signature []byte
 	cache     struct {
-		signingHash atomic.Value
-		signer      atomic.Value
-		hash        atomic.Value
+		signer atomic.Value
+		hash   atomic.Value
 	}
 }
 
-// NewProposal creates a new proposal.
-func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Proposal {
-	return &Proposal{
+// NewDeclaration creates a new declaration.
+func NewDeclaration(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Declaration {
+	return &Declaration{
 		ParentID:  parentID,
 		TxsRoot:   txsRoot,
 		GasLimit:  gasLimit,
@@ -37,34 +36,34 @@ func NewProposal(parentID, txsRoot thor.Bytes32, gasLimit, timestamp uint64) *Pr
 	}
 }
 
-// SigningHash returns the hash of the proposal body without signature.
-func (p *Proposal) SigningHash() (hash thor.Bytes32) {
-	if cached := p.cache.signingHash.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() { p.cache.signingHash.Store(hash) }()
+// Number returns number of the declaration.
+func (d *Declaration) Number() uint32 {
+	return Number(d.ParentID) + 1
+}
 
+// SigningHash returns the hash of the declaration body without signature.
+func (d *Declaration) SigningHash() (hash thor.Bytes32) {
 	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b, p.GasLimit)
-	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+	binary.BigEndian.PutUint64(b, d.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], d.Timestamp)
 
 	// [parentID + txsRoot + Gaslimit + Timestamp]
-	hash = thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b)
+	hash = thor.Blake2b(d.ParentID.Bytes(), d.TxsRoot.Bytes(), b)
 	return
 }
 
-// Signer extract signer of the proposal from signature.
-func (p *Proposal) Signer() (signer thor.Address, err error) {
-	if cached := p.cache.signer.Load(); cached != nil {
+// Signer extract signer of the declaration from signature.
+func (d *Declaration) Signer() (signer thor.Address, err error) {
+	if cached := d.cache.signer.Load(); cached != nil {
 		return cached.(thor.Address), nil
 	}
 	defer func() {
 		if err == nil {
-			p.cache.signer.Store(signer)
+			d.cache.signer.Store(signer)
 		}
 	}()
 
-	pub, err := crypto.SigToPub(p.SigningHash().Bytes(), p.Signature)
+	pub, err := crypto.SigToPub(d.SigningHash().Bytes(), d.Signature)
 	if err != nil {
 		return thor.Address{}, err
 	}
@@ -73,40 +72,40 @@ func (p *Proposal) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// WithSignature create a new proposal with signature set.
-func (p *Proposal) WithSignature(sig []byte) *Proposal {
-	return &Proposal{
-		ParentID:  p.ParentID,
-		TxsRoot:   p.TxsRoot,
-		GasLimit:  p.GasLimit,
-		Timestamp: p.Timestamp,
+// WithSignature create a new declaration with signature set.
+func (d *Declaration) WithSignature(sig []byte) *Declaration {
+	return &Declaration{
+		ParentID:  d.ParentID,
+		TxsRoot:   d.TxsRoot,
+		GasLimit:  d.GasLimit,
+		Timestamp: d.Timestamp,
 		Signature: append([]byte(nil), sig...),
 	}
 }
 
-// Hash is the hash of proposal body.
-func (p *Proposal) Hash() (hash thor.Bytes32) {
-	if cached := p.cache.hash.Load(); cached != nil {
+// Hash is the hash of declaration body.
+func (d *Declaration) Hash() (hash thor.Bytes32) {
+	if cached := d.cache.hash.Load(); cached != nil {
 		return cached.(thor.Bytes32)
 	}
-	defer func() { p.cache.hash.Store(hash) }()
+	defer func() { d.cache.hash.Store(hash) }()
 
 	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b, p.GasLimit)
-	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+	binary.BigEndian.PutUint64(b, d.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], d.Timestamp)
 
 	// [parentID + txsRoot + gaslimit + timestamp + signature]
-	hash = thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, p.Signature)
+	hash = thor.Blake2b(d.ParentID.Bytes(), d.TxsRoot.Bytes(), b, d.Signature)
 	return
 }
 
-// Alpha computes the hash of proposal with signer as the input of VRF function.
-func (p *Proposal) Alpha(signer thor.Address) thor.Bytes32 {
+// Alpha computes the hash of declaration with signer as the input of VRF function.
+func (d *Declaration) Alpha(signer thor.Address) thor.Bytes32 {
 	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b, p.GasLimit)
-	binary.BigEndian.PutUint64(b[8:], p.Timestamp)
+	binary.BigEndian.PutUint64(b, d.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], d.Timestamp)
 
 	// [parentID + txsRoot + gaslimit + timestamp + signer]
-	alpha := thor.Blake2b(p.ParentID.Bytes(), p.TxsRoot.Bytes(), b, signer.Bytes())
+	alpha := thor.Blake2b(d.ParentID.Bytes(), d.TxsRoot.Bytes(), b, signer.Bytes())
 	return alpha
 }

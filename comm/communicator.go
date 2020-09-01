@@ -37,7 +37,7 @@ type Communicator struct {
 	peerSet                *PeerSet
 	syncedCh               chan struct{}
 	newBlockFeed           event.Feed
-	newProposalFeed        event.Feed
+	newDeclarationFeed     event.Feed
 	newBackerSignatureFeed event.Feed
 	announcementCh         chan *announcement
 	feedScope              event.SubscriptionScope
@@ -297,18 +297,18 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	return stats
 }
 
-// BroadcastProposal broadcast a block proposal to remote peers.
-func (c *Communicator) BroadcastProposal(p *block.Proposal) {
+// BroadcastDeclaration broadcast a declaration to remote peers.
+func (c *Communicator) BroadcastDeclaration(d *block.Declaration) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsProposalKnown(p.Hash())
+		return !peer.IsDeclarationKnown(d.Hash())
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkProposal(p.Hash())
+		peer.MarkDeclaration(d.Hash())
 		c.goes.Go(func() {
-			if err := proto.NotifyNewProposal(c.ctx, peer, p); err != nil {
-				peer.logger.Debug("failed to broadcast new proposal", "err", err)
+			if err := proto.NotifyNewDeclaration(c.ctx, peer, d); err != nil {
+				peer.logger.Debug("failed to broadcast new declaration", "err", err)
 			}
 		})
 	}
@@ -332,9 +332,9 @@ func (c *Communicator) BroadcastBackerSignature(bs *proto.FullBackerSignature) {
 	}
 }
 
-// SubscribeProposal subscribe the event that new proposal received.
-func (c *Communicator) SubscribeProposal(ch chan *NewBlockProposalEvent) event.Subscription {
-	return c.feedScope.Track(c.newProposalFeed.Subscribe(ch))
+// SubscribeDeclaration subscribe the event that new declaration received.
+func (c *Communicator) SubscribeDeclaration(ch chan *NewDeclarationEvent) event.Subscription {
+	return c.feedScope.Track(c.newDeclarationFeed.Subscribe(ch))
 }
 
 // SubscribeBackerSignature subscribe the event that new backer signature received.
