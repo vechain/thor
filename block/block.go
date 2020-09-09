@@ -6,6 +6,8 @@
 package block
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -19,6 +21,7 @@ import (
 type Block struct {
 	header *Header
 	txs    tx.Transactions
+	bss    ComplexSignatures
 	cache  struct {
 		size atomic.Value
 	}
@@ -27,15 +30,17 @@ type Block struct {
 // Body defines body of a block.
 type Body struct {
 	Txs tx.Transactions
+	Bss ComplexSignatures
 }
 
 // Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func Compose(header *Header, txs tx.Transactions) *Block {
+func Compose(header *Header, txs tx.Transactions, bss ComplexSignatures) *Block {
 	return &Block{
 		header: header,
 		txs:    append(tx.Transactions(nil), txs...),
+		bss:    append(ComplexSignatures(nil), bss...),
 	}
 }
 
@@ -44,6 +49,7 @@ func (b *Block) WithSignature(sig []byte) *Block {
 	return &Block{
 		header: b.header.withSignature(sig),
 		txs:    b.txs,
+		bss:    b.bss,
 	}
 }
 
@@ -57,34 +63,76 @@ func (b *Block) Transactions() tx.Transactions {
 	return append(tx.Transactions(nil), b.txs...)
 }
 
+// BackerSignatures returns a copy of backer signature list.
+func (b *Block) BackerSignatures() ComplexSignatures {
+	return append(ComplexSignatures(nil), b.bss...)
+}
+
 // Body returns body of a block.
 func (b *Block) Body() *Body {
-	return &Body{append(tx.Transactions(nil), b.txs...)}
+	return &Body{
+		append(tx.Transactions(nil), b.txs...),
+		append(ComplexSignatures(nil), b.bss...),
+	}
 }
 
 // EncodeRLP implements rlp.Encoder.
 func (b *Block) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{
+	input := []interface{}{
 		b.header,
 		b.txs,
-	})
+	}
+
+	// TotalBackersCount not equal 0 means block is surely at post 193 stage.
+	if b.Header().TotalBackersCount() != 0 {
+		input = append(input, b.bss)
+	}
+
+	return rlp.Encode(w, input)
 }
 
 // DecodeRLP implements rlp.Decoder.
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
-	payload := struct {
-		Header Header
-		Txs    tx.Transactions
-	}{}
 
-	if err := s.Decode(&payload); err != nil {
+	var (
+		raws   []rlp.RawValue
+		header Header
+		txs    tx.Transactions
+		bss    ComplexSignatures
+	)
+
+	if err := s.Decode(&raws); err != nil {
+		return err
+	}
+	if len(raws) != 2 && len(raws) != 3 {
+		return errors.New("rlp:invalid fields of block body, want 2 or 3")
+	}
+
+	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
+		return err
+	}
+
+	// strictly limit the fields of block body in pre and post 193 fork stage.
+	// before 193: block must contain only block header and transactions.
+	if len(raws) == 3 && header.TotalBackersCount() != 0 {
+		if err := rlp.Decode(bytes.NewReader(raws[2]), &bss); err != nil {
+			return err
+		}
+	} else if len(raws) == 2 && header.TotalBackersCount() == 0 {
+		bss = ComplexSignatures(nil)
+	} else {
+		return errors.New("rlp:unrecognized block format")
+	}
+
+	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
 		return err
 	}
 
 	*b = Block{
-		header: &payload.Header,
-		txs:    payload.Txs,
+		header: &header,
+		txs:    txs,
+		bss:    bss,
 	}
 	b.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil
