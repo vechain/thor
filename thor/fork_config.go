@@ -17,6 +17,7 @@ type ForkConfig struct {
 	ETH_CONST uint32
 	BLOCKLIST uint32
 	ETH_IST   uint32
+	VIP193    uint32
 }
 
 func (fc ForkConfig) String() string {
@@ -41,6 +42,7 @@ var NoFork = ForkConfig{
 	ETH_CONST: math.MaxUint32,
 	BLOCKLIST: math.MaxUint32,
 	ETH_IST:   math.MaxUint32,
+	VIP193:    math.MaxUint32,
 }
 
 // for well-known networks
@@ -51,6 +53,7 @@ var forkConfigs = map[Bytes32]ForkConfig{
 		ETH_CONST: 3337300,
 		BLOCKLIST: 4817300,
 		ETH_IST:   9254300, // ~ Mon, 07 Jun 2021 08:00:00 GMT
+		VIP193:    math.MaxUint32,
 	},
 	// testnet
 	MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"): {
@@ -58,6 +61,7 @@ var forkConfigs = map[Bytes32]ForkConfig{
 		ETH_CONST: 3192500,
 		BLOCKLIST: math.MaxUint32,
 		ETH_IST:   9146700, // ~ Thu, 20 May 2021 08:00:00 GMT
+		VIP193:    math.MaxUint32,
 	},
 }
 
