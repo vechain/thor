@@ -45,6 +45,8 @@ type headerBody struct {
 	ReceiptsRoot    thor.Bytes32
 
 	Signature []byte
+
+	Extension extension
 }
 
 // ParentID returns id of parent block.
@@ -103,6 +105,16 @@ func (h *Header) ReceiptsRoot() thor.Bytes32 {
 	return h.body.ReceiptsRoot
 }
 
+// BackerSignaturesRoot returns merkle root of backer signatures.
+func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
+	return h.body.Extension.BackerSignaturesRoot
+}
+
+// TotalBackersCount returns total backers count that cumulated from genesis block to this one.
+func (h *Header) TotalBackersCount() uint64 {
+	return h.body.Extension.TotalBackersCount
+}
+
 // ID computes id of block.
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
 func (h *Header) ID() (id thor.Bytes32) {
@@ -136,7 +148,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
+	input := []interface{}{
 		h.body.ParentID,
 		h.body.Timestamp,
 		h.body.GasLimit,
@@ -148,7 +160,9 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		&h.body.TxsRootFeatures,
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
-	})
+		&h.body.Extension,
+	}
+	rlp.Encode(hw, input)
 	hw.Sum(hash[:0])
 	return
 }
@@ -190,7 +204,7 @@ func (h *Header) Signer() (signer thor.Address, err error) {
 	return
 }
 
-// EncodeRLP implements rlp.Encoder
+// EncodeRLP implements rlp.Encoder.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &h.body)
 }
@@ -215,21 +229,23 @@ func (h *Header) String() string {
 	}
 
 	return fmt.Sprintf(`Header(%v):
-	Number:         %v
-	ParentID:       %v
-	Timestamp:      %v
-	Signer:         %v
-	Beneficiary:    %v
-	GasLimit:       %v
-	GasUsed:        %v
-	TotalScore:     %v
-	TxsRoot:        %v
-	TxsFeatures:    %v
-	StateRoot:      %v
-	ReceiptsRoot:   %v
-	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+	Number:                 %v
+	ParentID:               %v
+	Timestamp:              %v
+	Signer:                 %v
+	Beneficiary:            %v
+	GasLimit:               %v
+	GasUsed:                %v
+	TotalScore:             %v
+	TxsRoot:                %v
+	TxsFeatures:            %v
+	StateRoot:              %v
+	ReceiptsRoot:           %v
+	BackerSignaturesRoot:   %v
+	TotalBackersCount       %v
+	Signature:              0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.BackerSignaturesRoot, h.body.Extension.TotalBackersCount, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.
