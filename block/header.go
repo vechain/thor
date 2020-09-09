@@ -115,6 +115,11 @@ func (h *Header) TotalBackersCount() uint64 {
 	return h.body.Extension.TotalBackersCount
 }
 
+// TotalQuality returns total heavy block count that cumulated from genesis block to this one.
+func (h *Header) TotalQuality() uint32 {
+	return h.body.Extension.TotalQuality
+}
+
 // ID computes id of block.
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
 func (h *Header) ID() (id thor.Bytes32) {
