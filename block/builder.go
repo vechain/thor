@@ -14,6 +14,7 @@ import (
 type Builder struct {
 	headerBody headerBody
 	txs        tx.Transactions
+	bss        ComplexSignatures
 }
 
 // ParentID set parent id.
@@ -70,9 +71,16 @@ func (b *Builder) Transaction(tx *tx.Transaction) *Builder {
 	return b
 }
 
-// TransactionFeatures set supported transaction features
+// TransactionFeatures set supported transaction features.
 func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	b.headerBody.TxsRootFeatures.Features = features
+	return b
+}
+
+// BackerSignatures add the list of backer signature.
+func (b *Builder) BackerSignatures(bss ComplexSignatures, parentBackerCount uint64) *Builder {
+	b.bss = append(ComplexSignatures(nil), bss...)
+	b.headerBody.Extension.TotalBackersCount = parentBackerCount + uint64(len(bss))
 	return b
 }
 
@@ -80,9 +88,11 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
+	header.body.Extension.BackerSignaturesRoot = b.bss.RootHash()
 
 	return &Block{
 		header: &header,
 		txs:    b.txs,
+		bss:    b.bss,
 	}
 }
