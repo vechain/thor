@@ -105,7 +105,7 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
-		BackerSignatures(ComplexSignatures{bs}, 10).
+		BackerSignatures(ComplexSignatures{bs}, 10, 0).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
@@ -227,8 +227,10 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	d, _ := rlp.EncodeToBytes(&struct {
 		Root              thor.Bytes32
 		TotalBackersCount uint64
+		TotalQuality      uint32
 	}{
 		thor.Bytes32{},
+		0,
 		0,
 	})
 	raws = append(raws, d)
@@ -236,11 +238,11 @@ func TestEncodingBadBssRoot(t *testing.T) {
 
 	var h2 Header
 	err = rlp.DecodeBytes(b, &h2)
-	assert.EqualError(t, err, "rlp: BackerSignautreRoot should be trimmed if total backers count is 0")
+	assert.EqualError(t, err, "rlp: extension should be trimmed if total backers count is 0")
 }
 
 func TestEncodingBssRoot(t *testing.T) {
-	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1).Build()
+	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
 	h := block.Header()
 
 	bytes, err := rlp.EncodeToBytes(h)
@@ -267,7 +269,7 @@ func TestEncodingBssRoot(t *testing.T) {
 }
 
 func TestDecoding(t *testing.T) {
-	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 1).Build()
+	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
 	b1 := new(Builder).Build()
 
 	raw0, _ := rlp.EncodeToBytes(struct {

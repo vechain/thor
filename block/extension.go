@@ -16,6 +16,7 @@ import (
 type extension struct {
 	BackerSignaturesRoot thor.Bytes32
 	TotalBackersCount    uint64
+	TotalQuality         uint32
 }
 
 type _extension extension
@@ -42,14 +43,15 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			*ex = extension{
 				emptyRoot,
 				0,
+				0,
 			}
 			return nil
 		}
 		return err
 	}
 	if obj.TotalBackersCount == 0 {
-		// TotalBackersCount equals 0, bss root should be trimmed
-		return errors.New("rlp: BackerSignautreRoot should be trimmed if total backers count is 0")
+		// TotalBackersCount equals 0, extension should be trimmed
+		return errors.New("rlp: extension should be trimmed if total backers count is 0")
 	}
 	*ex = extension(obj)
 	return nil
