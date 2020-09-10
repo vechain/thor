@@ -23,7 +23,7 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
-	GetBalanceGas        uint64 = 400              //EIP158 gas table
+	GetBalanceGas        uint64 = 400              // EIP158 gas table
 	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
@@ -32,11 +32,12 @@ const (
 
 	MaxBlockProposers uint64 = 101
 
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
+	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit.
 
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
 	HeavyBlockRequirement = 3    // backer signature count required to be a "heavy" block.
+	ElectionThreshold     = 8    // Maximum value of VRF output used for backer election(8 of 100).
 	EpochInterval         = 8640 // block number interval between two epochs.
 )
 
