@@ -252,7 +252,7 @@ func (r *Repository) GetBlockBackerSignatures(id thor.Bytes32) (block.ComplexSig
 	cached, err := r.caches.bss.GetOrLoad(id, func() (interface{}, error) {
 		bss, err := loadBackerSignatures(r.data, id)
 		if err != nil {
-			// backword compatibility
+			// backward compatibility
 			if r.IsNotFound(err) {
 				return bss, nil
 			}

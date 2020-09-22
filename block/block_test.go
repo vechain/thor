@@ -300,3 +300,16 @@ func TestDecoding(t *testing.T) {
 	err = rlp.DecodeBytes(raw2, &bx)
 	assert.EqualError(t, err, "rlp:unrecognized block format")
 }
+
+func TestComplexSig(t *testing.T) {
+	var invalid [1]byte
+	rand.Read(invalid[:])
+
+	bs := (ComplexSignature)(invalid[:])
+	encoded, _ := rlp.EncodeToBytes(bs)
+
+	var data ComplexSignature
+	err := rlp.DecodeBytes(encoded, &data)
+
+	assert.EqualError(t, err, "rlp(complex signature): invalid length, want 146bytes")
+}
