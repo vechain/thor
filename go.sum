@@ -94,6 +94,8 @@ github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72 h1:qLC7fQah7D6K1
 github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/testify v1.1.4 h1:ToftOQTytwshuOSj6bDSolVUa3GINfJP/fg3OkkOzQQ=
 github.com/stretchr/testify v1.1.4/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
+github.com/vechain/go-ecvrf v0.0.0-20200326080414-5b7e9ee61906 h1:llHjJ24ov25y8DtT+Aw5uJl7HCRWoJHRmhH7Y9/TYQI=
+github.com/vechain/go-ecvrf v0.0.0-20200326080414-5b7e9ee61906/go.mod h1:HM7kygiu1D0CdotRa2u8z4I8AW9sRShPSjpLuIw0kyE=
 github.com/vechain/goleveldb v1.0.1-0.20200818163831-48cd513f9906 h1:AqYony+dPPgwHeXYiCmtl/w6sWyjRA+QWYnzJSzr4vk=
 github.com/vechain/goleveldb v1.0.1-0.20200818163831-48cd513f9906/go.mod h1:u2MKkTVTVJWe5D1rCvame8WqhBd88EuIwODJZ1VHCPM=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
