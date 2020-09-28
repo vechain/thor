@@ -36,7 +36,8 @@ const (
 
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	HeavyBlockRequirement = 3 // backer signature count required to be a "heavy" block
+	HeavyBlockRequirement = 3    // backer signature count required to be a "heavy" block.
+	EpochInterval         = 8640 // block number interval between two epochs.
 )
 
 // Keys of governance params.
