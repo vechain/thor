@@ -35,6 +35,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.1.4
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
+	github.com/vechain/go-ecvrf v0.0.0-20200326080414-5b7e9ee61906
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
