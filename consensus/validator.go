@@ -138,7 +138,17 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return nil, err
 	}
 
-	sched, err := poa.NewScheduler(signer, proposers, parent.Number(), parent.Timestamp())
+	var sched poa.Scheduler
+	if header.Number() >= c.forkConfig.VIP193 {
+		var seed thor.Bytes32
+		seed, err = c.seeder.Generate(header.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		sched, err = poa.NewSchedulerV2(signer, proposers, parent.ID(), parent.Timestamp(), seed.Bytes())
+	} else {
+		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
+	}
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
