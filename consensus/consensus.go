@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/poa"
 
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -27,6 +28,7 @@ type Consensus struct {
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	candidatesCache      *simplelru.LRU
+	seeder               *poa.Seeder
 }
 
 // New create a Consensus instance.
@@ -38,6 +40,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		candidatesCache:      candidatesCache,
+		seeder:               poa.NewSeeder(repo),
 	}
 }
 
