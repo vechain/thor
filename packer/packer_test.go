@@ -190,11 +190,8 @@ func TestBlocklist(t *testing.T) {
 
 	stater := state.NewStater(db)
 
-	forkConfig := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-	}
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
