@@ -46,7 +46,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlock().Header(), now)
+		flow, err := n.packer.Schedule(n.repo.BestBlock(), now)
 		if err != nil {
 			if authorized {
 				authorized = false
