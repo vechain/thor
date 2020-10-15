@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
 )
@@ -83,12 +84,14 @@ func TestUpdates(t *testing.T) {
 }
 
 func TestScheduleV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	_, err := poa.NewSchedulerV2(p1, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	_, err := poa.NewSchedulerV2(p1, proposers, parent, nil)
 	assert.NotNil(t, err)
 
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	for i := uint64(0); i < 100; i++ {
 		now := parentTime + i*thor.BlockInterval/2
@@ -99,9 +102,11 @@ func TestScheduleV2(t *testing.T) {
 }
 
 func TestIsTheTimeV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	tests := []struct {
 		now  uint64
@@ -118,9 +123,11 @@ func TestIsTheTimeV2(t *testing.T) {
 }
 
 func TestUpdatesV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	tests := []struct {
 		newBlockTime uint64
