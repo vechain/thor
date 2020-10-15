@@ -225,7 +225,7 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {
 	b := repo.BestBlock()
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
+	flow, err := packer.Schedule(b, uint64(time.Now().Unix()))
 	err = flow.Adopt(transaction)
 	if err != nil {
 		t.Fatal(err)
