@@ -47,6 +47,28 @@ type headerBody struct {
 	Signature []byte
 
 	Extension extension
+
+	FinalityVector [4]thor.Bytes32
+}
+
+// NV returns new view
+func (h *Header) NV() thor.Bytes32 {
+	return h.body.FinalityVector[0]
+}
+
+// PR returns prepare
+func (h *Header) PR() thor.Bytes32 {
+	return h.body.FinalityVector[1]
+}
+
+// PC returns pre-commit
+func (h *Header) PC() thor.Bytes32 {
+	return h.body.FinalityVector[2]
+}
+
+// CM returns commit
+func (h *Header) CM() thor.Bytes32 {
+	return h.body.FinalityVector[3]
 }
 
 // ParentID returns id of parent block.
