@@ -172,6 +172,11 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+		// Insufficient balance, ping the tracer then exit
+		if evm.vmConfig.Debug && evm.depth == 0 {
+			evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+			evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, ErrInsufficientBalance)
+		}
 		return nil, gas, ErrInsufficientBalance
 	}
 
