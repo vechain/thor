@@ -49,22 +49,22 @@ func New(
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.StateRoot())
+func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow, err error) {
+	state := p.stater.NewState(parent.Header().StateRoot())
 
 	// Before process hook of VIP-191, update builtin extension contract's code to V2
 	vip191 := p.forkConfig.VIP191
 	if vip191 == 0 {
 		vip191 = 1
 	}
-	if parent.Number()+1 == vip191 {
+	if parent.Header().Number()+1 == vip191 {
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
 			return nil, err
 		}
 	}
 
 	var features tx.Features
-	if parent.Number()+1 >= vip191 {
+	if parent.Header().Number()+1 >= vip191 {
 		features |= tx.DelegationFeature
 	}
 
@@ -97,15 +97,15 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	var sched poa.Scheduler
-	if parent.Number()+1 >= p.forkConfig.VIP193 {
+	if parent.Header().Number()+1 >= p.forkConfig.VIP193 {
 		var seed thor.Bytes32
-		seed, err = p.seeder.Generate(parent.ID())
+		seed, err = p.seeder.Generate(parent.Header().ID())
 		if err != nil {
 			return nil, err
 		}
-		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.ID(), parent.Timestamp(), seed.Bytes())
+		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent, seed.Bytes())
 	} else {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
+		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
 		return nil, err
@@ -122,19 +122,19 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	rt := runtime.New(
-		p.repo.NewChain(parent.ID()),
+		p.repo.NewChain(parent.Header().ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
-			Number:      parent.Number() + 1,
+			Number:      parent.Header().Number() + 1,
 			Time:        newBlockTime,
-			GasLimit:    p.gasLimit(parent.GasLimit()),
-			TotalScore:  parent.TotalScore() + score,
+			GasLimit:    p.gasLimit(parent.Header().GasLimit()),
+			TotalScore:  parent.Header().TotalScore() + score,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent.Header(), rt, features), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
