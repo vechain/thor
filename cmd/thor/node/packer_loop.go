@@ -12,8 +12,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
+	"github.com/vechain/go-ecvrf"
+	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -74,9 +80,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
 		for {
-			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
-				// time to pack block
-				// blockInterval/2 early to allow more time for processing txs
+			if n.timeToPack(flow) == true {
 				if err := n.pack(flow); err != nil {
 					log.Error("failed to pack block", "err", err)
 				}
@@ -106,6 +110,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
+func (n *Node) timeToPack(flow *packer.Flow) bool {
+	nowTs := uint64(time.Now().Unix())
+	// start immediately in post vip 193 stage, to allow more time for getting backer signature
+	if flow.ParentHeader().Number() >= n.forkConfig.VIP193 {
+		return nowTs+thor.BlockInterval >= flow.When()
+	}
+	// blockInterval/2 early to allow more time for processing txs
+	return nowTs+thor.BlockInterval/2 >= flow.When()
+}
+
 func (n *Node) pack(flow *packer.Flow) error {
 	txs := n.txPool.Executables()
 	var txsToRemove []*tx.Transaction
@@ -114,6 +128,9 @@ func (n *Node) pack(flow *packer.Flow) error {
 			n.txPool.Remove(tx.Hash(), tx.ID())
 		}
 	}()
+
+	var scope event.SubscriptionScope
+	defer scope.Close()
 
 	startTime := mclock.Now()
 	for _, tx := range txs {
@@ -127,18 +144,93 @@ func (n *Node) pack(flow *packer.Flow) error {
 			txsToRemove = append(txsToRemove, tx)
 		}
 	}
+	execElapsed := mclock.Now() - startTime
 
+	if flow.Number() >= n.forkConfig.VIP193 {
+		proposal, err := flow.Propose(n.master.PrivateKey)
+		if err != nil {
+			return nil
+		}
+		n.comm.BroadcastProposal(proposal)
+
+		now := uint64(time.Now().Unix())
+		if now < flow.When()-1 {
+			newAccCh := make(chan *comm.NewAcceptedEvent)
+			scope.Track(n.comm.SubscribeAccepted(newAccCh))
+
+			ticker := time.NewTimer(time.Duration(flow.When()-1-now) * time.Second)
+			defer ticker.Stop()
+
+			msg := proposal.AsMessage(n.master.Address())
+			alpha := append([]byte(nil), flow.Seed()...)
+			alpha = append(alpha, flow.ParentHeader().ID().Bytes()[:4]...)
+
+			b, _ := rlp.EncodeToBytes(proposal)
+			hash := thor.Blake2b(b)
+			for {
+				select {
+				case ev := <-newAccCh:
+					if flow.Number() >= n.forkConfig.VIP193 {
+						if ev.ProposalHash == hash {
+							if err := func() (err error) {
+								startTime := mclock.Now()
+								defer func() {
+									if err != nil {
+										execElapsed += mclock.Now() - startTime
+									}
+								}()
+
+								pub, err := crypto.SigToPub(thor.Blake2b(msg, ev.Signature.Proof()).Bytes(), ev.Signature.Signature())
+								if err != nil {
+									return
+								}
+								backer := thor.Address(crypto.PubkeyToAddress(*pub))
+
+								if flow.IsBackerKnown(backer) == true {
+									return errors.New("known backer")
+								}
+
+								if flow.GetAuthority(backer) == nil {
+									return fmt.Errorf("backer: %v is not an authority", backer)
+								}
+
+								beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, ev.Signature.Proof())
+								if err != nil {
+									return
+								}
+								if poa.EvaluateVRF(beta) == true {
+									flow.AddBackerSignature(ev.Signature, beta, backer)
+								} else {
+									return fmt.Errorf("invalid proof from %v", backer)
+								}
+								return
+							}(); err != nil {
+								log.Debug("failed to process backer signature", "err", err)
+								continue
+							}
+						}
+					}
+				case <-ticker.C:
+					goto NEXT
+				}
+			}
+		NEXT:
+		}
+	}
+
+	startTime = mclock.Now()
 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 	if err != nil {
 		return err
 	}
-	execElapsed := mclock.Now() - startTime
+	execElapsed += mclock.Now() - startTime
 
+	startTime = mclock.Now()
 	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
 	if err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
-	commitElapsed := mclock.Now() - startTime - execElapsed
+	commitElapsed := mclock.Now() - startTime
 
 	n.processFork(prevTrunk, curTrunk)
 
