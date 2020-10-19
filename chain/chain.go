@@ -6,6 +6,7 @@
 package chain
 
 import (
+	"bytes"
 	"encoding/binary"
 	"sort"
 
@@ -246,6 +247,16 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 		return h.Timestamp() <= ts
 	}))
 	return c.GetBlockHeader(n)
+}
+
+// IsOnChain checks whether the block is on the current chain
+func (c *Chain) IsOnChain(id thor.Bytes32) bool {
+	storedID, err := c.GetBlockID(block.Number(id))
+	if err != nil {
+		return false
+	}
+
+	return bytes.Compare(storedID.Bytes(), id.Bytes()) == 0
 }
 
 // NewBestChain create a chain with best block as head.
