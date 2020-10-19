@@ -6,6 +6,7 @@
 package chain_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -89,4 +90,48 @@ func TestRepository(t *testing.T) {
 
 		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
 	}
+}
+
+func TestBranchOps(t *testing.T) {
+	// 		b0
+	// 		|
+	//		|
+	//		b1
+	//		|--------
+	// 		|		|
+	// 		b2 		b5
+	// 		|--------
+	//		|		|
+	//		b3		b4
+
+	repo := newTestRepo()
+
+	blocks := make([]*block.Block, 6)
+	blocks[0] = newBlock(repo.GenesisBlock(), 10)
+	blocks[1] = newBlock(blocks[0], 20)
+	blocks[2] = newBlock(blocks[1], 30)
+	blocks[3] = newBlock(blocks[2], 40)
+	blocks[4] = newBlock(blocks[2], 40)
+	blocks[5] = newBlock(blocks[1], 30)
+
+	for _, blk := range blocks {
+		err := repo.AddBlock(blk, nil)
+		assert.Nil(t, err)
+	}
+
+	branches := repo.GetBranches(blocks[1].Header().ID())
+
+	assert.Equal(t, len(branches), 3)
+	assert.Equal(t, branches[0].HeadID(), blocks[5].Header().ID())
+
+	var b0, b1 *block.Block
+	if bytes.Compare(blocks[3].Header().ID().Bytes(), blocks[4].Header().ID().Bytes()) < 0 {
+		b0 = blocks[3]
+		b1 = blocks[4]
+	} else {
+		b0 = blocks[4]
+		b1 = blocks[3]
+	}
+	assert.Equal(t, branches[1].HeadID(), b0.Header().ID())
+	assert.Equal(t, branches[2].HeadID(), b1.Header().ID())
 }
