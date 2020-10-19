@@ -26,3 +26,5 @@ package.json
 /vendor/
 
 .fake_gopath_suffix
+
+.DS_Store
