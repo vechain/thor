@@ -97,8 +97,8 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 	}
 
 	var sched poa.Scheduler
+	var seed thor.Bytes32
 	if parent.Header().Number()+1 >= p.forkConfig.VIP193 {
-		var seed thor.Bytes32
 		seed, err = p.seeder.Generate(parent.Header().ID())
 		if err != nil {
 			return nil, err
@@ -134,7 +134,7 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header(), rt, features), nil
+	return newFlow(p, parent.Header(), rt, features, proposers, seed.Bytes()), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -178,7 +178,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent, rt, features, nil, nil), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {
