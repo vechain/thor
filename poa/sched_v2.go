@@ -158,6 +158,7 @@ func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score ui
 	for _, a := range s.activates {
 		updates = append(updates, Proposer{a, true})
 	}
+
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
 		if s.parentBlockTime+i*T+T >= newBlockTime {
 			break
@@ -167,6 +168,6 @@ func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score ui
 		}
 	}
 
-	score = uint64(len(s.shuffled)) - uint64(len(updates))
+	score = uint64(len(s.shuffled) + len(s.activates) - len(updates))
 	return
 }
