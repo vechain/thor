@@ -6,9 +6,11 @@
 package poa_test
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/poa"
@@ -134,6 +136,41 @@ func TestUpdatesV2(t *testing.T) {
 		want         uint64
 	}{
 		{parentTime + thor.BlockInterval*30, 1},
+	}
+
+	for _, tt := range tests {
+		_, score := sched.Updates(tt.newBlockTime)
+		assert.Equal(t, tt.want, score)
+	}
+}
+
+func TestActivateInV2(t *testing.T) {
+	pps := append([]poa.Proposer(nil), proposers...)
+	backer, _ := crypto.GenerateKey()
+	pps = append(pps, poa.Proposer{thor.Address(crypto.PubkeyToAddress(backer.PublicKey)), false})
+
+	proposer, _ := crypto.GenerateKey()
+	dummy := new(block.Builder).Build()
+
+	var proof [81]byte
+	rand.Read(proof[:])
+	msg := block.NewProposal(dummy.Header().ParentID(), dummy.Header().TxsRoot(), dummy.Header().GasLimit(), dummy.Header().Timestamp()).AsMessage(thor.Address(crypto.PubkeyToAddress(proposer.PublicKey)))
+	sig, _ := crypto.Sign(thor.Blake2b(msg, proof[:]).Bytes(), backer)
+	bs, _ := block.NewComplexSignature(proof[:], sig)
+
+	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0, 0).Build()
+	signingHash := b.Header().SigningHash()
+	blockSig, _ := crypto.Sign(signingHash.Bytes(), proposer)
+	b0 := b.WithSignature(blockSig)
+
+	sched, _ := poa.NewSchedulerV2(p2, pps, b0, nil)
+
+	tests := []struct {
+		newBlockTime uint64
+		want         uint64
+	}{
+		{b0.Header().Timestamp() + thor.BlockInterval, 2},
+		{b0.Header().Timestamp() + thor.BlockInterval*3, 1},
 	}
 
 	for _, tt := range tests {
