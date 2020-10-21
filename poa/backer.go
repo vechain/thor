@@ -22,3 +22,8 @@ func EvaluateVRF(beta []byte) bool {
 	}
 	return false
 }
+
+// MockElectionThreshold mocks the election threshold, for testing only.
+func MockElectionThreshold(t uint8) {
+	threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(int64(t))), big.NewInt(100))
+}
