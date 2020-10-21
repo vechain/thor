@@ -280,9 +280,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 					return consensusError(fmt.Sprintf("backer signature's signer unavailable: %v", err))
 				}
 
-				backer := getBacker(thor.Address(crypto.PubkeyToAddress(*pub)))
+				addr := thor.Address(crypto.PubkeyToAddress(*pub))
+				backer := getBacker(addr)
 				if backer == nil {
-					return consensusError(fmt.Sprintf("backer: %v is not an authority", backer))
+					return consensusError(fmt.Sprintf("backer: %v is not an authority", addr))
 				}
 
 				if backer.Address == proposer {
@@ -299,7 +300,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				prev = beta
 
 				if poa.EvaluateVRF(beta) == false {
-					return consensusError(fmt.Sprintf("invalid proof from %v", backer))
+					return consensusError(fmt.Sprintf("invalid proof from %v", addr))
 				}
 			}
 			return nil
