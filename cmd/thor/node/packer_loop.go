@@ -82,7 +82,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
-				if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+				if n.needReSchedule(flow) {
 					log.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
@@ -90,6 +90,32 @@ func (n *Node) packerLoop(ctx context.Context) {
 		}
 	RE_SCHEDULE:
 	}
+}
+
+func (n *Node) needReSchedule(flow *packer.Flow) bool {
+	best := n.repo.BestBlock().Header()
+
+	if flow.Number() < n.forkConfig.VIP193 {
+		/* Before VIP193, re-schedule regarding the following two conditions:
+		1. a new block with better total score replaced parent block becomes the best block(at same block height).
+		2. new best block has a higher total score.
+		*/
+		if (best.Number() == flow.ParentHeader().Number() && best.TotalScore() != flow.ParentHeader().TotalScore()) ||
+			n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+			return true
+		}
+	}
+
+	/* After VIP-193, re-schedule regarding the following two conditions:
+	1. new best block at a different block height.
+	2. new blest block at the same block height but with a different total score.
+	*/
+	if (best.Number() == flow.ParentHeader().Number() && best.TotalScore() != flow.ParentHeader().TotalScore()) ||
+		best.Number() != flow.ParentHeader().Number() {
+		return true
+	}
+
+	return false
 }
 
 func (n *Node) timeToPack(flow *packer.Flow) bool {
