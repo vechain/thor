@@ -88,6 +88,12 @@ func (b *Builder) BackerSignatures(bss ComplexSignatures, parentBackerCount uint
 	return b
 }
 
+// FinalityVector sets the finality vector
+func (b *Builder) FinalityVector(fv [4]thor.Bytes32) *Builder {
+	b.headerBody.FinalityVector = fv
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
