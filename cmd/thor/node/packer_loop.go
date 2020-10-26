@@ -10,13 +10,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/go-ecvrf"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/poa"
@@ -83,7 +82,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
-				if n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+				if n.needReSchedule(flow) {
 					log.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
@@ -91,6 +90,32 @@ func (n *Node) packerLoop(ctx context.Context) {
 		}
 	RE_SCHEDULE:
 	}
+}
+
+func (n *Node) needReSchedule(flow *packer.Flow) bool {
+	best := n.repo.BestBlock().Header()
+
+	if flow.Number() < n.forkConfig.VIP193 {
+		/* Before VIP193, re-schedule regarding the following two conditions:
+		1. a new block with better total score replaced parent block becomes the best block(at same block height).
+		2. new best block has a higher total score.
+		*/
+		if (best.Number() == flow.ParentHeader().Number() && best.TotalScore() != flow.ParentHeader().TotalScore()) ||
+			n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+			return true
+		}
+	}
+
+	/* After VIP-193, re-schedule regarding the following two conditions:
+	1. new best block at a different block height.
+	2. new blest block at the same block height but with a different total score.
+	*/
+	if (best.Number() == flow.ParentHeader().Number() && best.TotalScore() != flow.ParentHeader().TotalScore()) ||
+		best.Number() != flow.ParentHeader().Number() {
+		return true
+	}
+
+	return false
 }
 
 func (n *Node) timeToPack(flow *packer.Flow) bool {
@@ -115,7 +140,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 	var scope event.SubscriptionScope
 	defer scope.Close()
 
-	startTime := mclock.Now()
 	for _, tx := range txs {
 		if err := flow.Adopt(tx); err != nil {
 			if packer.IsGasLimitReached(err) {
@@ -127,7 +151,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 			txsToRemove = append(txsToRemove, tx)
 		}
 	}
-	execElapsed := mclock.Now() - startTime
 
 	if flow.Number() >= n.forkConfig.VIP193 {
 		proposal, err := flow.Propose(n.master.PrivateKey)
@@ -155,39 +178,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 				case ev := <-newAccCh:
 					if flow.Number() >= n.forkConfig.VIP193 {
 						if ev.ProposalHash == hash {
-							if err := func() (err error) {
-								startTime := mclock.Now()
-								defer func() {
-									if err != nil {
-										execElapsed += mclock.Now() - startTime
-									}
-								}()
-
-								pub, err := crypto.SigToPub(thor.Blake2b(msg, ev.Signature.Proof()).Bytes(), ev.Signature.Signature())
-								if err != nil {
-									return
-								}
-								backer := thor.Address(crypto.PubkeyToAddress(*pub))
-
-								if flow.IsBackerKnown(backer) == true {
-									return errors.New("known backer")
-								}
-
-								if flow.GetAuthority(backer) == nil {
-									return fmt.Errorf("backer: %v is not an authority", backer)
-								}
-
-								beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, ev.Signature.Proof())
-								if err != nil {
-									return
-								}
-								if poa.EvaluateVRF(beta) == true {
-									flow.AddBackerSignature(ev.Signature, beta, backer)
-								} else {
-									return fmt.Errorf("invalid proof from %v", backer)
-								}
-								return
-							}(); err != nil {
+							if validateBackerSignature(ev.Signature, flow, msg, alpha); err != nil {
 								log.Debug("failed to process backer signature", "err", err)
 								continue
 							}
@@ -201,19 +192,15 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}
 
-	startTime = mclock.Now()
 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
 	if err != nil {
 		return err
 	}
-	execElapsed += mclock.Now() - startTime
 
-	startTime = mclock.Now()
 	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
 	if err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
-	commitElapsed := mclock.Now() - startTime
 
 	n.processFork(prevTrunk, curTrunk)
 
@@ -222,13 +209,36 @@ func (n *Node) pack(flow *packer.Flow) error {
 		log.Info("📦 new block packed",
 			"txs", len(receipts),
 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
-			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
 		)
 	}
 
-	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(execElapsed+commitElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
-	}
 	return nil
+}
+
+func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, msg []byte, alpha []byte) (err error) {
+	pub, err := crypto.SigToPub(thor.Blake2b(msg, sig.Proof()).Bytes(), sig.Signature())
+	if err != nil {
+		return
+	}
+	backer := thor.Address(crypto.PubkeyToAddress(*pub))
+
+	if flow.IsBackerKnown(backer) == true {
+		return errors.New("known backer")
+	}
+
+	if flow.GetAuthority(backer) == nil {
+		return fmt.Errorf("backer: %v is not an authority", backer)
+	}
+
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, sig.Proof())
+	if err != nil {
+		return
+	}
+	if poa.EvaluateVRF(beta) == true {
+		flow.AddBackerSignature(sig, beta, backer)
+	} else {
+		return fmt.Errorf("invalid proof from %v", backer)
+	}
+	return
 }
