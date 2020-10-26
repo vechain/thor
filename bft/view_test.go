@@ -29,6 +29,10 @@ var (
 	emptyRootHash = new(tx.Transactions).RootHash()
 )
 
+func M(args ...interface{}) []interface{} {
+	return args
+}
+
 func randBytes32() (b thor.Bytes32) {
 	rand.Read(b[:])
 	return
@@ -290,7 +294,15 @@ func TestNewView(t *testing.T) {
 	}
 }
 
-func TestView(t *testing.T) {
+func TestViewFunc(t *testing.T) {
+	// 		b0
+	// 		|
+	//		|
+	//		b1
+	//		|--------
+	// 		|		|
+	// 		b2 		b3
+
 	// Generate private keys for nodes
 	keys := []*ecdsa.PrivateKey(nil)
 	for i := 0; i < nNode; i++ {
@@ -298,15 +310,78 @@ func TestView(t *testing.T) {
 		keys = append(keys, key)
 	}
 
-	// repo := newTestRepo()
-	// gen := repo.GenesisBlock()
+	repo := newTestRepo()
+	gen := repo.GenesisBlock()
 
-	// blk1 := newBlock(
-	// 	keys[0],
-	// 	keys[1:30],
-	// 	gen.Header().ID(),
-	// 	gen.Header().Timestamp()+10,
-	// 	0,
-	// 	[4]thor.Bytes32{},
-	// )
+	var (
+		pp = randBytes32()
+		pc = randBytes32()
+	)
+
+	blk1 := newBlock(
+		keys[0],
+		keys[1:30],
+		gen.Header().ID(),
+		gen.Header().Timestamp()+10,
+		0,
+		[4]thor.Bytes32{
+			genNVforFirstBlock(1),
+			pp,
+			pc,
+			thor.Bytes32{},
+		},
+	)
+
+	blk2 := newBlock(
+		keys[30],
+		keys[31:68],
+		blk1.Header().ID(),
+		blk1.Header().Timestamp()+10,
+		0,
+		[4]thor.Bytes32{
+			blk1.Header().ID(),
+			pp,
+			pc,
+			thor.Bytes32{},
+		},
+	)
+
+	blk3 := newBlock(
+		keys[30],
+		keys[31:66],
+		blk1.Header().ID(),
+		blk1.Header().Timestamp()+10,
+		0,
+		[4]thor.Bytes32{
+			blk1.Header().ID(),
+			randID,
+			thor.Bytes32{},
+			thor.Bytes32{},
+		},
+	)
+
+	assert.Nil(t, repo.AddBlock(blk1, nil))
+	assert.Nil(t, repo.AddBlock(blk2, nil))
+	assert.Nil(t, repo.AddBlock(blk3, nil))
+
+	var (
+		bh *chain.Chain
+		vw *view
+	)
+	bh = repo.GetBranches(blk2.Header().ID())[0]
+	vw = newView(bh, blk1.Header().ID())
+	assert.True(t, vw.ifHasQCForNV())
+	assert.Equal(t, M(true, pp), M(vw.ifHasQCForPP()))
+	assert.Equal(t, M(true, pc), M(vw.ifHasQCForPC()))
+
+	bh = repo.GetBranches(blk3.Header().ID())[0]
+	vw = newView(bh, blk1.Header().ID())
+	assert.False(t, vw.ifHasQCForNV())
+	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPP()))
+	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPC()))
+	assert.Equal(t, 2, len(vw.pp))
+	assert.Equal(t, 1, len(vw.pc))
+	assert.Equal(t, 30, len(vw.pp[pp]))
+	assert.Equal(t, 36, len(vw.pp[randID]))
+	assert.Equal(t, 30, len(vw.pc[pc]))
 }
