@@ -9,13 +9,18 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+// MaxByzantineNodes - Maximum number of Byzatine nodes, i.e., f
+const MaxByzantineNodes = 33
+
+// QC = N - f
+const QC = int(thor.MaxBlockProposers) - MaxByzantineNodes
+
 type view struct {
 	branch        *chain.Chain
 	first         thor.Bytes32
 	nv            map[thor.Address]uint8
 	pp            map[thor.Bytes32]map[thor.Address]uint8
 	pc            map[thor.Bytes32]map[thor.Address]uint8
-	cm            map[thor.Bytes32]map[thor.Address]uint8
 	hasConflictPC bool
 }
 
@@ -26,12 +31,12 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 	}
 
 	v = &view{
-		branch:        branch,
-		first:         first,
-		nv:            make(map[thor.Address]uint8),
-		pp:            make(map[thor.Bytes32]map[thor.Address]uint8),
-		pc:            make(map[thor.Bytes32]map[thor.Address]uint8),
-		cm:            make(map[thor.Bytes32]map[thor.Address]uint8),
+		branch: branch,
+		first:  first,
+		nv:     make(map[thor.Address]uint8),
+		pp:     make(map[thor.Bytes32]map[thor.Address]uint8),
+		pc:     make(map[thor.Bytes32]map[thor.Address]uint8),
+
 		hasConflictPC: false,
 	}
 
@@ -40,7 +45,7 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 		blk *block.Block
 		err error
 
-		pp, pc, cm thor.Bytes32
+		pp, pc thor.Bytes32
 	)
 
 	blk, err = branch.GetBlock(i)
@@ -56,7 +61,6 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 	for {
 		pp = blk.Header().PP()
 		pc = blk.Header().PC()
-		cm = blk.Header().CM()
 
 		if _, ok := v.pp[pp]; !ok {
 			v.pp[pp] = make(map[thor.Address]uint8)
@@ -64,16 +68,12 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 		if _, ok := v.pc[pc]; !ok {
 			v.pc[pc] = make(map[thor.Address]uint8)
 		}
-		if _, ok := v.cm[cm]; !ok {
-			v.cm[cm] = make(map[thor.Address]uint8)
-		}
 
 		signers := getSigners(blk)
 		for _, signer := range signers {
 			v.nv[signer] = v.nv[signer] + 1
 			v.pp[pp][signer] = v.pp[pp][signer] + 1
 			v.pc[pc][signer] = v.pc[pc][signer] + 1
-			v.cm[cm][signer] = v.cm[cm][signer] + 1
 		}
 
 		if !v.hasConflictPC && !branch.IsOnChain(pc) {
@@ -91,6 +91,36 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 	}
 
 	return
+}
+
+func (v *view) getFirstBlockID() thor.Bytes32 {
+	return v.first
+}
+
+func (v *view) ifHasConflictPC() bool {
+	return v.hasConflictPC
+}
+
+func (v *view) ifHasQCForNV() bool {
+	return len(v.nv) >= QC
+}
+
+func (v *view) ifHasQCForPP() (bool, thor.Bytes32) {
+	for pp := range v.pp {
+		if len(v.pp[pp]) >= QC {
+			return true, pp
+		}
+	}
+	return false, thor.Bytes32{}
+}
+
+func (v *view) ifHasQCForPC() (bool, thor.Bytes32) {
+	for pc := range v.pc {
+		if len(v.pc[pc]) >= QC {
+			return true, pc
+		}
+	}
+	return false, thor.Bytes32{}
 }
 
 func getSigners(blk *block.Block) (endorsors []thor.Address) {
@@ -128,4 +158,9 @@ func isValidFirstNV(first *block.Block) bool {
 	binary.BigEndian.PutUint32(nv[:], uint32(0))
 
 	return nv.IsZero()
+}
+
+func genNVforFirstBlock(num uint32) (nv thor.Bytes32) {
+	binary.BigEndian.PutUint32(nv[:], num)
+	return
 }

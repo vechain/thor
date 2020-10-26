@@ -3,7 +3,6 @@ package bft
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
-	"encoding/binary"
 	rnd "math/rand"
 	"testing"
 
@@ -26,6 +25,8 @@ var (
 	viewStart    = 2
 	viewEnd      = 6
 	randThres    = 3
+
+	emptyRootHash = new(tx.Transactions).RootHash()
 )
 
 func randBytes32() (b thor.Bytes32) {
@@ -52,11 +53,8 @@ func newBlock(
 	fv [4]thor.Bytes32,
 ) (blk *block.Block) {
 
-	txs := new(tx.Transactions)
-	emptyTxRoot := txs.RootHash()
-
 	msg := block.NewProposal(
-		parentID, emptyTxRoot, gasLimit, timestamp,
+		parentID, emptyRootHash, gasLimit, timestamp,
 	).AsMessage(thor.Address(crypto.PubkeyToAddress(proposer.PublicKey)))
 
 	bss := block.ComplexSignatures(nil)
@@ -187,8 +185,9 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 			}
 		}
 		if i == viewStart { // first block of view
-			nv := thor.Bytes32{}
-			binary.BigEndian.PutUint32(nv[:], uint32(viewStart))
+			// nv := thor.Bytes32{}
+			// binary.BigEndian.PutUint32(nv[:], uint32(viewStart))
+			nv := genNVforFirstBlock(uint32(viewStart))
 			fv[0] = nv
 		}
 
@@ -201,7 +200,7 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 	return
 }
 
-func TestView(t *testing.T) {
+func TestNewView(t *testing.T) {
 	// Generate private keys for nodes
 	keys := []*ecdsa.PrivateKey(nil)
 	for i := 0; i < nNode; i++ {
@@ -288,27 +287,26 @@ func TestView(t *testing.T) {
 				assert.Equal(t, expected, actual)
 			}
 		}
-
-		// verify cm
-		cms := make(map[int][]int)
-		for i := viewStart; i <= viewEnd; i++ {
-			cm := fvInds[i][3]
-			cms[cm] = append(cms[cm], nodeInds[i]...)
-		}
-		for key, val := range cms {
-			var id thor.Bytes32
-			if key == -1 {
-				id = randID
-			} else {
-				id = blks[key].Header().ID()
-			}
-			summary := countIntArray(val)
-			for i, j := range summary {
-				addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
-				expected := uint8(j)
-				actual := v.cm[id][addr]
-				assert.Equal(t, expected, actual)
-			}
-		}
 	}
+}
+
+func TestView(t *testing.T) {
+	// Generate private keys for nodes
+	keys := []*ecdsa.PrivateKey(nil)
+	for i := 0; i < nNode; i++ {
+		key, _ := crypto.GenerateKey()
+		keys = append(keys, key)
+	}
+
+	// repo := newTestRepo()
+	// gen := repo.GenesisBlock()
+
+	// blk1 := newBlock(
+	// 	keys[0],
+	// 	keys[1:30],
+	// 	gen.Header().ID(),
+	// 	gen.Header().Timestamp()+10,
+	// 	0,
+	// 	[4]thor.Bytes32{},
+	// )
 }
