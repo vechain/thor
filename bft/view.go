@@ -169,7 +169,8 @@ func isValidFirstNV(first *block.Block) bool {
 	return nv.IsZero()
 }
 
-func genNVforFirstBlock(num uint32) (nv thor.Bytes32) {
+// GenNVforFirstBlock computes the nv value for the first block of a view
+func GenNVforFirstBlock(num uint32) (nv thor.Bytes32) {
 	binary.BigEndian.PutUint32(nv[:], num)
 	return
 }
