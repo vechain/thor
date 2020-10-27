@@ -162,6 +162,20 @@ func (evm *EVM) Depth() int {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	if evm.vmConfig.Debug && evm.depth == 0 {
+		// Capture the tracer start/end events in debug mode
+		start := time.Now()
+		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+
+		defer func() { // Lazy evaluation of the parameters
+			evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+		}()
+	}
+
+	return evm.call(caller, addr, input, gas, value)
+}
+
+func (evm *EVM) call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -172,11 +186,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	// Fail if we're trying to transfer more than the available balance
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		// Insufficient balance, ping the tracer then exit
-		if evm.vmConfig.Debug && evm.depth == 0 {
-			evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
-			evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, ErrInsufficientBalance)
-		}
 		return nil, gas, ErrInsufficientBalance
 	}
 
@@ -190,11 +199,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			precompiles = PrecompiledContractsByzantium
 		}
 		if precompiles[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.Sign() == 0 {
-			// Calling a non existing account, don't do anything, but ping the tracer
-			if evm.vmConfig.Debug && evm.depth == 0 {
-				evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
-				evm.vmConfig.Tracer.CaptureEnd(ret, 0, 0, nil)
-			}
 			return nil, gas, nil
 		}
 		evm.StateDB.CreateAccount(addr)
@@ -206,16 +210,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
-	// Capture the tracer start/end events in debug mode
-	if evm.vmConfig.Debug && evm.depth == 0 {
-		start := time.Now()
-		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
-
-		defer func() { // Lazy evaluation of the parameters
-			evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
-		}()
-	}
-	ret, err = run(evm, contract, input)
+	ret, err := run(evm, contract, input)
 
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
@@ -346,6 +341,23 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	return ret, contract.Gas, err
 }
 
+// Create creates a new contract using code as deployment code.
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
+
+	if evm.vmConfig.Debug && evm.depth == 0 {
+		// Capture the tracer start/end events in debug mode
+		start := time.Now()
+		evm.vmConfig.Tracer.CaptureStart(caller.Address(), contractAddr, true, code, gas, value)
+
+		defer func() { // Lazy evaluation of the parameters
+			evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+		}()
+	}
+
+	return evm.create(caller, code, gas, value, contractAddr)
+}
+
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.Int, contractAddr common.Address) ([]byte, common.Address, uint64, error) {
 	// Depth check execution. Fail if we're trying to execute above the
@@ -392,11 +404,6 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 		return nil, contractAddr, gas, nil
 	}
 
-	if evm.vmConfig.Debug && evm.depth == 0 {
-		evm.vmConfig.Tracer.CaptureStart(caller.Address(), contractAddr, true, code, gas, value)
-	}
-	start := time.Now()
-
 	ret, err := run(evm, contract, nil)
 
 	// check whether the max code size has been exceeded
@@ -427,17 +434,8 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if maxCodeSizeExceeded && err == nil {
 		err = errMaxCodeSizeExceeded
 	}
-	if evm.vmConfig.Debug && evm.depth == 0 {
-		evm.vmConfig.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
-	}
 	return ret, contractAddr, contract.Gas, err
 
-}
-
-// Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
-	return evm.create(caller, code, gas, value, contractAddr)
 }
 
 // Create2 creates a new contract using code as deployment code.
