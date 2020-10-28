@@ -216,7 +216,7 @@ func TestNewView(t *testing.T) {
 		repo := newTestRepo()
 		nodeInds, blks, fvInds := newTestBranch(repo, keys)
 
-		branches := repo.GetBranches(repo.GenesisBlock().Header().ID())
+		branches := repo.GetBranchesByID(repo.GenesisBlock().Header().ID())
 
 		assert.Equal(t, len(branches), 1)                                      // only one branch
 		assert.Equal(t, branches[0].HeadID(), blks[len(blks)-1].Header().ID()) // verify branch head
@@ -368,13 +368,13 @@ func TestViewFunc(t *testing.T) {
 		bh *chain.Chain
 		vw *view
 	)
-	bh = repo.GetBranches(blk2.Header().ID())[0]
+	bh = repo.GetBranchesByID(blk2.Header().ID())[0]
 	vw = newView(bh, blk1.Header().ID())
 	assert.True(t, vw.ifHasQCForNV())
 	assert.Equal(t, M(true, pp), M(vw.ifHasQCForPP()))
 	assert.Equal(t, M(true, pc), M(vw.ifHasQCForPC()))
 
-	bh = repo.GetBranches(blk3.Header().ID())[0]
+	bh = repo.GetBranchesByID(blk3.Header().ID())[0]
 	vw = newView(bh, blk1.Header().ID())
 	assert.False(t, vw.ifHasQCForNV())
 	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPP()))
