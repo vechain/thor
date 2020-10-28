@@ -132,6 +132,11 @@ func (v *view) ifHasQCForPC() (bool, thor.Bytes32) {
 	return false, thor.Bytes32{}
 }
 
+// getPCNum gets the number of signatures on the input pc value
+func (v *view) getNumSigOnPC(pc thor.Bytes32) int {
+	return len(v.pc[pc])
+}
+
 func getSigners(blk *block.Block) (endorsors []thor.Address) {
 	header := blk.Header()
 	proposer, _ := header.Signer()

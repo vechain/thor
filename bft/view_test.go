@@ -383,5 +383,8 @@ func TestViewFunc(t *testing.T) {
 	assert.Equal(t, 1, len(vw.pc))
 	assert.Equal(t, 30, len(vw.pp[pp]))
 	assert.Equal(t, 36, len(vw.pp[randID]))
-	assert.Equal(t, 30, len(vw.pc[pc]))
+
+	// Test getNumSigOnPC
+	assert.Equal(t, 30, vw.getNumSigOnPC(pc))
+	assert.Equal(t, 0, vw.getNumSigOnPC(randBytes32()))
 }
