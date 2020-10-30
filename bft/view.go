@@ -2,6 +2,7 @@ package bft
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
@@ -17,7 +18,7 @@ const QC = int(thor.MaxBlockProposers) - MaxByzantineNodes
 
 type view struct {
 	branch        *chain.Chain
-	first         thor.Bytes32
+	first         uint32
 	nv            map[thor.Address]uint8
 	pp            map[thor.Bytes32]map[thor.Address]uint8
 	pc            map[thor.Bytes32]map[thor.Address]uint8
@@ -25,10 +26,26 @@ type view struct {
 }
 
 // newView construct a view object starting with the block referred by `id`
-func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
-	if !branch.IsOnChain(first) {
-		return nil
+func newView(branch *chain.Chain, first uint32) (v *view, err error) {
+	var (
+		i      = first //block.Number(first)
+		maxNum = block.Number(branch.HeadID())
+
+		blk    *block.Block
+		pp, pc thor.Bytes32
+	)
+
+	blk, err = branch.GetBlock(i)
+	if err != nil {
+		return nil, err
 	}
+	// If block b is the first block of a view, then
+	// 		nv = [blkNum | 00 ... 0]
+	if !isValidFirstNV(blk) {
+		return nil, errors.New("Invalid NV value for the first block of the view")
+	}
+
+	firstID := blk.Header().ID()
 
 	v = &view{
 		branch: branch,
@@ -38,26 +55,6 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 		pc:     make(map[thor.Bytes32]map[thor.Address]uint8),
 
 		hasConflictPC: false,
-	}
-
-	var (
-		i      = block.Number(first)
-		maxNum = block.Number(v.branch.HeadID())
-
-		blk *block.Block
-		err error
-
-		pp, pc thor.Bytes32
-	)
-
-	blk, err = branch.GetBlock(i)
-	if err != nil {
-		return nil
-	}
-	// If block b is the first block of a view, then
-	// 		nv = [blkNum | 00 ... 0]
-	if !isValidFirstNV(blk) {
-		return nil
 	}
 
 	for {
@@ -92,9 +89,9 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 		}
 		blk, err = branch.GetBlock(i)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		if blk.Header().NV() != v.first {
+		if blk.Header().NV() != firstID {
 			break
 		}
 	}
@@ -102,8 +99,12 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 	return
 }
 
-func (v *view) getFirstBlockID() thor.Bytes32 {
-	return v.first
+func (v *view) getFirstBlockID() (id thor.Bytes32) {
+	id, err := v.branch.GetBlockID(v.first)
+	if err != nil {
+		panic(err)
+	}
+	return
 }
 
 func (v *view) ifHasConflictPC() bool {
