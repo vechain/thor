@@ -7,6 +7,7 @@ package proto
 
 import (
 	"context"
+	"encoding/binary"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -23,7 +24,7 @@ type Status struct {
 	TotalScore     uint64
 }
 
-// Accepted is constructed by the backer's signature to an proposal with it's hash.
+// Accepted is the backer's signature to an proposal with proposal's hash.
 type Accepted struct {
 	ProposalHash thor.Bytes32
 	Signature    block.ComplexSignature
@@ -31,14 +32,25 @@ type Accepted struct {
 }
 
 // Hash computes the hash of accepted.
-func (acc *Accepted) Hash() (hash thor.Bytes32) {
-	if cached := acc.hash.Load(); cached != nil {
-		return cached.(thor.Bytes32)
-	}
-	defer func() { acc.hash.Store(hash) }()
+func (acc *Accepted) Hash() thor.Bytes32 {
+	return thor.Blake2b(acc.ProposalHash.Bytes(), ([]byte)(acc.Signature))
+}
 
-	hash = thor.Blake2b(acc.ProposalHash.Bytes(), ([]byte)(acc.Signature))
-	return
+// Draft is constructed by the leader's proposal and signature.
+type Draft struct {
+	Proposal  *block.Proposal
+	Signature []byte
+	hash      atomic.Value
+}
+
+// Hash computes the hash of draft.
+func (d *Draft) Hash() thor.Bytes32 {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b, d.Proposal.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], d.Proposal.Timestamp)
+
+	// [parentID + txsRoot + Gaslimit + Timestamp + Signature]
+	return thor.Blake2b(d.Proposal.ParentID.Bytes(), d.Proposal.TxsRoot.Bytes(), b, d.Signature)
 }
 
 // RPC defines RPC interface.
@@ -71,9 +83,9 @@ func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 	return rpc.Notify(ctx, MsgNewTx, tx)
 }
 
-// NotifyNewProposal notify a proposal to remote peer.
-func NotifyNewProposal(ctx context.Context, rpc RPC, d *block.Proposal) error {
-	return rpc.Notify(ctx, MsgNewProposal, d)
+// NotifyNewDraft notify a draft to remote peer.
+func NotifyNewDraft(ctx context.Context, rpc RPC, d *Draft) error {
+	return rpc.Notify(ctx, MsgNewDraft, d)
 }
 
 // NotifyNewAccepted notify an accepted message` to remote peer.

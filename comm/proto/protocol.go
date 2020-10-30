@@ -27,7 +27,7 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
-	MsgNewProposal
+	MsgNewDraft
 	MsgNewAccepted
 )
 
@@ -50,8 +50,8 @@ func MsgName(msgCode uint64) string {
 		return "MsgGetBlocksFromNumber"
 	case MsgGetTxs:
 		return "MsgGetTxs"
-	case MsgNewProposal:
-		return "MsgNewProposal"
+	case MsgNewDraft:
+		return "MsgNewDraft"
 	case MsgNewAccepted:
 		return "MsgNewAccepted"
 	default:
