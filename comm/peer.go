@@ -22,7 +22,7 @@ import (
 const (
 	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
-	maxKnownProposals     = 1024  // Maximum block proposals to keep in the know list(prevent DOS)
+	maxKnownDrafts        = 1024  // Maximum block draft to keep in the know list(prevent DOS)
 	maxKnownAccepted      = 1024  // Maximum accepted messages to keep in the know list(prevent DOS)
 	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
 )
@@ -37,12 +37,12 @@ type Peer struct {
 	*rpc.RPC
 	logger log15.Logger
 
-	createdTime    mclock.AbsTime
-	knownTxs       *lru.Cache
-	knownBlocks    *lru.Cache
-	knownProposals *lru.Cache
-	knownAccepted  *lru.Cache
-	head           struct {
+	createdTime   mclock.AbsTime
+	knownTxs      *lru.Cache
+	knownBlocks   *lru.Cache
+	knownDrafts   *lru.Cache
+	knownAccepted *lru.Cache
+	head          struct {
 		sync.Mutex
 		id         thor.Bytes32
 		totalScore uint64
@@ -60,17 +60,17 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	}
 	knownTxs, _ := lru.New(maxKnownTxs)
 	knownBlocks, _ := lru.New(maxKnownBlocks)
-	knownProposals, _ := lru.New(maxKnownProposals)
+	knownDrafts, _ := lru.New(maxKnownDrafts)
 	knownAccepted, _ := lru.New(maxKnownAccepted)
 	return &Peer{
-		Peer:           peer,
-		RPC:            rpc.New(peer, rw),
-		logger:         log.New(ctx...),
-		createdTime:    mclock.Now(),
-		knownTxs:       knownTxs,
-		knownBlocks:    knownBlocks,
-		knownProposals: knownProposals,
-		knownAccepted:  knownAccepted,
+		Peer:          peer,
+		RPC:           rpc.New(peer, rw),
+		logger:        log.New(ctx...),
+		createdTime:   mclock.Now(),
+		knownTxs:      knownTxs,
+		knownBlocks:   knownBlocks,
+		knownDrafts:   knownDrafts,
+		knownAccepted: knownAccepted,
 	}
 }
 
@@ -104,9 +104,9 @@ func (p *Peer) MarkBlock(id thor.Bytes32) {
 	p.knownBlocks.Add(id, struct{}{})
 }
 
-// MarkProposal marks a proposal to known.
-func (p *Peer) MarkProposal(hash thor.Bytes32) {
-	p.knownProposals.Add(hash, struct{}{})
+// MarkDraft marks a draft to known.
+func (p *Peer) MarkDraft(hash thor.Bytes32) {
+	p.knownDrafts.Add(hash, struct{}{})
 }
 
 // MarkAccepted marks an accepted message to known.
@@ -128,9 +128,9 @@ func (p *Peer) IsBlockKnown(id thor.Bytes32) bool {
 	return p.knownBlocks.Contains(id)
 }
 
-// IsProposalKnown returns if the proposal is known.
-func (p *Peer) IsProposalKnown(hash thor.Bytes32) bool {
-	return p.knownProposals.Contains(hash)
+// IsDraftKnown returns if the draft is known.
+func (p *Peer) IsDraftKnown(hash thor.Bytes32) bool {
+	return p.knownDrafts.Contains(hash)
 }
 
 // IsAcceptedKnown returns if the accepted message is known.
