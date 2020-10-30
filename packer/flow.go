@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -118,19 +119,23 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 	return true, txMeta.Reverted, nil
 }
 
-// Propose creates a proposal for p2p propagation.
-func (f *Flow) Propose(privateKey *ecdsa.PrivateKey) (*block.Proposal, error) {
+// Draft an block proposal and sign it for p2p propagation.
+func (f *Flow) Draft(privateKey *ecdsa.PrivateKey) (*proto.Draft, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, errors.New("private key mismatch")
 	}
 
 	p := block.NewProposal(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
-	sig, err := crypto.Sign(p.SigningHash().Bytes(), privateKey)
+	sig, err := crypto.Sign(p.Hash().Bytes(), privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	return p.WithSignature(sig), nil
+	draft := proto.Draft{
+		Proposal:  p,
+		Signature: sig,
+	}
+	return &draft, nil
 }
 
 // AddBackerSignature adds a backer signature.
