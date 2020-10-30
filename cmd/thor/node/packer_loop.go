@@ -12,7 +12,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
@@ -160,11 +159,11 @@ func (n *Node) pack(flow *packer.Flow) error {
 	}
 
 	if flow.Number() >= n.forkConfig.VIP193 {
-		proposal, err := flow.Propose(n.master.PrivateKey)
+		draft, err := flow.Draft(n.master.PrivateKey)
 		if err != nil {
 			return nil
 		}
-		n.comm.BroadcastProposal(proposal)
+		n.comm.BroadcastDraft(draft)
 
 		now := uint64(time.Now().Unix())
 		if now < flow.When()-1 {
@@ -174,18 +173,16 @@ func (n *Node) pack(flow *packer.Flow) error {
 			ticker := time.NewTimer(time.Duration(flow.When()-1-now) * time.Second)
 			defer ticker.Stop()
 
-			msg := proposal.AsMessage(n.master.Address())
 			alpha := append([]byte(nil), flow.Seed()...)
 			alpha = append(alpha, flow.ParentHeader().ID().Bytes()[:4]...)
 
-			b, _ := rlp.EncodeToBytes(proposal)
-			hash := thor.Blake2b(b)
+			proposalHash := draft.Proposal.Hash()
 			for {
 				select {
 				case ev := <-newAccCh:
 					if flow.Number() >= n.forkConfig.VIP193 {
-						if ev.ProposalHash == hash {
-							if validateBackerSignature(ev.Signature, flow, msg, alpha); err != nil {
+						if ev.ProposalHash == proposalHash {
+							if validateBackerSignature(ev.Signature, flow, proposalHash, alpha); err != nil {
 								log.Debug("failed to process backer signature", "err", err)
 								continue
 							}
@@ -223,8 +220,8 @@ func (n *Node) pack(flow *packer.Flow) error {
 	return nil
 }
 
-func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, msg []byte, alpha []byte) (err error) {
-	pub, err := crypto.SigToPub(thor.Blake2b(msg, sig.Proof()).Bytes(), sig.Signature())
+func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, proposalHash thor.Bytes32, alpha []byte) (err error) {
+	pub, err := crypto.SigToPub(thor.Blake2b(proposalHash.Bytes(), sig.Proof()).Bytes(), sig.Signature())
 	if err != nil {
 		return
 	}
