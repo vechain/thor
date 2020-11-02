@@ -155,7 +155,7 @@ func TestActivateInV2(t *testing.T) {
 	var proof [81]byte
 	rand.Read(proof[:])
 	hash := block.NewProposal(dummy.Header().ParentID(), dummy.Header().TxsRoot(), dummy.Header().GasLimit(), dummy.Header().Timestamp()).Hash()
-	sig, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof[:]).Bytes(), backer)
+	sig, _ := crypto.Sign(hash.Bytes(), backer)
 	bs, _ := block.NewComplexSignature(proof[:], sig)
 
 	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0, 0).Build()

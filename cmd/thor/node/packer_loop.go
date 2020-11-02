@@ -214,7 +214,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 }
 
 func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, proposalHash thor.Bytes32, alpha []byte) (err error) {
-	pub, err := crypto.SigToPub(thor.Blake2b(proposalHash.Bytes(), sig.Proof()).Bytes(), sig.Signature())
+	pub, err := crypto.SigToPub(proposalHash.Bytes(), sig.Signature())
 	if err != nil {
 		return
 	}

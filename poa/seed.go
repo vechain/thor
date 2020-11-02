@@ -80,7 +80,7 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 			return thor.Bytes32{}, err
 		}
 		for _, bs := range bss {
-			pub, err := crypto.SigToPub(thor.Blake2b(hash.Bytes(), bs.Proof()).Bytes(), bs.Signature())
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 			if err != nil {
 				return thor.Bytes32{}, err
 			}
