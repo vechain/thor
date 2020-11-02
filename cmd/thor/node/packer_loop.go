@@ -81,11 +81,15 @@ func (n *Node) packerLoop(ctx context.Context) {
 			case <-time.After(time.Second):
 				best := n.repo.BestBlock().Header()
 				/*  re-schedule regarding the following two conditions:
-				1. a new block with better total score replaced parent block becomes the best block(at same block height)
-				2. new best block has a higher score
+				1. parent block needs to update and the new best is not proposed by the same one
+				2. best block is better than the block to be proposed
 				*/
-				if (best.Number() == flow.ParentHeader().Number() && best.TotalScore() != flow.ParentHeader().TotalScore()) ||
-					n.repo.BestBlock().Header().TotalScore() > flow.TotalScore() {
+
+				s1, _ := best.Signer()
+				s2, _ := flow.ParentHeader().Signer()
+
+				if (best.Number() == flow.ParentHeader().Number() && s1 != s2) ||
+					best.TotalScore() > flow.TotalScore() {
 					log.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
