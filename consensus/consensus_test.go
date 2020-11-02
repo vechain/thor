@@ -128,7 +128,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 
 	proposal, _ := flow.Draft(proposer.PrivateKey)
 	hash := proposal.Hash()
-	backerSig, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof[:]).Bytes(), backer.PrivateKey)
+	backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
 	bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
 	flow.AddBackerSignature(bs, beta[:], backer.Address)
@@ -510,7 +510,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		priv, _ := crypto.GenerateKey()
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof[:]).Bytes(), priv)
+		backerSig, _ := crypto.Sign(hash.Bytes(), priv)
 
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
@@ -527,7 +527,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		proposer := genesis.DevAccounts()[0]
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof[:]).Bytes(), proposer.PrivateKey)
+		backerSig, _ := crypto.Sign(hash.Bytes(), proposer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
@@ -546,7 +546,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha)
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof).Bytes(), backer.PrivateKey)
+		backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof, backerSig)
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
 
@@ -564,11 +564,11 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 
 		_, proof1, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[1].PrivateKey, alpha)
-		sig1, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof1).Bytes(), genesis.DevAccounts()[1].PrivateKey)
+		sig1, _ := crypto.Sign(hash.Bytes(), genesis.DevAccounts()[1].PrivateKey)
 		bs1, _ := block.NewComplexSignature(proof1, sig1)
 
 		_, proof2, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[2].PrivateKey, alpha)
-		sig2, _ := crypto.Sign(thor.Blake2b(hash.Bytes(), proof2).Bytes(), genesis.DevAccounts()[2].PrivateKey)
+		sig2, _ := crypto.Sign(hash.Bytes(), genesis.DevAccounts()[2].PrivateKey)
 		bs2, _ := block.NewComplexSignature(proof2, sig2)
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount(), 0).Build())
