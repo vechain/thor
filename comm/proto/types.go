@@ -8,7 +8,6 @@ package proto
 import (
 	"context"
 	"encoding/binary"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -28,7 +27,6 @@ type Status struct {
 type Accepted struct {
 	ProposalHash thor.Bytes32
 	Signature    block.ComplexSignature
-	hash         atomic.Value
 }
 
 // Hash computes the hash of accepted.
@@ -40,7 +38,6 @@ func (acc *Accepted) Hash() thor.Bytes32 {
 type Draft struct {
 	Proposal  *block.Proposal
 	Signature []byte
-	hash      atomic.Value
 }
 
 // Hash computes the hash of draft.

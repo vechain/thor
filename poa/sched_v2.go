@@ -46,7 +46,7 @@ func NewSchedulerV2(
 		header := parent.Header()
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		for _, bs := range bss {
-			pub, err := crypto.SigToPub(thor.Blake2b(hash.Bytes(), bs.Proof()).Bytes(), bs.Signature())
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 			if err != nil {
 				return nil, err
 			}
