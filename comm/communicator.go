@@ -15,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -38,7 +37,7 @@ type Communicator struct {
 	peerSet         *PeerSet
 	syncedCh        chan struct{}
 	newBlockFeed    event.Feed
-	newProposalFeed event.Feed
+	newDraftFeed    event.Feed
 	newAcceptedFeed event.Feed
 	announcementCh  chan *announcement
 	feedScope       event.SubscriptionScope
@@ -298,21 +297,20 @@ func (c *Communicator) PeersStats() []*PeerStats {
 	return stats
 }
 
-// BroadcastProposal broadcast a proposal to remote peers.
-func (c *Communicator) BroadcastProposal(p *block.Proposal) {
-	b, _ := rlp.EncodeToBytes(p)
-	hash := thor.Blake2b(b)
+// BroadcastDraft broadcast a draft to remote peers.
+func (c *Communicator) BroadcastDraft(d *proto.Draft) {
+	hash := d.Hash()
 
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsProposalKnown(hash)
+		return !peer.IsDraftKnown(hash)
 	})
 
 	for _, peer := range peers {
 		peer := peer
-		peer.MarkProposal(hash)
+		peer.MarkDraft(hash)
 		c.goes.Go(func() {
-			if err := proto.NotifyNewProposal(c.ctx, peer, p); err != nil {
-				peer.logger.Debug("failed to broadcast new proposal", "err", err)
+			if err := proto.NotifyNewDraft(c.ctx, peer, d); err != nil {
+				peer.logger.Debug("failed to broadcast new draft", "err", err)
 			}
 		})
 	}
@@ -335,9 +333,9 @@ func (c *Communicator) BroadcastAccepted(acc *proto.Accepted) {
 	}
 }
 
-// SubscribeProposal subscribe the event that new proposal received.
-func (c *Communicator) SubscribeProposal(ch chan *NewProposalEvent) event.Subscription {
-	return c.feedScope.Track(c.newProposalFeed.Subscribe(ch))
+// SubscribeDraft subscribe the event that new draft received.
+func (c *Communicator) SubscribeDraft(ch chan *NewDraftEvent) event.Subscription {
+	return c.feedScope.Track(c.newDraftFeed.Subscribe(ch))
 }
 
 // SubscribeAccepted subscribe the event that new accepted message received.

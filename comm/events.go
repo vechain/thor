@@ -17,9 +17,9 @@ type NewBlockEvent struct {
 	*block.Block
 }
 
-// NewProposalEvent emitted when received proposal.
-type NewProposalEvent struct {
-	*block.Proposal
+// NewDraftEvent emitted when received draft.
+type NewDraftEvent struct {
+	*proto.Draft
 }
 
 // NewAcceptedEvent emitted when received accepted.

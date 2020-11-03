@@ -74,13 +74,13 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 		alpha := append([]byte(nil), theSeed.Bytes()...)
 		alpha = append(alpha, seedBlock.ParentID().Bytes()[:4]...)
 
-		msg := block.NewProposal(seedBlock.ParentID(), seedBlock.TxsRoot(), seedBlock.GasLimit(), seedBlock.Timestamp()).AsMessage(signer)
+		hash := block.NewProposal(seedBlock.ParentID(), seedBlock.TxsRoot(), seedBlock.GasLimit(), seedBlock.Timestamp()).Hash()
 		bss, err := seeder.repo.GetBlockBackerSignatures(seedBlock.ID())
 		if err != nil {
 			return thor.Bytes32{}, err
 		}
 		for _, bs := range bss {
-			pub, err := crypto.SigToPub(thor.Blake2b(msg, bs.Proof()).Bytes(), bs.Signature())
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 			if err != nil {
 				return thor.Bytes32{}, err
 			}

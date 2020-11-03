@@ -44,10 +44,9 @@ func NewSchedulerV2(
 	bss := parent.BackerSignatures()
 	if len(bss) > 0 {
 		header := parent.Header()
-		proposer, _ := header.Signer()
-		msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(proposer)
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		for _, bs := range bss {
-			pub, err := crypto.SigToPub(thor.Blake2b(msg, bs.Proof()).Bytes(), bs.Signature())
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 			if err != nil {
 				return nil, err
 			}
@@ -135,19 +134,24 @@ func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
 func (s *SchedulerV2) IsTheTime(newBlockTime uint64) bool {
-	if s.parentBlockTime >= newBlockTime {
+	return s.IsScheduled(newBlockTime, s.proposer.Address)
+}
+
+// IsScheduled returns if the schedule(proposer, blockTime) is correct.
+func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool {
+	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
 	}
 
 	T := thor.BlockInterval
-	if (newBlockTime-s.parentBlockTime)%T != 0 {
+	if (blockTime-s.parentBlockTime)%T != 0 {
 		// invalid block time
 		return false
 	}
 
-	index := (newBlockTime - s.parentBlockTime - T) / T % uint64(len(s.shuffled))
-	return s.shuffled[index] == s.proposer.Address
+	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.shuffled))
+	return s.shuffled[index] == proposer
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.

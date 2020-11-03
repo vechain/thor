@@ -272,10 +272,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 			alpha := append([]byte(nil), seed.Bytes()...)
 			alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 
-			msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(proposer)
+			hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 			prev := []byte{}
 			for _, bs := range bss {
-				pub, err := crypto.SigToPub(thor.Blake2b(msg, bs.Proof()).Bytes(), bs.Signature())
+				pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 				if err != nil {
 					return consensusError(fmt.Sprintf("backer signature's signer unavailable: %v", err))
 				}

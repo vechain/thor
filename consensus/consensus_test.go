@@ -126,9 +126,9 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	rand.Read(proof[:])
 	rand.Read(beta[:])
 
-	proposal, _ := flow.Propose(proposer.PrivateKey)
-	msg := proposal.AsMessage(proposer.Address)
-	backerSig, _ := crypto.Sign(thor.Blake2b(msg, proof[:]).Bytes(), backer.PrivateKey)
+	proposal, _ := flow.Draft(proposer.PrivateKey)
+	hash := proposal.Hash()
+	backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
 	bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
 	flow.AddBackerSignature(bs, beta[:], backer.Address)
@@ -507,11 +507,10 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		rand.Read(proof[:])
 
 		header := tc.original.Header()
-		proposer := genesis.DevAccounts()[0].PrivateKey
 		priv, _ := crypto.GenerateKey()
-		msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(thor.Address(crypto.PubkeyToAddress(proposer.PublicKey)))
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(msg, proof[:]).Bytes(), priv)
+		backerSig, _ := crypto.Sign(hash.Bytes(), priv)
 
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
@@ -526,9 +525,9 @@ func (tc *testConsensus) TestValidateBlockBody() {
 
 		header := tc.original.Header()
 		proposer := genesis.DevAccounts()[0]
-		msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(proposer.Address)
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(msg, proof[:]).Bytes(), proposer.PrivateKey)
+		backerSig, _ := crypto.Sign(hash.Bytes(), proposer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
@@ -539,16 +538,15 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	}
 	triggers["triggerInvalidProof"] = func() {
 		header := tc.original.Header()
-		proposer := genesis.DevAccounts()[0]
 		backer := genesis.DevAccounts()[1]
 
 		var seed thor.Bytes32
-		msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(proposer.Address)
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		alpha := append([]byte(nil), seed.Bytes()...)
 		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha)
 
-		backerSig, _ := crypto.Sign(thor.Blake2b(msg, proof).Bytes(), backer.PrivateKey)
+		backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof, backerSig)
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
 
@@ -558,20 +556,19 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	}
 	triggers["triggerNotSorted"] = func() {
 		header := tc.original.Header()
-		proposer := genesis.DevAccounts()[0]
 
 		poa.MockElectionThreshold(100)
 		var seed thor.Bytes32
-		msg := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).AsMessage(proposer.Address)
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		alpha := append([]byte(nil), seed.Bytes()...)
 		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 
 		_, proof1, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[1].PrivateKey, alpha)
-		sig1, _ := crypto.Sign(thor.Blake2b(msg, proof1).Bytes(), genesis.DevAccounts()[1].PrivateKey)
+		sig1, _ := crypto.Sign(hash.Bytes(), genesis.DevAccounts()[1].PrivateKey)
 		bs1, _ := block.NewComplexSignature(proof1, sig1)
 
 		_, proof2, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[2].PrivateKey, alpha)
-		sig2, _ := crypto.Sign(thor.Blake2b(msg, proof2).Bytes(), genesis.DevAccounts()[2].PrivateKey)
+		sig2, _ := crypto.Sign(hash.Bytes(), genesis.DevAccounts()[2].PrivateKey)
 		bs2, _ := block.NewComplexSignature(proof2, sig2)
 
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount(), 0).Build())
@@ -611,14 +608,14 @@ func (tc *testConsensus) TestValidateProposer() {
 	}
 	triggers["triggerErrTimestampUnscheduled"] = func() {
 		blk := tc.originalBuilder().Build()
-		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[1].PrivateKey)
+		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[3].PrivateKey)
 		blk = blk.WithSignature(sig)
 		err := tc.consent(blk)
 		expect := consensusError(
 			fmt.Sprintf(
 				"block timestamp unscheduled: t %v, s %v",
 				blk.Header().Timestamp(),
-				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey)),
+				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[3].PrivateKey.PublicKey)),
 			),
 		)
 		tc.assert.Equal(expect, err)
