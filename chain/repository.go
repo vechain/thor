@@ -334,12 +334,14 @@ func (r *Repository) NewTicker() co.Waiter {
 }
 
 // GetBranchesByID returns all the branches that contain the block
-func (r *Repository) GetBranchesByID(id thor.Bytes32) (branches []*Chain) {
+func (r *Repository) GetBranchesByID(id thor.Bytes32) (branches []*Chain, err error) {
 	heads := loadBranchHeads(r.data, block.Number(id))
 
 	for _, head := range heads {
 		c := newChain(r, head)
-		if c.IsOnChain(id) {
+		if ok, err := c.HasBlock(id); err != nil {
+			return nil, err
+		} else if ok {
 			branches = append(branches, c)
 		}
 	}
@@ -348,7 +350,7 @@ func (r *Repository) GetBranchesByID(id thor.Bytes32) (branches []*Chain) {
 }
 
 // GetBranchesByTimestamp returns all the branches newer than the input timestamp
-func (r *Repository) GetBranchesByTimestamp(ts uint64) (branches []*Chain) {
+func (r *Repository) GetBranchesByTimestamp(ts uint64) (branches []*Chain, err error) {
 	heads := loadBranchHeads(
 		r.data,
 		uint32((ts-r.genesis.Header().Timestamp())/thor.BlockInterval), // min block number
@@ -357,7 +359,7 @@ func (r *Repository) GetBranchesByTimestamp(ts uint64) (branches []*Chain) {
 	for _, head := range heads {
 		summary, err := r.GetBlockSummary(head)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 
 		if summary.Header.Timestamp() <= ts {
@@ -369,4 +371,34 @@ func (r *Repository) GetBranchesByTimestamp(ts uint64) (branches []*Chain) {
 	}
 
 	return
+}
+
+// IfConflict checks whether the input two blocks conflict with each other
+func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
+	var (
+		c         *Chain
+		low, high thor.Bytes32
+	)
+
+	if _, err := r.GetBlockSummary(b1); err != nil {
+		return false, err
+	}
+	if _, err := r.GetBlockSummary(b2); err != nil {
+		return false, err
+	}
+
+	if block.Number(b1) == block.Number(b2) {
+		return false, nil
+	} else if block.Number(b1) > block.Number(b2) {
+		low, high = b2, b1
+	} else {
+		low, high = b1, b2
+	}
+
+	c = r.NewChain(high)
+	ok, err := c.HasBlock(low)
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
 }
