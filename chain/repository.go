@@ -390,6 +390,9 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 	if block.Number(b1) == block.Number(b2) {
 		return false, nil
 	} else if block.Number(b1) > block.Number(b2) {
+		// Here compare block number should be okay since
+		// if the two blocks are on the same chain, the one
+		// with a larger number is always newer than the other
 		low, high = b2, b1
 	} else {
 		low, high = b1, b2
