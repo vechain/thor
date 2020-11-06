@@ -10,19 +10,13 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// MaxByzantineNodes - Maximum number of Byzatine nodes, i.e., f
-const MaxByzantineNodes = 33
-
-// QC = N - f
-const QC = int(thor.MaxBlockProposers) - MaxByzantineNodes
-
 type view struct {
-	branch        *chain.Chain
-	first         uint32
-	nv            map[thor.Address]uint8
-	pp            map[thor.Bytes32]map[thor.Address]uint8
-	pc            map[thor.Bytes32]map[thor.Address]uint8
-	hasConflictPC bool
+	branch   *chain.Chain
+	first    uint32
+	nv       map[thor.Address]uint8
+	pp       map[thor.Bytes32]map[thor.Address]uint8
+	pc       map[thor.Bytes32]map[thor.Address]uint8
+	conflict bool
 }
 
 // newView construct a view object starting with the block referred by `id`
@@ -54,7 +48,7 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 		pp:     make(map[thor.Bytes32]map[thor.Address]uint8),
 		pc:     make(map[thor.Bytes32]map[thor.Address]uint8),
 
-		hasConflictPC: false,
+		conflict: false,
 	}
 
 	for {
@@ -79,8 +73,10 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 			}
 		}
 
-		if !v.hasConflictPC && !pc.IsZero() && !branch.IsOnChain(pc) {
-			v.hasConflictPC = true
+		if ok, err := branch.HasBlock(pc); err != nil {
+			return nil, err
+		} else if !v.conflict && !pc.IsZero() && !ok {
+			v.conflict = true
 		}
 
 		i = i + 1
@@ -107,15 +103,15 @@ func (v *view) getFirstBlockID() (id thor.Bytes32) {
 	return
 }
 
-func (v *view) ifHasConflictPC() bool {
-	return v.hasConflictPC
+func (v *view) hasConflictPC() bool {
+	return v.conflict
 }
 
-func (v *view) ifHasQCForNV() bool {
+func (v *view) hasQCForNV() bool {
 	return len(v.nv) >= QC
 }
 
-func (v *view) ifHasQCForPP() (bool, thor.Bytes32) {
+func (v *view) hasQCForPP() (bool, thor.Bytes32) {
 	for pp := range v.pp {
 		if len(v.pp[pp]) >= QC {
 			return true, pp
@@ -124,7 +120,7 @@ func (v *view) ifHasQCForPP() (bool, thor.Bytes32) {
 	return false, thor.Bytes32{}
 }
 
-func (v *view) ifHasQCForPC() (bool, thor.Bytes32) {
+func (v *view) hasQCForPC() (bool, thor.Bytes32) {
 	for pc := range v.pc {
 		if len(v.pc[pc]) >= QC {
 			return true, pc
