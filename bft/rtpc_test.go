@@ -10,11 +10,14 @@ import (
 )
 
 func TestUpdate(t *testing.T) {
+	//								|-v4-|
 	// 				    	   b7 <-- b8
-	//				   		  /
+	//				   		  /			  |--v3--|
 	// b0 <-- b1 <-- b2 <-- b3 <-- b4 <-- b5 <-- b6
+	//        |--v1--|       |--v2--|      \
 	//							            \
 	//										 b10
+	// 										|-v5-|
 
 	// v1: b1-b2, 	pp(b0) = 2f+1
 	// v2: b3-b4, 	pp(b1) = 2f+1, 	npc(b0) = 0
@@ -87,10 +90,10 @@ func TestUpdate(t *testing.T) {
 	// Add v3: b5-b6, rtpc: b1 -> b1
 	b5 := newBlock(
 		keys[0], keys[1:30],
-		b4.Header().ID(), b4.Header().Timestamp()+20, 0,
+		b4.Header().ID(), b4.Header().Timestamp()+30, 0,
 		[4]thor.Bytes32{
 			GenNVforFirstBlock(b4.Header().Number() + 1),
-			thor.Bytes32{}, b3.Header().ID(),
+			thor.Bytes32{}, b7.Header().ID(),
 		},
 	)
 	assert.Nil(t, repo.AddBlock(b5, nil))
