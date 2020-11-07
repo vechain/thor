@@ -2,6 +2,7 @@ package bft
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -19,11 +20,11 @@ func TestUpdate(t *testing.T) {
 	//										 b10
 	// 										|-v5-|
 
-	// v1: b1-b2, 	pp(b0) = 2f+1
-	// v2: b3-b4, 	pp(b1) = 2f+1, 	npc(b0) = 0
-	// v3: b5-b6, 		        	npc(b1) > 0, npc(b7) > 0
-	// v4: b8, 		pp(b7) = 2f+1, 	npc(b1) = 0
-	// v5: b10, 					npc(b7) = 0
+	// v1: b1-b2, 	npp(b0) = 2f+1
+	// v2: b3-b4, 	npp(b1) = 2f+1, 	npc(b0) = 0
+	// v3: b5-b6, 		        		npc(b1) > 0, npc(b7) > 0
+	// v4: b8, 		npp(b7) = 2f+1, 	npc(b1) = 0
+	// v5: b10, 						npc(b7) = 0
 	//
 	// v1 < v2 < v4 < v3 < v5
 	//
@@ -38,7 +39,7 @@ func TestUpdate(t *testing.T) {
 
 	repo := newTestRepo()
 	gen := repo.GenesisBlock()
-	rtpc := newRTPC(repo, gen.Header())
+	rtpc := newRTPC(repo, gen.Header().ID())
 
 	b0 := newBlock(keys[0], nil, gen.Header().ID(), gen.Header().Timestamp()+10, 0, [4]thor.Bytes32{})
 	assert.Nil(t, repo.AddBlock(b0, nil))
@@ -128,4 +129,38 @@ func TestUpdate(t *testing.T) {
 	assert.Nil(t, repo.AddBlock(b10, nil))
 	rtpc.update(b10)
 	assert.Nil(t, rtpc.get())
+}
+
+func TestUpdateLastCommitted(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+
+	repo := newTestRepo()
+	gen := repo.GenesisBlock()
+	rtpc := newRTPC(repo, gen.Header().ID())
+
+	b1 := newBlock(key, nil, gen.Header().ID(), gen.Header().Timestamp()+10, 0, [4]thor.Bytes32{})
+	b2 := newBlock(key, nil, b1.Header().ID(), gen.Header().Timestamp()+20, 0, [4]thor.Bytes32{})
+	b3 := newBlock(key, nil, b2.Header().ID(), gen.Header().Timestamp()+30, 0, [4]thor.Bytes32{})
+	b4 := newBlock(key, nil, b1.Header().ID(), gen.Header().Timestamp()+20, 0, [4]thor.Bytes32{})
+	repo.AddBlock(b1, nil)
+	repo.AddBlock(b2, nil)
+	repo.AddBlock(b3, nil)
+	repo.AddBlock(b4, nil)
+
+	rtpc.curr = b2.Header()
+
+	err := rtpc.updateLastCommitted(b1.Header().ID())
+	assert.Nil(t, err)
+	assert.Equal(t, b2.Header().ID(), rtpc.get().ID())
+
+	err = rtpc.updateLastCommitted(b2.Header().ID())
+	assert.Nil(t, err)
+	assert.Nil(t, rtpc.get())
+
+	err = rtpc.updateLastCommitted(b3.Header().ID())
+	assert.Nil(t, err)
+	assert.Nil(t, rtpc.get())
+
+	err = rtpc.updateLastCommitted(b4.Header().ID())
+	assert.Equal(t, errors.New("Input block must be an offspring of the last committed"), err)
 }
