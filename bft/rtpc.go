@@ -1,38 +1,53 @@
 package bft
 
 import (
+	"errors"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 )
 
 type rtpc struct {
-	repo *chain.Repository
-	curr *block.Header
+	repo          *chain.Repository
+	curr          *block.Header
+	lastCommitted *block.Header
 }
 
-func newRTPC(repo *chain.Repository) *rtpc {
+func newRTPC(repo *chain.Repository, lastCommitted *block.Header) *rtpc {
 	return &rtpc{
-		repo: repo,
-		curr: nil,
+		repo:          repo,
+		curr:          nil,
+		lastCommitted: lastCommitted,
 	}
 }
 
-func (r *rtpc) getRTPC() *block.Header {
+func (r *rtpc) get() *block.Header {
 	return r.curr
 }
 
-func (r *rtpc) updateByLastCommitted(lastCommitted *block.Header) {
+func (r *rtpc) updateLastCommitted(lastCommitted *block.Header) error {
+	// The new lastCommitted must be an offspring of the old lastCommitted
+	branch := r.repo.NewChain(lastCommitted.ID())
+	if ok, err := branch.HasBlock(r.lastCommitted.ID()); err != nil {
+		return err
+	} else if !ok {
+		return errors.New("The input block not an offspring of the previously committed")
+	}
+	r.lastCommitted = lastCommitted
+
 	if r.curr == nil {
-		return
+		return nil
 	}
 
 	// if the current RTPC block is older than the latest block committed locally
 	if r.curr.Timestamp() <= lastCommitted.Timestamp() {
 		r.curr = nil
 	}
+
+	return nil
 }
 
-func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
+func (r *rtpc) update(newBlock *block.Block) error {
 	// Construct the view containing the lastest received block `newBlock`
 	branch := r.repo.NewChain(newBlock.Header().ID())
 	currView, err := newView(branch, block.Number(newBlock.Header().NV()))
@@ -70,11 +85,17 @@ func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
 	if !ok || currView.hasConflictPC() {
 		return nil
 	}
+
 	summary, err = r.repo.GetBlockSummary(id)
 	if err != nil {
 		return err
 	}
 	candidate := summary.Header
+
+	// Candidate RTPC block must be newer than the last committed
+	if candidate.Timestamp() <= r.lastCommitted.Timestamp() {
+		return nil
+	}
 
 	// Check whether every newer view contains pc message of the candidate RTPC block
 	ifUpdate := true
@@ -90,17 +111,18 @@ func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
 				return err
 			}
 			num = block.Number(header.NV())
+
+			// Along each branch, search for views that are newer than the view
+			// that includes the new block
 			if nv, err := branch.GetBlockHeader(num); err != nil {
 				return err
 			} else if nv.Timestamp() <= currViewTS {
 				break
 			}
-
 			vw, err := newView(branch, num)
 			if err != nil {
 				return err
 			}
-
 			if vw.hasQCForNV() && vw.getNumSigOnPC(candidate.ID()) == 0 {
 				ifUpdate = false
 				goto END_SEARCH
