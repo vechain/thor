@@ -403,5 +403,5 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return ok, nil
+	return !ok, nil
 }
