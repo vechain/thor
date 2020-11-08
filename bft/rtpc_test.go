@@ -1,7 +1,6 @@
 package bft
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"testing"
 
@@ -30,14 +29,7 @@ func TestUpdate(t *testing.T) {
 	//
 	// blocks arriving order: b0, b1, b2, b3, b4, b7, b5, b6, b8, b10
 
-	// Generate private keys for nodes
-	keys := []*ecdsa.PrivateKey(nil)
-	for i := 0; i < nNode; i++ {
-		key, _ := crypto.GenerateKey()
-		keys = append(keys, key)
-	}
-
-	repo := newTestRepo()
+	repo, keys := newTestRepo()
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
 
@@ -134,7 +126,7 @@ func TestUpdate(t *testing.T) {
 func TestUpdateLastCommitted(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
 
