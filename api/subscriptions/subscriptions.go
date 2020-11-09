@@ -8,6 +8,7 @@ package subscriptions
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -33,6 +34,13 @@ type msgReader interface {
 
 var (
 	log = log15.New("pkg", "subscriptions")
+)
+
+const (
+	// Time allowed to read the next pong message from the peer.
+	pongWait = 60 * time.Second
+	// Send pings to peer with this period. Must be less than pongWait.
+	pingPeriod = (pongWait * 7) / 10
 )
 
 func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
@@ -200,6 +208,11 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(pongWait))
+			return nil
+		})
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
 				log.Debug("websocket read err", "err", err)
@@ -209,6 +222,8 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 		}
 	}()
 	ticker := s.repo.NewTicker()
+	pingTicker := time.NewTicker(pingPeriod)
+	defer pingTicker.Stop()
 	for {
 		msgs, hasMore, err := reader.Read()
 		if err != nil {
@@ -219,13 +234,15 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 				return err
 			}
 		}
-		if !hasMore {
+		if hasMore {
 			select {
 			case <-s.done:
 				return nil
 			case <-closed:
 				return nil
-			case <-ticker.C():
+			case <-pingTicker.C:
+				conn.WriteMessage(websocket.PingMessage, nil)
+			default:
 			}
 		} else {
 			select {
@@ -233,7 +250,9 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 				return nil
 			case <-closed:
 				return nil
-			default:
+			case <-ticker.C():
+			case <-pingTicker.C:
+				conn.WriteMessage(websocket.PingMessage, nil)
 			}
 		}
 	}
