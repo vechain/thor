@@ -7,13 +7,13 @@ import (
 
 type committedBlockInfo struct {
 	local    thor.Bytes32
-	observed map[thor.Bytes32]uint8
+	observed map[thor.Bytes32]map[thor.Address]uint8
 }
 
 func newCommittedBlockInfo(id thor.Bytes32) *committedBlockInfo {
 	return &committedBlockInfo{
 		local:    id,
-		observed: make(map[thor.Bytes32]uint8),
+		observed: make(map[thor.Bytes32]map[thor.Address]uint8),
 	}
 }
 
@@ -35,14 +35,28 @@ func (info *committedBlockInfo) updateLocal(id thor.Bytes32) {
 
 // updateObserved updates observed blocks committed by other nodes. It returns true
 // if the input block is committed by at least f+1 nodes.
-func (info *committedBlockInfo) updateObserved(id thor.Bytes32) bool {
-	if block.Number(id) <= block.Number(info.local) {
+func (info *committedBlockInfo) updateObserved(b *block.Block) bool {
+	// Get cm value
+	cm := b.Header().CM()
+
+	// Check height
+	if block.Number(cm) <= block.Number(info.local) {
 		return false
 	}
 
-	info.observed[id] = info.observed[id] + 1
+	// Init map
+	if _, ok := info.observed[cm]; !ok {
+		info.observed[cm] = make(map[thor.Address]uint8)
+	}
 
-	if info.observed[id] >= MaxByzantineNodes+1 {
+	// Update the observed info
+	signers := getSigners(b)
+	for _, signer := range signers {
+		info.observed[cm][signer] = info.observed[cm][signer] + 1
+	}
+
+	// Check whether there are f+1 cm messages
+	if len(info.observed[cm]) >= MaxByzantineNodes+1 {
 		return true
 	}
 
