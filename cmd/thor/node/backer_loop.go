@@ -29,7 +29,6 @@ import (
 
 var (
 	seenDraft, _    = simplelru.NewLRU(512, nil)
-	seenProposer, _ = simplelru.NewLRU(512, nil)
 	seenAccepted, _ = simplelru.NewLRU(512, nil)
 
 	knownProposal   = cache.NewPrioCache(16)
@@ -41,7 +40,7 @@ type status struct {
 	parent    *block.Header
 	proposers []poa.Proposer
 	scheduler *poa.SchedulerV2
-	seed      []byte
+	alpha     []byte
 }
 
 type acceptedWithPub struct {
@@ -80,40 +79,32 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 		return nil, err
 	}
 
+	alpha := append([]byte(nil), seed.Bytes()...)
+	alpha = append(alpha, parent.Header().ID().Bytes()[:4]...)
+
 	return &status{
 		parent:    parent.Header(),
 		proposers: proposers,
 		scheduler: scheduler,
-		seed:      seed.Bytes(),
+		alpha:     alpha,
 	}, nil
 }
 
-func (st *status) GetAuthority(addr thor.Address) *poa.Proposer {
+func (st *status) IsAuthority(addr thor.Address) bool {
 	for _, p := range st.proposers {
 		if p.Address == addr {
-			return &poa.Proposer{
-				Address: p.Address,
-				Active:  p.Active,
-			}
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func (st *status) IsScheduled(blockTime uint64, proposer thor.Address) bool {
 	return st.scheduler.IsScheduled(blockTime, proposer)
 }
 
-func (st *status) Seed() []byte {
-	return st.seed
-}
-
-func (st *status) ParentID() thor.Bytes32 {
-	return st.parent.ID()
-}
-
-func (st *status) ParentNumber() uint32 {
-	return st.parent.Number()
+func (st *status) Alpha() []byte {
+	return st.alpha
 }
 
 func (n *Node) backerLoop(ctx context.Context) {
@@ -162,53 +153,24 @@ func (n *Node) backerLoop(ctx context.Context) {
 				continue
 			}
 
-			p := ev.Proposal
 			hash := ev.Draft.Hash()
-
-			// only accept proposal that are within 3 rounds.
-			if math.Abs(float64(p.Number())-float64(st.ParentNumber()+1)) > 3 {
-				continue
-			}
-
 			// skip if draft already seen(prevent DoS)
 			if seenDraft.Contains(hash) {
 				continue
 			}
 			seenDraft.Add(hash, struct{}{})
 
-			if st.ParentID() != p.ParentID {
+			if st.parent.ID() != ev.Proposal.ParentID {
 				unknownDraft.Set(hash, ev.Draft)
 				continue
 			}
 
-			proposalHash := p.Hash()
-			if err := n.validateProposer(ev.Draft, proposalHash, st); err != nil {
-				log.Debug("signer not valid", "err", err)
+			if err := n.processDraft(ev.Draft, st); err != nil {
+				log.Debug("failed to process draft", "err", err)
 				continue
 			}
-
-			if err := n.validateProposal(p, st); err != nil {
-				log.Debug("block Proposal is not valid", "err", err)
-				continue
-			}
-
-			n.comm.BroadcastDraft(ev.Draft)
-			knownProposal.Set(proposalHash, p, float64(p.Timestamp))
-
-			if st.GetAuthority(n.master.Address()) != nil {
-				signature, err := n.tryBacking(proposalHash, st)
-				if err != nil {
-					log.Debug("failed to back a proposal", "err", err)
-					continue
-				}
-
-				accepted := proto.Accepted{
-					ProposalHash: proposalHash,
-					Signature:    signature,
-				}
-
-				seenAccepted.Add(accepted.Hash(), struct{}{})
-				n.comm.BroadcastAccepted(&accepted)
+			if err := n.tryBacking(ev.Proposal.Hash(), st); err != nil {
+				log.Debug("failed to back proposal", "err", err)
 			}
 		case ev := <-newAcceptedCh:
 			if st == nil {
@@ -230,17 +192,13 @@ func (n *Node) backerLoop(ctx context.Context) {
 			}
 
 			if val, _, ok := knownProposal.Get(ev.ProposalHash); ok == true {
-				p := val.(*block.Proposal)
-
-				if st.ParentID() != p.ParentID {
+				if st.parent.ID() != val.(*block.Proposal).ParentID {
 					continue
 				}
-				if err := n.validateBackerSignature(ev.Signature, pub, st); err != nil {
+				if err := n.processBackerSignature(ev.Accepted, pub, st); err != nil {
 					log.Debug("failed to validate backer signature", "err", err)
 					continue
 				}
-
-				n.comm.BroadcastAccepted(ev.Accepted)
 			} else {
 				unknownAccepted.Set(hash, acceptedWithPub{
 					Accepted: ev.Accepted,
@@ -250,7 +208,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 		case <-unknownTicker.C:
 			parent := n.repo.BestBlock()
 
-			if st == nil || st.ParentID() != parent.Header().ID() {
+			if st == nil || st.parent.ID() != parent.Header().ID() {
 				new, err := newStatus(n, parent)
 				if err != nil {
 					log.Debug("failed to initiate status", "err", err)
@@ -267,106 +225,56 @@ func (n *Node) backerLoop(ctx context.Context) {
 			for _, ent := range drafts {
 				draft := ent.Value.(*proto.Draft)
 				p := draft.Proposal
-				hash := ent.Key.(thor.Bytes32)
-				// remove obsolete proposals
-				if math.Abs(float64(p.Number())-float64(st.ParentNumber()+1)) > 3 {
-					unknownDraft.Remove(hash)
-					continue
-				}
-				if p.ParentID == parent.Header().ID() {
-					unknownDraft.Remove(hash)
 
-					proposalHash := p.Hash()
-					if err := n.validateProposer(draft, proposalHash, st); err != nil {
-						log.Debug("signer not valid", "err", err)
+				if st.parent.ID() == p.ParentID {
+					unknownDraft.Remove(ent.Key.(thor.Bytes32))
+
+					if err := n.processDraft(ent.Value.(*proto.Draft), st); err != nil {
+						log.Debug("failed to process draft", "err", err)
 						continue
 					}
-
-					if err := n.validateProposal(p, st); err != nil {
-						log.Debug("block proposal is not valid", "err", err)
-						continue
-					}
-
-					n.comm.BroadcastDraft(draft)
-					knownProposal.Set(proposalHash, p, float64(p.Timestamp))
-
-					if st.GetAuthority(n.master.Address()) != nil {
-						signature, err := n.tryBacking(proposalHash, st)
-						if err != nil {
-							log.Debug("failed to back a proposal", "err", err)
-							continue
-						}
-
-						accepted := proto.Accepted{
-							ProposalHash: hash,
-							Signature:    signature,
-						}
-
-						seenAccepted.Add(accepted.Hash(), struct{}{})
-						n.comm.BroadcastAccepted(&accepted)
+					if err := n.tryBacking(p.Hash(), st); err != nil {
+						log.Debug("failed to back proposal", "err", err)
 					}
 				}
 			}
 
-			var aps []*acceptedWithPub
+			var aps []*cache.Entry
 			unknownAccepted.ForEach(func(ent *cache.Entry) bool {
-				aps = append(aps, ent.Value.(*acceptedWithPub))
+				aps = append(aps, ent)
 				return true
 			})
 
-			for _, ap := range aps {
-				accepted := ap.Accepted
-				pub := ap.Pub
+			for _, ent := range aps {
+				accepted := ent.Value.(*acceptedWithPub).Accepted
+				pub := ent.Value.(*acceptedWithPub).Pub
 				if val, _, ok := knownProposal.Get(accepted.ProposalHash); ok == true {
-					unknownAccepted.Remove(accepted.Hash())
+					unknownAccepted.Remove(ent.Key.(thor.Bytes32))
 
-					p := val.(*block.Proposal)
-
-					if parent.Header().ID() != p.ParentID {
+					if st.parent.ID() != val.(*block.Proposal).ParentID {
 						continue
 					}
 
-					if err := n.validateBackerSignature(accepted.Signature, pub, st); err != nil {
+					if err := n.processBackerSignature(accepted, pub, st); err != nil {
 						log.Debug("failed to validate backer signature", "err", err)
 						continue
 					}
 
-					n.comm.BroadcastAccepted(accepted)
 				}
 			}
 		}
 	}
 }
 
-func (n *Node) validateProposer(d *proto.Draft, proposalHash thor.Bytes32, st *status) error {
-	pub, err := crypto.SigToPub(proposalHash.Bytes(), d.Signature)
-	if err != nil {
-		return err
-	}
-	signer := thor.Address(crypto.PubkeyToAddress(*pub))
-
-	if st.GetAuthority(signer) == nil {
-		return errors.Errorf("proposer: %v is not an authority", signer)
-	}
-
+func (n *Node) processDraft(d *proto.Draft, st *status) error {
 	p := d.Proposal
-	var key [32]byte
-	copy(key[:], signer.Bytes())
-	binary.BigEndian.PutUint32(key[20:], p.Number())
-	binary.BigEndian.PutUint64(key[24:], p.Timestamp)
-	if seenProposer.Contains(key) {
-		return errors.Errorf("proposer:%v already proposed in this round", signer)
-	}
-	seenProposer.Add(key, struct{}{})
-
-	if st.IsScheduled(p.Timestamp, signer) == false {
-		return errors.New("proposal not scheduled")
-	}
-	return nil
-}
-
-func (n *Node) validateProposal(p *block.Proposal, st *status) error {
+	proposalHash := p.Hash()
 	now := uint64(time.Now().Unix())
+
+	if math.Abs(float64(p.Number())-float64(st.parent.Number()+1)) > 3 {
+		return errors.New("obsolete proposal")
+	}
+
 	if p.Timestamp <= st.parent.Timestamp() {
 		return errors.New("proposal timestamp behind parents")
 	}
@@ -379,33 +287,68 @@ func (n *Node) validateProposal(p *block.Proposal, st *status) error {
 		return errors.New("proposal in the future")
 	}
 
+	pub, err := crypto.SigToPub(proposalHash.Bytes(), d.Signature)
+	if err != nil {
+		return err
+	}
+	signer := thor.Address(crypto.PubkeyToAddress(*pub))
+
+	if st.IsAuthority(signer) == false {
+		return errors.Errorf("proposer: %v is not an authority", signer)
+	}
+
+	// limit that proposer can propose only one proposal in a round
+	var key [32]byte
+	copy(key[:], signer.Bytes())
+	binary.BigEndian.PutUint32(key[20:], p.Number())
+	binary.BigEndian.PutUint64(key[24:], p.Timestamp)
+	if seenDraft.Contains(key) {
+		return errors.Errorf("proposer:%v already proposed in this round", signer)
+	}
+	seenDraft.Add(key, struct{}{})
+
+	if st.IsScheduled(p.Timestamp, signer) == false {
+		return errors.New("proposal not scheduled")
+	}
+
+	knownProposal.Set(proposalHash, p, float64(p.Timestamp))
+	n.comm.BroadcastDraft(d)
 	return nil
 }
 
-func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) (block.ComplexSignature, error) {
-	alpha := append([]byte(nil), st.Seed()...)
-	alpha = append(alpha, st.ParentID().Bytes()[:4]...)
+func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) error {
+	if st.IsAuthority(n.master.Address()) == false {
+		return nil
+	}
 
+	alpha := append([]byte(nil), st.Alpha()...)
 	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(n.master.PrivateKey, alpha)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if lucky := poa.EvaluateVRF(beta); lucky == false {
-		return nil, errors.New("not lucky enough")
+		return errors.New("not lucky enough")
 	}
 
 	signature, err := crypto.Sign(proposalHash.Bytes(), n.master.PrivateKey)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	bs, err := block.NewComplexSignature(proof, signature)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return bs, nil
+	accepted := proto.Accepted{
+		ProposalHash: proposalHash,
+		Signature:    bs,
+	}
+
+	seenAccepted.Add(accepted.Hash(), struct{}{})
+	n.comm.BroadcastAccepted(&accepted)
+	return nil
 }
 
 func (n *Node) validateBacker(acc *proto.Accepted, st *status) (*ecdsa.PublicKey, error) {
@@ -415,18 +358,17 @@ func (n *Node) validateBacker(acc *proto.Accepted, st *status) (*ecdsa.PublicKey
 	}
 	backer := thor.Address(crypto.PubkeyToAddress(*pub))
 
-	if st.GetAuthority(backer) == nil {
+	if st.IsAuthority(backer) == false {
 		return nil, errors.Errorf("backer:%v is not an authority", backer)
 	}
 
 	return pub, nil
 }
 
-func (n *Node) validateBackerSignature(bs block.ComplexSignature, pub *ecdsa.PublicKey, st *status) error {
-	alpha := append([]byte(nil), st.Seed()...)
-	alpha = append(alpha, st.ParentID().Bytes()[:4]...)
+func (n *Node) processBackerSignature(acc *proto.Accepted, pub *ecdsa.PublicKey, st *status) error {
+	alpha := append([]byte(nil), st.Alpha()...)
 
-	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, bs.Proof())
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, acc.Signature.Proof())
 	if err != nil {
 		return err
 	}
@@ -434,5 +376,6 @@ func (n *Node) validateBackerSignature(bs block.ComplexSignature, pub *ecdsa.Pub
 	if isBacker := poa.EvaluateVRF(beta); isBacker == false {
 		return fmt.Errorf("VRF output is not lucky enough to be a backer: %v", crypto.PubkeyToAddress(*pub))
 	}
+	n.comm.BroadcastAccepted(acc)
 	return nil
 }
