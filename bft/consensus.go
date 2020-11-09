@@ -28,7 +28,7 @@ type Consensus struct {
 	committed               *committedBlockInfo
 	rtpc                    *rtpc
 	hasLastSignedpPCExpired bool
-	lastSignedPC            thor.Bytes32
+	lastSignedPC            *block.Header
 
 	nodeAddress   thor.Address
 	prevBestBlock *block.Header
@@ -49,26 +49,26 @@ func NewConsensus(
 		committed:               newCommittedBlockInfo(lastFinalized),
 		rtpc:                    newRTPC(repo, lastFinalized),
 		hasLastSignedpPCExpired: false,
-		lastSignedPC:            thor.Bytes32{},
+		lastSignedPC:            nil,
 		nodeAddress:             nodeAddress,
 		prevBestBlock:           repo.BestBlock().Header(),
 	}
 }
 
-// Update updates the local BFT state vector
-func (cons *Consensus) Update(newBlock *block.Block) error {
-	// update lastSignedPC
-	if pc := newBlock.Header().PC(); !pc.IsZero() {
-		signers := getSigners(newBlock)
-		for _, signer := range signers {
-			if signer == cons.nodeAddress {
-				cons.lastSignedPC = pc
-				cons.hasLastSignedpPCExpired = false
-				break
-			}
-		}
+// UpdateLastSignedPC updates lastSignedPC.
+// This function is called by the leader after he generates a new block or
+// by a backer after he backs a block proposal
+func (cons *Consensus) UpdateLastSignedPC(lastSignedPC *block.Header) {
+	if cons.lastSignedPC != nil && lastSignedPC.Timestamp() <= cons.lastSignedPC.Timestamp() {
+		return
 	}
 
+	cons.lastSignedPC = lastSignedPC
+	cons.hasLastSignedpPCExpired = false
+}
+
+// Update updates the local BFT state vector
+func (cons *Consensus) Update(newBlock *block.Block) error {
 	// Check whether the new block is on the canonical chain
 	isOnConanicalChain := false
 	best := cons.repo.BestBlock().Header()
@@ -123,14 +123,14 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	}
 
 	// Check whether the current view invalidates the last signed pc
-	if !cons.lastSignedPC.IsZero() && v.hasQCForNV() && v.getNumSigOnPC(cons.lastSignedPC) == 0 {
+	if cons.lastSignedPC != nil && v.hasQCForNV() && v.getNumSigOnPC(cons.lastSignedPC.ID()) == 0 {
 		cons.hasLastSignedpPCExpired = true
 	}
 
 	if rtpc := cons.rtpc.get(); rtpc != nil {
 		ifUpdatePC := false
-		if !cons.lastSignedPC.IsZero() {
-			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSignedPC)
+		if cons.lastSignedPC != nil {
+			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSignedPC.ID())
 			if err != nil {
 				return err
 			}
