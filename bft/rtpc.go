@@ -27,13 +27,15 @@ func (r *rtpc) get() *block.Header {
 }
 
 func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
-	// lastCommitted must be an offspring of r.lastCommitted
-	ok, err := isAncestor(r.repo, lastCommitted, r.lastCommitted)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return errors.New("Input block must be an offspring of the last committed")
+	if !r.lastCommitted.IsZero() {
+		// lastCommitted must be an offspring of r.lastCommitted
+		ok, err := isAncestor(r.repo, lastCommitted, r.lastCommitted)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("Input block must be an offspring of the last committed")
+		}
 	}
 
 	r.lastCommitted = lastCommitted
