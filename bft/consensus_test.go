@@ -102,9 +102,7 @@ func TestNormalSituation(t *testing.T) {
 			}
 		}
 		if ifUpdateLastSignedPC {
-			summary, err := repo.GetBlockSummary(cons.state[PC])
-			assert.Nil(t, err)
-			cons.UpdateLastSignedPC(summary.Header)
+			assert.Nil(t, cons.UpdateLastSignedPC(head.Header()))
 		}
 
 		repo.AddBlock(head, nil)
@@ -223,6 +221,41 @@ func TestNVC(t *testing.T) {
 	assert.Equal(t, c1.Header().ID(), cons.state[NV])
 }
 
+func TestNVD(t *testing.T) {
+	/**
+	Genesis --- b1 --- b2
+
+	b1 has a QC
+	nv[b1] <- b1
+	nv[b2] <- b1
+	*/
+
+	repo, nodes := newTestRepo()
+	gen := repo.BestBlock()
+	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
+
+	b1 := newBlock(
+		nodes[0], nodes[:QC+3], gen.Header().ID(),
+		gen.Header().Timestamp()+10, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+
+	b2 := newBlock(
+		nodes[0], nodes[:1], b1.Header().ID(),
+		gen.Header().Timestamp()+10, 0,
+		[4]thor.Bytes32{b1.Header().ID()},
+	)
+
+	assert.Nil(t, repo.AddBlock(b1, nil))
+	assert.Nil(t, repo.AddBlock(b2, nil))
+
+	assert.Nil(t, cons.repo.SetBestBlockID(b2.Header().ID()))
+
+	cons.state[NV] = b1.Header().ID()
+	assert.Nil(t, cons.Update(b2))
+	assert.Equal(t, b2.Header().ID(), cons.state[NV])
+}
+
 func TestPPUnlock(t *testing.T) {
 	/**
 	Genesis --- b1
@@ -257,7 +290,7 @@ func TestPPUnlock(t *testing.T) {
 	assert.True(t, cons.state[PP].IsZero())
 }
 
-func TestCommitFromBlockMessages(t *testing.T) {
+func TestCM(t *testing.T) {
 	repo, nodes := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
