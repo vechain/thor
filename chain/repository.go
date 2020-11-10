@@ -387,6 +387,10 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 		return true, err
 	}
 
+	if b1 == b2 {
+		return false, nil
+	}
+
 	if block.Number(b1) == block.Number(b2) {
 		return true, nil
 	} else if block.Number(b1) > block.Number(b2) {
