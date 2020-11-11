@@ -79,7 +79,9 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 		return nil, err
 	}
 
-	scheduler, err := poa.NewSchedulerV2(node.master.Address(), proposers, parent, seed.Bytes())
+	// use parent block's signer just for initiating the scheduler
+	signer, _ := parent.Header().Signer()
+	scheduler, err := poa.NewSchedulerV2(signer, proposers, parent, seed.Bytes())
 	if err != nil {
 		return nil, err
 	}
