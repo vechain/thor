@@ -246,9 +246,8 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 				if st.parent.ID() == draft.Proposal.ParentID {
 					unknownDraft.Remove(ent.Key.(thor.Bytes32))
-					draft := ent.Value.(*draftWithSigner).Draft
-					signer := ent.Value.(*draftWithSigner).Signer
 
+					signer := ent.Value.(*draftWithSigner).Signer
 					if err := n.processDraft(draft, signer, st); err != nil {
 						log.Debug("failed to process draft", "err", err)
 						continue
