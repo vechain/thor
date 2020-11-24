@@ -23,12 +23,14 @@ const (
 
 // Consensus ...
 type Consensus struct {
-	repo                    *chain.Repository
-	state                   [5]thor.Bytes32
-	committed               *committedBlockInfo
-	rtpc                    *rtpc
+	repo      *chain.Repository
+	state     [5]thor.Bytes32
+	committed *committedBlockInfo
+	rtpc      *rtpc
+
+	lastSignedPC            thor.Bytes32
+	lastSignedPCViewTS      uint64
 	hasLastSignedpPCExpired bool
-	lastSignedPC            *block.Header
 
 	nodeAddress   thor.Address
 	prevBestBlock *block.Header
@@ -44,27 +46,53 @@ func NewConsensus(
 	state[FN] = lastFinalized
 
 	return &Consensus{
-		repo:                    repo,
-		state:                   state,
-		committed:               newCommittedBlockInfo(lastFinalized),
-		rtpc:                    newRTPC(repo, lastFinalized),
-		hasLastSignedpPCExpired: false,
-		lastSignedPC:            nil,
-		nodeAddress:             nodeAddress,
-		prevBestBlock:           repo.BestBlock().Header(),
+		repo:          repo,
+		state:         state,
+		committed:     newCommittedBlockInfo(lastFinalized),
+		rtpc:          newRTPC(repo, lastFinalized),
+		nodeAddress:   nodeAddress,
+		prevBestBlock: repo.BestBlock().Header(),
 	}
 }
 
 // UpdateLastSignedPC updates lastSignedPC.
 // This function is called by the leader after he generates a new block or
 // by a backer after he backs a block proposal
-func (cons *Consensus) UpdateLastSignedPC(lastSignedPC *block.Header) {
-	if cons.lastSignedPC != nil && lastSignedPC.Timestamp() <= cons.lastSignedPC.Timestamp() {
-		return
+func (cons *Consensus) UpdateLastSignedPC(h *block.Header) error {
+	var (
+		viewTS uint64
+		err    error
+	)
+
+	// PC value must not be zero or equal to the existing lastSignedPC
+	if h.PC().IsZero() || h.PC() == cons.lastSignedPC {
+		return nil
 	}
 
-	cons.lastSignedPC = lastSignedPC
+	// If the block is the first of its view, use the block's timestamp directly.
+	// It is because the block may have not yet been added to repo in case of a
+	// backer calling this function;
+	// Otherwise, the block referred by the NV value should have already existed
+	// in repo.
+	if h.NV() == GenNVforFirstBlock(h.Number()) {
+		viewTS = h.Timestamp()
+	} else {
+		viewTS, err = getTimestamp(cons.repo, getNV(h))
+		if err != nil {
+			return err
+		}
+	}
+
+	// view must be newer
+	if viewTS <= cons.lastSignedPCViewTS {
+		return nil
+	}
+
+	cons.lastSignedPC = h.PC()
+	cons.lastSignedPCViewTS = viewTS
 	cons.hasLastSignedpPCExpired = false
+
+	return nil
 }
 
 // Update updates the local BFT state vector
@@ -121,14 +149,20 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	}
 
 	// Check whether the current view invalidates the last signed pc
-	if cons.lastSignedPC != nil && v.hasQCForNV() && v.getNumSigOnPC(cons.lastSignedPC.ID()) == 0 {
-		cons.hasLastSignedpPCExpired = true
+	if !cons.lastSignedPC.IsZero() && v.hasQCForNV() && v.getNumSigOnPC(cons.lastSignedPC) == 0 {
+		ts, err := getTimestamp(cons.repo, getNV(newBlock.Header()))
+		if err != nil {
+			return err
+		}
+		if ts > cons.lastSignedPCViewTS {
+			cons.hasLastSignedpPCExpired = true
+		}
 	}
 
 	if rtpc := cons.rtpc.get(); rtpc != nil {
 		ifUpdatePC := false
-		if cons.lastSignedPC != nil {
-			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSignedPC.ID())
+		if !cons.lastSignedPC.IsZero() {
+			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSignedPC)
 			if err != nil {
 				return err
 			}
@@ -166,19 +200,20 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	// Update nv //
 	///////////////
 	if isOnConanicalChain {
-		nv := newBlock.Header().NV()
-		if block.Number(nv) == newBlock.Header().Number() {
-			nv = newBlock.Header().ID()
-		}
+		nv := getNV(newBlock.Header())
 
 		if cons.state[NV].IsZero() {
 			cons.state[NV] = nv
 		} else {
-			summary, err := cons.repo.GetBlockSummary(cons.state[NV])
+			ts0, err := getTimestamp(cons.repo, cons.state[NV])
 			if err != nil {
 				return err
 			}
-			if newBlock.Header().Timestamp() > summary.Header.Timestamp() {
+			ts1, err := getTimestamp(cons.repo, newBlock.Header().ID())
+			if err != nil {
+				return err
+			}
+			if ts1 > ts0 {
 				cons.state[NV] = nv
 			} else if newBlock.Header().ParentID() != cons.prevBestBlock.ID() {
 				cons.state[NV] = newBlock.Header().ID()
@@ -188,12 +223,11 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 			// has already obtained 2f+1 nv messages. If yes, then start a
 			// new view.
 			pid := newBlock.Header().ParentID()
-			summary, err = cons.repo.GetBlockSummary(pid)
+			summary, err := cons.repo.GetBlockSummary(pid)
 			if err != nil {
 				return err
 			}
-			first := block.Number(summary.Header.NV())
-			w, err := newView(cons.repo.NewChain(pid), first)
+			w, err := newView(cons.repo.NewChain(pid), block.Number(summary.Header.NV()))
 			if err != nil {
 				return err
 			}
@@ -241,4 +275,21 @@ func isAncestor(repo *chain.Repository, offspring, ancestor thor.Bytes32) (bool,
 	}
 
 	return ok, nil
+}
+
+func getTimestamp(repo *chain.Repository, id thor.Bytes32) (uint64, error) {
+	summary, err := repo.GetBlockSummary(id)
+	if err != nil {
+		return 0, err
+	}
+
+	return summary.Header.Timestamp(), nil
+}
+
+func getNV(h *block.Header) (nv thor.Bytes32) {
+	nv = h.NV()
+	if block.Number(nv) == block.Number(h.ID()) {
+		nv = h.ID()
+	}
+	return
 }
