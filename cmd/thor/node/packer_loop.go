@@ -72,7 +72,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		for {
 			if n.timeToPack(flow) == true {
-				if err := n.pack(flow); err != nil {
+				if err := n.pack(ctx, flow); err != nil {
+					if err == context.Canceled {
+						return
+					}
 					log.Error("failed to pack block", "err", err)
 				}
 				break
@@ -126,7 +129,7 @@ func (n *Node) timeToPack(flow *packer.Flow) bool {
 	return nowTs+thor.BlockInterval/2 >= flow.When()
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
+func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 	txs := n.txPool.Executables()
 	var txsToRemove []*tx.Transaction
 	defer func() {
@@ -180,6 +183,8 @@ func (n *Node) pack(flow *packer.Flow) error {
 							}
 						}
 					}
+				case <-ctx.Done():
+					return ctx.Err()
 				case <-ticker.C:
 					goto NEXT
 				}
