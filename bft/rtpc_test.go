@@ -29,6 +29,8 @@ func TestUpdate(t *testing.T) {
 	//
 	// blocks arriving order: b0, b1, b2, b3, b4, b7, b5, b6, b8, b10
 
+	emptyBytes32 := thor.Bytes32{}
+
 	repo, keys := newTestRepo()
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
@@ -86,7 +88,7 @@ func TestUpdate(t *testing.T) {
 		b4.Header().ID(), b4.Header().Timestamp()+30, 0,
 		[4]thor.Bytes32{
 			GenNVforFirstBlock(b4.Header().Number() + 1),
-			thor.Bytes32{}, b7.Header().ID(),
+			emptyBytes32, b7.Header().ID(),
 		},
 	)
 	assert.Nil(t, repo.AddBlock(b5, nil))
@@ -96,7 +98,7 @@ func TestUpdate(t *testing.T) {
 	b6 := newBlock(
 		keys[30], keys[31:68],
 		b5.Header().ID(), b5.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{b5.Header().ID(), thor.Bytes32{}, b1.Header().ID()},
+		[4]thor.Bytes32{b5.Header().ID(), emptyBytes32, b1.Header().ID()},
 	)
 	assert.Nil(t, repo.AddBlock(b6, nil))
 	rtpc.update(b6)
