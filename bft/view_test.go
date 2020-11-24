@@ -216,7 +216,7 @@ func TestNewView(t *testing.T) {
 		repo := newTestRepo()
 		nodeInds, blks, fvInds := newTestBranch(repo, keys)
 
-		branches := repo.GetBranchesByID(repo.GenesisBlock().Header().ID())
+		branches, _ := repo.GetBranchesByID(repo.GenesisBlock().Header().ID())
 
 		assert.Equal(t, len(branches), 1)                                      // only one branch
 		assert.Equal(t, branches[0].HeadID(), blks[len(blks)-1].Header().ID()) // verify branch head
@@ -237,7 +237,7 @@ func TestNewView(t *testing.T) {
 				hasConflictPC = true
 			}
 		}
-		assert.Equal(t, vw.hasConflictPC, hasConflictPC)
+		assert.Equal(t, vw.hasConflictPC(), hasConflictPC)
 
 		// verify nv info
 		nvs := []int(nil)
@@ -352,20 +352,20 @@ func TestViewFunc(t *testing.T) {
 	assert.Nil(t, repo.AddBlock(blk3, nil))
 
 	var (
-		bh *chain.Chain
-		vw *view
+		bhs []*chain.Chain
+		vw  *view
 	)
-	bh = repo.GetBranchesByID(blk2.Header().ID())[0]
-	vw, _ = newView(bh, block.Number(blk1.Header().ID()))
-	assert.True(t, vw.ifHasQCForNV())
-	assert.Equal(t, M(true, pp), M(vw.ifHasQCForPP()))
-	assert.Equal(t, M(true, pc), M(vw.ifHasQCForPC()))
+	bhs, _ = repo.GetBranchesByID(blk2.Header().ID())
+	vw, _ = newView(bhs[0], block.Number(blk1.Header().ID()))
+	assert.True(t, vw.hasQCForNV())
+	assert.Equal(t, M(true, pp), M(vw.hasQCForPP()))
+	assert.Equal(t, M(true, pc), M(vw.hasQCForPC()))
 
-	bh = repo.GetBranchesByID(blk3.Header().ID())[0]
-	vw, _ = newView(bh, block.Number(blk1.Header().ID()))
-	assert.False(t, vw.ifHasQCForNV())
-	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPP()))
-	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPC()))
+	bhs, _ = repo.GetBranchesByID(blk3.Header().ID())
+	vw, _ = newView(bhs[0], block.Number(blk1.Header().ID()))
+	assert.False(t, vw.hasQCForNV())
+	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.hasQCForPP()))
+	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.hasQCForPC()))
 	assert.Equal(t, 2, len(vw.pp))
 	assert.Equal(t, 1, len(vw.pc))
 	assert.Equal(t, 30, len(vw.pp[pp]))
