@@ -381,10 +381,16 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 	)
 
 	if _, err := r.GetBlockSummary(b1); err != nil {
-		return true, err
+		if r.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
 	if _, err := r.GetBlockSummary(b2); err != nil {
-		return true, err
+		if r.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
 
 	if b1 == b2 {
