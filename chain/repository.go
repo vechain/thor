@@ -381,14 +381,14 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 	)
 
 	if _, err := r.GetBlockSummary(b1); err != nil {
-		return false, err
+		return true, err
 	}
 	if _, err := r.GetBlockSummary(b2); err != nil {
-		return false, err
+		return true, err
 	}
 
 	if block.Number(b1) == block.Number(b2) {
-		return false, nil
+		return true, nil
 	} else if block.Number(b1) > block.Number(b2) {
 		// Here compare block number should be okay since
 		// if the two blocks are on the same chain, the one
@@ -401,7 +401,7 @@ func (r *Repository) IfConflict(b1, b2 thor.Bytes32) (bool, error) {
 	c = r.NewChain(high)
 	ok, err := c.HasBlock(low)
 	if err != nil {
-		return false, err
+		return true, err
 	}
 	return !ok, nil
 }
