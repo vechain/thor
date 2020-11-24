@@ -1,8 +1,6 @@
 package bft
 
 import (
-	"errors"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 )
@@ -23,64 +21,67 @@ func (r *rtpc) getRTPC() *block.Header {
 	return r.curr
 }
 
-func (r *rtpc) updateByLatestCommitted(latestCommitted *block.Header) {
+func (r *rtpc) updateByLastCommitted(lastCommitted *block.Header) {
+	if r.curr == nil {
+		return
+	}
+
 	// if the current RTPC block is older than the latest block committed locally
-	if r.curr.Timestamp() <= latestCommitted.Timestamp() {
+	if r.curr.Timestamp() <= lastCommitted.Timestamp() {
 		r.curr = nil
 	}
 }
 
 func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
-	var (
-		branches []*chain.Chain
-		summary  *chain.BlockSummary
-		vw       *view
-		err      error
-	)
-
-	branches = r.repo.GetBranchesByID(newBlock.Header().ID())
-	if len(branches) != 1 || branches[0].HeadID() != newBlock.Header().ID() {
-		return errors.New("New block is not a branch head")
-	}
-
 	// Construct the view containing the lastest received block `newBlock`
-	nv := newBlock.Header().NV()
-	if newBlock.Header().NV() == GenNVforFirstBlock(newBlock.Header().Number()) {
-		nv = newBlock.Header().ID()
-	}
-	vw, err = newView(branches[0], block.Number(nv))
+	branch := r.repo.NewChain(newBlock.Header().ID())
+	currView, err := newView(branch, block.Number(newBlock.Header().NV()))
 	if err != nil {
 		return err
 	}
 
 	// Check whether there are 2f+1 sigs
-	if !vw.ifHasQCForNV() {
+	if !currView.hasQCForNV() {
 		return nil
 	}
 
-	// Make sure the view is newer
-	summary, err = r.repo.GetBlockSummary(nv)
+	// Make sure the view is newer that the current RTPC block
+	summary, err := r.repo.GetBlockSummary(currView.getFirstBlockID())
+	currViewTS := summary.Header.Timestamp()
 	if err != nil {
 		return err
 	}
-	if r.curr != nil && summary.Header.Timestamp() <= r.curr.Timestamp() {
+	if r.curr != nil && currViewTS <= r.curr.Timestamp() {
 		return nil
 	}
 
 	// Invalidate the current RTPC block if the latest view contains no pc message of the block
-	if r.curr != nil && vw.getNumSigOnPC(r.curr.ID()) == 0 {
+	if r.curr != nil && currView.getNumSigOnPC(r.curr.ID()) == 0 {
 		r.curr = nil
 	}
 
-	// Check whether the view has 2f+1 pp messages and no conflict pc message
-	ok, pp := vw.ifHasQCForPP()
-	if !ok || vw.ifHasConflictPC() {
+	// Stop here if there is a valid RTPC block
+	if r.curr != nil {
 		return nil
 	}
 
-	// Check whether every newer view contains pc message of the view
+	// Check whether the view has 2f+1 pp messages and no conflict pc message
+	ok, id := currView.hasQCForPP()
+	if !ok || currView.hasConflictPC() {
+		return nil
+	}
+	summary, err = r.repo.GetBlockSummary(id)
+	if err != nil {
+		return err
+	}
+	candidate := summary.Header
+
+	// Check whether every newer view contains pc message of the candidate RTPC block
 	ifUpdate := true
-	branches = r.repo.GetBranchesByTimestamp(summary.Header.Timestamp())
+	branches, err := r.repo.GetBranchesByTimestamp(currViewTS)
+	if err != nil {
+		return err
+	}
 	for _, branch := range branches {
 		num := block.Number(branch.HeadID())
 		for {
@@ -89,7 +90,9 @@ func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
 				return err
 			}
 			num = block.Number(header.NV())
-			if num <= block.Number(nv) {
+			if nv, err := branch.GetBlockHeader(num); err != nil {
+				return err
+			} else if nv.Timestamp() <= currViewTS {
 				break
 			}
 
@@ -98,9 +101,15 @@ func (r *rtpc) updateByNewBlock(newBlock *block.Block) error {
 				return err
 			}
 
-			if vw.getNumSigOnPC(nv) == 0 {
+			if vw.hasQCForNV() && vw.getNumSigOnPC(candidate.ID()) == 0 {
 				ifUpdate = false
 				goto END_SEARCH
+			}
+
+			// move to the previous view
+			num = num - 1
+			if num <= 0 {
+				break
 			}
 		}
 	}
@@ -108,11 +117,7 @@ END_SEARCH:
 
 	// update RTPC if every view newer than the view contains at least one pc message for the view
 	if ifUpdate {
-		summary, err = r.repo.GetBlockSummary(pp)
-		if err != nil {
-			return err
-		}
-		r.curr = summary.Header
+		r.curr = candidate
 	}
 
 	return nil
