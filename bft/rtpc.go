@@ -10,20 +10,20 @@ import (
 
 type rtpc struct {
 	repo          *chain.Repository
-	curr          *block.Header
+	currRTPC      *block.Header
+	currView      *block.Header
 	lastCommitted thor.Bytes32
 }
 
 func newRTPC(repo *chain.Repository, lastCommitted thor.Bytes32) *rtpc {
 	return &rtpc{
 		repo:          repo,
-		curr:          nil,
 		lastCommitted: lastCommitted,
 	}
 }
 
 func (r *rtpc) get() *block.Header {
-	return r.curr
+	return r.currRTPC
 }
 
 func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
@@ -40,15 +40,16 @@ func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
 
 	r.lastCommitted = lastCommitted
 
-	if r.curr == nil {
+	if r.currRTPC == nil {
 		return nil
 	}
 
 	// if the current RTPC block is not newer than the latest block committed locally
 	if summary, err := r.repo.GetBlockSummary(lastCommitted); err != nil {
 		return err
-	} else if r.curr.Timestamp() <= summary.Header.Timestamp() {
-		r.curr = nil
+	} else if r.currRTPC.Timestamp() <= summary.Header.Timestamp() {
+		r.currRTPC = nil
+		r.currView = nil
 	}
 
 	return nil
@@ -67,23 +68,23 @@ func (r *rtpc) update(newBlock *block.Block) error {
 		return nil
 	}
 
-	// Make sure the view is newer that the current RTPC block
+	// If currRTPC != nil, make sure the view is newer than currView
 	summary, err := r.repo.GetBlockSummary(currView.getFirstBlockID())
-	currViewTS := summary.Header.Timestamp()
+	currViewBlock := summary.Header
 	if err != nil {
 		return err
 	}
-	if r.curr != nil && currViewTS <= r.curr.Timestamp() {
+	if r.currRTPC != nil && currViewBlock.Timestamp() <= r.currView.Timestamp() {
 		return nil
 	}
 
 	// Invalidate the current RTPC block if the latest view contains no pc message of the block
-	if r.curr != nil && currView.getNumSigOnPC(r.curr.ID()) == 0 {
-		r.curr = nil
+	if r.currRTPC != nil && currView.getNumSigOnPC(r.currRTPC.ID()) == 0 {
+		r.currRTPC = nil
 	}
 
 	// Stop here if there is a valid RTPC block
-	if r.curr != nil {
+	if r.currRTPC != nil {
 		return nil
 	}
 
@@ -99,18 +100,9 @@ func (r *rtpc) update(newBlock *block.Block) error {
 	}
 	candidate := summary.Header
 
-	// Candidate RTPC block must be newer than the last committed
-	summary, err = r.repo.GetBlockSummary(r.lastCommitted)
-	if err != nil {
-		return err
-	}
-	if candidate.Timestamp() <= summary.Header.Timestamp() {
-		return nil
-	}
-
 	// Check whether every newer view contains pc message of the candidate RTPC block
 	ifUpdate := true
-	branches, err := r.repo.GetBranchesByTimestamp(currViewTS)
+	branches, err := r.repo.GetBranchesByTimestamp(currViewBlock.Timestamp())
 	if err != nil {
 		return err
 	}
@@ -127,7 +119,7 @@ func (r *rtpc) update(newBlock *block.Block) error {
 			// that includes the new block
 			if nv, err := branch.GetBlockHeader(num); err != nil {
 				return err
-			} else if nv.Timestamp() <= currViewTS {
+			} else if nv.Timestamp() <= currViewBlock.Timestamp() {
 				break
 			}
 			vw, err := newView(branch, num)
@@ -150,7 +142,8 @@ END_SEARCH:
 
 	// update RTPC if every view newer than the view contains at least one pc message for the view
 	if ifUpdate {
-		r.curr = candidate
+		r.currRTPC = candidate
+		r.currView = currViewBlock
 	}
 
 	return nil

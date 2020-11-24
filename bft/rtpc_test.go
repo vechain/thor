@@ -133,20 +133,18 @@ func TestUpdateLastCommitted(t *testing.T) {
 	repo.AddBlock(b3, nil)
 	repo.AddBlock(b4, nil)
 
-	rtpc.curr = b2.Header()
+	rtpc.currRTPC = b2.Header()
 
-	err := rtpc.updateLastCommitted(b1.Header().ID())
-	assert.Nil(t, err)
+	assert.Nil(t, rtpc.updateLastCommitted(b1.Header().ID()))
 	assert.Equal(t, b2.Header().ID(), rtpc.get().ID())
 
-	err = rtpc.updateLastCommitted(b2.Header().ID())
-	assert.Nil(t, err)
+	assert.Nil(t, rtpc.updateLastCommitted(b2.Header().ID()))
 	assert.Nil(t, rtpc.get())
 
-	err = rtpc.updateLastCommitted(b3.Header().ID())
-	assert.Nil(t, err)
+	assert.Nil(t, rtpc.updateLastCommitted(b3.Header().ID()))
 	assert.Nil(t, rtpc.get())
 
-	err = rtpc.updateLastCommitted(b4.Header().ID())
-	assert.Equal(t, errors.New("Input block must be an offspring of the last committed"), err)
+	assert.Equal(
+		t, errors.New("Input block must be an offspring of the last committed"),
+		rtpc.updateLastCommitted(b4.Header().ID()))
 }
