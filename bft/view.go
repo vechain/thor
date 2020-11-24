@@ -140,16 +140,16 @@ func (v *view) getNumSigOnPC(pc thor.Bytes32) int {
 func getSigners(blk *block.Block) (endorsors []thor.Address) {
 	header := blk.Header()
 	proposer, _ := header.Signer()
-	msg := block.NewProposal(
+	hash := block.NewProposal(
 		header.ParentID(),
 		header.TxsRoot(),
 		header.GasLimit(),
 		header.Timestamp(),
-	).AsMessage(proposer)
+	).Hash()
 
 	bss := blk.BackerSignatures()
 	for _, bs := range bss {
-		pub, err := crypto.SigToPub(thor.Blake2b(msg, bs.Proof()).Bytes(), bs.Signature())
+		pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
 		if err != nil {
 			panic(err)
 		}

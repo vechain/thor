@@ -101,18 +101,18 @@ func newBlock(
 	h := parent.Header()
 	timestamp := h.Timestamp() + numInternvalApart*thor.BlockInterval
 
-	msg := block.NewProposal(
+	hash := block.NewProposal(
 		h.ID(),
 		emptyRootHash,
 		h.GasLimit(),
 		timestamp,
-	).AsMessage(thor.Address(crypto.PubkeyToAddress(nodes[proposer].PublicKey)))
+	).Hash()
 
 	bss := block.ComplexSignatures(nil)
 	for _, backer := range backers {
 		proof := make([]byte, 81)
 		rand.Read(proof)
-		sig, err := crypto.Sign(thor.Blake2b(msg, proof).Bytes(), nodes[backer])
+		sig, err := crypto.Sign(hash.Bytes(), nodes[backer])
 		if err != nil {
 			panic(err)
 		}
