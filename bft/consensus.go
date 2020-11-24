@@ -23,15 +23,15 @@ const (
 
 // Consensus ...
 type Consensus struct {
-	repo               *chain.Repository
-	state              [5]thor.Bytes32
-	committed          *committedBlockInfo
-	rtpc               *rtpc
-	hasPCSignedExpired bool
-	lastSigned         *block.Header
+	repo                    *chain.Repository
+	state                   [5]thor.Bytes32
+	committed               *committedBlockInfo
+	rtpc                    *rtpc
+	hasLastSignedpPCExpired bool
+	lastSignedPC            thor.Bytes32
 
-	nodeAddress thor.Address
-	prevBest    *block.Header
+	nodeAddress   thor.Address
+	prevBestBlock *block.Header
 }
 
 // NewConsensus initializes BFT consensus
@@ -44,31 +44,34 @@ func NewConsensus(
 	state[FN] = lastFinalized
 
 	return &Consensus{
-		repo:               repo,
-		state:              state,
-		committed:          newCommittedBlockInfo(lastFinalized),
-		rtpc:               newRTPC(repo, lastFinalized),
-		hasPCSignedExpired: false,
-		lastSigned:         nil,
-		nodeAddress:        nodeAddress,
-		prevBest:           repo.BestBlock().Header(),
+		repo:                    repo,
+		state:                   state,
+		committed:               newCommittedBlockInfo(lastFinalized),
+		rtpc:                    newRTPC(repo, lastFinalized),
+		hasLastSignedpPCExpired: false,
+		lastSignedPC:            thor.Bytes32{},
+		nodeAddress:             nodeAddress,
+		prevBestBlock:           repo.BestBlock().Header(),
 	}
 }
 
 // Update updates the local BFT state vector
 func (cons *Consensus) Update(newBlock *block.Block) error {
-	// update lastSigned
-	signers := getSigners(newBlock)
-	for _, signer := range signers {
-		if signer == cons.nodeAddress {
-			cons.lastSigned = newBlock.Header()
+	// update lastSignedPC
+	if pc := newBlock.Header().PC(); !pc.IsZero() {
+		signers := getSigners(newBlock)
+		for _, signer := range signers {
+			if signer == cons.nodeAddress {
+				cons.lastSignedPC = pc
+				cons.hasLastSignedpPCExpired = false
+			}
 		}
 	}
 
 	// Check whether the new block is on the canonical chain
 	isOnConanicalChain := false
 	best := cons.repo.BestBlock().Header()
-	if best.ID() == cons.prevBest.ID() {
+	if best.ID() == cons.prevBestBlock.ID() {
 		isOnConanicalChain = true
 	}
 
@@ -78,61 +81,61 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		return err
 	}
 
-	// update CM
+	if !v.hasQCForNV() {
+		return nil
+	}
+
+	///////////////
+	// update CM //
+	///////////////
+	// Check whether there are 2f + 1 same pp messages and no conflict pc in the view
 	if ok, cm := v.hasQCForPC(); ok && !v.hasConflictPC() {
 		cons.state[CM] = cm
 		cons.state[PC] = thor.Bytes32{}
 		cons.committed.updateLocal(cm)
 	}
-	if cm := newBlock.Header().CM(); !cm.IsZero() {
+	// Check whether there are f+1 same cm messages
+	if cm := newBlock.Header().CM(); !cm.IsZero() && cm != cons.state[CM] {
 		// Check whether there are f+1 cm messages
-		ok1, err := cons.committed.updateObserved(cm)
-		if err != nil {
-			return err
-		}
-
-		if ok1 {
-			ifUpdate := true
-			// Check whether the new cm is an offspring of the old cm
-			if !cons.state[CM].IsZero() {
-				ok2, err := isAncestor(cons.repo, cm, cons.state[CM])
-				if err != nil {
-					return err
-				}
-				if !ok2 {
-					ifUpdate = false
-				}
-			}
-
-			if ifUpdate {
-				cons.state[CM] = cm
-				cons.committed.updateLocal(cm)
-			}
+		ok := cons.committed.updateObserved(cm)
+		if ok {
+			cons.state[CM] = cm
+			cons.committed.updateLocal(cm)
 		}
 	}
+	// update the finalized block info
 	if block.Number(cons.state[FN]) < block.Number(cons.state[CM]) {
 		cons.state[FN] = cons.state[CM]
 	}
 
-	// update PC
+	///////////////
+	// update PC //
+	///////////////
+	// Update RTPC
 	if !cons.state[CM].IsZero() {
-		cons.rtpc.updateLastCommitted(cons.state[CM])
-	}
-	if cons.lastSigned != nil {
-		if v.hasQCForNV() && v.getNumSigOnPC(cons.lastSigned.PC()) == 0 {
-			cons.hasPCSignedExpired = true
+		if err := cons.rtpc.updateLastCommitted(cons.state[CM]); err != nil {
+			return err
 		}
 	}
+	if err := cons.rtpc.update(newBlock); err != nil {
+		return err
+	}
+
+	// Check whether the current view invalidates the last signed pc
+	if !cons.lastSignedPC.IsZero() && v.getNumSigOnPC(cons.lastSignedPC) == 0 {
+		cons.hasLastSignedpPCExpired = true
+	}
+
 	if rtpc := cons.rtpc.get(); rtpc != nil {
 		ifUpdatePC := false
-		if cons.lastSigned != nil {
-			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSigned.PC())
+		if !cons.lastSignedPC.IsZero() {
+			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSignedPC)
 			if err != nil {
 				return err
 			}
 			if !ok {
 				ifUpdatePC = true
-			} else if cons.hasPCSignedExpired {
+			} else if cons.hasLastSignedpPCExpired {
 				ifUpdatePC = true
 			}
 		} else {
@@ -144,21 +147,25 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		}
 	}
 
-	// Unlock pc
+	///////////////
+	// Unlock pc //
+	///////////////
 	if rtpc := cons.rtpc.get(); rtpc != nil {
 		if cons.state[PC] != rtpc.ID() {
 			cons.state[PC] = thor.Bytes32{}
 		}
 	}
 
-	// Update pp
-	if isOnConanicalChain {
-		if v.hasQCForNV() && !v.hasConflictPC() {
-			cons.state[PP] = v.getFirstBlockID()
-		}
+	///////////////
+	// Update pp //
+	///////////////
+	if isOnConanicalChain && !v.hasConflictPC() {
+		cons.state[PP] = v.getFirstBlockID()
 	}
 
-	// Update nv
+	///////////////
+	// Update nv //
+	///////////////
 	if isOnConanicalChain {
 		nv := newBlock.Header().NV()
 		if block.Number(nv) == newBlock.Header().Number() {
@@ -174,10 +181,13 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 			}
 			if newBlock.Header().Timestamp() > summary.Header.Timestamp() {
 				cons.state[NV] = nv
-			} else if newBlock.Header().ParentID() != cons.prevBest.ID() {
+			} else if newBlock.Header().ParentID() != cons.prevBestBlock.ID() {
 				cons.state[NV] = newBlock.Header().ID()
 			}
 
+			// Check whether the view including the parent of the new block
+			// has already obtained 2f+1 nv messages. If yes, then start a
+			// new view.
 			pid := newBlock.Header().ParentID()
 			summary, err = cons.repo.GetBlockSummary(pid)
 			if err != nil {
@@ -194,15 +204,19 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		}
 	}
 
-	// unlock pp
-	if ok, err := cons.repo.IfConflict(cons.state[NV], cons.state[PP]); err != nil {
-		return err
-	} else if ok {
-		cons.state[PP] = thor.Bytes32{}
+	///////////////
+	// unlock pp //
+	///////////////
+	if !cons.state[NV].IsZero() && !cons.state[PP].IsZero() {
+		if ok, err := cons.repo.IfConflict(cons.state[NV], cons.state[PP]); err != nil {
+			return err
+		} else if ok {
+			cons.state[PP] = thor.Bytes32{}
+		}
 	}
 
-	// update prevBest
-	cons.prevBest = best
+	// update prevBestBlock
+	cons.prevBestBlock = best
 
 	return nil
 }
