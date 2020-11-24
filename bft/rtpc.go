@@ -44,12 +44,10 @@ func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
 		return nil
 	}
 
-	// if the current RTPC block is older than the latest block committed locally
-	summary, err := r.repo.GetBlockSummary(lastCommitted)
-	if err != nil {
+	// if the current RTPC block is not newer than the latest block committed locally
+	if summary, err := r.repo.GetBlockSummary(lastCommitted); err != nil {
 		return err
-	}
-	if r.curr.Timestamp() <= summary.Header.Timestamp() {
+	} else if r.curr.Timestamp() <= summary.Header.Timestamp() {
 		r.curr = nil
 	}
 
