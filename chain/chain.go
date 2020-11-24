@@ -248,15 +248,15 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 	return c.GetBlockHeader(n)
 }
 
-// IsOnChain checks whether the block is on the current chain
-func (c *Chain) IsOnChain(id thor.Bytes32) bool {
-	storedID, err := c.GetBlockID(block.Number(id))
-	if err != nil {
-		return false
-	}
+// // IsOnChain checks whether the block is on the current chain
+// func (c *Chain) IsOnChain(id thor.Bytes32) bool {
+// 	storedID, err := c.GetBlockID(block.Number(id))
+// 	if err != nil {
+// 		return false
+// 	}
 
-	return storedID == id
-}
+// 	return storedID == id
+// }
 
 // NewBestChain create a chain with best block as head.
 func (r *Repository) NewBestChain() *Chain {

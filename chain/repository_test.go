@@ -7,6 +7,7 @@ package chain_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"sort"
 	"testing"
 
@@ -114,6 +115,7 @@ func TestBranchOps(t *testing.T) {
 		branches []*chain.Chain
 		expected []thor.Bytes32
 		actual   []thor.Bytes32
+		err      error
 	)
 
 	repo := newTestRepo()
@@ -128,26 +130,17 @@ func TestBranchOps(t *testing.T) {
 	blocks[5] = newBlock(blocks[1], 30+launchTime)
 
 	for _, blk := range blocks {
-		err := repo.AddBlock(blk, nil)
+		err = repo.AddBlock(blk, nil)
 		assert.Nil(t, err)
 	}
 
-	branches = repo.GetBranchesByID(blocks[1].Header().ID())
+	/////////////////////
+	// GetBranchesByID
+	/////////////////////
+	// Find all the branches that contain b1 => ==> [b3, b4, b5]
+	branches, err = repo.GetBranchesByID(blocks[1].Header().ID())
+	assert.Nil(t, err)
 	assert.Equal(t, len(branches), 3)
-	assert.Equal(t, branches[0].HeadID(), blocks[5].Header().ID())
-
-	var b0, b1 *block.Block
-	if bytes.Compare(blocks[3].Header().ID().Bytes(), blocks[4].Header().ID().Bytes()) < 0 {
-		b0 = blocks[3]
-		b1 = blocks[4]
-	} else {
-		b0 = blocks[4]
-		b1 = blocks[3]
-	}
-	assert.Equal(t, branches[1].HeadID(), b0.Header().ID())
-	assert.Equal(t, branches[2].HeadID(), b1.Header().ID())
-
-	branches = repo.GetBranchesByTimestamp(20 + launchTime)
 	assert.Equal(t, 3, len(branches))
 	expected = []thor.Bytes32{blocks[5].Header().ID(), blocks[3].Header().ID(), blocks[4].Header().ID()}
 	sortBytes32Array(expected)
@@ -155,7 +148,21 @@ func TestBranchOps(t *testing.T) {
 	sortBytes32Array(actual)
 	assert.Equal(t, expected, actual)
 
-	branches = repo.GetBranchesByTimestamp(30 + launchTime)
+	///////////////////////////
+	// GetBranchesByTimestamp
+	///////////////////////////
+	// Find the branches newer than b1 ==> [b3, b4, b5]
+	branches, err = repo.GetBranchesByTimestamp(blocks[1].Header().Timestamp())
+	assert.Equal(t, 3, len(branches))
+	expected = []thor.Bytes32{blocks[5].Header().ID(), blocks[3].Header().ID(), blocks[4].Header().ID()}
+	sortBytes32Array(expected)
+	actual = []thor.Bytes32{branches[0].HeadID(), branches[1].HeadID(), branches[2].HeadID()}
+	sortBytes32Array(actual)
+	assert.Equal(t, expected, actual)
+
+	// Find the branches newer than b2 ==> [b3, b4]
+	branches, err = repo.GetBranchesByTimestamp(blocks[2].Header().Timestamp())
+	assert.Nil(t, err)
 	assert.Equal(t, 2, len(branches))
 	expected = []thor.Bytes32{blocks[3].Header().ID(), blocks[4].Header().ID()}
 	sortBytes32Array(expected)
@@ -163,14 +170,41 @@ func TestBranchOps(t *testing.T) {
 	sortBytes32Array(actual)
 	assert.Equal(t, expected, actual)
 
-	branches = repo.GetBranchesByTimestamp(40 + launchTime)
+	// Find the branches newer than b3 ==> [b4]
+	branches, err = repo.GetBranchesByTimestamp(blocks[3].Header().Timestamp())
+	assert.Nil(t, err)
 	assert.Equal(t, 1, len(branches))
 	expected = []thor.Bytes32{blocks[4].Header().ID()}
 	actual = []thor.Bytes32{branches[0].HeadID()}
 	assert.Equal(t, expected, actual)
 
-	branches = repo.GetBranchesByTimestamp(50 + launchTime)
+	// Find the branches newer than b4 ==> none
+	branches, err = repo.GetBranchesByTimestamp(blocks[4].Header().Timestamp())
+	assert.Nil(t, err)
 	assert.Nil(t, branches)
+
+	/////////////////////
+	// IfConflict
+	/////////////////////
+	// Randomly generated ID
+	var randID thor.Bytes32
+	rand.Read(randID[:])
+	_, err = repo.GetBlockSummary(randID)
+	assert.Equal(t, M(repo.IfConflict(randID, blocks[1].Header().ID())), M(false, err))
+
+	// b1, b3
+	assert.Equal(
+		t,
+		M(repo.IfConflict(blocks[1].Header().ID(), blocks[3].Header().ID())),
+		M(true, nil),
+	)
+
+	// b3, b4
+	assert.Equal(
+		t,
+		M(repo.IfConflict(blocks[3].Header().ID(), blocks[4].Header().ID())),
+		M(false, nil),
+	)
 }
 
 func sortBytes32Array(a []thor.Bytes32) {
