@@ -5,15 +5,16 @@ import (
 
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/thor"
 )
 
 type rtpc struct {
 	repo          *chain.Repository
 	curr          *block.Header
-	lastCommitted *block.Header
+	lastCommitted thor.Bytes32
 }
 
-func newRTPC(repo *chain.Repository, lastCommitted *block.Header) *rtpc {
+func newRTPC(repo *chain.Repository, lastCommitted thor.Bytes32) *rtpc {
 	return &rtpc{
 		repo:          repo,
 		curr:          nil,
@@ -25,14 +26,16 @@ func (r *rtpc) get() *block.Header {
 	return r.curr
 }
 
-func (r *rtpc) updateLastCommitted(lastCommitted *block.Header) error {
-	// The new lastCommitted must be an offspring of the old lastCommitted
-	branch := r.repo.NewChain(lastCommitted.ID())
-	if ok, err := branch.HasBlock(r.lastCommitted.ID()); err != nil {
+func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
+	// lastCommitted must be an offspring of r.lastCommitted
+	ok, err := isAncestor(r.repo, lastCommitted, r.lastCommitted)
+	if err != nil {
 		return err
-	} else if !ok {
-		return errors.New("The input block not an offspring of the previously committed")
 	}
+	if !ok {
+		return errors.New("Input block must be an offspring of the last committed")
+	}
+
 	r.lastCommitted = lastCommitted
 
 	if r.curr == nil {
@@ -40,7 +43,11 @@ func (r *rtpc) updateLastCommitted(lastCommitted *block.Header) error {
 	}
 
 	// if the current RTPC block is older than the latest block committed locally
-	if r.curr.Timestamp() <= lastCommitted.Timestamp() {
+	summary, err := r.repo.GetBlockSummary(lastCommitted)
+	if err != nil {
+		return err
+	}
+	if r.curr.Timestamp() <= summary.Header.Timestamp() {
 		r.curr = nil
 	}
 
@@ -93,7 +100,11 @@ func (r *rtpc) update(newBlock *block.Block) error {
 	candidate := summary.Header
 
 	// Candidate RTPC block must be newer than the last committed
-	if candidate.Timestamp() <= r.lastCommitted.Timestamp() {
+	summary, err = r.repo.GetBlockSummary(r.lastCommitted)
+	if err != nil {
+		return err
+	}
+	if candidate.Timestamp() <= summary.Header.Timestamp() {
 		return nil
 	}
 
