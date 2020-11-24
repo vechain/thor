@@ -33,7 +33,8 @@ func TestNormalSituation(t *testing.T) {
 	repo, nodes := newTestRepo()
 	head = repo.GenesisBlock()
 
-	cons = NewConsensus(repo, head.Header().ID(), pubToAddr(nodes[rand.Intn(N)].PublicKey))
+	node := pubToAddr(nodes[rand.Intn(N)].PublicKey)
+	cons = NewConsensus(repo, head.Header().ID(), node)
 
 	branch = repo.NewChain(head.Header().ID())
 	v, err = newView(branch, block.Number(head.Header().NV()))
@@ -68,6 +69,26 @@ func TestNormalSituation(t *testing.T) {
 				cons.state[CM],
 			},
 		)
+
+		// Check whether node is either the leader or a backer
+		// If yes, update lastSignedPC
+		ifUpdateLastSignedPC := false
+		if !cons.state[PC].IsZero() {
+			if pubToAddr(leader.PublicKey) == node {
+				ifUpdateLastSignedPC = true
+			} else {
+				for _, backer := range backers {
+					if pubToAddr(backer.PublicKey) == node {
+						ifUpdateLastSignedPC = true
+					}
+				}
+			}
+		}
+		if ifUpdateLastSignedPC {
+			summary, err := repo.GetBlockSummary(cons.state[PC])
+			assert.Nil(t, err)
+			cons.UpdateLastSignedPC(summary.Header)
+		}
 
 		repo.AddBlock(head, nil)
 
