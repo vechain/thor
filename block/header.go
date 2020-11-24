@@ -56,8 +56,8 @@ func (h *Header) NV() thor.Bytes32 {
 	return h.body.FinalityVector[0]
 }
 
-// PR returns prepare
-func (h *Header) PR() thor.Bytes32 {
+// PP returns prepare
+func (h *Header) PP() thor.Bytes32 {
 	return h.body.FinalityVector[1]
 }
 
