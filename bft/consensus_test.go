@@ -91,6 +91,7 @@ func TestNormalSituation(t *testing.T) {
 		}
 
 		repo.AddBlock(head, nil)
+		repo.SetBestBlockID(head.Header().ID())
 
 		prevState = cons.Get()
 		cons.Update(head)
@@ -125,6 +126,72 @@ func TestNormalSituation(t *testing.T) {
 			break
 		}
 	}
+}
+
+func TestNVB(t *testing.T) {
+	repo, nodes := newTestRepo()
+	gen := repo.BestBlock()
+	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
+
+	b1 := newBlock(
+		nodes[0], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+10, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+
+	c1 := newBlock(
+		nodes[1], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+20, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+
+	assert.Nil(t, repo.AddBlock(b1, nil))
+	assert.Nil(t, repo.AddBlock(c1, nil))
+
+	assert.Nil(t, cons.Update(b1))
+	assert.Equal(t, b1.Header().ID(), cons.state[NV])
+
+	assert.Nil(t, cons.Update(c1))
+	assert.Equal(t, c1.Header().ID(), cons.state[NV])
+}
+
+func TestNVC(t *testing.T) {
+	repo, nodes := newTestRepo()
+	gen := repo.BestBlock()
+	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
+
+	b1 := newBlock(
+		nodes[0], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+20, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+	c1 := newBlock(
+		nodes[0], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+10, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+	c2 := newBlock(
+		nodes[0], nil, c1.Header().ID(),
+		gen.Header().Timestamp()+30, 0,
+		[4]thor.Bytes32{c1.Header().ID()},
+	)
+
+	assert.Nil(t, repo.AddBlock(b1, nil))
+	assert.Nil(t, repo.AddBlock(c1, nil))
+	assert.Nil(t, repo.AddBlock(c2, nil))
+
+	assert.Nil(t, cons.repo.SetBestBlockID(b1.Header().ID()))
+
+	assert.Nil(t, cons.Update(b1))
+	assert.Equal(t, b1.Header().ID(), cons.state[NV])
+
+	assert.Nil(t, cons.Update(c1))
+	assert.Equal(t, b1.Header().ID(), cons.state[NV])
+
+	assert.Nil(t, cons.repo.SetBestBlockID(c2.Header().ID()))
+
+	assert.Nil(t, cons.Update(c2))
+	assert.Equal(t, c1.Header().ID(), cons.state[NV])
 }
 
 func TestCommitFromBlockMessages(t *testing.T) {
