@@ -18,13 +18,12 @@ const (
 	PP
 	PC
 	CM
-	FN
 )
 
 // Consensus ...
 type Consensus struct {
 	repo      *chain.Repository
-	state     [5]thor.Bytes32
+	state     [4]thor.Bytes32
 	committed *committedBlockInfo
 	rtpc      *rtpc
 
@@ -42,8 +41,8 @@ func NewConsensus(
 	lastFinalized thor.Bytes32,
 	nodeAddress thor.Address,
 ) *Consensus {
-	state := [5]thor.Bytes32{}
-	state[FN] = lastFinalized
+	state := [4]thor.Bytes32{}
+	state[CM] = lastFinalized
 
 	return &Consensus{
 		repo:          repo,
@@ -134,10 +133,6 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 				return err
 			}
 		}
-	}
-	// update the finalized block info
-	if block.Number(cons.state[FN]) < block.Number(cons.state[CM]) {
-		cons.state[FN] = cons.state[CM]
 	}
 
 	///////////////
@@ -255,8 +250,8 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 }
 
 // Get returns the local finality state
-func (cons *Consensus) Get() [5]thor.Bytes32 {
-	return cons.state
+func (cons *Consensus) Get() []thor.Bytes32 {
+	return cons.state[:]
 }
 
 func isAncestor(repo *chain.Repository, offspring, ancestor thor.Bytes32) (bool, error) {
