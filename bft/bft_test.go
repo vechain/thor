@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	nodes []*ecdsa.PrivateKey
-	inds  []int
+	nodes   []*ecdsa.PrivateKey
+	inds    []int
+	emptyID = thor.Bytes32{}
 )
 
 func init() {
