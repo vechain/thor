@@ -197,7 +197,7 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 		Beneficiary(header.Beneficiary()).
 		StateRoot(header.StateRoot()).
 		ReceiptsRoot(header.ReceiptsRoot()).
-		BackerSignatures(block.ComplexSignatures{}, 1, 0).
+		BackerSignatures(block.ComplexSignatures{}, tc.parent.Header().TotalQuality()).
 		TransactionFeatures(features)
 }
 
@@ -305,12 +305,6 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				features,
 			),
 		)
-		tc.assert.Equal(expect, err)
-	}
-	triggers["triggerInvalidBackersCount"] = func() {
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{}, 0, 0).Build())
-		err := tc.consent(blk)
-		expect := consensusError("block total backers count invalid: parent 1, current 0")
 		tc.assert.Equal(expect, err)
 	}
 
@@ -476,14 +470,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		)
 		tc.assert.Equal(consensusError("tx already exists"), err)
 	}
-	triggers["triggerInvalidBackersCount"] = func() {
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{}, 2, 0).Build())
-		err := tc.consent(blk)
-		expect := consensusError("block total backers count mismatch: want 2, have 1")
-		tc.assert.Equal(expect, err)
-	}
 	triggers["triggerInvalidBackersRootCount"] = func() {
-		b := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{}, 2, 0).Build())
+		b := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{}, tc.parent.Header().TotalQuality()).Build())
 
 		var (
 			proof [81]byte
@@ -513,7 +501,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		backerSig, _ := crypto.Sign(hash.Bytes(), priv)
 
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalQuality()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError(fmt.Sprintf("backer: %v is not an authority", thor.Address(crypto.PubkeyToAddress(priv.PublicKey))))
@@ -530,7 +518,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		backerSig, _ := crypto.Sign(hash.Bytes(), proposer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalQuality()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError("block signer cannot back itself")
@@ -548,7 +536,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 
 		backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof, backerSig)
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalBackersCount(), 0).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalQuality()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError(fmt.Sprintf("invalid proof from %v", backer.Address))
@@ -571,7 +559,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		sig2, _ := crypto.Sign(hash.Bytes(), genesis.DevAccounts()[2].PrivateKey)
 		bs2, _ := block.NewComplexSignature(proof2, sig2)
 
-		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs1, bs2}, tc.parent.Header().TotalBackersCount(), 0).Build())
+		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs1, bs2}, tc.parent.Header().TotalQuality()).Build())
 
 		err := tc.consent(blk)
 		expect := consensusError("backer signatures are not in ascending order(by beta)")
