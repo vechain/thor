@@ -64,6 +64,7 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 			if signer == cons.nodeAddress {
 				cons.lastSignedPC = pc
 				cons.hasLastSignedpPCExpired = false
+				break
 			}
 		}
 	}
@@ -81,10 +82,6 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		return err
 	}
 
-	if !v.hasQCForNV() {
-		return nil
-	}
-
 	///////////////
 	// update CM //
 	///////////////
@@ -93,6 +90,11 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		cons.state[CM] = cm
 		cons.state[PC] = thor.Bytes32{}
 		cons.committed.updateLocal(cm)
+
+		// Update RTPC
+		if err := cons.rtpc.updateLastCommitted(cons.state[CM]); err != nil {
+			return err
+		}
 	}
 	// Check whether there are f+1 same cm messages
 	if cm := newBlock.Header().CM(); !cm.IsZero() && cm != cons.state[CM] {
@@ -101,6 +103,10 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		if ok {
 			cons.state[CM] = cm
 			cons.committed.updateLocal(cm)
+
+			if err := cons.rtpc.updateLastCommitted(cons.state[CM]); err != nil {
+				return err
+			}
 		}
 	}
 	// update the finalized block info
@@ -112,17 +118,12 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	// update PC //
 	///////////////
 	// Update RTPC
-	if !cons.state[CM].IsZero() {
-		if err := cons.rtpc.updateLastCommitted(cons.state[CM]); err != nil {
-			return err
-		}
-	}
 	if err := cons.rtpc.update(newBlock); err != nil {
 		return err
 	}
 
 	// Check whether the current view invalidates the last signed pc
-	if !cons.lastSignedPC.IsZero() && v.getNumSigOnPC(cons.lastSignedPC) == 0 {
+	if !cons.lastSignedPC.IsZero() && v.hasQCForNV() && v.getNumSigOnPC(cons.lastSignedPC) == 0 {
 		cons.hasLastSignedpPCExpired = true
 	}
 
@@ -159,7 +160,7 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	///////////////
 	// Update pp //
 	///////////////
-	if isOnConanicalChain && !v.hasConflictPC() {
+	if isOnConanicalChain && v.hasQCForNV() && !v.hasConflictPC() {
 		cons.state[PP] = v.getFirstBlockID()
 	}
 
@@ -219,6 +220,11 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	cons.prevBestBlock = best
 
 	return nil
+}
+
+// Get returns the local finality state
+func (cons *Consensus) Get() [5]thor.Bytes32 {
+	return cons.state
 }
 
 func isAncestor(repo *chain.Repository, offspring, ancestor thor.Bytes32) (bool, error) {
