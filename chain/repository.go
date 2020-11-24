@@ -201,6 +201,14 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 	if err := r.saveBlock(newBlock, receipts, indexRoot); err != nil {
 		return err
 	}
+
+	// Write the persistent branch head info
+	if isBranchHead(r.data, newBlock.Header().ParentID()) {
+		saveBranchHead(r.data, newBlock.Header().ID(), newBlock.Header().ParentID())
+	} else {
+		saveBranchHead(r.data, newBlock.Header().ID(), thor.Bytes32{})
+	}
+
 	return nil
 }
 
@@ -323,4 +331,18 @@ func (r *Repository) IsNotFound(err error) bool {
 // NewTicker create a signal Waiter to receive event that the best block changed.
 func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
+}
+
+// GetBranches returns all the branches that contain the block
+func (r *Repository) GetBranches(id thor.Bytes32) (branches []*Chain) {
+	heads := loadBranchHeads(r.data, block.Number(id))
+
+	for _, head := range heads {
+		c := newChain(r, head)
+		if c.IsOnChain(id) {
+			branches = append(branches, c)
+		}
+	}
+
+	return
 }
