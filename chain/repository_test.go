@@ -7,15 +7,18 @@ package chain_test
 
 import (
 	"bytes"
+	"sort"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	. "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -93,34 +96,43 @@ func TestRepository(t *testing.T) {
 }
 
 func TestBranchOps(t *testing.T) {
-	// 		b0
+	//		Genesis
+	//		|
+	//		|
+	// 		b0 (+10)
 	// 		|
 	//		|
-	//		b1
-	//		|--------
-	// 		|		|
-	// 		b2 		b5
-	// 		|--------
-	//		|		|
-	//		b3		b4
+	//		b1 (+20)
+	//		|----------------
+	// 		|				|
+	// 		b2 (+30) 		b5 (+30)
+	// 		|----------------
+	//		|				|
+	//		b3 (+40)		b4 (+50)
+
+	var (
+		branches []*chain.Chain
+		expected []thor.Bytes32
+		actual   []thor.Bytes32
+	)
 
 	repo := newTestRepo()
 
 	blocks := make([]*block.Block, 6)
-	blocks[0] = newBlock(repo.GenesisBlock(), 10)
-	blocks[1] = newBlock(blocks[0], 20)
-	blocks[2] = newBlock(blocks[1], 30)
-	blocks[3] = newBlock(blocks[2], 40)
-	blocks[4] = newBlock(blocks[2], 40)
-	blocks[5] = newBlock(blocks[1], 30)
+	launchTime := repo.GenesisBlock().Header().Timestamp()
+	blocks[0] = newBlock(repo.GenesisBlock(), 10+launchTime)
+	blocks[1] = newBlock(blocks[0], 20+launchTime)
+	blocks[2] = newBlock(blocks[1], 30+launchTime)
+	blocks[3] = newBlock(blocks[2], 40+launchTime)
+	blocks[4] = newBlock(blocks[2], 50+launchTime)
+	blocks[5] = newBlock(blocks[1], 30+launchTime)
 
 	for _, blk := range blocks {
 		err := repo.AddBlock(blk, nil)
 		assert.Nil(t, err)
 	}
 
-	branches := repo.GetBranches(blocks[1].Header().ID())
-
+	branches = repo.GetBranchesByID(blocks[1].Header().ID())
 	assert.Equal(t, len(branches), 3)
 	assert.Equal(t, branches[0].HeadID(), blocks[5].Header().ID())
 
@@ -134,4 +146,35 @@ func TestBranchOps(t *testing.T) {
 	}
 	assert.Equal(t, branches[1].HeadID(), b0.Header().ID())
 	assert.Equal(t, branches[2].HeadID(), b1.Header().ID())
+
+	branches = repo.GetBranchesByTimestamp(20 + launchTime)
+	assert.Equal(t, 3, len(branches))
+	expected = []thor.Bytes32{blocks[5].Header().ID(), blocks[3].Header().ID(), blocks[4].Header().ID()}
+	sortBytes32Array(expected)
+	actual = []thor.Bytes32{branches[0].HeadID(), branches[1].HeadID(), branches[2].HeadID()}
+	sortBytes32Array(actual)
+	assert.Equal(t, expected, actual)
+
+	branches = repo.GetBranchesByTimestamp(30 + launchTime)
+	assert.Equal(t, 2, len(branches))
+	expected = []thor.Bytes32{blocks[3].Header().ID(), blocks[4].Header().ID()}
+	sortBytes32Array(expected)
+	actual = []thor.Bytes32{branches[0].HeadID(), branches[1].HeadID()}
+	sortBytes32Array(actual)
+	assert.Equal(t, expected, actual)
+
+	branches = repo.GetBranchesByTimestamp(40 + launchTime)
+	assert.Equal(t, 1, len(branches))
+	expected = []thor.Bytes32{blocks[4].Header().ID()}
+	actual = []thor.Bytes32{branches[0].HeadID()}
+	assert.Equal(t, expected, actual)
+
+	branches = repo.GetBranchesByTimestamp(50 + launchTime)
+	assert.Nil(t, branches)
+}
+
+func sortBytes32Array(a []thor.Bytes32) {
+	sort.Slice(a, func(i, j int) bool {
+		return bytes.Compare(a[i][:], a[j][:]) < 0
+	})
 }

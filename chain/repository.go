@@ -333,8 +333,8 @@ func (r *Repository) NewTicker() co.Waiter {
 	return r.tick.NewWaiter()
 }
 
-// GetBranches returns all the branches that contain the block
-func (r *Repository) GetBranches(id thor.Bytes32) (branches []*Chain) {
+// GetBranchesByID returns all the branches that contain the block
+func (r *Repository) GetBranchesByID(id thor.Bytes32) (branches []*Chain) {
 	heads := loadBranchHeads(r.data, block.Number(id))
 
 	for _, head := range heads {
@@ -342,6 +342,30 @@ func (r *Repository) GetBranches(id thor.Bytes32) (branches []*Chain) {
 		if c.IsOnChain(id) {
 			branches = append(branches, c)
 		}
+	}
+
+	return
+}
+
+// GetBranchesByTimestamp returns all the branches newer than the input timestamp
+func (r *Repository) GetBranchesByTimestamp(ts uint64) (branches []*Chain) {
+	heads := loadBranchHeads(
+		r.data,
+		uint32((ts-r.genesis.Header().Timestamp())/thor.BlockInterval), // min block number
+	)
+
+	for _, head := range heads {
+		summary, err := r.GetBlockSummary(head)
+		if err != nil {
+			panic(err)
+		}
+
+		if summary.Header.Timestamp() <= ts {
+			continue
+		}
+
+		c := newChain(r, head)
+		branches = append(branches, c)
 	}
 
 	return
