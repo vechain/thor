@@ -83,8 +83,7 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		b.txs,
 	}
 
-	// TotalBackersCount not equal 0 means block is surely at post 193 stage.
-	if b.Header().TotalBackersCount() != 0 {
+	if len(b.bss) > 0 {
 		input = append(input, b.bss)
 	}
 
@@ -113,13 +112,11 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	// strictly limit the fields of block body in pre and post 193 fork stage.
-	// before 193: block must contain only block header and transactions.
-	if len(raws) == 3 && header.TotalBackersCount() != 0 {
+	if len(raws) == 3 && header.BackerSignaturesRoot() != emptyRoot {
 		if err := rlp.Decode(bytes.NewReader(raws[2]), &bss); err != nil {
 			return err
 		}
-	} else if len(raws) == 2 && header.TotalBackersCount() == 0 {
+	} else if len(raws) == 2 && header.BackerSignaturesRoot() == emptyRoot {
 		bss = ComplexSignatures(nil)
 	} else {
 		return errors.New("rlp:unrecognized block format")
