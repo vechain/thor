@@ -7,6 +7,7 @@ package chain
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -105,4 +106,48 @@ func loadBackerSignatures(r kv.Getter, id thor.Bytes32) (block.ComplexSignatures
 		return nil, err
 	}
 	return bss, nil
+}
+
+func branchHeadKey(id thor.Bytes32) []byte {
+	return append([]byte("branch"), id.Bytes()...)
+}
+
+func saveBranchHead(w kv.Putter, newHead thor.Bytes32, oldHead thor.Bytes32) error {
+	if !oldHead.IsZero() {
+		if err := w.Delete(branchHeadKey(oldHead)); err != nil {
+			return err
+		}
+	}
+	w.Put(branchHeadKey(newHead), []byte{})
+	return nil
+}
+
+func loadBranchHeads(s kv.Store, minNum uint32) (heads []thor.Bytes32) {
+	// rng := kv.Range(*util.BytesPrefix(append([]byte("branch"))))
+	// s.Iterate(rng, func(pair kv.Pair) bool {
+	// 	id := thor.BytesToBytes32(pair.Key()[6:])
+	// 	if block.Number(id) >= minNum {
+	// 		heads = append(heads, id)
+	// 	}
+	// 	return true
+	// })
+
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, minNum)
+	start := append([]byte("branch"), b...)
+	binary.BigEndian.PutUint32(b, uint32(math.Exp2(32)-1))
+	limit := append([]byte("branch"), b...)
+
+	s.Iterate(kv.Range{Start: start, Limit: limit}, func(pair kv.Pair) bool {
+		id := thor.BytesToBytes32(pair.Key()[6:])
+		heads = append(heads, id)
+		return true
+	})
+
+	return heads
+}
+
+func isBranchHead(r kv.Getter, id thor.Bytes32) bool {
+	_, err := r.Get(branchHeadKey(id))
+	return err == nil
 }
