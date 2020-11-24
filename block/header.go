@@ -110,11 +110,6 @@ func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
 	return h.body.Extension.BackerSignaturesRoot
 }
 
-// TotalBackersCount returns total backers count that cumulated from genesis block to this one.
-func (h *Header) TotalBackersCount() uint64 {
-	return h.body.Extension.TotalBackersCount
-}
-
 // TotalQuality returns total heavy block count that cumulated from genesis block to this one.
 func (h *Header) TotalQuality() uint32 {
 	return h.body.Extension.TotalQuality
@@ -247,11 +242,10 @@ func (h *Header) String() string {
 	StateRoot:              %v
 	ReceiptsRoot:           %v
 	BackerSignaturesRoot:   %v
-	TotalBackersCount       %v
 	TotalQuality            %v
 	Signature:              0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.BackerSignaturesRoot, h.body.Extension.TotalBackersCount, h.body.Extension.TotalQuality, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.BackerSignaturesRoot, h.body.Extension.TotalQuality, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.

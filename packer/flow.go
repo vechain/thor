@@ -249,7 +249,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 			}
 		}
 
-		builder.BackerSignatures(bss, f.parentHeader.TotalBackersCount(), f.parentHeader.TotalQuality())
+		builder.BackerSignatures(bss, f.parentHeader.TotalQuality())
 	}
 
 	for _, tx := range f.txs {
