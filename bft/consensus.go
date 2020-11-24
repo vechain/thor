@@ -97,13 +97,13 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		}
 	}
 	// Check whether there are f+1 same cm messages
-	if cm := newBlock.Header().CM(); !cm.IsZero() && cm != cons.state[CM] {
+	if cm := newBlock.Header().CM(); block.Number(cm) > block.Number(cons.state[CM]) {
 		// Check whether there are f+1 cm messages
-		ok := cons.committed.updateObserved(cm)
-		if ok {
+		if cons.committed.updateObserved(newBlock) {
 			cons.state[CM] = cm
 			cons.committed.updateLocal(cm)
 
+			// Update RTPC
 			if err := cons.rtpc.updateLastCommitted(cons.state[CM]); err != nil {
 				return err
 			}
