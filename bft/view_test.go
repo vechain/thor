@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
@@ -93,16 +94,45 @@ func newBlock(
 	return
 }
 
-func newTestRepo() *chain.Repository {
+func newTestGenesisBuilder() (builder *genesis.Builder, nodes []*ecdsa.PrivateKey) {
+	for i := 0; i < int(thor.MaxBlockProposers); i++ {
+		key, _ := crypto.GenerateKey()
+		nodes = append(nodes, key)
+	}
+
+	builder = new(genesis.Builder).
+		Timestamp(0).
+		GasLimit(thor.InitialGasLimit).
+		State(func(state *state.State) error { // add master nodes
+			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
+			for _, node := range nodes {
+				ok, err := builtin.Authority.Native(state).Add(pubToAddr(
+					node.PublicKey), thor.Address{}, thor.Bytes32{},
+				)
+				if !ok {
+					panic("failed to add consensus node")
+				}
+				if err != nil {
+					panic(err)
+				}
+			}
+			return nil
+		})
+
+	return
+}
+
+func newTestRepo() (*chain.Repository, []*ecdsa.PrivateKey) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	// g := genesis.NewDevnet()
+	g, nodes := newTestGenesisBuilder()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, err := chain.NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
-	return repo
+	return repo, nodes
 }
 
 func pubToAddr(pub ecdsa.PublicKey) thor.Address {
@@ -205,28 +235,18 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 }
 
 func TestNewView(t *testing.T) {
-	// Generate private keys for nodes
-	keys := []*ecdsa.PrivateKey(nil)
-	for i := 0; i < nNode; i++ {
-		key, _ := crypto.GenerateKey()
-		keys = append(keys, key)
-	}
-
-	for count := 0; count < 10; count++ {
-		repo := newTestRepo()
+	for count := 0; count < 100; count++ {
+		repo, keys := newTestRepo()
 		nodeInds, blks, fvInds := newTestBranch(repo, keys)
 
-		branches, _ := repo.GetBranchesByID(repo.GenesisBlock().Header().ID())
+		branche := repo.NewChain(blks[len(blks)-1].Header().ID())
 
-		assert.Equal(t, len(branches), 1)                                      // only one branch
-		assert.Equal(t, branches[0].HeadID(), blks[len(blks)-1].Header().ID()) // verify branch head
-
-		vw, _ := newView(branches[0], block.Number(randBytes32()))
+		vw, _ := newView(branche, block.Number(randBytes32()))
 		assert.Nil(t, vw) // block with random nv value
-		vw, _ = newView(branches[0], block.Number(blks[1].Header().ID()))
+		vw, _ = newView(branche, block.Number(blks[1].Header().ID()))
 		assert.Nil(t, vw) // block with invalid nv value
 
-		vw, _ = newView(branches[0], block.Number(blks[2].Header().ID()))
+		vw, _ = newView(branche, block.Number(blks[2].Header().ID()))
 
 		assert.Equal(t, vw.getFirstBlockID(), blks[2].Header().ID()) // verify id of the first block in the view
 
@@ -305,14 +325,7 @@ func TestViewFunc(t *testing.T) {
 	// 		|		|
 	// 		b2 		b3
 
-	// Generate private keys for nodes
-	keys := []*ecdsa.PrivateKey(nil)
-	for i := 0; i < nNode; i++ {
-		key, _ := crypto.GenerateKey()
-		keys = append(keys, key)
-	}
-
-	repo := newTestRepo()
+	repo, keys := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	var (
