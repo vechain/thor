@@ -1,7 +1,6 @@
 package bft
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -39,18 +38,19 @@ func TestNormalSituation(t *testing.T) {
 		expNumBacker        = 40
 		N                   = int(thor.MaxBlockProposers)
 
-		leader  *ecdsa.PrivateKey
-		backers []*ecdsa.PrivateKey
+		leader  int
+		backers []int
 
 		cons      *Consensus
 		nv        thor.Bytes32
 		prevState [5]thor.Bytes32
 	)
 
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	head = repo.GenesisBlock()
 
-	node := pubToAddr(nodes[rand.Intn(N)].PublicKey)
+	// node := pubToAddr(nodes[rand.Intn(N)].PublicKey)
+	node := nodeAddress(rand.Intn(N))
 	cons = NewConsensus(repo, head.Header().ID(), node)
 
 	branch = repo.NewChain(head.Header().ID())
@@ -59,11 +59,11 @@ func TestNormalSituation(t *testing.T) {
 
 	for {
 		// Randomly pick the leader and backers
-		leader = nodes[rand.Intn(N)]
+		leader = rand.Intn(N)
 		backers = nil
 		for i := 0; i < N; i++ {
 			if rand.Intn(N) < expNumBacker {
-				backers = append(backers, nodes[i])
+				backers = append(backers, i)
 			}
 		}
 
@@ -74,11 +74,7 @@ func TestNormalSituation(t *testing.T) {
 		}
 
 		head = newBlock(
-			leader,
-			backers,
-			head.Header().ID(),
-			head.Header().Timestamp()+thor.BlockInterval,
-			0,
+			leader, backers, head, 1,
 			[4]thor.Bytes32{
 				nv,
 				cons.state[PP],
@@ -91,11 +87,11 @@ func TestNormalSituation(t *testing.T) {
 		// If yes, update lastSignedPC
 		ifUpdateLastSignedPC := false
 		if !cons.state[PC].IsZero() {
-			if pubToAddr(leader.PublicKey) == node {
+			if nodeAddress(leader) == node {
 				ifUpdateLastSignedPC = true
 			} else {
 				for _, backer := range backers {
-					if pubToAddr(backer.PublicKey) == node {
+					if nodeAddress(backer) == node {
 						ifUpdateLastSignedPC = true
 					}
 				}
@@ -143,25 +139,23 @@ func TestNormalSituation(t *testing.T) {
 	}
 }
 
-func TestNVB(t *testing.T) {
+func Test1b(t *testing.T) {
 	/**
 	Genesis --- b1
 			|
 			|------- c1
 	*/
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
 
 	b1 := newBlock(
-		nodes[0], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+10, 0,
+		0, nil, gen, 1,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	c1 := newBlock(
-		nodes[1], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+20, 0,
+		1, nil, gen, 2,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
@@ -177,29 +171,26 @@ func TestNVB(t *testing.T) {
 	assert.Equal(t, c1.Header().ID(), cons.state[NV])
 }
 
-func TestNVC(t *testing.T) {
+func Test1c(t *testing.T) {
 	/**
 	Genesis -------- b1
 			|
 			|-- c1 ------ c2
 	*/
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
 
 	b1 := newBlock(
-		nodes[0], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+20, 0,
+		0, nil, gen, 2,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 	c1 := newBlock(
-		nodes[0], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+10, 0,
+		0, nil, gen, 1,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 	c2 := newBlock(
-		nodes[0], nil, c1.Header().ID(),
-		gen.Header().Timestamp()+30, 0,
+		0, nil, c1, 2,
 		[4]thor.Bytes32{c1.Header().ID()},
 	)
 
@@ -221,7 +212,7 @@ func TestNVC(t *testing.T) {
 	assert.Equal(t, c1.Header().ID(), cons.state[NV])
 }
 
-func TestNVD(t *testing.T) {
+func TestNVHasQC(t *testing.T) {
 	/**
 	Genesis --- b1 --- b2
 
@@ -230,19 +221,17 @@ func TestNVD(t *testing.T) {
 	nv[b2] <- b1
 	*/
 
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
 
 	b1 := newBlock(
-		nodes[0], nodes[:QC+3], gen.Header().ID(),
-		gen.Header().Timestamp()+10, 0,
+		0, inds[:QC+3], gen, 1,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	b2 := newBlock(
-		nodes[0], nodes[:1], b1.Header().ID(),
-		gen.Header().Timestamp()+10, 0,
+		0, inds[:1], b1, 1,
 		[4]thor.Bytes32{b1.Header().ID()},
 	)
 
@@ -263,19 +252,17 @@ func TestPPUnlock(t *testing.T) {
 			|------- c1
 	*/
 
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
 
 	b1 := newBlock(
-		nodes[0], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+10, 0,
+		0, nil, gen, 1,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	c1 := newBlock(
-		nodes[1], nil, gen.Header().ID(),
-		gen.Header().Timestamp()+20, 0,
+		1, nil, gen, 2,
 		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
@@ -290,13 +277,17 @@ func TestPPUnlock(t *testing.T) {
 	assert.True(t, cons.state[PP].IsZero())
 }
 
+func Test3g(t *testing.T) {
+
+}
+
 func TestCM(t *testing.T) {
-	repo, nodes := newTestRepo()
+	repo := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
 
-	leader := nodes[0]
-	backers := nodes[:QC]
+	leader := 0
+	backers := inds[:QC]
 
 	var blocks []*block.Block
 	blocks = append(blocks, gen)
@@ -313,14 +304,7 @@ func TestCM(t *testing.T) {
 			}
 		}
 
-		b := newBlock(
-			leader,
-			backers,
-			blocks[i-1].Header().ID(),
-			blocks[i-1].Header().Timestamp()+thor.BlockInterval,
-			0,
-			fv,
-		)
+		b := newBlock(leader, backers, blocks[i-1], 1, fv)
 		assert.Nil(t, repo.AddBlock(b, nil))
 		blocks = append(blocks, b)
 	}

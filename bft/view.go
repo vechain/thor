@@ -13,6 +13,7 @@ import (
 type view struct {
 	branch   *chain.Chain
 	first    uint32
+	len      int
 	nv       map[thor.Address]uint8
 	pp       map[thor.Bytes32]map[thor.Address]uint8
 	pc       map[thor.Bytes32]map[thor.Address]uint8
@@ -22,7 +23,7 @@ type view struct {
 // newView construct a view object starting with the block referred by `id`
 func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 	var (
-		i      = first //block.Number(first)
+		i      = first
 		maxNum = block.Number(branch.HeadID())
 
 		blk    *block.Block
@@ -52,6 +53,8 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 	}
 
 	for {
+		v.len = v.len + 1
+
 		pp = blk.Header().PP()
 		pc = blk.Header().PC()
 

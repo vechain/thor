@@ -1,19 +1,12 @@
 package bft
 
 import (
-	"crypto/ecdsa"
-	"crypto/rand"
 	rnd "math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -30,122 +23,16 @@ var (
 	emptyRootHash = new(tx.Transactions).RootHash()
 )
 
-func M(args ...interface{}) []interface{} {
-	return args
-}
-
-func randBytes32() (b thor.Bytes32) {
-	rand.Read(b[:])
-	return
-}
-
-func countIntArray(a []int) (c map[int]int) {
-	c = make(map[int]int)
-
-	for _, e := range a {
-		c[e] = c[e] + 1
-	}
-
-	return
-}
-
-func newBlock(
-	proposer *ecdsa.PrivateKey,
-	backers []*ecdsa.PrivateKey,
-	parentID thor.Bytes32,
-	timestamp uint64,
-	gasLimit uint64,
-	fv [4]thor.Bytes32,
-) (blk *block.Block) {
-
-	msg := block.NewProposal(
-		parentID, emptyRootHash, gasLimit, timestamp,
-	).AsMessage(thor.Address(crypto.PubkeyToAddress(proposer.PublicKey)))
-
-	bss := block.ComplexSignatures(nil)
-	for _, backer := range backers {
-		proof := make([]byte, 81)
-		rand.Read(proof)
-		sig, err := crypto.Sign(thor.Blake2b(msg, proof).Bytes(), backer)
-		if err != nil {
-			panic(err)
-		}
-		bs, err := block.NewComplexSignature(proof, sig)
-		if err != nil {
-			panic(err)
-		}
-		bss = append(bss, bs)
-	}
-
-	builder := new(block.Builder).
-		ParentID(parentID).
-		Timestamp(timestamp).
-		GasLimit(gasLimit).
-		BackerSignatures(bss, 0, 0).
-		FinalityVector(fv)
-
-	blk = builder.Build()
-	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), proposer)
-	if err != nil {
-		panic(err)
-	}
-	blk = blk.WithSignature(sig)
-
-	return
-}
-
-func newTestGenesisBuilder() (builder *genesis.Builder, nodes []*ecdsa.PrivateKey) {
-	for i := 0; i < int(thor.MaxBlockProposers); i++ {
-		key, _ := crypto.GenerateKey()
-		nodes = append(nodes, key)
-	}
-
-	builder = new(genesis.Builder).
-		Timestamp(0).
-		GasLimit(thor.InitialGasLimit).
-		State(func(state *state.State) error { // add master nodes
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			for _, node := range nodes {
-				ok, err := builtin.Authority.Native(state).Add(pubToAddr(
-					node.PublicKey), thor.Address{}, thor.Bytes32{},
-				)
-				if !ok {
-					panic("failed to add consensus node")
-				}
-				if err != nil {
-					panic(err)
-				}
-			}
-			return nil
-		})
-
-	return
-}
-
-func newTestRepo() (*chain.Repository, []*ecdsa.PrivateKey) {
-	db := muxdb.NewMem()
-	// g := genesis.NewDevnet()
-	g, nodes := newTestGenesisBuilder()
-	b0, _, _, _ := g.Build(state.NewStater(db))
-
-	repo, err := chain.NewRepository(db, b0)
-	if err != nil {
-		panic(err)
-	}
-	return repo, nodes
-}
-
-func pubToAddr(pub ecdsa.PublicKey) thor.Address {
-	return thor.Address(crypto.PubkeyToAddress(pub))
-}
-
 func TestNewRandBlock(t *testing.T) {
-	proposer, _ := crypto.GenerateKey()
-	backers := make([]*ecdsa.PrivateKey, 1)
-	for i := 0; i < 1; i++ {
-		backers[i], _ = crypto.GenerateKey()
+	repo := newTestRepo()
+
+	proposer := rnd.Intn(nNode)
+	backers := []int{}
+	for i := 0; i < 5; i++ {
+		backers = append(backers, rnd.Intn(nNode))
 	}
-	b := newBlock(proposer, backers, thor.Bytes32{}, 0, 0, [4]thor.Bytes32{})
+
+	b := newBlock(proposer, backers, repo.GenesisBlock(), 1, [4]thor.Bytes32{})
 	es := getSigners(b)
 
 	addrs := make(map[thor.Address]bool)
@@ -153,24 +40,22 @@ func TestNewRandBlock(t *testing.T) {
 		addrs[e] = true
 	}
 
-	assert.True(t, addrs[pubToAddr(proposer.PublicKey)])
+	assert.True(t, addrs[nodeAddress(proposer)])
 	for _, backer := range backers {
-		assert.True(t, addrs[pubToAddr(backer.PublicKey)])
+		assert.True(t, addrs[nodeAddress(backer)])
 	}
 }
 
-func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
+func newTestBranch(repo *chain.Repository) (
 	nodeInds [][]int, blks []*block.Block, fvInds [][4]int,
 ) {
-	// nodes that sign a block
-	// nodes[][0] is the proposer, nodes[][1:] are backers
 	nodeInds = make([][]int, nBlock+1)
 	blks = make([]*block.Block, nBlock+1)
 	fvInds = make([][4]int, nBlock+1)
 
 	blks[0] = repo.GenesisBlock()
 
-	// Init proposers/backers for blocks
+	// Sample proposers+backers for blocks
 	for i := 1; i <= nBlock; i++ {
 		n := rnd.Intn(maxNumBacker+1) + 1
 		nodeInds[i] = make([]int, n)
@@ -179,10 +64,7 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 		}
 	}
 
-	// Init finality vectors for blocks
-	//
-	// test view: block viewStart ~ viewEnd
-	// negative value == random id == conflict block
+	// Sample finality vectors for blocks
 	for i := 1; i <= nBlock; i++ {
 		for j := 0; j < 4; j++ {
 			fvInds[i][j] = rnd.Intn(i)
@@ -198,18 +80,11 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 
 	// Construct the branch
 	for i := 1; i <= nBlock; i++ {
-		nodes := make([]*ecdsa.PrivateKey, len(nodeInds[i]))
-		for j, val := range nodeInds[i] {
-			nodes[j] = keys[val]
-		}
-
 		var (
-			parentID  thor.Bytes32
-			timestamp uint64
-			fv        [4]thor.Bytes32
+			fv       [4]thor.Bytes32
+			proposer = nodeInds[i][0]
+			backers  = nodeInds[i][1:]
 		)
-		parentID = blks[i-1].Header().ID()
-		timestamp = blks[i-1].Header().Timestamp() + 10
 
 		for j, val := range fvInds[i] {
 			if val < 0 {
@@ -219,13 +94,11 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 			}
 		}
 		if i == viewStart { // first block of view
-			// nv := thor.Bytes32{}
-			// binary.BigEndian.PutUint32(nv[:], uint32(viewStart))
 			nv := GenNVForFirstBlock(uint32(viewStart))
 			fv[0] = nv
 		}
 
-		blks[i] = newBlock(nodes[0], nodes[1:], parentID, timestamp, 0, fv)
+		blks[i] = newBlock(proposer, backers, blks[i-1], 1, fv)
 		if err := repo.AddBlock(blks[i], nil); err != nil {
 			panic(err)
 		}
@@ -235,83 +108,85 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 }
 
 func TestNewView(t *testing.T) {
-	for count := 0; count < 100; count++ {
-		repo, keys := newTestRepo()
-		nodeInds, blks, fvInds := newTestBranch(repo, keys)
+	repo := newTestRepo()
+	nodeInds, blks, fvInds := newTestBranch(repo)
 
-		branche := repo.NewChain(blks[len(blks)-1].Header().ID())
+	branch := repo.NewChain(blks[len(blks)-1].Header().ID())
 
-		vw, _ := newView(branche, block.Number(randBytes32()))
-		assert.Nil(t, vw) // block with random nv value
-		vw, _ = newView(branche, block.Number(blks[1].Header().ID()))
-		assert.Nil(t, vw) // block with invalid nv value
+	vw, _ := newView(branch, block.Number(randBytes32()))
+	assert.Nil(t, vw) // block with random nv value
+	vw, _ = newView(branch, block.Number(blks[1].Header().ID()))
+	assert.Nil(t, vw) // block with invalid nv value
 
-		vw, _ = newView(branche, block.Number(blks[2].Header().ID()))
+	vw, _ = newView(branch, block.Number(blks[2].Header().ID()))
 
-		assert.Equal(t, vw.getFirstBlockID(), blks[2].Header().ID()) // verify id of the first block in the view
+	assert.Equal(t, vw.getFirstBlockID(), blks[2].Header().ID()) // verify id of the first block in the view
 
-		// verify whether the view has any conflict pc
-		hasConflictPC := false
-		for i := viewStart; i <= viewEnd; i++ {
-			if fvInds[i][2] < 0 {
-				hasConflictPC = true
-			}
+	// verify whether the view has any conflict pc
+	hasConflictPC := false
+	for i := viewStart; i <= viewEnd; i++ {
+		if fvInds[i][2] < 0 {
+			hasConflictPC = true
+			break
 		}
-		assert.Equal(t, vw.hasConflictPC(), hasConflictPC)
+	}
+	assert.Equal(t, vw.hasConflictPC(), hasConflictPC)
 
-		// verify nv info
-		nvs := []int(nil)
-		for i := viewStart; i <= viewEnd; i++ {
-			nvs = append(nvs, nodeInds[i]...)
-		}
-		nvSummary := countIntArray(nvs)
-		for i, val := range nvSummary {
-			addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
-			assert.Equal(t, vw.nv[addr], uint8(val))
-		}
+	// verify nv info
+	nvs := []int(nil)
+	for i := viewStart; i <= viewEnd; i++ {
+		nvs = append(nvs, nodeInds[i]...)
+	}
+	nvSummary := countIntArray(nvs)
+	for i, val := range nvSummary {
+		// addr := thor.Address(crypto.PubkeyToAddress(nodes[i].PublicKey))
+		addr := nodeAddress(i)
+		assert.Equal(t, vw.nv[addr], uint8(val))
+	}
 
-		// verify pp
-		pps := make(map[int][]int)
-		for i := viewStart; i <= viewEnd; i++ {
-			pp := fvInds[i][1]
-			pps[pp] = append(pps[pp], nodeInds[i]...)
+	// verify pp
+	pps := make(map[int][]int)
+	for i := viewStart; i <= viewEnd; i++ {
+		pp := fvInds[i][1]
+		pps[pp] = append(pps[pp], nodeInds[i]...)
+	}
+	for key, val := range pps {
+		var id thor.Bytes32
+		if key == -1 {
+			id = randID
+		} else {
+			id = blks[key].Header().ID()
 		}
-		for key, val := range pps {
-			var id thor.Bytes32
-			if key == -1 {
-				id = randID
-			} else {
-				id = blks[key].Header().ID()
-			}
-			summary := countIntArray(val)
-			for i, j := range summary {
-				addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
-				expected := uint8(j)
-				actual := vw.pp[id][addr]
-				assert.Equal(t, expected, actual)
-			}
+		summary := countIntArray(val)
+		for i, j := range summary {
+			// addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
+			addr := nodeAddress(i)
+			expected := uint8(j)
+			actual := vw.pp[id][addr]
+			assert.Equal(t, expected, actual)
 		}
+	}
 
-		// verify pc
-		pcs := make(map[int][]int)
-		for i := viewStart; i <= viewEnd; i++ {
-			pc := fvInds[i][2]
-			pcs[pc] = append(pcs[pc], nodeInds[i]...)
+	// verify pc
+	pcs := make(map[int][]int)
+	for i := viewStart; i <= viewEnd; i++ {
+		pc := fvInds[i][2]
+		pcs[pc] = append(pcs[pc], nodeInds[i]...)
+	}
+	for key, val := range pcs {
+		var id thor.Bytes32
+		if key == -1 {
+			id = randID
+		} else {
+			id = blks[key].Header().ID()
 		}
-		for key, val := range pcs {
-			var id thor.Bytes32
-			if key == -1 {
-				id = randID
-			} else {
-				id = blks[key].Header().ID()
-			}
-			summary := countIntArray(val)
-			for i, j := range summary {
-				addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
-				expected := uint8(j)
-				actual := vw.pc[id][addr]
-				assert.Equal(t, expected, actual)
-			}
+		summary := countIntArray(val)
+		for i, j := range summary {
+			// addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
+			addr := nodeAddress(i)
+			expected := uint8(j)
+			actual := vw.pc[id][addr]
+			assert.Equal(t, expected, actual)
 		}
 	}
 }
@@ -325,8 +200,7 @@ func TestViewFunc(t *testing.T) {
 	// 		|		|
 	// 		b2 		b3
 
-	repo, keys := newTestRepo()
-	gen := repo.GenesisBlock()
+	repo := newTestRepo()
 
 	var (
 		pp = randBytes32()
@@ -334,33 +208,20 @@ func TestViewFunc(t *testing.T) {
 	)
 
 	blk1 := newBlock(
-		keys[0],
-		keys[1:30],
-		gen.Header().ID(),
-		gen.Header().Timestamp()+10,
-		0,
+		0, inds[1:30], repo.GenesisBlock(), 1,
 		[4]thor.Bytes32{GenNVForFirstBlock(1), pp, pc},
 	)
+	assert.Nil(t, repo.AddBlock(blk1, nil))
 
 	blk2 := newBlock(
-		keys[30],
-		keys[31:68],
-		blk1.Header().ID(),
-		blk1.Header().Timestamp()+10,
-		0,
+		30, inds[31:68], blk1, 1,
 		[4]thor.Bytes32{blk1.Header().ID(), pp, pc},
 	)
 
 	blk3 := newBlock(
-		keys[30],
-		keys[31:66],
-		blk1.Header().ID(),
-		blk1.Header().Timestamp()+10,
-		0,
+		30, inds[31:66], blk1, 1,
 		[4]thor.Bytes32{blk1.Header().ID(), randID},
 	)
-
-	assert.Nil(t, repo.AddBlock(blk1, nil))
 	assert.Nil(t, repo.AddBlock(blk2, nil))
 	assert.Nil(t, repo.AddBlock(blk3, nil))
 
