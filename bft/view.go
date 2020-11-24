@@ -41,7 +41,9 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 	}
 
 	var (
-		i   uint32 = block.Number(first)
+		i      = block.Number(first)
+		maxNum = block.Number(v.branch.HeadID())
+
 		blk *block.Block
 		err error
 
@@ -62,25 +64,32 @@ func newView(branch *chain.Chain, first thor.Bytes32) (v *view) {
 		pp = blk.Header().PP()
 		pc = blk.Header().PC()
 
-		if _, ok := v.pp[pp]; !ok {
+		if _, ok := v.pp[pp]; !pp.IsZero() && !ok {
 			v.pp[pp] = make(map[thor.Address]uint8)
 		}
-		if _, ok := v.pc[pc]; !ok {
+		if _, ok := v.pc[pc]; !pc.IsZero() && !ok {
 			v.pc[pc] = make(map[thor.Address]uint8)
 		}
 
 		signers := getSigners(blk)
 		for _, signer := range signers {
 			v.nv[signer] = v.nv[signer] + 1
-			v.pp[pp][signer] = v.pp[pp][signer] + 1
-			v.pc[pc][signer] = v.pc[pc][signer] + 1
+			if !pp.IsZero() {
+				v.pp[pp][signer] = v.pp[pp][signer] + 1
+			}
+			if !pc.IsZero() {
+				v.pc[pc][signer] = v.pc[pc][signer] + 1
+			}
 		}
 
-		if !v.hasConflictPC && !branch.IsOnChain(pc) {
+		if !v.hasConflictPC && !pc.IsZero() && !branch.IsOnChain(pc) {
 			v.hasConflictPC = true
 		}
 
 		i = i + 1
+		if i > maxNum {
+			break
+		}
 		blk, err = branch.GetBlock(i)
 		if err != nil {
 			return nil
