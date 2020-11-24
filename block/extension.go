@@ -15,7 +15,6 @@ import (
 
 type extension struct {
 	BackerSignaturesRoot thor.Bytes32
-	TotalBackersCount    uint64
 	TotalQuality         uint32
 }
 
@@ -23,14 +22,13 @@ type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
 func (ex *extension) EncodeRLP(w io.Writer) error {
-	// strictly limit extension in pre and post 193 fork stage.
-	// before 193: block header must be encoded without extension
+	// trim extension if the fields are initial values
 	// this is mainly for backward compatibility
 
-	if ex.TotalBackersCount != 0 {
-		return rlp.Encode(w, (*_extension)(ex))
+	if ex.TotalQuality == 0 && ex.BackerSignaturesRoot == emptyRoot {
+		return nil
 	}
-	return nil
+	return rlp.Encode(w, (*_extension)(ex))
 }
 
 // DecodeRLP implements rlp.Decoder.
@@ -43,15 +41,13 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 			*ex = extension{
 				emptyRoot,
 				0,
-				0,
 			}
 			return nil
 		}
 		return err
 	}
-	if obj.TotalBackersCount == 0 {
-		// TotalBackersCount equals 0, extension should be trimmed
-		return errors.New("rlp: extension should be trimmed if total backers count is 0")
+	if obj.TotalQuality == 0 && obj.BackerSignaturesRoot == emptyRoot {
+		return errors.New("rlp: extension must be trimmed")
 	}
 	*ex = extension(obj)
 	return nil

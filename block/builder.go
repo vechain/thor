@@ -78,9 +78,8 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 }
 
 // BackerSignatures add the list of backer signature.
-func (b *Builder) BackerSignatures(bss ComplexSignatures, parentBackerCount uint64, parentQuality uint32) *Builder {
+func (b *Builder) BackerSignatures(bss ComplexSignatures, parentQuality uint32) *Builder {
 	b.bss = append(ComplexSignatures(nil), bss...)
-	b.headerBody.Extension.TotalBackersCount = parentBackerCount + uint64(len(bss))
 	b.headerBody.Extension.TotalQuality = parentQuality
 	if len(bss) >= thor.HeavyBlockRequirement {
 		b.headerBody.Extension.TotalQuality++

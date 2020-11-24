@@ -20,6 +20,8 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+var emptyRoot = thor.Blake2b(rlp.EmptyString) // This is the known root hash of an empty trie.
+
 func TestBlock(t *testing.T) {
 	var (
 		proof     [81]byte
@@ -79,7 +81,6 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
-	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 	key, _ := crypto.HexToECDSA(privKey)
 	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
@@ -105,11 +106,10 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
-		BackerSignatures(ComplexSignatures{bs}, 10, 0).
+		BackerSignatures(ComplexSignatures{bs}, 0).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
-	assert.Equal(t, uint64(10+1), block.Header().TotalBackersCount())
 	assert.Equal(t, block.BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
 
 	data, _ = rlp.EncodeToBytes(block)
@@ -166,7 +166,6 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
-	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 	var raws []rlp.RawValue
 	data, _ := rlp.EncodeToBytes(block)
@@ -210,7 +209,6 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.EqualValues(t, 0, h1.TotalBackersCount())
 
 	data, _, err := rlp.SplitList(bytes)
 	if err != nil {
@@ -225,12 +223,10 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	var raws []rlp.RawValue
 	_ = rlp.DecodeBytes(bytes, &raws)
 	d, _ := rlp.EncodeToBytes(&struct {
-		Root              thor.Bytes32
-		TotalBackersCount uint64
-		TotalQuality      uint32
+		Root         thor.Bytes32
+		TotalQuality uint32
 	}{
-		thor.Bytes32{},
-		0,
+		emptyRoot,
 		0,
 	})
 	raws = append(raws, d)
@@ -238,11 +234,11 @@ func TestEncodingBadBssRoot(t *testing.T) {
 
 	var h2 Header
 	err = rlp.DecodeBytes(b, &h2)
-	assert.EqualError(t, err, "rlp: extension should be trimmed if total backers count is 0")
+	assert.EqualError(t, err, "rlp: extension must be trimmed")
 }
 
-func TestEncodingBssRoot(t *testing.T) {
-	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
+func TestEncodingExtension(t *testing.T) {
+	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1).Build()
 	h := block.Header()
 
 	bytes, err := rlp.EncodeToBytes(h)
@@ -255,7 +251,6 @@ func TestEncodingBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.EqualValues(t, 1, hh.TotalBackersCount())
 
 	data, _, err := rlp.SplitList(bytes)
 	if err != nil {
@@ -269,7 +264,7 @@ func TestEncodingBssRoot(t *testing.T) {
 }
 
 func TestDecoding(t *testing.T) {
-	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
+	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 0).Build()
 	b1 := new(Builder).Build()
 
 	raw0, _ := rlp.EncodeToBytes(struct {
