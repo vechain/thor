@@ -70,11 +70,9 @@ func (cons *Consensus) UpdateLastSignedPC(lastSignedPC *block.Header) {
 // Update updates the local BFT state vector
 func (cons *Consensus) Update(newBlock *block.Block) error {
 	// Check whether the new block is on the canonical chain
-	isOnConanicalChain := false
+	// Here the new block should have already been added to cons.repo
 	best := cons.repo.BestBlock().Header()
-	if best.ID() == cons.prevBestBlock.ID() {
-		isOnConanicalChain = true
-	}
+	isOnConanicalChain := best.ID() == newBlock.Header().ID()
 
 	branch := cons.repo.NewChain(newBlock.Header().ID())
 	v, err := newView(branch, block.Number(newBlock.Header().NV()))
