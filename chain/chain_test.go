@@ -64,6 +64,11 @@ func TestChain(t *testing.T) {
 	_, err = c.FindBlockHeaderByTimestamp(25, 0)
 	assert.True(t, c.IsNotFound(err))
 
+	assert.True(t, c.IsOnChain(b1.Header().ID()))
+	assert.True(t, c.IsOnChain(b2.Header().ID()))
+	assert.True(t, c.IsOnChain(b3.Header().ID()))
+	assert.False(t, c.IsOnChain(b3x.Header().ID()))
+
 	c1, c2 := repo.NewChain(b3.Header().ID()), repo.NewChain(b3x.Header().ID())
 
 	assert.Equal(t, M([]thor.Bytes32{b3.Header().ID()}, nil), M(c1.Exclude(c2)))
