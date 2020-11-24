@@ -221,12 +221,14 @@ func TestNewView(t *testing.T) {
 		assert.Equal(t, len(branches), 1)                                      // only one branch
 		assert.Equal(t, branches[0].HeadID(), blks[len(blks)-1].Header().ID()) // verify branch head
 
-		assert.Nil(t, newView(branches[0], randBytes32()))         // block not on chain
-		assert.Nil(t, newView(branches[0], blks[1].Header().ID())) // block with invalid nv value
+		vw, _ := newView(branches[0], block.Number(randBytes32()))
+		assert.Nil(t, vw) // block with random nv value
+		vw, _ = newView(branches[0], block.Number(blks[1].Header().ID()))
+		assert.Nil(t, vw) // block with invalid nv value
 
-		v := newView(branches[0], blks[2].Header().ID())
+		vw, _ = newView(branches[0], block.Number(blks[2].Header().ID()))
 
-		assert.Equal(t, v.first, blks[2].Header().ID()) // verify id of the first block in the view
+		assert.Equal(t, vw.getFirstBlockID(), blks[2].Header().ID()) // verify id of the first block in the view
 
 		// verify whether the view has any conflict pc
 		hasConflictPC := false
@@ -235,7 +237,7 @@ func TestNewView(t *testing.T) {
 				hasConflictPC = true
 			}
 		}
-		assert.Equal(t, v.hasConflictPC, hasConflictPC)
+		assert.Equal(t, vw.hasConflictPC, hasConflictPC)
 
 		// verify nv info
 		nvs := []int(nil)
@@ -245,7 +247,7 @@ func TestNewView(t *testing.T) {
 		nvSummary := countIntArray(nvs)
 		for i, val := range nvSummary {
 			addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
-			assert.Equal(t, v.nv[addr], uint8(val))
+			assert.Equal(t, vw.nv[addr], uint8(val))
 		}
 
 		// verify pp
@@ -265,7 +267,7 @@ func TestNewView(t *testing.T) {
 			for i, j := range summary {
 				addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
 				expected := uint8(j)
-				actual := v.pp[id][addr]
+				actual := vw.pp[id][addr]
 				assert.Equal(t, expected, actual)
 			}
 		}
@@ -287,7 +289,7 @@ func TestNewView(t *testing.T) {
 			for i, j := range summary {
 				addr := thor.Address(crypto.PubkeyToAddress(keys[i].PublicKey))
 				expected := uint8(j)
-				actual := v.pc[id][addr]
+				actual := vw.pc[id][addr]
 				assert.Equal(t, expected, actual)
 			}
 		}
@@ -324,12 +326,7 @@ func TestViewFunc(t *testing.T) {
 		gen.Header().ID(),
 		gen.Header().Timestamp()+10,
 		0,
-		[4]thor.Bytes32{
-			GenNVforFirstBlock(1),
-			pp,
-			pc,
-			thor.Bytes32{},
-		},
+		[4]thor.Bytes32{GenNVforFirstBlock(1), pp, pc},
 	)
 
 	blk2 := newBlock(
@@ -338,12 +335,7 @@ func TestViewFunc(t *testing.T) {
 		blk1.Header().ID(),
 		blk1.Header().Timestamp()+10,
 		0,
-		[4]thor.Bytes32{
-			blk1.Header().ID(),
-			pp,
-			pc,
-			thor.Bytes32{},
-		},
+		[4]thor.Bytes32{blk1.Header().ID(), pp, pc},
 	)
 
 	blk3 := newBlock(
@@ -352,12 +344,7 @@ func TestViewFunc(t *testing.T) {
 		blk1.Header().ID(),
 		blk1.Header().Timestamp()+10,
 		0,
-		[4]thor.Bytes32{
-			blk1.Header().ID(),
-			randID,
-			thor.Bytes32{},
-			thor.Bytes32{},
-		},
+		[4]thor.Bytes32{blk1.Header().ID(), randID},
 	)
 
 	assert.Nil(t, repo.AddBlock(blk1, nil))
@@ -369,13 +356,13 @@ func TestViewFunc(t *testing.T) {
 		vw *view
 	)
 	bh = repo.GetBranchesByID(blk2.Header().ID())[0]
-	vw = newView(bh, blk1.Header().ID())
+	vw, _ = newView(bh, block.Number(blk1.Header().ID()))
 	assert.True(t, vw.ifHasQCForNV())
 	assert.Equal(t, M(true, pp), M(vw.ifHasQCForPP()))
 	assert.Equal(t, M(true, pc), M(vw.ifHasQCForPC()))
 
 	bh = repo.GetBranchesByID(blk3.Header().ID())[0]
-	vw = newView(bh, blk1.Header().ID())
+	vw, _ = newView(bh, block.Number(blk1.Header().ID()))
 	assert.False(t, vw.ifHasQCForNV())
 	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPP()))
 	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.ifHasQCForPC()))
