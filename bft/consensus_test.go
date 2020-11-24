@@ -106,6 +106,53 @@ func TestNormalSituation(t *testing.T) {
 	}
 }
 
+func TestCommitFromBlockMessages(t *testing.T) {
+	repo, nodes := newTestRepo()
+	gen := repo.BestBlock()
+	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
+
+	leader := nodes[0]
+	backers := nodes[:QC]
+
+	var blocks []*block.Block
+	blocks = append(blocks, gen)
+
+	emptyBytes32 := thor.Bytes32{}
+	for i := 1; i <= 3; i++ {
+		fv := [4]thor.Bytes32{GenNVforFirstBlock(uint32(i))}
+		if i == 3 {
+			fv = [4]thor.Bytes32{
+				GenNVforFirstBlock(uint32(i)),
+				emptyBytes32,
+				emptyBytes32,
+				blocks[2].Header().ID(),
+			}
+		}
+
+		b := newBlock(
+			leader,
+			backers,
+			blocks[i-1].Header().ID(),
+			blocks[i-1].Header().Timestamp()+thor.BlockInterval,
+			0,
+			fv,
+		)
+		assert.Nil(t, repo.AddBlock(b, nil))
+		blocks = append(blocks, b)
+	}
+
+	// Observed CM not newer than the locally committed
+	cons.state[CM] = blocks[3].Header().ID()
+	assert.Nil(t, cons.Update(blocks[3]))
+	assert.Equal(t, blocks[3].Header().ID(), cons.state[CM])
+
+	// Observed CM newer than the locally committed
+	cons.state = [5]thor.Bytes32{}
+	cons.state[CM] = blocks[1].Header().ID()
+	assert.Nil(t, cons.Update(blocks[3]))
+	assert.Equal(t, blocks[2].Header().ID(), cons.state[CM])
+}
+
 func printFinalityState(n uint32, v *view, cons *Consensus) {
 	fmt.Printf("Blk%d, sigSize = %d, finalVec = [ %d, %d, %d, %d, %d ]\n",
 		n,
