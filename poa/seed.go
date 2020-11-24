@@ -6,8 +6,6 @@
 package poa
 
 import (
-	"encoding/binary"
-
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/go-ecvrf"
@@ -59,10 +57,6 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 
 	hasher := thor.NewBlake2b()
 	hasher.Write(signer.Bytes())
-
-	t := make([]byte, 8)
-	binary.BigEndian.PutUint64(t, seedBlock.TotalBackersCount())
-	hasher.Write(t)
 
 	if seedBlock.BackerSignaturesRoot() != emptyRoot {
 		// the seed corresponding to the seed block

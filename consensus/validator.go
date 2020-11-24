@@ -120,9 +120,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	if header.Number() < c.forkConfig.VIP193 {
-		if header.TotalBackersCount() != 0 {
-			return consensusError("invalid block header: total backers count should be 0 before fork VIP193")
-		}
 		if header.BackerSignaturesRoot() != emptyRoot {
 			return consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
 		}
@@ -130,9 +127,6 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 			return consensusError("invalid block header: total quality should be 0 before fork VIP193")
 		}
 	} else {
-		if header.TotalBackersCount() < parent.TotalBackersCount() {
-			return consensusError(fmt.Sprintf("block total backers count invalid: parent %v, current %v", parent.TotalBackersCount(), header.TotalBackersCount()))
-		}
 		if header.TotalQuality() < parent.TotalQuality() {
 			return consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
 		}
@@ -242,16 +236,12 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 			return consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", header.BackerSignaturesRoot(), bss.RootHash()))
 		}
 
-		if totalBackers := uint64(len(bss)) + parent.TotalBackersCount(); header.TotalBackersCount() != totalBackers {
-			return consensusError(fmt.Sprintf("block total backers count mismatch: want %v, have %v", header.TotalBackersCount(), totalBackers))
-		}
-
 		totalQuality := parent.TotalQuality()
 		if len(bss) >= thor.HeavyBlockRequirement {
 			totalQuality++
 		}
 		if totalQuality != header.TotalQuality() {
-			return consensusError(fmt.Sprintf("block total quality mismatch: want %v, have %v", header.TotalBackersCount(), totalQuality))
+			return consensusError(fmt.Sprintf("block total quality mismatch: want %v, have %v", header.TotalQuality(), totalQuality))
 		}
 
 		if len(bss) > 0 {
