@@ -42,7 +42,7 @@ func TestUpdate(t *testing.T) {
 	b1 := newBlock(
 		keys[0], keys[1:30],
 		b0.Header().ID(), b0.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(b0.Header().Number() + 1), b0.Header().ID()},
+		[4]thor.Bytes32{GenNVForFirstBlock(b0.Header().Number() + 1), b0.Header().ID()},
 	)
 	assert.Nil(t, repo.AddBlock(b1, nil))
 	rtpc.update(b1)
@@ -61,7 +61,7 @@ func TestUpdate(t *testing.T) {
 	b3 := newBlock(
 		keys[0], keys[1:30],
 		b2.Header().ID(), b2.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(b2.Header().Number() + 1), b1.Header().ID()},
+		[4]thor.Bytes32{GenNVForFirstBlock(b2.Header().Number() + 1), b1.Header().ID()},
 	)
 	assert.Nil(t, repo.AddBlock(b3, nil))
 	rtpc.update(b3)
@@ -87,7 +87,7 @@ func TestUpdate(t *testing.T) {
 		keys[0], keys[1:30],
 		b4.Header().ID(), b4.Header().Timestamp()+30, 0,
 		[4]thor.Bytes32{
-			GenNVforFirstBlock(b4.Header().Number() + 1),
+			GenNVForFirstBlock(b4.Header().Number() + 1),
 			emptyBytes32, b7.Header().ID(),
 		},
 	)
@@ -108,7 +108,7 @@ func TestUpdate(t *testing.T) {
 	b8 := newBlock(
 		keys[0], keys[:68],
 		b7.Header().ID(), b7.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(b4.Header().Number() + 1), b7.Header().ID()},
+		[4]thor.Bytes32{GenNVForFirstBlock(b4.Header().Number() + 1), b7.Header().ID()},
 	)
 	assert.Nil(t, repo.AddBlock(b8, nil))
 	rtpc.update(b8)
@@ -118,7 +118,7 @@ func TestUpdate(t *testing.T) {
 	b10 := newBlock(
 		keys[0], keys[:68],
 		b5.Header().ID(), b5.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(b5.Header().Number() + 1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(b5.Header().Number() + 1)},
 	)
 	assert.Nil(t, repo.AddBlock(b10, nil))
 	rtpc.update(b10)

@@ -70,7 +70,7 @@ func TestNormalSituation(t *testing.T) {
 		// Use the new block's ID as the NV value if the block is the first block of its view
 		nv = cons.state[NV]
 		if v.hasQCForNV() || head.Header().Number() == 0 {
-			nv = GenNVforFirstBlock(head.Header().Number() + 1)
+			nv = GenNVForFirstBlock(head.Header().Number() + 1)
 		}
 
 		head = newBlock(
@@ -156,13 +156,13 @@ func TestNVB(t *testing.T) {
 	b1 := newBlock(
 		nodes[0], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	c1 := newBlock(
 		nodes[1], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+20, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	assert.Nil(t, repo.AddBlock(b1, nil))
@@ -190,12 +190,12 @@ func TestNVC(t *testing.T) {
 	b1 := newBlock(
 		nodes[0], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+20, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 	c1 := newBlock(
 		nodes[0], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 	c2 := newBlock(
 		nodes[0], nil, c1.Header().ID(),
@@ -237,7 +237,7 @@ func TestNVD(t *testing.T) {
 	b1 := newBlock(
 		nodes[0], nodes[:QC+3], gen.Header().ID(),
 		gen.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	b2 := newBlock(
@@ -270,13 +270,13 @@ func TestPPUnlock(t *testing.T) {
 	b1 := newBlock(
 		nodes[0], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+10, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	c1 := newBlock(
 		nodes[1], nil, gen.Header().ID(),
 		gen.Header().Timestamp()+20, 0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+		[4]thor.Bytes32{GenNVForFirstBlock(1)},
 	)
 
 	assert.Nil(t, repo.AddBlock(b1, nil))
@@ -303,10 +303,10 @@ func TestCM(t *testing.T) {
 
 	emptyBytes32 := thor.Bytes32{}
 	for i := 1; i <= 3; i++ {
-		fv := [4]thor.Bytes32{GenNVforFirstBlock(uint32(i))}
+		fv := [4]thor.Bytes32{GenNVForFirstBlock(uint32(i))}
 		if i == 3 {
 			fv = [4]thor.Bytes32{
-				GenNVforFirstBlock(uint32(i)),
+				GenNVForFirstBlock(uint32(i)),
 				emptyBytes32,
 				emptyBytes32,
 				blocks[2].Header().ID(),

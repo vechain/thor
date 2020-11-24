@@ -221,7 +221,7 @@ func newTestBranch(repo *chain.Repository, keys []*ecdsa.PrivateKey) (
 		if i == viewStart { // first block of view
 			// nv := thor.Bytes32{}
 			// binary.BigEndian.PutUint32(nv[:], uint32(viewStart))
-			nv := GenNVforFirstBlock(uint32(viewStart))
+			nv := GenNVForFirstBlock(uint32(viewStart))
 			fv[0] = nv
 		}
 
@@ -339,7 +339,7 @@ func TestViewFunc(t *testing.T) {
 		gen.Header().ID(),
 		gen.Header().Timestamp()+10,
 		0,
-		[4]thor.Bytes32{GenNVforFirstBlock(1), pp, pc},
+		[4]thor.Bytes32{GenNVForFirstBlock(1), pp, pc},
 	)
 
 	blk2 := newBlock(

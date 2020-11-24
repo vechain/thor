@@ -74,7 +74,7 @@ func (cons *Consensus) UpdateLastSignedPC(h *block.Header) error {
 	// backer calling this function;
 	// Otherwise, the block referred by the NV value should have already existed
 	// in repo.
-	if h.NV() == GenNVforFirstBlock(h.Number()) {
+	if h.NV() == GenNVForFirstBlock(h.Number()) {
 		viewTS = h.Timestamp()
 	} else {
 		viewTS, err = getTimestamp(cons.repo, getNV(h))
