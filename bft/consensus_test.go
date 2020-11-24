@@ -12,7 +12,24 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+func printFinalityState(n uint32, v *view, cons *Consensus) {
+	fmt.Printf("Blk%d, sigSize = %d, finalVec = [ %d, %d, %d, %d, %d ]\n",
+		n,
+		len(v.nv),
+		block.Number(cons.state[NV]),
+		block.Number(cons.state[PP]),
+		block.Number(cons.state[PC]),
+		block.Number(cons.state[CM]),
+		block.Number(cons.state[FN]),
+	)
+}
+
 func TestNormalSituation(t *testing.T) {
+	/**
+	Genesis -- b1
+			|
+			|-------c1
+	*/
 	var (
 		head         *block.Block
 		branch       *chain.Chain
@@ -129,6 +146,11 @@ func TestNormalSituation(t *testing.T) {
 }
 
 func TestNVB(t *testing.T) {
+	/**
+	Genesis --- b1
+			|
+			|------- c1
+	*/
 	repo, nodes := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
@@ -148,14 +170,21 @@ func TestNVB(t *testing.T) {
 	assert.Nil(t, repo.AddBlock(b1, nil))
 	assert.Nil(t, repo.AddBlock(c1, nil))
 
+	assert.Nil(t, cons.repo.SetBestBlockID(b1.Header().ID()))
 	assert.Nil(t, cons.Update(b1))
 	assert.Equal(t, b1.Header().ID(), cons.state[NV])
 
+	assert.Nil(t, cons.repo.SetBestBlockID(c1.Header().ID()))
 	assert.Nil(t, cons.Update(c1))
 	assert.Equal(t, c1.Header().ID(), cons.state[NV])
 }
 
 func TestNVC(t *testing.T) {
+	/**
+	Genesis -------- b1
+			|
+			|-- c1 ------ c2
+	*/
 	repo, nodes := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
@@ -192,6 +221,40 @@ func TestNVC(t *testing.T) {
 
 	assert.Nil(t, cons.Update(c2))
 	assert.Equal(t, c1.Header().ID(), cons.state[NV])
+}
+
+func TestPPUnlock(t *testing.T) {
+	/**
+	Genesis --- b1
+			|
+			|------- c1
+	*/
+
+	repo, nodes := newTestRepo()
+	gen := repo.BestBlock()
+	cons := NewConsensus(repo, gen.Header().ID(), pubToAddr(nodes[0].PublicKey))
+
+	b1 := newBlock(
+		nodes[0], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+10, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+
+	c1 := newBlock(
+		nodes[1], nil, gen.Header().ID(),
+		gen.Header().Timestamp()+20, 0,
+		[4]thor.Bytes32{GenNVforFirstBlock(1)},
+	)
+
+	assert.Nil(t, repo.AddBlock(b1, nil))
+	assert.Nil(t, repo.AddBlock(c1, nil))
+
+	cons.state[NV] = b1.Header().ID()
+	cons.state[PP] = b1.Header().ID()
+
+	assert.Nil(t, cons.repo.SetBestBlockID(c1.Header().ID()))
+	assert.Nil(t, cons.Update(c1))
+	assert.True(t, cons.state[PP].IsZero())
 }
 
 func TestCommitFromBlockMessages(t *testing.T) {
@@ -239,16 +302,4 @@ func TestCommitFromBlockMessages(t *testing.T) {
 	cons.state[CM] = blocks[1].Header().ID()
 	assert.Nil(t, cons.Update(blocks[3]))
 	assert.Equal(t, blocks[2].Header().ID(), cons.state[CM])
-}
-
-func printFinalityState(n uint32, v *view, cons *Consensus) {
-	fmt.Printf("Blk%d, sigSize = %d, finalVec = [ %d, %d, %d, %d, %d ]\n",
-		n,
-		len(v.nv),
-		block.Number(cons.state[NV]),
-		block.Number(cons.state[PP]),
-		block.Number(cons.state[PC]),
-		block.Number(cons.state[CM]),
-		block.Number(cons.state[FN]),
-	)
 }
