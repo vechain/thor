@@ -6,7 +6,6 @@
 package chain
 
 import (
-	"bytes"
 	"encoding/binary"
 	"sort"
 
@@ -256,7 +255,7 @@ func (c *Chain) IsOnChain(id thor.Bytes32) bool {
 		return false
 	}
 
-	return bytes.Compare(storedID.Bytes(), id.Bytes()) == 0
+	return storedID == id
 }
 
 // NewBestChain create a chain with best block as head.
