@@ -6,7 +6,6 @@
 package block
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -104,25 +103,23 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&raws); err != nil {
 		return err
 	}
-	if len(raws) != 2 && len(raws) != 3 {
+
+	if len(raws) == 3 {
+		if err := rlp.DecodeBytes(raws[2], &bss); err != nil {
+			return err
+		}
+		if len(bss) == 0 {
+			return errors.New("rlp: block body should be trimmed")
+		}
+	} else if len(raws) != 2 {
 		return errors.New("rlp:invalid fields of block body, want 2 or 3")
 	}
 
-	if err := rlp.Decode(bytes.NewReader(raws[0]), &header); err != nil {
+	if err := rlp.DecodeBytes(raws[0], &header); err != nil {
 		return err
 	}
 
-	if len(raws) == 3 && header.BackerSignaturesRoot() != emptyRoot {
-		if err := rlp.Decode(bytes.NewReader(raws[2]), &bss); err != nil {
-			return err
-		}
-	} else if len(raws) == 2 && header.BackerSignaturesRoot() == emptyRoot {
-		bss = ComplexSignatures(nil)
-	} else {
-		return errors.New("rlp:unrecognized block format")
-	}
-
-	if err := rlp.Decode(bytes.NewReader(raws[1]), &txs); err != nil {
+	if err := rlp.DecodeBytes(raws[1], &txs); err != nil {
 		return err
 	}
 
