@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -195,7 +196,7 @@ func TestHeaderEncoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp: input contains more than one value")
 }
 
-func TestEncodingBadBssRoot(t *testing.T) {
+func TestEncodingBadExtension(t *testing.T) {
 	block := new(Builder).Build()
 	h := block.Header()
 
@@ -218,6 +219,7 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// backward compatiability，required to be trimmed
 	assert.EqualValues(t, 10, count)
 
 	var raws []rlp.RawValue
@@ -281,7 +283,7 @@ func TestDecoding(t *testing.T) {
 	raw2, _ := rlp.EncodeToBytes([]interface{}{
 		b1.Header(),
 		b1.Transactions(),
-		uint(1),
+		ComplexSignatures{},
 	})
 
 	var bx Block
@@ -293,7 +295,23 @@ func TestDecoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw2, &bx)
-	assert.EqualError(t, err, "rlp:unrecognized block format")
+	assert.EqualError(t, err, "rlp: block body should be trimmed")
+}
+
+func TestCodingCompatiability(t *testing.T) {
+	raw := hexutil.MustDecode("0xf8a1f89ea0000000000000000000000000000000000000000000000000000000000000000080809400000000000000000000000000000000000000008080a045b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0a00000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000080c0")
+
+	var b0 Block
+	err := rlp.DecodeBytes(raw, &b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := rlp.EncodeToBytes(&b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, raw, data)
 }
 
 func TestComplexSig(t *testing.T) {
