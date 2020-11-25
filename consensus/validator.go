@@ -6,8 +6,12 @@
 package consensus
 
 import (
+	"bytes"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -18,24 +22,26 @@ import (
 	"github.com/vechain/thor/xenv"
 )
 
+var emptyRoot = thor.Blake2b(rlp.EmptyString) // This is the known root hash of an empty trie.
+
 func (c *Consensus) validate(
 	state *state.State,
 	block *block.Block,
-	parentHeader *block.Header,
+	parent *block.Block,
 	nowTimestamp uint64,
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
-	if err := c.validateBlockHeader(header, parentHeader, nowTimestamp); err != nil {
+	if err := c.validateBlockHeader(header, parent.Header(), nowTimestamp); err != nil {
 		return nil, nil, err
 	}
 
-	candidates, err := c.validateProposer(header, parentHeader, state)
+	candidates, proposers, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := c.validateBlockBody(block); err != nil {
+	if err := c.validateBlockBody(block, parent.Header(), proposers); err != nil {
 		return nil, nil, err
 	}
 
@@ -112,30 +118,50 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
+
+	if header.Number() < c.forkConfig.VIP193 {
+		if header.TotalBackersCount() != 0 {
+			return consensusError("invalid block header: total backers count should be 0 before fork VIP193")
+		}
+		if header.BackerSignaturesRoot() != emptyRoot {
+			return consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
+		}
+		if header.TotalQuality() != 0 {
+			return consensusError("invalid block header: total quality should be 0 before fork VIP193")
+		}
+	} else {
+		if header.TotalBackersCount() < parent.TotalBackersCount() {
+			return consensusError(fmt.Sprintf("block total backers count invalid: parent %v, current %v", parent.TotalBackersCount(), header.TotalBackersCount()))
+		}
+		if header.TotalQuality() < parent.TotalQuality() {
+			return consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
+		}
+	}
+
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Header, st *state.State) (*poa.Candidates, error) {
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, st *state.State) (*poa.Candidates, []poa.Proposer, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+		return nil, nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
 	authority := builtin.Authority.Native(st)
 	var candidates *poa.Candidates
-	if entry, ok := c.candidatesCache.Get(parent.ID()); ok {
+	if entry, ok := c.candidatesCache.Get(parent.Header().ID()); ok {
 		candidates = entry.(*poa.Candidates).Copy()
 	} else {
 		list, err := authority.AllCandidates()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		candidates = poa.NewCandidates(list)
 	}
 
 	proposers, err := candidates.Pick(st)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var sched poa.Scheduler
@@ -143,28 +169,28 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		var seed thor.Bytes32
 		seed, err = c.seeder.Generate(header.ParentID())
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		sched, err = poa.NewSchedulerV2(signer, proposers, parent.ID(), parent.Timestamp(), seed.Bytes())
+		sched, err = poa.NewSchedulerV2(signer, proposers, parent, seed.Bytes())
 	} else {
-		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
+		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
-		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+		return nil, nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
-		return nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
-	if parent.TotalScore()+score != header.TotalScore() {
-		return nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.TotalScore()+score, header.TotalScore()))
+	if parent.Header().TotalScore()+score != header.TotalScore() {
+		return nil, nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.Header().TotalScore()+score, header.TotalScore()))
 	}
 
 	for _, u := range updates {
 		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !candidates.Update(u.Address, u.Active) {
 			// should never happen
@@ -172,10 +198,10 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		}
 	}
 
-	return candidates, nil
+	return candidates, proposers, nil
 }
 
-func (c *Consensus) validateBlockBody(blk *block.Block) error {
+func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, proposers []poa.Proposer) error {
 	header := blk.Header()
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
@@ -206,6 +232,80 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 		}
 	}
 
+	bss := blk.BackerSignatures()
+	if header.Number() < c.forkConfig.VIP193 {
+		if len(bss) != 0 {
+			return consensusError("invalid block: backer signatures should be empty before fork VIP193")
+		}
+	} else {
+		if header.BackerSignaturesRoot() != bss.RootHash() {
+			return consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", header.BackerSignaturesRoot(), bss.RootHash()))
+		}
+
+		if totalBackers := uint64(len(bss)) + parent.TotalBackersCount(); header.TotalBackersCount() != totalBackers {
+			return consensusError(fmt.Sprintf("block total backers count mismatch: want %v, have %v", header.TotalBackersCount(), totalBackers))
+		}
+
+		totalQuality := parent.TotalQuality()
+		if len(bss) >= thor.HeavyBlockRequirement {
+			totalQuality++
+		}
+		if totalQuality != header.TotalQuality() {
+			return consensusError(fmt.Sprintf("block total quality mismatch: want %v, have %v", header.TotalBackersCount(), totalQuality))
+		}
+
+		if len(bss) > 0 {
+			proposer, _ := header.Signer()
+			getBacker := func(addr thor.Address) *poa.Proposer {
+				for _, p := range proposers {
+					if p.Address == addr {
+						return &poa.Proposer{
+							Address: p.Address,
+							Active:  p.Active,
+						}
+					}
+				}
+				return nil
+			}
+
+			seed, _ := c.seeder.Generate(header.ParentID())
+			alpha := append([]byte(nil), seed.Bytes()...)
+			alpha = append(alpha, header.ParentID().Bytes()[:4]...)
+
+			hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
+			prev := []byte{}
+			for _, bs := range bss {
+				pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
+				if err != nil {
+					return consensusError(fmt.Sprintf("backer signature's signer unavailable: %v", err))
+				}
+
+				addr := thor.Address(crypto.PubkeyToAddress(*pub))
+				backer := getBacker(addr)
+				if backer == nil {
+					return consensusError(fmt.Sprintf("backer: %v is not an authority", addr))
+				}
+
+				if backer.Address == proposer {
+					return consensusError("block signer cannot back itself")
+				}
+
+				beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, bs.Proof())
+				if err != nil {
+					return consensusError(fmt.Sprintf("failed to verify backer's signature: %v", err))
+				}
+				if bytes.Compare(prev, beta) > 0 {
+					return consensusError("backer signatures are not in ascending order(by beta)")
+				}
+				prev = beta
+
+				if poa.EvaluateVRF(beta) == false {
+					return consensusError(fmt.Sprintf("invalid proof from %v", addr))
+				}
+			}
+			return nil
+		}
+	}
 	return nil
 }
 
@@ -296,7 +396,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	}
 	stateRoot := stage.Hash()
 
-	if blk.Header().StateRoot() != stateRoot {
+	if header.StateRoot() != stateRoot {
 		return nil, nil, consensusError(fmt.Sprintf("block state root mismatch: want %v, have %v", header.StateRoot(), stateRoot))
 	}
 

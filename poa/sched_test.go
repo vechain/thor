@@ -6,10 +6,13 @@
 package poa_test
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
 )
@@ -83,12 +86,14 @@ func TestUpdates(t *testing.T) {
 }
 
 func TestScheduleV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	_, err := poa.NewSchedulerV2(p1, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	_, err := poa.NewSchedulerV2(p1, proposers, parent, nil)
 	assert.NotNil(t, err)
 
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	for i := uint64(0); i < 100; i++ {
 		now := parentTime + i*thor.BlockInterval/2
@@ -99,9 +104,11 @@ func TestScheduleV2(t *testing.T) {
 }
 
 func TestIsTheTimeV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	tests := []struct {
 		now  uint64
@@ -118,15 +125,52 @@ func TestIsTheTimeV2(t *testing.T) {
 }
 
 func TestUpdatesV2(t *testing.T) {
-	var id thor.Bytes32
-	binary.BigEndian.PutUint32(id[:], 1)
-	sched, _ := poa.NewSchedulerV2(p2, proposers, id, parentTime, nil)
+	var parentID thor.Bytes32
+	binary.BigEndian.PutUint32(parentID[:], 0)
+	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
+
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
 
 	tests := []struct {
 		newBlockTime uint64
 		want         uint64
 	}{
 		{parentTime + thor.BlockInterval*30, 1},
+	}
+
+	for _, tt := range tests {
+		_, score := sched.Updates(tt.newBlockTime)
+		assert.Equal(t, tt.want, score)
+	}
+}
+
+func TestActivateInV2(t *testing.T) {
+	pps := append([]poa.Proposer(nil), proposers...)
+	backer, _ := crypto.GenerateKey()
+	pps = append(pps, poa.Proposer{thor.Address(crypto.PubkeyToAddress(backer.PublicKey)), false})
+
+	proposer, _ := crypto.GenerateKey()
+	dummy := new(block.Builder).Build()
+
+	var proof [81]byte
+	rand.Read(proof[:])
+	hash := block.NewProposal(dummy.Header().ParentID(), dummy.Header().TxsRoot(), dummy.Header().GasLimit(), dummy.Header().Timestamp()).Hash()
+	sig, _ := crypto.Sign(hash.Bytes(), backer)
+	bs, _ := block.NewComplexSignature(proof[:], sig)
+
+	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0, 0).Build()
+	signingHash := b.Header().SigningHash()
+	blockSig, _ := crypto.Sign(signingHash.Bytes(), proposer)
+	b0 := b.WithSignature(blockSig)
+
+	sched, _ := poa.NewSchedulerV2(p2, pps, b0, nil)
+
+	tests := []struct {
+		newBlockTime uint64
+		want         uint64
+	}{
+		{b0.Header().Timestamp() + thor.BlockInterval, 2},
+		{b0.Header().Timestamp() + thor.BlockInterval*3, 1},
 	}
 
 	for _, tt := range tests {

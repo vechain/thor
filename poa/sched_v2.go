@@ -10,6 +10,8 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
 
@@ -20,6 +22,7 @@ type SchedulerV2 struct {
 	parentBlockTime uint64
 	seed            []byte
 	shuffled        []thor.Address
+	activates       []thor.Address
 }
 
 var _ Scheduler = (*SchedulerV2)(nil)
@@ -30,12 +33,30 @@ var _ Scheduler = (*SchedulerV2)(nil)
 func NewSchedulerV2(
 	addr thor.Address,
 	proposers []Proposer,
-	parentID thor.Bytes32,
-	parentBlockTime uint64,
+	parent *block.Block,
 	seed []byte) (*SchedulerV2, error) {
+	var (
+		backers   = make(map[thor.Address]bool)
+		activates []thor.Address
+	)
+
+	// handling parent block's backers in post VIP-193 stage, activate them when they backs
+	bss := parent.BackerSignatures()
+	if len(bss) > 0 {
+		header := parent.Header()
+		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
+		for _, bs := range bss {
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
+			if err != nil {
+				return nil, err
+			}
+			backers[thor.Address(crypto.PubkeyToAddress(*pub))] = true
+		}
+	}
+
 	if canPropose := func() bool {
 		for _, p := range proposers {
-			if p.Address == addr && p.Active == true {
+			if p.Address == addr && (p.Active == true || backers[p.Address] == true) {
 				return true
 			}
 		}
@@ -53,7 +74,10 @@ func NewSchedulerV2(
 	)
 
 	for _, p := range proposers {
-		if p.Active == true {
+		if p.Active == false && backers[p.Address] == true {
+			activates = append(activates, p.Address)
+		}
+		if p.Active == true || backers[p.Address] == true {
 			if p.Address == addr {
 				proposer = p
 			}
@@ -62,7 +86,7 @@ func NewSchedulerV2(
 				hash thor.Bytes32
 			}{
 				p.Address,
-				thor.Blake2b(seed, parentID.Bytes()[:4], p.Address.Bytes()),
+				thor.Blake2b(seed, parent.Header().ID().Bytes()[:4], p.Address.Bytes()),
 			})
 		}
 	}
@@ -78,9 +102,10 @@ func NewSchedulerV2(
 
 	return &SchedulerV2{
 		proposer,
-		parentBlockTime,
+		parent.Header().Timestamp(),
 		seed,
 		shuffled,
+		activates,
 	}, nil
 }
 
@@ -109,25 +134,35 @@ func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
 func (s *SchedulerV2) IsTheTime(newBlockTime uint64) bool {
-	if s.parentBlockTime >= newBlockTime {
+	return s.IsScheduled(newBlockTime, s.proposer.Address)
+}
+
+// IsScheduled returns if the schedule(proposer, blockTime) is correct.
+func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool {
+	if s.parentBlockTime >= blockTime {
 		// invalid block time
 		return false
 	}
 
 	T := thor.BlockInterval
-	if (newBlockTime-s.parentBlockTime)%T != 0 {
+	if (blockTime-s.parentBlockTime)%T != 0 {
 		// invalid block time
 		return false
 	}
 
-	index := (newBlockTime - s.parentBlockTime - T) / T % uint64(len(s.shuffled))
-	return s.shuffled[index] == s.proposer.Address
+	index := (blockTime - s.parentBlockTime - T) / T % uint64(len(s.shuffled))
+	return s.shuffled[index] == proposer
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 // In scheduler v2, Updates only deactivate proposers.
 func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval
+
+	for _, a := range s.activates {
+		updates = append(updates, Proposer{a, true})
+	}
+
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
 		if s.parentBlockTime+i*T+T >= newBlockTime {
 			break
@@ -137,6 +172,6 @@ func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score ui
 		}
 	}
 
-	score = uint64(len(s.shuffled)) - uint64(len(updates))
+	score = uint64(len(s.shuffled) + len(s.activates) - len(updates))
 	return
 }

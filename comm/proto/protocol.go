@@ -12,12 +12,12 @@ import (
 // Constants
 const (
 	Name              = "thor"
-	Version    uint   = 1
-	Length     uint64 = 8
+	Version    uint   = 2
+	Length     uint64 = 10
 	MaxMsgSize        = 10 * 1024 * 1024
 )
 
-// Protocol messages of thor
+// Protocol messages of thor.
 const (
 	MsgGetStatus = iota
 	MsgNewBlockID
@@ -27,6 +27,8 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
+	MsgNewDraft
+	MsgNewAccepted
 )
 
 // MsgName convert msg code to string.
@@ -48,6 +50,10 @@ func MsgName(msgCode uint64) string {
 		return "MsgGetBlocksFromNumber"
 	case MsgGetTxs:
 		return "MsgGetTxs"
+	case MsgNewDraft:
+		return "MsgNewDraft"
+	case MsgNewAccepted:
+		return "MsgNewAccepted"
 	default:
 		return fmt.Sprintf("unknown msg code(%v)", msgCode)
 	}

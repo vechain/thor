@@ -6,16 +6,25 @@
 package packer
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/comm/proto"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
+
+type bsWithBeta struct {
+	sig  block.ComplexSignature
+	beta []byte
+}
 
 // Flow the flow of packing a new block.
 type Flow struct {
@@ -27,6 +36,10 @@ type Flow struct {
 	txs          tx.Transactions
 	receipts     tx.Receipts
 	features     tx.Features
+	proposers    []poa.Proposer // all proposers in power
+	seed         []byte
+	knownBackers map[thor.Address]bool
+	bss          []bsWithBeta
 }
 
 func newFlow(
@@ -34,6 +47,8 @@ func newFlow(
 	parentHeader *block.Header,
 	runtime *runtime.Runtime,
 	features tx.Features,
+	proposers []poa.Proposer,
+	seed []byte,
 ) *Flow {
 	return &Flow{
 		packer:       packer,
@@ -41,6 +56,9 @@ func newFlow(
 		runtime:      runtime,
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
+		proposers:    proposers,
+		seed:         seed,
+		knownBackers: make(map[thor.Address]bool),
 	}
 }
 
@@ -54,9 +72,37 @@ func (f *Flow) When() uint64 {
 	return f.runtime.Context().Time
 }
 
+// Number returns the block number.
+func (f *Flow) Number() uint32 {
+	return f.runtime.Context().Number
+}
+
 // TotalScore returns total score of new block.
 func (f *Flow) TotalScore() uint64 {
 	return f.runtime.Context().TotalScore
+}
+
+// GetAuthority returns authority corresponding to the given address.
+func (f *Flow) GetAuthority(addr thor.Address) *poa.Proposer {
+	for _, p := range f.proposers {
+		if p.Address == addr {
+			return &poa.Proposer{
+				Address: p.Address,
+				Active:  p.Active,
+			}
+		}
+	}
+	return nil
+}
+
+// Seed returns the seed of this round.
+func (f *Flow) Seed() []byte {
+	return f.seed
+}
+
+// IsBackerKnown returns true is backer's signature is already added.
+func (f *Flow) IsBackerKnown(backer thor.Address) bool {
+	return f.knownBackers[backer]
 }
 
 func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
@@ -71,6 +117,38 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 		return false, false, err
 	}
 	return true, txMeta.Reverted, nil
+}
+
+// Draft an block proposal and sign it for p2p propagation.
+func (f *Flow) Draft(privateKey *ecdsa.PrivateKey) (*proto.Draft, error) {
+	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
+		return nil, errors.New("private key mismatch")
+	}
+
+	p := block.NewProposal(f.parentHeader.ID(), f.txs.RootHash(), f.runtime.Context().GasLimit, f.runtime.Context().Time)
+	sig, err := crypto.Sign(p.Hash().Bytes(), privateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	draft := proto.Draft{
+		Proposal:  p,
+		Signature: sig,
+	}
+	return &draft, nil
+}
+
+// AddBackerSignature adds a backer signature.
+func (f *Flow) AddBackerSignature(bs block.ComplexSignature, beta []byte, signer thor.Address) bool {
+	if signer == f.packer.nodeMaster {
+		return false
+	}
+
+	cpy := bs
+	f.knownBackers[signer] = true
+	f.bss = append(f.bss, bsWithBeta{cpy, beta})
+
+	return true
 }
 
 // Adopt try to execute the given transaction.
@@ -159,6 +237,20 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		ReceiptsRoot(f.receipts.RootHash()).
 		StateRoot(stateRoot).
 		TransactionFeatures(f.features)
+
+	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
+		var bss block.ComplexSignatures
+		if len(f.bss) > 0 {
+			sort.Slice(f.bss, func(i, j int) bool {
+				return bytes.Compare(f.bss[i].beta, f.bss[j].beta) < 0
+			})
+			for _, b := range f.bss {
+				bss = append(bss, b.sig)
+			}
+		}
+
+		builder.BackerSignatures(bss, f.parentHeader.TotalBackersCount(), f.parentHeader.TotalQuality())
+	}
 
 	for _, tx := range f.txs {
 		builder.Transaction(tx)

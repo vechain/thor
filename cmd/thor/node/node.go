@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -54,6 +55,9 @@ type Node struct {
 	skipLogs       bool
 	logDBFailed    bool
 	bandwidth      bandwidth.Bandwidth
+	forkConfig     thor.ForkConfig
+	stater         *state.Stater
+	seeder         *poa.Seeder
 }
 
 func New(
@@ -79,15 +83,19 @@ func New(
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
+		stater:         stater,
 	}
 }
 
+// Run starts the node process.
 func (n *Node) Run(ctx context.Context) error {
 	n.comm.Sync(n.handleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
+	n.goes.Go(func() { n.backerLoop(ctx) })
 
 	n.goes.Wait()
 	return nil

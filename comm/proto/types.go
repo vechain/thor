@@ -7,6 +7,7 @@ package proto
 
 import (
 	"context"
+	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -14,16 +15,40 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-type (
+// Status result of MsgGetStatus.
+type Status struct {
+	GenesisBlockID thor.Bytes32
+	SysTimestamp   uint64
+	BestBlockID    thor.Bytes32
+	TotalScore     uint64
+}
 
-	// Status result of MsgGetStatus.
-	Status struct {
-		GenesisBlockID thor.Bytes32
-		SysTimestamp   uint64
-		BestBlockID    thor.Bytes32
-		TotalScore     uint64
-	}
-)
+// Accepted is the backer's signature to an proposal with proposal's hash.
+type Accepted struct {
+	ProposalHash thor.Bytes32
+	Signature    block.ComplexSignature
+}
+
+// Hash computes the hash of accepted.
+func (acc *Accepted) Hash() thor.Bytes32 {
+	return thor.Blake2b(acc.ProposalHash.Bytes(), ([]byte)(acc.Signature))
+}
+
+// Draft is constructed by the leader's proposal and signature.
+type Draft struct {
+	Proposal  *block.Proposal
+	Signature []byte
+}
+
+// Hash computes the hash of draft.
+func (d *Draft) Hash() thor.Bytes32 {
+	b := make([]byte, 16)
+	binary.BigEndian.PutUint64(b, d.Proposal.GasLimit)
+	binary.BigEndian.PutUint64(b[8:], d.Proposal.Timestamp)
+
+	// [parentID + txsRoot + Gaslimit + Timestamp + Signature]
+	return thor.Blake2b(d.Proposal.ParentID.Bytes(), d.Proposal.TxsRoot.Bytes(), b, d.Signature)
+}
 
 // RPC defines RPC interface.
 type RPC interface {
@@ -53,6 +78,16 @@ func NotifyNewBlock(ctx context.Context, rpc RPC, block *block.Block) error {
 // NotifyNewTx notify new tx to remote peer.
 func NotifyNewTx(ctx context.Context, rpc RPC, tx *tx.Transaction) error {
 	return rpc.Notify(ctx, MsgNewTx, tx)
+}
+
+// NotifyNewDraft notify a draft to remote peer.
+func NotifyNewDraft(ctx context.Context, rpc RPC, d *Draft) error {
+	return rpc.Notify(ctx, MsgNewDraft, d)
+}
+
+// NotifyNewAccepted notify an accepted message` to remote peer.
+func NotifyNewAccepted(ctx context.Context, rpc RPC, acc *Accepted) error {
+	return rpc.Notify(ctx, MsgNewAccepted, acc)
 }
 
 // GetBlockByID query block from remote peer by given block ID.
