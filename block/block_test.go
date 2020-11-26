@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,8 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
+
+var emptyRoot = thor.Blake2b(rlp.EmptyString) // This is the known root hash of an empty trie.
 
 func TestBlock(t *testing.T) {
 	var (
@@ -79,7 +82,6 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
-	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 	key, _ := crypto.HexToECDSA(privKey)
 	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
@@ -105,11 +107,10 @@ func TestBlock(t *testing.T) {
 		ParentID(emptyRoot).
 		Beneficiary(beneficiary).
 		TransactionFeatures(1).
-		BackerSignatures(ComplexSignatures{bs}, 10, 0).
+		BackerSignatures(ComplexSignatures{bs}, 0).
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
-	assert.Equal(t, uint64(10+1), block.Header().TotalBackersCount())
 	assert.Equal(t, block.BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
 
 	data, _ = rlp.EncodeToBytes(block)
@@ -166,7 +167,6 @@ func TestEncoding(t *testing.T) {
 	assert.Equal(t, beneficiary, h.Beneficiary())
 	assert.Equal(t, txsRootHash, h.TxsRoot())
 	assert.Equal(t, brRootHash, h.BackerSignaturesRoot())
-	assert.Equal(t, uint64(0), h.TotalBackersCount())
 
 	var raws []rlp.RawValue
 	data, _ := rlp.EncodeToBytes(block)
@@ -196,7 +196,7 @@ func TestHeaderEncoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp: input contains more than one value")
 }
 
-func TestEncodingBadBssRoot(t *testing.T) {
+func TestEncodingBadExtension(t *testing.T) {
 	block := new(Builder).Build()
 	h := block.Header()
 
@@ -210,7 +210,6 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.EqualValues(t, 0, h1.TotalBackersCount())
 
 	data, _, err := rlp.SplitList(bytes)
 	if err != nil {
@@ -220,17 +219,16 @@ func TestEncodingBadBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// backward compatiability，required to be trimmed
 	assert.EqualValues(t, 10, count)
 
 	var raws []rlp.RawValue
 	_ = rlp.DecodeBytes(bytes, &raws)
 	d, _ := rlp.EncodeToBytes(&struct {
-		Root              thor.Bytes32
-		TotalBackersCount uint64
-		TotalQuality      uint32
+		Root         thor.Bytes32
+		TotalQuality uint32
 	}{
-		thor.Bytes32{},
-		0,
+		emptyRoot,
 		0,
 	})
 	raws = append(raws, d)
@@ -238,11 +236,11 @@ func TestEncodingBadBssRoot(t *testing.T) {
 
 	var h2 Header
 	err = rlp.DecodeBytes(b, &h2)
-	assert.EqualError(t, err, "rlp: extension should be trimmed if total backers count is 0")
+	assert.EqualError(t, err, "rlp: extension must be trimmed")
 }
 
-func TestEncodingBssRoot(t *testing.T) {
-	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
+func TestEncodingExtension(t *testing.T) {
+	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1).Build()
 	h := block.Header()
 
 	bytes, err := rlp.EncodeToBytes(h)
@@ -255,7 +253,6 @@ func TestEncodingBssRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.EqualValues(t, 1, hh.TotalBackersCount())
 
 	data, _, err := rlp.SplitList(bytes)
 	if err != nil {
@@ -269,7 +266,7 @@ func TestEncodingBssRoot(t *testing.T) {
 }
 
 func TestDecoding(t *testing.T) {
-	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 1, 0).Build()
+	b0 := new(Builder).BackerSignatures(ComplexSignatures{}, 0).Build()
 	b1 := new(Builder).Build()
 
 	raw0, _ := rlp.EncodeToBytes(struct {
@@ -286,7 +283,7 @@ func TestDecoding(t *testing.T) {
 	raw2, _ := rlp.EncodeToBytes([]interface{}{
 		b1.Header(),
 		b1.Transactions(),
-		uint(1),
+		ComplexSignatures{},
 	})
 
 	var bx Block
@@ -298,7 +295,23 @@ func TestDecoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp:invalid fields of block body, want 2 or 3")
 
 	err = rlp.DecodeBytes(raw2, &bx)
-	assert.EqualError(t, err, "rlp:unrecognized block format")
+	assert.EqualError(t, err, "rlp: block body should be trimmed")
+}
+
+func TestCodingCompatiability(t *testing.T) {
+	raw := hexutil.MustDecode("0xf8a1f89ea0000000000000000000000000000000000000000000000000000000000000000080809400000000000000000000000000000000000000008080a045b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0a00000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000080c0")
+
+	var b0 Block
+	err := rlp.DecodeBytes(raw, &b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := rlp.EncodeToBytes(&b0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, raw, data)
 }
 
 func TestComplexSig(t *testing.T) {

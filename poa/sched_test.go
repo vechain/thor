@@ -158,7 +158,7 @@ func TestActivateInV2(t *testing.T) {
 	sig, _ := crypto.Sign(hash.Bytes(), backer)
 	bs, _ := block.NewComplexSignature(proof[:], sig)
 
-	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0, 0).Build()
+	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0).Build()
 	signingHash := b.Header().SigningHash()
 	blockSig, _ := crypto.Sign(signingHash.Bytes(), proposer)
 	b0 := b.WithSignature(blockSig)
