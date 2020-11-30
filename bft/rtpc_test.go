@@ -31,7 +31,7 @@ func TestUpdate(t *testing.T) {
 
 	emptyBytes32 := thor.Bytes32{}
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
 
@@ -120,7 +120,7 @@ func TestUpdate(t *testing.T) {
 func TestUpdateLastCommitted(t *testing.T) {
 	proposer := rand.Intn(nNode)
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
 

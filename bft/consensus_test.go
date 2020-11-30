@@ -40,7 +40,7 @@ func TestNormalSituation(t *testing.T) {
 		)
 	}
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	head = repo.GenesisBlock()
 
 	// node := pubToAddr(nodes[rand.Intn(N)].PublicKey)
@@ -117,7 +117,7 @@ func Test1b(t *testing.T) {
 	  		\
 	   		 -------- b1
 	*/
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -145,7 +145,7 @@ func Test1c(t *testing.T) {
 	    	\
 	   		 b1 ------ b2
 	*/
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -173,7 +173,7 @@ func Test1c(t *testing.T) {
 }
 
 func Test2b(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -203,7 +203,7 @@ func Test2b(t *testing.T) {
 }
 
 func Test2c(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -226,7 +226,7 @@ func Test2c(t *testing.T) {
 }
 
 func Test3ai(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -238,7 +238,7 @@ func Test3ai(t *testing.T) {
 }
 
 func Test3b(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -266,7 +266,7 @@ func Test3b(t *testing.T) {
 }
 
 func Test3c(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -315,7 +315,7 @@ func Test3c(t *testing.T) {
 }
 
 func Test3cii(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -337,7 +337,7 @@ func Test3cii(t *testing.T) {
 }
 
 func Test3ciii(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -362,7 +362,7 @@ func Test3ciii(t *testing.T) {
 }
 
 func Test3e(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -387,7 +387,7 @@ func Test3e(t *testing.T) {
 }
 
 func Test3ei(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -419,7 +419,7 @@ func Test3fi(t *testing.T) {
 			 \------- b2
 			   		  v:b2
 	*/
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	u := 0
@@ -450,7 +450,7 @@ func Test3fii(t *testing.T) {
 					 	 v:b3
 	*/
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	u := 0
@@ -484,7 +484,7 @@ func Test3fiii(t *testing.T) {
 					 	 v:b3			   v:b5
 	*/
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	u := 0
@@ -524,7 +524,7 @@ func Test3fiv(t *testing.T) {
 					 	 v:b3			   v:b5
 	*/
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	u := 0
@@ -564,7 +564,7 @@ func Test3fv(t *testing.T) {
 					 	 v:b3			   v:b5
 	*/
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.GenesisBlock()
 
 	u := 0
@@ -611,7 +611,7 @@ func Test3g(t *testing.T) {
 		rtpc  *block.Header
 	)
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	g := repo.GenesisBlock()
 	cons := NewConsensus(repo, repo.BestBlock().Header().ID(), nodeAddress(u))
 	state[CM] = repo.BestBlock().Header().ID()
@@ -768,7 +768,7 @@ func Test3gi(t *testing.T) {
 		rtpc  *block.Header
 	)
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	g := repo.GenesisBlock()
 	cons := NewConsensus(repo, repo.BestBlock().Header().ID(), nodeAddress(u))
 	state[CM] = repo.BestBlock().Header().ID()
@@ -927,7 +927,7 @@ func Test3gii(t *testing.T) {
 		rtpc  *block.Header
 	)
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	g := repo.GenesisBlock()
 	cons := NewConsensus(repo, repo.BestBlock().Header().ID(), nodeAddress(u))
 	state[CM] = repo.BestBlock().Header().ID()
@@ -1011,7 +1011,7 @@ func Test3gii(t *testing.T) {
 }
 
 func Test4b(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -1040,7 +1040,7 @@ func Test4b(t *testing.T) {
 }
 
 func TestCM(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
@@ -1087,7 +1087,7 @@ func TestNVHasQC(t *testing.T) {
 	nv[b2] <- b1
 	*/
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 

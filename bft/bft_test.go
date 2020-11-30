@@ -1,10 +1,13 @@
 package bft
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"math/rand"
+	"sort"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -12,6 +15,7 @@ import (
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 )
 
 var (
@@ -60,16 +64,21 @@ func newTestGenesisBuilder() (builder *genesis.Builder) {
 		Timestamp(0).
 		GasLimit(thor.InitialGasLimit).
 		State(func(state *state.State) error { // add master nodes
-			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
-			for _, node := range nodes {
-				ok, err := builtin.Authority.Native(state).Add(pubToAddr(
-					node.PublicKey), thor.Address{}, thor.Bytes32{},
-				)
+			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
+				panic(err)
+			}
+
+			for i := range nodes {
+				ok, err := builtin.Authority.Native(state).Add(nodeAddress(i), nodeAddress(i), thor.Bytes32{})
 				if !ok {
 					panic("failed to add consensus node")
 				}
 				if err != nil {
 					panic(err)
+				}
+
+				if err := state.SetBalance(nodeAddress(i), thor.InitialProposerEndorsement); err != nil {
+					return err
 				}
 			}
 			return nil
@@ -78,17 +87,14 @@ func newTestGenesisBuilder() (builder *genesis.Builder) {
 	return
 }
 
-func newTestRepo() *chain.Repository {
+func newTestRepo() (repo *chain.Repository, stater *state.Stater) {
 	db := muxdb.NewMem()
-	// g := genesis.NewDevnet()
-	g := newTestGenesisBuilder()
-	b0, _, _, _ := g.Build(state.NewStater(db))
 
-	repo, err := chain.NewRepository(db, b0)
-	if err != nil {
-		panic(err)
-	}
-	return repo
+	stater = state.NewStater(db)
+	g := newTestGenesisBuilder()
+	b0, _, _, _ := g.Build(stater)
+	repo, _ = chain.NewRepository(db, b0)
+	return
 }
 
 func newBlock(
@@ -134,6 +140,87 @@ func newBlock(
 	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), nodes[proposer])
 	if err != nil {
 		panic(err)
+	}
+	blk = blk.WithSignature(sig)
+
+	return
+}
+
+func newBlock1(
+	proposer int,
+	backers []int,
+	parent *block.Block,
+	numInternvalApart int,
+	totalScore uint64,
+	seed []byte,
+	stateRoot thor.Bytes32,
+	fv [4]thor.Bytes32,
+) (blk *block.Block, err error) {
+	h := parent.Header()
+	timestamp := h.Timestamp() + uint64(numInternvalApart)*thor.BlockInterval
+
+	hash := block.NewProposal(
+		h.ID(),
+		emptyRootHash,
+		h.GasLimit(),
+		timestamp,
+	).Hash()
+
+	bss := block.ComplexSignatures(nil)
+	alpha := append([]byte(nil), seed...)
+	alpha = append(alpha, parent.Header().ID().Bytes()[:4]...)
+
+	type betaInd struct {
+		beta []byte
+		i    int
+	}
+	var betaInds []betaInd
+
+	for i, backer := range backers {
+		sig, err := crypto.Sign(hash.Bytes(), nodes[backer])
+		if err != nil {
+			return nil, err
+		}
+
+		beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(nodes[backer], alpha)
+		if err != nil {
+			return nil, err
+		}
+
+		bs, err := block.NewComplexSignature(proof, sig)
+		if err != nil {
+			return nil, err
+		}
+
+		bss = append(bss, bs)
+		betaInds = append(betaInds, betaInd{beta, i})
+	}
+
+	var bss1 block.ComplexSignatures
+	if len(bss) > 0 {
+		sort.Slice(betaInds, func(i, j int) bool {
+			return bytes.Compare(betaInds[i].beta, betaInds[j].beta) < 0
+		})
+
+		for _, ind := range betaInds {
+			bss1 = append(bss1, bss[ind.i])
+		}
+	}
+
+	builder := new(block.Builder).
+		ParentID(h.ID()).
+		Timestamp(timestamp).
+		GasLimit(h.GasLimit()).
+		BackerSignatures(bss1, 0, 0).
+		FinalityVector(fv).
+		TotalScore(totalScore).
+		ReceiptsRoot(tx.Receipts(nil).RootHash()).
+		StateRoot(stateRoot)
+
+	blk = builder.Build()
+	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), nodes[proposer])
+	if err != nil {
+		return nil, err
 	}
 	blk = blk.WithSignature(sig)
 

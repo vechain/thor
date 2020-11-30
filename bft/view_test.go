@@ -24,7 +24,7 @@ var (
 )
 
 func TestNewRandBlock(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 
 	proposer := rnd.Intn(nNode)
 	backers := []int{}
@@ -108,7 +108,7 @@ func newTestBranch(repo *chain.Repository) (
 }
 
 func TestNewView(t *testing.T) {
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 	nodeInds, blks, fvInds := newTestBranch(repo)
 
 	branch := repo.NewChain(blks[len(blks)-1].Header().ID())
@@ -200,7 +200,7 @@ func TestViewFunc(t *testing.T) {
 	// 		|		|
 	// 		b2 		b3
 
-	repo := newTestRepo()
+	repo, _ := newTestRepo()
 
 	var (
 		pp = randBytes32()
