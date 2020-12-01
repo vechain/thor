@@ -9,6 +9,10 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+func backers() []int {
+	return randNums(nNode-1, MinNumBackers)
+}
+
 func TestUpdate(t *testing.T) {
 	//								|-v4-|
 	// 				    	   b7 <-- b8
@@ -124,10 +128,10 @@ func TestUpdateLastCommitted(t *testing.T) {
 	gen := repo.GenesisBlock()
 	rtpc := newRTPC(repo, gen.Header().ID())
 
-	b1 := newBlock(proposer, nil, gen, 1, [4]thor.Bytes32{})
-	b2 := newBlock(proposer, nil, b1, 1, [4]thor.Bytes32{})
-	b3 := newBlock(proposer, nil, b2, 1, [4]thor.Bytes32{})
-	b4 := newBlock(proposer, nil, b1, 1, [4]thor.Bytes32{})
+	b1 := newBlock(proposer, backers(), gen, 1, [4]thor.Bytes32{})
+	b2 := newBlock(proposer, backers(), b1, 1, [4]thor.Bytes32{})
+	b3 := newBlock(proposer, backers(), b2, 1, [4]thor.Bytes32{})
+	b4 := newBlock(proposer, backers(), b1, 1, [4]thor.Bytes32{})
 	repo.AddBlock(b1, nil)
 	repo.AddBlock(b2, nil)
 	repo.AddBlock(b3, nil)

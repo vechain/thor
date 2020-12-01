@@ -1,7 +1,6 @@
 package bft
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
 
@@ -29,16 +28,16 @@ func TestNormalSituation(t *testing.T) {
 		prevState []thor.Bytes32
 	)
 
-	printFinalityState := func(n uint32) {
-		fmt.Printf("Blk%d, sigSize = %d, finalVec = [ %d, %d, %d, %d]\n",
-			n,
-			len(v.nv),
-			block.Number(cons.state[NV]),
-			block.Number(cons.state[PP]),
-			block.Number(cons.state[PC]),
-			block.Number(cons.state[CM]),
-		)
-	}
+	// printFinalityState := func(n uint32) {
+	// 	fmt.Printf("Blk%d, sigSize = %d, finalVec = [ %d, %d, %d, %d]\n",
+	// 		n,
+	// 		len(v.nv),
+	// 		block.Number(cons.state[NV]),
+	// 		block.Number(cons.state[PP]),
+	// 		block.Number(cons.state[PC]),
+	// 		block.Number(cons.state[CM]),
+	// 	)
+	// }
 
 	repo, _ := newTestRepo()
 	head = repo.GenesisBlock()
@@ -78,7 +77,7 @@ func TestNormalSituation(t *testing.T) {
 		)
 
 		if cons.IfUpdateLastSignedPC(head) {
-			assert.Nil(t, cons.UpdateLastSignedPC(head.Header()))
+			assert.Nil(t, cons.UpdateLastSignedPC(head))
 		}
 
 		repo.AddBlock(head, nil)
@@ -103,7 +102,7 @@ func TestNormalSituation(t *testing.T) {
 			assert.Equal(t, prevState, cons.Get())
 		}
 
-		printFinalityState(head.Header().Number())
+		// printFinalityState(head.Header().Number())
 
 		if head.Header().Number() >= maxBlockNum {
 			break
@@ -121,9 +120,9 @@ func Test1b(t *testing.T) {
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
-	a1 := newBlock(0, nil, gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
-	a2 := newBlock(0, nil, a1, 1, [4]thor.Bytes32{a1.Header().ID()})
-	b1 := newBlock(0, nil, a1, 2, [4]thor.Bytes32{GenNVForFirstBlock(2)})
+	a1 := newBlock(0, backers(), gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
+	a2 := newBlock(0, backers(), a1, 1, [4]thor.Bytes32{a1.Header().ID()})
+	b1 := newBlock(0, backers(), a1, 2, [4]thor.Bytes32{GenNVForFirstBlock(2)})
 
 	repo.AddBlock(a1, nil)
 	repo.SetBestBlockID(a2.Header().ID())
@@ -149,10 +148,10 @@ func Test1c(t *testing.T) {
 	gen := repo.BestBlock()
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
-	a1 := newBlock(0, nil, gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
-	a2 := newBlock(0, nil, a1, 1, [4]thor.Bytes32{a1.Header().ID()})
-	b1 := newBlock(0, nil, a1, 2, [4]thor.Bytes32{GenNVForFirstBlock(2)})
-	b2 := newBlock(0, nil, b1, 2, [4]thor.Bytes32{b1.Header().ID()})
+	a1 := newBlock(0, backers(), gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
+	a2 := newBlock(0, backers(), a1, 1, [4]thor.Bytes32{a1.Header().ID()})
+	b1 := newBlock(0, backers(), a1, 2, [4]thor.Bytes32{GenNVForFirstBlock(2)})
+	b2 := newBlock(0, backers(), b1, 2, [4]thor.Bytes32{b1.Header().ID()})
 
 	repo.AddBlock(a1, nil)
 	repo.SetBestBlockID(a2.Header().ID())
@@ -178,12 +177,12 @@ func Test2b(t *testing.T) {
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
 	a1 := newBlock(0, inds[1:20], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
-	b1 := newBlock(0, nil, gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
+	b1 := newBlock(0, backers(), gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(
 		0, inds[20:40], a1, 1, [4]thor.Bytes32{a1.Header().ID(), emptyID, b1.Header().ID()},
 	)
 	a3 := newBlock(0, inds[40:80], a2, 1, [4]thor.Bytes32{a1.Header().ID()})
-	a4 := newBlock(0, nil, a3, 1, [4]thor.Bytes32{GenNVForFirstBlock(4)})
+	a4 := newBlock(0, backers(), a3, 1, [4]thor.Bytes32{GenNVForFirstBlock(4)})
 
 	assert.Nil(t, repo.AddBlock(a1, nil))
 	assert.Nil(t, repo.AddBlock(b1, nil))
@@ -210,9 +209,9 @@ func Test2c(t *testing.T) {
 	a1 := newBlock(0, inds[1:20], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(0, inds[20:40], a1, 1, [4]thor.Bytes32{a1.Header().ID()})
 	a3 := newBlock(0, inds[40:80], a2, 1, [4]thor.Bytes32{a1.Header().ID()})
-	a4 := newBlock(0, nil, a3, 1, [4]thor.Bytes32{GenNVForFirstBlock(4)})
-	a5 := newBlock(0, nil, a4, 1, [4]thor.Bytes32{a4.Header().ID()})
-	b5 := newBlock(0, nil, a4, 1, [4]thor.Bytes32{GenNVForFirstBlock(5)})
+	a4 := newBlock(0, backers(), a3, 1, [4]thor.Bytes32{GenNVForFirstBlock(4)})
+	a5 := newBlock(0, backers(), a4, 1, [4]thor.Bytes32{a4.Header().ID()})
+	b5 := newBlock(0, backers(), a4, 1, [4]thor.Bytes32{GenNVForFirstBlock(5)})
 
 	repo.AddBlock(a1, nil)
 	repo.AddBlock(a2, nil)
@@ -231,10 +230,10 @@ func Test3ai(t *testing.T) {
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(0))
 
 	pc := randBytes32()
-	b := newBlock(0, nil, gen, 3, [4]thor.Bytes32{emptyID, emptyID, pc})
-	assert.Nil(t, cons.UpdateLastSignedPC(b.Header()))
-	assert.Equal(t, pc, cons.lastSigned.PC())
-	assert.Equal(t, b.Header().Timestamp(), cons.lastSigned.Timestamp())
+	b := newBlock(0, backers(), gen, 3, [4]thor.Bytes32{emptyID, emptyID, pc})
+	assert.Nil(t, cons.UpdateLastSignedPC(b))
+	assert.Equal(t, pc, cons.lastSigned.Header().PC())
+	assert.Equal(t, b.Header().Timestamp(), cons.lastSigned.Header().Timestamp())
 }
 
 func Test3b(t *testing.T) {
@@ -343,7 +342,7 @@ func Test3ciii(t *testing.T) {
 
 	a1 := newBlock(0, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(0, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(0, nil, a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3)})
+	a3 := newBlock(0, backers(), a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b3 := newBlock(0, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(0, inds[20:80], b3, 2, [4]thor.Bytes32{b3.Header().ID()})
 
@@ -368,7 +367,7 @@ func Test3e(t *testing.T) {
 
 	a1 := newBlock(0, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(0, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(0, nil, a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
+	a3 := newBlock(0, backers(), a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b3 := newBlock(0, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(0, inds[20:80], b3, 1, [4]thor.Bytes32{b3.Header().ID(), emptyID, a1.Header().ID()})
 
@@ -393,7 +392,7 @@ func Test3ei(t *testing.T) {
 
 	a1 := newBlock(0, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(0, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(0, nil, a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
+	a3 := newBlock(0, backers(), a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b3 := newBlock(0, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(0, inds[20:80], b3, 1, [4]thor.Bytes32{b3.Header().ID(), emptyID, a1.Header().ID()})
 
@@ -425,16 +424,17 @@ func Test3fi(t *testing.T) {
 	u := 0
 	cons := NewConsensus(repo, gen.Header().ID(), nodeAddress(u))
 
-	a1 := newBlock(1, nil, gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
-	a2 := newBlock(u, nil, a1, 1, [4]thor.Bytes32{a1.Header().ID(), emptyID, randBytes32()})
+	backers := backers()
+	a1 := newBlock(1, backers, gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
+	a2 := newBlock(u, backers, a1, 1, [4]thor.Bytes32{a1.Header().ID(), emptyID, randBytes32()})
 	b2 := newBlock(1, inds[1:80], a1, 2, [4]thor.Bytes32{GenNVForFirstBlock(2)})
 
 	repo.AddBlock(a1, nil)
 	repo.AddBlock(a2, nil)
 	repo.AddBlock(b2, nil)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(a2.Header()))
-	assert.Equal(t, cons.lastSigned.ID(), a2.Header().ID())
+	assert.Nil(t, cons.UpdateLastSignedPC(a2))
+	assert.Equal(t, cons.lastSigned.Header().ID(), a2.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
 	assert.Nil(t, cons.Update(b2))
@@ -458,7 +458,7 @@ func Test3fii(t *testing.T) {
 
 	a1 := newBlock(1, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(1, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(u, nil, a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
+	a3 := newBlock(u, backers(), a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
 	b3 := newBlock(1, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(1, inds[20:80], b3, 2, [4]thor.Bytes32{b3.Header().ID()})
 
@@ -468,10 +468,10 @@ func Test3fii(t *testing.T) {
 	repo.AddBlock(b3, nil)
 	repo.AddBlock(b4, nil)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(a3.Header()))
+	assert.Nil(t, cons.UpdateLastSignedPC(a3))
 
 	assert.Nil(t, cons.Update(b4))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 }
 
@@ -492,7 +492,7 @@ func Test3fiii(t *testing.T) {
 
 	a1 := newBlock(1, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(1, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(u, nil, a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
+	a3 := newBlock(u, backers(), a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
 	b3 := newBlock(1, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(1, inds[20:80], b3, 2, [4]thor.Bytes32{b3.Header().ID()})
 	b5 := newBlock(1, inds[1:80], b4, 1, [4]thor.Bytes32{GenNVForFirstBlock(5)})
@@ -504,14 +504,14 @@ func Test3fiii(t *testing.T) {
 	repo.AddBlock(b4, nil)
 	repo.AddBlock(b5, nil)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(a3.Header()))
+	assert.Nil(t, cons.UpdateLastSignedPC(a3))
 
 	assert.Nil(t, cons.Update(b4))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
 	assert.Nil(t, cons.Update(b5))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.True(t, cons.hasLastSignedpPCExpired)
 }
 
@@ -532,7 +532,7 @@ func Test3fiv(t *testing.T) {
 
 	a1 := newBlock(1, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(1, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(u, nil, a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
+	a3 := newBlock(u, backers(), a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
 	b3 := newBlock(1, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(1, inds[20:80], b3, 2, [4]thor.Bytes32{b3.Header().ID()})
 	b5 := newBlock(1, inds[1:80], b4, 1, [4]thor.Bytes32{GenNVForFirstBlock(5), emptyID, a1.Header().ID()})
@@ -544,14 +544,14 @@ func Test3fiv(t *testing.T) {
 	repo.AddBlock(b4, nil)
 	repo.AddBlock(b5, nil)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(a3.Header()))
+	assert.Nil(t, cons.UpdateLastSignedPC(a3))
 
 	assert.Nil(t, cons.Update(b4))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
 	assert.Nil(t, cons.Update(b5))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 }
 
@@ -572,7 +572,7 @@ func Test3fv(t *testing.T) {
 
 	a1 := newBlock(1, inds[1:80], gen, 1, [4]thor.Bytes32{GenNVForFirstBlock(1)})
 	a2 := newBlock(1, inds[1:80], a1, 1, [4]thor.Bytes32{GenNVForFirstBlock(2), a1.Header().ID()})
-	a3 := newBlock(u, nil, a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
+	a3 := newBlock(u, backers(), a2, 2, [4]thor.Bytes32{GenNVForFirstBlock(3), a2.Header().ID(), a1.Header().ID()})
 	b3 := newBlock(1, inds[1:20], a2, 1, [4]thor.Bytes32{GenNVForFirstBlock(3)})
 	b4 := newBlock(1, inds[20:80], b3, 2, [4]thor.Bytes32{b3.Header().ID()})
 	b5 := newBlock(u, inds[1:80], b4, 1, [4]thor.Bytes32{GenNVForFirstBlock(5), emptyID, a1.Header().ID()})
@@ -584,15 +584,15 @@ func Test3fv(t *testing.T) {
 	repo.AddBlock(b4, nil)
 	repo.AddBlock(b5, nil)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(a3.Header()))
+	assert.Nil(t, cons.UpdateLastSignedPC(a3))
 
 	assert.Nil(t, cons.Update(b4))
-	assert.Equal(t, a3.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, a3.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
-	assert.Nil(t, cons.UpdateLastSignedPC(b5.Header()))
+	assert.Nil(t, cons.UpdateLastSignedPC(b5))
 	assert.Nil(t, cons.Update(b5))
-	assert.Equal(t, b5.Header().ID(), cons.lastSigned.ID())
+	assert.Equal(t, b5.Header().ID(), cons.lastSigned.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 }
 
@@ -622,7 +622,7 @@ func Test3g(t *testing.T) {
 			repo.SetBestBlockID(b.Header().ID())
 		}
 		if cons.IfUpdateLastSignedPC(b) {
-			assert.Nil(t, cons.UpdateLastSignedPC(b.Header()))
+			assert.Nil(t, cons.UpdateLastSignedPC(b))
 		}
 		assert.Nil(t, cons.Update(b))
 	}
@@ -715,12 +715,12 @@ func Test3g(t *testing.T) {
 	checkStatus()
 
 	// blk: 7, ts: 70
-	a7 := newBlock(u, nil, a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
+	a7 := newBlock(u, backers(), a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
 	update(a7, true)
 	state[NV] = a7.Header().ID()
 	checkStatus()
-	assert.Equal(t, cons.lastSigned.PC(), a1.Header().ID())
-	assert.Equal(t, cons.lastSigned.Timestamp(), a7.Header().Timestamp())
+	assert.Equal(t, cons.lastSigned.Header().PC(), a1.Header().ID())
+	assert.Equal(t, cons.lastSigned.Header().Timestamp(), a7.Header().Timestamp())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
 	// blk: 6', ts:70
@@ -779,7 +779,7 @@ func Test3gi(t *testing.T) {
 			repo.SetBestBlockID(b.Header().ID())
 		}
 		if cons.IfUpdateLastSignedPC(b) {
-			assert.Nil(t, cons.UpdateLastSignedPC(b.Header()))
+			assert.Nil(t, cons.UpdateLastSignedPC(b))
 		}
 		assert.Nil(t, cons.Update(b))
 	}
@@ -872,11 +872,11 @@ func Test3gi(t *testing.T) {
 	checkStatus()
 
 	// blk: 7, ts: 70
-	a7 := newBlock(u, nil, a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
+	a7 := newBlock(u, backers(), a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
 	update(a7, true)
 	state[NV] = a7.Header().ID()
 	checkStatus()
-	assert.Equal(t, cons.lastSigned.ID(), a7.Header().ID())
+	assert.Equal(t, cons.lastSigned.Header().ID(), a7.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 
 	// blk: 6', ts:70
@@ -906,7 +906,7 @@ func Test3gi(t *testing.T) {
 	)
 	update(b8, true)
 	rtpc = nil
-	assert.Equal(t, cons.lastSigned.ID(), a7.Header().ID())
+	assert.Equal(t, cons.lastSigned.Header().ID(), a7.Header().ID())
 	assert.False(t, cons.hasLastSignedpPCExpired)
 	checkStatus()
 }
@@ -938,7 +938,7 @@ func Test3gii(t *testing.T) {
 			repo.SetBestBlockID(b.Header().ID())
 		}
 		if cons.IfUpdateLastSignedPC(b) {
-			assert.Nil(t, cons.UpdateLastSignedPC(b.Header()))
+			assert.Nil(t, cons.UpdateLastSignedPC(b))
 		}
 		assert.Nil(t, cons.Update(b))
 	}
@@ -1002,7 +1002,7 @@ func Test3gii(t *testing.T) {
 	update(a5, false)
 	a6 := newBlock(1, inds[50:80], a5, 1, [4]thor.Bytes32{a4.Header().ID(), a1.Header().ID()})
 	update(a6, false)
-	a7 := newBlock(u, nil, a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
+	a7 := newBlock(u, backers(), a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
 	update(a7, false)
 
 	state[PC] = a1.Header().ID()
@@ -1021,7 +1021,7 @@ func Test4b(t *testing.T) {
 			repo.SetBestBlockID(b.Header().ID())
 		}
 		if cons.IfUpdateLastSignedPC(b) {
-			assert.Nil(t, cons.UpdateLastSignedPC(b.Header()))
+			assert.Nil(t, cons.UpdateLastSignedPC(b))
 		}
 		assert.Nil(t, cons.Update(b))
 	}
@@ -1097,7 +1097,7 @@ func TestNVHasQC(t *testing.T) {
 	)
 
 	b2 := newBlock(
-		0, inds[:1], b1, 1,
+		0, backers(), b1, 1,
 		[4]thor.Bytes32{b1.Header().ID()},
 	)
 

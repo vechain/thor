@@ -13,7 +13,7 @@ import (
 type view struct {
 	branch   *chain.Chain
 	first    uint32
-	len      int
+	last     uint32
 	nv       map[thor.Address]uint8
 	pp       map[thor.Bytes32]map[thor.Address]uint8
 	pc       map[thor.Bytes32]map[thor.Address]uint8
@@ -22,18 +22,34 @@ type view struct {
 
 // newView construct a view object starting with the block referred by `id`
 func newView(branch *chain.Chain, first uint32) (v *view, err error) {
-	var (
-		i      = first
-		maxNum = block.Number(branch.HeadID())
+	if first == 0 {
+		return &view{
+			branch:   branch,
+			first:    0,
+			last:     0,
+			nv:       make(map[thor.Address]uint8),
+			pp:       make(map[thor.Bytes32]map[thor.Address]uint8),
+			pc:       make(map[thor.Bytes32]map[thor.Address]uint8),
+			conflict: false,
+		}, nil
+	}
 
+	var (
+		i      uint32
+		maxNum uint32
 		blk    *block.Block
 		pp, pc thor.Bytes32
 	)
 
-	blk, err = branch.GetBlock(i)
+	blk, err = branch.GetBlock(first)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(blk.BackerSignatures()) < MinNumBackers {
+		return nil, errors.New("First block of a view must be heavy")
+	}
+
 	// If block b is the first block of a view, then
 	// 		nv = [blkNum | 00 ... 0]
 	if !isValidFirstNV(blk) {
@@ -45,6 +61,7 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 	v = &view{
 		branch: branch,
 		first:  first,
+		last:   first,
 		nv:     make(map[thor.Address]uint8),
 		pp:     make(map[thor.Bytes32]map[thor.Address]uint8),
 		pc:     make(map[thor.Bytes32]map[thor.Address]uint8),
@@ -52,8 +69,27 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 		conflict: false,
 	}
 
+	i = first
+	maxNum = block.Number(branch.HeadID())
 	for {
-		v.len = v.len + 1
+		if i > maxNum {
+			break
+		}
+		blk, err = branch.GetBlock(i)
+		if err != nil {
+			return nil, err
+		}
+		if i > first && blk.Header().NV() != firstID {
+			break
+		}
+
+		i++
+
+		if len(blk.BackerSignatures()) < MinNumBackers {
+			continue
+		}
+
+		v.last = i
 
 		pp = blk.Header().PP()
 		pc = blk.Header().PC()
@@ -76,22 +112,12 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 			}
 		}
 
-		if ok, err := branch.HasBlock(pc); err != nil {
-			return nil, err
-		} else if !v.conflict && !pc.IsZero() && !ok {
-			v.conflict = true
-		}
-
-		i = i + 1
-		if i > maxNum {
-			break
-		}
-		blk, err = branch.GetBlock(i)
-		if err != nil {
-			return nil, err
-		}
-		if blk.Header().NV() != firstID {
-			break
+		if !v.conflict && !pc.IsZero() {
+			if ok, err := branch.HasBlock(pc); err != nil {
+				return nil, err
+			} else if !ok {
+				v.conflict = true
+			}
 		}
 	}
 
@@ -155,8 +181,8 @@ func getSigners(blk *block.Block) (endorsors []thor.Address) {
 		}
 		endorsors = append(endorsors, thor.Address(crypto.PubkeyToAddress(*pub)))
 	}
-
 	endorsors = append(endorsors, proposer)
+
 	return
 }
 

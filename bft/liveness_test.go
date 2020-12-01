@@ -28,28 +28,39 @@ var (
 	c1, c2, c3, c4, c5, c6 *block.Block
 )
 
-func randQC() (qc []int) {
-	r := make(map[int]interface{})
+func randQC() []int {
+	return randNums(nNode-1, QC)
+}
 
-	for {
-		if len(r) >= QC {
-			break
-		}
+func resetVars() {
+	repos = []*chain.Repository{}
+	staters = []*state.Stater{}
+	bftCons = []*Consensus{}
+	a1 = nil
+	a2 = nil
+	a3 = nil
+	a4 = nil
+	a5 = nil
+	a6 = nil
 
-		i := rand.Intn(nNode)
-		if _, ok := r[i]; !ok {
-			r[i] = struct{}{}
-		}
-	}
+	b1 = nil
+	b2 = nil
+	b3 = nil
+	b4 = nil
+	b5 = nil
+	b6 = nil
 
-	for k := range r {
-		qc = append(qc, k)
-	}
-
-	return
+	c1 = nil
+	c2 = nil
+	c3 = nil
+	c4 = nil
+	c5 = nil
+	c6 = nil
 }
 
 func initNodesStatus(t *testing.T) {
+	resetVars()
+
 	t1 := int(QC / 3)
 	t2 := int(2 * QC / 3)
 
@@ -201,7 +212,7 @@ func TestLiveness2(t *testing.T) {
 			repos[c].SetBestBlockID(b.Header().ID())
 		}
 		if isSigner {
-			assert.Nil(t, bftCons[c].UpdateLastSignedPC(b.Header()))
+			assert.Nil(t, bftCons[c].UpdateLastSignedPC(b))
 		}
 		assert.Nil(t, bftCons[c].Update(b))
 	}

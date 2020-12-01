@@ -44,10 +44,13 @@ func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
 		return nil
 	}
 
-	// if the current RTPC block is not newer than the latest block committed locally
-	if summary, err := r.repo.GetBlockSummary(lastCommitted); err != nil {
+	if blk, err := r.repo.GetBlock(lastCommitted); err != nil {
 		return err
-	} else if r.currRTPC.Timestamp() <= summary.Header.Timestamp() {
+	} else if len(blk.BackerSignatures()) < MinNumBackers {
+		// check heavy block
+		return errors.New("Non-heavy block")
+	} else if r.currRTPC.Timestamp() <= blk.Header().Timestamp() {
+		// reset the current if earlier than the last committed
 		r.currRTPC = nil
 		r.currView = nil
 	}
@@ -56,6 +59,11 @@ func (r *rtpc) updateLastCommitted(lastCommitted thor.Bytes32) error {
 }
 
 func (r *rtpc) update(newBlock *block.Block) error {
+	// Check heavy block
+	if len(newBlock.BackerSignatures()) < MinNumBackers {
+		return errors.New("Non-heavy block")
+	}
+
 	// Construct the view containing the lastest received block `newBlock`
 	branch := r.repo.NewChain(newBlock.Header().ID())
 	currView, err := newView(branch, block.Number(newBlock.Header().NV()))

@@ -6,7 +6,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// MaxByzantineNodes - Maximum number of Byzatine nodes, i.e., f
+// MaxByzantineNodes - maximum number of Byzatine nodes, i.e., f
 const MaxByzantineNodes = 33
 
 // QC = N - f
@@ -20,7 +20,10 @@ const (
 	CM
 )
 
-// Consensus ...
+// MinNumBackers - minimum number of backers required to construct a heavy block
+const MinNumBackers = 3
+
+// Consensus - BFT consensus
 type Consensus struct {
 	repo      *chain.Repository
 	state     [4]thor.Bytes32
@@ -28,7 +31,7 @@ type Consensus struct {
 	rtpc      *rtpc
 
 	hasLastSignedpPCExpired bool
-	lastSigned              *block.Header
+	lastSigned              *block.Block
 
 	nodeAddress   thor.Address
 	prevBestBlock *block.Header
@@ -50,19 +53,22 @@ func NewConsensus(
 		rtpc:          newRTPC(repo, lastFinalized),
 		nodeAddress:   nodeAddress,
 		prevBestBlock: repo.BestBlock().Header(),
-		lastSigned:    repo.GenesisBlock().Header(),
+		lastSigned:    repo.GenesisBlock(),
 	}
 }
 
 // UpdateLastSignedPC updates lastSignedPC.
 // This function is called by the leader after he generates a new block or
 // by a backer after he backs a block proposal
-func (cons *Consensus) UpdateLastSignedPC(h *block.Header) error {
-	if h == nil || h.PC().IsZero() || h.Timestamp() <= cons.lastSigned.Timestamp() {
+func (cons *Consensus) UpdateLastSignedPC(b *block.Block) error {
+	if b == nil ||
+		b.Header().PC().IsZero() || // empty PC value
+		b.Header().Timestamp() <= cons.lastSigned.Header().Timestamp() || // earlier than the last signed
+		len(b.BackerSignatures()) < MinNumBackers { // not a heavy block
 		return nil
 	}
 
-	cons.lastSigned = h
+	cons.lastSigned = b
 	cons.hasLastSignedpPCExpired = false
 
 	return nil
@@ -70,6 +76,11 @@ func (cons *Consensus) UpdateLastSignedPC(h *block.Header) error {
 
 // Update updates the local BFT state vector
 func (cons *Consensus) Update(newBlock *block.Block) error {
+	// check heavy block
+	if len(newBlock.BackerSignatures()) < MinNumBackers {
+		return nil
+	}
+
 	// Check whether the new block is on the canonical chain
 	// Here the new block should have already been added to cons.repo
 	best := cons.repo.BestBlock().Header()
@@ -118,21 +129,21 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 	}
 
 	// Check whether the current view invalidates the last signed pc
-	if !cons.lastSigned.PC().IsZero() && !cons.hasLastSignedpPCExpired &&
-		v.hasQCForNV() && v.getNumSigOnPC(cons.lastSigned.PC()) == 0 {
+	if !cons.lastSigned.Header().PC().IsZero() && !cons.hasLastSignedpPCExpired &&
+		v.hasQCForNV() && v.getNumSigOnPC(cons.lastSigned.Header().PC()) == 0 {
 		ts, err := getTimestamp(cons.repo, v.getFirstBlockID())
 		if err != nil {
 			return err
 		}
-		if ts > cons.lastSigned.Timestamp() {
+		if ts > cons.lastSigned.Header().Timestamp() {
 			cons.hasLastSignedpPCExpired = true
 		}
 	}
 
 	if rtpc := cons.rtpc.get(); rtpc != nil {
 		ifUpdatePC := false
-		if !cons.lastSigned.PC().IsZero() {
-			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSigned.PC())
+		if !cons.lastSigned.Header().PC().IsZero() {
+			ok, err := cons.repo.IfConflict(rtpc.ID(), cons.lastSigned.Header().PC())
 			if err != nil {
 				return err
 			}

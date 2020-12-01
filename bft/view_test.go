@@ -1,6 +1,7 @@
 package bft
 
 import (
+	"math/rand"
 	rnd "math/rand"
 	"testing"
 
@@ -22,6 +23,27 @@ var (
 
 	emptyRootHash = new(tx.Transactions).RootHash()
 )
+
+func randNums(max int, num int) (nums []int) {
+	r := make(map[int]interface{})
+
+	for {
+		if len(r) >= num {
+			break
+		}
+
+		i := rand.Intn(max + 1)
+		if _, ok := r[i]; !ok {
+			r[i] = struct{}{}
+		}
+	}
+
+	for k := range r {
+		nums = append(nums, k)
+	}
+
+	return
+}
 
 func TestNewRandBlock(t *testing.T) {
 	repo, _ := newTestRepo()
@@ -58,10 +80,10 @@ func newTestBranch(repo *chain.Repository) (
 	// Sample proposers+backers for blocks
 	for i := 1; i <= nBlock; i++ {
 		n := rnd.Intn(maxNumBacker+1) + 1
-		nodeInds[i] = make([]int, n)
-		for j := 0; j < n; j++ {
-			nodeInds[i][j] = rnd.Intn(nNode)
+		if i == viewStart && n < thor.HeavyBlockRequirement+1 {
+			n = thor.HeavyBlockRequirement + 1
 		}
+		nodeInds[i] = append(nodeInds[i], randNums(nNode-1, n)...)
 	}
 
 	// Sample finality vectors for blocks
@@ -132,9 +154,17 @@ func TestNewView(t *testing.T) {
 	}
 	assert.Equal(t, vw.hasConflictPC(), hasConflictPC)
 
+	isHeavy := func(i uint32) bool {
+		blk, _ := branch.GetBlock(i)
+		return len(blk.BackerSignatures()) >= thor.HeavyBlockRequirement
+	}
+
 	// verify nv info
 	nvs := []int(nil)
 	for i := viewStart; i <= viewEnd; i++ {
+		if !isHeavy(uint32(i)) {
+			continue
+		}
 		nvs = append(nvs, nodeInds[i]...)
 	}
 	nvSummary := countIntArray(nvs)
@@ -147,6 +177,9 @@ func TestNewView(t *testing.T) {
 	// verify pp
 	pps := make(map[int][]int)
 	for i := viewStart; i <= viewEnd; i++ {
+		if !isHeavy(uint32(i)) {
+			continue
+		}
 		pp := fvInds[i][1]
 		pps[pp] = append(pps[pp], nodeInds[i]...)
 	}
@@ -170,6 +203,9 @@ func TestNewView(t *testing.T) {
 	// verify pc
 	pcs := make(map[int][]int)
 	for i := viewStart; i <= viewEnd; i++ {
+		if !isHeavy(uint32(i)) {
+			continue
+		}
 		pc := fvInds[i][2]
 		pcs[pc] = append(pcs[pc], nodeInds[i]...)
 	}
@@ -228,15 +264,18 @@ func TestViewFunc(t *testing.T) {
 	var (
 		bhs []*chain.Chain
 		vw  *view
+		err error
 	)
 	bhs, _ = repo.GetBranchesByID(blk2.Header().ID())
-	vw, _ = newView(bhs[0], block.Number(blk1.Header().ID()))
+	vw, err = newView(bhs[0], block.Number(blk1.Header().ID()))
+	assert.Nil(t, err)
 	assert.True(t, vw.hasQCForNV())
 	assert.Equal(t, M(true, pp), M(vw.hasQCForPP()))
 	assert.Equal(t, M(true, pc), M(vw.hasQCForPC()))
 
 	bhs, _ = repo.GetBranchesByID(blk3.Header().ID())
-	vw, _ = newView(bhs[0], block.Number(blk1.Header().ID()))
+	vw, err = newView(bhs[0], block.Number(blk1.Header().ID()))
+	assert.Nil(t, err)
 	assert.False(t, vw.hasQCForNV())
 	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.hasQCForPP()))
 	assert.Equal(t, M(false, thor.Bytes32{}), M(vw.hasQCForPC()))
