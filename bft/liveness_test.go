@@ -1,6 +1,7 @@
 package bft
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
@@ -19,8 +20,8 @@ import (
 )
 
 var (
+	dbs     []*muxdb.MuxDB
 	repos   []*chain.Repository
-	staters []*state.Stater
 	bftCons []*Consensus
 
 	a1, a2, a3, a4, a5, a6 *block.Block
@@ -33,8 +34,8 @@ func randQC() []int {
 }
 
 func resetVars() {
+	dbs = []*muxdb.MuxDB{}
 	repos = []*chain.Repository{}
-	staters = []*state.Stater{}
 	bftCons = []*Consensus{}
 	a1 = nil
 	a2 = nil
@@ -66,9 +67,9 @@ func initNodesStatus(t *testing.T) {
 
 	// Init repository and consensus for nodes
 	for i := 0; i < 3; i++ {
-		repo, stater := newTestRepo()
+		repo, db := newTestRepo()
+		dbs = append(dbs, db)
 		repos = append(repos, repo)
-		staters = append(staters, stater)
 		bftCons = append(bftCons, NewConsensus(repos[i], repos[i].GenesisBlock().Header().ID(), nodeAddress(i)))
 	}
 
@@ -206,6 +207,22 @@ func TestLiveness1(t *testing.T) {
 }
 
 func TestLiveness2(t *testing.T) {
+	////////////////////
+	// Initialization //
+	////////////////////
+	initNodesStatus(t)
+
+	a7 := newBlock(0, inds[1:33], a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
+	b7 := newBlock(33, inds[34:45], b6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), b4.Header().ID(), b1.Header().ID()})
+	c7, err := newBlock1(
+		66, inds[67:101], c6, c6.Header().Timestamp()+thor.BlockInterval,
+		uint64(nNode), nil, repos[2].GenesisBlock().Header().StateRoot(),
+		[4]thor.Bytes32{GenNVForFirstBlock(7), c4.Header().ID(), c1.Header().ID()})
+	assert.Nil(t, err)
+
+	/////////////////////
+	// Synchronization //
+	/////////////////////
 	update := func(c int, b *block.Block, isBest bool, isSigner bool) {
 		repos[c].AddBlock(b, nil)
 		if isBest {
@@ -217,44 +234,23 @@ func TestLiveness2(t *testing.T) {
 		assert.Nil(t, bftCons[c].Update(b))
 	}
 
-	////////////////////
-	// Initialization //
-	////////////////////
-	initNodesStatus(t)
-
-	a7 := newBlock(0, inds[1:33], a6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), a4.Header().ID(), a1.Header().ID()})
-	b7 := newBlock(33, inds[34:45], b6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), b4.Header().ID(), b1.Header().ID()})
-	c7 := newBlock(66, inds[67:101], c6, 1, [4]thor.Bytes32{GenNVForFirstBlock(7), c4.Header().ID(), c1.Header().ID()})
-
 	// node 0-32
 	update(0, a7, true, true)
-
-	// node 33-65
-	update(1, b7, true, true)
-
-	// node 66-100
-	update(2, c7, true, true)
-
-	/////////////////////
-	// Synchronization //
-	/////////////////////
-	// node 0-32
 	update(0, b6, false, false)
 	update(0, b7, true, false)
 	update(0, c5, false, false)
 	update(0, c6, false, false)
 	update(0, c7, true, false)
-
 	assert.Equal(t, c7.Header().ID(), bftCons[0].state[NV])
 	assert.Equal(t, emptyID, bftCons[0].state[PP])
 	assert.Equal(t, emptyID, bftCons[0].state[PC])
 
 	// node 33-44
 	update(1, a7, false, false)
+	update(1, b7, true, true)
 	update(1, c5, false, false)
 	update(1, c6, false, false)
 	update(1, c7, true, false)
-
 	assert.Equal(t, c7.Header().ID(), bftCons[1].state[NV])
 	assert.Equal(t, emptyID, bftCons[1].state[PP])
 	assert.Equal(t, emptyID, bftCons[1].state[PC])
@@ -262,22 +258,121 @@ func TestLiveness2(t *testing.T) {
 	// node 66-100
 	update(2, a7, false, false)
 	update(2, b7, false, false)
+	update(2, c7, true, true)
 	assert.Equal(t, c7.Header().ID(), bftCons[2].state[NV])
 	assert.Equal(t, c4.Header().ID(), bftCons[2].state[PP])
 	assert.Equal(t, c1.Header().ID(), bftCons[2].state[PC])
 
-	// seeder := poa.NewSeeder(repos[0])
-	// ncCons := consensus.New(repos[0], staters[0], thor.ForkConfig{VIP193: 1, VIP191: math.MaxUint32})
-	// for {
+	///////////////////////
+	// Post-Sync process //
+	///////////////////////
+	var (
+		seeder *poa.Seeder
+		stater *state.Stater
+		// ncCons *consensus.Consensus
+	)
+	seeder = poa.NewSeeder(repos[0])
+	stater = state.NewStater(dbs[0])
+	// ncCons = consensus.New(repos[0], stater, thor.ForkConfig{VIP193: 1, VIP191: math.MaxUint32})
 
-	// }
+	updateAll := func(b *block.Block) {
+		for i := 0; i < 3; i++ {
+			repos[i].AddBlock(b, nil)
+			repos[i].SetBestBlockID(b.Header().ID())
+			assert.Nil(t, bftCons[i].Update(b))
+		}
+	}
+
+	ts := c7.Header().Timestamp()
+	parent := c7
+	prevCM := bftCons[0].state[CM]
+	for {
+		ts = ts + thor.BlockInterval
+
+		st := stater.NewState(parent.Header().StateRoot())
+		proposers, err := getProposers(st)
+		assert.Nil(t, err)
+		proposer, inactives, score := getProposer(seeder, parent, ts, proposers)
+		qualified := getCommittee(seeder, parent, proposer, inds)
+
+		// nodes 45-65 stay offline
+		if proposer > 44 && proposer < 66 {
+			continue
+		}
+
+		var backers []int
+		for _, q := range qualified {
+			if q == proposer || (q > 44 && q < 66) {
+				continue
+			}
+			if (proposer < 45 && q < 45) || (proposer > 65 && q > 65) {
+				backers = append(backers, q)
+			}
+		}
+
+		seed, err := seeder.Generate(parent.Header().ID())
+		assert.Nil(t, err)
+		updateState(st, backers, inactives)
+		stage, _ := st.Stage()
+		stateRoot, err := stage.Commit()
+		assert.Nil(t, err)
+
+		var fv [4]thor.Bytes32
+		if proposer < 45 {
+			fv = bftCons[0].state
+		} else {
+			fv = bftCons[2].state
+		}
+
+		c := repos[0].NewChain(parent.Header().ID())
+		view, err := newView(c, block.Number(fv[NV]))
+		assert.Nil(t, err)
+		if view == nil {
+			fmt.Println("Debug")
+		}
+		if view.hasQCForNV() {
+			fv[0] = GenNVForFirstBlock(parent.Header().Number() + 1)
+		}
+
+		newBlock, err := newBlock1(
+			proposer, backers, parent, ts, parent.Header().TotalScore()+score, seed.Bytes(), stateRoot, fv,
+		)
+		assert.Nil(t, err)
+
+		updateAll(newBlock)
+
+		printRes := func() {
+			fmt.Printf("Block: ts = %d, p = %d, b = %d\n", ts, proposer, backers)
+			fmt.Printf("\tFV0: [%d, %d, %d, %d]\n",
+				block.Number(bftCons[0].state[NV]),
+				block.Number(bftCons[0].state[PP]),
+				block.Number(bftCons[0].state[PC]),
+				block.Number(bftCons[0].state[CM]),
+			)
+			fmt.Printf("\tFV2: [%d, %d, %d, %d]\n",
+				block.Number(bftCons[2].state[NV]),
+				block.Number(bftCons[2].state[PP]),
+				block.Number(bftCons[2].state[PC]),
+				block.Number(bftCons[2].state[CM]),
+			)
+		}
+		printRes()
+
+		if bftCons[0].state[CM] != prevCM {
+			assert.Equal(t, bftCons[0].state, bftCons[1].state)
+			assert.Equal(t, bftCons[0].state, bftCons[2].state)
+			break
+		}
+
+		parent = newBlock
+	}
 }
 
 func TestProposer(t *testing.T) {
-	var proposers []poa.Proposer
-	for i := range inds {
-		proposers = append(proposers, poa.Proposer{Address: nodeAddress(i), Active: true})
-	}
+	// var proposers []poa.Proposer
+	// for i := range inds {
+	// 	proposers = append(proposers, poa.Proposer{Address: nodeAddress(i), Active: true})
+	// }
 
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
@@ -287,21 +382,32 @@ func TestProposer(t *testing.T) {
 	seeder := poa.NewSeeder(repo)
 	cons := consensus.New(repo, stater, thor.ForkConfig{VIP193: 1, VIP191: math.MaxUint32})
 
+	st := stater.NewState(b0.Header().StateRoot())
+	proposers, err := getProposers(st)
+	assert.Nil(t, err)
+
 	nInterval := 3
-	proposer, inactives, score := getProposer(seeder, b0, nInterval, proposers)
-	committee := getCommittee(seeder, b0, proposer, inds)
+	proposer, inactives, score := getProposer(
+		seeder, b0, b0.Header().Timestamp()+uint64(nInterval)*thor.BlockInterval, proposers,
+	)
+	backers := getCommittee(seeder, b0, proposer, inds)
 	seed, err := seeder.Generate(b0.Header().ID())
 	assert.Nil(t, err)
 
 	state := stater.NewState(b0.Header().StateRoot())
-	updateState(state, proposer, committee, inactives)
+	updateState(state, backers, inactives)
 	stage, _ := state.Stage()
+	stage.Commit()
 
-	b1, err := newBlock1(proposer, committee, b0, nInterval, score, seed.Bytes(), stage.Hash(), [4]thor.Bytes32{})
+	b1, err := newBlock1(
+		proposer, backers, b0,
+		b0.Header().Timestamp()+uint64(nInterval)*thor.BlockInterval,
+		score, seed.Bytes(), stage.Hash(), [4]thor.Bytes32{})
 	assert.Nil(t, err)
 
 	_, _, err = cons.Process(b1, b1.Header().Timestamp())
 	assert.Nil(t, err)
+
 }
 
 func TestVRF(t *testing.T) {
@@ -315,13 +421,25 @@ func TestVRF(t *testing.T) {
 	assert.Equal(t, beta1, beta2)
 }
 
-func updateState(state *state.State, proposer int, committee []int, inactives []poa.Proposer) {
-	ok, err := builtin.Authority.Native(state).Update(nodeAddress(proposer), true)
-	if !ok || err != nil {
-		panic("Update error")
+func getProposers(st *state.State) ([]poa.Proposer, error) {
+	authority := builtin.Authority.Native(st)
+	var candidates *poa.Candidates
+	list, err := authority.AllCandidates()
+	if err != nil {
+		return nil, err
+	}
+	candidates = poa.NewCandidates(list)
+
+	proposers, err := candidates.Pick(st)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, backer := range committee {
+	return proposers, nil
+}
+
+func updateState(state *state.State, backers []int, inactives []poa.Proposer) {
+	for _, backer := range backers {
 		ok, err := builtin.Authority.Native(state).Update(nodeAddress(backer), true)
 		if !ok || err != nil {
 			panic("Update error")
@@ -361,10 +479,10 @@ func getCommittee(seeder *poa.Seeder, parent *block.Block, proposer int, backers
 func getProposer(
 	seeder *poa.Seeder,
 	parent *block.Block,
-	nInterval int,
+	blockTime uint64,
 	proposers []poa.Proposer,
 ) (proposer int, inactives []poa.Proposer, score uint64) {
-	blockTime := parent.Header().Timestamp() + uint64(nInterval)*thor.BlockInterval
+	// blockTime := parent.Header().Timestamp() + uint64(nInterval)*thor.BlockInterval
 	u := 0
 
 	seed, err := seeder.Generate(parent.Header().ID())

@@ -67,6 +67,13 @@ func newTestGenesisBuilder() (builder *genesis.Builder) {
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
 				panic(err)
 			}
+			if err := state.SetCode(builtin.Params.Address, builtin.Params.RuntimeBytecodes()); err != nil {
+				panic(err)
+			}
+
+			if err := builtin.Params.Native(state).Set(thor.KeyProposerEndorsement, thor.InitialProposerEndorsement); err != nil {
+				panic(err)
+			}
 
 			for i := range nodes {
 				ok, err := builtin.Authority.Native(state).Add(nodeAddress(i), nodeAddress(i), thor.Bytes32{})
@@ -87,12 +94,10 @@ func newTestGenesisBuilder() (builder *genesis.Builder) {
 	return
 }
 
-func newTestRepo() (repo *chain.Repository, stater *state.Stater) {
-	db := muxdb.NewMem()
-
-	stater = state.NewStater(db)
+func newTestRepo() (repo *chain.Repository, db *muxdb.MuxDB) {
+	db = muxdb.NewMem()
 	g := newTestGenesisBuilder()
-	b0, _, _, _ := g.Build(stater)
+	b0, _, _, _ := g.Build(state.NewStater(db))
 	repo, _ = chain.NewRepository(db, b0)
 	return
 }
@@ -150,20 +155,19 @@ func newBlock1(
 	proposer int,
 	backers []int,
 	parent *block.Block,
-	numInternvalApart int,
+	blockTime uint64,
 	totalScore uint64,
 	seed []byte,
 	stateRoot thor.Bytes32,
 	fv [4]thor.Bytes32,
 ) (blk *block.Block, err error) {
 	h := parent.Header()
-	timestamp := h.Timestamp() + uint64(numInternvalApart)*thor.BlockInterval
 
 	hash := block.NewProposal(
 		h.ID(),
 		emptyRootHash,
 		h.GasLimit(),
-		timestamp,
+		blockTime,
 	).Hash()
 
 	bss := block.ComplexSignatures(nil)
@@ -209,7 +213,7 @@ func newBlock1(
 
 	builder := new(block.Builder).
 		ParentID(h.ID()).
-		Timestamp(timestamp).
+		Timestamp(blockTime).
 		GasLimit(h.GasLimit()).
 		BackerSignatures(bss1, 0, 0).
 		FinalityVector(fv).
