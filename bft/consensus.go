@@ -76,15 +76,16 @@ func (cons *Consensus) UpdateLastSignedPC(b *block.Block) error {
 
 // Update updates the local BFT state vector
 func (cons *Consensus) Update(newBlock *block.Block) error {
-	// check heavy block
-	if len(newBlock.BackerSignatures()) < MinNumBackers {
-		return nil
-	}
-
 	// Check whether the new block is on the canonical chain
 	// Here the new block should have already been added to cons.repo
 	best := cons.repo.BestBlock().Header()
 	isOnConanicalChain := best.ID() == newBlock.Header().ID()
+
+	// check heavy block
+	if len(newBlock.BackerSignatures()) < MinNumBackers {
+		cons.prevBestBlock = best
+		return nil
+	}
 
 	branch := cons.repo.NewChain(newBlock.Header().ID())
 	v, err := newView(branch, block.Number(newBlock.Header().NV()))
@@ -205,17 +206,19 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 			// Check whether the view including the parent of the new block
 			// has already obtained 2f+1 nv messages. If yes, then start a
 			// new view.
-			pid := newBlock.Header().ParentID()
-			summary, err := cons.repo.GetBlockSummary(pid)
+			parentID := newBlock.Header().ParentID()
+			summary, err := cons.repo.GetBlockSummary(parentID)
 			if err != nil {
 				return err
 			}
-			w, err := newView(cons.repo.NewChain(pid), block.Number(summary.Header.NV()))
-			if err != nil {
-				return err
-			}
-			if w.hasQCForNV() {
-				cons.state[NV] = newBlock.Header().ID()
+			if block.Number(summary.Header.NV()) == block.Number(newBlock.Header().NV()) {
+				w, err := newView(cons.repo.NewChain(parentID), block.Number(summary.Header.NV()))
+				if err != nil {
+					return err
+				}
+				if w.hasQCForNV() {
+					cons.state[NV] = newBlock.Header().ID()
+				}
 			}
 		}
 	}
@@ -231,7 +234,7 @@ func (cons *Consensus) Update(newBlock *block.Block) error {
 		}
 	}
 
-	// update prevBestBlock
+	// update previous best block
 	cons.prevBestBlock = best
 
 	return nil
