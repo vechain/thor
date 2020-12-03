@@ -69,12 +69,17 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 		conflict: false,
 	}
 
-	i = first
+	i = first - 1
 	maxNum = block.Number(branch.HeadID())
 	for {
+		i++
+
+		// Cannot be later than the brand head
 		if i > maxNum {
 			break
 		}
+
+		// New view value must be the ID of the first block of the current view
 		blk, err = branch.GetBlock(i)
 		if err != nil {
 			return nil, err
@@ -83,8 +88,7 @@ func newView(branch *chain.Chain, first uint32) (v *view, err error) {
 			break
 		}
 
-		i++
-
+		// Skip non-heavy blocks
 		if len(blk.BackerSignatures()) < MinNumBackers {
 			continue
 		}
