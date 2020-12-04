@@ -59,10 +59,19 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		if err != nil {
 			return err
 		}
+		bss, err := b.repo.GetBlockBackerSignatures(summary.Header.ID())
+		if err != nil {
+			return err
+		}
 
+		backers, err := buildJSONBackers(summary.Header, bss)
+		if err != nil {
+			return err
+		}
 		return utils.WriteJSON(w, &JSONExpandedBlock{
 			jSummary,
 			buildJSONEmbeddedTxs(txs, receipts),
+			backers,
 		})
 	}
 

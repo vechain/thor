@@ -140,6 +140,8 @@ func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
 	assert.Equal(t, header.TxsRoot(), actBl.TxsRoot, "TxsRoot should be equal")
 	assert.Equal(t, header.StateRoot(), actBl.StateRoot, "StateRoot should be equal")
 	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
+	assert.Equal(t, header.BackerSignaturesRoot(), actBl.BackerSignaturesRoot, "BackerSignaturesRoot should be equal")
+	assert.Equal(t, header.TotalQuality(), actBl.TotalQuality, "TotalQuality should be equal")
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
 	}
