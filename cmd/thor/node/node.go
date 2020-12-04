@@ -384,6 +384,10 @@ func (n *Node) findLatestHeavyBlock(ids []thor.Bytes32) (*block.Header, error) {
 
 // compare compares two chains, returns true if a>b.
 func (n *Node) compare(b1 *block.Header, b2 *block.Header) (bool, error) {
+	if b1.ID() == b2.ID() {
+		return false, nil
+	}
+
 	q1 := b1.TotalQuality()
 	q2 := b2.TotalQuality()
 
