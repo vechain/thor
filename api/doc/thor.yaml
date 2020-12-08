@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.3.2
+  version: 1.5.0
 
 servers:
   - url: '/'
@@ -298,6 +298,12 @@ paths:
                           allOf:
                             - $ref: '#/components/schemas/Tx'
                             - $ref: '#/components/schemas/Receipt'
+                      backers:
+                        description: address of backers                     
+                        type: array
+                        items:
+                          type: string
+                          example: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
                     description: expanded block
 
               example:
@@ -721,6 +727,16 @@ components:
           format: bytes32
           description: root hash of transactions in the block 
           example: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
+        backerSignaturesRoot:
+          type: string
+          format: bytes32
+          description: root hash of backer signatures in the block 
+          example: '0x45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0'
+        totalQuality:
+          type: integer
+          format: uint32
+          description: sum of all ancestral heavy block count
+          example: 100
         txsFeatures:
           type: integer
           format: uint32
@@ -1261,7 +1277,6 @@ components:
           description: |
             the number of hash functions for bloom filter
           example: 3          
-
     IsTrunk:
       properties:
         isTrunk:
