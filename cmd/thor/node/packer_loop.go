@@ -90,7 +90,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
+			case <-time.After(time.Second / 2):
 				if n.needReSchedule(flow) {
 					log.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
@@ -119,7 +119,7 @@ func (n *Node) needReSchedule(flow *packer.Flow) bool {
 	}
 
 	/* After VIP193, re-schedule when parent block changes.(prevent one proposer propose blocks with different ID at the same height)*/
-	if s1 != s2 {
+	if s1 != s2 || flow.ParentHeader().Number() != best.Number() {
 		return true
 	}
 
