@@ -78,7 +78,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
 		for {
-			if n.timeToPack(flow) == true {
+			if n.timeToPack(flow) {
 				if err := n.pack(ctx, flow); err != nil {
 					if err == context.Canceled {
 						return
@@ -231,7 +231,7 @@ func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, prop
 	}
 	backer := thor.Address(crypto.PubkeyToAddress(*pub))
 
-	if flow.IsBackerKnown(backer) == true {
+	if flow.IsBackerKnown(backer) {
 		return errors.New("known backer")
 	}
 
@@ -243,7 +243,7 @@ func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, prop
 	if err != nil {
 		return
 	}
-	if poa.EvaluateVRF(beta) == true {
+	if poa.EvaluateVRF(beta) {
 		flow.AddBackerSignature(sig, beta, backer)
 	} else {
 		return fmt.Errorf("invalid proof from %v", backer)

@@ -300,7 +300,7 @@ func (n *Node) validateDraft(d *proto.Draft, st *status) (thor.Address, error) {
 	}
 	signer := thor.Address(crypto.PubkeyToAddress(*pub))
 
-	if st.IsAuthority(signer) == false {
+	if !st.IsAuthority(signer) {
 		return thor.Address{}, errors.Errorf("proposer: %v is not an authority", signer)
 	}
 
@@ -337,7 +337,7 @@ func (n *Node) processDraft(d *proto.Draft, signer thor.Address, st *status) err
 		return errors.New("invalid gaslimit")
 	}
 
-	if st.IsScheduled(p.Timestamp, signer) == false {
+	if !st.IsScheduled(p.Timestamp, signer) {
 		return errors.New("proposal not scheduled")
 	}
 
@@ -347,7 +347,7 @@ func (n *Node) processDraft(d *proto.Draft, signer thor.Address, st *status) err
 }
 
 func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) error {
-	if st.IsAuthority(n.master.Address()) == false {
+	if !st.IsAuthority(n.master.Address()) {
 		return nil
 	}
 
@@ -357,7 +357,7 @@ func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) error {
 		return err
 	}
 
-	if lucky := poa.EvaluateVRF(beta); lucky == false {
+	if !poa.EvaluateVRF(beta) {
 		return errors.New("not lucky enough")
 	}
 
@@ -388,7 +388,7 @@ func (n *Node) validateBacker(acc *proto.Accepted, st *status) (*ecdsa.PublicKey
 	}
 	backer := thor.Address(crypto.PubkeyToAddress(*pub))
 
-	if st.IsAuthority(backer) == false {
+	if !st.IsAuthority(backer) {
 		return nil, errors.Errorf("backer:%v is not an authority", backer)
 	}
 
@@ -403,7 +403,7 @@ func (n *Node) processBackerSignature(acc *proto.Accepted, pub *ecdsa.PublicKey,
 		return err
 	}
 
-	if isBacker := poa.EvaluateVRF(beta); isBacker == false {
+	if !poa.EvaluateVRF(beta) {
 		return fmt.Errorf("VRF output is not lucky enough to be a backer: %v", crypto.PubkeyToAddress(*pub))
 	}
 	n.comm.BroadcastAccepted(acc)
