@@ -289,7 +289,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				}
 				prev = beta
 
-				if poa.EvaluateVRF(beta) == false {
+				if !poa.EvaluateVRF(beta) {
 					return consensusError(fmt.Sprintf("invalid proof from %v", addr))
 				}
 			}
