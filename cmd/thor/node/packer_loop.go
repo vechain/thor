@@ -71,7 +71,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
 		for {
-			if n.timeToPack(flow) == true {
+			if n.timeToPack(flow) {
 				if err := n.pack(ctx, flow); err != nil {
 					if err == context.Canceled {
 						return
@@ -83,7 +83,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Second):
+			case <-time.After(time.Second / 2):
 				if n.needReSchedule(flow) {
 					log.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
@@ -112,7 +112,7 @@ func (n *Node) needReSchedule(flow *packer.Flow) bool {
 	}
 
 	/* After VIP193, re-schedule when parent block changes.(prevent one proposer propose blocks with different ID at the same height)*/
-	if s1 != s2 {
+	if s1 != s2 || flow.ParentHeader().Number() != best.Number() {
 		return true
 	}
 
@@ -224,7 +224,7 @@ func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, prop
 	}
 	backer := thor.Address(crypto.PubkeyToAddress(*pub))
 
-	if flow.IsBackerKnown(backer) == true {
+	if flow.IsBackerKnown(backer) {
 		return errors.New("known backer")
 	}
 
@@ -236,7 +236,7 @@ func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, prop
 	if err != nil {
 		return
 	}
-	if poa.EvaluateVRF(beta) == true {
+	if poa.EvaluateVRF(beta) {
 		flow.AddBackerSignature(sig, beta, backer)
 	} else {
 		return fmt.Errorf("invalid proof from %v", backer)
