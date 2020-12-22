@@ -36,6 +36,7 @@ require (
 	github.com/stretchr/testify v1.1.4
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20180723110524-d53328019b21
