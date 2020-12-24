@@ -185,6 +185,9 @@ func (n *Node) backerLoop(ctx context.Context) {
 				log.Debug("failed to process draft", "err", err)
 				continue
 			}
+			if signer == n.master.Address() {
+				continue
+			}
 			if err := n.tryBacking(ev.Proposal.Hash(), st); err != nil {
 				log.Debug("failed to back proposal", "err", err)
 			}
@@ -252,6 +255,9 @@ func (n *Node) backerLoop(ctx context.Context) {
 					signer := ent.Value.(*draftWithSigner).Signer
 					if err := n.processDraft(draft, signer, st); err != nil {
 						log.Debug("failed to process draft", "err", err)
+						continue
+					}
+					if signer == n.master.Address() {
 						continue
 					}
 					if err := n.tryBacking(draft.Proposal.Hash(), st); err != nil {
