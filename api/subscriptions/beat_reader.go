@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/thor/bloom"
 )
 
 type beatReader struct {
@@ -60,8 +61,8 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 		bloomContent.add(signer.Bytes())
 		bloomContent.add(header.Beneficiary().Bytes())
 
-		k := thor.EstimateBloomK(bloomContent.len())
-		bloom := thor.NewBloom(k)
+		k := bloom.LegacyEstimateBloomK(bloomContent.len())
+		bloom := bloom.NewLegacyBloom(k)
 		for _, item := range bloomContent.items {
 			bloom.Add(item)
 		}
