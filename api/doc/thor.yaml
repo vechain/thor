@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.3.2
+  version: 1.4.0
 
 servers:
   - url: '/'
@@ -520,6 +520,25 @@ paths:
               schema:
                 allOf:
                     - $ref: '#/components/schemas/Beat'
+                    - $ref: '#/components/schemas/Obsolete'
+
+  /subscriptions/beat2:
+    get:
+      tags:
+        - Subscriptions
+      summary: (Websocket) Subscribe block chain's beats
+      description: |
+        which contain summary of new blocks, and bloom filters that composited with affected addresses.
+      parameters:
+        - $ref: '#/components/parameters/PositionInQuery'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                    - $ref: '#/components/schemas/Beat2'
                     - $ref: '#/components/schemas/Obsolete'
 
   /debug/tracers:
@@ -1261,6 +1280,21 @@ components:
           description: |
             the number of hash functions for bloom filter
           example: 3          
+
+    Beat2:
+      allOf:
+        - $ref: '#/components/schemas/Beat'
+      properties:
+        gasLimit:
+          type: integer
+          format: uint64
+          description: block gas limit
+          example: 12000000
+        bpk:
+          type: integer
+          format: uint8
+          description: bits per key parameter of bloom filter
+          example: 20
 
     IsTrunk:
       properties:
