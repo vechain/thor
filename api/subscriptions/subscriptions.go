@@ -147,6 +147,14 @@ func (s *Subscriptions) handleBeatReader(w http.ResponseWriter, req *http.Reques
 	return newBeatReader(s.repo, position), nil
 }
 
+func (s *Subscriptions) handleBeat2Reader(w http.ResponseWriter, req *http.Request) (*beat2Reader, error) {
+	position, err := s.parsePosition(req.URL.Query().Get("pos"))
+	if err != nil {
+		return nil, err
+	}
+	return newBeat2Reader(s.repo, position), nil
+}
+
 func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) error {
 	s.wg.Add(1)
 	defer s.wg.Done()
@@ -170,6 +178,10 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		}
 	case "beat":
 		if reader, err = s.handleBeatReader(w, req); err != nil {
+			return err
+		}
+	case "beat2":
+		if reader, err = s.handleBeat2Reader(w, req); err != nil {
 			return err
 		}
 	default:
