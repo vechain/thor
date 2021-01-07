@@ -18,7 +18,7 @@ var (
 )
 
 // ComplexSignature is the signature from backer.
-// Composed by [ VRF Proof(81 bytes) + ECDSA(Secp256k1) Signature(65 bytes)]
+// Composed by [ECDSA(Secp256k1) Signature(65 bytes)+VRF Proof(81 bytes)]
 type ComplexSignature []byte
 
 // NewComplexSignature creates a new signature.
@@ -32,20 +32,20 @@ func NewComplexSignature(proof, signature []byte) (ComplexSignature, error) {
 
 	var ms ComplexSignature
 	ms = make([]byte, 0, 146)
-	ms = append(ms, proof...)
 	ms = append(ms, signature...)
+	ms = append(ms, proof...)
 
 	return ms, nil
 }
 
 // Signature returns the ECDSA signature.
 func (ms ComplexSignature) Signature() []byte {
-	return ms[81:]
+	return ms[:65]
 }
 
 // Proof returns the VRF proof.
 func (ms ComplexSignature) Proof() []byte {
-	return ms[:81]
+	return ms[65:]
 }
 
 // DecodeRLP implements rlp.Decoder.
