@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The VeChainThor developers
+// Copyright (c) 2021 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
@@ -14,24 +14,35 @@ import (
 	"github.com/vechain/thor/thor/bloom"
 )
 
-type beatReader struct {
+type beat2Reader struct {
 	repo        *chain.Repository
 	blockReader chain.BlockReader
 }
 
-func newBeatReader(repo *chain.Repository, position thor.Bytes32) *beatReader {
-	return &beatReader{
+func newBeat2Reader(repo *chain.Repository, position thor.Bytes32) *beat2Reader {
+	return &beat2Reader{
 		repo:        repo,
 		blockReader: repo.NewBlockReader(position),
 	}
 }
 
-func (br *beatReader) Read() ([]interface{}, bool, error) {
+func (br *beat2Reader) Read() ([]interface{}, bool, error) {
 	blocks, err := br.blockReader.Read()
 	if err != nil {
 		return nil, false, err
 	}
 	var msgs []interface{}
+
+	bloomGenerator := &bloom.Generator{}
+
+	bloomAdd := func(key []byte) {
+		key = bytes.TrimLeft(key, "\x00")
+		// exclude non-address key
+		if len(key) <= thor.AddressLength {
+			bloomGenerator.Add(key)
+		}
+	}
+
 	for _, block := range blocks {
 		header := block.Header()
 		receipts, err := br.repo.GetBlockReceipts(header.ID())
@@ -39,55 +50,41 @@ func (br *beatReader) Read() ([]interface{}, bool, error) {
 			return nil, false, err
 		}
 		txs := block.Transactions()
-		bloomContent := &bloomContent{}
 		for i, receipt := range receipts {
-			bloomContent.add(receipt.GasPayer.Bytes())
+			bloomAdd(receipt.GasPayer.Bytes())
 			for _, output := range receipt.Outputs {
 				for _, event := range output.Events {
-					bloomContent.add(event.Address.Bytes())
+					bloomAdd(event.Address.Bytes())
 					for _, topic := range event.Topics {
-						bloomContent.add(topic.Bytes())
+						bloomAdd(topic.Bytes())
 					}
 				}
 				for _, transfer := range output.Transfers {
-					bloomContent.add(transfer.Sender.Bytes())
-					bloomContent.add(transfer.Recipient.Bytes())
+					bloomAdd(transfer.Sender.Bytes())
+					bloomAdd(transfer.Recipient.Bytes())
 				}
 			}
 			origin, _ := txs[i].Origin()
-			bloomContent.add(origin.Bytes())
+			bloomAdd(origin.Bytes())
 		}
 		signer, _ := header.Signer()
-		bloomContent.add(signer.Bytes())
-		bloomContent.add(header.Beneficiary().Bytes())
+		bloomAdd(signer.Bytes())
+		bloomAdd(header.Beneficiary().Bytes())
 
-		k := bloom.LegacyEstimateBloomK(bloomContent.len())
-		bloom := bloom.NewLegacyBloom(k)
-		for _, item := range bloomContent.items {
-			bloom.Add(item)
-		}
-		msgs = append(msgs, &BeatMessage{
+		const bitsPerKey = 20
+		filter := bloomGenerator.Generate(bitsPerKey, bloom.K(bitsPerKey))
+
+		msgs = append(msgs, &Beat2Message{
 			Number:      header.Number(),
 			ID:          header.ID(),
 			ParentID:    header.ParentID(),
 			Timestamp:   header.Timestamp(),
 			TxsFeatures: uint32(header.TxsFeatures()),
-			Bloom:       hexutil.Encode(bloom.Bits[:]),
-			K:           uint32(k),
+			GasLimit:    header.GasLimit(),
+			Bloom:       hexutil.Encode(filter.Bits),
+			K:           filter.K,
 			Obsolete:    block.Obsolete,
 		})
 	}
 	return msgs, len(blocks) > 0, nil
-}
-
-type bloomContent struct {
-	items [][]byte
-}
-
-func (bc *bloomContent) add(item []byte) {
-	bc.items = append(bc.items, bytes.TrimLeft(item, "\x00"))
-}
-
-func (bc *bloomContent) len() int {
-	return len(bc.items)
 }
