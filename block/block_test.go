@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/go-ecvrf"
 	. "github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -298,7 +299,7 @@ func TestDecoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp: block body should be trimmed")
 }
 
-func TestCodingCompatiability(t *testing.T) {
+func TestCodingCompatibility(t *testing.T) {
 	raw := hexutil.MustDecode("0xf8a1f89ea0000000000000000000000000000000000000000000000000000000000000000080809400000000000000000000000000000000000000008080a045b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0a00000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000080c0")
 
 	var b0 Block
@@ -325,4 +326,53 @@ func TestComplexSig(t *testing.T) {
 	err := rlp.DecodeBytes(encoded, &data)
 
 	assert.EqualError(t, err, "rlp(complex signature): invalid length, want 146bytes")
+}
+
+func TestBlockSignature(t *testing.T) {
+	priv, _ := crypto.GenerateKey()
+	signer := thor.Address(crypto.PubkeyToAddress(priv.PublicKey))
+
+	b := new(Builder).Build()
+	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), priv)
+
+	b0 := b.WithSignature(sig)
+	s0, err := b0.Header().Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, signer, s0)
+
+	bt0, err := b0.Header().VerifyVRF()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, []byte{}, bt0)
+
+	var alpha [4]byte
+	copy(alpha[:], b.Header().ParentID().Bytes()[:4])
+	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, alpha[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cs, _ := NewComplexSignature(proof, sig)
+	b1 := b.WithSignature(cs)
+	s1, err := b1.Header().Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, signer, s1)
+
+	bt1, err := b1.Header().VerifyVRF()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, beta, bt1)
+
+	b2 := b.WithSignature(cs)
+	bt2, err := b2.Header().VerifyVRF()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, beta, bt2)
 }
