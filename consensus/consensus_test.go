@@ -65,6 +65,7 @@ type testConsensus struct {
 	parent     *block.Block
 	original   *block.Block
 	tag        byte
+	forkConfig thor.ForkConfig
 	revertedID thor.Bytes32
 }
 
@@ -171,15 +172,30 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		parent:     b1,
 		original:   original,
 		tag:        repo.ChainTag(),
+		forkConfig: forkConfig,
 		revertedID: tx.ID(),
 	}
 }
 
 func (tc *testConsensus) sign(blk *block.Block) *block.Block {
-	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.pk)
+	var sig []byte
+
+	ecSig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.pk)
 	if err != nil {
 		tc.t.Fatal(err)
 	}
+	if blk.Header().Number() >= tc.forkConfig.VIP193 {
+		var alpha [4]byte
+		copy(alpha[:], blk.Header().ParentID().Bytes()[:4])
+		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(tc.pk, alpha[:])
+		if err != nil {
+			tc.t.Fatal(err)
+		}
+		sig, _ = block.NewComplexSignature(proof, ecSig)
+	} else {
+		sig = ecSig
+	}
+
 	return blk.WithSignature(sig)
 }
 
@@ -574,16 +590,15 @@ func (tc *testConsensus) TestValidateBlockBody() {
 
 func (tc *testConsensus) TestValidateProposer() {
 	triggers := make(map[string]func())
-	triggers["triggerErrSignerUnavailable"] = func() {
-		blk := tc.originalBuilder().Build()
-		err := tc.consent(blk)
-		expect := consensusError("block signer unavailable: invalid signature length")
-		tc.assert.Equal(expect, err)
-	}
 	triggers["triggerErrSignerInvalid"] = func() {
 		blk := tc.originalBuilder().Build()
 		pk, _ := crypto.GenerateKey()
-		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
+		ecSig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
+		var alpha [4]byte
+		copy(alpha[:], blk.Header().ParentID().Bytes()[:4])
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(pk, alpha[:])
+		sig, _ := block.NewComplexSignature(proof, ecSig)
+
 		blk = blk.WithSignature(sig)
 		err := tc.consent(blk)
 		expect := consensusError(
@@ -596,7 +611,12 @@ func (tc *testConsensus) TestValidateProposer() {
 	}
 	triggers["triggerErrTimestampUnscheduled"] = func() {
 		blk := tc.originalBuilder().Build()
-		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[3].PrivateKey)
+		ecSig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[3].PrivateKey)
+		var alpha [4]byte
+		copy(alpha[:], blk.Header().ParentID().Bytes()[:4])
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[3].PrivateKey, alpha[:])
+
+		sig, _ := block.NewComplexSignature(proof, ecSig)
 		blk = blk.WithSignature(sig)
 		err := tc.consent(blk)
 		expect := consensusError(

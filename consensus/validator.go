@@ -119,6 +119,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
+	sig := header.Signature()
 	if header.Number() < c.forkConfig.VIP193 {
 		if header.BackerSignaturesRoot() != emptyRoot {
 			return consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
@@ -126,9 +127,19 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		if header.TotalQuality() != 0 {
 			return consensusError("invalid block header: total quality should be 0 before fork VIP193")
 		}
+		if len(sig) != 65 {
+			return consensusError("invalid signature length")
+		}
 	} else {
 		if header.TotalQuality() < parent.TotalQuality() {
 			return consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
+		}
+		if len(sig) != 146 {
+			return consensusError("invalid signature length")
+		}
+		_, err := header.VerifyVRF()
+		if err != nil {
+			return consensusError(fmt.Sprintf("failed to verify signer's VRF: %v", err))
 		}
 	}
 
