@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/block"
 	. "github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -89,4 +91,66 @@ func TestRepository(t *testing.T) {
 
 		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
 	}
+}
+
+func TestBlockSummary(t *testing.T) {
+	type bSummary struct {
+		Header    *block.Header
+		IndexRoot thor.Bytes32
+		Txs       []thor.Bytes32
+		Size      uint64
+	}
+
+	b := new(block.Builder).Build()
+	root := b.Transactions().RootHash()
+	txs := []thor.Bytes32{b.Header().ID()}
+	size := uint64(b.Size().Int64())
+
+	bs1 := bSummary{b.Header(), root, txs, size}
+
+	bytes1, err := rlp.EncodeToBytes(bs1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var bs2 BlockSummary
+	err = rlp.DecodeBytes(bytes1, &bs2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, 0, len(bs2.Beta))
+	assert.Equal(t, bs1.Header.ID(), bs2.Header.ID())
+	assert.Equal(t, bs1.IndexRoot, bs2.IndexRoot)
+	assert.Equal(t, bs1.Size, bs2.Size)
+	assert.Equal(t, bs1.Txs, bs2.Txs)
+
+	bytes2, err := rlp.EncodeToBytes(&bs2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, bytes1, bytes2)
+
+	beta := []byte{0xff}
+	bs3 := BlockSummary{
+		bs1.Header,
+		bs1.IndexRoot,
+		bs1.Txs,
+		bs1.Size,
+		beta,
+	}
+
+	bytes3, err := rlp.EncodeToBytes(&bs3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var bs4 BlockSummary
+	err = rlp.DecodeBytes(bytes3, &bs4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, beta, []byte(bs4.Beta))
 }
