@@ -32,6 +32,7 @@ func (fc ForkConfig) String() string {
 	push("ETH_CONST", fc.ETH_CONST)
 	push("BLOCKLIST", fc.BLOCKLIST)
 	push("ETH_IST", fc.ETH_IST)
+	push("VIP193", fc.VIP193)
 
 	return strings.Join(strs, ", ")
 }
