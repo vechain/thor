@@ -29,25 +29,26 @@ func (c *Consensus) validate(
 	block *block.Block,
 	parent *block.Block,
 	nowTimestamp uint64,
-) (*state.Stage, tx.Receipts, error) {
+) (*state.Stage, tx.Receipts, []byte, error) {
 	header := block.Header()
 
-	if err := c.validateBlockHeader(header, parent.Header(), nowTimestamp); err != nil {
-		return nil, nil, err
+	beta, err := c.validateBlockHeader(header, parent.Header(), nowTimestamp)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	candidates, proposers, err := c.validateProposer(header, parent, state)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if err := c.validateBlockBody(block, parent.Header(), proposers); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	stage, receipts, err := c.verifyBlock(block, state)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	hasAuthorityEvent := func() bool {
@@ -91,48 +92,66 @@ func (c *Consensus) validate(
 		}
 		c.candidatesCache.Add(header.ID(), candidates)
 	}
-	return stage, receipts, nil
+	return stage, receipts, beta, nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) ([]byte, error) {
 	if header.Timestamp() <= parent.Timestamp() {
-		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
+		return nil, consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
 	if (header.Timestamp()-parent.Timestamp())%thor.BlockInterval != 0 {
-		return consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
+		return nil, consensusError(fmt.Sprintf("block interval not rounded: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
 
 	if header.Timestamp() > nowTimestamp+thor.BlockInterval {
-		return errFutureBlock
+		return nil, errFutureBlock
 	}
 
 	if !block.GasLimit(header.GasLimit()).IsValid(parent.GasLimit()) {
-		return consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
+		return nil, consensusError(fmt.Sprintf("block gas limit invalid: parent %v, current %v", parent.GasLimit(), header.GasLimit()))
 	}
 
 	if header.GasUsed() > header.GasLimit() {
-		return consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
+		return nil, consensusError(fmt.Sprintf("block gas used exceeds limit: limit %v, used %v", header.GasLimit(), header.GasUsed()))
 	}
 
 	if header.TotalScore() <= parent.TotalScore() {
-		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
+		return nil, consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
+	sig := header.Signature()
 	if header.Number() < c.forkConfig.VIP193 {
 		if header.BackerSignaturesRoot() != emptyRoot {
-			return consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
+			return nil, consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
 		}
 		if header.TotalQuality() != 0 {
-			return consensusError("invalid block header: total quality should be 0 before fork VIP193")
+			return nil, consensusError("invalid block header: total quality should be 0 before fork VIP193")
 		}
+		if len(sig) != 65 {
+			return nil, consensusError("invalid signature length")
+		}
+		return []byte{}, nil
 	} else {
 		if header.TotalQuality() < parent.TotalQuality() {
-			return consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
+			return nil, consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
 		}
+		if len(sig) != 146 {
+			return nil, consensusError("invalid signature length")
+		}
+		seed, err := c.seeder.Generate(header.ParentID())
+		if err != nil {
+			return nil, consensusError(fmt.Sprintf("failed to generate seed: %v", err))
+		}
+
+		beta, err := header.VerifyVRF(seed.Bytes())
+		if err != nil {
+			return nil, consensusError(fmt.Sprintf("failed to verify signer's VRF: %v", err))
+		}
+
+		return beta, nil
 	}
 
-	return nil
 }
 
 func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, st *state.State) (*poa.Candidates, []poa.Proposer, error) {
@@ -160,11 +179,8 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, 
 
 	var sched poa.Scheduler
 	if header.Number() >= c.forkConfig.VIP193 {
-		var seed thor.Bytes32
-		seed, err = c.seeder.Generate(header.ParentID())
-		if err != nil {
-			return nil, nil, err
-		}
+		seed, _ := c.seeder.Generate(header.ParentID())
+
 		sched, err = poa.NewSchedulerV2(signer, proposers, parent, seed.Bytes())
 	} else {
 		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Header().Number(), parent.Header().Timestamp())
