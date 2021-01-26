@@ -6,9 +6,7 @@
 package poa
 
 import (
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
@@ -36,7 +34,7 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 	blockNum := block.Number(parentID) + 1
 
 	epoch := blockNum / thor.EpochInterval
-	if epoch < 1 {
+	if epoch <= 1 {
 		return thor.Bytes32{}, nil
 	}
 	seedNum := (epoch - 1) * thor.EpochInterval
@@ -46,44 +44,28 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 		return thor.Bytes32{}, err
 	}
 
+	// seedblock located at pre-VIP193 stage
+	if len(seedBlock.Signature()) == 65 {
+		return thor.Bytes32{}, nil
+	}
+
 	if v, ok := seeder.cache[seedBlock.ID()]; ok == true {
 		return v, nil
 	}
 
-	signer, err := seedBlock.Signer()
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-
 	hasher := thor.NewBlake2b()
-	hasher.Write(signer.Bytes())
-
-	if seedBlock.BackerSignaturesRoot() != emptyRoot {
-		// the seed corresponding to the seed block
-		theSeed, err := seeder.Generate(seedBlock.ParentID())
+	next := seedBlock.ID()
+	for i := 0; i < thor.EpochInterval; i++ {
+		sum, err := seeder.repo.GetBlockSummary(next)
 		if err != nil {
 			return thor.Bytes32{}, err
 		}
 
-		alpha := append([]byte(nil), theSeed.Bytes()...)
-		alpha = append(alpha, seedBlock.ParentID().Bytes()[:4]...)
-
-		hash := block.NewProposal(seedBlock.ParentID(), seedBlock.TxsRoot(), seedBlock.GasLimit(), seedBlock.Timestamp()).Hash()
-		bss, err := seeder.repo.GetBlockBackerSignatures(seedBlock.ID())
-		if err != nil {
-			return thor.Bytes32{}, err
+		if len(sum.Beta) == 0 {
+			break
 		}
-		for _, bs := range bss {
-			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
-			if err != nil {
-				return thor.Bytes32{}, err
-			}
-			beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, bs.Proof())
-			if err != nil {
-				return thor.Bytes32{}, err
-			}
-			hasher.Write(beta)
-		}
+		hasher.Write(sum.Beta)
+		next = sum.Header.ParentID()
 	}
 
 	var seed thor.Bytes32
