@@ -31,14 +31,14 @@ var log = log15.New("pkg", "solo")
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo        *chain.Repository
-	txPool      *txpool.TxPool
-	packer      *packer.Packer
-	logDB       *logdb.LogDB
-	gasLimit    uint64
-	bandwidth   bandwidth.Bandwidth
-	onDemand    bool
-	skipLogs    bool
+	repo      *chain.Repository
+	txPool    *txpool.TxPool
+	packer    *packer.Packer
+	logDB     *logdb.LogDB
+	gasLimit  uint64
+	bandwidth bandwidth.Bandwidth
+	onDemand  bool
+	skipLogs  bool
 }
 
 // New returns Solo instance
@@ -99,7 +99,7 @@ func (s *Solo) loop(ctx context.Context) {
 				}
 			} else if s.onDemand {
 				pendingTxs := s.txPool.Executables()
-				if len(pendingTxs) > 0{
+				if len(pendingTxs) > 0 {
 					if err := s.packing(pendingTxs, true); err != nil {
 						log.Error("failed to pack block", "err", err)
 					}
@@ -143,7 +143,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, beta, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		return errors.WithMessage(err, "pack")
 	}
@@ -159,7 +159,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 
 	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts); err != nil {
+	if err := s.repo.AddBlock(b, receipts, beta); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
 	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {

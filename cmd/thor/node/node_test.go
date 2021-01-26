@@ -85,14 +85,14 @@ func TestCompareChain(t *testing.T) {
 	b4x := newBlock(b3x.Header(), 1, 10, 40, s2)
 
 	receipts := tx.Receipts{}
-	repo.AddBlock(b1, receipts)
-	repo.AddBlock(b2, receipts)
-	repo.AddBlock(b3, receipts)
-	repo.AddBlock(b4, receipts)
-	repo.AddBlock(b3x, receipts)
-	repo.AddBlock(b4x, receipts)
-	repo.AddBlock(largerID, receipts)
-	repo.AddBlock(lowerID, receipts)
+	repo.AddBlock(b1, receipts, nil)
+	repo.AddBlock(b2, receipts, nil)
+	repo.AddBlock(b3, receipts, nil)
+	repo.AddBlock(b4, receipts, nil)
+	repo.AddBlock(b3x, receipts, nil)
+	repo.AddBlock(b4x, receipts, nil)
+	repo.AddBlock(largerID, receipts, nil)
+	repo.AddBlock(lowerID, receipts, nil)
 
 	node := &Node{
 		repo:       repo,
@@ -122,7 +122,7 @@ func TestCompareChain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo.AddBlock(tt.b1, tx.Receipts{})
+			repo.AddBlock(tt.b1, tx.Receipts{}, nil)
 
 			got, err := node.compare(tt.b1.Header(), tt.b2.Header())
 			if err != nil {

@@ -82,7 +82,7 @@ func TestExecutable(t *testing.T) {
 	repo := newChainRepo(db)
 	b0 := repo.GenesisBlock()
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil, nil)
 	st := state.New(db, repo.GenesisBlock().Header().StateRoot())
 
 	tests := []struct {

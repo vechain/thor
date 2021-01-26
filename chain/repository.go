@@ -80,7 +80,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := repo.saveBlock(genesis, nil, indexRoot); err != nil {
+		if err := repo.saveBlock(genesis, nil, nil, indexRoot); err != nil {
 			return nil, err
 		}
 		if err := repo.setBestBlock(genesis); err != nil {
@@ -143,14 +143,14 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 	return nil
 }
 
-func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
+func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, beta []byte, indexRoot thor.Bytes32) error {
 	return r.data.Batch(func(putter kv.PutFlusher) error {
 		var (
 			header  = block.Header()
 			id      = header.ID()
 			txs     = block.Transactions()
 			bss     = block.BackerSignatures()
-			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), nil}
+			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), beta}
 		)
 
 		if n := len(txs); n > 0 {
@@ -185,7 +185,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 }
 
 // AddBlock add a new block with its receipts into repository.
-func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error {
+func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, beta []byte) error {
 	parentSummary, err := r.GetBlockSummary(newBlock.Header().ParentID())
 	if err != nil {
 		if r.IsNotFound(err) {
@@ -198,7 +198,7 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 		return err
 	}
 
-	if err := r.saveBlock(newBlock, receipts, indexRoot); err != nil {
+	if err := r.saveBlock(newBlock, receipts, beta, indexRoot); err != nil {
 		return err
 	}
 	return nil

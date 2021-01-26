@@ -217,14 +217,14 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 }
 
 // Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
+func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, []byte, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
-		return nil, nil, nil, errors.New("private key mismatch")
+		return nil, nil, nil, nil, errors.New("private key mismatch")
 	}
 
 	stage, err := f.runtime.State().Stage()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	stateRoot := stage.Hash()
 
@@ -262,26 +262,27 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 
 	ecSig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
+	var beta []byte
 	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
 		alpha := append([]byte(nil), f.seed...)
 		alpha = append(alpha, f.parentHeader.ID().Bytes()[:4]...)
 
 		var proof []byte
-		_, proof, err = ecvrf.NewSecp256k1Sha256Tai().Prove(privateKey, alpha[:])
+		beta, proof, err = ecvrf.NewSecp256k1Sha256Tai().Prove(privateKey, alpha[:])
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		cs, err := block.NewComplexSignature(proof, ecSig)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		signature = cs
 	} else {
 		signature = ecSig
 	}
 
-	return newBlock.WithSignature(signature), stage, f.receipts, nil
+	return newBlock.WithSignature(signature), stage, f.receipts, beta, nil
 }

@@ -780,7 +780,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build()
-		repo.AddBlock(b, tx.Receipts{})
+		repo.AddBlock(b, tx.Receipts{}, nil)
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
@@ -847,7 +847,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build()
-		repo.AddBlock(b, tx.Receipts{})
+		repo.AddBlock(b, tx.Receipts{}, nil)
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
@@ -913,9 +913,9 @@ func TestExtensionNative(t *testing.T) {
 
 	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
 
-	err := repo.AddBlock(b1, nil)
+	err := repo.AddBlock(b1, nil, nil)
 	assert.Equal(t, err, nil)
-	err = repo.AddBlock(b2, nil)
+	err = repo.AddBlock(b2, nil, nil)
 	assert.Equal(t, err, nil)
 
 	assert.Equal(t, builtin.Extension.Address, builtin.Extension.Address)

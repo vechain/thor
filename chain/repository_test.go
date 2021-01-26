@@ -68,7 +68,7 @@ func TestRepository(t *testing.T) {
 	receipt1 := &tx.Receipt{}
 
 	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
-	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}))
+	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}, nil))
 
 	// best block not set, so still 0
 	assert.Equal(t, uint32(0), repo1.BestBlock().Header().Number())

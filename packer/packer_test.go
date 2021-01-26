@@ -96,12 +96,12 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+		blk, stage, receipts, beta, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
 		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
 
-		if err := repo.AddBlock(blk, receipts); err != nil {
+		if err := repo.AddBlock(blk, receipts, beta); err != nil {
 			t.Fatal(err)
 		}
 		repo.SetBestBlockID(blk.Header().ID())
@@ -155,16 +155,16 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	blk, stage, receipts, beta, err := flow.Pack(a1.PrivateKey)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := repo.AddBlock(blk, receipts); err != nil {
+	if err := repo.AddBlock(blk, receipts, beta); err != nil {
 		t.Fatal(err)
 	}
 

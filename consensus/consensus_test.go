@@ -65,6 +65,7 @@ type testConsensus struct {
 	parent     *block.Block
 	original   *block.Block
 	tag        byte
+	forkConfig thor.ForkConfig
 	revertedID thor.Bytes32
 }
 
@@ -132,7 +133,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
 	flow.AddBackerSignature(bs, beta[:], backer.Address)
-	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey)
+	b1, stage, receipts, bt, err := flow.Pack(proposer.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +141,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = repo.AddBlock(b1, receipts)
+	err = repo.AddBlock(b1, receipts, bt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +152,14 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	if err != nil {
 		t.Fatal(err)
 	}
-	original, _, _, err := flow.Pack(proposer.PrivateKey)
+	original, _, _, _, err := flow.Pack(proposer.PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	con := New(repo, stater, forkConfig)
 
-	if _, _, err := con.Process(original, flow.When()); err != nil {
+	if _, _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -171,15 +172,35 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		parent:     b1,
 		original:   original,
 		tag:        repo.ChainTag(),
+		forkConfig: forkConfig,
 		revertedID: tx.ID(),
 	}
 }
 
 func (tc *testConsensus) sign(blk *block.Block) *block.Block {
-	sig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.pk)
+	var sig []byte
+
+	ecSig, err := crypto.Sign(blk.Header().SigningHash().Bytes(), tc.pk)
 	if err != nil {
 		tc.t.Fatal(err)
 	}
+	if blk.Header().Number() >= tc.forkConfig.VIP193 {
+		seed, err := tc.con.seeder.Generate(blk.Header().ParentID())
+		if err != nil {
+			tc.t.Fatal(err)
+		}
+		alpha := append([]byte(nil), seed[:]...)
+		alpha = append(alpha, blk.Header().ParentID().Bytes()[:4]...)
+
+		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(tc.pk, alpha[:])
+		if err != nil {
+			tc.t.Fatal(err)
+		}
+		sig, _ = block.NewComplexSignature(proof, ecSig)
+	} else {
+		sig = ecSig
+	}
+
 	return blk.WithSignature(sig)
 }
 
@@ -202,7 +223,7 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
-	_, _, err := tc.con.Process(blk, tc.time)
+	_, _, _, err := tc.con.Process(blk, tc.time)
 	return err
 }
 
@@ -574,16 +595,18 @@ func (tc *testConsensus) TestValidateBlockBody() {
 
 func (tc *testConsensus) TestValidateProposer() {
 	triggers := make(map[string]func())
-	triggers["triggerErrSignerUnavailable"] = func() {
-		blk := tc.originalBuilder().Build()
-		err := tc.consent(blk)
-		expect := consensusError("block signer unavailable: invalid signature length")
-		tc.assert.Equal(expect, err)
-	}
 	triggers["triggerErrSignerInvalid"] = func() {
 		blk := tc.originalBuilder().Build()
 		pk, _ := crypto.GenerateKey()
-		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
+		ecSig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), pk)
+
+		seed, _ := tc.con.seeder.Generate(blk.Header().ParentID())
+
+		alpha := append([]byte(nil), seed[:]...)
+		alpha = append(alpha, blk.Header().ParentID().Bytes()[:4]...)
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(pk, alpha[:])
+		sig, _ := block.NewComplexSignature(proof, ecSig)
+
 		blk = blk.WithSignature(sig)
 		err := tc.consent(blk)
 		expect := consensusError(
@@ -596,7 +619,14 @@ func (tc *testConsensus) TestValidateProposer() {
 	}
 	triggers["triggerErrTimestampUnscheduled"] = func() {
 		blk := tc.originalBuilder().Build()
-		sig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[3].PrivateKey)
+		ecSig, _ := crypto.Sign(blk.Header().SigningHash().Bytes(), genesis.DevAccounts()[3].PrivateKey)
+
+		seed, _ := tc.con.seeder.Generate(blk.Header().ParentID())
+		alpha := append([]byte(nil), seed[:]...)
+		alpha = append(alpha, blk.Header().ParentID().Bytes()[:4]...)
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(genesis.DevAccounts()[3].PrivateKey, alpha[:])
+
+		sig, _ := block.NewComplexSignature(proof, ecSig)
 		blk = blk.WithSignature(sig)
 		err := tc.consent(blk)
 		expect := consensusError(
