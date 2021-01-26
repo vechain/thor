@@ -18,16 +18,16 @@ func TestBlockReader(t *testing.T) {
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil, nil)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, nil)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, nil)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil, nil)
 
 	repo.SetBestBlockID(b4.Header().ID())
 
@@ -58,19 +58,19 @@ func TestBlockReaderFork(t *testing.T) {
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil, nil)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, nil)
 
 	b2x := newBlock(b1, 20)
-	repo.AddBlock(b2x, nil)
+	repo.AddBlock(b2x, nil, nil)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, nil)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil, nil)
 
 	repo.SetBestBlockID(b4.Header().ID())
 

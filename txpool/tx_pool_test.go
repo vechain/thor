@@ -54,7 +54,7 @@ func TestSubscribeNewTx(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
 		Build()
-	pool.repo.AddBlock(b1, nil)
+	pool.repo.AddBlock(b1, nil, nil)
 	pool.repo.SetBestBlockID(b1.Header().ID())
 
 	txCh := make(chan *TxEvent)
@@ -91,7 +91,7 @@ func TestWashTxs(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
 		Build()
-	pool.repo.AddBlock(b1, nil)
+	pool.repo.AddBlock(b1, nil, nil)
 
 	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
 	assert.Nil(t, err)
@@ -121,7 +121,7 @@ func TestAdd(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
 		Build()
-	pool.repo.AddBlock(b1, nil)
+	pool.repo.AddBlock(b1, nil, nil)
 	pool.repo.SetBestBlockID(b1.Header().ID())
 	acc := genesis.DevAccounts()[0]
 

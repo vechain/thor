@@ -31,16 +31,16 @@ func TestChain(t *testing.T) {
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
 	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
-	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
+	repo.AddBlock(b1, tx.Receipts{tx1Receipt}, nil)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, nil)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, nil)
 
 	b3x := newBlock(b2, 30)
-	repo.AddBlock(b3x, nil)
+	repo.AddBlock(b3x, nil, nil)
 
 	c := repo.NewChain(b3.Header().ID())
 

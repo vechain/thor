@@ -191,12 +191,12 @@ func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 		}
 	}
 
-	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
+	newBlock, stage, receipts, beta, err := flow.Pack(n.master.PrivateKey)
 	if err != nil {
 		return err
 	}
 
-	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts, beta)
 	if err != nil {
 		return errors.WithMessage(err, "commit block")
 	}

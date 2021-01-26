@@ -259,7 +259,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	// consensus object is not thread-safe
 	n.consLock.Lock()
 	startTime := mclock.Now()
-	stage, receipts, err := n.cons.Process(blk, uint64(time.Now().Unix()))
+	stage, receipts, beta, err := n.cons.Process(blk, uint64(time.Now().Unix()))
 	execElapsed := mclock.Now() - startTime
 	n.consLock.Unlock()
 
@@ -279,7 +279,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	prevTrunk, curTrunk, err := n.commitBlock(stage, blk, receipts)
+	prevTrunk, curTrunk, err := n.commitBlock(stage, blk, receipts, beta)
 	if err != nil {
 		log.Error("failed to commit block", "err", err)
 		return false, err
@@ -295,14 +295,14 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
 
-func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts) (*chain.Chain, *chain.Chain, error) {
+func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts, beta []byte) (*chain.Chain, *chain.Chain, error) {
 	n.commitLock.Lock()
 	defer n.commitLock.Unlock()
 
 	if _, err := stage.Commit(); err != nil {
 		return nil, nil, errors.Wrap(err, "commit state")
 	}
-	if err := n.repo.AddBlock(newBlock, receipts); err != nil {
+	if err := n.repo.AddBlock(newBlock, receipts, beta); err != nil {
 		return nil, nil, errors.Wrap(err, "add block")
 	}
 

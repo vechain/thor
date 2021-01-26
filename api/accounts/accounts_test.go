@@ -230,14 +230,14 @@ func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transa
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, beta, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddBlock(b, receipts); err != nil {
+	if err := repo.AddBlock(b, receipts, beta); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {
