@@ -6,13 +6,16 @@
 package block
 
 import (
+	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -24,7 +27,7 @@ type Header struct {
 
 	cache struct {
 		signingHash atomic.Value
-		signer      atomic.Value
+		pubkey      atomic.Value
 		id          atomic.Value
 	}
 }
@@ -178,29 +181,60 @@ func (h *Header) withSignature(sig []byte) *Header {
 	return &cpy
 }
 
+// pubkey recover leader's public key.
+func (h *Header) pubkey() (*ecdsa.PublicKey, error) {
+	if cached := h.cache.pubkey.Load(); cached != nil {
+		return cached.(*ecdsa.PublicKey), nil
+	}
+	if len(h.body.Signature) != 65 && len(h.body.Signature) != 146 {
+		return nil, errors.New("invalid signature length")
+	}
+	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
+	if err != nil {
+		return nil, err
+	}
+
+	h.cache.pubkey.Store(pub)
+	return pub, nil
+}
+
 // Signer extract signer of the block from signature.
-func (h *Header) Signer() (signer thor.Address, err error) {
+func (h *Header) Signer() (thor.Address, error) {
 	if h.Number() == 0 {
 		// special case for genesis block
 		return thor.Address{}, nil
 	}
 
-	if cached := h.cache.signer.Load(); cached != nil {
-		return cached.(thor.Address), nil
-	}
-	defer func() {
-		if err == nil {
-			h.cache.signer.Store(signer)
-		}
-	}()
-
-	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), h.body.Signature)
+	pub, err := h.pubkey()
 	if err != nil {
 		return thor.Address{}, err
 	}
 
-	signer = thor.Address(crypto.PubkeyToAddress(*pub))
-	return
+	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
+}
+
+// VerifyVRF verifies the VRF proof in the header's signature and returns the beta.
+func (h *Header) VerifyVRF(seed []byte) ([]byte, error) {
+	if h.Number() == 0 || len(h.body.Signature) == 65 {
+		return []byte{}, nil
+	}
+
+	pub, err := h.pubkey()
+	if err != nil {
+		return nil, err
+	}
+
+	alpha := append([]byte(nil), seed...)
+	alpha = append(alpha, h.ParentID().Bytes()[:4]...)
+
+	proof := ComplexSignature(h.body.Signature).Proof()
+
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha[:], proof)
+	if err != nil {
+		return nil, err
+	}
+
+	return beta, nil
 }
 
 // EncodeRLP implements rlp.Encoder.
