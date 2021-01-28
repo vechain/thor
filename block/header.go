@@ -181,6 +181,23 @@ func (h *Header) withSignature(sig []byte) *Header {
 	return &cpy
 }
 
+// pubkey recover leader's public key.
+func (h *Header) pubkey() (*ecdsa.PublicKey, error) {
+	if cached := h.cache.pubkey.Load(); cached != nil {
+		return cached.(*ecdsa.PublicKey), nil
+	}
+	if len(h.body.Signature) != 65 && len(h.body.Signature) != 146 {
+		return nil, errors.New("invalid signature length")
+	}
+	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
+	if err != nil {
+		return nil, err
+	}
+
+	h.cache.pubkey.Store(pub)
+	return pub, nil
+}
+
 // Signer extract signer of the block from signature.
 func (h *Header) Signer() (thor.Address, error) {
 	if h.Number() == 0 {
@@ -188,23 +205,12 @@ func (h *Header) Signer() (thor.Address, error) {
 		return thor.Address{}, nil
 	}
 
-	if cached := h.cache.pubkey.Load(); cached != nil {
-		return thor.Address(crypto.PubkeyToAddress(cached.(ecdsa.PublicKey))), nil
-	}
-
-	if len(h.body.Signature) != 65 && len(h.body.Signature) != 146 {
-		return thor.Address{}, errors.New("invalid signature length")
-	}
-
-	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
+	pub, err := h.pubkey()
 	if err != nil {
 		return thor.Address{}, err
 	}
 
-	pubkey := *pub
-	h.cache.pubkey.Store(pubkey)
-
-	return thor.Address(crypto.PubkeyToAddress(pubkey)), nil
+	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
 }
 
 // VerifyVRF verifies the VRF proof in the header's signature and returns the beta.
@@ -213,20 +219,17 @@ func (h *Header) VerifyVRF(seed []byte) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	if cached := h.cache.pubkey.Load(); cached == nil {
-		_, err := h.Signer()
-		if err != nil {
-			return nil, err
-		}
+	pub, err := h.pubkey()
+	if err != nil {
+		return nil, err
 	}
 
 	alpha := append([]byte(nil), seed...)
 	alpha = append(alpha, h.ParentID().Bytes()[:4]...)
 
-	pub := h.cache.pubkey.Load().(ecdsa.PublicKey)
 	proof := ComplexSignature(h.body.Signature).Proof()
 
-	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(&pub, alpha[:], proof)
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha[:], proof)
 	if err != nil {
 		return nil, err
 	}
