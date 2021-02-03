@@ -86,6 +86,7 @@ func New(
 		skipLogs:       skipLogs,
 		forkConfig:     forkConfig,
 		stater:         stater,
+		seeder:         poa.NewSeeder(repo),
 	}
 }
 
