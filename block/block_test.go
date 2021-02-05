@@ -338,6 +338,9 @@ func TestBlockSignature(t *testing.T) {
 	b := new(Builder).Build()
 	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), priv)
 
+	alpha := append([]byte(nil), seed[:]...)
+	alpha = append(alpha, b.Header().ParentID().Bytes()[:4]...)
+
 	b0 := b.WithSignature(sig)
 	s0, err := b0.Header().Signer()
 	if err != nil {
@@ -351,8 +354,6 @@ func TestBlockSignature(t *testing.T) {
 	}
 	assert.Equal(t, []byte{}, bt0)
 
-	alpha := append([]byte(nil), seed[:]...)
-	alpha = append(alpha, b.Header().ParentID().Bytes()[:4]...)
 	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, alpha[:])
 	if err != nil {
 		t.Fatal(err)
@@ -366,14 +367,14 @@ func TestBlockSignature(t *testing.T) {
 	}
 	assert.Equal(t, signer, s1)
 
-	bt1, err := b1.Header().VerifyVRF(seed[:])
+	bt1, err := b1.Header().VerifyVRF(alpha)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, beta, bt1)
 
 	b2 := b.WithSignature(cs)
-	bt2, err := b2.Header().VerifyVRF(seed[:])
+	bt2, err := b2.Header().VerifyVRF(alpha)
 	if err != nil {
 		t.Fatal(err)
 	}
