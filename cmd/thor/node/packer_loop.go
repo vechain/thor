@@ -175,9 +175,7 @@ func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 			ticker := time.NewTimer(time.Duration(flow.When()-1-now) * time.Second)
 			defer ticker.Stop()
 
-			alpha := append([]byte(nil), flow.Seed()...)
-			alpha = append(alpha, flow.ParentHeader().ID().Bytes()[:4]...)
-
+			alpha := append([]byte(nil), flow.Alpha()...)
 			proposalHash := draft.Proposal.Hash()
 			for {
 				select {
