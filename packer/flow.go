@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/poa"
@@ -260,9 +261,29 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	}
 	newBlock := builder.Build()
 
-	sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+	var signature []byte
+
+	ecSig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return newBlock.WithSignature(sig), stage, f.receipts, nil
+
+	if f.runtime.Context().Number >= f.packer.forkConfig.VIP193 {
+		alpha := append([]byte(nil), f.alpha...)
+
+		var proof []byte
+		_, proof, err = ecvrf.NewSecp256k1Sha256Tai().Prove(privateKey, alpha[:])
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		cs, err := block.NewComplexSignature(proof, ecSig)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		signature = cs
+	} else {
+		signature = ecSig
+	}
+
+	return newBlock.WithSignature(signature), stage, f.receipts, nil
 }
