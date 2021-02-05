@@ -214,7 +214,7 @@ func (h *Header) Signer() (thor.Address, error) {
 }
 
 // VerifyVRF verifies the VRF proof in the header's signature and returns the beta.
-func (h *Header) VerifyVRF(seed []byte) ([]byte, error) {
+func (h *Header) VerifyVRF(alpha []byte) ([]byte, error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {
 		return []byte{}, nil
 	}
@@ -223,9 +223,6 @@ func (h *Header) VerifyVRF(seed []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	alpha := append([]byte(nil), seed...)
-	alpha = append(alpha, h.ParentID().Bytes()[:4]...)
 
 	proof := ComplexSignature(h.body.Signature).Proof()
 
