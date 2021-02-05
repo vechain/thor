@@ -37,7 +37,7 @@ type Flow struct {
 	receipts     tx.Receipts
 	features     tx.Features
 	proposers    []poa.Proposer // all proposers in power
-	seed         []byte
+	alpha        []byte
 	knownBackers map[thor.Address]bool
 	bss          []bsWithBeta
 }
@@ -50,6 +50,9 @@ func newFlow(
 	proposers []poa.Proposer,
 	seed []byte,
 ) *Flow {
+	alpha := append([]byte(nil), seed...)
+	alpha = append(alpha, parentHeader.ID().Bytes()[:4]...)
+
 	return &Flow{
 		packer:       packer,
 		parentHeader: parentHeader,
@@ -57,7 +60,7 @@ func newFlow(
 		processedTxs: make(map[thor.Bytes32]bool),
 		features:     features,
 		proposers:    proposers,
-		seed:         seed,
+		alpha:        alpha,
 		knownBackers: make(map[thor.Address]bool),
 	}
 }
@@ -95,9 +98,9 @@ func (f *Flow) GetAuthority(addr thor.Address) *poa.Proposer {
 	return nil
 }
 
-// Seed returns the seed of this round.
-func (f *Flow) Seed() []byte {
-	return f.seed
+// Alpha returns the alpha of this round.
+func (f *Flow) Alpha() []byte {
+	return f.alpha
 }
 
 // IsBackerKnown returns true is backer's signature is already added.

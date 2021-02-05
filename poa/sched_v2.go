@@ -20,7 +20,6 @@ import (
 type SchedulerV2 struct {
 	proposer        Proposer
 	parentBlockTime uint64
-	seed            []byte
 	shuffled        []thor.Address
 	activates       []thor.Address
 }
@@ -103,7 +102,6 @@ func NewSchedulerV2(
 	return &SchedulerV2{
 		proposer,
 		parent.Header().Timestamp(),
-		seed,
 		shuffled,
 		activates,
 	}, nil
