@@ -21,7 +21,7 @@ import (
 )
 
 // Consensus check whether the block is verified,
-// and predicate which trunk it belong to.
+// and predicate which trunk it belongs to.
 type Consensus struct {
 	repo                 *chain.Repository
 	stater               *state.Stater
@@ -42,7 +42,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	}
 }
 
-// Process process a block.
+// Process a block.
 func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 
