@@ -77,6 +77,12 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	return b
 }
 
+// Alpha set the alpha.
+func (b *Builder) Alpha(alpha []byte) *Builder {
+	b.headerBody.Extension.Alpha = append([]byte(nil), alpha...)
+	return b
+}
+
 // BackerSignatures add the list of backer signature.
 func (b *Builder) BackerSignatures(bss ComplexSignatures, parentQuality uint32) *Builder {
 	b.bss = append(ComplexSignatures(nil), bss...)

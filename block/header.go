@@ -29,6 +29,7 @@ type Header struct {
 		signingHash atomic.Value
 		pubkey      atomic.Value
 		id          atomic.Value
+		beta        atomic.Value
 	}
 }
 
@@ -105,6 +106,11 @@ func (h *Header) StateRoot() thor.Bytes32 {
 // ReceiptsRoot returns merkle root of tx receipts.
 func (h *Header) ReceiptsRoot() thor.Bytes32 {
 	return h.body.ReceiptsRoot
+}
+
+// Alpha returns alpha.
+func (h *Header) Alpha() []byte {
+	return h.body.Extension.Alpha
 }
 
 // BackerSignaturesRoot returns merkle root of backer signatures.
@@ -213,25 +219,29 @@ func (h *Header) Signer() (thor.Address, error) {
 	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
 }
 
-// VerifyVRF verifies the VRF proof in the header's signature and returns the beta.
-func (h *Header) VerifyVRF(alpha []byte) ([]byte, error) {
+// Beta verifies the VRF proof in header's signature and returns the beta.
+func (h *Header) Beta() (beta []byte, err error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {
 		return []byte{}, nil
 	}
 
+	if cached := h.cache.beta.Load(); cached != nil {
+		return cached.([]byte), nil
+	}
+	defer func() {
+		if err == nil {
+			h.cache.beta.Store(beta)
+		}
+	}()
+
 	pub, err := h.pubkey()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	proof := ComplexSignature(h.body.Signature).Proof()
-
-	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha[:], proof)
-	if err != nil {
-		return nil, err
-	}
-
-	return beta, nil
+	alpha := append([]byte(nil), h.body.Extension.Alpha...)
+	return ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, proof)
 }
 
 // EncodeRLP implements rlp.Encoder.

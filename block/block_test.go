@@ -226,9 +226,11 @@ func TestEncodingBadExtension(t *testing.T) {
 	var raws []rlp.RawValue
 	_ = rlp.DecodeBytes(bytes, &raws)
 	d, _ := rlp.EncodeToBytes(&struct {
+		Alpha        []byte
 		Root         thor.Bytes32
 		TotalQuality uint32
 	}{
+		nil,
 		emptyRoot,
 		0,
 	})
@@ -241,7 +243,7 @@ func TestEncodingBadExtension(t *testing.T) {
 }
 
 func TestEncodingExtension(t *testing.T) {
-	block := new(Builder).BackerSignatures(ComplexSignatures{}, 1).Build()
+	block := new(Builder).Alpha([]byte{0x0}).BackerSignatures(ComplexSignatures{}, 1).Build()
 	h := block.Header()
 
 	bytes, err := rlp.EncodeToBytes(h)
@@ -329,17 +331,11 @@ func TestComplexSig(t *testing.T) {
 }
 
 func TestBlockSignature(t *testing.T) {
-	var seed [32]byte
-	rand.Read(seed[:])
-
 	priv, _ := crypto.GenerateKey()
 	signer := thor.Address(crypto.PubkeyToAddress(priv.PublicKey))
 
 	b := new(Builder).Build()
 	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), priv)
-
-	alpha := append([]byte(nil), seed[:]...)
-	alpha = append(alpha, b.Header().ParentID().Bytes()[:4]...)
 
 	b0 := b.WithSignature(sig)
 	s0, err := b0.Header().Signer()
@@ -348,11 +344,18 @@ func TestBlockSignature(t *testing.T) {
 	}
 	assert.Equal(t, signer, s0)
 
-	bt0, err := b0.Header().VerifyVRF(nil)
+	bt0, err := b0.Header().Beta()
 	if err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, []byte{}, bt0)
+
+	// POST VIP-193
+	var alpha [32 + 4]byte
+	rand.Read(alpha[:])
+
+	b1 := new(Builder).Alpha(alpha[:]).Build()
+	sig, _ = crypto.Sign(b1.Header().SigningHash().Bytes(), priv)
 
 	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, alpha[:])
 	if err != nil {
@@ -360,21 +363,14 @@ func TestBlockSignature(t *testing.T) {
 	}
 
 	cs, _ := NewComplexSignature(proof, sig)
-	b1 := b.WithSignature(cs)
-	s1, err := b1.Header().Signer()
+	b2 := b1.WithSignature(cs)
+	s2, err := b2.Header().Signer()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, signer, s1)
+	assert.Equal(t, signer, s2)
 
-	bt1, err := b1.Header().VerifyVRF(alpha)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, beta, bt1)
-
-	b2 := b.WithSignature(cs)
-	bt2, err := b2.Header().VerifyVRF(alpha)
+	bt2, err := b2.Header().Beta()
 	if err != nil {
 		t.Fatal(err)
 	}
