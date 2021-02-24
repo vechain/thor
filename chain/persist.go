@@ -7,7 +7,6 @@ package chain
 
 import (
 	"encoding/binary"
-	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -22,48 +21,17 @@ const (
 	bssSuffix    = byte(2) // backer signatures suffix
 )
 
-// the key for tx/receipt.
-// it consists of: ( block id | infix | index )
-type txKey [32 + 1 + 8]byte
-
 // BlockSummary presents block summary.
 type BlockSummary struct {
 	Header    *block.Header
 	IndexRoot thor.Bytes32
 	Txs       []thor.Bytes32
 	Size      uint64
-	Beta      Beta
 }
 
-// Beta represents beta from block signer's VRF.
-type Beta []byte
-type _beta Beta
-
-// EncodeRLP implements rlp.Encoder.
-func (b *Beta) EncodeRLP(w io.Writer) error {
-	if len(*b) == 0 {
-		return nil
-	}
-
-	return rlp.Encode(w, (*_beta)(b))
-}
-
-// DecodeRLP implements rlp.Decoder.
-func (b *Beta) DecodeRLP(s *rlp.Stream) error {
-	var obj _beta
-	if err := s.Decode(&obj); err != nil {
-		// Error(end-of-list) means this field is not present, return default value
-		// for backward compatibility
-		if err == rlp.EOL {
-			*b = Beta{}
-			return nil
-		}
-		return err
-	}
-
-	*b = Beta(obj)
-	return nil
-}
+// the key for tx/receipt.
+// it consists of: ( block id | infix | index )
+type txKey [32 + 1 + 8]byte
 
 func makeTxKey(blockID thor.Bytes32, infix byte) (k txKey) {
 	copy(k[:], blockID[:])
