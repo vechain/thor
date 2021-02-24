@@ -61,10 +61,15 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 			return thor.Bytes32{}, err
 		}
 
-		if len(sum.Beta) == 0 {
+		beta, err := sum.Header.Beta()
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+
+		if len(beta) == 0 {
 			break
 		}
-		hasher.Write(sum.Beta)
+		hasher.Write(beta)
 		next = sum.Header.ParentID()
 	}
 
