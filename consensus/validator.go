@@ -8,7 +8,6 @@ package consensus
 import (
 	"bytes"
 	"fmt"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -247,7 +246,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 		alpha := append([]byte(nil), seed.Bytes()...)
 		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 
-		if !reflect.DeepEqual(header.Alpha(), alpha) {
+		if !bytes.Equal(header.Alpha(), alpha) {
 			return consensusError(fmt.Sprintf("alpha mismatch: want %s, have %s", hexutil.Bytes(alpha), hexutil.Bytes(header.Alpha())))
 		}
 
