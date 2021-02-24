@@ -150,7 +150,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 			id      = header.ID()
 			txs     = block.Transactions()
 			bss     = block.BackerSignatures()
-			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), nil}
+			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
 		)
 
 		if n := len(txs); n > 0 {
