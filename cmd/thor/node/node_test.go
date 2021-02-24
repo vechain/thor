@@ -28,12 +28,17 @@ var (
 func newBlock(parent *block.Header, quality uint32, score, ts uint64, pk *ecdsa.PrivateKey) *block.Block {
 	bss := block.ComplexSignatures{}
 
-	b := new(block.Builder).
+	builder := new(block.Builder).
 		ParentID(parent.ID()).
 		TotalScore(score).
 		Timestamp(ts).
-		BackerSignatures(bss, quality).
-		Build()
+		BackerSignatures(bss, quality)
+
+	if quality != 0 {
+		builder.Alpha([]byte{0x0})
+	}
+
+	b := builder.Build()
 
 	sig, _ := crypto.Sign(b.Header().SigningHash().Bytes(), pk)
 

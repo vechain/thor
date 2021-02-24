@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/go-ecvrf"
@@ -120,13 +121,22 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	if header.Number() < c.forkConfig.VIP193 {
+		if len(header.Signature()) != 65 {
+			return consensusError("invalid signature length")
+		}
 		if header.BackerSignaturesRoot() != emptyRoot {
 			return consensusError("invalid block header: backer signature root should be empty root before fork VIP193")
 		}
 		if header.TotalQuality() != 0 {
 			return consensusError("invalid block header: total quality should be 0 before fork VIP193")
 		}
+		if len(header.Alpha()) != 0 {
+			return consensusError("invalid block header: alpha should be nil before fork VIP193")
+		}
 	} else {
+		if len(header.Signature()) != 146 {
+			return consensusError("invalid signature length")
+		}
 		if header.TotalQuality() < parent.TotalQuality() {
 			return consensusError(fmt.Sprintf("block quality invalid: parent %v, current %v", parent.TotalQuality(), header.TotalQuality()))
 		}
@@ -232,6 +242,18 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 			return consensusError("invalid block: backer signatures should be empty before fork VIP193")
 		}
 	} else {
+		seed, _ := c.seeder.Generate(header.ParentID())
+		alpha := append([]byte(nil), seed.Bytes()...)
+		alpha = append(alpha, header.ParentID().Bytes()[:4]...)
+
+		if !bytes.Equal(header.Alpha(), alpha) {
+			return consensusError(fmt.Sprintf("alpha mismatch: want %s, have %s", hexutil.Bytes(alpha), hexutil.Bytes(header.Alpha())))
+		}
+
+		if _, err := header.Beta(); err != nil {
+			return consensusError("failed to verify VRF in header: " + err.Error())
+		}
+
 		if header.BackerSignaturesRoot() != bss.RootHash() {
 			return consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", header.BackerSignaturesRoot(), bss.RootHash()))
 		}
@@ -257,10 +279,6 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				}
 				return nil
 			}
-
-			seed, _ := c.seeder.Generate(header.ParentID())
-			alpha := append([]byte(nil), seed.Bytes()...)
-			alpha = append(alpha, header.ParentID().Bytes()[:4]...)
 
 			hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 			prev := []byte{}
