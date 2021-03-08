@@ -17,7 +17,7 @@ require (
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-stack/stack v1.7.0 // indirect
 	github.com/gorilla/context v0.0.0-20160226214623-1ea25387ff6f // indirect
-	github.com/gorilla/handlers v1.3.0
+	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.6.0
 	github.com/gorilla/websocket v1.3.0
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
