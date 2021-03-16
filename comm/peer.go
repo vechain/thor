@@ -143,6 +143,17 @@ func (p *Peer) Duration() mclock.AbsTime {
 	return mclock.Now() - p.createdTime
 }
 
+// TestCap tests the capabilities(supported subprotocols) of the peer.
+func (p *Peer) TestCap(version uint) bool {
+	for _, cap := range p.Caps() {
+		if cap.Version == version {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Peers slice of peers
 type Peers []*Peer
 
