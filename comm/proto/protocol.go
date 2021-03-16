@@ -27,8 +27,10 @@ const (
 	MsgGetBlockIDByNumber
 	MsgGetBlocksFromNumber // fetch blocks from given number (including given number)
 	MsgGetTxs
+	// above was defined in protocol "thor/1"
 	MsgNewDraft
 	MsgNewAccepted
+	// above was introduced in protocol "thor/2"
 )
 
 // MsgName convert msg code to string.
