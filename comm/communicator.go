@@ -302,7 +302,8 @@ func (c *Communicator) BroadcastDraft(d *proto.Draft) {
 	hash := d.Hash()
 
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsDraftKnown(hash)
+		// MsgNewDraft was introduced in protocol 'thor/2'
+		return peer.TestCap(2) && !peer.IsDraftKnown(hash)
 	})
 
 	for _, peer := range peers {
@@ -319,7 +320,8 @@ func (c *Communicator) BroadcastDraft(d *proto.Draft) {
 // BroadcastAccepted broadcast an accepted message to remote peers.
 func (c *Communicator) BroadcastAccepted(acc *proto.Accepted) {
 	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
-		return !peer.IsAcceptedKnown(acc.Hash())
+		// MsgNewAccepted was introduced in protocol 'thor/2'
+		return peer.TestCap(2) && !peer.IsAcceptedKnown(acc.Hash())
 	})
 
 	for _, peer := range peers {
