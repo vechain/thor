@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/p2psrv/discv5"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
@@ -130,28 +130,26 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 }
 
 // Protocols returns all supported protocols.
-func (c *Communicator) Protocols() []*p2psrv.Protocol {
-	genesisID := c.repo.GenesisBlock().Header().ID()
-	return []*p2psrv.Protocol{
+func (c *Communicator) Protocols() []*p2p.Protocol {
+	return []*p2p.Protocol{
 		{
-			Protocol: p2p.Protocol{
-				Name:    proto.Name,
-				Version: 1,
-				Length:  8,
-				Run:     c.servePeer,
-			},
-			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, 1, genesisID[24:]),
-		},
-		{
-			Protocol: p2p.Protocol{
-				Name:    proto.Name,
-				Version: proto.Version,
-				Length:  proto.Length,
-				Run:     c.servePeer,
-			},
-			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
+			Name:    proto.Name,
+			Version: 1,
+			Length:  8,
+			Run:     c.servePeer,
+		}, {
+			Name:    proto.Name,
+			Version: proto.Version,
+			Length:  proto.Length,
+			Run:     c.servePeer,
 		},
 	}
+}
+
+// DiscTopic  returns the topic for p2p network discovery.
+func (c *Communicator) DiscTopic() discv5.Topic {
+	genesisID := c.repo.GenesisBlock().Header().ID()
+	return discv5.Topic(fmt.Sprintf("thor1@%x", genesisID[24:]))
 }
 
 // Start start the communicator.
