@@ -120,10 +120,15 @@ bin/thor -h
 
 * `solo`                client runs in solo mode for test & dev
 
-```text
-bin/thor solo --on-demand               # create new block when there is pending transaction
-bin/thor solo --persist                 # save blockchain data to disk(default to memory)
-bin/thor solo --persist --on-demand     # two options can work together
+```shell
+# create new block when there is pending transaction
+bin/thor solo --on-demand
+
+# save blockchain data to disk(default to memory)
+bin/thor solo --persist
+
+# two options can work together
+bin/thor solo --persist --on-demand
 ```
 
 * `master-key`          master key management
