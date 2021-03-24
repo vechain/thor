@@ -508,18 +508,15 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerBackersNotInPower"] = func() {
-		var (
-			proof [81]byte
-		)
-		rand.Read(proof[:])
-
 		header := tc.original.Header()
 		priv, _ := crypto.GenerateKey()
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
+		alpha := tc.original.Header().Alpha()
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, alpha)
 		backerSig, _ := crypto.Sign(hash.Bytes(), priv)
-
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
+
 		blk := tc.sign(tc.originalBuilder().BackerSignatures(block.ComplexSignatures{bs}, tc.parent.Header().TotalQuality()).Build(), tc.pk)
 
 		err := tc.consent(blk)
@@ -527,13 +524,12 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerLeaderCannotBeBacker"] = func() {
-		var proof [81]byte
-		rand.Read(proof[:])
-
 		header := tc.original.Header()
 		proposer := genesis.DevAccounts()[0]
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
+		alpha := tc.original.Header().Alpha()
+		_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(proposer.PrivateKey, alpha)
 		backerSig, _ := crypto.Sign(hash.Bytes(), proposer.PrivateKey)
 		bs, _ := block.NewComplexSignature(proof[:], backerSig)
 
