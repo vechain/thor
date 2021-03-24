@@ -10,9 +10,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/poa"
@@ -280,38 +278,30 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				return nil
 			}
 
-			hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
-			prev := []byte{}
-			for _, bs := range bss {
-				pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
-				if err != nil {
-					return consensusError(fmt.Sprintf("backer signature's signer unavailable: %v", err))
-				}
+			backers, betas, err := blk.Committee()
+			if err != nil {
+				return consensusError(fmt.Sprintf("failed to get block committee: %v", err))
+			}
 
-				addr := thor.Address(crypto.PubkeyToAddress(*pub))
-				backer := getBacker(addr)
-				if backer == nil {
+			prev := []byte{}
+			for i, addr := range backers {
+				if b := getBacker(addr); b == nil {
 					return consensusError(fmt.Sprintf("backer: %v is not an authority", addr))
 				}
 
-				if backer.Address == proposer {
+				if addr == proposer {
 					return consensusError("block signer cannot back itself")
 				}
 
-				beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, bs.Proof())
-				if err != nil {
-					return consensusError(fmt.Sprintf("failed to verify backer's signature: %v", err))
-				}
-				if bytes.Compare(prev, beta) > 0 {
+				if bytes.Compare(prev, betas[i]) > 0 {
 					return consensusError("backer signatures are not in ascending order(by beta)")
 				}
-				prev = beta
 
-				if !poa.EvaluateVRF(beta) {
+				prev = betas[i]
+				if !poa.EvaluateVRF(betas[i]) {
 					return consensusError(fmt.Sprintf("invalid proof from %v", addr))
 				}
 			}
-			return nil
 		}
 	}
 	return nil
