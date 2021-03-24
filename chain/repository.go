@@ -66,7 +66,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		tag:     genesisID[31],
 	}
 
-	repo.caches.summaries = newCache(512)
+	repo.caches.summaries = newCache(thor.EpochInterval * 3)
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
 	repo.caches.bss = newCache(512)
