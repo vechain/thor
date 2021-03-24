@@ -214,9 +214,14 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 		decoder := json.NewDecoder(file)
 		decoder.DisallowUnknownFields()
 
-		var forkConfig = thor.NoFork
-		var gen genesis.CustomGenesis
+		var (
+			gen                genesis.CustomGenesis
+			forkConfig         = thor.NoFork
+			configurableParams = thor.DefaultConfigurableParams
+		)
+
 		gen.ForkConfig = &forkConfig
+		gen.ConfigurableParams = &configurableParams
 
 		if err := decoder.Decode(&gen); err != nil {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "decode genesis file")
@@ -226,6 +231,8 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 		if err != nil {
 			return nil, thor.ForkConfig{}, errors.Wrap(err, "build genesis")
 		}
+
+		thor.SetConfigurableParams(configurableParams)
 
 		return customGen, forkConfig, nil
 	}
