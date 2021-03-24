@@ -376,3 +376,40 @@ func TestBlockSignature(t *testing.T) {
 	}
 	assert.Equal(t, beta, bt2)
 }
+
+func TestCommittee(t *testing.T) {
+	priv1, _ := crypto.GenerateKey()
+	priv2, _ := crypto.GenerateKey()
+
+	var alpha [32 + 4]byte
+	rand.Read(alpha[:])
+	b := new(Builder).Alpha(alpha[:]).Build()
+
+	hash := NewProposal(b.Header().ParentID(), b.Header().TxsRoot(), b.Header().GasLimit(), b.Header().Timestamp()).Hash()
+	bSig, _ := crypto.Sign(hash.Bytes(), priv2)
+	_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv2, alpha[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, _ := NewComplexSignature(proof, bSig)
+
+	b0 := new(Builder).Alpha(alpha[:]).BackerSignatures(ComplexSignatures{bs}, 0).Build()
+	sig, _ := crypto.Sign(b0.Header().SigningHash().Bytes(), priv1)
+
+	_, proof, err = ecvrf.NewSecp256k1Sha256Tai().Prove(priv1, alpha[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cs, _ := NewComplexSignature(proof, sig)
+	b1 := b0.WithSignature(cs)
+
+	_, _, err = b1.Committee()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = b1.Committee()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
