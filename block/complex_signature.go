@@ -17,7 +17,7 @@ var (
 	emptyRoot = trie.DeriveRoot(&derivableComplexSignatures{})
 )
 
-// ComplexSignature is the signature from backer.
+// ComplexSignature is the signature from committee member.
 // Composed by [ECDSA(Secp256k1) Signature(65 bytes)+VRF Proof(81 bytes)]
 type ComplexSignature []byte
 
