@@ -54,7 +54,7 @@ func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 		}
 
 		satisfied = make([]int, 0, len(c.list))
-		for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers; i++ {
+		for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers(); i++ {
 			bal, err := state.GetBalance(c.list[i].Endorsor)
 			if err != nil {
 				return nil, err

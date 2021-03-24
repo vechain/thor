@@ -73,7 +73,7 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers())
 	if err != nil {
 		return nil, err
 	}

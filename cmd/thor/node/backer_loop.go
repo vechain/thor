@@ -61,7 +61,7 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers())
 	if err != nil {
 		return nil, err
 	}

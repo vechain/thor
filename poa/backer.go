@@ -13,17 +13,12 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(thor.ElectionThreshold)), big.NewInt(100))
-
 // EvaluateVRF evalutes if the VRF output(beta) meets the requirement of backer.
 func EvaluateVRF(beta []byte) bool {
+	var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(thor.CommitteMemberRequirement)), big.NewInt(int64(thor.MaxBlockProposers())))
+
 	if c := bytes.Compare(beta, threshold.Bytes()); c <= 0 {
 		return true
 	}
 	return false
-}
-
-// MockElectionThreshold mocks the election threshold, for testing only.
-func MockElectionThreshold(t uint8) {
-	threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(int64(t))), big.NewInt(100))
 }

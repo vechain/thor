@@ -12,6 +12,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type ConfigurableParams struct {
+	MaxBlockProposers uint64 `json:"maxBlockProposers"`
+}
+
+var DefaultConfigurableParams = ConfigurableParams{
+	MaxBlockProposers: 101,
+}
+
 // Constants of block chain.
 const (
 	BlockInterval uint64 = 10 // time interval between two consecutive blocks.
@@ -28,17 +36,13 @@ const (
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit.
+	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	MaxBlockProposers uint64 = 101
-
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit.
-
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
-
-	HeavyBlockRequirement = 5    // backer signature count required to be a "heavy" block.
-	ElectionThreshold     = 8    // Maximum value of VRF output used for backer election(8 of 100).
-	EpochInterval         = 8640 // block number interval between two epochs.
+	HeavyBlockRequirement     = 5    // backer signature count required to be a "heavy" block.
+	CommitteMemberRequirement = 8    // required member count of committee(block backer).
+	EpochInterval             = 8640 // block number interval between two epochs.
 )
 
 // Keys of governance params.
@@ -54,3 +58,13 @@ var (
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )
+
+var configurable = DefaultConfigurableParams
+
+func SetConfigurableParams(params ConfigurableParams) {
+	configurable = params
+}
+
+func MaxBlockProposers() uint64 {
+	return configurable.MaxBlockProposers
+}
