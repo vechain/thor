@@ -11,8 +11,11 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/metric"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -22,7 +25,8 @@ type Block struct {
 	txs    tx.Transactions
 	bss    ComplexSignatures
 	cache  struct {
-		size atomic.Value
+		size      atomic.Value
+		committee atomic.Value
 	}
 }
 
@@ -30,6 +34,11 @@ type Block struct {
 type Body struct {
 	Txs tx.Transactions
 	Bss ComplexSignatures
+}
+
+type committee struct {
+	addrs []thor.Address
+	betas [][]byte
 }
 
 // Compose compose a block with all needed components
@@ -73,6 +82,40 @@ func (b *Block) Body() *Body {
 		append(tx.Transactions(nil), b.txs...),
 		append(ComplexSignatures(nil), b.bss...),
 	}
+}
+
+// Committee verifies all backer signatures.
+func (b *Block) Committee() ([]thor.Address, [][]byte, error) {
+	if cached := b.cache.committee.Load(); cached != nil {
+		c := cached.(*committee)
+		return c.addrs, c.betas, nil
+	}
+
+	if len(b.bss) > 0 {
+		var cmt committee
+		cmt.addrs = make([]thor.Address, 0, len(b.bss))
+		cmt.betas = make([][]byte, 0, len(b.bss))
+
+		hash := NewProposal(b.header.ParentID(), b.header.TxsRoot(), b.header.GasLimit(), b.header.Timestamp()).Hash()
+		for _, bs := range b.bss {
+			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
+			if err != nil {
+				return nil, nil, err
+			}
+			cmt.addrs = append(cmt.addrs, thor.Address(crypto.PubkeyToAddress(*pub)))
+
+			beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, b.header.Alpha(), bs.Proof())
+			if err != nil {
+				return nil, nil, err
+			}
+			cmt.betas = append(cmt.betas, beta)
+		}
+
+		b.cache.committee.Store(&cmt)
+		return cmt.addrs, cmt.betas, nil
+	}
+
+	return nil, nil, nil
 }
 
 // EncodeRLP implements rlp.Encoder.
