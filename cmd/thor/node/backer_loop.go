@@ -37,10 +37,11 @@ var (
 )
 
 type status struct {
-	parent    *block.Header
-	proposers []poa.Proposer
-	scheduler *poa.SchedulerV2
-	alpha     []byte
+	parent            *block.Header
+	proposers         []poa.Proposer
+	maxBlockProposers uint64
+	scheduler         *poa.SchedulerV2
+	alpha             []byte
 }
 
 type acceptedWithPub struct {
@@ -61,7 +62,15 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
 	if err != nil {
 		return nil, err
 	}
@@ -90,10 +99,11 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 	alpha = append(alpha, parent.Header().ID().Bytes()[:4]...)
 
 	return &status{
-		parent:    parent.Header(),
-		proposers: proposers,
-		scheduler: scheduler,
-		alpha:     alpha,
+		parent:            parent.Header(),
+		proposers:         proposers,
+		maxBlockProposers: maxBlockProposers,
+		scheduler:         scheduler,
+		alpha:             alpha,
 	}, nil
 }
 
@@ -363,7 +373,7 @@ func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) error {
 		return err
 	}
 
-	if !poa.EvaluateVRF(beta) {
+	if !poa.EvaluateVRF(beta, st.maxBlockProposers) {
 		return errors.New("not lucky enough")
 	}
 
@@ -409,7 +419,7 @@ func (n *Node) processBackerSignature(acc *proto.Accepted, pub *ecdsa.PublicKey,
 		return err
 	}
 
-	if !poa.EvaluateVRF(beta) {
+	if !poa.EvaluateVRF(beta, st.maxBlockProposers) {
 		return fmt.Errorf("VRF output is not lucky enough to be a backer: %v", crypto.PubkeyToAddress(*pub))
 	}
 	n.comm.BroadcastAccepted(acc)

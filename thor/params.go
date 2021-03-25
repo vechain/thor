@@ -28,17 +28,16 @@ const (
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
-
-	MaxBlockProposers uint64 = 101
-
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit.
-
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
+	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit.
+	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
 	HeavyBlockRequirement = 5    // backer signature count required to be a "heavy" block.
-	ElectionThreshold     = 8    // Maximum value of VRF output used for backer election(8 of 100).
 	EpochInterval         = 8640 // block number interval between two epochs.
+)
+
+var (
+	CommitteMemberRequirement uint64 = 8 // required member count of committee(block backer).
 )
 
 // Keys of governance params.
@@ -47,10 +46,17 @@ var (
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
 
-	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e15)
-	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialRewardRatio                = big.NewInt(3e17) // 30%
+	InitialBaseGasPrice               = big.NewInt(1e15)
+	InitialProposerEndorsement        = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialMaxBlockProposers   uint64 = 101
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )
+
+// MockCommitteeMember mocks CommitteMemberRequirement, this function is test purpose only.
+func MockCommitteMember(r uint64) {
+	CommitteMemberRequirement = r
+}
