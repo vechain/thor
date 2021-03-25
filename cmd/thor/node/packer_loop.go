@@ -241,7 +241,7 @@ func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, prop
 	if err != nil {
 		return
 	}
-	if poa.EvaluateVRF(beta) {
+	if poa.EvaluateVRF(beta, flow.MaxBlockProposers()) {
 		flow.AddBackerSignature(sig, beta, backer)
 	} else {
 		return fmt.Errorf("invalid proof from %v", backer)

@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -320,7 +319,6 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 	}
 
 	for _, trigger := range triggers {
-		poa.MockElectionThreshold(thor.ElectionThreshold)
 		trigger()
 	}
 }
@@ -558,7 +556,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	triggers["triggerNotSorted"] = func() {
 		header := tc.original.Header()
 
-		poa.MockElectionThreshold(100)
+		thor.MockCommitteMember(thor.InitialMaxBlockProposers)
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		alpha := tc.original.Header().Alpha()
 
@@ -575,6 +573,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		err := tc.consent(blk)
 		expect := consensusError("backer signatures are not in ascending order(by beta)")
 		tc.assert.Equal(expect, err)
+		thor.MockCommitteMember(8)
 	}
 	triggers["triggerInvalidAlpha"] = func() {
 		var alpha [32 + 4]byte
@@ -595,7 +594,6 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	}
 
 	for _, trigger := range triggers {
-		poa.MockElectionThreshold(thor.ElectionThreshold)
 		trigger()
 	}
 }
@@ -645,7 +643,6 @@ func (tc *testConsensus) TestValidateProposer() {
 	}
 
 	for _, trigger := range triggers {
-		poa.MockElectionThreshold(thor.ElectionThreshold)
 		trigger()
 	}
 }
