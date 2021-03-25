@@ -62,7 +62,17 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+
+	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+
+	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +104,7 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 		}
 		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent, seed.Bytes())
 	} else {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header().Number(), parent.Header().Timestamp())
+		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, maxBlockProposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
 		return nil, err
@@ -123,7 +133,7 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent.Header(), rt, features, proposers, seed.Bytes()), nil
+	return newFlow(p, parent.Header(), rt, features, proposers, maxBlockProposers, seed.Bytes()), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -155,7 +165,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features, nil, nil), nil
+	return newFlow(p, parent, rt, features, nil, 0, nil), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

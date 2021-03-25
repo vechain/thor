@@ -44,7 +44,7 @@ func (c *Candidates) Copy() *Candidates {
 }
 
 // Pick picks a list of proposers, which satisfy preset conditions.
-func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
+func (c *Candidates) Pick(state *state.State, maxBlockProposers uint64) ([]Proposer, error) {
 	satisfied := c.satisfied
 	if len(satisfied) == 0 {
 		// re-pick
@@ -54,7 +54,7 @@ func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 		}
 
 		satisfied = make([]int, 0, len(c.list))
-		for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers; i++ {
+		for i := 0; i < len(c.list) && uint64(len(satisfied)) < maxBlockProposers; i++ {
 			bal, err := state.GetBalance(c.list[i].Endorsor)
 			if err != nil {
 				return nil, err
