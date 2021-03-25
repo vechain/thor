@@ -158,6 +158,14 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyProposerEndorsement, e)
 	builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
 
+	if m := gen.Params.MaxBlockProposers; m != nil {
+		if *m == uint64(0) {
+			return nil, errors.New("maxBlockProposers must a non-negative integer")
+		}
+		data = mustEncodeInput(builtin.Params.ABI, "set", thor.KeyMaxBlockProposers, new(big.Int).SetUint64(*m))
+		builder.Call(tx.NewClause(&builtin.Params.Address).WithData(data), executor)
+	}
+
 	if len(gen.Authority) == 0 {
 		return nil, errors.New("at least one authority node")
 	}
@@ -221,6 +229,7 @@ type Params struct {
 	BaseGasPrice        *hexOrDecimal256 `json:"baseGasPrice"`
 	ProposerEndorsement *hexOrDecimal256 `json:"proposerEndorsement"`
 	ExecutorAddress     *thor.Address    `json:"executorAddress"`
+	MaxBlockProposers   *uint64
 }
 
 // hexOrDecimal256 marshals big.Int as hex or decimal.
