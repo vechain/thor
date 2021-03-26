@@ -184,7 +184,7 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, 
 		}
 		sched, err = poa.NewSchedulerV2(signer, proposers, parent, seed.Bytes())
 	} else {
-		sched, err = poa.NewSchedulerV1(signer, proposers, maxBlockProposers, parent.Header().Number(), parent.Header().Timestamp())
+		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
 		return nil, nil, 0, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
