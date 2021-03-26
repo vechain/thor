@@ -37,7 +37,7 @@ const (
 )
 
 var (
-	CommitteMemberRequirement uint64 = 8 // required member count of committee(block backer).
+	CommitteMemberSize uint64 = 8 // required member count of committee(block backer).
 )
 
 // Keys of governance params.
@@ -56,7 +56,7 @@ var (
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )
 
-// MockCommitteeMember mocks CommitteMemberRequirement, this function is test purpose only.
-func MockCommitteMember(r uint64) {
-	CommitteMemberRequirement = r
+// MockCommitteMemberSize mocks CommitteMemberRequirement, this function is test purpose only.
+func MockCommitteMemberSize(r uint64) {
+	CommitteMemberSize = r
 }
