@@ -104,7 +104,7 @@ func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow,
 		}
 		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent, seed.Bytes())
 	} else {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, maxBlockProposers, parent.Header().Number(), parent.Header().Timestamp())
+		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
 		return nil, err
