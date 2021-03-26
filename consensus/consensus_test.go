@@ -556,7 +556,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 	triggers["triggerNotSorted"] = func() {
 		header := tc.original.Header()
 
-		thor.MockCommitteMember(thor.InitialMaxBlockProposers)
+		initialSize := thor.CommitteMemberSize
+		thor.MockCommitteMemberSize(thor.InitialMaxBlockProposers)
 		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 		alpha := tc.original.Header().Alpha()
 
@@ -573,7 +574,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		err := tc.consent(blk)
 		expect := consensusError("backer signatures are not in ascending order(by beta)")
 		tc.assert.Equal(expect, err)
-		thor.MockCommitteMember(8)
+		thor.MockCommitteMemberSize(initialSize)
 	}
 	triggers["triggerInvalidAlpha"] = func() {
 		var alpha [32 + 4]byte
