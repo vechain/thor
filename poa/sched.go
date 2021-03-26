@@ -23,7 +23,6 @@ type Scheduler interface {
 type SchedulerV1 struct {
 	proposer          Proposer
 	actives           []Proposer
-	maxBlockProposers uint64
 	parentBlockNumber uint32
 	parentBlockTime   uint64
 }
@@ -36,7 +35,6 @@ var _ Scheduler = (*SchedulerV1)(nil)
 func NewSchedulerV1(
 	addr thor.Address,
 	proposers []Proposer,
-	maxBlockProposers uint64,
 	parentBlockNumber uint32,
 	parentBlockTime uint64) (*SchedulerV1, error) {
 
@@ -60,7 +58,6 @@ func NewSchedulerV1(
 	return &SchedulerV1{
 		proposer,
 		actives,
-		maxBlockProposers,
 		parentBlockNumber,
 		parentBlockTime,
 	}, nil
@@ -115,7 +112,7 @@ func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score ui
 	toDeactivate := make(map[thor.Address]Proposer)
 
 	t := newBlockTime - thor.BlockInterval
-	for i := uint64(0); i < s.maxBlockProposers && t > s.parentBlockTime; i++ {
+	for i := uint64(0); i < uint64(len(s.actives)) && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
 			toDeactivate[p.Address] = p

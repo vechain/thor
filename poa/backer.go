@@ -15,7 +15,7 @@ import (
 
 // EvaluateVRF evalutes if the VRF output(beta) meets the requirement of backer.
 func EvaluateVRF(beta []byte, maxBlockProposers uint64) bool {
-	var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, new(big.Int).SetUint64(thor.CommitteMemberRequirement)), new(big.Int).SetUint64(maxBlockProposers))
+	var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, new(big.Int).SetUint64(thor.CommitteMemberSize)), new(big.Int).SetUint64(maxBlockProposers))
 
 	if c := bytes.Compare(beta, threshold.Bytes()); c <= 0 {
 		return true
