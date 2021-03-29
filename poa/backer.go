@@ -6,7 +6,6 @@
 package poa
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -15,10 +14,11 @@ import (
 
 // EvaluateVRF evalutes if the VRF output(beta) meets the requirement of backer.
 func EvaluateVRF(beta []byte, maxBlockProposers uint64) bool {
-	var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, new(big.Int).SetUint64(thor.CommitteMemberSize)), new(big.Int).SetUint64(maxBlockProposers))
+	// calc the threshold = CommitteMemberSize * MaxBig256 / maxBlockProposers
+	x := new(big.Int).SetUint64(thor.CommitteMemberSize)
+	x = x.Mul(x, math.MaxBig256)
+	x = x.Div(x, new(big.Int).SetUint64(maxBlockProposers))
 
-	if c := bytes.Compare(beta, threshold.Bytes()); c <= 0 {
-		return true
-	}
-	return false
+	// beta <= threshold, then it's a valid beta
+	return new(big.Int).SetBytes(beta).Cmp(x) <= 0
 }
