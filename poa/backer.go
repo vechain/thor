@@ -6,24 +6,19 @@
 package poa
 
 import (
-	"bytes"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/thor"
 )
 
-var threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(thor.ElectionThreshold)), big.NewInt(100))
-
 // EvaluateVRF evalutes if the VRF output(beta) meets the requirement of backer.
-func EvaluateVRF(beta []byte) bool {
-	if c := bytes.Compare(beta, threshold.Bytes()); c <= 0 {
-		return true
-	}
-	return false
-}
+func EvaluateVRF(beta []byte, maxBlockProposers uint64) bool {
+	// calc the threshold = CommitteMemberSize * MaxBig256 / maxBlockProposers
+	x := new(big.Int).SetUint64(thor.CommitteMemberSize)
+	x = x.Mul(x, math.MaxBig256)
+	x = x.Div(x, new(big.Int).SetUint64(maxBlockProposers))
 
-// MockElectionThreshold mocks the election threshold, for testing only.
-func MockElectionThreshold(t uint8) {
-	threshold = new(big.Int).Div(new(big.Int).Mul(math.MaxBig256, big.NewInt(int64(t))), big.NewInt(100))
+	// beta <= threshold, then it's a valid beta
+	return new(big.Int).SetBytes(beta).Cmp(x) <= 0
 }

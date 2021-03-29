@@ -68,7 +68,6 @@ func TestIsTheTime(t *testing.T) {
 }
 
 func TestUpdates(t *testing.T) {
-
 	sched, _ := poa.NewSchedulerV1(p1, proposers, 1, parentTime)
 
 	tests := []struct {

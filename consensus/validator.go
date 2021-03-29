@@ -35,12 +35,12 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	candidates, proposers, err := c.validateProposer(header, parent, state)
+	candidates, proposers, maxBlockProposers, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := c.validateBlockBody(block, parent.Header(), proposers); err != nil {
+	if err := c.validateBlockBody(block, parent.Header(), proposers, maxBlockProposers); err != nil {
 		return nil, nil, err
 	}
 
@@ -143,10 +143,10 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	return nil
 }
 
-func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, st *state.State) (*poa.Candidates, []poa.Proposer, error) {
+func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, st *state.State) (*poa.Candidates, []poa.Proposer, uint64, error) {
 	signer, err := header.Signer()
 	if err != nil {
-		return nil, nil, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
+		return nil, nil, 0, consensusError(fmt.Sprintf("block signer unavailable: %v", err))
 	}
 
 	authority := builtin.Authority.Native(st)
@@ -156,14 +156,23 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, 
 	} else {
 		list, err := authority.AllCandidates()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		candidates = poa.NewCandidates(list)
 	}
 
-	proposers, err := candidates.Pick(st)
+	mbp, err := builtin.Params.Native(st).Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
+	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+
+	proposers, err := candidates.Pick(st, maxBlockProposers)
+	if err != nil {
+		return nil, nil, 0, err
 	}
 
 	var sched poa.Scheduler
@@ -171,28 +180,28 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, 
 		var seed thor.Bytes32
 		seed, err = c.seeder.Generate(header.ParentID())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		sched, err = poa.NewSchedulerV2(signer, proposers, parent, seed.Bytes())
 	} else {
 		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Header().Number(), parent.Header().Timestamp())
 	}
 	if err != nil {
-		return nil, nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
+		return nil, nil, 0, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}
 
 	if !sched.IsTheTime(header.Timestamp()) {
-		return nil, nil, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
+		return nil, nil, 0, consensusError(fmt.Sprintf("block timestamp unscheduled: t %v, s %v", header.Timestamp(), signer))
 	}
 
 	updates, score := sched.Updates(header.Timestamp())
 	if parent.Header().TotalScore()+score != header.TotalScore() {
-		return nil, nil, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.Header().TotalScore()+score, header.TotalScore()))
+		return nil, nil, 0, consensusError(fmt.Sprintf("block total score invalid: want %v, have %v", parent.Header().TotalScore()+score, header.TotalScore()))
 	}
 
 	for _, u := range updates {
 		if _, err := authority.Update(u.Address, u.Active); err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		if !candidates.Update(u.Address, u.Active) {
 			// should never happen
@@ -200,10 +209,10 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Block, 
 		}
 	}
 
-	return candidates, proposers, nil
+	return candidates, proposers, maxBlockProposers, nil
 }
 
-func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, proposers []poa.Proposer) error {
+func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, proposers []poa.Proposer, maxBlockProposers uint64) error {
 	header := blk.Header()
 	txs := blk.Transactions()
 	if header.TxsRoot() != txs.RootHash() {
@@ -298,7 +307,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				}
 
 				prev = betas[i]
-				if !poa.EvaluateVRF(betas[i]) {
+				if !poa.EvaluateVRF(betas[i], maxBlockProposers) {
 					return consensusError(fmt.Sprintf("invalid proof from %v", addr))
 				}
 			}

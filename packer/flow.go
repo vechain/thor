@@ -29,18 +29,19 @@ type bsWithBeta struct {
 
 // Flow the flow of packing a new block.
 type Flow struct {
-	packer       *Packer
-	parentHeader *block.Header
-	runtime      *runtime.Runtime
-	processedTxs map[thor.Bytes32]bool // txID -> reverted
-	gasUsed      uint64
-	txs          tx.Transactions
-	receipts     tx.Receipts
-	features     tx.Features
-	proposers    []poa.Proposer // all proposers in power
-	alpha        []byte
-	knownBackers map[thor.Address]bool
-	bss          []bsWithBeta
+	packer            *Packer
+	parentHeader      *block.Header
+	runtime           *runtime.Runtime
+	processedTxs      map[thor.Bytes32]bool // txID -> reverted
+	gasUsed           uint64
+	txs               tx.Transactions
+	receipts          tx.Receipts
+	features          tx.Features
+	proposers         []poa.Proposer // all proposers in power
+	maxBlockProposers uint64
+	alpha             []byte
+	knownBackers      map[thor.Address]bool
+	bss               []bsWithBeta
 }
 
 func newFlow(
@@ -49,20 +50,22 @@ func newFlow(
 	runtime *runtime.Runtime,
 	features tx.Features,
 	proposers []poa.Proposer,
+	maxBlockProposers uint64,
 	seed []byte,
 ) *Flow {
 	alpha := append([]byte(nil), seed...)
 	alpha = append(alpha, parentHeader.ID().Bytes()[:4]...)
 
 	return &Flow{
-		packer:       packer,
-		parentHeader: parentHeader,
-		runtime:      runtime,
-		processedTxs: make(map[thor.Bytes32]bool),
-		features:     features,
-		proposers:    proposers,
-		alpha:        alpha,
-		knownBackers: make(map[thor.Address]bool),
+		packer:            packer,
+		parentHeader:      parentHeader,
+		runtime:           runtime,
+		processedTxs:      make(map[thor.Bytes32]bool),
+		features:          features,
+		proposers:         proposers,
+		maxBlockProposers: maxBlockProposers,
+		alpha:             alpha,
+		knownBackers:      make(map[thor.Address]bool),
 	}
 }
 
@@ -107,6 +110,11 @@ func (f *Flow) Alpha() []byte {
 // IsBackerKnown returns true is backer's signature is already added.
 func (f *Flow) IsBackerKnown(backer thor.Address) bool {
 	return f.knownBackers[backer]
+}
+
+// MaxBlockProposers returns the max block proposers count.
+func (f *Flow) MaxBlockProposers() uint64 {
+	return f.maxBlockProposers
 }
 
 func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
