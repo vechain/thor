@@ -229,7 +229,7 @@ type Params struct {
 	BaseGasPrice        *hexOrDecimal256 `json:"baseGasPrice"`
 	ProposerEndorsement *hexOrDecimal256 `json:"proposerEndorsement"`
 	ExecutorAddress     *thor.Address    `json:"executorAddress"`
-	MaxBlockProposers   *uint64
+	MaxBlockProposers   *uint64          `json:"maxBlockProposers"`
 }
 
 // hexOrDecimal256 marshals big.Int as hex or decimal.
