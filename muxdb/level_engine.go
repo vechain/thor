@@ -6,6 +6,9 @@
 package muxdb
 
 import (
+	"context"
+	"io"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -19,16 +22,23 @@ var (
 )
 
 type levelEngine struct {
-	db *leveldb.DB
+	db            *leveldb.DB
+	storageCloser io.Closer
 }
 
 // newLevelEngine create leveldb instance which implements engine interface.
-func newLevelEngine(db *leveldb.DB) engine {
-	return &levelEngine{db}
+func newLevelEngine(db *leveldb.DB, storageCloser io.Closer) engine {
+	return &levelEngine{db, storageCloser}
 }
 
 func (ldb *levelEngine) Close() error {
-	return ldb.db.Close()
+	err := ldb.db.Close()
+	if ldb.storageCloser != nil {
+		if err1 := ldb.storageCloser.Close(); err == nil {
+			err = err1
+		}
+	}
+	return err
 }
 
 func (ldb *levelEngine) IsNotFound(err error) bool {
@@ -54,6 +64,45 @@ func (ldb *levelEngine) Put(key, val []byte) error {
 
 func (ldb *levelEngine) Delete(key []byte) error {
 	return ldb.db.Delete(key, &writeOpt)
+}
+
+func (ldb *levelEngine) DeleteRange(ctx context.Context, rng kv.Range) (n int, err error) {
+	err = ldb.Batch(func(putter kv.PutFlusher) error {
+		var nextStart []byte
+		for {
+			iterCount := 0
+			// use short-range iterator here to prevent from holding snapshot for long time.
+			if err := ldb.Iterate(rng, func(pair kv.Pair) bool {
+				iterCount++
+				nextStart = append(append(nextStart[:0], pair.Key()...), 0)
+
+				// error can be ignored here
+				_ = putter.Delete(pair.Key())
+
+				return iterCount < 4096
+			}); err != nil {
+				return err
+			}
+
+			// no more
+			if iterCount == 0 {
+				break
+			}
+			n += iterCount
+			if err := putter.Flush(); err != nil {
+				return err
+			}
+			rng.Start = nextStart
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		return nil
+	})
+	return
 }
 
 func (ldb *levelEngine) Snapshot(fn func(kv.Getter) error) error {

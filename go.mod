@@ -8,8 +8,9 @@ require (
 	github.com/btcsuite/btcd v0.0.0-20171128150713-2e60448ffcc6 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
+	github.com/cockroachdb/pebble v0.0.0-20210406003833-3d4c32f510a8
 	github.com/coocood/freecache v1.1.1-0.20191203093230-cf06d5fa0ac1
-	github.com/davecgh/go-spew v1.1.0
+	github.com/davecgh/go-spew v1.1.1
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/elastic/gosigar v0.10.5
 	github.com/elazarl/go-bindata-assetfs v1.0.0
@@ -19,21 +20,20 @@ require (
 	github.com/gorilla/context v0.0.0-20160226214623-1ea25387ff6f // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.6.0
-	github.com/gorilla/websocket v1.3.0
+	github.com/gorilla/websocket v1.4.0
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/huin/goupnp v0.0.0-20171109214107-dceda08e705b // indirect
 	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
 	github.com/jackpal/go-nat-pmp v1.0.1 // indirect
-	github.com/mattn/go-colorable v0.0.9 // indirect
-	github.com/mattn/go-isatty v0.0.3
+	github.com/mattn/go-isatty v0.0.9
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/mattn/go-sqlite3 v1.14.1
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
-	github.com/pkg/errors v0.8.0
+	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rjeczalik/notify v0.9.1 // indirect
-	github.com/stretchr/testify v1.1.4
+	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed

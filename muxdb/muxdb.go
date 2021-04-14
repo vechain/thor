@@ -8,8 +8,11 @@
 package muxdb
 
 import (
-	"io"
+	"context"
+	"errors"
+	"runtime"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -35,8 +38,18 @@ type engine interface {
 	Close() error
 }
 
+type EngineType int
+
+const (
+	LevelDB EngineType = 0
+	Pebble  EngineType = 1
+)
+
 // Options optional parameters for MuxDB.
 type Options struct {
+	// Engine specifies underlying KV engine.
+	// defaults to level db.
+	Engine EngineType
 	// EncodedTrieNodeCacheSizeMB is the size of encoded trie node cache.
 	EncodedTrieNodeCacheSizeMB int
 	// DecodedTrieNodeCacheCapacity is max count of cached decoded trie nodes.
@@ -60,45 +73,68 @@ type MuxDB struct {
 	engine        engine
 	trieCache     *trieCache
 	trieLiveSpace *trieLiveSpace
-	storageCloser io.Closer
 	permanentTrie bool
+}
+
+func newEngine(path string, options *Options) (engine, error) {
+	if options.Engine == LevelDB {
+		// prepare leveldb options
+		ldbOpts := opt.Options{
+			OpenFilesCacheCapacity:        options.OpenFilesCacheCapacity,
+			BlockCacheCapacity:            options.ReadCacheMB * opt.MiB,
+			WriteBuffer:                   options.WriteBufferMB * opt.MiB,
+			Filter:                        filter.NewBloomFilter(10),
+			BlockSize:                     1024 * 32, // balance performance of point reads and compression ratio.
+			DisableSeeksCompaction:        true,
+			CompactionTableSizeMultiplier: 2,
+			VibrantKeys: []*util.Range{
+				util.BytesPrefix([]byte{trieSpaceA}),
+				util.BytesPrefix([]byte{trieSpaceB}),
+				util.BytesPrefix([]byte{trieSecureKeySpace}),
+			},
+		}
+
+		storage, err := openLevelFileStorage(path, false, options.DisablePageCache)
+		if err != nil {
+			return nil, err
+		}
+
+		// open leveldb
+		ldb, err := leveldb.Open(storage, &ldbOpts)
+		if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
+			ldb, err = leveldb.Recover(storage, &ldbOpts)
+		}
+		if err != nil {
+			storage.Close()
+			return nil, err
+		}
+		return newLevelEngine(ldb, storage), nil
+	} else if options.Engine == Pebble {
+		db, err := pebble.Open(
+			path,
+			&pebble.Options{
+				MemTableSize:             options.WriteBufferMB * opt.MiB,
+				MaxConcurrentCompactions: runtime.NumCPU(),
+				MaxOpenFiles:             options.OpenFilesCacheCapacity,
+				Cache:                    pebble.NewCache(int64(options.ReadCacheMB * opt.MiB)),
+				Levels: []pebble.LevelOptions{
+					{BlockSize: 32 * 1024},
+				},
+			})
+		if err != nil {
+			return nil, err
+		}
+		return newPebbleEngine(db), nil
+	}
+	return nil, errors.New("unsupported kv engine")
 }
 
 // Open opens or creates DB at the given path.
 func Open(path string, options *Options) (*MuxDB, error) {
-	// prepare leveldb options
-	ldbOpts := opt.Options{
-		OpenFilesCacheCapacity:        options.OpenFilesCacheCapacity,
-		BlockCacheCapacity:            options.ReadCacheMB * opt.MiB,
-		WriteBuffer:                   options.WriteBufferMB * opt.MiB,
-		Filter:                        filter.NewBloomFilter(10),
-		BlockSize:                     1024 * 32, // balance performance of point reads and compression ratio.
-		DisableSeeksCompaction:        true,
-		CompactionTableSizeMultiplier: 2,
-		VibrantKeys: []*util.Range{
-			util.BytesPrefix([]byte{trieSpaceA}),
-			util.BytesPrefix([]byte{trieSpaceB}),
-			util.BytesPrefix([]byte{trieSecureKeySpace}),
-		},
-	}
-
-	storage, err := openLevelFileStorage(path, false, options.DisablePageCache)
+	engine, err := newEngine(path, options)
 	if err != nil {
 		return nil, err
 	}
-
-	// open leveldb
-	ldb, err := leveldb.Open(storage, &ldbOpts)
-	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
-		ldb, err = leveldb.Recover(storage, &ldbOpts)
-	}
-	if err != nil {
-		storage.Close()
-		return nil, err
-	}
-
-	// as engine
-	engine := newLevelEngine(ldb)
 
 	propsStore := newNamedStore(engine, propsStoreName)
 	trieLiveSpace, err := newTrieLiveSpace(propsStore)
@@ -113,7 +149,6 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			options.EncodedTrieNodeCacheSizeMB,
 			options.DecodedTrieNodeCacheCapacity),
 		trieLiveSpace: trieLiveSpace,
-		storageCloser: storage,
 		permanentTrie: options.PermanentTrie,
 	}, nil
 }
@@ -123,25 +158,20 @@ func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
 	ldb, _ := leveldb.Open(storage, nil)
 
-	engine := newLevelEngine(ldb)
+	engine := newLevelEngine(ldb, storage)
 	propsStore := newNamedStore(engine, propsStoreName)
 	trieLiveSpace, _ := newTrieLiveSpace(propsStore)
 
 	return &MuxDB{
-		engine:        newLevelEngine(ldb),
+		engine:        engine,
 		trieCache:     newTrieCache(0, 8192),
 		trieLiveSpace: trieLiveSpace,
-		storageCloser: storage,
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	err := db.engine.Close()
-	if err1 := db.storageCloser.Close(); err == nil {
-		err = err1
-	}
-	return err
+	return db.engine.Close()
 }
 
 // NewTrie creates trie either with existing root node.
@@ -203,6 +233,7 @@ func newNamedStore(src kv.Store, name string) kv.Store {
 		kv.BatchFunc
 		kv.IterateFunc
 		kv.IsNotFoundFunc
+		kv.DeleteRangeFunc
 	}{
 		bkt.ProxyGetter(src),
 		bkt.ProxyPutter(src),
@@ -228,5 +259,8 @@ func newNamedStore(src kv.Store, name string) kv.Store {
 			})
 		},
 		src.IsNotFound,
+		func(ctx context.Context, r kv.Range) (int, error) {
+			return src.DeleteRange(ctx, bkt.MakeRange(r))
+		},
 	}
 }
