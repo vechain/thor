@@ -138,4 +138,8 @@ var (
 		Value: 16,
 		Usage: "set tx limit per account in pool",
 	}
+	pebbleEngineFlag = cli.BoolFlag{
+		Name:  "pebble-engine",
+		Usage: "!EXPERIMENTAL! enable cockroachdb/pebble as underlying KV engine",
+	}
 )
