@@ -10,9 +10,9 @@ package muxdb
 import (
 	"context"
 	"errors"
-	"runtime"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/bloom"
 	"github.com/cockroachdb/pebble/vfs"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -119,18 +119,36 @@ func newEngine(path string, options *Options) (engine, error) {
 			fs = &pebbleFSNoPageCache{vfs.Default}
 		}
 
-		db, err := pebble.Open(
-			path,
-			&pebble.Options{
-				FS:                       fs,
-				MemTableSize:             options.WriteBufferMB * opt.MiB,
-				MaxConcurrentCompactions: runtime.NumCPU(),
-				MaxOpenFiles:             options.OpenFilesCacheCapacity,
-				Cache:                    pebble.NewCache(int64(options.ReadCacheMB * opt.MiB)),
-				Levels: []pebble.LevelOptions{
-					{BlockSize: 32 * 1024},
-				},
-			})
+		cache := pebble.NewCache(int64(options.ReadCacheMB * opt.MiB))
+		defer cache.Unref()
+
+		opts := &pebble.Options{
+			Cache:                       cache,
+			L0CompactionThreshold:       2,
+			L0StopWritesThreshold:       1000,
+			FS:                          fs,
+			LBaseMaxBytes:               int64(options.WriteBufferMB * opt.MiB),
+			MemTableSize:                options.WriteBufferMB * opt.MiB,
+			MemTableStopWritesThreshold: 4,
+			MaxConcurrentCompactions:    3,
+			MaxOpenFiles:                options.OpenFilesCacheCapacity,
+			Levels:                      make([]pebble.LevelOptions, 7),
+		}
+
+		for i := 0; i < len(opts.Levels); i++ {
+			l := &opts.Levels[i]
+			l.BlockSize = 32 << 10       // 32 KB
+			l.IndexBlockSize = 256 << 10 // 256 KB
+			l.FilterPolicy = bloom.FilterPolicy(10)
+			l.FilterType = pebble.TableFilter
+			if i > 0 {
+				l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+			}
+			l.EnsureDefaults()
+		}
+		opts.Levels[len(opts.Levels)-1].FilterPolicy = nil
+
+		db, err := pebble.Open(path, opts)
 		if err != nil {
 			return nil, err
 		}
