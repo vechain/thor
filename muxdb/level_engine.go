@@ -8,9 +8,12 @@ package muxdb
 import (
 	"context"
 	"io"
+	"os"
+	"reflect"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
 )
@@ -166,4 +169,31 @@ func (ldb *levelEngine) Iterate(rng kv.Range, fn func(kv.Pair) bool) error {
 		}
 	}
 	return it.Error()
+}
+
+//
+type leveldbStorageNoPageCache struct {
+	storage.Storage
+}
+
+func unwrapFileObject(i interface{}) *os.File {
+	return reflect.ValueOf(i).Elem().FieldByIndex([]int{0}).Interface().(*os.File)
+}
+
+func (s *leveldbStorageNoPageCache) Open(fd storage.FileDesc) (storage.Reader, error) {
+	r, err := s.Storage.Open(fd)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(unwrapFileObject(r))
+	return r, nil
+}
+
+func (s *leveldbStorageNoPageCache) Create(fd storage.FileDesc) (storage.Writer, error) {
+	w, err := s.Storage.Create(fd)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(unwrapFileObject(w))
+	return w, nil
 }

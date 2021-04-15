@@ -13,6 +13,7 @@ import (
 	"runtime"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/vfs"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -94,9 +95,12 @@ func newEngine(path string, options *Options) (engine, error) {
 			},
 		}
 
-		storage, err := openLevelFileStorage(path, false, options.DisablePageCache)
+		storage, err := storage.OpenFile(path, false)
 		if err != nil {
 			return nil, err
+		}
+		if options.DisablePageCache {
+			storage = &leveldbStorageNoPageCache{storage}
 		}
 
 		// open leveldb
@@ -110,9 +114,15 @@ func newEngine(path string, options *Options) (engine, error) {
 		}
 		return newLevelEngine(ldb, storage), nil
 	} else if options.Engine == Pebble {
+		var fs vfs.FS
+		if options.DisablePageCache {
+			fs = &pebbleFSNoPageCache{vfs.Default}
+		}
+
 		db, err := pebble.Open(
 			path,
 			&pebble.Options{
+				FS:                       fs,
 				MemTableSize:             options.WriteBufferMB * opt.MiB,
 				MaxConcurrentCompactions: runtime.NumCPU(),
 				MaxOpenFiles:             options.OpenFilesCacheCapacity,

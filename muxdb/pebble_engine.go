@@ -7,8 +7,10 @@ package muxdb
 
 import (
 	"context"
+	"os"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/vfs"
 	"github.com/vechain/thor/kv"
 )
 
@@ -135,4 +137,27 @@ func (pe *pebbleEngine) Iterate(rng kv.Range, fn func(kv.Pair) bool) error {
 		}
 	}
 	return it.Error()
+}
+
+//
+type pebbleFSNoPageCache struct {
+	vfs.FS
+}
+
+func (fs *pebbleFSNoPageCache) Create(name string) (vfs.File, error) {
+	f, err := fs.FS.Create(name)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(f.(*os.File))
+	return f, nil
+}
+
+func (fs *pebbleFSNoPageCache) Open(name string, opts ...vfs.OpenOption) (vfs.File, error) {
+	f, err := fs.FS.Open(name, opts...)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(f.(*os.File))
+	return f, nil
 }
