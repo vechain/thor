@@ -121,9 +121,10 @@ func (n *Node) needReSchedule(flow *packer.Flow) bool {
 
 func (n *Node) timeToPack(flow *packer.Flow) bool {
 	nowTs := uint64(time.Now().Unix())
-	// start immediately in post vip 193 stage, to allow more time for getting backer signature
 	if flow.ParentHeader().Number() >= n.forkConfig.VIP193 {
-		return nowTs+thor.BlockInterval >= flow.When()
+		// in post vip 193 stage,giving 2 seconds for receiving and processing new block
+		// then start packing to allow more time for getting backer signature
+		return nowTs+thor.BlockInterval >= flow.When()+2
 	}
 	// blockInterval/2 early to allow more time for processing txs
 	return nowTs+thor.BlockInterval/2 >= flow.When()
