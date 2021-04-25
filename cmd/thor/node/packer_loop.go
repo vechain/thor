@@ -159,36 +159,32 @@ func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 			return nil
 		}
 		n.comm.BroadcastDraft(draft)
+		newAccCh := make(chan *comm.NewAcceptedEvent)
+		scope.Track(n.comm.SubscribeAccepted(newAccCh))
 
-		now := uint64(time.Now().Unix())
-		if now < flow.When()-1 {
-			newAccCh := make(chan *comm.NewAcceptedEvent)
-			scope.Track(n.comm.SubscribeAccepted(newAccCh))
+		deadline := time.NewTimer(time.Duration(thor.BlockInterval/2) * time.Second)
+		defer deadline.Stop()
 
-			ticker := time.NewTimer(time.Duration(flow.When()-1-now) * time.Second)
-			defer ticker.Stop()
-
-			alpha := append([]byte(nil), flow.Alpha()...)
-			proposalHash := draft.Proposal.Hash()
-			for {
-				select {
-				case ev := <-newAccCh:
-					if flow.Number() >= n.forkConfig.VIP193 {
-						if ev.ProposalHash == proposalHash {
-							if validateBackerSignature(ev.Signature, flow, proposalHash, alpha); err != nil {
-								log.Debug("failed to process backer signature", "err", err)
-								continue
-							}
+		alpha := append([]byte(nil), flow.Alpha()...)
+		proposalHash := draft.Proposal.Hash()
+		for {
+			select {
+			case ev := <-newAccCh:
+				if flow.Number() >= n.forkConfig.VIP193 {
+					if ev.ProposalHash == proposalHash {
+						if validateBackerSignature(ev.Signature, flow, proposalHash, alpha); err != nil {
+							log.Debug("failed to process backer signature", "err", err)
+							continue
 						}
 					}
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-ticker.C:
-					goto NEXT
 				}
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-deadline.C:
+				goto NEXT
 			}
-		NEXT:
 		}
+	NEXT:
 	}
 
 	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
