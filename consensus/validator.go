@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
@@ -28,25 +29,27 @@ func (c *Consensus) validate(
 	block *block.Block,
 	parent *block.Block,
 	nowTimestamp uint64,
-) (*state.Stage, tx.Receipts, error) {
+) (*state.Stage, tx.Receipts, mclock.AbsTime, error) {
 	header := block.Header()
 
 	if err := c.validateBlockHeader(header, parent.Header(), nowTimestamp); err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
+	start := mclock.Now()
 	candidates, proposers, maxBlockProposers, err := c.validateProposer(header, parent, state)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
+	et := mclock.Now() - start
 
 	if err := c.validateBlockBody(block, parent.Header(), proposers, maxBlockProposers); err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	stage, receipts, err := c.verifyBlock(block, state)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	hasAuthorityEvent := func() bool {
@@ -90,7 +93,7 @@ func (c *Consensus) validate(
 		}
 		c.candidatesCache.Add(header.ID(), candidates)
 	}
-	return stage, receipts, nil
+	return stage, receipts, et, nil
 }
 
 func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
