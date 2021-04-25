@@ -8,6 +8,7 @@ package consensus
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
@@ -45,23 +46,23 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 }
 
 // Process process a block.
-func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage, tx.Receipts, mclock.AbsTime, error) {
 	header := blk.Header()
 
 	if _, err := c.repo.GetBlockSummary(header.ID()); err != nil {
 		if !c.repo.IsNotFound(err) {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	} else {
-		return nil, nil, errKnownBlock
+		return nil, nil, 0, errKnownBlock
 	}
 
 	parent, err := c.repo.GetBlock(header.ParentID())
 	if err != nil {
 		if !c.repo.IsNotFound(err) {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
-		return nil, nil, errParentMissing
+		return nil, nil, 0, errParentMissing
 	}
 
 	state := c.stater.NewState(parent.Header().StateRoot())
@@ -72,15 +73,15 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 	}
 
 	if header.TxsFeatures() != features {
-		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
+		return nil, nil, 0, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
 	}
 
-	stage, receipts, err := c.validate(state, blk, parent, nowTimestamp)
+	stage, receipts, et, err := c.validate(state, blk, parent, nowTimestamp)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	return stage, receipts, nil
+	return stage, receipts, et, nil
 }
 
 func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*runtime.Runtime, error) {

@@ -259,7 +259,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	// consensus object is not thread-safe
 	n.consLock.Lock()
 	startTime := mclock.Now()
-	stage, receipts, err := n.cons.Process(blk, uint64(time.Now().Unix()))
+	stage, receipts, schedElapsed, err := n.cons.Process(blk, uint64(time.Now().Unix()))
 	execElapsed := mclock.Now() - startTime
 	n.consLock.Unlock()
 
@@ -290,7 +290,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		log.Debug("bandwidth updated", "gps", v)
 	}
 
-	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
+	stats.UpdateProcessed(1, len(receipts), schedElapsed, execElapsed-schedElapsed, commitElapsed, blk.Header().GasUsed())
 	n.processFork(prevTrunk, curTrunk)
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
