@@ -162,7 +162,7 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}
