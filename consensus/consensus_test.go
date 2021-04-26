@@ -158,7 +158,7 @@ func newTestConsensus(t *testing.T) *testConsensus {
 
 	con := New(repo, stater, forkConfig)
 
-	if _, _, err := con.Process(original, flow.When()); err != nil {
+	if _, _, _, err := con.Process(original, flow.When()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,7 +212,7 @@ func (tc *testConsensus) originalBuilder() *block.Builder {
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
-	_, _, err := tc.con.Process(blk, tc.time)
+	_, _, _, err := tc.con.Process(blk, tc.time)
 	return err
 }
 
