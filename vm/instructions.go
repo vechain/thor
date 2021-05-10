@@ -871,6 +871,18 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	return nil, nil
 }
 
+// opChainID implements CHAINID opcode
+func opChainID(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(evm.interpreter.intPool.get().Set(evm.chainConfig.ChainID))
+	return nil, nil
+}
+
+func opSelfBalance(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	balance := evm.StateDB.GetBalance(contract.Address())
+	stack.push(evm.interpreter.intPool.get().Set(balance))
+	return nil, nil
+}
+
 // following functions are used by the instruction jump  table
 
 // make log instruction function
