@@ -8,7 +8,7 @@ package thor
 import (
 	"hash"
 
-	"golang.org/x/crypto/blake2b"
+	"github.com/vechain/thor/blake2b"
 )
 
 // NewBlake2b return blake2b-256 hash.
