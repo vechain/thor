@@ -41,19 +41,22 @@ func init() {
 	}
 }
 
-var baseChainConfig = params.ChainConfig{
-	ChainID:             big.NewInt(0),
-	HomesteadBlock:      big.NewInt(0),
-	DAOForkBlock:        big.NewInt(0),
-	DAOForkSupport:      false,
-	EIP150Block:         big.NewInt(0),
-	EIP150Hash:          common.Hash{},
-	EIP155Block:         big.NewInt(0),
-	EIP158Block:         big.NewInt(0),
-	ByzantiumBlock:      big.NewInt(0),
-	ConstantinopleBlock: nil,
-	Ethash:              nil,
-	Clique:              nil,
+var baseChainConfig = vm.ChainConfig{
+	ChainConfig: params.ChainConfig{
+		ChainID:             big.NewInt(0),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash:              nil,
+		Clique:              nil,
+	},
+	IstanbulBlock: nil,
 }
 
 // Output output of clause execution.
@@ -80,7 +83,7 @@ type Runtime struct {
 	state       *state.State
 	ctx         *xenv.BlockContext
 	forkConfig  thor.ForkConfig
-	chainConfig params.ChainConfig
+	chainConfig vm.ChainConfig
 }
 
 // New create a Runtime object.
@@ -92,6 +95,12 @@ func New(
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
+	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
+
+	if chain != nil {
+		// use genesis id as chain id
+		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+	}
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
