@@ -55,7 +55,29 @@ var (
 	homesteadInstructionSet      = NewHomesteadInstructionSet()
 	byzantiumInstructionSet      = NewByzantiumInstructionSet()
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
+	istanbulInstructionSet       = NewIstanbulInstructionSet()
 )
+
+func NewIstanbulInstructionSet() [256]operation {
+	instructionSet := NewConstantinopleInstructionSet()
+	// ChainID opcode
+	instructionSet[CHAINID] = operation{
+		execute:       opChainID,
+		gasCost:       constGasFunc(GasQuickStep),
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+
+	// SelfBalance opcode
+	instructionSet[SELFBALANCE] = operation{
+		execute:       opSelfBalance,
+		gasCost:       constGasFunc(GasFastStep),
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+
+	return instructionSet
+}
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
 // byzantium and contantinople instructions.

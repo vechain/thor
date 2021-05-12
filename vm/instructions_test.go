@@ -34,7 +34,7 @@ type twoOperandTest struct {
 
 func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
 		stack = newstack()
 		pc    = uint64(0)
 	)
@@ -70,7 +70,7 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 
 func TestByteOp(t *testing.T) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
 		stack = newstack()
 	)
 	tests := []struct {
@@ -200,7 +200,7 @@ func TestSLT(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error), args ...string) {
 	var (
-		env   = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
+		env   = NewEVM(Context{}, nil, &ChainConfig{ChainConfig: *params.TestChainConfig}, Config{})
 		stack = newstack()
 	)
 	// convert args
