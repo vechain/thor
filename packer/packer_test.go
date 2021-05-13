@@ -126,6 +126,7 @@ func TestForkVIP191(t *testing.T) {
 	b0, _, _, err := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
+		ForkConfig(thor.NoFork).
 		State(func(state *state.State) error {
 			// setup builtin contracts
 			state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes())
@@ -146,10 +147,12 @@ func TestForkVIP191(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	best := repo.BestBlock()
-	p := packer.New(repo, stater, a1.Address, &a1.Address, thor.ForkConfig{
+	fc := thor.ForkConfig{
 		VIP191: 1,
-	})
+	}
+
+	best := repo.BestBlock()
+	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)
 	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +162,7 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, thor.ForkConfig{}).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}

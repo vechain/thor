@@ -15,7 +15,6 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
 
 // DevAccount account for development.
@@ -68,12 +67,6 @@ func NewDevnet() *Genesis {
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
-			// alloc precompiled contracts
-			for addr := range vm.PrecompiledContractsByzantium {
-				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
-					return err
-				}
-			}
 
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {

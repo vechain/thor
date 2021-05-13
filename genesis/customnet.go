@@ -13,12 +13,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vm"
 )
 
 // CustomGenesis is user customized genesis
@@ -50,14 +48,8 @@ func NewCustomNet(gen *CustomGenesis) (*Genesis, error) {
 	builder := new(Builder).
 		Timestamp(launchTime).
 		GasLimit(gen.GasLimit).
+		ForkConfig(*gen.ForkConfig).
 		State(func(state *state.State) error {
-			// alloc precompiled contracts
-			for addr := range vm.PrecompiledContractsByzantium {
-				if err := state.SetCode(thor.Address(addr), emptyRuntimeBytecode); err != nil {
-					return err
-				}
-			}
-
 			// alloc builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
 				return err
