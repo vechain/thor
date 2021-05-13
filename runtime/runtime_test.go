@@ -103,6 +103,112 @@ func TestContractSuicide(t *testing.T) {
 	assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(100)), nil), M(state.GetEnergy(origin, time)))
 }
 
+func TestChainID(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	b0, _, _, err := g.Build(stater)
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	// pragma solidity >=0.7.0 <0.9.0;
+	// contract TestChainID {
+
+	//     function chainID() public view returns (uint256) {
+	//         return block.chainid;
+	//     }
+	// }
+	data, _ := hex.DecodeString("6080604052348015600f57600080fd5b506004361060285760003560e01c8063adc879e914602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600046905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea264697066735822122060b67d944ffa8f0c5ee69f2f47decc3dc175ea2e4341a4de3705d72b868ce2b864736f6c63430008010033")
+	addr := thor.BytesToAddress([]byte("acc01"))
+	state := stater.NewState(b0.Header().StateRoot())
+	state.SetCode(addr, data)
+
+	abi, _ := abi.New([]byte(`[{
+			"inputs": [],
+			"name": "chainID",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		}
+	]`))
+	chainIDMethod, _ := abi.MethodByName("chainID")
+	methodData, err := chainIDMethod.EncodeInput()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	assert.Nil(t, out.VMErr)
+
+	assert.Equal(t, g.ID(), thor.BytesToBytes32(out.Data))
+}
+
+func TestSelfBalance(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+
+	stater := state.NewStater(db)
+	b0, _, _, err := g.Build(stater)
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	// pragma solidity >=0.7.0 <0.9.0;
+	// contract TestSelfBalance {
+
+	//     function selfBalance() public view returns (uint256) {
+	//         return address(this).balance;
+	//     }
+	// }
+
+	data, _ := hex.DecodeString("6080604052348015600f57600080fd5b506004361060285760003560e01c8063b0bed0ba14602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600047905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea2646970667358221220eeac1b7322c414db88987af09d3c8bdfde83bb378be9ac0e9ebe3fe34ecbcf2564736f6c63430008010033")
+	addr := thor.BytesToAddress([]byte("acc01"))
+	state := stater.NewState(b0.Header().StateRoot())
+	state.SetCode(addr, data)
+	state.SetBalance(addr, big.NewInt(100))
+
+	abi, _ := abi.New([]byte(`[{
+			"inputs": [],
+			"name": "selfBalance",
+			"outputs": [
+				{
+					"internalType": "uint256",
+					"name": "",
+					"type": "uint256"
+				}
+			],
+			"stateMutability": "view",
+			"type": "function"
+		}
+	]`))
+	selfBalanceMethod, _ := abi.MethodByName("selfBalance")
+	methodData, err := selfBalanceMethod.EncodeInput()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
+		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+	out, _, err := exec()
+	assert.Nil(t, err)
+	assert.Nil(t, out.VMErr)
+
+	assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(100)) == 0)
+}
+
 func TestCall(t *testing.T) {
 	db := muxdb.NewMem()
 
