@@ -576,15 +576,6 @@ func printSoloStartupMessage(
 	apiURL string,
 	forkConfig thor.ForkConfig,
 ) {
-	tableHead := `
-┌────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────┐
-│                   Address                  │                             Private Key                            │`
-	tableContent := `
-├────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────┤
-│ %v │ %v │`
-	tableEnd := `
-└────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────┘`
-
 	bestBlock := repo.BestBlock()
 
 	info := fmt.Sprintf(`Starting %v
@@ -592,23 +583,17 @@ func printSoloStartupMessage(
     Best block  [ %v #%v @%v ]
     Forks       [ %v ]
     Data dir    [ %v ]
-    API portal  [ %v ]`,
+    API portal  [ %v ]
+┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
 		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
 		forkConfig,
 		dataDir,
 		apiURL)
-
-	info += tableHead
-
-	for _, a := range genesis.DevAccounts() {
-		info += fmt.Sprintf(tableContent,
-			a.Address,
-			thor.BytesToBytes32(crypto.FromECDSA(a.PrivateKey)),
-		)
-	}
-	info += tableEnd + "\r\n"
 
 	fmt.Print(info)
 }
