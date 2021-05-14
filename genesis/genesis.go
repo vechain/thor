@@ -6,8 +6,6 @@
 package genesis
 
 import (
-	"encoding/hex"
-
 	"github.com/vechain/thor/abi"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/state"
@@ -55,13 +53,3 @@ func mustEncodeInput(abi *abi.ABI, name string, args ...interface{}) []byte {
 	}
 	return data
 }
-
-func mustDecodeHex(str string) []byte {
-	data, err := hex.DecodeString(str)
-	if err != nil {
-		panic(err)
-	}
-	return data
-}
-
-var emptyRuntimeBytecode = mustDecodeHex("6060604052600256")

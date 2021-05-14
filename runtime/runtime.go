@@ -29,6 +29,8 @@ var (
 	energyTransferEvent     *abi.Event
 	prototypeSetMasterEvent *abi.Event
 	nativeCallReturnGas     uint64 = 1562 // see test case for calculation
+
+	EmptyRuntimeBytecode = []byte{0x60, 0x60, 0x60, 0x40, 0x52, 0x60, 0x02, 0x56}
 )
 
 func init() {
@@ -41,19 +43,22 @@ func init() {
 	}
 }
 
-var baseChainConfig = params.ChainConfig{
-	ChainID:             big.NewInt(0),
-	HomesteadBlock:      big.NewInt(0),
-	DAOForkBlock:        big.NewInt(0),
-	DAOForkSupport:      false,
-	EIP150Block:         big.NewInt(0),
-	EIP150Hash:          common.Hash{},
-	EIP155Block:         big.NewInt(0),
-	EIP158Block:         big.NewInt(0),
-	ByzantiumBlock:      big.NewInt(0),
-	ConstantinopleBlock: nil,
-	Ethash:              nil,
-	Clique:              nil,
+var baseChainConfig = vm.ChainConfig{
+	ChainConfig: params.ChainConfig{
+		ChainID:             big.NewInt(0),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        big.NewInt(0),
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: nil,
+		Ethash:              nil,
+		Clique:              nil,
+	},
+	IstanbulBlock: nil,
 }
 
 // Output output of clause execution.
@@ -79,8 +84,7 @@ type Runtime struct {
 	chain       *chain.Chain
 	state       *state.State
 	ctx         *xenv.BlockContext
-	forkConfig  thor.ForkConfig
-	chainConfig params.ChainConfig
+	chainConfig vm.ChainConfig
 }
 
 // New create a Runtime object.
@@ -92,11 +96,39 @@ func New(
 ) *Runtime {
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
+	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
+	if chain != nil {
+		// use genesis id as chain id
+		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
+	}
+
+	// alloc precompiled contracts
+	if forkConfig.ETH_IST == ctx.Number {
+		for addr := range vm.PrecompiledContractsIstanbul {
+			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+				panic(err)
+			}
+		}
+	} else if ctx.Number == 0 {
+		for addr := range vm.PrecompiledContractsByzantium {
+			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	// VIP191
+	if forkConfig.VIP191 == ctx.Number {
+		// upgrade extension contract to V2
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	}
+
 	rt := Runtime{
 		chain:       chain,
 		state:       state,
 		ctx:         ctx,
-		forkConfig:  forkConfig,
 		chainConfig: currentChainConfig,
 	}
 	return &rt

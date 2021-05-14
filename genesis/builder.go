@@ -26,6 +26,8 @@ type Builder struct {
 	stateProcs []func(state *state.State) error
 	calls      []call
 	extraData  [28]byte
+
+	forkConfig thor.ForkConfig
 }
 
 type call struct {
@@ -63,6 +65,12 @@ func (b *Builder) ExtraData(data [28]byte) *Builder {
 	return b
 }
 
+// ForkConfig set fork config.
+func (b *Builder) ForkConfig(fc thor.ForkConfig) *Builder {
+	b.forkConfig = fc
+	return b
+}
+
 // ComputeID compute genesis ID.
 func (b *Builder) ComputeID() (thor.Bytes32, error) {
 	db := muxdb.NewMem()
@@ -87,7 +95,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 	rt := runtime.New(nil, state, &xenv.BlockContext{
 		Time:     b.timestamp,
 		GasLimit: b.gasLimit,
-	}, thor.NoFork)
+	}, b.forkConfig)
 
 	for _, call := range b.calls {
 		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{

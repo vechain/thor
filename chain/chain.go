@@ -63,6 +63,11 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 	}
 }
 
+// GenesisID returns genesis id.
+func (c *Chain) GenesisID() thor.Bytes32 {
+	return c.repo.GenesisBlock().Header().ID()
+}
+
 // HeadID returns the head block id.
 func (c *Chain) HeadID() thor.Bytes32 {
 	return c.headID
