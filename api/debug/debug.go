@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
+	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -28,7 +29,7 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
-var devNetGenesisID = thor.MustParseBytes32("0x00000000973ceb7f343a58b08f0693d6701a5fd354ff73d7058af3fba222aea4")
+var devNetGenesisID = genesis.NewDevnet().ID()
 
 type Debug struct {
 	repo       *chain.Repository
