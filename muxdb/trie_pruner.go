@@ -77,7 +77,7 @@ func (p *TriePruner) ArchiveNodes(
 			if it.Leaf() {
 				entryCount++
 				if handleLeaf != nil {
-					blob1, err := trie1.Get(it.LeafKey())
+					blob1, err := p.db.NewTrie(name, root1).Get(it.LeafKey())
 					if err != nil {
 						return err
 					}
