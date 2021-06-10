@@ -443,7 +443,7 @@ func (n *Node) compare(b1 *block.Header, b2 *block.Header) (bool, error) {
 	if s1 > s2 {
 		return true, nil
 	}
-	if s2 < s1 {
+	if s1 < s2 {
 		return false, nil
 	}
 	// total scores are equal
