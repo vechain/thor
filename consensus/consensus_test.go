@@ -71,9 +71,15 @@ type testConsensus struct {
 func newTestConsensus(t *testing.T) *testConsensus {
 	db := muxdb.NewMem()
 
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
+	forkConfig.VIP191 = 1
+	forkConfig.VIP193 = 0
+
 	launchTime := uint64(1526400000)
 	gen := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
+		ForkConfig(forkConfig).
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
 			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
@@ -97,11 +103,6 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	forkConfig := thor.NoFork
-	forkConfig.BLOCKLIST = 0
-	forkConfig.VIP191 = 0
-	forkConfig.VIP193 = 0
 
 	proposer := genesis.DevAccounts()[0]
 	backer := genesis.DevAccounts()[1]
@@ -380,8 +381,9 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		err := tc.consent(blk)
 		expect := consensusError(
 			fmt.Sprintf(
-				"block state root mismatch: want %v, have 0xe049292984c1036f3098a3b4c44bb66d9fc1457725fae84db4609071aeab635e",
+				"block state root mismatch: want %v, have %v",
 				thor.Bytes32{},
+				tc.original.Header().StateRoot(),
 			),
 		)
 		tc.assert.Equal(expect, err)
@@ -614,18 +616,6 @@ func (tc *testConsensus) TestValidateProposer() {
 			fmt.Sprintf(
 				"block signer invalid: %v unauthorized or inactive block proposer",
 				thor.Address(crypto.PubkeyToAddress(pk.PublicKey)),
-			),
-		)
-		tc.assert.Equal(expect, err)
-	}
-	triggers["triggerErrTimestampUnscheduled"] = func() {
-		blk := tc.sign(tc.originalBuilder().Build(), genesis.DevAccounts()[3].PrivateKey)
-		err := tc.consent(blk)
-		expect := consensusError(
-			fmt.Sprintf(
-				"block timestamp unscheduled: t %v, s %v",
-				blk.Header().Timestamp(),
-				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[3].PrivateKey.PublicKey)),
 			),
 		)
 		tc.assert.Equal(expect, err)
