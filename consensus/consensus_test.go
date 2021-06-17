@@ -120,17 +120,18 @@ func newTestConsensus(t *testing.T) *testConsensus {
 	}
 	_ = flow.Adopt(tx)
 
-	var (
-		proof [81]byte
-		beta  [32]byte
-	)
-	rand.Read(proof[:])
-	rand.Read(beta[:])
+	alpha := append([]byte(nil), thor.Bytes32{}.Bytes()...)
+	alpha = append(alpha, parent.Header().ID().Bytes()[:4]...)
 
-	proposal, _ := flow.Draft(proposer.PrivateKey)
-	hash := proposal.Hash()
+	draft, _ := flow.Draft(proposer.PrivateKey)
+	hash := draft.Proposal.Hash()
 	backerSig, _ := crypto.Sign(hash.Bytes(), backer.PrivateKey)
-	bs, _ := block.NewComplexSignature(proof[:], backerSig)
+
+	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(backer.PrivateKey, alpha)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bs, _ := block.NewComplexSignature(proof, backerSig)
 
 	flow.AddBackerSignature(bs, beta[:], backer.Address)
 	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey)
