@@ -6,12 +6,12 @@
 package poa_test
 
 import (
-	"crypto/rand"
 	"encoding/binary"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
@@ -147,15 +147,14 @@ func TestActivateInV2(t *testing.T) {
 	pps := append([]poa.Proposer(nil), proposers...)
 	backer, _ := crypto.GenerateKey()
 	pps = append(pps, poa.Proposer{thor.Address(crypto.PubkeyToAddress(backer.PublicKey)), false})
-
 	proposer, _ := crypto.GenerateKey()
+
 	dummy := new(block.Builder).Build()
 
-	var proof [81]byte
-	rand.Read(proof[:])
 	hash := block.NewProposal(dummy.Header().ParentID(), dummy.Header().TxsRoot(), dummy.Header().GasLimit(), dummy.Header().Timestamp()).Hash()
 	sig, _ := crypto.Sign(hash.Bytes(), backer)
-	bs, _ := block.NewComplexSignature(proof[:], sig)
+	_, proof, _ := ecvrf.NewSecp256k1Sha256Tai().Prove(backer, dummy.Header().Alpha())
+	bs, _ := block.NewComplexSignature(proof, sig)
 
 	b := new(block.Builder).BackerSignatures(block.ComplexSignatures{bs}, 0).Build()
 	signingHash := b.Header().SigningHash()

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
@@ -40,22 +39,17 @@ func NewSchedulerV2(
 	)
 
 	// handling parent block's backers in post VIP-193 stage, activate them when they backs
-	bss := parent.BackerSignatures()
-	if len(bss) > 0 {
-		header := parent.Header()
-		hash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
-		for _, bs := range bss {
-			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
-			if err != nil {
-				return nil, err
-			}
-			backers[thor.Address(crypto.PubkeyToAddress(*pub))] = true
-		}
+	bs, _, err := parent.Committee()
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range bs {
+		backers[b] = true
 	}
 
 	if canPropose := func() bool {
 		for _, p := range proposers {
-			if p.Address == addr && (p.Active == true || backers[p.Address] == true) {
+			if p.Address == addr && (p.Active || backers[p.Address]) {
 				return true
 			}
 		}
@@ -73,10 +67,10 @@ func NewSchedulerV2(
 	)
 
 	for _, p := range proposers {
-		if p.Active == false && backers[p.Address] == true {
+		if !p.Active && backers[p.Address] {
 			activates = append(activates, p.Address)
 		}
-		if p.Active == true || backers[p.Address] == true {
+		if p.Active || backers[p.Address] {
 			if p.Address == addr {
 				proposer = p
 			}
