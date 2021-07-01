@@ -156,9 +156,8 @@ func (f *Flow) AddBackerSignature(bs block.ComplexSignature, beta []byte, signer
 		return false
 	}
 
-	cpy := bs
 	f.knownBackers[signer] = true
-	f.bss = append(f.bss, bsWithBeta{cpy, beta})
+	f.bss = append(f.bss, bsWithBeta{bs, beta})
 
 	return true
 }
