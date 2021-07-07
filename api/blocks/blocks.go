@@ -59,12 +59,13 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		if err != nil {
 			return err
 		}
-		bss, err := b.repo.GetBlockBackerSignatures(summary.Header.ID())
+
+		cmt, err := b.repo.GetBlockCommittee(summary.Header.ID())
 		if err != nil {
 			return err
 		}
 
-		backers, err := buildJSONBackers(summary.Header, bss)
+		backers, _, err := cmt.Members()
 		if err != nil {
 			return err
 		}

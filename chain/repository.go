@@ -44,7 +44,7 @@ type Repository struct {
 		summaries *cache
 		txs       *cache
 		receipts  *cache
-		bss       *cache
+		committee *cache
 	}
 }
 
@@ -69,7 +69,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo.caches.summaries = newCache(thor.EpochInterval * 3)
 	repo.caches.txs = newCache(2048)
 	repo.caches.receipts = newCache(2048)
-	repo.caches.bss = newCache(512)
+	repo.caches.committee = newCache(1024)
 
 	if val, err := repo.props.Get(bestBlockIDKey); err != nil {
 		if !repo.props.IsNotFound(err) {
@@ -146,11 +146,11 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
 	return r.data.Batch(func(putter kv.PutFlusher) error {
 		var (
-			header  = block.Header()
-			id      = header.ID()
-			txs     = block.Transactions()
-			bss     = block.BackerSignatures()
-			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
+			header    = block.Header()
+			id        = header.ID()
+			txs       = block.Transactions()
+			committee = block.Committee()
+			summary   = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
 		)
 
 		if n := len(txs); n > 0 {
@@ -172,10 +172,10 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 				r.caches.receipts.Add(key, receipt)
 			}
 		}
-		if err := saveBackerSignatures(putter, id, bss); err != nil {
+		if err := saveBackerSignatures(putter, id, committee.BackerSignatures()); err != nil {
 			return err
 		}
-		r.caches.bss.Add(id, bss)
+		r.caches.committee.Add(id, committee)
 		if err := saveBlockSummary(putter, &summary); err != nil {
 			return err
 		}
@@ -248,22 +248,26 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 }
 
 // GetBlockBackerSignatures get all backer signatures of a block for given block id.
-func (r *Repository) GetBlockBackerSignatures(id thor.Bytes32) (block.ComplexSignatures, error) {
-	cached, err := r.caches.bss.GetOrLoad(id, func() (interface{}, error) {
+func (r *Repository) GetBlockCommittee(id thor.Bytes32) (*block.Committee, error) {
+	cached, err := r.caches.committee.GetOrLoad(id, func() (interface{}, error) {
 		bss, err := loadBackerSignatures(r.data, id)
-		if err != nil {
-			// backward compatibility
-			if r.IsNotFound(err) {
-				return bss, nil
-			}
+		if err != nil && !r.IsNotFound(err) {
 			return nil, err
 		}
-		return bss, nil
+
+		summary, err := r.GetBlockSummary(id)
+		if err != nil {
+			return nil, err
+		}
+		header := summary.Header
+		proposalHash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
+
+		return block.NewCommittee(proposalHash, header.Alpha(), bss), nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return cached.(block.ComplexSignatures), nil
+	return cached.(*block.Committee), nil
 }
 
 // GetBlock get block by id.
@@ -276,11 +280,11 @@ func (r *Repository) GetBlock(id thor.Bytes32) (*block.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	bss, err := r.GetBlockBackerSignatures(id)
+	committee, err := r.GetBlockCommittee(id)
 	if err != nil {
 		return nil, err
 	}
-	return block.Compose(summary.Header, txs, bss), nil
+	return block.Compose(summary.Header, txs, committee), nil
 }
 
 func (r *Repository) getReceipt(key txKey) (*tx.Receipt, error) {
