@@ -39,7 +39,7 @@ func NewSchedulerV2(
 	)
 
 	// handling parent block's backers in post VIP-193 stage, activate them when they backs
-	bs, _, err := parent.Committee()
+	bs, _, err := parent.Committee().Members()
 	if err != nil {
 		return nil, err
 	}

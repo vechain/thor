@@ -71,7 +71,7 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 				for _, blk := range blocks {
 					blk := blk
 					h := blk.Header()
-					queue <- func() { blk.Committee() }
+					queue <- func() { blk.Committee().Members() }
 					queue <- func() {
 						h.ID()
 						h.Beta()
