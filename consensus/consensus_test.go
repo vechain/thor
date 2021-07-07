@@ -503,7 +503,8 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		bs, _ := block.NewComplexSignature(proof[:], sig[:])
 
 		as := block.ComplexSignatures{bs}
-		blk := block.Compose(b.Header(), tx.Transactions{}, as)
+
+		blk := block.Compose(b.Header(), tx.Transactions{}, block.NewCommittee(thor.Bytes32{}, []byte(nil), as))
 		err := tc.consent(blk)
 		expect := consensusError(fmt.Sprintf("block backers root mismatch: want %v, have %v", b.Header().BackerSignaturesRoot(), as.RootHash()))
 		tc.assert.Equal(expect, err)

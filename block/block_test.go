@@ -64,15 +64,13 @@ func TestBlock(t *testing.T) {
 	h := block.Header()
 
 	txs := block.Transactions()
-	body := block.Body()
-	bss := block.BackerSignatures()
+	cmt := block.Committee()
 	txsRootHash := txs.RootHash()
-	brRootHash := bss.RootHash()
+	brRootHash := cmt.BackerSignatures().RootHash()
 
 	fmt.Println(h.ID())
 
-	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, ComplexSignatures(nil)), block)
+	assert.Equal(t, Compose(h, txs, cmt), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -112,7 +110,7 @@ func TestBlock(t *testing.T) {
 		Build()
 
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
-	assert.Equal(t, block.BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
+	assert.Equal(t, block.Committee().BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
 
 	data, _ = rlp.EncodeToBytes(block)
 	var bx Block
@@ -151,13 +149,11 @@ func TestEncoding(t *testing.T) {
 	h := block.Header()
 
 	txs := block.Transactions()
-	body := block.Body()
-	bss := block.BackerSignatures()
+	cmt := block.Committee()
 	txsRootHash := txs.RootHash()
-	brRootHash := bss.RootHash()
+	brRootHash := cmt.BackerSignatures().RootHash()
 
-	assert.Equal(t, body.Txs, txs)
-	assert.Equal(t, Compose(h, txs, ComplexSignatures(nil)), block)
+	assert.Equal(t, Compose(h, txs, cmt), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
 	assert.Equal(t, totalScore, h.TotalScore())
@@ -404,11 +400,7 @@ func TestCommittee(t *testing.T) {
 	cs, _ := NewComplexSignature(proof, sig)
 	b1 := b0.WithSignature(cs)
 
-	_, _, err = b1.Committee()
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = b1.Committee()
+	_, _, err = b1.Committee().Members()
 	if err != nil {
 		t.Fatal(err)
 	}

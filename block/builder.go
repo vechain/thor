@@ -99,9 +99,10 @@ func (b *Builder) Build() *Block {
 	header.body.TxsRootFeatures.Root = b.txs.RootHash()
 	header.body.Extension.BackerSignaturesRoot = b.bss.RootHash()
 
+	proposalHash := NewProposal(header.body.ParentID, header.body.TxsRootFeatures.Root, header.body.GasLimit, header.body.Timestamp).Hash()
 	return &Block{
-		header: &header,
-		txs:    b.txs,
-		bss:    b.bss,
+		header:    &header,
+		txs:       b.txs,
+		committee: NewCommittee(proposalHash, b.headerBody.Extension.Alpha, b.bss),
 	}
 }
