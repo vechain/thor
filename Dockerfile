@@ -2,11 +2,8 @@
 FROM golang:alpine as builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers git
-
-
-RUN git clone https://github.com/vechain/thor.git
 WORKDIR  /go/thor
-RUN git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+COPY . /go/thor
 RUN make all
 
 # Pull thor into a second stage deploy alpine container

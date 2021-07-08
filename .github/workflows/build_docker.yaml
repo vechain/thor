@@ -1,0 +1,33 @@
+name: Push docker images
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: libotony/vechain
+          tags: |
+            type=ref,event=tag
+      
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
