@@ -8,6 +8,7 @@ package chain
 import (
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/co"
@@ -25,6 +26,7 @@ const (
 var (
 	errNotFound    = errors.New("not found")
 	bestBlockIDKey = []byte("best-block-id")
+	emptyRoot      = thor.Blake2b(rlp.EmptyString) // This is the known root hash of an empty trie.
 )
 
 // Repository stores block headers, txs and receipts.
@@ -251,6 +253,7 @@ func (r *Repository) GetBlockTransactions(id thor.Bytes32) (tx.Transactions, err
 func (r *Repository) GetBlockCommittee(id thor.Bytes32) (*block.Committee, error) {
 	cached, err := r.caches.committee.GetOrLoad(id, func() (interface{}, error) {
 		bss, err := loadBackerSignatures(r.data, id)
+		// for backward compatiability, accept not found here
 		if err != nil && !r.IsNotFound(err) {
 			return nil, err
 		}
@@ -259,6 +262,11 @@ func (r *Repository) GetBlockCommittee(id thor.Bytes32) (*block.Committee, error
 		if err != nil {
 			return nil, err
 		}
+
+		if len(bss) == 0 && summary.Header.BackerSignaturesRoot() != emptyRoot {
+			return nil, errors.New("invalid backer signatures, root is not empty")
+		}
+
 		header := summary.Header
 		proposalHash := block.NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
 
