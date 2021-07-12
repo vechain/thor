@@ -8,8 +8,6 @@ package blocks
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -192,20 +190,4 @@ func buildJSONEmbeddedTxs(txs tx.Transactions, receipts tx.Receipts) []*JSONEmbe
 		})
 	}
 	return jTxs
-}
-
-func buildJSONBackers(b *block.Header, bss block.ComplexSignatures) ([]thor.Address, error) {
-	backers := make([]thor.Address, 0, len(bss))
-	if len(bss) > 0 {
-		hash := block.NewProposal(b.ParentID(), b.TxsRoot(), b.GasLimit(), b.Timestamp()).Hash().Bytes()
-		for _, bs := range bss {
-			pub, err := crypto.SigToPub(hash, bs.Signature())
-			if err != nil {
-				return nil, err
-			}
-
-			backers = append(backers, thor.Address(crypto.PubkeyToAddress(*pub)))
-		}
-	}
-	return backers, nil
 }

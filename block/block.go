@@ -11,53 +11,38 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/metric"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
 // Block is an immutable block type.
 type Block struct {
-	header *Header
-	txs    tx.Transactions
-	bss    ComplexSignatures
-	cache  struct {
-		size      atomic.Value
-		committee atomic.Value
+	header    *Header
+	txs       tx.Transactions
+	committee *Committee
+	cache     struct {
+		size atomic.Value
 	}
-}
-
-// Body defines body of a block.
-type Body struct {
-	Txs tx.Transactions
-	Bss ComplexSignatures
-}
-
-type committee struct {
-	addrs []thor.Address
-	betas [][]byte
 }
 
 // Compose compose a block with all needed components
 // Note: This method is usually to recover a block by its portions, and the TxsRoot is not verified.
 // To build up a block, use a Builder.
-func Compose(header *Header, txs tx.Transactions, bss ComplexSignatures) *Block {
+func Compose(header *Header, txs tx.Transactions, cmt *Committee) *Block {
 	return &Block{
-		header: header,
-		txs:    append(tx.Transactions(nil), txs...),
-		bss:    append(ComplexSignatures(nil), bss...),
+		header:    header,
+		txs:       append(tx.Transactions(nil), txs...),
+		committee: cmt,
 	}
 }
 
 // WithSignature create a new block object with signature set.
 func (b *Block) WithSignature(sig []byte) *Block {
 	return &Block{
-		header: b.header.withSignature(sig),
-		txs:    b.txs,
-		bss:    b.bss,
+		header:    b.header.withSignature(sig),
+		txs:       b.txs,
+		committee: b.committee,
 	}
 }
 
@@ -71,51 +56,9 @@ func (b *Block) Transactions() tx.Transactions {
 	return append(tx.Transactions(nil), b.txs...)
 }
 
-// BackerSignatures returns a copy of backer signature list.
-func (b *Block) BackerSignatures() ComplexSignatures {
-	return append(ComplexSignatures(nil), b.bss...)
-}
-
-// Body returns body of a block.
-func (b *Block) Body() *Body {
-	return &Body{
-		append(tx.Transactions(nil), b.txs...),
-		append(ComplexSignatures(nil), b.bss...),
-	}
-}
-
-// Committee verifies all backer signatures.
-func (b *Block) Committee() ([]thor.Address, [][]byte, error) {
-	if cached := b.cache.committee.Load(); cached != nil {
-		c := cached.(*committee)
-		return c.addrs, c.betas, nil
-	}
-
-	if len(b.bss) > 0 {
-		var cmt committee
-		cmt.addrs = make([]thor.Address, 0, len(b.bss))
-		cmt.betas = make([][]byte, 0, len(b.bss))
-
-		hash := NewProposal(b.header.ParentID(), b.header.TxsRoot(), b.header.GasLimit(), b.header.Timestamp()).Hash()
-		for _, bs := range b.bss {
-			pub, err := crypto.SigToPub(hash.Bytes(), bs.Signature())
-			if err != nil {
-				return nil, nil, err
-			}
-			cmt.addrs = append(cmt.addrs, thor.Address(crypto.PubkeyToAddress(*pub)))
-
-			beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, b.header.Alpha(), bs.Proof())
-			if err != nil {
-				return nil, nil, err
-			}
-			cmt.betas = append(cmt.betas, beta)
-		}
-
-		b.cache.committee.Store(&cmt)
-		return cmt.addrs, cmt.betas, nil
-	}
-
-	return nil, nil, nil
+// Committee returns the committee in block body.
+func (b *Block) Committee() *Committee {
+	return b.committee
 }
 
 // EncodeRLP implements rlp.Encoder.
@@ -125,8 +68,8 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		b.txs,
 	}
 
-	if len(b.bss) > 0 {
-		input = append(input, b.bss)
+	if len(b.committee.bss) > 0 {
+		input = append(input, b.committee.bss)
 	}
 
 	return rlp.Encode(w, input)
@@ -166,10 +109,12 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
+	proposalHash := NewProposal(header.ParentID(), header.TxsRoot(), header.GasLimit(), header.Timestamp()).Hash()
+	cmt := NewCommittee(proposalHash, header.Alpha(), bss)
 	*b = Block{
-		header: &header,
-		txs:    txs,
-		bss:    bss,
+		header:    &header,
+		txs:       txs,
+		committee: cmt,
 	}
 	b.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
 	return nil

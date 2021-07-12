@@ -246,7 +246,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 		}
 	}
 
-	bss := blk.BackerSignatures()
+	bss := blk.Committee().BackerSignatures()
 	if header.Number() < c.forkConfig.VIP193 {
 		if len(bss) != 0 {
 			return consensusError("invalid block: backer signatures should be empty before fork VIP193")
@@ -290,7 +290,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 				return nil
 			}
 
-			backers, betas, err := blk.Committee()
+			backers, betas, err := blk.Committee().Members()
 			if err != nil {
 				return consensusError(fmt.Sprintf("failed to get block committee: %v", err))
 			}
