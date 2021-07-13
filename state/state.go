@@ -87,6 +87,12 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err
 		}
 		return code, true, nil
 	case storageKey: // get storage
+		// the address was ever deleted in the life-cycle of this state instance.
+		// treat its storage as an empty set.
+		if k.barrier != 0 {
+			return rlp.RawValue(nil), true, nil
+		}
+
 		obj, err := s.getCachedObject(k.addr)
 		if err != nil {
 			return nil, false, err
@@ -96,6 +102,8 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err
 			return nil, false, err
 		}
 		return v, true, nil
+	case storageBarrierKey: // get barrier, 0 as initial value
+		return 0, true, nil
 	}
 	panic(fmt.Errorf("unexpected key type %+v", key))
 }
@@ -133,6 +141,15 @@ func (s *State) getAccountCopy(addr thor.Address) (Account, error) {
 
 func (s *State) updateAccount(addr thor.Address, acc *Account) {
 	s.sm.Put(addr, acc)
+}
+
+func (s *State) getStorageBarrier(addr thor.Address) int {
+	b, _, _ := s.sm.Get(storageBarrierKey(addr))
+	return b.(int)
+}
+
+func (s *State) setStorageBarrier(addr thor.Address, barrier int) {
+	s.sm.Put(storageBarrierKey(addr), barrier)
 }
 
 // GetBalance returns balance for the given address.
@@ -233,7 +250,7 @@ func (s *State) SetStorage(addr thor.Address, key, value thor.Bytes32) {
 
 // GetRawStorage returns storage value in rlp raw for given address and key.
 func (s *State) GetRawStorage(addr thor.Address, key thor.Bytes32) (rlp.RawValue, error) {
-	data, _, err := s.sm.Get(storageKey{addr, key})
+	data, _, err := s.sm.Get(storageKey{addr, s.getStorageBarrier(addr), key})
 	if err != nil {
 		return nil, &Error{err}
 	}
@@ -242,7 +259,7 @@ func (s *State) GetRawStorage(addr thor.Address, key thor.Bytes32) (rlp.RawValue
 
 // SetRawStorage set storage value in rlp raw.
 func (s *State) SetRawStorage(addr thor.Address, key thor.Bytes32, raw rlp.RawValue) {
-	s.sm.Put(storageKey{addr, key}, raw)
+	s.sm.Put(storageKey{addr, s.getStorageBarrier(addr), key}, raw)
 }
 
 // EncodeStorage set storage value encoded by given enc method.
@@ -321,6 +338,8 @@ func (s *State) Exists(addr thor.Address) (bool, error) {
 func (s *State) Delete(addr thor.Address) {
 	s.sm.Put(codeKey(addr), []byte(nil))
 	s.updateAccount(addr, emptyAccount())
+	// increase the barrier value
+	s.setStorageBarrier(addr, s.getStorageBarrier(addr)+1)
 }
 
 // NewCheckpoint makes a checkpoint of current state.
@@ -414,6 +433,12 @@ func (s *State) Stage() (*Stage, error) {
 				c.storage = make(map[thor.Bytes32]rlp.RawValue)
 			}
 			c.storage[key.key] = v.(rlp.RawValue)
+		case storageBarrierKey:
+			if c, jerr = getChanged(thor.Address(key)); jerr != nil {
+				return false
+			}
+			// discard all storage updates when meet the barrier.
+			c.storage = nil
 		}
 		return true
 	})
@@ -453,8 +478,10 @@ func (s *State) Stage() (*Stage, error) {
 
 type (
 	storageKey struct {
-		addr thor.Address
-		key  thor.Bytes32
+		addr    thor.Address
+		barrier int
+		key     thor.Bytes32
 	}
-	codeKey thor.Address
+	codeKey           thor.Address
+	storageBarrierKey thor.Address
 )
