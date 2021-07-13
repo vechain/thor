@@ -95,43 +95,7 @@ func (p *TriePruner) ArchiveNodes(
 
 // DropStaleNodes delete stale trie nodes.
 func (p *TriePruner) DropStaleNodes(ctx context.Context) (count int, err error) {
-	err = p.db.engine.Batch(func(putter kv.PutFlusher) error {
-		rng := kv.Range(*util.BytesPrefix([]byte{p.db.trieLiveSpace.Stale()}))
-		var nextStart []byte
-		for {
-			iterCount := 0
-			// use short-range iterator here to prevent from holding snapshot for long time.
-			if err := p.db.engine.Iterate(rng, func(pair kv.Pair) bool {
-				iterCount++
-				nextStart = append(append(nextStart[:0], pair.Key()...), 0)
-
-				// error can be ignored here
-				_ = putter.Delete(pair.Key())
-
-				return iterCount < prunerBatchSize
-			}); err != nil {
-				return err
-			}
-
-			// no more
-			if iterCount == 0 {
-				break
-			}
-			count += iterCount
-			if err := putter.Flush(); err != nil {
-				return err
-			}
-			rng.Start = nextStart
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-		}
-		return nil
-	})
-	return
+	return p.db.engine.DeleteRange(ctx, kv.Range(*util.BytesPrefix([]byte{p.db.trieLiveSpace.Stale()})))
 }
 
 // SwitchLiveSpace switch trie live space.

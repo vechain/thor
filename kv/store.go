@@ -5,6 +5,8 @@
 
 package kv
 
+import "context"
+
 // Getter defines methods to read kv.
 type Getter interface {
 	Get(key []byte) ([]byte, error)
@@ -23,6 +25,10 @@ type PutFlusher interface {
 	Flush() error
 }
 
+type RangeDeleter interface {
+	DeleteRange(ctx context.Context, rng Range) (int, error)
+}
+
 // Pair defines key-value pair.
 type Pair interface {
 	Key() []byte
@@ -39,6 +45,7 @@ type Range struct {
 type Store interface {
 	Getter
 	Putter
+	RangeDeleter
 
 	Snapshot(fn func(Getter) error) error
 	Batch(fn func(PutFlusher) error) error

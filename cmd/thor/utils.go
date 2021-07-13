@@ -252,6 +252,9 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 	if ctx.Bool(disablePrunerFlag.Name) {
 		suffix = "-full"
 	}
+	if ctx.Bool(pebbleEngineFlag.Name) {
+		suffix += ".pebble"
+	}
 
 	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
@@ -274,8 +277,14 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	fdCache := suggestFDCache()
 	log.Debug("fd cache", "n", fdCache)
 
+	engine := muxdb.LevelDB
+	if ctx.Bool(pebbleEngineFlag.Name) {
+		engine = muxdb.Pebble
+	}
+
 	path := filepath.Join(dir, "main.db")
 	db, err := muxdb.Open(path, &muxdb.Options{
+		Engine:                       engine,
 		EncodedTrieNodeCacheSizeMB:   cacheMB,
 		DecodedTrieNodeCacheCapacity: 65536,
 		OpenFilesCacheCapacity:       fdCache,

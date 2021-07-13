@@ -6,8 +6,14 @@
 package muxdb
 
 import (
+	"context"
+	"io"
+	"os"
+	"reflect"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
 )
@@ -19,16 +25,23 @@ var (
 )
 
 type levelEngine struct {
-	db *leveldb.DB
+	db            *leveldb.DB
+	storageCloser io.Closer
 }
 
 // newLevelEngine create leveldb instance which implements engine interface.
-func newLevelEngine(db *leveldb.DB) engine {
-	return &levelEngine{db}
+func newLevelEngine(db *leveldb.DB, storageCloser io.Closer) engine {
+	return &levelEngine{db, storageCloser}
 }
 
 func (ldb *levelEngine) Close() error {
-	return ldb.db.Close()
+	err := ldb.db.Close()
+	if ldb.storageCloser != nil {
+		if err1 := ldb.storageCloser.Close(); err == nil {
+			err = err1
+		}
+	}
+	return err
 }
 
 func (ldb *levelEngine) IsNotFound(err error) bool {
@@ -54,6 +67,45 @@ func (ldb *levelEngine) Put(key, val []byte) error {
 
 func (ldb *levelEngine) Delete(key []byte) error {
 	return ldb.db.Delete(key, &writeOpt)
+}
+
+func (ldb *levelEngine) DeleteRange(ctx context.Context, rng kv.Range) (n int, err error) {
+	err = ldb.Batch(func(putter kv.PutFlusher) error {
+		var nextStart []byte
+		for {
+			iterCount := 0
+			// use short-range iterator here to prevent from holding snapshot for long time.
+			if err := ldb.Iterate(rng, func(pair kv.Pair) bool {
+				iterCount++
+				nextStart = append(append(nextStart[:0], pair.Key()...), 0)
+
+				// error can be ignored here
+				_ = putter.Delete(pair.Key())
+
+				return iterCount < 4096
+			}); err != nil {
+				return err
+			}
+
+			// no more
+			if iterCount == 0 {
+				break
+			}
+			n += iterCount
+			if err := putter.Flush(); err != nil {
+				return err
+			}
+			rng.Start = nextStart
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		return nil
+	})
+	return
 }
 
 func (ldb *levelEngine) Snapshot(fn func(kv.Getter) error) error {
@@ -117,4 +169,31 @@ func (ldb *levelEngine) Iterate(rng kv.Range, fn func(kv.Pair) bool) error {
 		}
 	}
 	return it.Error()
+}
+
+//
+type leveldbStorageNoPageCache struct {
+	storage.Storage
+}
+
+func unwrapFileObject(i interface{}) *os.File {
+	return reflect.ValueOf(i).Elem().FieldByIndex([]int{0}).Interface().(*os.File)
+}
+
+func (s *leveldbStorageNoPageCache) Open(fd storage.FileDesc) (storage.Reader, error) {
+	r, err := s.Storage.Open(fd)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(unwrapFileObject(r))
+	return r, nil
+}
+
+func (s *leveldbStorageNoPageCache) Create(fd storage.FileDesc) (storage.Writer, error) {
+	w, err := s.Storage.Create(fd)
+	if err != nil {
+		return nil, err
+	}
+	disablePageCache(unwrapFileObject(w))
+	return w, nil
 }

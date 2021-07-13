@@ -19,7 +19,7 @@ func M(args ...interface{}) []interface{} {
 
 func newMemDB() engine {
 	ldb, _ := leveldb.Open(storage.NewMemStorage(), nil)
-	return newLevelEngine(ldb)
+	return newLevelEngine(ldb, nil)
 }
 
 func Test_bucket_ProxyGetterPutter(t *testing.T) {

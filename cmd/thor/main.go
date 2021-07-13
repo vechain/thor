@@ -80,6 +80,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			pebbleEngineFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -104,6 +105,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					pebbleEngineFlag,
 				},
 				Action: soloAction,
 			},
