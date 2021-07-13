@@ -146,3 +146,26 @@ func TestStorage(t *testing.T) {
 
 	assert.Equal(t, M(thor.Blake2b(data), nil), M(st.GetStorage(addr, key)))
 }
+
+func TestStorageBarrier(t *testing.T) {
+	db := muxdb.NewMem()
+	st := New(db, thor.Bytes32{})
+
+	addr := thor.BytesToAddress([]byte("addr"))
+	key := thor.BytesToBytes32([]byte("key"))
+
+	st.SetCode(addr, []byte("code"))
+	st.SetStorage(addr, key, thor.BytesToBytes32([]byte("data")))
+
+	st.Delete(addr)
+	assert.Equal(t, M(rlp.RawValue(nil), nil), M(st.GetRawStorage(addr, key)), "should read empty storage when account deleted")
+
+	st.SetCode(addr, []byte("code"))
+
+	stage, err := st.Stage()
+	assert.Nil(t, err)
+
+	acc, err := loadAccount(stage.accountTrie, addr)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")
+}
