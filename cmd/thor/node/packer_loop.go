@@ -18,6 +18,9 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+// gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
+const gasLimitSoftLimit uint64 = 21000000
+
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
 	defer log.Debug("leave packer loop")
@@ -43,6 +46,10 @@ func (n *Node) packerLoop(ctx context.Context) {
 		if n.targetGasLimit == 0 {
 			// no preset, use suggested
 			suggested := n.bandwidth.SuggestGasLimit()
+			// apply soft limit in adaptive mode
+			if suggested > gasLimitSoftLimit {
+				suggested = gasLimitSoftLimit
+			}
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
