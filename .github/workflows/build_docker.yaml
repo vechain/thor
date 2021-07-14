@@ -15,7 +15,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: libotony/vechain
+          images: vechain/thor
           tags: |
             type=ref,event=tag
       
