@@ -364,11 +364,13 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	trie := s.db.NewSecureTrie(StorageTrieName(thor.Blake2b(addr[:])), root)
 
+	barrier := s.getStorageBarrier(addr)
+
 	// traverse journal to filter out storage changes for addr
 	s.sm.Journal(func(k, v interface{}) bool {
 		switch key := k.(type) {
 		case storageKey:
-			if key.addr == addr {
+			if key.barrier == barrier && key.addr == addr {
 				err = saveStorage(trie, key.key, v.(rlp.RawValue))
 				if err != nil {
 					return false
