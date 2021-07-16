@@ -86,7 +86,7 @@ func TestP(t *testing.T) {
 	for {
 		best := repo.BestBlock()
 		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork)
-		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,7 +153,7 @@ func TestForkVIP191(t *testing.T) {
 
 	best := repo.BestBlock()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestForkVIP191(t *testing.T) {
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,17 +193,14 @@ func TestBlocklist(t *testing.T) {
 
 	stater := state.NewStater(db)
 
-	forkConfig := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-	}
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
 	best := repo.BestBlock()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}

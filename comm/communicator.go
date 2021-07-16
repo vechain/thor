@@ -20,7 +20,7 @@ import (
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/p2psrv"
+	"github.com/vechain/thor/p2psrv/discv5"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
@@ -30,17 +30,19 @@ var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
-	repo           *chain.Repository
-	txPool         *txpool.TxPool
-	ctx            context.Context
-	cancel         context.CancelFunc
-	peerSet        *PeerSet
-	syncedCh       chan struct{}
-	newBlockFeed   event.Feed
-	announcementCh chan *announcement
-	feedScope      event.SubscriptionScope
-	goes           co.Goes
-	onceSynced     sync.Once
+	repo            *chain.Repository
+	txPool          *txpool.TxPool
+	ctx             context.Context
+	cancel          context.CancelFunc
+	peerSet         *PeerSet
+	syncedCh        chan struct{}
+	newBlockFeed    event.Feed
+	newDraftFeed    event.Feed
+	newAcceptedFeed event.Feed
+	announcementCh  chan *announcement
+	feedScope       event.SubscriptionScope
+	goes            co.Goes
+	onceSynced      sync.Once
 }
 
 // New create a new Communicator instance.
@@ -128,18 +130,26 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 }
 
 // Protocols returns all supported protocols.
-func (c *Communicator) Protocols() []*p2psrv.Protocol {
+func (c *Communicator) Protocols() []*p2p.Protocol {
+	return []*p2p.Protocol{
+		{
+			Name:    proto.Name,
+			Version: 1,
+			Length:  8,
+			Run:     c.servePeer,
+		}, {
+			Name:    proto.Name,
+			Version: proto.Version,
+			Length:  proto.Length,
+			Run:     c.servePeer,
+		},
+	}
+}
+
+// DiscTopic  returns the topic for p2p network discovery.
+func (c *Communicator) DiscTopic() discv5.Topic {
 	genesisID := c.repo.GenesisBlock().Header().ID()
-	return []*p2psrv.Protocol{
-		&p2psrv.Protocol{
-			Protocol: p2p.Protocol{
-				Name:    proto.Name,
-				Version: proto.Version,
-				Length:  proto.Length,
-				Run:     c.servePeer,
-			},
-			DiscTopic: fmt.Sprintf("%v%v@%x", proto.Name, proto.Version, genesisID[24:]),
-		}}
+	return discv5.Topic(fmt.Sprintf("thor1@%x", genesisID[24:]))
 }
 
 // Start start the communicator.
@@ -283,4 +293,52 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
+}
+
+// BroadcastDraft broadcast a draft to remote peers.
+func (c *Communicator) BroadcastDraft(d *proto.Draft) {
+	hash := d.Hash()
+
+	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
+		// MsgNewDraft was introduced in protocol 'thor/2'
+		return peer.TestCap(2) && !peer.IsDraftKnown(hash)
+	})
+
+	for _, peer := range peers {
+		peer := peer
+		peer.MarkDraft(hash)
+		c.goes.Go(func() {
+			if err := proto.NotifyNewDraft(c.ctx, peer, d); err != nil {
+				peer.logger.Debug("failed to broadcast new draft", "err", err)
+			}
+		})
+	}
+}
+
+// BroadcastAccepted broadcast an accepted message to remote peers.
+func (c *Communicator) BroadcastAccepted(acc *proto.Accepted) {
+	peers := c.peerSet.Slice().Filter(func(peer *Peer) bool {
+		// MsgNewAccepted was introduced in protocol 'thor/2'
+		return peer.TestCap(2) && !peer.IsAcceptedKnown(acc.Hash())
+	})
+
+	for _, peer := range peers {
+		peer := peer
+		peer.MarkAccepted(acc.Hash())
+		c.goes.Go(func() {
+			if err := proto.NotifyNewAccepted(c.ctx, peer, acc); err != nil {
+				peer.logger.Debug("failed to broadcast new accepted message", "err", err)
+			}
+		})
+	}
+}
+
+// SubscribeDraft subscribe the event that new draft received.
+func (c *Communicator) SubscribeDraft(ch chan *NewDraftEvent) event.Subscription {
+	return c.feedScope.Track(c.newDraftFeed.Subscribe(ch))
+}
+
+// SubscribeAccepted subscribe the event that new accepted message received.
+func (c *Communicator) SubscribeAccepted(ch chan *NewAcceptedEvent) event.Subscription {
+	return c.feedScope.Track(c.newAcceptedFeed.Subscribe(ch))
 }

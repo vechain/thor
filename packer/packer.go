@@ -25,6 +25,7 @@ type Packer struct {
 	beneficiary    *thor.Address
 	targetGasLimit uint64
 	forkConfig     thor.ForkConfig
+	seeder         *poa.Seeder
 }
 
 // New create a new Packer instance.
@@ -43,15 +44,16 @@ func New(
 		beneficiary,
 		0,
 		forkConfig,
+		poa.NewSeeder(repo),
 	}
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.StateRoot())
+func (p *Packer) Schedule(parent *block.Block, nowTimestamp uint64) (flow *Flow, err error) {
+	state := p.stater.NewState(parent.Header().StateRoot())
 
 	var features tx.Features
-	if parent.Number()+1 >= p.forkConfig.VIP191 {
+	if parent.Header().Number()+1 >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
@@ -60,7 +62,17 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+
+	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+
+	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +95,22 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 		})
 	}
 
-	// calc the time when it's turn to produce block
-	sched, err := poa.NewScheduler(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
+	var sched poa.Scheduler
+	var seed thor.Bytes32
+	if parent.Header().Number()+1 >= p.forkConfig.VIP193 {
+		seed, err = p.seeder.Generate(parent.Header().ID())
+		if err != nil {
+			return nil, err
+		}
+		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent, seed.Bytes())
+	} else {
+		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header().Number(), parent.Header().Timestamp())
+	}
 	if err != nil {
 		return nil, err
 	}
 
+	// calc the time when it's turn to produce block
 	newBlockTime := sched.Schedule(nowTimestamp)
 	updates, score := sched.Updates(newBlockTime)
 
@@ -99,19 +121,19 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	rt := runtime.New(
-		p.repo.NewChain(parent.ID()),
+		p.repo.NewChain(parent.Header().ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
-			Number:      parent.Number() + 1,
+			Number:      parent.Header().Number() + 1,
 			Time:        newBlockTime,
-			GasLimit:    p.gasLimit(parent.GasLimit()),
-			TotalScore:  parent.TotalScore() + score,
+			GasLimit:    p.gasLimit(parent.Header().GasLimit()),
+			TotalScore:  parent.Header().TotalScore() + score,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent.Header(), rt, features, proposers, maxBlockProposers, seed.Bytes()), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
@@ -143,7 +165,7 @@ func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) 
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent, rt, features, nil, 0, nil), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

@@ -147,7 +147,7 @@ func initTransactionServer(t *testing.T) {
 	}
 	transaction = transaction.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
-	flow, err := packer.Schedule(b.Header(), uint64(time.Now().Unix()))
+	flow, err := packer.Schedule(b, uint64(time.Now().Unix()))
 	err = flow.Adopt(transaction)
 	if err != nil {
 		t.Fatal(err)

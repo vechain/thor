@@ -6,6 +6,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -29,6 +30,7 @@ import (
 	"github.com/vechain/thor/consensus"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -54,6 +56,9 @@ type Node struct {
 	skipLogs       bool
 	logDBFailed    bool
 	bandwidth      bandwidth.Bandwidth
+	forkConfig     thor.ForkConfig
+	stater         *state.Stater
+	seeder         *poa.Seeder
 }
 
 func New(
@@ -79,15 +84,20 @@ func New(
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
+		stater:         stater,
+		seeder:         poa.NewSeeder(repo),
 	}
 }
 
+// Run starts the node process.
 func (n *Node) Run(ctx context.Context) error {
 	n.comm.Sync(n.handleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
 	n.goes.Go(func() { n.packerLoop(ctx) })
+	n.goes.Go(func() { n.backerLoop(ctx) })
 
 	n.goes.Wait()
 	return nil
@@ -246,11 +256,10 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
-
 	// consensus object is not thread-safe
 	n.consLock.Lock()
 	startTime := mclock.Now()
-	stage, receipts, err := n.cons.Process(blk, uint64(time.Now().Unix()))
+	stage, receipts, schedElapsed, err := n.cons.Process(blk, uint64(time.Now().Unix()))
 	execElapsed := mclock.Now() - startTime
 	n.consLock.Unlock()
 
@@ -281,7 +290,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		log.Debug("bandwidth updated", "gps", v)
 	}
 
-	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
+	stats.UpdateProcessed(1, len(receipts), schedElapsed, execElapsed-schedElapsed, commitElapsed, blk.Header().GasUsed())
 	n.processFork(prevTrunk, curTrunk)
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
@@ -290,53 +299,158 @@ func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts t
 	n.commitLock.Lock()
 	defer n.commitLock.Unlock()
 
-	var (
-		prevBest      = n.repo.BestBlock()
-		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header())
-		awaitLog      = func() {}
-	)
-	defer awaitLog()
+	if _, err := stage.Commit(); err != nil {
+		return nil, nil, errors.Wrap(err, "commit state")
+	}
+	if err := n.repo.AddBlock(newBlock, receipts); err != nil {
+		return nil, nil, errors.Wrap(err, "add block")
+	}
 
-	if becomeNewBest && !n.skipLogs && !n.logDBFailed {
-		done := make(chan struct{})
-		awaitLog = func() { <-done }
+	var prevBest = n.repo.BestBlock()
+	becomeNewBest, err := n.compare(newBlock.Header(), prevBest.Header())
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "compare head")
+	}
 
-		go func() {
-			defer close(done)
-
+	if becomeNewBest {
+		if !n.skipLogs && !n.logDBFailed {
 			diff, err := n.repo.NewChain(newBlock.Header().ParentID()).Exclude(
 				n.repo.NewChain(prevBest.Header().ID()))
 			if err != nil {
 				n.logDBFailed = true
 				log.Warn("failed to write logs", "err", err)
-				return
 			}
 
 			if err := n.writeLogs(diff, newBlock, receipts); err != nil {
 				n.logDBFailed = true
 				log.Warn("failed to write logs", "err", err)
-				return
 			}
-		}()
-	}
-
-	if _, err := stage.Commit(); err != nil {
-		return nil, nil, errors.Wrap(err, "commit state")
-	}
-
-	if err := n.repo.AddBlock(newBlock, receipts); err != nil {
-		return nil, nil, errors.Wrap(err, "add block")
-	}
-
-	if becomeNewBest {
-		// to wait for log written
-		awaitLog()
+		}
 		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
 			return nil, nil, err
 		}
 	}
 
 	return n.repo.NewChain(prevBest.Header().ID()), n.repo.NewBestChain(), nil
+}
+
+// build forks comparing two heads.
+func (n *Node) buildFork(b1 *block.Header, b2 *block.Header) (ancestor *block.Header, br1 []thor.Bytes32, br2 []thor.Bytes32, err error) {
+	c1 := n.repo.NewChain(b1.ID())
+	c2 := n.repo.NewChain(b2.ID())
+
+	br1, err = c1.Exclude(c2)
+	if err != nil {
+		return
+	}
+	br2, err = c2.Exclude(c1)
+	if err != nil {
+		return
+	}
+
+	var ancestorNumber uint32
+	if len(br1) > 0 {
+		ancestorNumber = block.Number(br1[0]) - 1
+	} else {
+		ancestorNumber = block.Number(br2[0]) - 1
+	}
+
+	ancestor, err = c1.GetBlockHeader(ancestorNumber)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// giving the list of blockID in ascending order, find the latest heavy block.
+func (n *Node) findLatestHeavyBlock(ids []thor.Bytes32) (*block.Header, error) {
+	for i := len(ids) - 1; i >= 0; i-- {
+		sum, err := n.repo.GetBlockSummary(ids[i])
+		if err != nil {
+			return nil, err
+		}
+
+		parent, err := n.repo.GetBlockSummary(sum.Header.ParentID())
+		if err != nil {
+			return nil, err
+		}
+
+		if sum.Header.TotalQuality() > parent.Header.TotalQuality() {
+			return sum.Header, nil
+		}
+	}
+	return nil, nil
+}
+
+// compare compares two chains, returns true if a>b.
+func (n *Node) compare(b1 *block.Header, b2 *block.Header) (bool, error) {
+	if b1.ID() == b2.ID() {
+		return false, nil
+	}
+
+	q1 := b1.TotalQuality()
+	q2 := b2.TotalQuality()
+
+	if q1 > q2 {
+		return true, nil
+	}
+	if q1 < q2 {
+		return false, nil
+	}
+
+	// total quality are equal, find the latest heavy block on both branches
+	// later heavy block is better
+
+	if q1 > 0 {
+		// Non-zero quality means blocks are at post VIP-193 stage
+		ancestor, br1, br2, err := n.buildFork(b1, b2)
+		if err != nil {
+			return false, errors.Wrap(err, "build fork")
+		}
+		if len(br2) == 0 {
+			// c1 includes c2
+			return true, nil
+		}
+		if len(br1) == 0 {
+			// c2 includes c1
+			return false, nil
+		}
+
+		if q1 > ancestor.TotalQuality() {
+			h1, err := n.findLatestHeavyBlock(br1)
+			if err != nil {
+				return false, err
+			}
+
+			h2, err := n.findLatestHeavyBlock(br2)
+			if err != nil {
+				return false, err
+			}
+
+			if h1.Timestamp() > h2.Timestamp() {
+				return true, nil
+			}
+
+			if h1.Timestamp() < h2.Timestamp() {
+				return false, nil
+			}
+		}
+	}
+
+	s1 := b1.TotalScore()
+	s2 := b2.TotalScore()
+	if s1 > s2 {
+		return true, nil
+	}
+	if s1 < s2 {
+		return false, nil
+	}
+	// total scores are equal
+
+	// smaller ID is preferred, since block with smaller ID usually has larger average score.
+	// also, it's a deterministic decision.
+	return bytes.Compare(b1.ID().Bytes(), b2.ID().Bytes()) < 0, nil
 }
 
 func (n *Node) writeLogs(diff []thor.Bytes32, newBlock *block.Block, newReceipts tx.Receipts) error {

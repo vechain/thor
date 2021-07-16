@@ -23,18 +23,21 @@ const (
 	MinGasLimit          uint64 = 1000 * 1000
 	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
 	GasLimitBoundDivisor uint64 = 1024             // from ethereum
-	GetBalanceGas        uint64 = 400              //EIP158 gas table
+	GetBalanceGas        uint64 = 400              // EIP158 gas table
 	SloadGas             uint64 = 200              // EIP158 gas table
 	SstoreSetGas         uint64 = params.SstoreSetGas
 	SstoreResetGas       uint64 = params.SstoreResetGas
 
-	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	MaxTxWorkDelay            uint32 = 30                     // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
+	TolerableBlockPackingTime        = 500 * time.Millisecond // the indicator to adjust target block gas limit.
+	MaxStateHistory                  = 65535                  // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	MaxBlockProposers uint64 = 101
+	HeavyBlockRequirement = 5    // backer signature count required to be a "heavy" block.
+	EpochInterval         = 8640 // block number interval between two epochs.
+)
 
-	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
-
-	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
+var (
+	CommitteMemberSize uint64 = 8 // required member count of committee(block backer).
 )
 
 // Keys of governance params.
@@ -43,10 +46,17 @@ var (
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
 
-	InitialRewardRatio         = big.NewInt(3e17) // 30%
-	InitialBaseGasPrice        = big.NewInt(1e15)
-	InitialProposerEndorsement = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialRewardRatio                = big.NewInt(3e17) // 30%
+	InitialBaseGasPrice               = big.NewInt(1e15)
+	InitialProposerEndorsement        = new(big.Int).Mul(big.NewInt(1e18), big.NewInt(25000000))
+	InitialMaxBlockProposers   uint64 = 101
 
 	EnergyGrowthRate = big.NewInt(5000000000) // WEI THOR per token(VET) per second. about 0.000432 THOR per token per day.
 )
+
+// MockCommitteMemberSize mocks CommitteMemberRequirement, this function is test purpose only.
+func MockCommitteMemberSize(r uint64) {
+	CommitteMemberSize = r
+}

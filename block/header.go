@@ -6,14 +6,16 @@
 package block
 
 import (
-	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -25,8 +27,9 @@ type Header struct {
 
 	cache struct {
 		signingHash atomic.Value
-		signer      atomic.Value
+		pubkey      atomic.Value
 		id          atomic.Value
+		beta        atomic.Value
 	}
 }
 
@@ -45,6 +48,8 @@ type headerBody struct {
 	ReceiptsRoot    thor.Bytes32
 
 	Signature []byte
+
+	Extension extension
 }
 
 // ParentID returns id of parent block.
@@ -103,6 +108,21 @@ func (h *Header) ReceiptsRoot() thor.Bytes32 {
 	return h.body.ReceiptsRoot
 }
 
+// Alpha returns alpha.
+func (h *Header) Alpha() []byte {
+	return h.body.Extension.Alpha
+}
+
+// BackerSignaturesRoot returns merkle root of backer signatures.
+func (h *Header) BackerSignaturesRoot() thor.Bytes32 {
+	return h.body.Extension.BackerSignaturesRoot
+}
+
+// TotalQuality returns total heavy block count that cumulated from genesis block to this one.
+func (h *Header) TotalQuality() uint32 {
+	return h.body.Extension.TotalQuality
+}
+
 // ID computes id of block.
 // The block ID is defined as: blockNumber + hash(signingHash, signer)[4:].
 func (h *Header) ID() (id thor.Bytes32) {
@@ -136,7 +156,7 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	defer func() { h.cache.signingHash.Store(hash) }()
 
 	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
+	input := []interface{}{
 		h.body.ParentID,
 		h.body.Timestamp,
 		h.body.GasLimit,
@@ -148,7 +168,9 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 		&h.body.TxsRootFeatures,
 		h.body.StateRoot,
 		h.body.ReceiptsRoot,
-	})
+		&h.body.Extension,
+	}
+	rlp.Encode(hw, input)
 	hw.Sum(hash[:0])
 	return
 }
@@ -165,32 +187,69 @@ func (h *Header) withSignature(sig []byte) *Header {
 	return &cpy
 }
 
+// pubkey recover leader's public key.
+func (h *Header) pubkey() (*ecdsa.PublicKey, error) {
+	if cached := h.cache.pubkey.Load(); cached != nil {
+		return cached.(*ecdsa.PublicKey), nil
+	}
+
+	if len(h.body.Signature) < 65 {
+		return nil, errors.New("invalid block signature")
+	}
+
+	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
+	if err != nil {
+		return nil, err
+	}
+
+	h.cache.pubkey.Store(pub)
+	return pub, nil
+}
+
 // Signer extract signer of the block from signature.
-func (h *Header) Signer() (signer thor.Address, err error) {
+func (h *Header) Signer() (thor.Address, error) {
 	if h.Number() == 0 {
 		// special case for genesis block
 		return thor.Address{}, nil
 	}
 
-	if cached := h.cache.signer.Load(); cached != nil {
-		return cached.(thor.Address), nil
-	}
-	defer func() {
-		if err == nil {
-			h.cache.signer.Store(signer)
-		}
-	}()
-
-	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), h.body.Signature)
+	pub, err := h.pubkey()
 	if err != nil {
 		return thor.Address{}, err
 	}
 
-	signer = thor.Address(crypto.PubkeyToAddress(*pub))
-	return
+	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
 }
 
-// EncodeRLP implements rlp.Encoder
+// Beta verifies the VRF proof in header's signature and returns the beta.
+func (h *Header) Beta() (beta []byte, err error) {
+	if h.Number() == 0 || len(h.body.Signature) == 65 {
+		return []byte{}, nil
+	}
+
+	if cached := h.cache.beta.Load(); cached != nil {
+		return cached.([]byte), nil
+	}
+	defer func() {
+		if err == nil {
+			h.cache.beta.Store(beta)
+		}
+	}()
+
+	if len(h.body.Signature) != 146 {
+		return nil, errors.New("invalid signature length")
+	}
+	pub, err := h.pubkey()
+	if err != nil {
+		return
+	}
+
+	proof := ComplexSignature(h.body.Signature).Proof()
+	alpha := append([]byte(nil), h.body.Extension.Alpha...)
+	return ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, proof)
+}
+
+// EncodeRLP implements rlp.Encoder.
 func (h *Header) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &h.body)
 }
@@ -202,6 +261,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
+
 	*h = Header{body: body}
 	return nil
 }
@@ -215,39 +275,23 @@ func (h *Header) String() string {
 	}
 
 	return fmt.Sprintf(`Header(%v):
-	Number:         %v
-	ParentID:       %v
-	Timestamp:      %v
-	Signer:         %v
-	Beneficiary:    %v
-	GasLimit:       %v
-	GasUsed:        %v
-	TotalScore:     %v
-	TxsRoot:        %v
-	TxsFeatures:    %v
-	StateRoot:      %v
-	ReceiptsRoot:   %v
-	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
+	Number:                 %v
+	ParentID:               %v
+	Timestamp:              %v
+	Signer:                 %v
+	Beneficiary:            %v
+	GasLimit:               %v
+	GasUsed:                %v
+	TotalScore:             %v
+	TxsRoot:                %v
+	TxsFeatures:            %v
+	StateRoot:              %v
+	ReceiptsRoot:           %v
+	BackerSignaturesRoot:   %v
+	TotalQuality            %v
+	Signature:              0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
-}
-
-// BetterThan return if this block is better than other one.
-func (h *Header) BetterThan(other *Header) bool {
-	s1 := h.TotalScore()
-	s2 := other.TotalScore()
-
-	if s1 > s2 {
-		return true
-	}
-	if s1 < s2 {
-		return false
-	}
-	// total scores are equal
-
-	// smaller ID is preferred, since block with smaller ID usually has larger average score.
-	// also, it's a deterministic decision.
-	return bytes.Compare(h.ID().Bytes(), other.ID().Bytes()) < 0
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.BackerSignaturesRoot, h.body.Extension.TotalQuality, h.body.Signature)
 }
 
 // Number extract block number from block id.
