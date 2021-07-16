@@ -109,6 +109,9 @@ func TestBlock(t *testing.T) {
 		BackerSignatures(ComplexSignatures{bs}, 0).
 		Build()
 
+	sig, _ = crypto.Sign(block.Header().SigningHash().Bytes(), key)
+	block = block.WithSignature(sig)
+
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
 	assert.Equal(t, block.Committee().BackerSignatures().RootHash(), block.Header().BackerSignaturesRoot())
 

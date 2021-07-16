@@ -192,9 +192,11 @@ func (h *Header) pubkey() (*ecdsa.PublicKey, error) {
 	if cached := h.cache.pubkey.Load(); cached != nil {
 		return cached.(*ecdsa.PublicKey), nil
 	}
-	if len(h.body.Signature) != 65 && len(h.body.Signature) != 146 {
-		return nil, errors.New("invalid signature length")
+
+	if len(h.body.Signature) < 65 {
+		return nil, errors.New("invalid block signature")
 	}
+
 	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
 	if err != nil {
 		return nil, err
@@ -234,6 +236,9 @@ func (h *Header) Beta() (beta []byte, err error) {
 		}
 	}()
 
+	if len(h.body.Signature) != 146 {
+		return nil, errors.New("invalid signature length")
+	}
 	pub, err := h.pubkey()
 	if err != nil {
 		return
@@ -256,6 +261,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
+
 	*h = Header{body: body}
 	return nil
 }
