@@ -204,6 +204,9 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 	case "main":
 		gene := genesis.NewMainnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
+	case "193":
+		gene := genesis.New193Net()
+		return gene, thor.GetForkConfig(gene.ID()), nil
 	default:
 		file, err := os.Open(network)
 		if err != nil {

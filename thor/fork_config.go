@@ -64,6 +64,14 @@ var forkConfigs = map[Bytes32]ForkConfig{
 		ETH_IST:   9146700, // ~ Thu, 20 May 2021 08:00:00 GMT
 		VIP193:    math.MaxUint32,
 	},
+	// 193 testnet
+	MustParseBytes32("0x0000000022d6ba16de61754e652d72226461eeac2559a3f099271f6704ff8d7c"): {
+		VIP191:    1,
+		ETH_CONST: 0,
+		BLOCKLIST: 0,
+		ETH_IST:   math.MaxUint32,
+		VIP193:    8640,
+	},
 }
 
 // GetForkConfig get fork config for given genesis ID.
