@@ -223,7 +223,7 @@ func validateBackerSignature(acc *proto.Accepted, flow *packer.Flow) (thor.Addre
 		return thor.Address{}, nil, errors.New("known backer")
 	}
 
-	if flow.GetAuthority(backer) == nil {
+	if !flow.IsAuthority(backer) {
 		return thor.Address{}, nil, fmt.Errorf("backer: %v is not an authority", backer)
 	}
 
