@@ -278,16 +278,10 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 
 		if len(bss) > 0 {
 			proposer, _ := header.Signer()
-			getBacker := func(addr thor.Address) *poa.Proposer {
-				for _, p := range proposers {
-					if p.Address == addr {
-						return &poa.Proposer{
-							Address: p.Address,
-							Active:  p.Active,
-						}
-					}
-				}
-				return nil
+
+			pps := make(map[thor.Address]bool, len(proposer))
+			for _, p := range proposers {
+				pps[p.Address] = true
 			}
 
 			backers, betas, err := blk.Committee().Members()
@@ -297,7 +291,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block, parent *block.Header, pr
 
 			prev := []byte{}
 			for i, addr := range backers {
-				if b := getBacker(addr); b == nil {
+				if !pps[addr] {
 					return consensusError(fmt.Sprintf("backer: %v is not an authority", addr))
 				}
 
