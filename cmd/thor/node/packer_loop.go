@@ -14,8 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pkg/errors"
 	"github.com/vechain/go-ecvrf"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/comm"
+	"github.com/vechain/thor/comm/proto"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/thor"
@@ -165,18 +165,17 @@ func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 		deadline := time.NewTimer(time.Duration(thor.BlockInterval/2) * time.Second)
 		defer deadline.Stop()
 
-		alpha := append([]byte(nil), flow.Alpha()...)
 		proposalHash := draft.Proposal.Hash()
 		for {
 			select {
 			case ev := <-newAccCh:
-				if flow.Number() >= n.forkConfig.VIP193 {
-					if ev.ProposalHash == proposalHash {
-						if validateBackerSignature(ev.Signature, flow, proposalHash, alpha); err != nil {
-							log.Debug("failed to process backer signature", "err", err)
-							continue
-						}
+				if ev.ProposalHash == proposalHash {
+					backer, beta, err := validateBackerSignature(ev.Accepted, flow)
+					if err != nil {
+						log.Debug("failed to process backer signature", "err", err)
+						continue
 					}
+					flow.AddBackerSignature(ev.Signature, beta, backer)
 				}
 			case <-ctx.Done():
 				return ctx.Err()
@@ -211,29 +210,30 @@ func (n *Node) pack(ctx context.Context, flow *packer.Flow) error {
 	return nil
 }
 
-func validateBackerSignature(sig block.ComplexSignature, flow *packer.Flow, proposalHash thor.Bytes32, alpha []byte) (err error) {
-	pub, err := crypto.SigToPub(proposalHash.Bytes(), sig.Signature())
+func validateBackerSignature(acc *proto.Accepted, flow *packer.Flow) (thor.Address, []byte, error) {
+	complexSig := acc.Signature
+
+	pub, err := crypto.SigToPub(acc.ProposalHash.Bytes(), complexSig.Signature())
 	if err != nil {
-		return
+		return thor.Address{}, nil, err
 	}
 	backer := thor.Address(crypto.PubkeyToAddress(*pub))
 
 	if flow.IsBackerKnown(backer) {
-		return errors.New("known backer")
+		return thor.Address{}, nil, errors.New("known backer")
 	}
 
-	if flow.GetAuthority(backer) == nil {
-		return fmt.Errorf("backer: %v is not an authority", backer)
+	if !flow.IsAuthority(backer) {
+		return thor.Address{}, nil, fmt.Errorf("backer: %v is not an authority", backer)
 	}
 
-	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, sig.Proof())
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, flow.Alpha(), complexSig.Proof())
 	if err != nil {
-		return
+		return thor.Address{}, nil, err
 	}
-	if poa.EvaluateVRF(beta, flow.MaxBlockProposers()) {
-		flow.AddBackerSignature(sig, beta, backer)
-	} else {
-		return fmt.Errorf("invalid proof from %v", backer)
+	if !poa.EvaluateVRF(beta, flow.MaxBlockProposers()) {
+		return thor.Address{}, nil, fmt.Errorf("invalid proof from %v", backer)
 	}
-	return
+
+	return backer, beta, nil
 }

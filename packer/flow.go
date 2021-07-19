@@ -37,7 +37,7 @@ type Flow struct {
 	txs               tx.Transactions
 	receipts          tx.Receipts
 	features          tx.Features
-	proposers         []poa.Proposer // all proposers in power
+	proposers         map[thor.Address]bool // all proposers in power
 	maxBlockProposers uint64
 	alpha             []byte
 	knownBackers      map[thor.Address]bool
@@ -56,13 +56,18 @@ func newFlow(
 	alpha := append([]byte(nil), seed...)
 	alpha = append(alpha, parentHeader.ID().Bytes()[:4]...)
 
+	pps := make(map[thor.Address]bool, len(proposers))
+	for _, p := range proposers {
+		pps[p.Address] = true
+	}
+
 	return &Flow{
 		packer:            packer,
 		parentHeader:      parentHeader,
 		runtime:           runtime,
 		processedTxs:      make(map[thor.Bytes32]bool),
 		features:          features,
-		proposers:         proposers,
+		proposers:         pps,
 		maxBlockProposers: maxBlockProposers,
 		alpha:             alpha,
 		knownBackers:      make(map[thor.Address]bool),
@@ -89,17 +94,9 @@ func (f *Flow) TotalScore() uint64 {
 	return f.runtime.Context().TotalScore
 }
 
-// GetAuthority returns authority corresponding to the given address.
-func (f *Flow) GetAuthority(addr thor.Address) *poa.Proposer {
-	for _, p := range f.proposers {
-		if p.Address == addr {
-			return &poa.Proposer{
-				Address: p.Address,
-				Active:  p.Active,
-			}
-		}
-	}
-	return nil
+// IsAuthority returns true if the given address is an authority.
+func (f *Flow) IsAuthority(addr thor.Address) bool {
+	return f.proposers[addr]
 }
 
 // Alpha returns the alpha of this round.

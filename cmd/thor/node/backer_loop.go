@@ -38,7 +38,7 @@ var (
 
 type status struct {
 	parent            *block.Header
-	proposers         []poa.Proposer
+	proposers         map[thor.Address]bool
 	maxBlockProposers uint64
 	scheduler         *poa.SchedulerV2
 	alpha             []byte
@@ -76,11 +76,13 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 	}
 
 	proposers := make([]poa.Proposer, 0, len(candidates))
+	pps := make(map[thor.Address]bool, len(candidates))
 	for _, c := range candidates {
 		proposers = append(proposers, poa.Proposer{
 			Address: c.NodeMaster,
 			Active:  c.Active,
 		})
+		pps[c.NodeMaster] = true
 	}
 
 	seed, err := node.seeder.Generate(parent.Header().ID())
@@ -100,7 +102,7 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 
 	return &status{
 		parent:            parent.Header(),
-		proposers:         proposers,
+		proposers:         pps,
 		maxBlockProposers: maxBlockProposers,
 		scheduler:         scheduler,
 		alpha:             alpha,
@@ -108,12 +110,7 @@ func newStatus(node *Node, parent *block.Block) (*status, error) {
 }
 
 func (st *status) IsAuthority(addr thor.Address) bool {
-	for _, p := range st.proposers {
-		if p.Address == addr {
-			return true
-		}
-	}
-	return false
+	return st.proposers[addr]
 }
 
 func (st *status) IsScheduled(blockTime uint64, proposer thor.Address) bool {
@@ -220,7 +217,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 				continue
 			}
 
-			if val, _, ok := knownProposal.Get(ev.ProposalHash); ok == true {
+			if val, _, ok := knownProposal.Get(ev.ProposalHash); ok {
 				if st.parent.ID() != val.(*block.Proposal).ParentID {
 					continue
 				}
@@ -284,7 +281,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 			for _, ent := range aps {
 				accepted := ent.Value.(*acceptedWithPub).Accepted
-				if val, _, ok := knownProposal.Get(accepted.ProposalHash); ok == true {
+				if val, _, ok := knownProposal.Get(accepted.ProposalHash); ok {
 					unknownAccepted.Remove(ent.Key.(thor.Bytes32))
 
 					if st.parent.ID() != val.(*block.Proposal).ParentID {
@@ -367,8 +364,7 @@ func (n *Node) tryBacking(proposalHash thor.Bytes32, st *status) error {
 		return nil
 	}
 
-	alpha := append([]byte(nil), st.Alpha()...)
-	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(n.master.PrivateKey, alpha)
+	beta, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(n.master.PrivateKey, st.Alpha())
 	if err != nil {
 		return err
 	}
@@ -412,9 +408,7 @@ func (n *Node) validateBacker(acc *proto.Accepted, st *status) (*ecdsa.PublicKey
 }
 
 func (n *Node) processBackerSignature(acc *proto.Accepted, pub *ecdsa.PublicKey, st *status) error {
-	alpha := append([]byte(nil), st.Alpha()...)
-
-	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, alpha, acc.Signature.Proof())
+	beta, err := ecvrf.NewSecp256k1Sha256Tai().Verify(pub, st.Alpha(), acc.Signature.Proof())
 	if err != nil {
 		return err
 	}
