@@ -20,11 +20,10 @@ import (
 )
 
 const (
-	maxKnownTxs           = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
-	maxKnownBlocks        = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
-	maxKnownDrafts        = 1024  // Maximum block draft to keep in the know list(prevent DOS)
-	maxKnownAccepted      = 1024  // Maximum accepted messages to keep in the know list(prevent DOS)
-	knownTxMarkExpiration = 10    // Time in seconds to expire known tx mark
+	maxKnownTxs      = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
+	maxKnownBlocks   = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
+	maxKnownDrafts   = 1024  // Maximum block draft to keep in the know list(prevent DOS)
+	maxKnownAccepted = 1024  // Maximum accepted messages to keep in the know list(prevent DOS)
 )
 
 func init() {
