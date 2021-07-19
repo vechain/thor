@@ -220,7 +220,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 				continue
 			}
 
-			if val, _, ok := knownProposal.Get(ev.ProposalHash); ok == true {
+			if val, _, ok := knownProposal.Get(ev.ProposalHash); ok {
 				if st.parent.ID() != val.(*block.Proposal).ParentID {
 					continue
 				}
@@ -284,7 +284,7 @@ func (n *Node) backerLoop(ctx context.Context) {
 
 			for _, ent := range aps {
 				accepted := ent.Value.(*acceptedWithPub).Accepted
-				if val, _, ok := knownProposal.Get(accepted.ProposalHash); ok == true {
+				if val, _, ok := knownProposal.Get(accepted.ProposalHash); ok {
 					unknownAccepted.Remove(ent.Key.(thor.Bytes32))
 
 					if st.parent.ID() != val.(*block.Proposal).ParentID {

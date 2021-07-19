@@ -49,7 +49,7 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 		return thor.Bytes32{}, nil
 	}
 
-	if v, ok := seeder.cache[seedBlock.ID()]; ok == true {
+	if v, ok := seeder.cache[seedBlock.ID()]; ok {
 		return v, nil
 	}
 
