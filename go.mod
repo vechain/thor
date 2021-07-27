@@ -19,7 +19,7 @@ require (
 	github.com/gorilla/context v0.0.0-20160226214623-1ea25387ff6f // indirect
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.6.0
-	github.com/gorilla/websocket v1.3.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
 	github.com/huin/goupnp v0.0.0-20171109214107-dceda08e705b // indirect
 	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
