@@ -277,8 +277,8 @@ func ethlogToEvent(ethlog *types.Log) *tx.Event {
 		}
 	}
 	return &tx.Event{
-		thor.Address(ethlog.Address),
-		topics,
-		ethlog.Data,
+		Address: thor.Address(ethlog.Address),
+		Topics:  topics,
+		Data:    ethlog.Data,
 	}
 }

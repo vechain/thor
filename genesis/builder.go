@@ -108,12 +108,8 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		if out.VMErr != nil {
 			return nil, nil, nil, errors.Wrap(out.VMErr, "vm")
 		}
-		for _, event := range out.Events {
-			events = append(events, (*tx.Event)(event))
-		}
-		for _, transfer := range out.Transfers {
-			transfers = append(transfers, transfer)
-		}
+		events = append(events, out.Events...)
+		transfers = append(transfers, out.Transfers...)
 	}
 
 	stage, err := state.Stage()

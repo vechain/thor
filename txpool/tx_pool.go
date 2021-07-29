@@ -365,12 +365,11 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 	}
 
 	var (
-		chain                  = p.repo.NewChain(headBlock.ID())
-		executableObjs         = make([]*txObject, 0, len(all))
-		nonExecutableObjs      = make([]*txObject, 0, len(all))
-		localExecutableObjs    = make([]*txObject, 0, len(all))
-		localNonExecutableObjs = make([]*txObject, 0, len(all))
-		now                    = time.Now().UnixNano()
+		chain               = p.repo.NewChain(headBlock.ID())
+		executableObjs      = make([]*txObject, 0, len(all))
+		nonExecutableObjs   = make([]*txObject, 0, len(all))
+		localExecutableObjs = make([]*txObject, 0, len(all))
+		now                 = time.Now().UnixNano()
 	)
 	for _, txObj := range all {
 		if thor.IsOriginBlocked(txObj.Origin()) || p.blocklist.Contains(txObj.Origin()) {
@@ -407,9 +406,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 				executableObjs = append(executableObjs, txObj)
 			}
 		} else {
-			if txObj.localSubmitted {
-				localNonExecutableObjs = append(localNonExecutableObjs, txObj)
-			} else {
+			if !txObj.localSubmitted {
 				nonExecutableObjs = append(nonExecutableObjs, txObj)
 			}
 		}

@@ -95,11 +95,11 @@ func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 
 func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, err error) {
 	var id thor.Bytes32
-	switch revision.(type) {
+	switch revision := revision.(type) {
 	case thor.Bytes32:
-		id = revision.(thor.Bytes32)
+		id = revision
 	case uint32:
-		id, err = b.repo.NewBestChain().GetBlockID(revision.(uint32))
+		id, err = b.repo.NewBestChain().GetBlockID(revision)
 		if err != nil {
 			return
 		}
