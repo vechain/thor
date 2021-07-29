@@ -117,14 +117,12 @@ func homeDir() string {
 func handleExitSignal() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		exitSignalCh := make(chan os.Signal)
-		signal.Notify(exitSignalCh, os.Interrupt, os.Kill, syscall.SIGTERM)
+		exitSignalCh := make(chan os.Signal, 1)
+		signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
 
-		select {
-		case sig := <-exitSignalCh:
-			log.Info("exit signal received", "signal", sig)
-			cancel()
-		}
+		sig := <-exitSignalCh
+		log.Info("exit signal received", "signal", sig)
+		cancel()
 	}()
 	return ctx
 }
