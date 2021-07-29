@@ -162,6 +162,9 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 			return &emptyRange, nil
 		}
 		head, err := chain.GetBlockHeader(block.Number(chain.HeadID()))
+		if err != nil {
+			return nil, err
+		}
 		if r.From > head.Timestamp() {
 			return &emptyRange, nil
 		}

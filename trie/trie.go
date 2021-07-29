@@ -79,9 +79,8 @@ type DatabaseWriterEx interface {
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
-	root         node
-	db           Database
-	originalRoot thor.Bytes32
+	root node
+	db   Database
 }
 
 // newFlag returns the cache flag value for a newly created node.
