@@ -610,44 +610,11 @@ func deleteString(trie *Trie, k string) {
 	trie.Delete([]byte(k))
 }
 
-type dbex struct {
-	Database
-}
+func TestExtended(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	tr := NewExtended(thor.Bytes32{}, 0, db)
 
-func (d *dbex) Get(key []byte) ([]byte, error) {
-	panic("unexpected call")
-}
-
-func (d *dbex) Has(key []byte) (bool, error) {
-	panic("unexpected call")
-}
-
-func (d *dbex) Put(key, val []byte) error {
-	panic("unexpected call")
-}
-
-func (d *dbex) GetEncoded(key *NodeKey) ([]byte, error) {
-	enc, err := d.Database.Get(append(append([]byte{}, key.Path...), key.Hash...))
-	if err != nil {
-		return nil, err
-	}
-	return enc, nil
-}
-
-func (d *dbex) GetDecoded(key *NodeKey) (dec interface{}, cacheDec func(interface{})) {
-	return nil, nil
-}
-
-func (d *dbex) PutEncoded(key *NodeKey, enc []byte) error {
-	return d.Database.Put(append(append([]byte{}, key.Path...), key.Hash...), enc)
-}
-
-func TestDatabaseEx(t *testing.T) {
-
-	db := &dbex{ethdb.NewMemDatabase()}
-	tr, _ := New(thor.Bytes32{}, db)
-
-	vals := []struct{ k, v string }{
+	vals1 := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
 		{"horse", "stallion"},
@@ -657,46 +624,66 @@ func TestDatabaseEx(t *testing.T) {
 		{"somethingveryoddindeedthis is", "myothernodedata"},
 	}
 
-	for _, v := range vals {
-		tr.Update([]byte(v.k), []byte(v.v))
+	vals2 := []struct{ k, v string }{
+		{"do1", "verb1"},
+		{"ether1", "wookiedoo1"},
+		{"horse1", "stallion1"},
+		{"shaman1", "horse1"},
+		{"doge1", "coin1"},
+		{"dog1", "puppy1"},
+		{"somethingveryoddindeedthis is1", "myothernodedata1"},
+		{"foo", "verb2"},
+		{"bar", "wookiedoo2"},
+		{"baz", "stallion2"},
+		{"hello", "horse2"},
+		{"world", "coin2"},
+		{"ethereum", "puppy2"},
+		{"is good", "myothernodedata2"},
 	}
 
-	root, err := tr.Commit()
+	for _, v := range vals1 {
+		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
+	}
+
+	root1, err := tr.Commit(1)
 	if err != nil {
 		t.Errorf("commit failed %v", err)
 	}
 
-	tr, _ = New(root, db)
-	for _, v := range vals {
-		val := tr.Get([]byte(v.k))
+	for _, v := range vals2 {
+		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
+	}
+	root2, err := tr.Commit(2)
+	if err != nil {
+		t.Errorf("commit failed %v", err)
+	}
+
+	tr1 := NewExtended(root1, 1, db)
+	if err != nil {
+		t.Errorf("new failed %v", err)
+	}
+	for _, v := range vals1 {
+		val, meta, _ := tr1.Get([]byte(v.k))
 		if string(val) != v.v {
-			t.Errorf("incorrect value")
+			t.Errorf("incorrect value for key '%v'", v.k)
+		}
+		if string(meta) != string(thor.Blake2b(val).Bytes()) {
+			t.Errorf("incorrect value meta for key '%v'", v.k)
 		}
 	}
 
-	doIter := func() {
-		it := tr.NodeIterator(nil)
-		for it.Next(true) {
-			n, err := it.Node()
-			if err != nil {
-				panic(err)
-			}
-			if h := it.Hash(); !h.IsZero() {
-				if thor.Blake2b(n) != h {
-					t.Errorf("invalid node")
-				}
-			} else {
-				if len(n) != 0 {
-					t.Errorf("must have no node")
-				}
-			}
+	tr2 := NewExtended(root2, 2, db)
+	if err != nil {
+		t.Errorf("new failed %v", err)
+	}
+	for _, v := range append(vals1, vals2...) {
+		val, meta, _ := tr2.Get([]byte(v.k))
+		if string(val) != v.v {
+			t.Errorf("incorrect value for key '%v'", v.k)
 		}
-		if err := it.Error(); err != nil {
-			t.Errorf("node iterator error %v", err)
+		if string(meta) != string(thor.Blake2b(val).Bytes()) {
+			t.Errorf("incorrect value meta for key '%v'", v.k)
 		}
 	}
 
-	doIter()
-	tr, _ = New(root, db)
-	doIter()
 }

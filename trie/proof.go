@@ -54,9 +54,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case hashNode:
+		case *hashNode:
 			var err error
-			tn, _, err = t.resolveHash(n, nil, false)
+			tn, _, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
@@ -69,19 +69,20 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
 		// if encoding doesn't work and we're not writing to any database.
-		n, _, _ = hasher.hashChildren(n, nil, nil)
-		hn, _ := hasher.store(n, nil, nil, false)
-		if hash, ok := hn.(hashNode); ok || i == 0 {
+		n, _, _ = hasher.hashChildren(n, nil, nil, nil)
+		hn, _ := hasher.store(n, nil, nil, false, nil)
+		if hash, ok := hn.(*hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
 				enc, _ := rlp.EncodeToBytes(n)
-				if !ok {
-					hash = thor.Blake2b(enc).Bytes()
+				if ok {
+					proofDb.Put(hash.hash, enc)
+				} else {
+					proofDb.Put(thor.Blake2b(enc).Bytes(), enc)
 				}
-				proofDb.Put(hash, enc)
 			}
 		}
 	}
@@ -100,7 +101,7 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
 		}
-		n, err := decodeNode(wantHash, buf)
+		n, err := decodeNode(&hashNode{wantHash, 0}, buf, nil, nil)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
 		}
@@ -109,11 +110,11 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 		case nil:
 			// The trie doesn't contain the key.
 			return nil, nil, i
-		case hashNode:
+		case *hashNode:
 			key = keyrest
-			wantHash = cld
-		case valueNode:
-			return cld, nil, i + 1
+			wantHash = cld.hash
+		case *valueNode:
+			return cld.value, nil, i + 1
 		}
 	}
 }
@@ -130,11 +131,11 @@ func get(tn node, key []byte) ([]byte, node) {
 		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
-		case hashNode:
+		case *hashNode:
 			return key, n
 		case nil:
 			return key, nil
-		case valueNode:
+		case *valueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
