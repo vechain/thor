@@ -24,8 +24,40 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/thor"
 )
+
+// makeTestTrie create a sample test trie to test node-wise reconstruction.
+func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
+	// Create an empty trie
+	db := ethdb.NewMemDatabase()
+	trie, _ := New(thor.Bytes32{}, db)
+
+	// Fill it with some arbitrary data
+	content := make(map[string][]byte)
+	for i := byte(0); i < 255; i++ {
+		// Map the same data under multiple keys
+		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		// Add some other data to inflate the trie
+		for j := byte(3); j < 13; j++ {
+			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
+			content[string(key)] = val
+			trie.Update(key, val)
+		}
+	}
+	trie.Commit()
+
+	// Return the generated trie
+	return db, trie, content
+}
 
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
@@ -372,4 +404,40 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 		seen[string(it.Path())] = true
 	}
 	return len(seen)
+}
+
+func TestIteratorNodeFilter(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	tr := NewExtended(thor.Bytes32{}, 0, db)
+	for _, val := range testdata1 {
+		tr.Update([]byte(val.k), []byte(val.v), nil)
+	}
+	root1, _ := tr.Commit(1)
+	_ = root1
+	for _, val := range testdata2 {
+		tr.Update([]byte(val.k), []byte(val.v), nil)
+	}
+	root2, _ := tr.Commit(2)
+
+	tr = NewExtended(root2, 2, db)
+
+	it := tr.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
+		return commitNum == 1
+	})
+
+	for it.Next(true) {
+		if h := it.Hash(); !h.IsZero() {
+			assert.Equal(t, uint32(1), it.CommitNum())
+		}
+	}
+
+	it = tr.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
+		return commitNum == 2
+	})
+
+	for it.Next(true) {
+		if h := it.Hash(); !h.IsZero() {
+			assert.Equal(t, uint32(2), it.CommitNum())
+		}
+	}
 }
