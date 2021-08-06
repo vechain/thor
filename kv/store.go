@@ -17,12 +17,6 @@ type Putter interface {
 	Delete(key []byte) error
 }
 
-// PutFlusher defines putter with Flush method.
-type PutFlusher interface {
-	Putter
-	Flush() error
-}
-
 // Pair defines key-value pair.
 type Pair interface {
 	Key() []byte
@@ -41,7 +35,7 @@ type Store interface {
 	Putter
 
 	Snapshot(fn func(Getter) error) error
-	Batch(fn func(PutFlusher) error) error
+	Batch(fn func(Putter) error) error
 	Iterate(r Range, fn func(Pair) bool) error
 	IsNotFound(err error) bool
 }
