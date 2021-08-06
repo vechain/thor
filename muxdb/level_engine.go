@@ -6,6 +6,8 @@
 package muxdb
 
 import (
+	"sync"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -19,12 +21,20 @@ var (
 )
 
 type levelEngine struct {
-	db *leveldb.DB
+	db        *leveldb.DB
+	batchPool *sync.Pool
 }
 
 // newLevelEngine create leveldb instance which implements engine interface.
 func newLevelEngine(db *leveldb.DB) engine {
-	return &levelEngine{db}
+	return &levelEngine{
+		db,
+		&sync.Pool{
+			New: func() interface{} {
+				return &leveldb.Batch{}
+			},
+		},
+	}
 }
 
 func (ldb *levelEngine) Close() error {
@@ -72,31 +82,33 @@ func (ldb *levelEngine) Snapshot(fn func(kv.Getter) error) error {
 	})
 }
 
-func (ldb *levelEngine) Batch(fn func(kv.PutFlusher) error) error {
-	batch := &leveldb.Batch{}
+func (ldb *levelEngine) Batch(fn func(kv.Putter) error) error {
+	batch := ldb.batchPool.Get().(*leveldb.Batch)
+	batch.Reset()
+	defer ldb.batchPool.Put(batch)
 
-	if err := fn(&struct {
-		kv.PutFunc
-		kv.DeleteFunc
-		kv.FlushFunc
-	}{
-		func(key, val []byte) error {
-			batch.Put(key, val)
-			return nil
-		},
-		func(key []byte) error {
-			batch.Delete(key)
-			return nil
-		},
-		func() error {
-			if batch.Len() == 0 {
-				return nil
-			}
+	flushIfNeeded := func() error {
+		// TODO: ideal batch size?
+		if len(batch.Dump()) >= 64*1024 {
 			if err := ldb.db.Write(batch, &writeOpt); err != nil {
 				return err
 			}
 			batch.Reset()
-			return nil
+		}
+		return nil
+	}
+
+	if err := fn(&struct {
+		kv.PutFunc
+		kv.DeleteFunc
+	}{
+		func(key, val []byte) error {
+			batch.Put(key, val)
+			return flushIfNeeded()
+		},
+		func(key []byte) error {
+			batch.Delete(key)
+			return flushIfNeeded()
 		},
 	}); err != nil {
 		return err
