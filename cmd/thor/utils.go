@@ -420,18 +420,15 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		cli.ShowAppHelp(ctx)
 		return nil, errors.Wrap(err, "parse -nat flag")
 	}
-	opts := &p2psrv.Options{
-		Name:           common.MakeName("thor", fullVersion()),
-		PrivateKey:     key,
-		MaxPeers:       ctx.Int(maxPeersFlag.Name),
-		ListenAddr:     fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
-		BootstrapNodes: bootstrapNodes,
-		NAT:            nat,
-	}
 
-	bootnodes := parseBootNode(ctx)
-	if bootnodes != nil {
-		opts.BootstrapNodes = bootnodes
+	opts := &p2psrv.Options{
+		Name:            common.MakeName("thor", fullVersion()),
+		PrivateKey:      key,
+		MaxPeers:        ctx.Int(maxPeersFlag.Name),
+		ListenAddr:      fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		BootstrapNodes:  fallbackBootstrapNodes,
+		RemoteBootstrap: remoteBootstrapList,
+		NAT:             nat,
 	}
 
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
@@ -444,14 +441,19 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		log.Warn("failed to load peers cache", "err", err)
 	}
 
-	var empty struct{}
-	m := make(map[discover.NodeID]struct{})
-	for _, node := range opts.KnownNodes {
-		m[node.ID] = empty
-	}
-	for _, bootnode := range bootnodes {
-		if _, ok := m[bootnode.ID]; !ok {
-			opts.KnownNodes = append(opts.KnownNodes, bootnode)
+	flagBootstrapNodes := parseBootNode(ctx)
+	if flagBootstrapNodes != nil {
+		opts.BootstrapNodes = flagBootstrapNodes
+		opts.RemoteBootstrap = ""
+
+		m := make(map[discover.NodeID]bool)
+		for _, node := range opts.KnownNodes {
+			m[node.ID] = true
+		}
+		for _, bootnode := range flagBootstrapNodes {
+			if !m[bootnode.ID] {
+				opts.KnownNodes = append(opts.KnownNodes, bootnode)
+			}
 		}
 	}
 
