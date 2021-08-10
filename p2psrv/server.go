@@ -6,6 +6,8 @@
 package p2psrv
 
 import (
+	"context"
+	"errors"
 	"math"
 	"net"
 	"time"
@@ -29,6 +31,7 @@ type Server struct {
 	discv5          *discv5.Network
 	goes            co.Goes
 	done            chan struct{}
+	bootstrapNodes  []*discv5.Node
 	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
@@ -117,6 +120,8 @@ func (s *Server) Start(protocols []*Protocol) error {
 			log.Debug("searching topic", "topic", topicToSearch)
 			s.goes.Go(func() { s.discoverLoop(topicToSearch) })
 		}
+
+		s.goes.Go(s.fetchBootstrap)
 	}
 
 	log.Debug("start up", "self", s.Self())
@@ -194,15 +199,15 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	bootnodes := make([]*discv5.Node, 0, len(s.opts.BootstrapNodes)+len(s.opts.KnownNodes))
 	for _, node := range s.opts.BootstrapNodes {
-		bootnodes = append(bootnodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
 	for _, node := range s.opts.KnownNodes {
-		bootnodes = append(bootnodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+
 	}
 
-	if err := network.SetFallbackNodes(bootnodes); err != nil {
+	if err := network.SetFallbackNodes(s.bootstrapNodes); err != nil {
 		return err
 	}
 	s.discv5 = network
@@ -317,4 +322,44 @@ func (s *Server) tryDial(node *discover.Node) error {
 		return err
 	}
 	return s.srv.SetupConn(conn, 1, node)
+}
+
+func (s *Server) fetchBootstrap() {
+	if s.opts.RemoteBootstrap == "" {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-s.done
+		cancel()
+	}()
+
+	f := func() error {
+		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteBootstrap)
+		if err != nil {
+			return err
+		}
+
+		bootnodes := append([]*discv5.Node(nil), s.bootstrapNodes...)
+		bootnodes = append(bootnodes, remoteNodes...)
+		if err := s.discv5.SetFallbackNodes(bootnodes); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	for {
+		if err := f(); err == nil || errors.Is(err, context.Canceled) {
+			return
+		} else {
+			log.Warn("update bootstrap nodes from remote failed", "err", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second * 10):
+		}
+	}
 }
