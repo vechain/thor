@@ -408,7 +408,7 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 
 func TestIteratorNodeFilter(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr := NewExtended(thor.Bytes32{}, 0, db)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, db)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v), nil)
 	}
@@ -419,7 +419,7 @@ func TestIteratorNodeFilter(t *testing.T) {
 	}
 	root2, _ := tr.Commit(2)
 
-	tr = NewExtended(root2, 2, db)
+	tr, _ = NewExtended(root2, 2, db)
 
 	it := tr.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
 		return commitNum == 1

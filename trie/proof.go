@@ -56,7 +56,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			nodes = append(nodes, n)
 		case *hashNode:
 			var err error
-			tn, _, err = t.resolveHash(n, nil)
+			tn, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
