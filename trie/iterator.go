@@ -344,7 +344,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 	if hash, ok := st.node.(*hashNode); ok {
-		resolved, _, err := tr.resolveHash(hash, path)
+		resolved, err := tr.resolveHash(hash, path)
 		if err != nil {
 			return err
 		}
