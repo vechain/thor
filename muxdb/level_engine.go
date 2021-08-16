@@ -89,7 +89,7 @@ func (ldb *levelEngine) Batch(fn func(kv.Putter) error) error {
 
 	flushIfNeeded := func() error {
 		// TODO: ideal batch size?
-		if len(batch.Dump()) >= 64*1024 {
+		if len(batch.Dump()) >= 32*1024 {
 			if err := ldb.db.Write(batch, &writeOpt); err != nil {
 				return err
 			}
