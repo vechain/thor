@@ -17,17 +17,12 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/muxdb/internal/trie"
 	"github.com/vechain/thor/thor"
 )
 
 const (
-	trieSpaceP         = byte(15) // the space to store permanent(pruned) trie nodes
-	trieSpaceA         = byte(0)  // the space to store live trie nodes
-	trieSpaceB         = byte(1)  // the space to store live trie nodes
-	trieSecureKeySpace = byte(16)
-	namedStoreSpace    = byte(32)
-
-	propsStoreName = "muxdb.props"
+	namedStoreSpace = byte(32)
 )
 
 type engine interface {
@@ -35,21 +30,21 @@ type engine interface {
 	Close() error
 }
 
+// Trie is the managed trie.
+type Trie = trie.Trie
+
 // Options optional parameters for MuxDB.
 type Options struct {
-	// EncodedTrieNodeCacheSizeMB is the size of encoded trie node cache.
-	EncodedTrieNodeCacheSizeMB int
-	// DecodedTrieNodeCacheCapacity is max count of cached decoded trie nodes.
-	DecodedTrieNodeCacheCapacity int
+	// TrieCacheSizeMB is the size of the trie cache.
+	TrieCacheSizeMB int
+	// TrieRootCacheCapacity is the capacity of trie root node cache.
+	TrieRootCacheCapacity int
 	// OpenFilesCacheCapacity is the capacity of open files caching for underlying database.
 	OpenFilesCacheCapacity int
 	// ReadCacheMB is the size of read cache for underlying database.
 	ReadCacheMB int
 	// WriteBufferMB is the size of write buffer for underlying database.
 	WriteBufferMB int
-	// PermanentTrie if set to true, tries always commit nodes into permanent space, so pruner
-	// will have no effect.
-	PermanentTrie bool
 	// DisablePageCache Disable page cache for database file.
 	// It's for test purpose only.
 	DisablePageCache bool
@@ -58,10 +53,8 @@ type Options struct {
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
 	engine        engine
-	trieCache     *trieCache
-	trieLiveSpace *trieLiveSpace
+	trieCache     *trie.Cache
 	storageCloser io.Closer
-	permanentTrie bool
 }
 
 // Open opens or creates DB at the given path.
@@ -76,9 +69,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		DisableSeeksCompaction:        true,
 		CompactionTableSizeMultiplier: 2,
 		VibrantKeys: []*util.Range{
-			util.BytesPrefix([]byte{trieSpaceA}),
-			util.BytesPrefix([]byte{trieSpaceB}),
-			util.BytesPrefix([]byte{trieSecureKeySpace}),
+			util.BytesPrefix([]byte{trie.NodeSpace}),
 		},
 	}
 
@@ -100,21 +91,10 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	// as engine
 	engine := newLevelEngine(ldb)
 
-	propsStore := newNamedStore(engine, propsStoreName)
-	trieLiveSpace, err := newTrieLiveSpace(propsStore)
-	if err != nil {
-		engine.Close()
-		return nil, err
-	}
-
 	return &MuxDB{
-		engine: engine,
-		trieCache: newTrieCache(
-			options.EncodedTrieNodeCacheSizeMB,
-			options.DecodedTrieNodeCacheCapacity),
-		trieLiveSpace: trieLiveSpace,
+		engine:        engine,
+		trieCache:     trie.NewCache(options.TrieCacheSizeMB, options.TrieRootCacheCapacity),
 		storageCloser: storage,
-		permanentTrie: options.PermanentTrie,
 	}, nil
 }
 
@@ -123,14 +103,9 @@ func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
 	ldb, _ := leveldb.Open(storage, nil)
 
-	engine := newLevelEngine(ldb)
-	propsStore := newNamedStore(engine, propsStoreName)
-	trieLiveSpace, _ := newTrieLiveSpace(propsStore)
-
 	return &MuxDB{
 		engine:        newLevelEngine(ldb),
-		trieCache:     newTrieCache(0, 8192),
-		trieLiveSpace: trieLiveSpace,
+		trieCache:     trie.NewCache(0, 0),
 		storageCloser: storage,
 	}
 }
@@ -148,40 +123,33 @@ func (db *MuxDB) Close() error {
 //
 // If root is zero or blake2b hash of an empty string, the trie is
 // initially empty.
-func (db *MuxDB) NewTrie(name string, root thor.Bytes32) *Trie {
-	return newTrie(
+func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
+	return trie.New(
 		db.engine,
 		name,
-		root,
 		db.trieCache,
 		false,
-		db.trieLiveSpace,
-		db.permanentTrie,
+		root,
+		commitNum,
 	)
 }
 
 // NewSecureTrie creates secure trie.
 // In a secure trie, keys are hashed using blake2b. It prevents depth attack.
-func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32) *Trie {
-	return newTrie(
+func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
+	return trie.New(
 		db.engine,
 		name,
-		root,
 		db.trieCache,
 		true,
-		db.trieLiveSpace,
-		db.permanentTrie,
+		root,
+		commitNum,
 	)
-}
-
-// NewTriePruner creates trie pruner.
-func (db *MuxDB) NewTriePruner() *TriePruner {
-	return newTriePruner(db)
 }
 
 // NewStore creates named kv-store.
 func (db *MuxDB) NewStore(name string) kv.Store {
-	return newNamedStore(db.engine, name)
+	return db.newBucket(append([]byte{namedStoreSpace}, name...))
 }
 
 // LowStore returns underlying kv-store. It's for test purpose only.
@@ -194,8 +162,9 @@ func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
 }
 
-func newNamedStore(src kv.Store, name string) kv.Store {
-	bkt := bucket(append([]byte{namedStoreSpace}, name...))
+func (db *MuxDB) newBucket(b []byte) kv.Store {
+	bkt := bucket(b)
+	src := db.engine
 	return &struct {
 		kv.Getter
 		kv.Putter
@@ -211,15 +180,9 @@ func newNamedStore(src kv.Store, name string) kv.Store {
 				return fn(bkt.ProxyGetter(getter))
 			})
 		},
-		func(fn func(kv.PutFlusher) error) error {
-			return src.Batch(func(putter kv.PutFlusher) error {
-				return fn(struct {
-					kv.Putter
-					kv.FlushFunc
-				}{
-					bkt.ProxyPutter(putter),
-					putter.Flush,
-				})
+		func(fn func(kv.Putter) error) error {
+			return src.Batch(func(putter kv.Putter) error {
+				return fn(bkt.ProxyPutter(putter))
 			})
 		},
 		func(r kv.Range, fn func(kv.Pair) bool) error {
