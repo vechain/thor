@@ -27,8 +27,8 @@ const (
 // StorageTrieName returns the name of storage trie.
 //
 // Each storage trie has a unique name, which can improve IO performance.
-func StorageTrieName(addressHash thor.Bytes32) string {
-	return "s" + string(addressHash[:16])
+func StorageTrieName(addr thor.Address) string {
+	return "s" + string(addr[:])
 }
 
 // Error is the error caused by state access failure.
@@ -49,10 +49,10 @@ type State struct {
 }
 
 // New create state object.
-func New(db *muxdb.MuxDB, root thor.Bytes32) *State {
+func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum uint32) *State {
 	state := State{
 		db:    db,
-		trie:  db.NewSecureTrie(AccountTrieName, root),
+		trie:  db.NewSecureTrie(AccountTrieName, root, commitNum),
 		cache: make(map[thor.Address]*cachedObject),
 	}
 
@@ -62,9 +62,9 @@ func New(db *muxdb.MuxDB, root thor.Bytes32) *State {
 	return &state
 }
 
-// NewStater create stater object.
-func (s *State) NewStater() *Stater {
-	return NewStater(s.db)
+// Checkout checkouts to another state.
+func (s *State) Checkout(root thor.Bytes32, commitNum uint32) *State {
+	return New(s.db, root, commitNum)
 }
 
 // cacheGetter implements stackedmap.MapGetter.
@@ -362,7 +362,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
-	trie := s.db.NewSecureTrie(StorageTrieName(thor.Blake2b(addr[:])), root)
+	trie := s.db.NewSecureTrie(StorageTrieName(addr), root, acc.storageCommitNum)
 
 	barrier := s.getStorageBarrier(addr)
 
@@ -386,10 +386,11 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 }
 
 // Stage makes a stage object to compute hash of trie or commit all changes.
-func (s *State) Stage() (*Stage, error) {
+func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 	type changed struct {
-		data    Account
-		storage map[thor.Bytes32]rlp.RawValue
+		data            Account
+		storage         map[thor.Bytes32]rlp.RawValue
+		baseStorageTrie *muxdb.Trie
 	}
 
 	var (
@@ -407,7 +408,7 @@ func (s *State) Stage() (*Stage, error) {
 			return nil, &Error{err}
 		}
 
-		c := &changed{data: co.data}
+		c := &changed{data: co.data, baseStorageTrie: co.cache.storageTrie}
 		changes[addr] = c
 		return c, nil
 	}
@@ -449,29 +450,38 @@ func (s *State) Stage() (*Stage, error) {
 	}
 
 	stage := &Stage{
-		db:          s.db,
-		accountTrie: s.db.NewSecureTrie(AccountTrieName, s.trie.Hash()),
-		codes:       codes,
+		db:           s.db,
+		trie:         s.trie.Copy(),
+		codes:        codes,
+		newCommitNum: newCommitNum,
 	}
 
 	for addr, c := range changes {
 		// skip storage changes if account is empty
 		if !c.data.IsEmpty() {
 			if len(c.storage) > 0 {
-				storageTrie := s.db.NewSecureTrie(
-					StorageTrieName(thor.Blake2b(addr[:])),
-					thor.BytesToBytes32(c.data.StorageRoot))
-
-				stage.storageTries = append(stage.storageTries, storageTrie)
+				var (
+					sTrie *muxdb.Trie
+					sRoot = thor.BytesToBytes32(c.data.StorageRoot)
+				)
+				if c.baseStorageTrie != nil && c.baseStorageTrie.Hash() == sRoot {
+					sTrie = c.baseStorageTrie.Copy()
+				} else {
+					sTrie = s.db.NewSecureTrie(StorageTrieName(addr), sRoot, c.data.storageCommitNum)
+				}
 				for k, v := range c.storage {
-					if err := saveStorage(storageTrie, k, v); err != nil {
+					if err := saveStorage(sTrie, k, v); err != nil {
 						return nil, &Error{err}
 					}
 				}
-				c.data.StorageRoot = storageTrie.Hash().Bytes()
+				if newRoot := sTrie.Hash(); sRoot != newRoot {
+					c.data.StorageRoot = newRoot.Bytes()
+					c.data.storageCommitNum = newCommitNum
+					stage.storageTries = append(stage.storageTries, sTrie)
+				}
 			}
 		}
-		if err := saveAccount(stage.accountTrie, addr, &c.data); err != nil {
+		if err := saveAccount(stage.trie, addr, &c.data); err != nil {
 			return nil, &Error{err}
 		}
 	}

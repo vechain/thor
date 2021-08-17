@@ -39,7 +39,7 @@ func TestAccount(t *testing.T) {
 }
 
 func newTrie() *muxdb.Trie {
-	return muxdb.NewMem().NewSecureTrie("", thor.Bytes32{})
+	return muxdb.NewMem().NewSecureTrie("", thor.Bytes32{}, 0)
 }
 func TestTrie(t *testing.T) {
 	trie := newTrie()
@@ -57,6 +57,7 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
+		0,
 	}
 	saveAccount(trie, addr, &acc1)
 	assert.Equal(t,
@@ -66,7 +67,7 @@ func TestTrie(t *testing.T) {
 	saveAccount(trie, addr, emptyAccount())
 	assert.Equal(t,
 		M(trie.Get(addr[:])),
-		M([]byte(nil), nil),
+		M([]byte(nil), []byte(nil), nil),
 		"empty account should be deleted")
 }
 
@@ -87,6 +88,6 @@ func TestStorageTrie(t *testing.T) {
 	saveStorage(trie, key, nil)
 	assert.Equal(t,
 		M(trie.Get(key[:])),
-		M([]byte(nil), nil),
+		M([]byte(nil), []byte(nil), nil),
 		"empty storage value should be deleted")
 }
