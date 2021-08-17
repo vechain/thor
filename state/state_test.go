@@ -19,7 +19,7 @@ import (
 func TestStateReadWrite(t *testing.T) {
 	db := muxdb.NewMem()
 
-	state := New(db, thor.Bytes32{})
+	state := New(db, thor.Bytes32{}, 0)
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -58,7 +58,7 @@ func TestStateReadWrite(t *testing.T) {
 
 func TestStateRevert(t *testing.T) {
 	db := muxdb.NewMem()
-	state := New(db, thor.Bytes32{})
+	state := New(db, thor.Bytes32{}, 0)
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	storageKey := thor.BytesToBytes32([]byte("storageKey"))
@@ -93,7 +93,7 @@ func TestStateRevert(t *testing.T) {
 	assert.Equal(t, M(false, nil), M(state.Exists(addr)))
 
 	//
-	state = New(db, thor.Bytes32{})
+	state = New(db, thor.Bytes32{}, 0)
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 0)
@@ -102,7 +102,7 @@ func TestStateRevert(t *testing.T) {
 
 func TestEnergy(t *testing.T) {
 	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{})
+	st := New(db, thor.Bytes32{}, 0)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -122,7 +122,7 @@ func TestEnergy(t *testing.T) {
 
 func TestStorage(t *testing.T) {
 	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{})
+	st := New(db, thor.Bytes32{}, 0)
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))
@@ -149,7 +149,7 @@ func TestStorage(t *testing.T) {
 
 func TestStorageBarrier(t *testing.T) {
 	db := muxdb.NewMem()
-	st := New(db, thor.Bytes32{})
+	st := New(db, thor.Bytes32{}, 0)
 
 	addr := thor.BytesToAddress([]byte("addr"))
 	key := thor.BytesToBytes32([]byte("key"))
@@ -162,10 +162,10 @@ func TestStorageBarrier(t *testing.T) {
 
 	st.SetCode(addr, []byte("code"))
 
-	stage, err := st.Stage()
+	stage, err := st.Stage(0)
 	assert.Nil(t, err)
 
-	acc, err := loadAccount(stage.accountTrie, addr)
+	acc, err := loadAccount(stage.trie, addr)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")
 }

@@ -13,6 +13,12 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+// AccountMetadata includes account metadata.
+type AccountMetadata struct {
+	Addr             thor.Address
+	StorageCommitNum uint32
+}
+
 // Account is the Thor consensus representation of an account.
 // RLP encoded objects are stored in main account trie.
 type Account struct {
@@ -22,6 +28,8 @@ type Account struct {
 	Master      []byte // master address
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
+
+	storageCommitNum uint32
 }
 
 // IsEmpty returns if an account is empty.
@@ -63,17 +71,25 @@ func emptyAccount() *Account {
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
 func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
-	data, err := trie.Get(addr[:])
+	data, meta, err := trie.Get(addr[:])
 	if err != nil {
 		return nil, err
 	}
 	if len(data) == 0 {
 		return emptyAccount(), nil
 	}
-	var a Account
+	var (
+		a Account
+		m AccountMetadata
+	)
 	if err := rlp.DecodeBytes(data, &a); err != nil {
 		return nil, err
+
 	}
+	if err := rlp.DecodeBytes(meta, &m); err != nil {
+		return nil, err
+	}
+	a.storageCommitNum = m.StorageCommitNum
 	return &a, nil
 }
 
@@ -82,23 +98,36 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
 func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.Update(addr[:], nil)
+		return trie.Update(addr[:], nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		return err
 	}
-	return trie.Update(addr[:], data)
+
+	meta, err := rlp.EncodeToBytes(&AccountMetadata{
+		addr,
+		a.storageCommitNum,
+	})
+	if err != nil {
+		return err
+	}
+	return trie.Update(addr[:], data, meta)
 }
 
 // loadStorage load storage data for given key.
 func loadStorage(trie *muxdb.Trie, key thor.Bytes32) (rlp.RawValue, error) {
-	return trie.Get(key[:])
+	v, _, err := trie.Get(key[:])
+	return v, err
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
 func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
-	return trie.Update(key[:], data)
+	return trie.Update(
+		key[:],
+		data,
+		key[:], // key preimage as metadata
+	)
 }
