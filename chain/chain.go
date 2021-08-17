@@ -55,7 +55,7 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 			if indexTrie == nil && initErr == nil {
 				var summary *BlockSummary
 				if summary, initErr = repo.GetBlockSummary(headID); initErr == nil {
-					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot)
+					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot, summary.Header.Number())
 				}
 			}
 			return indexTrie, initErr
@@ -83,7 +83,7 @@ func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
 	var key [4]byte
 	binary.BigEndian.PutUint32(key[:], num)
 
-	data, err := trie.Get(key[:])
+	data, _, err := trie.Get(key[:])
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -100,7 +100,7 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 		return nil, err
 	}
 
-	enc, err := trie.Get(id[:])
+	enc, _, err := trie.Get(id[:])
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +253,14 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 	return c.GetBlockHeader(n)
 }
 
+// CacheIndexTrie cache the index trie for later access.
+func (c *Chain) CacheIndexTrie() bool {
+	if trie, err := c.lazyInit(); err == nil {
+		return trie.Cache()
+	}
+	return false
+}
+
 // NewBestChain create a chain with best block as head.
 func (r *Repository) NewBestChain() *Chain {
 	return newChain(r, r.BestBlock().Header().ID())
@@ -269,11 +277,13 @@ func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, block *block.Block
 		return thor.Bytes32{}, errors.New("txs count != receipts count")
 	}
 
-	trie := r.db.NewTrie(IndexTrieName, parentIndexRoot)
+	trie := r.db.NewTrie(IndexTrieName, parentIndexRoot, block.Header().Number()-1)
+	defer trie.Cache()
+
 	id := block.Header().ID()
 
 	// map block number to block ID
-	if err := trie.Update(id[:4], id[:]); err != nil {
+	if err := trie.Update(id[:4], id[:], nil); err != nil {
 		return thor.Bytes32{}, err
 	}
 
@@ -287,9 +297,10 @@ func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, block *block.Block
 		if err != nil {
 			return thor.Bytes32{}, err
 		}
-		if err := trie.Update(tx.ID().Bytes(), enc); err != nil {
+		if err := trie.Update(tx.ID().Bytes(), enc, nil); err != nil {
 			return thor.Bytes32{}, err
 		}
 	}
-	return trie.Commit()
+
+	return trie.Commit(block.Header().Number())
 }

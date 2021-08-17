@@ -142,7 +142,7 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 }
 
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
-	return r.data.Batch(func(putter kv.PutFlusher) error {
+	return r.data.Batch(func(putter kv.Putter) error {
 		var (
 			header  = block.Header()
 			id      = header.ID()
