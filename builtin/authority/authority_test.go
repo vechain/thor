@@ -21,7 +21,7 @@ func M(a ...interface{}) []interface{} {
 
 func TestAuthority(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{})
+	st := state.New(db, thor.Bytes32{}, 0)
 
 	p1 := thor.BytesToAddress([]byte("p1"))
 	p2 := thor.BytesToAddress([]byte("p2"))
