@@ -256,6 +256,9 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	signer, _ := header.Signer()
 	chain := c.repo.NewChain(header.ParentID())
 
+	// cache index trie for later block commit
+	defer chain.CacheIndexTrie()
+
 	rt := runtime.New(
 		chain,
 		state,
@@ -328,7 +331,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		}
 	}
 
-	stage, err := state.Stage()
+	stage, err := state.Stage(header.Number())
 	if err != nil {
 		return nil, nil, err
 	}

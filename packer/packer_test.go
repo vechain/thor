@@ -157,7 +157,7 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
@@ -170,11 +170,11 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	headState := state.New(db, blk.Header().StateRoot())
+	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number())
 
 	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState := state.New(db, b0.Header().StateRoot())
+	geneState := state.New(db, b0.Header().StateRoot(), 0)
 
 	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }

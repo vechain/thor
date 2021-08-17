@@ -144,7 +144,10 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	stage, err := f.runtime.State().Stage()
+	// cache index trie for later block commit
+	f.runtime.Chain().CacheIndexTrie()
+
+	stage, err := f.runtime.State().Stage(f.runtime.Context().Number)
 	if err != nil {
 		return nil, nil, nil, err
 	}
