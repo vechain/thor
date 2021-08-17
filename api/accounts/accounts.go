@@ -47,9 +47,9 @@ func New(
 	}
 }
 
-func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, error) {
+func (a *Accounts) getCode(addr thor.Address, header *block.Header) ([]byte, error) {
 	code, err := a.stater.
-		NewState(stateRoot).
+		NewState(header.StateRoot(), header.Number()).
 		GetCode(addr)
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return err
 	}
-	code, err := a.getCode(addr, h.StateRoot())
+	code, err := a.getCode(addr, h)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 }
 
 func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account, error) {
-	state := a.stater.NewState(header.StateRoot())
+	state := a.stater.NewState(header.StateRoot(), header.Number())
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -96,9 +96,9 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	}, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot thor.Bytes32) (thor.Bytes32, error) {
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, header *block.Header) (thor.Bytes32, error) {
 	storage, err := a.stater.
-		NewState(stateRoot).
+		NewState(header.StateRoot(), header.Number()).
 		GetStorage(addr, key)
 
 	if err != nil {
@@ -136,7 +136,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return err
 	}
-	storage, err := a.getStorage(addr, key, h.StateRoot())
+	storage, err := a.getStorage(addr, key, h)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 	if err != nil {
 		return nil, err
 	}
-	state := a.stater.NewState(header.StateRoot())
+	state := a.stater.NewState(header.StateRoot(), header.Number())
 
 	signer, _ := header.Signer()
 	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
