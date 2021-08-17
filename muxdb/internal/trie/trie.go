@@ -62,35 +62,10 @@ func New(
 		secure: secure,
 	}
 
-	// create the database instance
-	db := &struct {
-		trie.DatabaseReader
-		trie.DatabaseWriter
-		trie.DatabaseKeyEncoder
-	}{
-		kv.GetFunc(func(key []byte) (blob []byte, err error) {
-			// get from cache
-			pathLen := nodeKey(key).Path().Len()
-			if blob = cache.GetNodeBlob(key, pathLen, t.noFillCache); len(blob) != 0 {
-				return
-			}
-			// get from store
-			if blob, err = store.Get(key); err != nil {
-				return
-			}
-			if !t.noFillCache {
-				cache.AddNodeBlob(key, blob, pathLen)
-			}
-			return
-		}),
-		nil,
-		databaseKeyEncodeFunc(newNodeKey(name).Encode),
-	}
-
 	if rootNode := cache.GetRootNode(name, root, commitNum); rootNode != nil {
-		t.ext = trie.NewExtendedCached(*rootNode, db)
+		t.ext = trie.NewExtendedCached(*rootNode, t.newDatabase())
 	} else {
-		t.ext, t.err = trie.NewExtended(root, commitNum, db)
+		t.ext, t.err = trie.NewExtended(root, commitNum, t.newDatabase())
 	}
 	return t
 }
@@ -98,6 +73,50 @@ func New(
 // Name returns trie name.
 func (t *Trie) Name() string {
 	return t.name
+}
+
+func (t *Trie) newDatabase() trie.Database {
+	return &struct {
+		trie.DatabaseReader
+		trie.DatabaseWriter
+		trie.DatabaseKeyEncoder
+	}{
+		kv.GetFunc(func(key []byte) (blob []byte, err error) {
+			// get from cache
+			pathLen := nodeKey(key).Path().Len()
+			if blob = t.cache.GetNodeBlob(key, pathLen, t.noFillCache); len(blob) != 0 {
+				return
+			}
+			// get from store
+			if blob, err = t.store.Get(key); err != nil {
+				return
+			}
+			if !t.noFillCache {
+				t.cache.AddNodeBlob(key, blob, pathLen)
+			}
+			return
+		}),
+		nil,
+		databaseKeyEncodeFunc(newNodeKey(t.name).Encode),
+	}
+}
+
+// Copy make a copy of this trie.
+func (t *Trie) Copy() *Trie {
+	cpy := *t
+	if t.ext != nil {
+		cpy.ext = trie.NewExtendedCached(t.ext.RootNode(), t.newDatabase())
+		cpy.noFillCache = false
+		if len(t.pfkeys) > 0 {
+			cpy.pfkeys = make(map[uint64]struct{})
+			for k, v := range t.pfkeys {
+				cpy.pfkeys[k] = v
+			}
+		} else {
+			cpy.pfkeys = nil
+		}
+	}
+	return &cpy
 }
 
 // Cache caches the current root node.
