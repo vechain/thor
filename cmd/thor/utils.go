@@ -251,7 +251,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v3", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
@@ -274,12 +274,11 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 
 	path := filepath.Join(dir, "main.db")
 	db, err := muxdb.Open(path, &muxdb.Options{
-		EncodedTrieNodeCacheSizeMB:   cacheMB,
-		DecodedTrieNodeCacheCapacity: 65536,
-		OpenFilesCacheCapacity:       fdCache,
-		ReadCacheMB:                  256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:                128,
-		PermanentTrie:                ctx.Bool(disablePrunerFlag.Name),
+		TrieCacheSizeMB:        cacheMB,
+		TrieRootCacheCapacity:  512,
+		OpenFilesCacheCapacity: fdCache,
+		ReadCacheMB:            256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:          128,
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "open main database [%v]", path)
