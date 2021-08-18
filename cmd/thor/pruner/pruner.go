@@ -77,9 +77,10 @@ func (p *Pruner) loop() error {
 	)
 
 	var (
-		status status
-		target uint32
-		stats  stats
+		status                   status
+		target                   uint32
+		stats                    stats
+		knownAlmostFinalBlockNum uint32
 	)
 
 	if err := status.Load(p.db); err != nil {
@@ -97,7 +98,7 @@ func (p *Pruner) loop() error {
 			target = status.Base + maxSpan
 		}
 
-		targetChain, err := p.waitUntilAlmostFinal(target)
+		targetChain, err := p.waitUntilAlmostFinal(target, &knownAlmostFinalBlockNum)
 		if err != nil {
 			return err
 		}
@@ -232,7 +233,11 @@ func (p *Pruner) getProposerCount(header *block.Header) (int, error) {
 
 // waitUntilAlmostFinal waits until the target block number becomes almost final,
 // and returns the canonical chain.
-func (p *Pruner) waitUntilAlmostFinal(target uint32) (*chain.Chain, error) {
+func (p *Pruner) waitUntilAlmostFinal(target uint32, knownAlmostFinalBlockNum *uint32) (*chain.Chain, error) {
+	if target <= *knownAlmostFinalBlockNum {
+		return p.repo.NewBestChain(), nil
+	}
+
 	ticker := p.repo.NewTicker()
 	for {
 		best := p.repo.BestBlock()
@@ -252,6 +257,7 @@ func (p *Pruner) waitUntilAlmostFinal(target uint32) (*chain.Chain, error) {
 
 				if len(set) >= (proposerCount+1)/2 {
 					// got enough unique signers
+					*knownAlmostFinalBlockNum = h.Number()
 					return p.repo.NewChain(best.Header().ID()), nil
 				}
 				s, err := p.repo.GetBlockSummary(h.ParentID())
