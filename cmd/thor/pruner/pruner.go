@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/muxdb"
@@ -25,12 +26,13 @@ var log = log15.New("pkg", "pruner")
 const (
 	propsStoreName = "pruner.props"
 	statusKey      = "status"
-
-	stepInitiate           = ""
-	stepArchiveIndexTrie   = "archiveIndexTrie"
-	stepArchiveAccountTrie = "archiveAccountTrie"
-	stepDropStale          = "dropStale"
 )
+
+type stats struct {
+	nIndexTrieNodeDeleted,
+	nAccountTrieNodeDeleted,
+	nStorageTrieNodeDeleted int
+}
 
 // Pruner is the state pruner.
 type Pruner struct {
@@ -66,176 +68,209 @@ func (p *Pruner) Stop() {
 	p.goes.Wait()
 }
 
+// loop the main loop.
 func (p *Pruner) loop() error {
-	var status status
+	log.Info("pruner started")
+	const (
+		minSpan = 100
+		maxSpan = 5000
+	)
+
+	var (
+		status status
+		target uint32
+		stats  stats
+	)
+
 	if err := status.Load(p.db); err != nil {
 		return err
 	}
-	if status.Cycles == 0 && status.Step == stepInitiate {
-		log.Info("pruner started")
-	} else {
-		log.Info("pruner started", "range", fmt.Sprintf("[%v, %v]", status.N1, status.N2), "step", status.Step)
-	}
 
-	pruner := p.db.NewTriePruner()
-
-	if status.Cycles == 0 {
-		if _, _, err := p.archiveIndexTrie(pruner, 0, 0); err != nil {
-			return err
-		}
-		if _, _, _, _, err := p.archiveAccountTrie(pruner, 0, 0); err != nil {
-			return err
-		}
-	}
-
-	bestNum := func() uint32 {
-		return p.repo.BestBlock().Header().Number()
-	}
-
-	waitUntil := func(n uint32) error {
-		for {
-			if bestNum() > n {
-				return nil
-			}
-			select {
-			case <-p.ctx.Done():
-				return p.ctx.Err()
-			case <-time.After(time.Second):
-			}
-		}
-	}
+	p.goes.Go(func() { p.statsLoop(&stats, &status.Base, &target) })
 
 	for {
-		switch status.Step {
-		case stepInitiate:
-			if err := pruner.SwitchLiveSpace(); err != nil {
-				return err
-			}
-			status.N1 = status.N2
-			status.N2 = bestNum() + 10
-			// not necessary to prune if n2 is too small
-			if status.N2 < thor.MaxStateHistory {
-				status.N2 = thor.MaxStateHistory
-			}
-			if err := waitUntil(status.N2); err != nil {
-				return err
-			}
-			log.Info("initiated", "range", fmt.Sprintf("[%v, %v]", status.N1, status.N2))
-			status.Step = stepArchiveIndexTrie
-		case stepArchiveIndexTrie:
-			log.Info("archiving index trie...")
-			nodeCount, entryCount, err := p.archiveIndexTrie(pruner, status.N1, status.N2)
-			if err != nil {
-				return err
-			}
-			log.Info("archived index trie", "nodes", nodeCount, "entries", entryCount)
-			status.Step = stepArchiveAccountTrie
-		case stepArchiveAccountTrie:
-			log.Info("archiving account trie...")
-			nodeCount, entryCount, sNodeCount, sEntryCount, err := p.archiveAccountTrie(pruner, status.N1, status.N2)
-			if err != nil {
-				return err
-			}
-			log.Info("archived account trie",
-				"nodes", nodeCount, "entries", entryCount,
-				"storageNodes", sNodeCount, "storageEntries", sEntryCount)
-			status.Step = stepDropStale
-		case stepDropStale:
-			if err := waitUntil(status.N2 + thor.MaxStateHistory + 128); err != nil {
-				return err
-			}
-			log.Info("sweeping stale nodes...")
-			count, err := pruner.DropStaleNodes(p.ctx)
-			if err != nil {
-				return err
-			}
-			log.Info("swept stale nodes", "count", count)
-
-			status.Cycles++
-			status.Step = stepInitiate
-		default:
-			return fmt.Errorf("unexpected pruner step: %v", status.Step)
+		// select target
+		target = p.repo.BestBlock().Header().Number()
+		if target < status.Base+minSpan {
+			target = status.Base + minSpan
+		} else if target > status.Base+maxSpan {
+			target = status.Base + maxSpan
 		}
 
+		targetChain, err := p.waitUntilAlmostFinal(target)
+		if err != nil {
+			return err
+		}
+
+		summary, err := targetChain.GetBlockSummary(target)
+		if err != nil {
+			return err
+		}
+		// prune the index trie
+		indexTrie := p.db.NewTrie(chain.IndexTrieName, summary.IndexRoot, target)
+		if nDeleted, err := indexTrie.Prune(p.ctx, status.Base); err != nil {
+			return err
+		} else {
+			stats.nIndexTrieNodeDeleted += nDeleted
+		}
+
+		// prune the account trie and storage tries
+		if err := p.pruneState(targetChain, status.Base, target, summary.Header.StateRoot(), &stats); err != nil {
+			return err
+		}
+
+		status.Base = target
 		if err := status.Save(p.db); err != nil {
 			return err
 		}
 	}
 }
 
-func (p *Pruner) archiveIndexTrie(pruner *muxdb.TriePruner, n1, n2 uint32) (nodeCount, entryCount int, err error) {
-	var (
-		bestChain              = p.repo.NewBestChain()
-		id1, id2, root1, root2 thor.Bytes32
-		s1, s2                 *chain.BlockSummary
-	)
+// pruneState prunes the account trie and storage tries.
+func (p *Pruner) pruneState(targetChain *chain.Chain, base, target uint32, stateRoot thor.Bytes32, stats *stats) error {
+	accIter := p.db.NewTrie(state.AccountTrieName, stateRoot, target).
+		NodeIterator(nil, func(path []byte, commitNum uint32) bool {
+			return commitNum > base
+		})
 
-	if id1, err = bestChain.GetBlockID(n1); err != nil {
-		return
-	}
-	if s1, err = p.repo.GetBlockSummary(id1); err != nil {
-		return
-	}
-	root1 = s1.IndexRoot
+	// iterate updated accounts since the base, and prune storage tries
+	for accIter.Next(true) {
+		if leaf := accIter.Leaf(); leaf != nil {
+			var acc state.Account
+			if err := rlp.DecodeBytes(leaf.Value, &acc); err != nil {
+				return err
+			}
+			if len(acc.StorageRoot) == 0 {
+				// skip, no storage
+				continue
+			}
 
-	if id2, err = bestChain.GetBlockID(n2); err != nil {
-		return
+			var meta state.AccountMetadata
+			if err := rlp.DecodeBytes(leaf.Meta, &meta); err != nil {
+				return err
+			}
+			if meta.StorageCommitNum <= base {
+				// skip, no storage updates
+				continue
+			}
+			sTrie := p.db.NewTrie(
+				state.StorageTrieName(meta.Addr),
+				thor.BytesToBytes32(acc.StorageRoot),
+				meta.StorageCommitNum,
+			)
+			if nDeleted, err := sTrie.Prune(p.ctx, base); err != nil {
+				return err
+			} else {
+				stats.nStorageTrieNodeDeleted += nDeleted
+			}
+		}
 	}
-	if s2, err = p.repo.GetBlockSummary(id2); err != nil {
-		return
+	if err := accIter.Error(); err != nil {
+		return err
 	}
-	root2 = s2.IndexRoot
 
-	if n1 == 0 && n2 == 0 {
-		root1 = thor.Bytes32{}
+	if base > thor.MaxStateHistory {
+		aBase := base - thor.MaxStateHistory
+		aTarget := target - thor.MaxStateHistory
+		summary, err := targetChain.GetBlockSummary(aTarget)
+		if err != nil {
+			return err
+		}
+		// prune the account trie
+		accTrie := p.db.NewTrie(state.AccountTrieName, summary.Header.StateRoot(), aTarget)
+		if nDeleted, err := accTrie.Prune(p.ctx, aBase); err != nil {
+			return err
+		} else {
+			stats.nAccountTrieNodeDeleted += nDeleted
+		}
 	}
-	nodeCount, entryCount, err = pruner.ArchiveNodes(p.ctx, chain.IndexTrieName, root1, root2, nil)
-	return
+	return nil
 }
 
-func (p *Pruner) archiveAccountTrie(pruner *muxdb.TriePruner, n1, n2 uint32) (nodeCount, entryCount, storageNodeCount, storageEntryCount int, err error) {
-	var (
-		bestChain        = p.repo.NewBestChain()
-		header1, header2 *block.Header
-		root1, root2     thor.Bytes32
-	)
-
-	if header1, err = bestChain.GetBlockHeader(n1); err != nil {
-		return
-	}
-	if header2, err = bestChain.GetBlockHeader(n2); err != nil {
-		return
-	}
-	root1, root2 = header1.StateRoot(), header2.StateRoot()
-	if n1 == 0 && n2 == 0 {
-		root1 = thor.Bytes32{}
-	}
-
-	nodeCount, entryCount, err = pruner.ArchiveNodes(p.ctx, state.AccountTrieName, root1, root2, func(key, blob1, blob2 []byte) error {
-		var sRoot1, sRoot2 thor.Bytes32
-		if len(blob1) > 0 {
-			var acc state.Account
-			if err := rlp.DecodeBytes(blob1, &acc); err != nil {
-				return err
-			}
-			sRoot1 = thor.BytesToBytes32(acc.StorageRoot)
+// statsLoop the loop prints stats logs.
+func (p *Pruner) statsLoop(stats *stats, base, target *uint32) {
+	isNearlySynced := func() bool {
+		diff := time.Now().Unix() - int64(p.repo.BestBlock().Header().Timestamp())
+		if diff < 0 {
+			diff = -diff
 		}
-		if len(blob2) > 0 {
-			var acc state.Account
-			if err := rlp.DecodeBytes(blob2, &acc); err != nil {
-				return err
-			}
-			sRoot2 = thor.BytesToBytes32(acc.StorageRoot)
+		return diff < 120
+	}
+	for {
+		period := time.Second * 20
+		if isNearlySynced() {
+			period = time.Minute * 5
 		}
-		if sRoot1 != sRoot2 {
-			n, e, err := pruner.ArchiveNodes(p.ctx, state.StorageTrieName(thor.BytesToBytes32(key)), sRoot1, sRoot2, nil)
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-time.After(period):
+		}
+
+		log.Info("pruning tries",
+			"i", stats.nIndexTrieNodeDeleted,
+			"a", stats.nAccountTrieNodeDeleted,
+			"s", stats.nStorageTrieNodeDeleted,
+			"r", fmt.Sprintf("#%v+%v", *base, *target-*base),
+		)
+	}
+}
+
+func (p *Pruner) getProposerCount(header *block.Header) (int, error) {
+	st := state.New(p.db, header.StateRoot(), header.Number())
+	endorsement, err := builtin.Params.Native(st).Get(thor.KeyProposerEndorsement)
+	if err != nil {
+		return 0, err
+	}
+
+	candidates, err := builtin.Authority.Native(st).Candidates(endorsement, thor.MaxBlockProposers)
+	if err != nil {
+		return 0, err
+	}
+	return len(candidates), nil
+}
+
+// waitUntilAlmostFinal waits until the target block number becomes almost final,
+// and returns the canonical chain.
+func (p *Pruner) waitUntilAlmostFinal(target uint32) (*chain.Chain, error) {
+	ticker := p.repo.NewTicker()
+	for {
+		best := p.repo.BestBlock()
+		// requires the best block number larger enough than target.
+		if best.Header().Number() > target+uint32(thor.MaxBlockProposers*2) {
+			proposerCount, err := p.getProposerCount(best.Header())
 			if err != nil {
-				return err
+				return nil, err
 			}
-			storageNodeCount += n
-			storageEntryCount += e
+
+			set := make(map[thor.Address]struct{})
+			h := best.Header()
+			// reverse iterate the chain and collect signers.
+			for i := 0; i < int(thor.MaxBlockProposers)*5 && h.Number() > target; i++ {
+				signer, _ := h.Signer()
+				set[signer] = struct{}{}
+
+				if len(set) >= (proposerCount+1)/2 {
+					// got enough unique signers
+					return p.repo.NewChain(best.Header().ID()), nil
+				}
+				s, err := p.repo.GetBlockSummary(h.ParentID())
+				if err != nil {
+					return nil, err
+				}
+				h = s.Header
+			}
 		}
-		return nil
-	})
-	return
+
+		select {
+		case <-p.ctx.Done():
+			return nil, p.ctx.Err()
+		case <-time.After(time.Second):
+			select {
+			case <-p.ctx.Done():
+				return nil, p.ctx.Err()
+			case <-ticker.C():
+			}
+		}
+	}
 }
