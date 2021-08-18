@@ -12,9 +12,7 @@ import (
 )
 
 type status struct {
-	N1, N2 uint32
-	Step   string
-	Cycles uint32
+	Base uint32
 }
 
 func (s *status) Load(db *muxdb.MuxDB) error {
