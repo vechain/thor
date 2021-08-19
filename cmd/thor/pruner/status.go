@@ -13,6 +13,7 @@ import (
 
 type status struct {
 	Base uint32
+	Top  uint32 // the largest already known almost final block number
 }
 
 func (s *status) Load(db *muxdb.MuxDB) error {
