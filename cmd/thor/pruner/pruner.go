@@ -28,7 +28,7 @@ const (
 	statusKey      = "status"
 )
 
-type stats struct {
+type counter struct {
 	nIndexTrieNodeDeleted,
 	nAccountTrieNodeDeleted,
 	nStorageTrieNodeDeleted int
@@ -77,16 +77,16 @@ func (p *Pruner) loop() error {
 	)
 
 	var (
-		status status
-		target uint32
-		stats  stats
+		status  status
+		target  uint32
+		counter counter
 	)
 
 	if err := status.Load(p.db); err != nil {
 		return err
 	}
 
-	p.goes.Go(func() { p.statsLoop(&stats, &status.Base, &target) })
+	p.goes.Go(func() { p.statsLoop(&counter, &status.Base, &target) })
 
 	for {
 		// select target
@@ -111,11 +111,11 @@ func (p *Pruner) loop() error {
 		if nDeleted, err := indexTrie.Prune(p.ctx, status.Base); err != nil {
 			return err
 		} else {
-			stats.nIndexTrieNodeDeleted += nDeleted
+			counter.nIndexTrieNodeDeleted += nDeleted
 		}
 
 		// prune the account trie and storage tries
-		if err := p.pruneState(targetChain, status.Base, target, summary.Header.StateRoot(), &stats); err != nil {
+		if err := p.pruneState(targetChain, status.Base, target, summary.Header.StateRoot(), &counter); err != nil {
 			return err
 		}
 
@@ -127,7 +127,7 @@ func (p *Pruner) loop() error {
 }
 
 // pruneState prunes the account trie and storage tries.
-func (p *Pruner) pruneState(targetChain *chain.Chain, base, target uint32, stateRoot thor.Bytes32, stats *stats) error {
+func (p *Pruner) pruneState(targetChain *chain.Chain, base, target uint32, stateRoot thor.Bytes32, counter *counter) error {
 	accIter := p.db.NewTrie(state.AccountTrieName, stateRoot, target).
 		NodeIterator(nil, func(path []byte, commitNum uint32) bool {
 			return commitNum > base
@@ -161,7 +161,7 @@ func (p *Pruner) pruneState(targetChain *chain.Chain, base, target uint32, state
 			if nDeleted, err := sTrie.Prune(p.ctx, base); err != nil {
 				return err
 			} else {
-				stats.nStorageTrieNodeDeleted += nDeleted
+				counter.nStorageTrieNodeDeleted += nDeleted
 			}
 		}
 	}
@@ -181,14 +181,14 @@ func (p *Pruner) pruneState(targetChain *chain.Chain, base, target uint32, state
 		if nDeleted, err := accTrie.Prune(p.ctx, aBase); err != nil {
 			return err
 		} else {
-			stats.nAccountTrieNodeDeleted += nDeleted
+			counter.nAccountTrieNodeDeleted += nDeleted
 		}
 	}
 	return nil
 }
 
 // statsLoop the loop prints stats logs.
-func (p *Pruner) statsLoop(stats *stats, base, target *uint32) {
+func (p *Pruner) statsLoop(counter *counter, base, target *uint32) {
 	isNearlySynced := func() bool {
 		diff := time.Now().Unix() - int64(p.repo.BestBlock().Header().Timestamp())
 		if diff < 0 {
@@ -208,9 +208,9 @@ func (p *Pruner) statsLoop(stats *stats, base, target *uint32) {
 		}
 
 		log.Info("pruning tries",
-			"i", stats.nIndexTrieNodeDeleted,
-			"a", stats.nAccountTrieNodeDeleted,
-			"s", stats.nStorageTrieNodeDeleted,
+			"i", counter.nIndexTrieNodeDeleted,
+			"a", counter.nAccountTrieNodeDeleted,
+			"s", counter.nStorageTrieNodeDeleted,
 			"r", fmt.Sprintf("#%v+%v", *base, *target-*base),
 		)
 	}
