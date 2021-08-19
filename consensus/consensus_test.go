@@ -172,7 +172,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().Timestamp(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 
 		blk = tc.sign(build.Timestamp(tc.parent.Header().Timestamp() - 1).Build())
 		err = tc.consent(blk)
@@ -183,7 +183,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().Timestamp(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrInterval"] = func() {
 		build := tc.originalBuilder()
@@ -196,7 +196,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().Timestamp(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrFutureBlock"] = func() {
 		build := tc.originalBuilder()
@@ -215,7 +215,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().GasLimit(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerExceedGaUsed"] = func() {
 		build := tc.originalBuilder()
@@ -228,7 +228,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().GasUsed(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerInvalidTotalScore"] = func() {
 		build := tc.originalBuilder()
@@ -241,7 +241,7 @@ func (tc *testConsensus) TestValidateBlockHeader() {
 				blk.Header().TotalScore(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 
 	for _, trigger := range triggers {
@@ -288,7 +288,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		blk := tc.sign(tc.originalBuilder().Transaction(txBuilder(tc.tag).Build()).Build())
 		err := tc.consent(blk)
 		expect := consensusError("tx signer unavailable: invalid signature length")
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 
 	triggers["triggerErrTxsRootMismatch"] = func() {
@@ -303,7 +303,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 				transactions.RootHash(),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrChainTagMismatch"] = func() {
 		err := tc.consent(
@@ -320,7 +320,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 				tc.tag+1,
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrRefFutureBlock"] = func() {
 		err := tc.consent(
@@ -331,7 +331,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 			),
 		)
 		expect := consensusError("tx ref future block: ref 100, current 1")
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerTxOriginBlocked"] = func() {
 		thor.MockBlocklist([]string{genesis.DevAccounts()[9].Address.String()})
@@ -346,7 +346,7 @@ func (tc *testConsensus) TestValidateBlockBody() {
 		expect := consensusError(
 			fmt.Sprintf("tx origin blocked got packed: %v", genesis.DevAccounts()[9].Address),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 
 	for _, trigger := range triggers {
@@ -360,7 +360,7 @@ func (tc *testConsensus) TestValidateProposer() {
 		blk := tc.originalBuilder().Build()
 		err := tc.consent(blk)
 		expect := consensusError("block signer unavailable: invalid signature length")
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrSignerInvalid"] = func() {
 		blk := tc.originalBuilder().Build()
@@ -374,7 +374,7 @@ func (tc *testConsensus) TestValidateProposer() {
 				thor.Address(crypto.PubkeyToAddress(pk.PublicKey)),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerErrTimestampUnscheduled"] = func() {
 		blk := tc.originalBuilder().Build()
@@ -388,14 +388,14 @@ func (tc *testConsensus) TestValidateProposer() {
 				thor.Address(crypto.PubkeyToAddress(genesis.DevAccounts()[1].PrivateKey.PublicKey)),
 			),
 		)
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 	triggers["triggerTotalScoreInvalid"] = func() {
 		build := tc.originalBuilder()
 		blk := tc.sign(build.TotalScore(tc.original.Header().TotalScore() + 100).Build())
 		err := tc.consent(blk)
 		expect := consensusError("block total score invalid: want 1, have 101")
-		tc.assert.Equal(err, expect)
+		tc.assert.Equal(expect, err)
 	}
 
 	for _, trigger := range triggers {

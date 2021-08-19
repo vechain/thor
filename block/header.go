@@ -184,7 +184,7 @@ func (h *Header) pubkey() (pubkey *ecdsa.PublicKey, err error) {
 	}()
 
 	if len(h.body.Signature) < 65 {
-		return nil, errors.New("invalid block signature")
+		return nil, errors.New("invalid signature length")
 	}
 
 	return crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
