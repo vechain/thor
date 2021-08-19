@@ -7,13 +7,16 @@ package block
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -25,8 +28,9 @@ type Header struct {
 
 	cache struct {
 		signingHash atomic.Value
-		signer      atomic.Value
 		id          atomic.Value
+		pubkey      atomic.Value
+		beta        atomic.Value
 	}
 }
 
@@ -45,6 +49,8 @@ type headerBody struct {
 	ReceiptsRoot    thor.Bytes32
 
 	Signature []byte
+
+	Extension extension
 }
 
 // ParentID returns id of parent block.
@@ -165,29 +171,64 @@ func (h *Header) withSignature(sig []byte) *Header {
 	return &cpy
 }
 
+// pubkey recover leader's public key.
+func (h *Header) pubkey() (pubkey *ecdsa.PublicKey, err error) {
+	if cached := h.cache.pubkey.Load(); cached != nil {
+		return cached.(*ecdsa.PublicKey), nil
+	}
+
+	defer func() {
+		if err == nil {
+			h.cache.pubkey.Store(pubkey)
+		}
+	}()
+
+	if len(h.body.Signature) < 65 {
+		return nil, errors.New("invalid block signature")
+	}
+
+	return crypto.SigToPub(h.SigningHash().Bytes(), ComplexSignature(h.body.Signature).Signature())
+}
+
 // Signer extract signer of the block from signature.
-func (h *Header) Signer() (signer thor.Address, err error) {
+func (h *Header) Signer() (thor.Address, error) {
 	if h.Number() == 0 {
 		// special case for genesis block
 		return thor.Address{}, nil
 	}
 
-	if cached := h.cache.signer.Load(); cached != nil {
-		return cached.(thor.Address), nil
-	}
-	defer func() {
-		if err == nil {
-			h.cache.signer.Store(signer)
-		}
-	}()
-
-	pub, err := crypto.SigToPub(h.SigningHash().Bytes(), h.body.Signature)
+	pub, err := h.pubkey()
 	if err != nil {
 		return thor.Address{}, err
 	}
 
-	signer = thor.Address(crypto.PubkeyToAddress(*pub))
-	return
+	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
+}
+
+// Beta verifies the VRF proof in header's signature and returns the beta.
+func (h *Header) Beta() (beta []byte, err error) {
+	if h.Number() == 0 || len(h.body.Signature) == 65 {
+		return []byte{}, nil
+	}
+
+	if cached := h.cache.beta.Load(); cached != nil {
+		return cached.([]byte), nil
+	}
+	defer func() {
+		if err == nil {
+			h.cache.beta.Store(beta)
+		}
+	}()
+
+	if len(h.body.Signature) != 146 {
+		return nil, errors.New("invalid signature length")
+	}
+	pub, err := h.pubkey()
+	if err != nil {
+		return
+	}
+
+	return ecvrf.NewSecp256k1Sha256Tai().Verify(pub, h.body.Extension.Alpha, ComplexSignature(h.body.Signature).Proof())
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -202,6 +243,15 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&body); err != nil {
 		return err
 	}
+
+	// After fork VIP-193.stage.0 block signature is complex signature
+	if len(body.Extension.Alpha) == 0 && len(body.Signature) != 65 {
+		return errors.New("rlp: invalid header")
+	}
+	if len(body.Extension.Alpha) > 0 && len(body.Signature) != 146 {
+		return errors.New("rlp: invalid header")
+	}
+
 	*h = Header{body: body}
 	return nil
 }

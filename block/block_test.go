@@ -6,10 +6,11 @@
 package block_test
 
 import (
-	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,6 @@ import (
 )
 
 func TestBlock(t *testing.T) {
-
 	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
 	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
 
@@ -51,12 +51,8 @@ func TestBlock(t *testing.T) {
 	h := block.Header()
 
 	txs := block.Transactions()
-	body := block.Body()
 	txsRootHash := txs.RootHash()
 
-	fmt.Println(h.ID())
-
-	assert.Equal(t, body.Txs, txs)
 	assert.Equal(t, Compose(h, txs), block)
 	assert.Equal(t, gasLimit, h.GasLimit())
 	assert.Equal(t, gasUsed, h.GasUsed())
@@ -74,15 +70,9 @@ func TestBlock(t *testing.T) {
 	block = block.WithSignature(sig)
 
 	data, _ := rlp.EncodeToBytes(block)
-	fmt.Println(Raw(data).DecodeHeader())
-	fmt.Println(Raw(data).DecodeBody())
-
-	fmt.Println(block.Size())
 
 	b := Block{}
 	rlp.DecodeBytes(data, &b)
-	fmt.Println(b.Header().ID())
-	fmt.Println(&b)
 
 	block = new(Builder).
 		GasUsed(gasUsed).
@@ -96,10 +86,180 @@ func TestBlock(t *testing.T) {
 		TransactionFeatures(1).
 		Build()
 
+	sig, _ = crypto.Sign(block.Header().SigningHash().Bytes(), key)
+	block = block.WithSignature(sig)
+
 	assert.Equal(t, tx.Features(1), block.Header().TxsFeatures())
 	data, _ = rlp.EncodeToBytes(block)
 	var bx Block
 	assert.Nil(t, rlp.DecodeBytes(data, &bx))
 	assert.Equal(t, block.Header().ID(), bx.Header().ID())
 	assert.Equal(t, block.Header().TxsFeatures(), bx.Header().TxsFeatures())
+}
+
+func TestHeaderEncoding(t *testing.T) {
+	var sig [65]byte
+	rand.Read(sig[:])
+
+	block := new(Builder).Build().WithSignature(sig[:])
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hh Header
+	err = rlp.DecodeBytes(bytes, &hh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes = append(bytes, []byte("just trailing")...)
+	var hhh Header
+	err = rlp.DecodeBytes(bytes, &hhh)
+	assert.EqualError(t, err, "rlp: input contains more than one value")
+
+	var proof [81]byte
+	var alpha [36]byte
+	rand.Read(proof[:])
+	rand.Read(alpha[:])
+
+	complex, err := NewComplexSignature(proof[:], sig[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b1 := new(Builder).Alpha(alpha[:]).Build().WithSignature(sig[:])
+	bs1, err := rlp.EncodeToBytes(b1.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var h1 Header
+	err = rlp.DecodeBytes(bs1, &h1)
+	assert.EqualError(t, err, "rlp: invalid header")
+
+	b2 := new(Builder).Alpha([]byte(nil)).Build().WithSignature(complex[:])
+	bs2, err := rlp.EncodeToBytes(b2.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var h2 Header
+	err = rlp.DecodeBytes(bs2, &h2)
+	assert.EqualError(t, err, "rlp: invalid header")
+
+	b3 := new(Builder).Alpha(alpha[:]).Build().WithSignature(complex[:])
+	bs3, err := rlp.EncodeToBytes(b3.Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var h3 Header
+	err = rlp.DecodeBytes(bs3, &h3)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEncodingBadExtension(t *testing.T) {
+	var sig [65]byte
+	rand.Read(sig[:])
+
+	block := new(Builder).Build().WithSignature(sig[:])
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var h1 Header
+	err = rlp.DecodeBytes(bytes, &h1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// backward compatiability，required to be trimmed
+	assert.EqualValues(t, 10, count)
+
+	var raws []rlp.RawValue
+	_ = rlp.DecodeBytes(bytes, &raws)
+	d, _ := rlp.EncodeToBytes(&struct {
+		Alpha []byte
+	}{
+		[]byte{},
+	})
+	raws = append(raws, d)
+	b, _ := rlp.EncodeToBytes(raws)
+
+	var h2 Header
+	err = rlp.DecodeBytes(b, &h2)
+	assert.EqualError(t, err, "rlp: extension must be trimmed")
+}
+
+func TestEncodingExtension(t *testing.T) {
+	var sig [146]byte
+	var alpha [36]byte
+	rand.Read(sig[:])
+	rand.Read(alpha[:])
+
+	block := new(Builder).Alpha(alpha[:]).Build().WithSignature(sig[:])
+	h := block.Header()
+
+	bytes, err := rlp.EncodeToBytes(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var hh Header
+	err = rlp.DecodeBytes(bytes, &hh)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 11, count)
+}
+
+func TestCodingCompatibility(t *testing.T) {
+	raw := hexutil.MustDecode("0xf8e0a0000000000000000000000000000000000000000000000000000000000000000080809400000000000000000000000000000000000000008080a045b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b841e95a07bda136baa1181f32fba25b8dec156dee373781fdc7d24acd5e60ebc104c04b397ee7a67953e2d10acc4835343cd949a73e7e58db1b92f682db62e793c412")
+
+	var h0 Header
+	err := rlp.DecodeBytes(raw, &h0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes, err := rlp.EncodeToBytes(&h0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, raw, bytes)
+
+	data, _, err := rlp.SplitList(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := rlp.CountValues(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.EqualValues(t, 10, count)
 }
