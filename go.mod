@@ -38,10 +38,10 @@ require (
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/sys v0.0.0-20200814200057-3d37ad5750ed
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
-	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
+	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951 // indirect
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20180723110524-d53328019b21
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.3.0
 )
 
-replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20200918014306-20f0a95f6dd4
+replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20210819030439-cc5203594725
