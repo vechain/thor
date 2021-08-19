@@ -83,7 +83,7 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	n.comm.Sync(n.handleBlockStream)
+	n.comm.Sync(n.HandleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
@@ -93,11 +93,45 @@ func (n *Node) Run(ctx context.Context) error {
 	return nil
 }
 
-func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
+// HandleBlockStream processes streamed block sequence.
+func (n *Node) HandleBlockStream(stream <-chan *block.Block) (err error) {
 	log.Debug("start to process block stream")
 	defer log.Debug("process block stream done", "err", err)
-	var stats blockStats
-	startTime := mclock.Now()
+	var (
+		stats        blockStats
+		startTime    = mclock.Now()
+		warmedStream = make(chan *block.Block, co.ParallelQueueLen()*2)
+		goes         co.Goes
+		done         = make(chan struct{})
+	)
+	defer goes.Wait()
+	defer close(done)
+
+	// pre-call expensive methods to warmup blocks
+	goes.Go(func() {
+		defer close(warmedStream)
+		<-co.Parallel(func(q chan<- func()) {
+			for b := range stream {
+				h := b.Header()
+				q <- func() { h.ID() }                // warmup block id
+				for _, tx := range b.Transactions() { // warmup txs
+					tx := tx
+					q <- func() {
+						txid := tx.ID()
+						tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
+						_, _ = n.repo.NewBestChain().GetTransactionMeta(txid)
+					}
+				}
+				select {
+				case warmedStream <- b:
+				case <-done:
+					return
+				}
+			}
+		})
+	})
 
 	report := func(block *block.Block) {
 		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
@@ -106,7 +140,7 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 	}
 
 	var blk *block.Block
-	for blk = range stream {
+	for blk = range warmedStream {
 		if _, err := n.processBlock(blk, &stats); err != nil {
 			return err
 		}
@@ -114,12 +148,6 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 		if stats.processed > 0 &&
 			mclock.Now()-startTime > mclock.AbsTime(time.Second*2) {
 			report(blk)
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
 		}
 	}
 	if blk != nil && stats.processed > 0 {
