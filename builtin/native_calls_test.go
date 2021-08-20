@@ -7,6 +7,7 @@ package builtin_test
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"math"
@@ -760,7 +761,9 @@ func TestPrototypeNative(t *testing.T) {
 func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	var (
 		acc1 = thor.BytesToAddress([]byte("acc1"))
+		sig  [65]byte
 	)
+	rand.Read(sig[:])
 
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
@@ -779,7 +782,8 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
-			Build()
+			Build().
+			WithSignature(sig[:])
 		repo.AddBlock(b, tx.Receipts{})
 		repo.SetBestBlockID(b.Header().ID())
 	}
@@ -827,7 +831,9 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	var (
 		acc1 = thor.BytesToAddress([]byte("acc1"))
+		sig  [65]byte
 	)
+	rand.Read(sig[:])
 
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
@@ -846,7 +852,8 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
-			Build()
+			Build().
+			WithSignature(sig[:])
 		repo.AddBlock(b, tx.Receipts{})
 		repo.SetBestBlockID(b.Header().ID())
 	}

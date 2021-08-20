@@ -6,6 +6,7 @@
 package txpool
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"testing"
@@ -48,14 +49,19 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
+	var sig [65]byte
+	rand.Read(sig[:])
+
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
 		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
-		Build()
-	pool.repo.AddBlock(b1, nil)
+		Build().WithSignature(sig[:])
+	if err := pool.repo.AddBlock(b1, nil); err != nil {
+		t.Fatal(err)
+	}
 	pool.repo.SetBestBlockID(b1.Header().ID())
 
 	txCh := make(chan *TxEvent)
@@ -115,13 +121,15 @@ func TestWashTxs(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
+	var sig [65]byte
+	rand.Read(sig[:])
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
 		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
-		Build()
+		Build().WithSignature(sig[:])
 	pool.repo.AddBlock(b1, nil)
 	pool.repo.SetBestBlockID(b1.Header().ID())
 	acc := genesis.DevAccounts()[0]
