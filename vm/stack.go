@@ -19,6 +19,7 @@ package vm
 import (
 	"fmt"
 	"math/big"
+	"sync"
 )
 
 // stack is an object for basic stack operations. Items popped to the stack are
@@ -29,7 +30,7 @@ type Stack struct {
 }
 
 func newstack() *Stack {
-	return &Stack{data: make([]*big.Int, 0, 1024)}
+	return &Stack{data: make([]*big.Int, 0, 16)}
 }
 
 func (st *Stack) Data() []*big.Int {
@@ -80,6 +81,10 @@ func (st *Stack) require(n int) error {
 	return nil
 }
 
+func (st *Stack) reset() {
+	st.data = st.data[:0]
+}
+
 func (st *Stack) Print() {
 	fmt.Println("### stack ###")
 	if len(st.data) > 0 {
@@ -90,4 +95,10 @@ func (st *Stack) Print() {
 		fmt.Println("-- empty --")
 	}
 	fmt.Println("#############")
+}
+
+var stackPool = sync.Pool{
+	New: func() interface{} {
+		return newstack()
+	},
 }
