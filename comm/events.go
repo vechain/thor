@@ -6,8 +6,6 @@
 package comm
 
 import (
-	"context"
-
 	"github.com/vechain/thor/block"
 )
 
@@ -16,5 +14,5 @@ type NewBlockEvent struct {
 	*block.Block
 }
 
-// HandleBlockStream to handle the stream of downloaded blocks in sync process.
-type HandleBlockStream func(ctx context.Context, stream <-chan *block.Block) error
+// ImportBlockFunc processes and imports a block.
+type ImportBlockFunc func(b *block.Block) error

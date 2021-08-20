@@ -6,100 +6,45 @@
 package comm
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 )
 
-func (c *Communicator) sync(peer *Peer, headNum uint32, handler HandleBlockStream) error {
+func (c *Communicator) sync(peer *Peer, headNum uint32, importFunc ImportBlockFunc) error {
 	ancestor, err := c.findCommonAncestor(peer, headNum)
 	if err != nil {
 		return errors.WithMessage(err, "find common ancestor")
 	}
-	return c.download(peer, ancestor+1, handler)
+	return c.download(peer, ancestor+1, importFunc)
 }
 
-func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) error {
-
-	// it's important to set cap to 2
-	errCh := make(chan error, 2)
-
-	ctx, cancel := context.WithCancel(c.ctx)
-	blockCh := make(chan *block.Block, 2048)
-
-	var goes co.Goes
-	goes.Go(func() {
-		defer cancel()
-		if err := handler(ctx, blockCh); err != nil {
-			errCh <- err
+func (c *Communicator) download(peer *Peer, fromNum uint32, importFunc ImportBlockFunc) error {
+	for {
+		result, err := proto.GetBlocksFromNumber(c.ctx, peer, fromNum)
+		if err != nil {
+			return err
 		}
-	})
-	goes.Go(func() {
-		defer close(blockCh)
-		var blocks []*block.Block
-		for {
-			result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if len(result) == 0 {
-				return
-			}
+		if len(result) == 0 {
+			return nil
+		}
 
-			blocks = blocks[:0]
-			for _, raw := range result {
-				var blk block.Block
-				if err := rlp.DecodeBytes(raw, &blk); err != nil {
-					errCh <- errors.Wrap(err, "invalid block")
-					return
-				}
-				if blk.Header().Number() != fromNum {
-					errCh <- errors.New("broken sequence")
-					return
-				}
-				fromNum++
-				blocks = append(blocks, &blk)
+		for _, raw := range result {
+			var blk block.Block
+			if err := rlp.DecodeBytes(raw, &blk); err != nil {
+				return errors.Wrap(err, "invalid block")
 			}
-
-			<-co.Parallel(func(queue chan<- func()) {
-				for _, blk := range blocks {
-					h := blk.Header()
-					queue <- func() { h.ID() }
-					for _, tx := range blk.Transactions() {
-						tx := tx
-						queue <- func() {
-							tx.ID()
-							tx.UnprovedWork()
-							_, _ = tx.IntrinsicGas()
-							_, _ = tx.Delegator()
-						}
-					}
-				}
-			})
-
-			for _, blk := range blocks {
-				peer.MarkBlock(blk.Header().ID())
-				select {
-				case <-ctx.Done():
-					return
-				case blockCh <- blk:
-				}
+			if blk.Header().Number() != fromNum {
+				return errors.New("broken sequence")
+			}
+			fromNum++
+			if err := importFunc(&blk); err != nil {
+				return err
 			}
 		}
-	})
-	goes.Wait()
-
-	select {
-	case err := <-errCh:
-		return err
-	default:
-		return nil
 	}
 }
 

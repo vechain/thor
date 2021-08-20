@@ -63,7 +63,7 @@ func (c *Communicator) Synced() <-chan struct{} {
 }
 
 // Sync start synchronization process.
-func (c *Communicator) Sync(handler HandleBlockStream) {
+func (c *Communicator) Sync(importFunc ImportBlockFunc) {
 	const initSyncInterval = 2 * time.Second
 	const syncInterval = 30 * time.Second
 
@@ -108,7 +108,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 					// if more than 3 peers connected, we are assumed to be the best
 					log.Debug("synchronization done, best assumed")
 				} else {
-					if err := c.sync(peer, best.Number(), handler); err != nil {
+					if err := c.sync(peer, best.Number(), importFunc); err != nil {
 						peer.logger.Debug("synchronization failed", "err", err)
 						break
 					}
