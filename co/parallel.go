@@ -12,9 +12,13 @@ import (
 
 var numCPU = runtime.NumCPU()
 
+func ParallelQueueLen() int {
+	return numCPU * 16
+}
+
 // Parallel to run a batch of work using as many CPU as it can.
 func Parallel(cb func(chan<- func())) <-chan struct{} {
-	queue := make(chan func(), numCPU*16)
+	queue := make(chan func(), ParallelQueueLen())
 	defer close(queue)
 
 	done := make(chan struct{})

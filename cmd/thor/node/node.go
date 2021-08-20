@@ -37,6 +37,17 @@ import (
 
 var log = log15.New("pkg", "node")
 
+type BlockImportCloser interface {
+	Import(b *block.Block) error
+	Close()
+}
+
+type BlockImportCloserImportFunc func(b *block.Block) error
+type BlockImportCloserCloseFunc func()
+
+func (f BlockImportCloserImportFunc) Import(b *block.Block) error { return f(b) }
+func (f BlockImportCloserCloseFunc) Close()                       { f() }
+
 type Node struct {
 	goes     co.Goes
 	packer   *packer.Packer
@@ -83,7 +94,9 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
-	n.comm.Sync(n.handleBlockStream)
+	importer := n.NewBlockImporter(2048)
+	defer importer.Close()
+	n.comm.Sync(importer.Import)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
 	n.goes.Go(func() { n.txStashLoop(ctx) })
@@ -93,39 +106,110 @@ func (n *Node) Run(ctx context.Context) error {
 	return nil
 }
 
-func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
-	log.Debug("start to process block stream")
-	defer log.Debug("process block stream done", "err", err)
-	var stats blockStats
-	startTime := mclock.Now()
+func (n *Node) NewBlockImporter(bufLen int) BlockImportCloser {
+	var (
+		bufferedCh  = make(chan *block.Block, bufLen)
+		warmedCh    = make(chan *block.Block, co.ParallelQueueLen()*2)
+		errCh       = make(chan error, 1)
+		goes        co.Goes
+		ctx, cancel = context.WithCancel(context.Background())
+	)
 
-	report := func(block *block.Block) {
-		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
-		stats = blockStats{}
-		startTime = mclock.Now()
-	}
+	goes.Go(func() {
+		defer close(warmedCh)
+		<-co.Parallel(func(q chan<- func()) {
+			for b := range bufferedCh {
+				if b == nil {
+					continue
+				}
+				h := b.Header()
+				q <- func() { h.ID() }                // warmup block id
+				for _, tx := range b.Transactions() { // warmup txs
+					tx := tx
+					q <- func() {
+						txid := tx.ID()
+						tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
+						_, _ = n.repo.NewBestChain().GetTransactionMeta(txid)
+					}
+				}
+				select {
+				case warmedCh <- b:
+				case <-ctx.Done():
+					return
+				}
+			}
+		})
+	})
 
-	var blk *block.Block
-	for blk = range stream {
-		if _, err := n.processBlock(blk, &stats); err != nil {
-			return err
+	goes.Go(func() {
+		var (
+			stats     blockStats
+			startTime = mclock.Now()
+		)
+		report := func(block *block.Block) {
+			log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+			stats = blockStats{}
+			startTime = mclock.Now()
 		}
+		var blk *block.Block
+		for blk = range warmedCh {
+			if _, err := n.processBlock(blk, &stats); err != nil {
+				select {
+				case errCh <- err:
+				default:
+				}
+				return
+			}
 
-		if stats.processed > 0 &&
-			mclock.Now()-startTime > mclock.AbsTime(time.Second*2) {
+			if stats.processed > 0 &&
+				mclock.Now()-startTime > mclock.AbsTime(time.Second*2) {
+				report(blk)
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+		}
+		if blk != nil && stats.processed > 0 {
 			report(blk)
 		}
+	})
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+	return &struct {
+		BlockImportCloserImportFunc
+		BlockImportCloserCloseFunc
+	}{
+		func(b *block.Block) error {
+			select {
+			case bufferedCh <- b:
+			case <-ctx.Done():
+				return ctx.Err()
+			case err := <-errCh:
+				return err
+			}
+			// when queued blocks count > 10% channel cap,
+			// send nil block to throttle to reduce mem pressure.
+			if len(bufferedCh)*10 > cap(bufferedCh) {
+				const targetSize = 2048
+				for i := 1; i < int(b.Size())/targetSize; i++ {
+					select {
+					case bufferedCh <- nil:
+					default:
+					}
+				}
+			}
+			return nil
+		},
+		func() {
+			close(bufferedCh)
+			cancel()
+			goes.Wait()
+		},
 	}
-	if blk != nil && stats.processed > 0 {
-		report(blk)
-	}
-	return nil
 }
 
 func (n *Node) houseKeeping(ctx context.Context) {
