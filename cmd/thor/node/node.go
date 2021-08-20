@@ -118,10 +118,17 @@ func (n *Node) NewBlockImporter(bufLen int) BlockImportCloser {
 	goes.Go(func() {
 		defer close(warmedCh)
 		<-co.Parallel(func(q chan<- func()) {
-			for b := range bufferedCh {
-				if b == nil {
-					continue
+			for {
+				var b *block.Block
+				select {
+				case b = <-bufferedCh:
+					if b == nil {
+						continue
+					}
+				case <-ctx.Done():
+					return
 				}
+
 				h := b.Header()
 				q <- func() { h.ID() }                // warmup block id
 				for _, tx := range b.Transactions() { // warmup txs
@@ -205,7 +212,6 @@ func (n *Node) NewBlockImporter(bufLen int) BlockImportCloser {
 			return nil
 		},
 		func() {
-			close(bufferedCh)
 			cancel()
 			goes.Wait()
 		},
