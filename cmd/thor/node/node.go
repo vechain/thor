@@ -134,11 +134,10 @@ func (n *Node) NewBlockImporter(bufLen int) BlockImportCloser {
 				for _, tx := range b.Transactions() { // warmup txs
 					tx := tx
 					q <- func() {
-						txid := tx.ID()
+						tx.ID()
 						tx.UnprovedWork()
 						_, _ = tx.IntrinsicGas()
 						_, _ = tx.Delegator()
-						_, _ = n.repo.NewBestChain().GetTransactionMeta(txid)
 					}
 				}
 				select {
