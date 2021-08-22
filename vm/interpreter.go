@@ -38,7 +38,7 @@ type Config struct {
 	// JumpTable contains the EVM instruction table. This
 	// may be left uninitialised and will be set to the default
 	// table.
-	JumpTable [256]operation
+	JumpTable JumpTable
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -60,7 +60,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
-	if !cfg.JumpTable[STOP].valid {
+	if cfg.JumpTable == nil {
 		switch {
 		case evm.ChainConfig().IsIstanbul(evm.BlockNumber):
 			cfg.JumpTable = istanbulInstructionSet
@@ -83,7 +83,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	}
 }
 
-func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
+func (in *Interpreter) enforceRestrictions(op OpCode, operation *operation, stack *Stack) error {
 	if in.evm.chainRules.IsByzantium {
 		if in.readOnly {
 			// If the interpreter is operating in readonly mode, make sure no
@@ -171,7 +171,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := in.cfg.JumpTable[op]
-		if !operation.valid {
+		if operation == nil {
 			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 		if err := operation.validateStack(stack); err != nil {
