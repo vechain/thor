@@ -147,9 +147,8 @@ func TestForkVIP191(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	fc := thor.ForkConfig{
-		VIP191: 1,
-	}
+	fc := thor.NoFork
+	fc.VIP191 = 1
 
 	best := repo.BestBlock()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)

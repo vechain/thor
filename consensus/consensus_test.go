@@ -8,7 +8,6 @@ package consensus
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"math"
 	"math/big"
 	"reflect"
 	"strings"
@@ -108,11 +107,8 @@ func newTestConsensus(t *testing.T) *testConsensus {
 		t.Fatal(err)
 	}
 
-	forkConfig := thor.ForkConfig{
-		VIP191:    math.MaxUint32,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 0,
-	}
+	forkConfig := thor.NoFork
+	forkConfig.BLOCKLIST = 0
 
 	con := New(repo, stater, forkConfig)
 

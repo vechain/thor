@@ -205,6 +205,11 @@ func (h *Header) Signer() (thor.Address, error) {
 	return thor.Address(crypto.PubkeyToAddress(*pub)), nil
 }
 
+// Alpha returns the alpha in the header.
+func (h *Header) Alpha() []byte {
+	return h.body.Extension.Alpha
+}
+
 // Beta verifies the VRF proof in header's signature and returns the beta.
 func (h *Header) Beta() (beta []byte, err error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {

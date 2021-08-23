@@ -6,10 +6,13 @@
 package consensus
 
 import (
+	"bytes"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -21,16 +24,16 @@ import (
 func (c *Consensus) validate(
 	state *state.State,
 	block *block.Block,
-	parentHeader *block.Header,
+	parentSummay *chain.BlockSummary,
 	nowTimestamp uint64,
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
-	if err := c.validateBlockHeader(header, parentHeader, nowTimestamp); err != nil {
+	if err := c.validateBlockHeader(header, parentSummay, nowTimestamp); err != nil {
 		return nil, nil, err
 	}
 
-	candidates, err := c.validateProposer(header, parentHeader, state)
+	candidates, err := c.validateProposer(header, parentSummay.Header, state)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -88,7 +91,9 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
+func (c *Consensus) validateBlockHeader(header *block.Header, parentSummary *chain.BlockSummary, nowTimestamp uint64) error {
+	parent := parentSummary.Header
+
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
@@ -112,6 +117,21 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	if header.TotalScore() <= parent.TotalScore() {
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
+
+	if header.Number() >= c.forkConfig.VIP214 {
+		if len(header.Signature()) != 146 {
+			return consensusError(fmt.Sprintf("block signature length invalid: want 146, have %v", len(header.Signature())))
+		}
+
+		if !bytes.Equal(header.Alpha(), parentSummary.Beta()) {
+			return consensusError(fmt.Sprintf("block alpha invalid: want %v, have %v", hexutil.Encode(parentSummary.Beta()), hexutil.Encode(header.Alpha())))
+		}
+
+		if _, err := header.Beta(); err != nil {
+			return consensusError(fmt.Sprintf("block VRF signature invalid: %v", err))
+		}
+	}
+
 	return nil
 }
 
@@ -138,7 +158,17 @@ func (c *Consensus) validateProposer(header *block.Header, parent *block.Header,
 		return nil, err
 	}
 
-	sched, err := poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
+	var sched poa.Scheduler
+	if header.Number() < c.forkConfig.VIP214 {
+		sched, err = poa.NewSchedulerV1(signer, proposers, parent.Number(), parent.Timestamp())
+	} else {
+		var seed thor.Bytes32
+		seed, err = c.seeder.Generate(header.ParentID())
+		if err != nil {
+			return nil, err
+		}
+		sched, err = poa.NewSchedulerV2(signer, proposers, parent.Number(), parent.Timestamp(), seed[:])
+	}
 	if err != nil {
 		return nil, consensusError(fmt.Sprintf("block signer invalid: %v %v", signer, err))
 	}

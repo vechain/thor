@@ -87,10 +87,10 @@ func TestScheduleV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
 
-	_, err := poa.NewSchedulerV2(thor.BytesToAddress([]byte("p6")), proposers, parent, nil)
+	_, err := poa.NewSchedulerV2(thor.BytesToAddress([]byte("p6")), proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	assert.NotNil(t, err)
 
-	sched, _ := poa.NewSchedulerV2(p2, proposers, parent, nil)
+	sched, _ := poa.NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 
 	for i := uint64(0); i < 100; i++ {
 		now := parentTime + i*thor.BlockInterval/2
@@ -105,7 +105,7 @@ func TestIsTheTimeV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
 
-	sched, err := poa.NewSchedulerV2(p2, proposers, parent, nil)
+	sched, err := poa.NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestUpdatesV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
 
-	sched, err := poa.NewSchedulerV2(p2, proposers, parent, nil)
+	sched, err := poa.NewSchedulerV2(p2, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestActivateInV2(t *testing.T) {
 	binary.BigEndian.PutUint32(parentID[:], 0)
 	parent := new(block.Builder).ParentID(parentID).Timestamp(parentTime).Build()
 
-	sched, err := poa.NewSchedulerV2(p1, proposers, parent, nil)
+	sched, err := poa.NewSchedulerV2(p1, proposers, parent.Header().Number(), parent.Header().Timestamp(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,10 +7,10 @@ package poa
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"sort"
 
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
 
@@ -30,7 +30,8 @@ var _ Scheduler = (*SchedulerV2)(nil)
 func NewSchedulerV2(
 	addr thor.Address,
 	proposers []Proposer,
-	parent *block.Block,
+	parentBlockNumber uint32,
+	parentBlockTime uint64,
 	seed []byte) (*SchedulerV2, error) {
 
 	var (
@@ -41,6 +42,8 @@ func NewSchedulerV2(
 			hash thor.Bytes32
 		}
 	)
+	var num [4]byte
+	binary.BigEndian.PutUint32(num[:], parentBlockNumber)
 
 	for _, p := range proposers {
 		if p.Address == addr {
@@ -52,7 +55,7 @@ func NewSchedulerV2(
 				hash thor.Bytes32
 			}{
 				p.Address,
-				thor.Blake2b(seed, parent.Header().ID().Bytes()[:4], p.Address.Bytes()),
+				thor.Blake2b(seed, num[:], p.Address.Bytes()),
 			})
 		} else if p.Active {
 			list = append(list, struct {
@@ -60,7 +63,7 @@ func NewSchedulerV2(
 				hash thor.Bytes32
 			}{
 				p.Address,
-				thor.Blake2b(seed, parent.Header().ID().Bytes()[:4], p.Address.Bytes()),
+				thor.Blake2b(seed, num[:], p.Address.Bytes()),
 			})
 		}
 	}
@@ -80,7 +83,7 @@ func NewSchedulerV2(
 
 	return &SchedulerV2{
 		proposer,
-		parent.Header().Timestamp(),
+		parentBlockTime,
 		shuffled,
 	}, nil
 }

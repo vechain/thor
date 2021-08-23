@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/poa"
 
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -24,6 +25,7 @@ import (
 type Consensus struct {
 	repo                 *chain.Repository
 	stater               *state.Stater
+	seeder               *poa.Seeder
 	forkConfig           thor.ForkConfig
 	correctReceiptsRoots map[string]string
 	candidatesCache      *simplelru.LRU
@@ -35,6 +37,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	return &Consensus{
 		repo:                 repo,
 		stater:               stater,
+		seeder:               poa.NewSeeder(repo),
 		forkConfig:           forkConfig,
 		correctReceiptsRoots: thor.LoadCorrectReceiptsRoots(),
 		candidatesCache:      candidatesCache,
@@ -72,7 +75,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
 	}
 
-	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)
+	stage, receipts, err := c.validate(state, blk, parentSummary, nowTimestamp)
 	if err != nil {
 		return nil, nil, err
 	}
