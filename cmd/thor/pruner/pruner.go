@@ -72,8 +72,8 @@ func (p *Pruner) Stop() {
 func (p *Pruner) loop() error {
 	log.Info("pruner started")
 	const (
-		minSpan = 100
-		maxSpan = 5000
+		minSpan = 3600  // 10 hours
+		maxSpan = 18000 // 50 hours
 	)
 
 	var (
