@@ -25,81 +25,91 @@ func (c *Communicator) sync(peer *Peer, headNum uint32, handler HandleBlockStrea
 }
 
 func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) error {
+	var (
+		ctx, cancel = context.WithCancel(c.ctx)
+		blockCh     = make(chan *block.Block, 2048)
+		goes        co.Goes
+		handlerErr  error
+	)
+	defer goes.Wait()
+	defer close(blockCh)
+	defer cancel()
 
-	// it's important to set cap to 2
-	errCh := make(chan error, 2)
-
-	ctx, cancel := context.WithCancel(c.ctx)
-	blockCh := make(chan *block.Block, 2048)
-
-	var goes co.Goes
 	goes.Go(func() {
 		defer cancel()
-		if err := handler(ctx, blockCh); err != nil {
-			errCh <- err
-		}
+		handlerErr = handler(ctx, blockCh)
 	})
-	goes.Go(func() {
-		defer close(blockCh)
-		var blocks []*block.Block
-		for {
-			result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if len(result) == 0 {
-				return
-			}
 
-			blocks = blocks[:0]
-			for _, raw := range result {
-				var blk block.Block
-				if err := rlp.DecodeBytes(raw, &blk); err != nil {
-					errCh <- errors.Wrap(err, "invalid block")
-					return
-				}
-				if blk.Header().Number() != fromNum {
-					errCh <- errors.New("broken sequence")
-					return
-				}
-				fromNum++
-				blocks = append(blocks, &blk)
+	var blocks []*block.Block
+	for {
+		result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
+		if err != nil {
+			if handlerErr != nil {
+				return handlerErr
 			}
+			return err
+		}
+		if len(result) == 0 {
+			return handlerErr
+		}
 
-			<-co.Parallel(func(queue chan<- func()) {
-				for _, blk := range blocks {
-					h := blk.Header()
-					queue <- func() { h.ID() }
-					for _, tx := range blk.Transactions() {
-						tx := tx
-						queue <- func() {
-							tx.ID()
-							tx.UnprovedWork()
-							_, _ = tx.IntrinsicGas()
-							_, _ = tx.Delegator()
-						}
+		blocks = blocks[:0]
+		for _, raw := range result {
+			var blk block.Block
+			if err := rlp.DecodeBytes(raw, &blk); err != nil {
+				return errors.Wrap(err, "invalid block")
+			}
+			if blk.Header().Number() != fromNum {
+				return errors.New("broken sequence")
+			}
+			fromNum++
+			blocks = append(blocks, &blk)
+		}
+
+		select {
+		case <-co.Parallel(func(queue chan<- func()) {
+			for _, blk := range blocks {
+				h := blk.Header()
+				queue <- func() { h.ID() }
+				for _, tx := range blk.Transactions() {
+					tx := tx
+					queue <- func() {
+						tx.ID()
+						tx.UnprovedWork()
+						_, _ = tx.IntrinsicGas()
+						_, _ = tx.Delegator()
 					}
 				}
-			})
+			}
+		}):
+		case <-ctx.Done():
+			if handlerErr != nil {
+				return handlerErr
+			}
+			return ctx.Err()
+		}
 
-			for _, blk := range blocks {
-				peer.MarkBlock(blk.Header().ID())
-				select {
-				case <-ctx.Done():
-					return
-				case blockCh <- blk:
+		for _, blk := range blocks {
+			// when queued blocks count > 10% channel cap,
+			// send nil block to throttle to reduce mem pressure.
+			if len(blockCh)*10 > cap(blockCh) {
+				const targetSize = 2048
+				for i := 0; i < int(blk.Size())/targetSize-1; i++ {
+					select {
+					case blockCh <- nil:
+					default:
+					}
 				}
 			}
+			select {
+			case <-ctx.Done():
+				if handlerErr != nil {
+					return handlerErr
+				}
+				return ctx.Err()
+			case blockCh <- blk:
+			}
 		}
-	})
-	goes.Wait()
-
-	select {
-	case err := <-errCh:
-		return err
-	default:
-		return nil
 	}
 }
 
