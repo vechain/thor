@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -147,8 +146,8 @@ func (ml *metaList) Next() ([]byte, error) {
 	return content, nil
 }
 
-// commitNumList is the splitted rlp list of commit numbers.
-type commitNumList []byte
+// commitNumList is a list of commit numbers.
+type commitNumList []uint32
 
 // Next returns the commit number of the current child hash node and move to the next none.
 // It returns io.EOF if reaches end.
@@ -159,16 +158,9 @@ func (cnl *commitNumList) Next() (uint32, error) {
 	if len(*cnl) == 0 {
 		return 0, io.EOF
 	}
-	_, _, rest, err := rlp.Split(*cnl)
-	if err != nil {
-		return 0, err
-	}
-	var cn uint32
-	if err := rlp.DecodeBytes((*cnl)[:len(*cnl)-len(rest)], &cn); err != nil {
-		return 0, err
-	}
 
-	*cnl = rest
+	cn := (*cnl)[0]
+	*cnl = (*cnl)[1:]
 	return cn, nil
 }
 
@@ -183,14 +175,12 @@ func decodeTrailing(buf []byte) (*metaList, *commitNumList, error) {
 		return nil, nil, err
 	}
 
-	cnBuf, rest, err := rlp.SplitList(rest)
-	if err != nil {
+	var cnList []uint32
+	if err := rlp.DecodeBytes(rest, &cnList); err != nil {
 		return nil, nil, err
 	}
-	if len(rest) > 0 {
-		return nil, nil, errors.New("encode trailing, unexpected rest bytes")
-	}
-	return (*metaList)(&mBuf), (*commitNumList)(&cnBuf), nil
+
+	return (*metaList)(&mBuf), (*commitNumList)(&cnList), nil
 }
 
 func encodeTrailing(collapsed node, w io.Writer) error {
