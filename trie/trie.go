@@ -427,7 +427,7 @@ func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node, error) {
 	}
 	buf, err := t.db.Get(key)
 	if err != nil || len(buf) == 0 {
-		return nil, &MissingNodeError{NodeHash: thor.BytesToBytes32(n.hash), Path: prefix}
+		return nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
 	}
 	return mustDecodeNode(n, buf), nil
 }
