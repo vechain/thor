@@ -46,7 +46,7 @@ func (c *Cache) nodeSlot(pathLen int) *freecache.Cache {
 // AddNodeBlob adds node into the cache.
 func (c *Cache) AddNodeBlob(key, node []byte, pathLen int) {
 	if s := c.nodeSlot(pathLen); s != nil {
-		_ = s.Set(key, node, 8*3600)
+		_ = s.Set(key, node, 0)
 	}
 }
 
@@ -65,7 +65,7 @@ func (c *Cache) GetNodeBlob(key []byte, pathLen int, peek bool) (node []byte) {
 // AddPrefilterKey add prefilter key into the cache.
 func (c *Cache) AddPrefilterKey(key []byte) {
 	if s := c.pfkeys; s != nil {
-		s.Set(key, nil, 8*3600)
+		s.Set(key, nil, 0)
 	}
 }
 
