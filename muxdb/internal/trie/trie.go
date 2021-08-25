@@ -8,6 +8,7 @@ package trie
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
@@ -31,7 +32,8 @@ func (f databaseKeyEncodeFunc) Encode(hash []byte, commitNum uint32, path []byte
 }
 
 var (
-	_ trie.DatabaseKeyEncoder = databaseKeyEncodeFunc(nil)
+	_                 trie.DatabaseKeyEncoder = databaseKeyEncodeFunc(nil)
+	errFalsePrefilter                         = errors.New("false prefilter")
 )
 
 // Trie is the managed trie.
@@ -42,6 +44,7 @@ type Trie struct {
 	secure      bool
 	noFillCache bool
 	pfkeys      map[uint64]struct{} // records updated keys needed by pre-filter
+	curPfKey    uint64
 	ext         *trie.ExtendedTrie
 	err         error
 }
@@ -87,6 +90,18 @@ func (t *Trie) newDatabase() trie.Database {
 			if blob = t.cache.GetNodeBlob(key, pathLen, t.noFillCache); len(blob) != 0 {
 				return
 			}
+			// prefilter when node missing in cache
+			if t.curPfKey != 0 {
+				if has, err := t.prefilter(t.curPfKey); err != nil {
+					return nil, err
+				} else {
+					t.curPfKey = 0
+					// short circuit if the prefilter tells not exist.
+					if !has {
+						return nil, errFalsePrefilter
+					}
+				}
+			}
 			// get from store
 			if blob, err = t.store.Get(key); err != nil {
 				return
@@ -105,7 +120,8 @@ func (t *Trie) newDatabase() trie.Database {
 func (t *Trie) Copy() *Trie {
 	cpy := *t
 	if t.ext != nil {
-		cpy.ext = trie.NewExtendedCached(t.ext.RootNode(), t.newDatabase())
+		cpy.ext = trie.NewExtendedCached(t.ext.RootNode(), cpy.newDatabase())
+		cpy.curPfKey = 0
 		cpy.noFillCache = false
 		if len(t.pfkeys) > 0 {
 			cpy.pfkeys = make(map[uint64]struct{})
@@ -187,17 +203,18 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 		return nil, nil, t.err
 	}
 	if t.secure {
-		var pfkey uint64
-		key, pfkey = t.hashKey(key)
-
-		if has, err := t.prefilter(pfkey); err != nil {
-			return nil, nil, err
-		} else if !has {
-			// short circuit if the prefilter tells not exist.
-			return nil, nil, nil
-		}
+		key, t.curPfKey = t.hashKey(key)
+		defer func() { t.curPfKey = 0 }()
 	}
-	return t.ext.Get(key)
+	val, meta, err := t.ext.Get(key)
+	if err == nil {
+		return val, meta, nil
+	}
+
+	if miss, ok := err.(*trie.MissingNodeError); ok && miss.Err == errFalsePrefilter {
+		return nil, nil, nil
+	}
+	return nil, nil, err
 }
 
 // Update associates key with value in the trie. Subsequent calls to
