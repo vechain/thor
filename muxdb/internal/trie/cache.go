@@ -14,19 +14,21 @@ import (
 
 // Cache is the cache layer for trie.
 type Cache struct {
-	blobs [8]*freecache.Cache // slots to cache blobs, like encoded nodes, prefilter keys.
-	roots *lru.Cache          // caches root nodes.
+	nodes  [7]*freecache.Cache // slots to cache node blobs.
+	pfkeys *freecache.Cache    // caches prefilter keys.
+	roots  *lru.Cache          // caches root nodes.
 }
 
 // NewCache creates a cache object with the given cache size.
 func NewCache(sizeMB int, rootCap int) *Cache {
 	var cache Cache
 	if sizeMB > 0 {
-		nSlot := len(cache.blobs)
+		nSlot := len(cache.nodes) + 1
 		size := sizeMB * 1024 * 1024 / nSlot
-		for i := 0; i < nSlot; i++ {
-			cache.blobs[i] = freecache.NewCache(size)
+		for i := 0; i < len(cache.nodes); i++ {
+			cache.nodes[i] = freecache.NewCache(size)
 		}
+		cache.pfkeys = freecache.NewCache(size)
 	}
 	if rootCap > 0 {
 		cache.roots, _ = lru.New(rootCap)
@@ -34,23 +36,23 @@ func NewCache(sizeMB int, rootCap int) *Cache {
 	return &cache
 }
 
-func (c *Cache) blobSlot(pathLen int) *freecache.Cache {
-	if n := len(c.blobs); pathLen >= n {
+func (c *Cache) nodeSlot(pathLen int) *freecache.Cache {
+	if n := len(c.nodes); pathLen >= n {
 		pathLen = n - 1
 	}
-	return c.blobs[pathLen]
+	return c.nodes[pathLen]
 }
 
 // AddNodeBlob adds node into the cache.
 func (c *Cache) AddNodeBlob(key, node []byte, pathLen int) {
-	if s := c.blobSlot(pathLen); s != nil {
+	if s := c.nodeSlot(pathLen); s != nil {
 		_ = s.Set(key, node, 8*3600)
 	}
 }
 
 // GetNodeBlob returns the cached node.
 func (c *Cache) GetNodeBlob(key []byte, pathLen int, peek bool) (node []byte) {
-	if s := c.blobSlot(pathLen); s != nil {
+	if s := c.nodeSlot(pathLen); s != nil {
 		f := s.Get
 		if peek {
 			f = s.Peek
@@ -62,14 +64,14 @@ func (c *Cache) GetNodeBlob(key []byte, pathLen int, peek bool) (node []byte) {
 
 // AddPrefilterKey add prefilter key into the cache.
 func (c *Cache) AddPrefilterKey(key []byte) {
-	if s := c.blobSlot(int(key[0])); s != nil {
+	if s := c.pfkeys; s != nil {
 		s.Set(key, nil, 8*3600)
 	}
 }
 
 // HasPrefilterKey check if the given key is in the cache.
 func (c *Cache) HasPrefilterKey(key []byte) bool {
-	if s := c.blobSlot(int(key[0])); s != nil {
+	if s := c.pfkeys; s != nil {
 		_, err := s.Get(key)
 		return err == nil
 	}
