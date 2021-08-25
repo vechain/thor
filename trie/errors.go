@@ -18,18 +18,17 @@ package trie
 
 import (
 	"fmt"
-
-	"github.com/vechain/thor/thor"
 )
 
 // MissingNodeError is returned by the trie functions (TryGet, TryUpdate, TryDelete)
 // in the case where a trie node is not present in the local database. It contains
 // information necessary for retrieving the missing node.
 type MissingNodeError struct {
-	NodeHash thor.Bytes32 // hash of the missing node
-	Path     []byte       // hex-encoded path to the missing node
+	NodeHash *hashNode // hash of the missing node
+	Path     []byte    // hex-encoded path to the missing node
+	Err      error     // the actual error
 }
 
 func (err *MissingNodeError) Error() string {
-	return fmt.Sprintf("missing trie node %v (path %x)", err.NodeHash, err.Path)
+	return fmt.Sprintf("missing trie node %x (#%v path %x) reason: %v", err.NodeHash.hash, err.NodeHash.cNum, err.Path, err.Err)
 }

@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -342,7 +343,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		it := tr.NodeIterator(nil)
 		checkIteratorNoDups(t, it, seen)
 		missing, ok := it.Error().(*MissingNodeError)
-		if !ok || !bytes.Equal(missing.NodeHash[:], rkey) {
+		if !ok || !bytes.Equal(missing.NodeHash.hash, rkey) {
 			t.Fatal("didn't hit missing node, got", it.Error())
 		}
 
@@ -369,7 +370,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
 	root, _ := ctr.Commit()
-	barNodeHash, _ := thor.ParseBytes32("d32fb77ad25227d60b76d53a512d28137304c9c03556db08a1709563c7ae9c9f")
+	barNodeHash, _ := hex.DecodeString("d32fb77ad25227d60b76d53a512d28137304c9c03556db08a1709563c7ae9c9f")
 	barNode, _ := db.Get(barNodeHash[:])
 	db.Delete(barNodeHash[:])
 
@@ -380,7 +381,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {
 		t.Fatal("want MissingNodeError, got", it.Error())
-	} else if missing.NodeHash != barNodeHash {
+	} else if !bytes.Equal(missing.NodeHash.hash, barNodeHash) {
 		t.Fatal("wrong node missing")
 	}
 
