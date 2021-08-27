@@ -140,7 +140,7 @@ func TestHeaderEncoding(t *testing.T) {
 	err = rlp.DecodeBytes(bs1, &h1)
 	assert.EqualError(t, err, "rlp: invalid header")
 
-	b2 := new(Builder).Alpha([]byte(nil)).Build().WithSignature(complex[:])
+	b2 := new(Builder).Alpha(alpha[:]).Build().WithSignature(complex[:])
 	bs2, err := rlp.EncodeToBytes(b2.Header())
 	if err != nil {
 		t.Fatal(err)
@@ -148,16 +148,6 @@ func TestHeaderEncoding(t *testing.T) {
 
 	var h2 Header
 	err = rlp.DecodeBytes(bs2, &h2)
-	assert.EqualError(t, err, "rlp: invalid header")
-
-	b3 := new(Builder).Alpha(alpha[:]).Build().WithSignature(complex[:])
-	bs3, err := rlp.EncodeToBytes(b3.Header())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var h3 Header
-	err = rlp.DecodeBytes(bs3, &h3)
 	if err != nil {
 		t.Fatal(err)
 	}
