@@ -123,12 +123,12 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parentSummary *cha
 			return consensusError(fmt.Sprintf("block signature length invalid: want 146, have %v", len(header.Signature())))
 		}
 
-		beta := parentSummary.Beta()
+		alpha := parentSummary.Beta()
 		if header.Number() == c.forkConfig.VIP214 {
-			beta = thor.Bytes32{}.Bytes()
+			alpha = thor.Bytes32{}.Bytes()
 		}
-		if !bytes.Equal(header.Alpha(), beta) {
-			return consensusError(fmt.Sprintf("block alpha invalid: want %v, have %v", hexutil.Encode(parentSummary.Beta()), hexutil.Encode(header.Alpha())))
+		if !bytes.Equal(header.Alpha(), alpha) {
+			return consensusError(fmt.Sprintf("block alpha invalid: want %v, have %v", hexutil.Encode(alpha), hexutil.Encode(header.Alpha())))
 		}
 
 		if _, err := header.Beta(); err != nil {
