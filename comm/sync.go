@@ -33,7 +33,6 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 	)
 	defer goes.Wait()
 	defer close(blockCh)
-	defer cancel()
 
 	goes.Go(func() {
 		defer cancel()
