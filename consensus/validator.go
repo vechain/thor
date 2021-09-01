@@ -118,13 +118,18 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parentSummary *cha
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
-	if header.Number() >= c.forkConfig.VIP214 {
+	VIP214 := c.forkConfig.VIP214
+	if VIP214 == 0 {
+		VIP214 = 1
+	}
+
+	if header.Number() >= VIP214 {
 		if len(header.Signature()) != 146 {
 			return consensusError(fmt.Sprintf("block signature length invalid: want 146, have %v", len(header.Signature())))
 		}
 
 		alpha := parentSummary.Beta()
-		if header.Number() == c.forkConfig.VIP214 {
+		if header.Number() == VIP214 {
 			alpha = thor.Bytes32{}.Bytes()
 		}
 		if !bytes.Equal(header.Alpha(), alpha) {

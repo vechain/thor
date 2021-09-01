@@ -165,7 +165,12 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		builder.Transaction(tx)
 	}
 
-	if f.runtime.Context().Number < f.packer.forkConfig.VIP214 {
+	VIP214 := f.packer.forkConfig.VIP214
+	if VIP214 == 0 {
+		VIP214 = 1
+	}
+
+	if f.runtime.Context().Number < VIP214 {
 		newBlock := builder.Build()
 
 		sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
@@ -175,7 +180,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		return newBlock.WithSignature(sig), stage, f.receipts, nil
 	} else {
 		var alpha []byte
-		if f.runtime.Context().Number == f.packer.forkConfig.VIP214 {
+		if f.runtime.Context().Number == VIP214 {
 			alpha = thor.Bytes32{}.Bytes()
 		} else {
 			parentBeta, err := f.parentHeader.Beta()

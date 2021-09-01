@@ -20,7 +20,7 @@ type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
 func (ex *extension) EncodeRLP(w io.Writer) error {
-	// trim extension before VIP193.stage.0
+	// trim extension before VIP214
 	// this is mainly for backward compatibility
 	if len(ex.Alpha) == 0 {
 		return nil

@@ -49,7 +49,6 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
 	}
 
 	seedSummary, err := seeder.repo.GetBlockSummary(blockID)
-
 	if err != nil {
 		return thor.Bytes32{}, err
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 // SchedulerV2 to schedule the time when a proposer to produce a block.
-// V2 is for post VIP-193 stage.
+// V2 is for post VIP-214 stage.
 type SchedulerV2 struct {
 	proposer        Proposer
 	parentBlockTime uint64
