@@ -14,7 +14,7 @@ type (
 	DeleteFunc     func(key []byte) error
 	SnapshotFunc   func(fn func(Getter) error) error
 	BatchFunc      func(fn func(Putter) error) error
-	IterateFunc    func(rgn Range, fn func(Pair) bool) error
+	IterateFunc    func(rng Range, fn func(Pair) bool) error
 	IsNotFoundFunc func(err error) bool
 	KeyFunc        func() []byte
 	ValueFunc      func() []byte
