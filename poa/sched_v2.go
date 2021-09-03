@@ -137,26 +137,22 @@ func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool 
 // In scheduler v2, Updates only deactivate proposers.
 func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval
-	toDeactivate := make(map[thor.Address]bool)
 
 	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
 		if s.parentBlockTime+T+i*T >= newBlockTime {
 			break
 		}
 		if s.shuffled[i] != s.proposer.Address {
-			toDeactivate[s.shuffled[i]] = true
+			updates = append(updates, Proposer{Address: s.shuffled[i], Active: false})
 		}
 	}
+
+	score = uint64(len(s.shuffled) - len(updates))
 
 	if !s.proposer.Active {
 		cpy := s.proposer
 		cpy.Active = true
 		updates = append(updates, cpy)
 	}
-	for addr := range toDeactivate {
-		updates = append(updates, Proposer{Address: addr, Active: false})
-	}
-
-	score = uint64(len(s.shuffled) - len(toDeactivate))
 	return
 }
