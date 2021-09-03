@@ -31,8 +31,8 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 }
 
 func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
-
-	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
+	chain := t.repo.NewChain(head)
+	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
 			if allowPending {
@@ -51,7 +51,12 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	blockID, err := chain.GetBlockID(meta.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := t.repo.GetBlockSummary(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +75,8 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 }
 
 func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*Transaction, error) {
-	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
+	chain := t.repo.NewChain(head)
+	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
 			if allowPending {
@@ -83,7 +89,12 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	blockID, err := chain.GetBlockID(meta.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := t.repo.GetBlockSummary(blockID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +117,12 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	summary, err := t.repo.GetBlockSummary(meta.BlockID)
+	blockID, err := chain.GetBlockID(meta.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := t.repo.GetBlockSummary(blockID)
 	if err != nil {
 		return nil, err
 	}

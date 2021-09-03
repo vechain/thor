@@ -25,7 +25,8 @@ const (
 
 // TxMeta contains tx location and reversal state.
 type TxMeta struct {
-	BlockID thor.Bytes32
+	// The block number this tx is involved.
+	BlockNum uint32
 
 	// Index the position of the tx in block's txs.
 	Index uint64 // rlp require uint64.
@@ -148,8 +149,12 @@ func (c *Chain) GetTransaction(id thor.Bytes32) (*tx.Transaction, *TxMeta, error
 	if err != nil {
 		return nil, nil, err
 	}
+	blockID, err := c.GetBlockID(txMeta.BlockNum)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	key := makeTxKey(txMeta.BlockID, txInfix)
+	key := makeTxKey(blockID, txInfix)
 	key.SetIndex(txMeta.Index)
 	tx, err := c.repo.getTransaction(key)
 	if err != nil {
@@ -165,7 +170,12 @@ func (c *Chain) GetTransactionReceipt(txID thor.Bytes32) (*tx.Receipt, error) {
 		return nil, err
 	}
 
-	key := makeTxKey(txMeta.BlockID, receiptInfix)
+	blockID, err := c.GetBlockID(txMeta.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	key := makeTxKey(blockID, receiptInfix)
 	key.SetIndex(txMeta.Index)
 	receipt, err := c.repo.getReceipt(key)
 	if err != nil {
@@ -295,7 +305,7 @@ func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, block *block.Block
 	// map tx id to tx meta
 	for i, tx := range block.Transactions() {
 		enc, err := rlp.EncodeToBytes(&TxMeta{
-			BlockID:  id,
+			BlockNum: block.Header().Number(),
 			Index:    uint64(i),
 			Reverted: receipts[i].Reverted,
 		})

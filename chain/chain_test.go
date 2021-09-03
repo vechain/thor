@@ -29,7 +29,7 @@ func TestChain(t *testing.T) {
 	repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
-	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
+	tx1Meta := &chain.TxMeta{BlockNum: b1.Header().Number(), Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
 	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
 
