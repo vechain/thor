@@ -17,7 +17,6 @@ var codeCache, _ = lru.NewARC(512)
 // cachedObject to cache code and storage of an account.
 type cachedObject struct {
 	db   *muxdb.MuxDB
-	addr thor.Address
 	data Account
 
 	cache struct {
@@ -27,8 +26,8 @@ type cachedObject struct {
 	}
 }
 
-func newCachedObject(db *muxdb.MuxDB, addr thor.Address, data *Account) *cachedObject {
-	return &cachedObject{db: db, addr: addr, data: *data}
+func newCachedObject(db *muxdb.MuxDB, data *Account) *cachedObject {
+	return &cachedObject{db: db, data: *data}
 }
 
 func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
@@ -37,9 +36,9 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 	}
 
 	trie := co.db.NewSecureTrie(
-		StorageTrieName(co.addr),
+		StorageTrieName(co.data.meta.Addr, co.data.meta.StorageInitCommitNum),
 		thor.BytesToBytes32(co.data.StorageRoot),
-		co.data.storageCommitNum)
+		co.data.meta.StorageCommitNum)
 
 	co.cache.storageTrie = trie
 	return trie

@@ -20,20 +20,20 @@ func M(a ...interface{}) []interface{} {
 }
 
 func TestAccount(t *testing.T) {
-	assert.True(t, emptyAccount().IsEmpty())
+	assert.True(t, emptyAccount(thor.Address{}).IsEmpty())
 
-	acc := emptyAccount()
+	acc := emptyAccount(thor.Address{})
 	acc.Balance = big.NewInt(1)
 	assert.False(t, acc.IsEmpty())
-	acc = emptyAccount()
+	acc = emptyAccount(thor.Address{})
 	acc.CodeHash = []byte{1}
 	assert.False(t, acc.IsEmpty())
 
-	acc = emptyAccount()
+	acc = emptyAccount(thor.Address{})
 	acc.Energy = big.NewInt(1)
 	assert.False(t, acc.IsEmpty())
 
-	acc = emptyAccount()
+	acc = emptyAccount(thor.Address{})
 	acc.StorageRoot = []byte{1}
 	assert.True(t, acc.IsEmpty())
 }
@@ -47,7 +47,7 @@ func TestTrie(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
 		M(loadAccount(trie, addr)),
-		M(emptyAccount(), nil),
+		M(emptyAccount(addr), nil),
 		"should load an empty account")
 
 	acc1 := Account{
@@ -57,14 +57,16 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
-		0,
+		AccountMetadata{
+			Addr: addr,
+		},
 	}
-	saveAccount(trie, addr, &acc1)
+	saveAccount(trie, &acc1)
 	assert.Equal(t,
 		M(loadAccount(trie, addr)),
 		M(&acc1, nil))
 
-	saveAccount(trie, addr, emptyAccount())
+	saveAccount(trie, emptyAccount(addr))
 	assert.Equal(t,
 		M(trie.Get(addr[:])),
 		M([]byte(nil), []byte(nil), nil),

@@ -15,8 +15,9 @@ import (
 
 // AccountMetadata includes account metadata.
 type AccountMetadata struct {
-	Addr             thor.Address
-	StorageCommitNum uint32
+	Addr                 thor.Address
+	StorageCommitNum     uint32
+	StorageInitCommitNum uint32
 }
 
 // Account is the Thor consensus representation of an account.
@@ -29,7 +30,7 @@ type Account struct {
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 
-	storageCommitNum uint32
+	meta AccountMetadata
 }
 
 // IsEmpty returns if an account is empty.
@@ -64,8 +65,10 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 	return new(big.Int).Add(a.Energy, x)
 }
 
-func emptyAccount() *Account {
-	return &Account{Balance: &big.Int{}, Energy: &big.Int{}}
+func emptyAccount(addr thor.Address) *Account {
+	a := Account{Balance: &big.Int{}, Energy: &big.Int{}}
+	a.meta.Addr = addr
+	return &a
 }
 
 // loadAccount load an account object by address in trie.
@@ -76,29 +79,25 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
 		return nil, err
 	}
 	if len(data) == 0 {
-		return emptyAccount(), nil
+		return emptyAccount(addr), nil
 	}
-	var (
-		a Account
-		m AccountMetadata
-	)
+	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
 		return nil, err
 
 	}
-	if err := rlp.DecodeBytes(meta, &m); err != nil {
+	if err := rlp.DecodeBytes(meta, &a.meta); err != nil {
 		return nil, err
 	}
-	a.storageCommitNum = m.StorageCommitNum
 	return &a, nil
 }
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
+func saveAccount(trie *muxdb.Trie, a *Account) error {
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.Update(addr[:], nil, nil)
+		return trie.Update(a.meta.Addr[:], nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
@@ -106,14 +105,11 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 		return err
 	}
 
-	meta, err := rlp.EncodeToBytes(&AccountMetadata{
-		addr,
-		a.storageCommitNum,
-	})
+	meta, err := rlp.EncodeToBytes(&a.meta)
 	if err != nil {
 		return err
 	}
-	return trie.Update(addr[:], data, meta)
+	return trie.Update(a.meta.Addr[:], data, meta)
 }
 
 // loadStorage load storage data for given key.

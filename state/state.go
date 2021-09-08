@@ -7,6 +7,7 @@ package state
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -19,16 +20,19 @@ import (
 
 const (
 	// AccountTrieName is the name of account trie.
-	AccountTrieName = "a"
+	AccountTrieName       = "a"
+	StorageTrieNamePrefix = "s"
 
 	codeStoreName = "state.code"
 )
 
 // StorageTrieName returns the name of storage trie.
-//
-// Each storage trie has a unique name, which can improve IO performance.
-func StorageTrieName(addr thor.Address) string {
-	return "s" + string(addr[:])
+func StorageTrieName(addr thor.Address, initCommitNum uint32) string {
+	var buf [25]byte
+	buf[0] = StorageTrieNamePrefix[0]
+	copy(buf[1:], addr[:])
+	binary.BigEndian.PutUint32(buf[21:], initCommitNum)
+	return string(buf[:])
 }
 
 // Error is the error caused by state access failure.
@@ -116,7 +120,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	co := newCachedObject(s.db, addr, a)
+	co := newCachedObject(s.db, a)
 	s.cache[addr] = co
 	return co, nil
 }
@@ -337,7 +341,7 @@ func (s *State) Exists(addr thor.Address) (bool, error) {
 // That's set balance, energy and code to zero value.
 func (s *State) Delete(addr thor.Address) {
 	s.sm.Put(codeKey(addr), []byte(nil))
-	s.updateAccount(addr, emptyAccount())
+	s.updateAccount(addr, emptyAccount(addr))
 	// increase the barrier value
 	s.setStorageBarrier(addr, s.getStorageBarrier(addr)+1)
 }
@@ -362,7 +366,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
-	trie := s.db.NewSecureTrie(StorageTrieName(addr), root, acc.storageCommitNum)
+	trie := s.db.NewSecureTrie(StorageTrieName(addr, acc.meta.StorageInitCommitNum), root, acc.meta.StorageCommitNum)
 
 	barrier := s.getStorageBarrier(addr)
 
@@ -440,8 +444,9 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 			if c, jerr = getChanged(thor.Address(key)); jerr != nil {
 				return false
 			}
-			// discard all storage updates when meet the barrier.
+			// discard all storage updates and base storage trie when meet the barrier.
 			c.storage = nil
+			c.baseStorageTrie = nil
 		}
 		return true
 	})
@@ -460,28 +465,30 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 		// skip storage changes if account is empty
 		if !c.data.IsEmpty() {
 			if len(c.storage) > 0 {
-				var (
-					sTrie *muxdb.Trie
-					sRoot = thor.BytesToBytes32(c.data.StorageRoot)
-				)
-				if c.baseStorageTrie != nil && c.baseStorageTrie.Hash() == sRoot {
+				var sTrie *muxdb.Trie
+				if len(c.data.StorageRoot) == 0 {
+					// storage was empty or destructed
+					c.data.meta.StorageInitCommitNum = newCommitNum
+				}
+				if len(c.data.StorageRoot) > 0 && c.baseStorageTrie != nil {
 					sTrie = c.baseStorageTrie.Copy()
 				} else {
-					sTrie = s.db.NewSecureTrie(StorageTrieName(addr), sRoot, c.data.storageCommitNum)
+					sTrie = s.db.NewSecureTrie(
+						StorageTrieName(addr, c.data.meta.StorageInitCommitNum),
+						thor.BytesToBytes32(c.data.StorageRoot),
+						c.data.meta.StorageCommitNum)
 				}
 				for k, v := range c.storage {
 					if err := saveStorage(sTrie, k, v); err != nil {
 						return nil, &Error{err}
 					}
 				}
-				if newRoot := sTrie.Hash(); sRoot != newRoot {
-					c.data.StorageRoot = newRoot.Bytes()
-					c.data.storageCommitNum = newCommitNum
-					stage.storageTries = append(stage.storageTries, sTrie)
-				}
+				c.data.StorageRoot = sTrie.Hash().Bytes()
+				c.data.meta.StorageCommitNum = newCommitNum
+				stage.storageTries = append(stage.storageTries, sTrie)
 			}
 		}
-		if err := saveAccount(stage.trie, addr, &c.data); err != nil {
+		if err := saveAccount(stage.trie, &c.data); err != nil {
 			return nil, &Error{err}
 		}
 	}
