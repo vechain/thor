@@ -26,8 +26,9 @@ import (
 )
 
 type hasher struct {
-	tmp sliceBuffer
-	sha hash.Hash
+	tmp           sliceBuffer
+	sha           hash.Hash
+	cachedNodeTTL int
 }
 
 type sliceBuffer []byte
@@ -51,8 +52,9 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher() *hasher {
+func newHasher(cachedNodeTTL int) *hasher {
 	h := hasherPool.Get().(*hasher)
+	h.cachedNodeTTL = cachedNodeTTL
 	return h
 }
 
@@ -68,16 +70,19 @@ func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool, commit
 		if db == nil {
 			return hash, n, nil
 		}
-		// force is true means n is root node. for an extended trie,
-		// always store the root node regardless of dirty flag.
-		isExtendedRoot := force && commitNum != nil
-		if !dirty && !isExtendedRoot {
-			switch n.(type) {
-			case *fullNode, *shortNode:
+
+		if !dirty {
+			if commitNum == nil { // non-extended
 				return hash, hash, nil
-			default:
+			}
+			// extended trie
+			if !force { // non-root node
+				if *commitNum > n.commitNum()+uint32(h.cachedNodeTTL) {
+					return hash, hash, nil
+				}
 				return hash, n, nil
 			}
+			// else for extended trie, always store root node regardless of dirty flag
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
@@ -184,7 +189,7 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool, commi
 		// extended
 		if commitNum != nil {
 			hash.cNum = *commitNum
-			if err := encodeTrailing(n, &h.tmp); err != nil {
+			if err := encodeTrailing(&h.tmp, n); err != nil {
 				return nil, err
 			}
 		}

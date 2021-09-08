@@ -183,7 +183,7 @@ func decodeTrailing(buf []byte) (*metaList, *commitNumList, error) {
 	return (*metaList)(&mBuf), (*commitNumList)(&cnList), nil
 }
 
-func encodeTrailing(collapsed node, w io.Writer) error {
+func encodeTrailing(w io.Writer, collapsed node) error {
 	var metaList [][]byte
 	var collectMeta func(n node)
 	collectMeta = func(n node) {
