@@ -89,15 +89,11 @@ type NodeIterator interface {
 	// Hash returns the hash of the current node.
 	Hash() thor.Bytes32
 
+	// Node calls the handler with the blob of the current node if any.
+	Node(extended bool, handler func(blob []byte))
+
 	// CommitNum returns the commit number of the current node.
 	CommitNum() uint32
-
-	// Short returns true if the current node is a short node.
-	Short() bool
-
-	// ShortKey returns the key of the short node. It panics if the current node is not a short node.
-	// Callers must not retain references to the return value after calling Next.
-	ShortKey() []byte
 
 	// Parent returns the hash of the parent of the current node. The hash may be the one
 	// grandparent if the immediate parent is an internal node with no hash.
@@ -130,6 +126,7 @@ type nodeIteratorState struct {
 	parent  thor.Bytes32 // Hash of the first full ancestor node (nil if current is the root)
 	index   int          // Child to be processed next
 	pathlen int          // Length of the path to this node
+	blob    []byte       // The blob of the node
 }
 
 type nodeIterator struct {
@@ -169,21 +166,30 @@ func (it *nodeIterator) Hash() thor.Bytes32 {
 	return it.stack[len(it.stack)-1].hash
 }
 
-func (it *nodeIterator) Short() bool {
+func (it *nodeIterator) Node(extended bool, handler func(blob []byte)) {
 	if len(it.stack) == 0 {
-		return false
+		return
 	}
-	_, ok := it.stack[len(it.stack)-1].node.(*shortNode)
-	return ok
-}
+	st := it.stack[len(it.stack)-1]
+	if st.hash.IsZero() {
+		return
+	}
+	if len(st.blob) > 0 {
+		handler(st.blob)
+		return
+	}
 
-func (it *nodeIterator) ShortKey() []byte {
-	if len(it.stack) > 0 {
-		if short, ok := it.stack[len(it.stack)-1].node.(*shortNode); ok {
-			return short.Key
-		}
+	h := newHasher(0)
+	defer returnHasherToPool(h)
+
+	collapsed, _, _ := h.hashChildren(st.node, nil, it.path, nil)
+
+	h.tmp.Reset()
+	_ = rlp.Encode(&h.tmp, collapsed)
+	if extended {
+		_ = encodeTrailing(&h.tmp, collapsed)
 	}
-	panic("not at short node")
+	handler(h.tmp)
 }
 
 func (it *nodeIterator) CommitNum() uint32 {
@@ -344,11 +350,12 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 	if hash, ok := st.node.(*hashNode); ok {
-		resolved, err := tr.resolveHash(hash, path)
+		resolved, blob, err := tr.resolveHash(hash, path)
 		if err != nil {
 			return err
 		}
 		st.node = resolved
+		st.blob = blob
 		st.hash = thor.BytesToBytes32(hash.hash)
 	}
 	return nil
@@ -472,16 +479,12 @@ func (it *differenceIterator) Hash() thor.Bytes32 {
 	return it.b.Hash()
 }
 
+func (it *differenceIterator) Node(extended bool, handler func(blob []byte)) {
+	it.b.Node(extended, handler)
+}
+
 func (it *differenceIterator) CommitNum() uint32 {
 	return it.b.CommitNum()
-}
-
-func (it *differenceIterator) Short() bool {
-	return it.b.Short()
-}
-
-func (it *differenceIterator) ShortKey() []byte {
-	return it.b.ShortKey()
 }
 
 func (it *differenceIterator) Parent() thor.Bytes32 {
@@ -583,16 +586,12 @@ func NewUnionIterator(iters []NodeIterator) (NodeIterator, *int) {
 	return ui, &ui.count
 }
 
-func (it *unionIterator) Short() bool {
-	return (*it.items)[0].Short()
-}
-
-func (it *unionIterator) ShortKey() []byte {
-	return (*it.items)[0].ShortKey()
-}
-
 func (it *unionIterator) Hash() thor.Bytes32 {
 	return (*it.items)[0].Hash()
+}
+
+func (it *unionIterator) Node(extended bool, handler func(blob []byte)) {
+	(*it.items)[0].Node(extended, handler)
 }
 
 func (it *unionIterator) CommitNum() uint32 {

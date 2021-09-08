@@ -52,7 +52,7 @@ func NewExtended(root thor.Bytes32, commitNum uint32, db Database) (*ExtendedTri
 	}
 	ext := ExtendedTrie{Trie{db: db}, 0}
 	if !isRootEmpty {
-		rootnode, err := ext.trie.resolveHash(&hashNode{root[:], commitNum}, nil)
+		rootnode, _, err := ext.trie.resolveHash(&hashNode{root[:], commitNum}, nil)
 		if err != nil {
 			return nil, err
 		}

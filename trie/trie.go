@@ -86,7 +86,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		rootnode, err := trie.resolveHash(&hashNode{root[:], 0}, nil)
+		rootnode, _, err := trie.resolveHash(&hashNode{root[:], 0}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +154,7 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value *valueNode, new
 		}
 		return value, n, didResolve, err
 	case *hashNode:
-		child, err := t.resolveHash(n, key[:pos])
+		child, _, err := t.resolveHash(n, key[:pos])
 		if err != nil {
 			return nil, n, true, err
 		}
@@ -259,7 +259,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, err := t.resolveHash(n, prefix)
+		rn, _, err := t.resolveHash(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -390,7 +390,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, err := t.resolveHash(n, prefix)
+		rn, _, err := t.resolveHash(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -414,22 +414,22 @@ func concat(s1 []byte, s2 ...byte) []byte {
 
 func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	if n, ok := n.(*hashNode); ok {
-		node, err := t.resolveHash(n, prefix)
+		node, _, err := t.resolveHash(n, prefix)
 		return node, err
 	}
 	return n, nil
 }
 
-func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node, error) {
+func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node, []byte, error) {
 	key := n.hash
 	if ke, ok := t.db.(DatabaseKeyEncoder); ok {
 		key = ke.Encode(n.hash, n.cNum, prefix)
 	}
 	buf, err := t.db.Get(key)
 	if err != nil || len(buf) == 0 {
-		return nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
+		return nil, nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
 	}
-	return mustDecodeNode(n, buf), nil
+	return mustDecodeNode(n, buf), buf, nil
 }
 
 // Root returns the root hash of the trie.
