@@ -476,7 +476,7 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
 		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
 	}
-	h := newHasher()
+	h := newHasher(0)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, nil, true, nil)
 }

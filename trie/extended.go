@@ -10,7 +10,8 @@ import "github.com/vechain/thor/thor"
 // ExtendedTrie is an extended Merkle Patricia Trie which supports commit-number
 // and leaf metadata.
 type ExtendedTrie struct {
-	trie Trie
+	trie          Trie
+	cachedNodeTTL int
 }
 
 // Node contains the internal node object.
@@ -49,7 +50,7 @@ func NewExtended(root thor.Bytes32, commitNum uint32, db Database) (*ExtendedTri
 	if !isRootEmpty && db == nil {
 		panic("trie.NewExtended: cannot use existing root without a database")
 	}
-	ext := ExtendedTrie{Trie{db: db}}
+	ext := ExtendedTrie{Trie{db: db}, 0}
 	if !isRootEmpty {
 		rootnode, err := ext.trie.resolveHash(&hashNode{root[:], commitNum}, nil)
 		if err != nil {
@@ -62,7 +63,18 @@ func NewExtended(root thor.Bytes32, commitNum uint32, db Database) (*ExtendedTri
 
 // NewExtendedCached creates an extended trie with the given root node.
 func NewExtendedCached(rootNode Node, db Database) *ExtendedTrie {
-	return &ExtendedTrie{Trie{rootNode.node, db}}
+	return &ExtendedTrie{Trie{root: rootNode.node, db: db}, 0}
+}
+
+// SetCacheTTL sets life time of a cached node. The life time is equivalent to
+// the differenc of commit number.
+func (e *ExtendedTrie) SetCachedNodeTTL(ttl int) {
+	e.cachedNodeTTL = ttl
+}
+
+// CachedNodeTTL returns the life time of a cached node.
+func (e *ExtendedTrie) CachedNodeTTL() int {
+	return e.cachedNodeTTL
 }
 
 // RootNode returns the current root node.
@@ -165,7 +177,7 @@ func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum uint32) (node, node
 	if t.root == nil {
 		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
 	}
-	h := newHasher()
+	h := newHasher(e.cachedNodeTTL)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, nil, true, &commitNum)
 }
