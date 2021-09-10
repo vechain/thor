@@ -12,13 +12,14 @@ import (
 )
 
 // Bucket provides logical bucket for kv store.
-type Bucket []byte
+type Bucket string
 
 // NewGetter creates a bucket getter from the source getter.
 func (b Bucket) NewGetter(src Getter) Getter {
 	return &struct {
 		GetFunc
 		HasFunc
+		IsNotFoundFunc
 	}{
 		func(key []byte) ([]byte, error) {
 			buf := bufPool.Get().(*buf)
@@ -34,6 +35,7 @@ func (b Bucket) NewGetter(src Getter) Getter {
 
 			return src.Has(buf.k)
 		},
+		src.IsNotFound,
 	}
 }
 
@@ -68,7 +70,6 @@ func (b Bucket) NewStore(src Store) Store {
 		SnapshotFunc
 		BatchFunc
 		IterateFunc
-		IsNotFoundFunc
 	}{
 		b.NewGetter(src),
 		b.NewPutter(src),
@@ -91,7 +92,7 @@ func (b Bucket) NewStore(src Store) Store {
 			}
 
 			if len(rng.Limit) == 0 {
-				rng.Limit = util.BytesPrefix(b).Limit
+				rng.Limit = util.BytesPrefix([]byte(b)).Limit
 			} else {
 				buf := bufPool.Get().(*buf)
 				defer bufPool.Put(buf)
@@ -113,7 +114,6 @@ func (b Bucket) NewStore(src Store) Store {
 				return fn(pair)
 			})
 		},
-		src.IsNotFound,
 	}
 }
 

@@ -76,9 +76,11 @@ func (ldb *levelEngine) Snapshot(fn func(kv.Getter) error) error {
 	return fn(&struct {
 		kv.GetFunc
 		kv.HasFunc
+		kv.IsNotFoundFunc
 	}{
 		func(key []byte) ([]byte, error) { return s.Get(key, &readOpt) },
 		func(key []byte) (bool, error) { return s.Has(key, &readOpt) },
+		ldb.IsNotFound,
 	})
 }
 

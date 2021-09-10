@@ -9,6 +9,7 @@ package kv
 type Getter interface {
 	Get(key []byte) ([]byte, error)
 	Has(key []byte) (bool, error)
+	IsNotFound(err error) bool
 }
 
 // Putter defines methods to write kv.
@@ -37,5 +38,4 @@ type Store interface {
 	Snapshot(fn func(Getter) error) error
 	Batch(fn func(Putter) error) error
 	Iterate(r Range, fn func(Pair) bool) error
-	IsNotFound(err error) bool
 }
