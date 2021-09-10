@@ -34,6 +34,9 @@ func (m mem) Delete(k []byte) error {
 	delete(m, string(k))
 	return nil
 }
+func (m mem) IsNotFound(err error) bool {
+	return true
+}
 
 func TestBucket_GetterGet(t *testing.T) {
 	m := mem{"k1": "v1", "k2": "v2"}
