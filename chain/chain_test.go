@@ -29,7 +29,7 @@ func TestChain(t *testing.T) {
 	repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
-	tx1Meta := &chain.TxMeta{BlockNum: b1.Header().Number(), Index: 0, Reverted: false}
+	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
 	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
 
@@ -55,6 +55,8 @@ func TestChain(t *testing.T) {
 	assert.Equal(t, M(tx1Meta, nil), M(c.GetTransactionMeta(tx1.ID())))
 	assert.Equal(t, M(tx1, tx1Meta, nil), M(c.GetTransaction(tx1.ID())))
 	assert.Equal(t, M(tx1Receipt, nil), M(c.GetTransactionReceipt(tx1.ID())))
+	_, err = c.GetTransactionMeta(thor.Bytes32{})
+	assert.True(t, c.IsNotFound(err))
 
 	assert.Equal(t, M(true, nil), M(c.HasBlock(b1.Header().ID())))
 	assert.Equal(t, M(false, nil), M(c.HasBlock(b3x.Header().ID())))
