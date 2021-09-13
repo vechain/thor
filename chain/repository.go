@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	dataStoreName = "chain.data"
-	propStoreName = "chain.props"
+	dataStoreName    = "chain.data"
+	propStoreName    = "chain.props"
+	txIndexStoreName = "chain.txi"
 )
 
 var (
@@ -31,9 +32,10 @@ var (
 //
 // It's thread-safe.
 type Repository struct {
-	db    *muxdb.MuxDB
-	data  kv.Store
-	props kv.Store
+	db        *muxdb.MuxDB
+	data      kv.Store
+	props     kv.Store
+	txIndexer kv.Store
 
 	genesis *block.Block
 	best    atomic.Value
@@ -58,11 +60,12 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 
 	genesisID := genesis.Header().ID()
 	repo := &Repository{
-		db:      db,
-		data:    db.NewStore(dataStoreName),
-		props:   db.NewStore(propStoreName),
-		genesis: genesis,
-		tag:     genesisID[31],
+		db:        db,
+		data:      db.NewStore(dataStoreName),
+		props:     db.NewStore(propStoreName),
+		txIndexer: db.NewStore(txIndexStoreName),
+		genesis:   genesis,
+		tag:       genesisID[31],
 	}
 
 	repo.caches.summaries = newCache(512)
@@ -142,15 +145,39 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 }
 
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
-	return r.data.Batch(func(putter kv.Putter) error {
-		var (
-			header  = block.Header()
-			id      = header.ID()
-			txs     = block.Transactions()
-			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
-		)
+	var (
+		header  = block.Header()
+		id      = header.ID()
+		txs     = block.Transactions()
+		summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
+	)
 
-		if n := len(txs); n > 0 {
+	if err := r.txIndexer.Batch(func(putter kv.Putter) error {
+		if len(txs) > 0 {
+			buf := make([]byte, 64)
+			copy(buf[32:], id[:])
+			for i, tx := range txs {
+				txid := tx.ID()
+				// to accelerate point access
+				if err := putter.Put(txid[:], nil); err != nil {
+					return err
+				}
+
+				copy(buf, txid[:])
+				if err := saveRLP(putter, buf, &storageTxMeta{
+					Index:    uint64(i),
+					Reverted: receipts[i].Reverted,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return r.data.Batch(func(putter kv.Putter) error {
+		if len(txs) > 0 {
 			key := makeTxKey(id, txInfix)
 			for i, tx := range txs {
 				key.SetIndex(uint64(i))

@@ -51,12 +51,7 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 		return nil, err
 	}
 
-	blockID, err := chain.GetBlockID(meta.BlockNum)
-	if err != nil {
-		return nil, err
-	}
-
-	summary, err := t.repo.GetBlockSummary(blockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +84,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 		return nil, err
 	}
 
-	blockID, err := chain.GetBlockID(meta.BlockNum)
-	if err != nil {
-		return nil, err
-	}
-
-	summary, err := t.repo.GetBlockSummary(blockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
@@ -117,12 +107,7 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 		return nil, err
 	}
 
-	blockID, err := chain.GetBlockID(meta.BlockNum)
-	if err != nil {
-		return nil, err
-	}
-
-	summary, err := t.repo.GetBlockSummary(blockID)
+	summary, err := t.repo.GetBlockSummary(meta.BlockID)
 	if err != nil {
 		return nil, err
 	}
