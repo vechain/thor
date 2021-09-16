@@ -83,7 +83,7 @@ func (b Bucket) NewStore(src Store) Store {
 				return fn(b.NewPutter(p))
 			})
 		},
-		func(rng Range, fn func(Pair) bool) error {
+		func(rng Range, fn func(Pair) (bool, error)) error {
 			{
 				buf := bufPool.Get().(*buf)
 				defer bufPool.Put(buf)
@@ -109,7 +109,7 @@ func (b Bucket) NewStore(src Store) Store {
 				func() []byte { return cur.Value() },
 			}
 
-			return src.Iterate(rng, func(p Pair) bool {
+			return src.Iterate(rng, func(p Pair) (bool, error) {
 				cur = p
 				return fn(pair)
 			})
