@@ -37,5 +37,5 @@ type Store interface {
 
 	Snapshot(fn func(Getter) error) error
 	Batch(fn func(Putter) error) error
-	Iterate(r Range, fn func(Pair) bool) error
+	Iterate(r Range, fn func(Pair) (bool, error)) error
 }

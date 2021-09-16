@@ -121,12 +121,16 @@ func (ldb *levelEngine) Batch(fn func(kv.Putter) error) error {
 	return ldb.db.Write(batch, &writeOpt)
 }
 
-func (ldb *levelEngine) Iterate(rng kv.Range, fn func(kv.Pair) bool) error {
+func (ldb *levelEngine) Iterate(rng kv.Range, fn func(kv.Pair) (bool, error)) error {
 	it := ldb.db.NewIterator((*util.Range)(&rng), &scanOpt)
 	defer it.Release()
 
 	for it.Next() {
-		if !fn(it) {
+		next, err := fn(it)
+		if err != nil {
+			return err
+		}
+		if !next {
 			break
 		}
 	}

@@ -112,41 +112,36 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 	}
 
 	var (
-		ierr error
 		rng  = kv.Range(*util.BytesPrefix(id[:]))
 		meta *TxMeta
-		has  bool
 	)
 
-	if err := c.repo.txIndexer.Iterate(rng, func(p kv.Pair) bool {
+	if err := c.repo.txIndexer.Iterate(rng, func(p kv.Pair) (bool, error) {
 		if len(p.Key()) != 64 { // skip the pure txid key
-			return true
+			return true, nil
 		}
 
 		blockID := thor.BytesToBytes32(p.Key()[32:])
 
-		has, ierr = c.HasBlock(blockID)
-		if ierr != nil {
-			return false
+		has, err := c.HasBlock(blockID)
+		if err != nil {
+			return false, err
 		}
 		if has {
 			var sMeta storageTxMeta
-			if ierr = rlp.DecodeBytes(p.Value(), &sMeta); ierr != nil {
-				return false
+			if err := rlp.DecodeBytes(p.Value(), &sMeta); err != nil {
+				return false, err
 			}
 			meta = &TxMeta{
 				BlockID:  blockID,
 				Index:    sMeta.Index,
 				Reverted: sMeta.Reverted,
 			}
-			return false
+			return false, nil
 		}
-		return true
+		return true, nil
 	}); err != nil {
 		return nil, err
-	}
-	if ierr != nil {
-		return nil, ierr
 	}
 	if meta != nil {
 		return meta, nil
