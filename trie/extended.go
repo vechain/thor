@@ -62,7 +62,7 @@ func NewExtended(root thor.Bytes32, commitNum uint32, db Database) (*ExtendedTri
 }
 
 // NewExtendedCached creates an extended trie with the given root node.
-func NewExtendedCached(rootNode Node, db Database) *ExtendedTrie {
+func NewExtendedCached(rootNode *Node, db Database) *ExtendedTrie {
 	return &ExtendedTrie{Trie{root: rootNode.node, db: db}, 0}
 }
 
@@ -78,8 +78,8 @@ func (e *ExtendedTrie) CachedNodeTTL() int {
 }
 
 // RootNode returns the current root node.
-func (e *ExtendedTrie) RootNode() Node {
-	return Node{e.trie.root}
+func (e *ExtendedTrie) RootNode() *Node {
+	return &Node{e.trie.root}
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
