@@ -33,12 +33,25 @@ type engine interface {
 // Trie is the managed trie.
 type Trie = trie.Trie
 
+// TrieDedupedNodePartitionFactor the partition factor for deduped nodes.
+const TrieDedupedNodePartitionFactor = trie.PartitionFactor(500000)
+
 // Options optional parameters for MuxDB.
 type Options struct {
-	// TrieCacheSizeMB is the size of the trie cache.
-	TrieCacheSizeMB int
+	// TrieNodeCacheSizeMB is the size of the cache for trie node blobs.
+	TrieNodeCacheSizeMB int
 	// TrieRootCacheCapacity is the capacity of trie root node cache.
 	TrieRootCacheCapacity int
+	// TrieCachedNodeTTL defines the life time(times of commit) of cached trie nodes.
+	TrieCachedNodeTTL int
+	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
+	TrieLeafBankSlotCapacity int
+	// TrieLeafBankSlotCacheCapacity defines per slot cache capacity for leaf bank.
+	TrieLeafBankSlotCacheCapacity int
+	// TrieHistNodePartitionFactor defines the partition factor for history nodes.
+	// It must be consistant over the lifetime of the DB.
+	TrieHistNodePartitionFactor trie.PartitionFactor
+
 	// OpenFilesCacheCapacity is the capacity of open files caching for underlying database.
 	OpenFilesCacheCapacity int
 	// ReadCacheMB is the size of read cache for underlying database.
@@ -52,9 +65,12 @@ type Options struct {
 
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
-	engine        engine
-	trieCache     *trie.Cache
-	storageCloser io.Closer
+	engine                engine
+	storageCloser         io.Closer
+	trieCache             *trie.Cache
+	trieLeafBank          *trie.LeafBank
+	trieCachedNodeTTL     int
+	trieHistNodePtnFactor trie.PartitionFactor
 }
 
 // Open opens or creates DB at the given path.
@@ -69,7 +85,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		DisableSeeksCompaction:        true,
 		CompactionTableSizeMultiplier: 2,
 		VibrantKeys: []*util.Range{
-			util.BytesPrefix([]byte{trie.NodeSpace}),
+			util.BytesPrefix([]byte{trie.LeafBankSpace}),
 		},
 	}
 
@@ -92,9 +108,12 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	engine := newLevelEngine(ldb)
 
 	return &MuxDB{
-		engine:        engine,
-		trieCache:     trie.NewCache(options.TrieCacheSizeMB, options.TrieRootCacheCapacity),
-		storageCloser: storage,
+		engine:                engine,
+		storageCloser:         storage,
+		trieCache:             trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
+		trieLeafBank:          trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity, options.TrieLeafBankSlotCacheCapacity),
+		trieCachedNodeTTL:     options.TrieCachedNodeTTL,
+		trieHistNodePtnFactor: options.TrieHistNodePartitionFactor,
 	}, nil
 }
 
@@ -104,9 +123,10 @@ func NewMem() *MuxDB {
 	ldb, _ := leveldb.Open(storage, nil)
 
 	return &MuxDB{
-		engine:        newLevelEngine(ldb),
-		trieCache:     trie.NewCache(0, 0),
-		storageCloser: storage,
+		engine:                newLevelEngine(ldb),
+		storageCloser:         storage,
+		trieCachedNodeTTL:     32,
+		trieHistNodePtnFactor: 1,
 	}
 }
 
@@ -126,8 +146,12 @@ func (db *MuxDB) Close() error {
 func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
 	return trie.New(
 		db.engine,
-		name,
 		db.trieCache,
+		nil, // disable leafbank for non-secure trie
+		db.trieHistNodePtnFactor,
+		TrieDedupedNodePartitionFactor,
+		db.trieCachedNodeTTL,
+		name,
 		false,
 		root,
 		commitNum,
@@ -139,8 +163,12 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie
 func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
 	return trie.New(
 		db.engine,
-		name,
 		db.trieCache,
+		db.trieLeafBank,
+		db.trieHistNodePtnFactor,
+		TrieDedupedNodePartitionFactor,
+		db.trieCachedNodeTTL,
+		name,
 		true,
 		root,
 		commitNum,
@@ -149,47 +177,15 @@ func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32)
 
 // NewStore creates named kv-store.
 func (db *MuxDB) NewStore(name string) kv.Store {
-	return db.newBucket(append([]byte{namedStoreSpace}, name...))
+	return kv.Bucket(string(namedStoreSpace) + name).NewStore(db.engine)
 }
 
-// LowStore returns underlying kv-store. It's for test purpose only.
-func (db *MuxDB) LowStore() kv.Store {
+// LowEngine returns underlying kv-engine. It's for test purpose only.
+func (db *MuxDB) LowEngine() kv.Store {
 	return db.engine
 }
 
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
-}
-
-func (db *MuxDB) newBucket(b []byte) kv.Store {
-	bkt := bucket(b)
-	src := db.engine
-	return &struct {
-		kv.Getter
-		kv.Putter
-		kv.SnapshotFunc
-		kv.BatchFunc
-		kv.IterateFunc
-		kv.IsNotFoundFunc
-	}{
-		bkt.ProxyGetter(src),
-		bkt.ProxyPutter(src),
-		func(fn func(kv.Getter) error) error {
-			return src.Snapshot(func(getter kv.Getter) error {
-				return fn(bkt.ProxyGetter(getter))
-			})
-		},
-		func(fn func(kv.Putter) error) error {
-			return src.Batch(func(putter kv.Putter) error {
-				return fn(bkt.ProxyPutter(putter))
-			})
-		},
-		func(r kv.Range, fn func(kv.Pair) bool) error {
-			return src.Iterate(bkt.MakeRange(r), func(pair kv.Pair) bool {
-				return fn(bkt.MakePair(pair))
-			})
-		},
-		src.IsNotFound,
-	}
 }
