@@ -90,7 +90,7 @@ type NodeIterator interface {
 	Hash() thor.Bytes32
 
 	// Node calls the handler with the blob of the current node if any.
-	Node(extended bool, handler func(blob []byte))
+	Node(extended bool, handler func(blob []byte) error) error
 
 	// CommitNum returns the commit number of the current node.
 	CommitNum() uint32
@@ -166,17 +166,16 @@ func (it *nodeIterator) Hash() thor.Bytes32 {
 	return it.stack[len(it.stack)-1].hash
 }
 
-func (it *nodeIterator) Node(extended bool, handler func(blob []byte)) {
+func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) error {
 	if len(it.stack) == 0 {
-		return
+		return nil
 	}
 	st := it.stack[len(it.stack)-1]
 	if st.hash.IsZero() {
-		return
+		return nil
 	}
 	if len(st.blob) > 0 {
-		handler(st.blob)
-		return
+		return handler(st.blob)
 	}
 
 	h := newHasher(0)
@@ -189,7 +188,7 @@ func (it *nodeIterator) Node(extended bool, handler func(blob []byte)) {
 	if extended {
 		_ = encodeTrailing(&h.tmp, collapsed)
 	}
-	handler(h.tmp)
+	return handler(h.tmp)
 }
 
 func (it *nodeIterator) CommitNum() uint32 {
@@ -479,8 +478,8 @@ func (it *differenceIterator) Hash() thor.Bytes32 {
 	return it.b.Hash()
 }
 
-func (it *differenceIterator) Node(extended bool, handler func(blob []byte)) {
-	it.b.Node(extended, handler)
+func (it *differenceIterator) Node(extended bool, handler func(blob []byte) error) error {
+	return it.b.Node(extended, handler)
 }
 
 func (it *differenceIterator) CommitNum() uint32 {
@@ -590,8 +589,8 @@ func (it *unionIterator) Hash() thor.Bytes32 {
 	return (*it.items)[0].Hash()
 }
 
-func (it *unionIterator) Node(extended bool, handler func(blob []byte)) {
-	(*it.items)[0].Node(extended, handler)
+func (it *unionIterator) Node(extended bool, handler func(blob []byte) error) error {
+	return (*it.items)[0].Node(extended, handler)
 }
 
 func (it *unionIterator) CommitNum() uint32 {
