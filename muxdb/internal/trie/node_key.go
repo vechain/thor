@@ -45,11 +45,6 @@ func (k HistNodeKey) Hash() []byte {
 	return k[len(k)-32:]
 }
 
-// HashPointer returns the hash pointer(hash with commit number).
-func (k HistNodeKey) HashPointer() []byte {
-	return k[len(k)-4-32:]
-}
-
 // CommitNum returns the commit number of the node.
 func (k HistNodeKey) CommitNum() uint32 {
 	return binary.BigEndian.Uint32(k[len(k)-4-32:])
