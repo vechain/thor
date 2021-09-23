@@ -6,19 +6,24 @@
 package trie
 
 import (
-	"hash"
 	"sync"
 
 	"github.com/vechain/thor/thor"
 )
 
-type hasher struct {
-	hash.Hash
-	tmp []byte
+type buffer struct {
+	b []byte
 }
 
-var hasherPool = sync.Pool{
-	New: func() interface{} {
-		return &hasher{Hash: thor.NewBlake2b()}
-	},
-}
+var (
+	hasherPool = sync.Pool{
+		New: func() interface{} {
+			return thor.NewBlake2b()
+		},
+	}
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return &buffer{}
+		},
+	}
+)
