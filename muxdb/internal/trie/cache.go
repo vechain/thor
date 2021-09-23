@@ -8,7 +8,6 @@ package trie
 import (
 	"bytes"
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,7 +24,6 @@ type Cache struct {
 	nodeStats   cacheStats
 	rootStats   cacheStats
 	lastLogTime int64
-	logMu       sync.Mutex
 }
 
 // NewCache creates a cache object with the given cache size.
@@ -38,13 +36,14 @@ func NewCache(sizeMB int, rootCap int) *Cache {
 }
 
 func (c *Cache) log() {
-	c.logMu.Lock()
-	defer c.logMu.Unlock()
+	now := time.Now().UnixNano()
+	last := atomic.SwapInt64(&c.lastLogTime, now)
 
-	if now := time.Now().UnixNano(); now-c.lastLogTime > int64(time.Second*20) {
-		c.lastLogTime = now
+	if now-last > int64(time.Second*20) {
 		c.nodeStats.Log("node cache stats")
 		c.rootStats.Log("root cache stats")
+	} else {
+		atomic.CompareAndSwapInt64(&c.lastLogTime, now, last)
 	}
 }
 
