@@ -6,7 +6,7 @@
 package trie
 
 import (
-	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -63,8 +63,8 @@ func (c *Cache) AddNodeBlob(name string, key HistNodeKey, node []byte) {
 	v := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(v)
 
-	// concat hash pointer with blob as cache value
-	v.b = append(v.b[:0], key.HashPointer()...)
+	// concat commit number with blob as cache value
+	v.b = appendUint32(v.b[:0], key.CommitNum())
 	v.b = append(v.b, node...)
 
 	_ = c.nodes.Set(k.b, v.b, 0)
@@ -89,13 +89,15 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) (node []byt
 	buf.b = append(buf.b, key.PathBlob()...)
 
 	if val, _ := get(buf.b); len(val) > 0 {
-		// compare the hash pointer
-		hp := key.HashPointer()
-		if bytes.Equal(hp, val[:len(hp)]) {
-			if !peek {
-				c.nodeStats.Hit()
+		// compare the commit number
+		if binary.BigEndian.Uint32(val) == key.CommitNum() {
+			// then verify hash
+			if ok, _ := verifyNodeHash(val[4:], key.Hash()); ok {
+				if !peek {
+					c.nodeStats.Hit()
+				}
+				return val[4:]
 			}
-			return val[len(hp):]
 		}
 	}
 	if !peek {
