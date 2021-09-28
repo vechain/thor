@@ -84,9 +84,9 @@ func TestP(t *testing.T) {
 	// defer pprof.StopCPUProfile()
 
 	for {
-		best := repo.BestBlock()
+		best := repo.BestBlockSummary()
 		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork)
-		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -111,8 +111,8 @@ func TestP(t *testing.T) {
 		}
 	}
 
-	best := repo.BestBlock()
-	fmt.Println(best.Header().Number(), best.Header().GasUsed())
+	best := repo.BestBlockSummary()
+	fmt.Println(best.Header.Number(), best.Header.GasUsed())
 	//	fmt.Println(best)
 }
 
@@ -150,9 +150,9 @@ func TestForkVIP191(t *testing.T) {
 	fc := thor.NoFork
 	fc.VIP191 = 1
 
-	best := repo.BestBlock()
+	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,11 +170,11 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number())
+	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number(), 0)
 
 	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState := state.New(db, b0.Header().StateRoot(), 0)
+	geneState := state.New(db, b0.Header().StateRoot(), 0, 0)
 
 	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }
@@ -200,9 +200,9 @@ func TestBlocklist(t *testing.T) {
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
-	best := repo.BestBlock()
+	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
