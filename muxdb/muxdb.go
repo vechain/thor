@@ -33,6 +33,9 @@ type engine interface {
 // Trie is the managed trie.
 type Trie = trie.Trie
 
+type TrieLeafBank = trie.LeafBank
+type TrieSaveLeaf = trie.SaveLeaf
+
 // TrieDedupedNodePartitionFactor the partition factor for deduped nodes.
 const TrieDedupedNodePartitionFactor = trie.PartitionFactor(500000)
 
@@ -40,7 +43,7 @@ const TrieDedupedNodePartitionFactor = trie.PartitionFactor(500000)
 type Options struct {
 	// TrieNodeCacheSizeMB is the size of the cache for trie node blobs.
 	TrieNodeCacheSizeMB int
-	// TrieRootCacheCapacity is the capacity of trie root node cache.
+	// TrieRootCacheCapacity is the capacity of the cache for trie root nodes.
 	TrieRootCacheCapacity int
 	// TrieCachedNodeTTL defines the life time(times of commit) of cached trie nodes.
 	TrieCachedNodeTTL int
@@ -65,12 +68,11 @@ type Options struct {
 
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
-	engine                engine
-	storageCloser         io.Closer
-	trieCache             *trie.Cache
-	trieLeafBank          *trie.LeafBank
-	trieCachedNodeTTL     int
-	trieHistNodePtnFactor trie.PartitionFactor
+	engine            engine
+	storageCloser     io.Closer
+	trieBackend       *trie.Backend
+	trieLeafBank      *trie.LeafBank
+	trieCachedNodeTTL int
 }
 
 // Open opens or creates DB at the given path.
@@ -108,12 +110,16 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	engine := newLevelEngine(ldb)
 
 	return &MuxDB{
-		engine:                engine,
-		storageCloser:         storage,
-		trieCache:             trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
-		trieLeafBank:          trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity, options.TrieLeafBankSlotCacheCapacity),
-		trieCachedNodeTTL:     options.TrieCachedNodeTTL,
-		trieHistNodePtnFactor: options.TrieHistNodePartitionFactor,
+		engine:        engine,
+		storageCloser: storage,
+		trieBackend: &trie.Backend{
+			Store:            engine,
+			Cache:            trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
+			HistPtnFactor:    options.TrieHistNodePartitionFactor,
+			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
+		},
+		trieLeafBank:      trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity, options.TrieLeafBankSlotCacheCapacity),
+		trieCachedNodeTTL: options.TrieCachedNodeTTL,
 	}, nil
 }
 
@@ -122,11 +128,17 @@ func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
 	ldb, _ := leveldb.Open(storage, nil)
 
+	engine := newLevelEngine(ldb)
 	return &MuxDB{
-		engine:                newLevelEngine(ldb),
-		storageCloser:         storage,
-		trieCachedNodeTTL:     32,
-		trieHistNodePtnFactor: 1,
+		engine:        engine,
+		storageCloser: storage,
+		trieBackend: &trie.Backend{
+			Store:            engine,
+			HistPtnFactor:    1,
+			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
+		},
+		trieLeafBank:      trie.NewLeafBank(engine, 1, 1),
+		trieCachedNodeTTL: 32,
 	}
 }
 
@@ -145,16 +157,12 @@ func (db *MuxDB) Close() error {
 // initially empty.
 func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
 	return trie.New(
-		db.engine,
-		db.trieCache,
-		nil, // disable leafbank for non-secure trie
-		db.trieHistNodePtnFactor,
-		TrieDedupedNodePartitionFactor,
-		db.trieCachedNodeTTL,
+		db.trieBackend,
 		name,
 		false,
 		root,
 		commitNum,
+		db.trieCachedNodeTTL,
 	)
 }
 
@@ -162,16 +170,12 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie
 // In a secure trie, keys are hashed using blake2b. It prevents depth attack.
 func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
 	return trie.New(
-		db.engine,
-		db.trieCache,
-		db.trieLeafBank,
-		db.trieHistNodePtnFactor,
-		TrieDedupedNodePartitionFactor,
-		db.trieCachedNodeTTL,
+		db.trieBackend,
 		name,
 		true,
 		root,
 		commitNum,
+		db.trieCachedNodeTTL,
 	)
 }
 
@@ -188,4 +192,8 @@ func (db *MuxDB) LowEngine() kv.Store {
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
+}
+
+func (db *MuxDB) TrieLeafBank() *TrieLeafBank {
+	return db.trieLeafBank
 }
