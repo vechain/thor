@@ -64,7 +64,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, errParentMissing
 	}
 
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number())
+	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.SteadyNum)
 
 	var features tx.Features
 	if header.Number() >= c.forkConfig.VIP191 {
@@ -95,7 +95,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		}
 		return nil, errParentMissing
 	}
-	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number())
+	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.SteadyNum)
 	if !skipPoA {
 		if _, err := c.validateProposer(header, parentSummary.Header, state); err != nil {
 			return nil, err
