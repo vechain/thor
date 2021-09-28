@@ -194,7 +194,7 @@ func TestParamsNative(t *testing.T) {
 		return nil
 	})
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot(), 0)
+	st := state.New(db, b0.Header().StateRoot(), 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
@@ -262,7 +262,7 @@ func TestAuthorityNative(t *testing.T) {
 		return nil
 	})
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot(), 0)
+	st := state.New(db, b0.Header().StateRoot(), 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
@@ -368,7 +368,7 @@ func TestEnergyNative(t *testing.T) {
 	})
 
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot(), 0)
+	st := state.New(db, b0.Header().StateRoot(), 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	st.SetEnergy(addr, eng, b0.Header().Timestamp())
@@ -494,7 +494,7 @@ func TestPrototypeNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
-	st := state.New(db, genesisBlock.Header().StateRoot(), 0)
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0)
 	chain := repo.NewChain(genesisBlock.Header().ID())
 
 	st.SetStorage(thor.Address(acc1), key, value)
@@ -765,7 +765,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, genesisBlock.Header().StateRoot(), 0)
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	launchTime := genesisBlock.Header().Timestamp()
 
@@ -775,8 +775,8 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		stage, _ := st.Stage(uint32(i))
 		stateRoot, _ := stage.Commit()
 		b := new(block.Builder).
-			ParentID(repo.BestBlock().Header().ID()).
-			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
+			ParentID(repo.BestBlockSummary().Header.ID()).
+			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build()
@@ -784,12 +784,12 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
-	st = state.New(db, repo.BestBlock().Header().StateRoot(), repo.BestBlock().Header().Number())
+	st = state.New(db, repo.BestBlockSummary().Header.StateRoot(), repo.BestBlockSummary().Header.Number(), 0)
 	chain := repo.NewBestChain()
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{
 		Number: thor.MaxStateHistory + 1,
-		Time:   repo.BestBlock().Header().Timestamp(),
+		Time:   repo.BestBlockSummary().Header.Timestamp(),
 	}, thor.NoFork)
 
 	test := &ctest{
@@ -832,7 +832,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, genesisBlock.Header().StateRoot(), 0)
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	launchTime := genesisBlock.Header().Timestamp()
 
@@ -842,8 +842,8 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 		stage, _ := st.Stage(uint32(i))
 		stateRoot, _ := stage.Commit()
 		b := new(block.Builder).
-			ParentID(repo.BestBlock().Header().ID()).
-			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
+			ParentID(repo.BestBlockSummary().Header.ID()).
+			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build()
@@ -851,12 +851,12 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
-	st = state.New(db, repo.BestBlock().Header().StateRoot(), repo.BestBlock().Header().Number())
+	st = state.New(db, repo.BestBlockSummary().Header.StateRoot(), repo.BestBlockSummary().Header.Number(), repo.BestBlockSummary().SteadyNum)
 	chain := repo.NewBestChain()
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Number: repo.BestBlock().Header().Number(),
-		Time:   repo.BestBlock().Header().Timestamp(),
+		Number: repo.BestBlockSummary().Header.Number(),
+		Time:   repo.BestBlockSummary().Header.Timestamp(),
 	}, thor.NoFork)
 
 	test := &ctest{
@@ -891,7 +891,7 @@ func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *e
 
 func TestExtensionNative(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0)
+	st := state.New(db, thor.Bytes32{}, 0, 0)
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
