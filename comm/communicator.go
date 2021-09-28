@@ -74,7 +74,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 		syncCount := 0
 
 		shouldSynced := func() bool {
-			bestBlockTime := c.repo.BestBlock().Header().Timestamp()
+			bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
 			now := uint64(time.Now().Unix())
 			if bestBlockTime+thor.BlockInterval >= now {
 				return true
@@ -94,7 +94,7 @@ func (c *Communicator) Sync(handler HandleBlockStream) {
 			case <-timer.C:
 				log.Debug("synchronization start")
 
-				best := c.repo.BestBlock().Header()
+				best := c.repo.BestBlockSummary().Header
 				// choose peer which has the head block with higher total score
 				peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
 					_, totalScore := peer.Head()

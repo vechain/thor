@@ -36,7 +36,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			return errors.WithMessage(err, "decode msg")
 		}
 
-		best := c.repo.BestBlock().Header()
+		best := c.repo.BestBlockSummary().Header
 		write(&proto.Status{
 			GenesisBlockID: c.repo.GenesisBlock().Header().ID(),
 			SysTimestamp:   uint64(time.Now().Unix()),
