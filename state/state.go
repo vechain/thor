@@ -46,18 +46,20 @@ func (e *Error) Error() string {
 
 // State manages the world state.
 type State struct {
-	db    *muxdb.MuxDB
-	trie  *muxdb.Trie                    // the accounts trie reader
-	cache map[thor.Address]*cachedObject // cache of accounts trie
-	sm    *stackedmap.StackedMap         // keeps revisions of accounts state
+	db              *muxdb.MuxDB
+	trie            *muxdb.Trie                    // the accounts trie reader
+	cache           map[thor.Address]*cachedObject // cache of accounts trie
+	sm              *stackedmap.StackedMap         // keeps revisions of accounts state
+	steadyCommitNum uint32
 }
 
 // New create state object.
-func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum uint32) *State {
+func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum, steadyCommitNum uint32) *State {
 	state := State{
-		db:    db,
-		trie:  db.NewSecureTrie(AccountTrieName, root, commitNum),
-		cache: make(map[thor.Address]*cachedObject),
+		db:              db,
+		trie:            db.NewSecureTrie(AccountTrieName, root, commitNum),
+		cache:           make(map[thor.Address]*cachedObject),
+		steadyCommitNum: steadyCommitNum,
 	}
 
 	state.sm = stackedmap.New(func(key interface{}) (interface{}, bool, error) {
@@ -67,8 +69,8 @@ func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum uint32) *State {
 }
 
 // Checkout checkouts to another state.
-func (s *State) Checkout(root thor.Bytes32, commitNum uint32) *State {
-	return New(s.db, root, commitNum)
+func (s *State) Checkout(root thor.Bytes32, commitNum, steadyCommitNum uint32) *State {
+	return New(s.db, root, commitNum, steadyCommitNum)
 }
 
 // cacheGetter implements stackedmap.MapGetter.
@@ -101,7 +103,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err
 		if err != nil {
 			return nil, false, err
 		}
-		v, err := obj.GetStorage(k.key)
+		v, err := obj.GetStorage(k.key, s.steadyCommitNum)
 		if err != nil {
 			return nil, false, err
 		}
@@ -116,7 +118,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if co, ok := s.cache[addr]; ok {
 		return co, nil
 	}
-	a, err := loadAccount(s.trie, addr)
+	a, err := loadAccount(s.trie, addr, s.db.TrieLeafBank(), s.steadyCommitNum)
 	if err != nil {
 		return nil, err
 	}

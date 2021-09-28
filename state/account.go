@@ -73,8 +73,8 @@ func emptyAccount(addr thor.Address) *Account {
 
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
-	data, meta, err := trie.Get(addr[:])
+func loadAccount(trie *muxdb.Trie, addr thor.Address, leafBank *muxdb.TrieLeafBank, steadyCommitNum uint32) (*Account, error) {
+	data, meta, err := trie.FastGet(addr[:], leafBank, steadyCommitNum)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +113,8 @@ func saveAccount(trie *muxdb.Trie, a *Account) error {
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie *muxdb.Trie, key thor.Bytes32) (rlp.RawValue, error) {
-	v, _, err := trie.Get(key[:])
+func loadStorage(trie *muxdb.Trie, key thor.Bytes32, leafBank *muxdb.TrieLeafBank, steadyCommitNum uint32) (rlp.RawValue, error) {
+	v, _, err := trie.FastGet(key[:], leafBank, steadyCommitNum)
 	return v, err
 }
 

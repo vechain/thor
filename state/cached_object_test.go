@@ -62,7 +62,7 @@ func TestCachedObject(t *testing.T) {
 	for _, s := range storages {
 		assert.Equal(t,
 			M(s.v, nil),
-			M(obj.GetStorage(s.k)))
+			M(obj.GetStorage(s.k, 0)))
 
 	}
 }
