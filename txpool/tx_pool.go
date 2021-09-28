@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
@@ -92,7 +91,7 @@ func (p *TxPool) housekeeping() {
 	ticker := time.NewTicker(time.Second * 1)
 	defer ticker.Stop()
 
-	headBlock := p.repo.BestBlock().Header()
+	headSummary := p.repo.BestBlockSummary()
 
 	for {
 		select {
@@ -100,11 +99,11 @@ func (p *TxPool) housekeeping() {
 			return
 		case <-ticker.C:
 			var headBlockChanged bool
-			if newHeadBlock := p.repo.BestBlock().Header(); newHeadBlock.ID() != headBlock.ID() {
-				headBlock = newHeadBlock
+			if newHeadSummary := p.repo.BestBlockSummary(); newHeadSummary.Header.ID() != headSummary.Header.ID() {
+				headSummary = newHeadSummary
 				headBlockChanged = true
 			}
-			if !isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
+			if !isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
 				// skip washing txs if not synced
 				continue
 			}
@@ -120,7 +119,7 @@ func (p *TxPool) housekeeping() {
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()
-				executables, removed, err := p.wash(headBlock)
+				executables, removed, err := p.wash(headSummary)
 				elapsed := mclock.Now() - startTime
 
 				ctx := []interface{}{
@@ -217,7 +216,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 		return nil
 	}
 
-	headBlock := p.repo.BestBlock().Header()
+	headSummary := p.repo.BestBlockSummary()
 
 	// validation
 	switch {
@@ -227,7 +226,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 		return txRejectedError{"size too large"}
 	}
 
-	if err := newTx.TestFeatures(headBlock.TxsFeatures()); err != nil {
+	if err := newTx.TestFeatures(headSummary.Header.TxsFeatures()); err != nil {
 		return txRejectedError{err.Error()}
 	}
 
@@ -236,9 +235,9 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 		return badTxError{err.Error()}
 	}
 
-	if isChainSynced(uint64(time.Now().Unix()), headBlock.Timestamp()) {
-		state := p.stater.NewState(headBlock.StateRoot(), headBlock.Number())
-		executable, err := txObj.Executable(p.repo.NewChain(headBlock.ID()), state, headBlock)
+	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
+		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.SteadyNum)
+		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
 		if err != nil {
 			return txRejectedError{err.Error()}
 		}
@@ -337,7 +336,7 @@ func (p *TxPool) Dump() tx.Transactions {
 
 // wash to evict txs that are over limit, out of lifetime, out of energy, settled, expired or dep broken.
 // this method should only be called in housekeeping go routine
-func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, removed int, err error) {
+func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transactions, removed int, err error) {
 	all := p.all.ToTxObjects()
 	var toRemove []*txObject
 	defer func() {
@@ -358,14 +357,14 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 	}()
 
-	state := p.stater.NewState(headBlock.StateRoot(), headBlock.Number())
+	state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.SteadyNum)
 	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	var (
-		chain               = p.repo.NewChain(headBlock.ID())
+		chain               = p.repo.NewChain(headSummary.Header.ID())
 		executableObjs      = make([]*txObject, 0, len(all))
 		nonExecutableObjs   = make([]*txObject, 0, len(all))
 		localExecutableObjs = make([]*txObject, 0, len(all))
@@ -385,7 +384,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, state, headBlock)
+		executable, err := txObj.Executable(chain, state, headSummary.Header)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", err)
@@ -393,7 +392,7 @@ func (p *TxPool) wash(headBlock *block.Header) (executables tx.Transactions, rem
 		}
 
 		if executable {
-			provedWork, err := txObj.ProvedWork(headBlock.Number(), chain.GetBlockID)
+			provedWork, err := txObj.ProvedWork(headSummary.Header.Number(), chain.GetBlockID)
 			if err != nil {
 				toRemove = append(toRemove, txObj)
 				log.Debug("tx washed out", "id", txObj.ID(), "err", err)
