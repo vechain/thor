@@ -271,7 +271,7 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 }
 
 func (s *Subscriptions) parsePosition(posStr string) (thor.Bytes32, error) {
-	bestID := s.repo.BestBlock().Header().ID()
+	bestID := s.repo.BestBlockSummary().Header.ID()
 	if posStr == "" {
 		return bestID, nil
 	}

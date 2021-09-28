@@ -104,7 +104,7 @@ func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, e
 			return
 		}
 	default:
-		id = b.repo.BestBlock().Header().ID()
+		id = b.repo.BestBlockSummary().Header.ID()
 	}
 	return b.repo.GetBlockSummary(id)
 }

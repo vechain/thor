@@ -204,7 +204,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 
 func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 	if head == "" {
-		return t.repo.BestBlock().Header().ID(), nil
+		return t.repo.BestBlockSummary().Header.ID(), nil
 	}
 	h, err := thor.ParseBytes32(head)
 	if err != nil {
