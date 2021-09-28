@@ -98,7 +98,8 @@ func newTestConsensus(t *testing.T) *testConsensus {
 
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, thor.NoFork)
-	flow, err := p.Schedule(parent.Header(), uint64(time.Now().Unix()))
+	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
+	flow, err := p.Schedule(parentSum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
