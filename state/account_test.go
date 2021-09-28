@@ -42,11 +42,12 @@ func newTrie() *muxdb.Trie {
 	return muxdb.NewMem().NewSecureTrie("", thor.Bytes32{}, 0)
 }
 func TestTrie(t *testing.T) {
-	trie := newTrie()
+	db := muxdb.NewMem()
+	trie := db.NewSecureTrie("", thor.Bytes32{}, 0)
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
-		M(loadAccount(trie, addr)),
+		M(loadAccount(trie, addr, db.TrieLeafBank(), 0)),
 		M(emptyAccount(addr), nil),
 		"should load an empty account")
 
@@ -63,7 +64,7 @@ func TestTrie(t *testing.T) {
 	}
 	saveAccount(trie, &acc1)
 	assert.Equal(t,
-		M(loadAccount(trie, addr)),
+		M(loadAccount(trie, addr, db.TrieLeafBank(), 0)),
 		M(&acc1, nil))
 
 	saveAccount(trie, emptyAccount(addr))
@@ -74,17 +75,18 @@ func TestTrie(t *testing.T) {
 }
 
 func TestStorageTrie(t *testing.T) {
-	trie := newTrie()
+	db := muxdb.NewMem()
+	trie := db.NewSecureTrie("", thor.Bytes32{}, 0)
 
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
-		M(loadStorage(trie, key)),
+		M(loadStorage(trie, key, db.TrieLeafBank(), 0)),
 		M(rlp.RawValue(nil), nil))
 
 	value := rlp.RawValue("value")
 	saveStorage(trie, key, value)
 	assert.Equal(t,
-		M(loadStorage(trie, key)),
+		M(loadStorage(trie, key, db.TrieLeafBank(), 0)),
 		M(value, nil))
 
 	saveStorage(trie, key, nil)

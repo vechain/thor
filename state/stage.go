@@ -48,7 +48,7 @@ func (s *Stage) Commit() (root thor.Bytes32, err error) {
 			err = &Error{err}
 			return
 		}
-		t.Cache()
+		t.CacheRoot()
 	}
 
 	// commit accounts trie
@@ -56,6 +56,6 @@ func (s *Stage) Commit() (root thor.Bytes32, err error) {
 		err = &Error{err}
 		return
 	}
-	s.trie.Cache()
+	s.trie.CacheRoot()
 	return
 }

@@ -18,7 +18,7 @@ import (
 func TestStage(t *testing.T) {
 	db := muxdb.NewMem()
 
-	state := New(db, thor.Bytes32{}, 0)
+	state := New(db, thor.Bytes32{}, 0, 0)
 
 	addr := thor.BytesToAddress([]byte("acc1"))
 
@@ -46,7 +46,7 @@ func TestStage(t *testing.T) {
 
 	assert.Equal(t, hash, root)
 
-	state = New(db, root, 1)
+	state = New(db, root, 1, 0)
 
 	assert.Equal(t, M(balance, nil), M(state.GetBalance(addr)))
 	assert.Equal(t, M(code, nil), M(state.GetCode(addr)))

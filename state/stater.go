@@ -21,6 +21,6 @@ func NewStater(db *muxdb.MuxDB) *Stater {
 }
 
 // NewState create a new state object.
-func (s *Stater) NewState(root thor.Bytes32, commitNum uint32) *State {
-	return New(s.db, root, commitNum)
+func (s *Stater) NewState(root thor.Bytes32, commitNum, steadyCommitNum uint32) *State {
+	return New(s.db, root, commitNum, steadyCommitNum)
 }
