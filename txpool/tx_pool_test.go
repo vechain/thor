@@ -48,7 +48,7 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0)
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0)
 	stage, _ := st.Stage(1)
 	root1, _ := stage.Commit()
 
@@ -77,7 +77,7 @@ func TestWashTxs(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
-	txs, _, err := pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
@@ -85,11 +85,11 @@ func TestWashTxs(t *testing.T) {
 	tx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
-	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0)
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0)
 	stage, _ := st.Stage(1)
 	root1, _ := stage.Commit()
 	b1 := new(block.Builder).
@@ -101,7 +101,7 @@ func TestWashTxs(t *testing.T) {
 		Build()
 	pool.repo.AddBlock(b1, nil)
 
-	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
@@ -113,7 +113,7 @@ func TestWashTxs(t *testing.T) {
 	txObj3, _ := resolveTx(tx3, false)
 	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
 
-	txs, removedCount, err := pool.wash(pool.repo.BestBlock().Header())
+	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
 	assert.Equal(t, 1, removedCount)
@@ -122,7 +122,7 @@ func TestWashTxs(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0)
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0)
 	stage, _ := st.Stage(1)
 	root1, _ := stage.Commit()
 	b1 := new(block.Builder).
