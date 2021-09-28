@@ -26,52 +26,46 @@ const (
 
 var log = log15.New("pkg", "muxdb.trie")
 
+// Backend is the backend of the trie.
+type Backend struct {
+	Store            kv.Store
+	Cache            *Cache
+	HistPtnFactor    PartitionFactor
+	DedupedPtnFactor PartitionFactor
+}
+
 // Trie is the managed trie.
 type Trie struct {
-	store            kv.Store
-	cache            *Cache
-	leafBank         *LeafBank // might be nil
-	histPtnFactor    PartitionFactor
-	dedupedPtnFactor PartitionFactor
-
+	back        *Backend
 	name        string
 	secure      bool
 	root        thor.Bytes32
 	commitNum   uint32
-	dirty       bool
 	ext         *trie.ExtendedTrie
 	err         error
+	dirty       bool
 	noFillCache bool
 	fastLeafGet func(nodeCommitNum uint32) (*trie.Leaf, error)
 }
 
 // New creates a managed trie.
 func New(
-	store kv.Store,
-	cache *Cache,
-	leafBank *LeafBank,
-	histPtnFactor PartitionFactor,
-	dedupedPtnFactor PartitionFactor,
-	cachedNodeTTL int,
+	back *Backend,
 	name string,
 	secure bool,
 	root thor.Bytes32,
 	commitNum uint32,
+	cachedNodeTTL int,
 ) *Trie {
 	t := &Trie{
-		store:            store,
-		cache:            cache,
-		leafBank:         leafBank,
-		histPtnFactor:    histPtnFactor,
-		dedupedPtnFactor: dedupedPtnFactor,
-
+		back:      back,
 		name:      name,
 		secure:    secure,
 		root:      root,
 		commitNum: commitNum,
 	}
 
-	if rootNode := cache.GetRootNode(name, root, commitNum); rootNode != nil {
+	if rootNode := t.back.Cache.GetRootNode(name, root, commitNum); rootNode != nil {
 		t.ext = trie.NewExtendedCached(rootNode, t.newDatabase())
 	} else {
 		t.ext, t.err = trie.NewExtended(root, commitNum, t.newDatabase())
@@ -82,6 +76,7 @@ func New(
 	return t
 }
 
+// newDatabase creates a database instance for low-level trie construction.
 func (t *Trie) newDatabase() trie.Database {
 	var (
 		histBkt    = kv.Bucket(string(HistSpace) + t.name)
@@ -96,30 +91,31 @@ func (t *Trie) newDatabase() trie.Database {
 	}{
 		kv.GetFunc(func(key []byte) (blob []byte, err error) {
 			// get from cache
-			if blob = t.cache.GetNodeBlob(t.name, key, t.noFillCache); len(blob) > 0 {
+			if blob = t.back.Cache.GetNodeBlob(t.name, key, t.noFillCache); len(blob) > 0 {
 				return
 			}
 			defer func() {
 				if err == nil && !t.noFillCache {
-					t.cache.AddNodeBlob(t.name, key, blob)
+					t.back.Cache.AddNodeBlob(t.name, key, blob)
 				}
 			}()
 
-			// fast leaf get
+			// if cache missed, try fast leaf get
 			if t.fastLeafGet != nil {
 				if leaf, err := t.fastLeafGet(HistNodeKey(key).CommitNum()); err != nil {
 					return nil, err
 				} else if leaf != nil {
-					// short circuit
+					// good, leaf got. returns a special error to short-circuit further node lookups.
 					return nil, &leafAvailable{leaf}
 				}
 			}
 
-			err = t.store.Snapshot(func(getter kv.Getter) error {
+			// have to lookup nodes
+			err = t.back.Store.Snapshot(func(getter kv.Getter) error {
 				// Get node from hist space first, then from deduped space.
-				// Don't change the order, or the trie might be broken when pruner enabled!
+				// Don't change the order, or the trie might be broken when during pruning.
 				if data, err := histBkt.NewGetter(getter).Get(key); err != nil {
-					if !t.store.IsNotFound(err) {
+					if !t.back.Store.IsNotFound(err) {
 						return err
 					}
 					// not found in hist space, fallback to deduped space
@@ -129,7 +125,8 @@ func (t *Trie) newDatabase() trie.Database {
 				}
 
 				// get from deduped space
-				if data, err := dedupedBkt.NewGetter(getter).Get(dedupedKey.FromHistKey(t.dedupedPtnFactor, HistNodeKey(key))); err != nil {
+				dKey := dedupedKey.FromHistKey(t.back.DedupedPtnFactor, HistNodeKey(key))
+				if data, err := dedupedBkt.NewGetter(getter).Get(dKey); err != nil {
 					return err
 				} else {
 					// the deduped node key uses path as db key.
@@ -149,7 +146,7 @@ func (t *Trie) newDatabase() trie.Database {
 		func() databaseKeyEncodeFunc {
 			var histKey HistNodeKey
 			return func(hash []byte, commitNum uint32, path []byte) []byte {
-				return histKey.Encode(t.histPtnFactor, hash, commitNum, path)
+				return histKey.Encode(t.back.HistPtnFactor, hash, commitNum, path)
 			}
 		}(),
 	}
@@ -166,13 +163,13 @@ func (t *Trie) Copy() *Trie {
 	return &cpy
 }
 
-// Cache caches the current root node.
+// CacheRoot caches the current root node.
 // Returns true if it is properly cached.
-func (t *Trie) Cache() bool {
+func (t *Trie) CacheRoot() bool {
 	if t.err != nil {
 		return false
 	}
-	return t.cache.AddRootNode(t.name, t.ext.RootNode())
+	return t.back.Cache.AddRootNode(t.name, t.ext.RootNode())
 }
 
 // Get returns the value for key stored in the trie.
@@ -192,31 +189,63 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 		b.b = h.Sum(b.b[:0])
 		key = b.b
 	}
+	return t.ext.Get(key)
+}
 
-	if t.leafBank != nil {
-		// setup fast leaf getter
-		var (
-			leaf *Leaf
-			err  error
-		)
-		t.fastLeafGet = func(nodeCommitNum uint32) (*trie.Leaf, error) {
-			if leaf == nil && err == nil {
-				leaf, err = t.leafBank.Lookup(t.name, key)
-			}
-			if err != nil {
-				return nil, err
-			}
+// FastGet uses a fast way to query the value for key stored in the trie.
+// See VIP-212 for detail.
+func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) ([]byte, []byte, error) {
+	if t.err != nil {
+		return nil, nil, t.err
+	}
+	if t.secure {
+		h := hasherPool.Get().(hash.Hash)
+		defer hasherPool.Put(h)
+		b := bufferPool.Get().(*buffer)
+		defer bufferPool.Put(b)
 
-			// see VIP-212 for detail.
-			rootCommitNum := t.commitNum
-			if rootCommitNum >= leaf.CommitNum && nodeCommitNum <= leaf.CommitNum {
-				// good, that's the leaf!
-				return &trie.Leaf{Value: leaf.Value, Meta: leaf.Meta}, nil
-			}
+		h.Reset()
+		h.Write(key)
+		b.b = h.Sum(b.b[:0])
+		key = b.b
+	}
+	// setup fast leaf getter
+	var (
+		leaf          *trie.Leaf
+		leafCommitNum uint32
+		gotLeaf       bool
+	)
+
+	t.fastLeafGet = func(nodeCommitNum uint32) (*trie.Leaf, error) {
+		if nodeCommitNum > steadyCommitNum {
 			return nil, nil
 		}
-		defer func() { t.fastLeafGet = nil }()
+		if !gotLeaf {
+			var err error
+			if leaf, leafCommitNum, err = leafBank.Lookup(t.name, key); err != nil {
+				return nil, err
+			}
+			gotLeaf = true
+		}
+		if leaf == nil {
+			return nil, nil
+		}
+
+		// see VIP-212 for detail.
+		if len(leaf.Value) > 0 {
+			if nodeCommitNum <= leafCommitNum && leafCommitNum <= steadyCommitNum {
+				// good, that's the leaf!
+				return leaf, nil
+			}
+		} else {
+			// enough for empty leaf
+			if nodeCommitNum <= leafCommitNum {
+				return leaf, nil
+			}
+		}
+		return nil, nil
 	}
+	defer func() { t.fastLeafGet = nil }()
 
 	val, meta, err := t.ext.Get(key)
 	if err != nil {
@@ -277,7 +306,7 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 		}
 	}()
 
-	err = t.store.Batch(func(putter kv.Putter) error {
+	err = t.back.Store.Batch(func(putter kv.Putter) error {
 		var (
 			histPutter = kv.Bucket(string(HistSpace) + t.name).NewPutter(putter)
 			cErr       error
@@ -292,14 +321,14 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 					return err
 				}
 				if !t.noFillCache {
-					t.cache.AddNodeBlob(t.name, key, blob)
+					t.back.Cache.AddNodeBlob(t.name, key, blob)
 				}
 				return nil
 			}),
 			func() databaseKeyEncodeFunc {
 				var histKey HistNodeKey
 				return func(hash []byte, commitNum uint32, path []byte) []byte {
-					return histKey.Encode(t.histPtnFactor, hash, commitNum, path)
+					return histKey.Encode(t.back.HistPtnFactor, hash, commitNum, path)
 				}
 			}(),
 		}, commitNum)
@@ -322,16 +351,8 @@ func (t *Trie) SetNoFillCache(b bool) {
 	t.noFillCache = b
 }
 
-// DisableFastLeaf disable fast leaf getter.
-func (t *Trie) DisableFastLeaf() {
-	t.leafBank = nil
-}
-
-// Optimize optimizes the trie.
-// Trie optimization involves two things:
-// 1. update the leaf bank (skipped if fast leaf disabled)
-// 2. prune the trie (skipped if the prune flag is false)
-func (t *Trie) Optimize(ctx context.Context, baseCommitNum uint32, prune bool) error {
+// Prune prunes redundant nodes in the range of [baseCommitNum, thisCommitNum].
+func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
 	if t.err != nil {
 		return t.err
 	}
@@ -339,15 +360,6 @@ func (t *Trie) Optimize(ctx context.Context, baseCommitNum uint32, prune bool) e
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
-
-	// nothing to do
-	if !prune && t.leafBank == nil {
-		return nil
-	}
-
-	// disable cache filling before start node iteration
-	t.SetNoFillCache(true)
-	defer t.SetNoFillCache(false)
 
 	// debounced context checker
 	checkContext := func() func() error {
@@ -365,78 +377,49 @@ func (t *Trie) Optimize(ctx context.Context, baseCommitNum uint32, prune bool) e
 		}
 	}()
 
-	return t.store.Batch(func(putter kv.Putter) error {
+	return t.back.Store.Batch(func(putter kv.Putter) error {
 		var (
+			dedupedKey    DedupedNodeKey
+			dedupedPutter = kv.Bucket(string(DedupedSpace) + t.name).NewPutter(putter)
 			rootCommitNum = t.commitNum
-			// wrap LeafBank.Update
-			updateLeafBank = func(batch func(save SaveLeaf) error) error {
-				if t.leafBank != nil {
-					return t.leafBank.Update(t.name, rootCommitNum, batch)
-				}
-				// no leafbank, pass a noop saveLeaf function
-				return batch(func(key, value, meta []byte) error { return nil })
+			histBkt       = kv.Bucket(string(HistSpace) + t.name)
+			histPutter    = histBkt.NewPutter(putter)
+			histRng       = kv.Range{
+				Start: appendUint32(nil, t.back.HistPtnFactor.Which(baseCommitNum)),
+				Limit: appendUint32(nil, t.back.HistPtnFactor.Which(rootCommitNum)+1),
 			}
+			it = t.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
+				return commitNum >= baseCommitNum
+			})
 		)
-
-		if err := updateLeafBank(func(saveLeaf SaveLeaf) error {
-			var (
-				dedupedKey    DedupedNodeKey
-				dedupedPutter = kv.Bucket(string(DedupedSpace) + t.name).NewPutter(putter)
-				it            = t.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
-					return commitNum >= baseCommitNum
-				})
-			)
-			for it.Next(true) {
-				if err := checkContext(); err != nil {
-					return err
-				}
-				// save all new leaves into leafbank
-				if leaf := it.Leaf(); leaf != nil {
-					if err := saveLeaf(it.LeafKey(), leaf.Value, leaf.Meta); err != nil {
-						return err
-					}
-				}
-				if prune {
-					// save all new nodes into deduped space
-					if err := it.Node(true, func(blob []byte) error {
-						key := dedupedKey.Encode(t.dedupedPtnFactor, it.CommitNum(), it.Path())
-						return dedupedPutter.Put(key, blob)
-					}); err != nil {
-						return err
-					}
-				}
+		for it.Next(true) {
+			if err := checkContext(); err != nil {
+				return err
 			}
-			return it.Error()
-		}); err != nil {
-			return err
-		}
-
-		if prune {
-			var (
-				bkt = kv.Bucket(string(HistSpace) + t.name)
-				rng = kv.Range{
-					Start: appendUint32(nil, t.histPtnFactor.Which(baseCommitNum)),
-					Limit: appendUint32(nil, t.histPtnFactor.Which(rootCommitNum)+1),
-				}
-			)
-
-			histPutter := bkt.NewPutter(putter)
-			// clean hist nodes
-			if err := bkt.NewStore(t.store).Iterate(rng, func(pair kv.Pair) (bool, error) {
-				if err := checkContext(); err != nil {
-					return false, err
-				}
-				if cn := HistNodeKey(pair.Key()).CommitNum(); cn >= baseCommitNum && cn <= rootCommitNum {
-					if err := histPutter.Delete(pair.Key()); err != nil {
-						return false, err
-					}
-				}
-				return true, nil
+			// save all new nodes into deduped space
+			if err := it.Node(true, func(blob []byte) error {
+				key := dedupedKey.Encode(t.back.DedupedPtnFactor, it.CommitNum(), it.Path())
+				return dedupedPutter.Put(key, blob)
 			}); err != nil {
 				return err
 			}
 		}
-		return nil
+		if err := it.Error(); err != nil {
+			return err
+		}
+
+		// clean hist nodes
+		return histBkt.NewStore(t.back.Store).Iterate(histRng, func(pair kv.Pair) (bool, error) {
+			if err := checkContext(); err != nil {
+				return false, err
+			}
+			if cn := HistNodeKey(pair.Key()).CommitNum(); cn >= baseCommitNum && cn <= rootCommitNum {
+				if err := histPutter.Delete(pair.Key()); err != nil {
+					return false, err
+				}
+			}
+			return true, nil
+		})
 	})
 }
 
