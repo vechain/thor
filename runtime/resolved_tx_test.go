@@ -67,8 +67,8 @@ func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) 
 }
 
 func (tr *testResolvedTransaction) currentState() *state.State {
-	h := tr.repo.BestBlock().Header()
-	return tr.stater.NewState(h.StateRoot(), h.Number())
+	h := tr.repo.BestBlockSummary()
+	return tr.stater.NewState(h.Header.StateRoot(), h.Header.Number(), h.SteadyNum)
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
@@ -134,7 +134,7 @@ func (tr *testResolvedTransaction) TestBuyGas() {
 		return txBuilder(tr.repo.ChainTag())
 	}
 
-	targetTime := tr.repo.BestBlock().Header().Timestamp() + thor.BlockInterval
+	targetTime := tr.repo.BestBlockSummary().Header.Timestamp() + thor.BlockInterval
 
 	buyGas := func(tx *tx.Transaction) thor.Address {
 		resolve, err := runtime.ResolveTransaction(tx)
