@@ -26,6 +26,7 @@ type BlockSummary struct {
 	IndexRoot thor.Bytes32
 	Txs       []thor.Bytes32
 	Size      uint64
+	SteadyNum uint32
 }
 
 // the key for tx/receipt.

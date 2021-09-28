@@ -10,7 +10,6 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
@@ -295,14 +294,14 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 // CacheIndexTrie cache the index trie for later access.
 func (c *Chain) CacheIndexTrie() bool {
 	if trie, err := c.lazyInit(); err == nil {
-		return trie.Cache()
+		return trie.CacheRoot()
 	}
 	return false
 }
 
 // NewBestChain create a chain with best block as head.
 func (r *Repository) NewBestChain() *Chain {
-	return newChain(r, r.BestBlock().Header().ID())
+	return newChain(r, r.BestBlockSummary().Header.ID())
 }
 
 // NewChain create a chain with head block specified by headID.
@@ -310,21 +309,18 @@ func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
 	return newChain(r, headID)
 }
 
-func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, block *block.Block, receipts tx.Receipts) (thor.Bytes32, error) {
-	txs := block.Transactions()
-	if len(txs) != len(receipts) {
-		return thor.Bytes32{}, errors.New("txs count != receipts count")
-	}
-
-	trie := r.db.NewTrie(IndexTrieName, parentIndexRoot, block.Header().Number()-1)
-	defer trie.Cache()
-
-	id := block.Header().ID()
+func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, newBlock *block.Block) (thor.Bytes32, error) {
+	var (
+		newNum = newBlock.Header().Number()
+		newID  = newBlock.Header().ID()
+		trie   = r.db.NewTrie(IndexTrieName, parentIndexRoot, newNum-1)
+	)
+	defer trie.CacheRoot()
 
 	// map block number to block ID
-	if err := trie.Update(id[:4], id[:], nil); err != nil {
+	if err := trie.Update(newID[:4], newID[:], nil); err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	return trie.Commit(block.Header().Number())
+	return trie.Commit(newNum)
 }
