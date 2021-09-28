@@ -7,35 +7,35 @@ package trie
 
 import (
 	"encoding/binary"
-	"math"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/trie"
 )
 
-// Leaf is the entity stored in leaf bank.
-type Leaf struct {
-	Value, Meta []byte
-	CommitNum   uint32
+// storageLeaf is the entity stored in leaf bank.
+type storageLeaf struct {
+	*trie.Leaf
+	CommitNum uint32
 }
 
-// SaveLeaf is the function to save a leaf.
-type SaveLeaf func(key, value, meta []byte) error
+// SaveLeaf defines the function to save the leaf.
+type SaveLeaf func(key []byte, leaf *trie.Leaf) error
 
 // leafBankSlot presents per-trie state and cached leaves.
 type leafBankSlot struct {
-	maxCommitNum uint32     // max recorded commit number, for empty leaf assertion
+	maxCommitNum uint32     // max recorded commit number
 	cache        *lru.Cache // cached leaves
 }
 
 // LeafBank records accumulated trie leaves to help accelerate trie leaf access
 // according to VIP-212.
 type LeafBank struct {
-	store   kv.Store
-	newSlot func() *leafBankSlot
-	slots   *lru.ARCCache
+	store            kv.Store
+	slots            *lru.ARCCache
+	perSlotLeavesCap int
 }
 
 // NewLeafBank creates a new LeafBank instance.
@@ -43,105 +43,106 @@ type LeafBank struct {
 // The perSlotLeavesCap indicates capacity of leaves cache of a trie slot.
 func NewLeafBank(store kv.Store, slotCap int, perSlotLeavesCap int) *LeafBank {
 	b := &LeafBank{
-		store: kv.Bucket(string(LeafBankSpace)).NewStore(store),
-		newSlot: func() *leafBankSlot {
-			slot := &leafBankSlot{maxCommitNum: math.MaxUint32}
-			slot.cache, _ = lru.New(perSlotLeavesCap)
-			return slot
-		},
+		store:            kv.Bucket(string(LeafBankSpace)).NewStore(store),
+		perSlotLeavesCap: perSlotLeavesCap,
 	}
 	b.slots, _ = lru.NewARC(slotCap)
 	return b
 }
 
+func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
+	getter := kv.Bucket(name).NewGetter(b.store)
+	if data, err := getter.Get(nil); err != nil {
+		if !getter.IsNotFound(err) {
+			return nil, err
+		}
+		// the trie has no leaf recorded yet
+		return nil, nil
+	} else {
+		cache, _ := lru.New(b.perSlotLeavesCap)
+		return &leafBankSlot{binary.BigEndian.Uint32(data), cache}, nil
+	}
+}
+
 // Lookup lookups a leaf from the trie named name by the given leafKey.
-func (b *LeafBank) Lookup(name string, leafKey []byte) (*Leaf, error) {
+// The returned leaf might be nil if no leaf recorded yet.
+// The commitNum indicates up to which commit number the leaf is valid.
+func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
 	// get slot from slots cache or create a new one.
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
 	} else {
-		slot = b.newSlot()
+		if slot, err = b.newSlot(name); err != nil {
+			return nil, 0, err
+		}
+		if slot == nil {
+			// the trie has no leaf recorded yet
+			return nil, 0, nil
+		}
 		b.slots.Add(name, slot)
 	}
 
 	// lookup from the slot's cache if any.
 	strLeafKey := string(leafKey)
 	if cached, ok := slot.cache.Get(strLeafKey); ok {
-		return cached.(*Leaf), nil
+		sLeaf := cached.(*storageLeaf)
+		return sLeaf.Leaf, sLeaf.CommitNum, nil
 	}
 
-	var leaf *Leaf
-	return leaf, b.store.Snapshot(func(getter kv.Getter) error {
-		getter = kv.Bucket(name).NewGetter(getter)
-		maxCN := atomic.LoadUint32(&slot.maxCommitNum)
-		// maxCN == MaxUint32 indicates that need to reload maxCN from store.
-		// It's important to load maxCN before load leaf!
-		if maxCN == math.MaxUint32 {
-			if data, err := getter.Get(nil); err != nil {
-				if !getter.IsNotFound(err) {
-					return err
-				}
-				// not found
-				maxCN = math.MaxUint32
-			} else {
-				maxCN = binary.BigEndian.Uint32(data)
-			}
-			atomic.StoreUint32(&slot.maxCommitNum, maxCN)
+	getter := kv.Bucket(name).NewGetter(b.store)
+	if data, err := getter.Get(leafKey); err != nil {
+		if !getter.IsNotFound(err) {
+			return nil, 0, err
 		}
-
-		if data, err := getter.Get(leafKey); err != nil {
-			if !getter.IsNotFound(err) {
-				return err
-			}
-			// not found
-			// return empty leaf. it's safe to set its commit number to max cn.
-			// see VIP-212 for detail.
-			leaf = &Leaf{CommitNum: maxCN}
-			return nil
-		} else {
-			if err := rlp.DecodeBytes(data, &leaf); err != nil {
-				return err
-			}
-			slot.cache.Add(strLeafKey, leaf)
-			return nil
+		// not found
+		// return empty leaf with max commit number.
+		return &trie.Leaf{}, atomic.LoadUint32(&slot.maxCommitNum), nil
+	} else {
+		var sLeaf storageLeaf
+		if err := rlp.DecodeBytes(data, &sLeaf); err != nil {
+			return nil, 0, err
 		}
-	})
+		slot.cache.Add(strLeafKey, &sLeaf)
+		return sLeaf.Leaf, sLeaf.CommitNum, nil
+	}
 }
 
-// Update updates a batch of leaves for the trie named name.
-func (b *LeafBank) Update(name string, commitNum uint32, batch func(save SaveLeaf) error) (err error) {
+// Update saves a batch of leaves for the trie named name.
+func (b *LeafBank) Update(name string, maxCommitNum uint32, batch func(save SaveLeaf) error) (err error) {
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
 		defer func() {
 			if err == nil {
-				// make maxCommitNum to be reloaded in next access.
-				atomic.StoreUint32(&slot.maxCommitNum, math.MaxUint32)
+				// the slot may be evicted at this point, but it's OK that
+				// newly created slot loads out-of-date maxCommitNum.
+				atomic.StoreUint32(&slot.maxCommitNum, maxCommitNum)
 			}
 		}()
 	}
 
 	return b.store.Batch(func(putter kv.Putter) error {
 		putter = kv.Bucket(name).NewPutter(putter)
-
-		if err := batch(func(key, value, meta []byte) error {
-			data, err := rlp.EncodeToBytes(&Leaf{
-				value, meta,
-				commitNum,
+		if err := batch(func(key []byte, leaf *trie.Leaf) error {
+			data, err := rlp.EncodeToBytes(&storageLeaf{
+				leaf,
+				maxCommitNum,
 			})
 			if err != nil {
 				return err
 			}
 			if slot != nil {
-				// invalidate cached leaves
+				// invalidate cached leaves.
+				// the slot may be evicted at this point, but it's OK that
+				// newly created slot loads out-of-date storageLeaf.
 				slot.cache.Remove(string(key))
 			}
 			return putter.Put(key, data)
 		}); err != nil {
 			return err
 		}
-		// at last, save the commit number as max commit number.
-		return putter.Put(nil, appendUint32(nil, commitNum))
+		// at last, save the max commit number.
+		return putter.Put(nil, appendUint32(nil, maxCommitNum))
 	})
 }
