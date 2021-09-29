@@ -272,14 +272,26 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	fdCache := suggestFDCache()
 	log.Debug("fd cache", "n", fdCache)
 
+	opts := muxdb.Options{
+		TrieNodeCacheSizeMB:           cacheMB,
+		TrieRootCacheCapacity:         128,
+		TrieCachedNodeTTL:             64,
+		TrieLeafBankSlotCapacity:      128,
+		TrieLeafBankSlotCacheCapacity: 16,
+		TrieHistNodePartitionFactor:   360, // !! DON'T touch this value, or db will get corrupted
+		OpenFilesCacheCapacity:        fdCache,
+		ReadCacheMB:                   256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:                 128,
+	}
+
+	if ctx.Bool(disablePrunerFlag.Name) {
+		// when pruner is disabled, set larger hist partition factor to
+		// gain much better db compression ratio.
+		opts.TrieHistNodePartitionFactor = 250000 // !! DON'T touch this value, or db will get corrupted
+	}
+
 	path := filepath.Join(dir, "main.db")
-	db, err := muxdb.Open(path, &muxdb.Options{
-		TrieCacheSizeMB:        cacheMB,
-		TrieRootCacheCapacity:  512,
-		OpenFilesCacheCapacity: fdCache,
-		ReadCacheMB:            256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:          128,
-	})
+	db, err := muxdb.Open(path, &opts)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open main database [%v]", path)
 	}
@@ -521,7 +533,7 @@ func printStartupMessage1(
 	dataDir string,
 	forkConfig thor.ForkConfig,
 ) {
-	bestBlock := repo.BestBlock()
+	bestBlock := repo.BestBlockSummary()
 
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]
@@ -533,7 +545,7 @@ func printStartupMessage1(
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
-		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
 		master.Address(),
 		func() string {
@@ -575,7 +587,7 @@ func printSoloStartupMessage(
 	apiURL string,
 	forkConfig thor.ForkConfig,
 ) {
-	bestBlock := repo.BestBlock()
+	bestBlock := repo.BestBlockSummary()
 
 	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    
@@ -589,7 +601,7 @@ func printSoloStartupMessage(
 `,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
-		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
 		dataDir,
 		apiURL)

@@ -110,7 +110,7 @@ func (s *Solo) loop(ctx context.Context) {
 }
 
 func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
-	best := s.repo.BestBlock()
+	best := s.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
 
 	var txsToRemove []*tx.Transaction
@@ -125,7 +125,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best.Header(), now, s.gasLimit)
+	flow, err := s.packer.Mock(best, now, s.gasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
