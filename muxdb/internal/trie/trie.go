@@ -339,11 +339,11 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key
-func (t *Trie) NodeIterator(start []byte, filter trie.NodeFilter) trie.NodeIterator {
+func (t *Trie) NodeIterator(start []byte, minCommitNum uint32) trie.NodeIterator {
 	if t.err != nil {
 		return &errorIterator{t.err}
 	}
-	return t.ext.NodeIterator(start, filter)
+	return t.ext.NodeIterator(start, minCommitNum)
 }
 
 // SetNoFillCache enable or disable cache filling.
@@ -388,9 +388,7 @@ func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
 				Start: appendUint32(nil, t.back.HistPtnFactor.Which(baseCommitNum)),
 				Limit: appendUint32(nil, t.back.HistPtnFactor.Which(rootCommitNum)+1),
 			}
-			it = t.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
-				return commitNum >= baseCommitNum
-			})
+			it = t.NodeIterator(nil, baseCommitNum)
 		)
 		for it.Next(true) {
 			if err := checkContext(); err != nil {

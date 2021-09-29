@@ -422,23 +422,19 @@ func TestIteratorNodeFilter(t *testing.T) {
 
 	tr, _ = NewExtended(root2, 2, db)
 
-	it := tr.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
-		return commitNum == 1
-	})
+	it := tr.NodeIterator(nil, 1)
 
 	for it.Next(true) {
 		if h := it.Hash(); !h.IsZero() {
-			assert.Equal(t, uint32(1), it.CommitNum())
+			assert.True(t, it.CommitNum() >= 1)
 		}
 	}
 
-	it = tr.NodeIterator(nil, func(path []byte, commitNum uint32) bool {
-		return commitNum == 2
-	})
+	it = tr.NodeIterator(nil, 2)
 
 	for it.Next(true) {
 		if h := it.Hash(); !h.IsZero() {
-			assert.Equal(t, uint32(2), it.CommitNum())
+			assert.True(t, it.CommitNum() >= 2)
 		}
 	}
 }
