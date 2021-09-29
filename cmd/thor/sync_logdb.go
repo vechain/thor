@@ -32,7 +32,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 		}
 	}
 
-	bestNum := repo.BestBlock().Header().Number()
+	bestNum := repo.BestBlockSummary().Header.Number()
 
 	if bestNum == startPos {
 		return nil
@@ -91,7 +91,7 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 }
 
 func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
-	best := repo.BestBlock().Header()
+	best := repo.BestBlockSummary().Header
 	if best.Number() == 0 {
 		return 0, nil
 	}

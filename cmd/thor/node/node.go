@@ -291,8 +291,8 @@ func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts t
 	defer n.commitLock.Unlock()
 
 	var (
-		prevBest      = n.repo.BestBlock()
-		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header())
+		prevBest      = n.repo.BestBlockSummary()
+		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header)
 		awaitLog      = func() {}
 	)
 	defer awaitLog()
@@ -305,7 +305,7 @@ func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts t
 			defer close(done)
 
 			diff, err := n.repo.NewChain(newBlock.Header().ParentID()).Exclude(
-				n.repo.NewChain(prevBest.Header().ID()))
+				n.repo.NewChain(prevBest.Header.ID()))
 			if err != nil {
 				n.logDBFailed = true
 				log.Warn("failed to write logs", "err", err)
@@ -336,7 +336,7 @@ func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts t
 		}
 	}
 
-	return n.repo.NewChain(prevBest.Header().ID()), n.repo.NewBestChain(), nil
+	return n.repo.NewChain(prevBest.Header.ID()), n.repo.NewBestChain(), nil
 }
 
 func (n *Node) writeLogs(diff []thor.Bytes32, newBlock *block.Block, newReceipts tx.Receipts) error {

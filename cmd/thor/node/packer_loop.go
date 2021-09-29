@@ -53,7 +53,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlock().Header(), now)
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if authorized {
 				authorized = false
@@ -86,7 +86,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
-				best := n.repo.BestBlock().Header()
+				best := n.repo.BestBlockSummary().Header
 				/*  re-schedule regarding the following two conditions:
 				1. parent block needs to update and the new best is not proposed by the same one
 				2. best block is better than the block to be proposed
