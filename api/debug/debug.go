@@ -175,7 +175,7 @@ func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, 
 }
 
 func storageRangeAt(t *muxdb.Trie, start []byte, maxResult int) (*StorageRangeResult, error) {
-	it := trie.NewIterator(t.NodeIterator(start, nil))
+	it := trie.NewIterator(t.NodeIterator(start, 0))
 	result := StorageRangeResult{Storage: StorageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
 		_, content, _, err := rlp.Split(it.Value)

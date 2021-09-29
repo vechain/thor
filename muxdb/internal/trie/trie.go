@@ -76,6 +76,16 @@ func New(
 	return t
 }
 
+// Name returns the trie name.
+func (t *Trie) Name() string {
+	return t.name
+}
+
+// CommitNum returns the current commit number.
+func (t *Trie) CommitNum() uint32 {
+	return t.commitNum
+}
+
 // newDatabase creates a database instance for low-level trie construction.
 func (t *Trie) newDatabase() trie.Database {
 	var (
