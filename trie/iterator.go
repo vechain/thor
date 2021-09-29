@@ -67,10 +67,6 @@ func (it *Iterator) Prove() [][]byte {
 	return it.nodeIt.LeafProof()
 }
 
-// NodeFilter helps efficiently filter out trie nodes during iterating.
-// It is called before resolving hash nodes. If false returned, the hash node and all its descendant nodes will be skipped.
-type NodeFilter func(path []byte, commitNum uint32) bool
-
 // Leaf presents the leaf node.
 type Leaf struct {
 	Value []byte
@@ -130,11 +126,11 @@ type nodeIteratorState struct {
 }
 
 type nodeIterator struct {
-	trie   *Trie                // Trie being iterated
-	stack  []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
-	path   []byte               // Path to the current node
-	err    error                // Failure set in case of an internal error in the iterator
-	filter NodeFilter           // The node filter
+	trie         *Trie                // Trie being iterated
+	stack        []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+	path         []byte               // Path to the current node
+	err          error                // Failure set in case of an internal error in the iterator
+	minCommitNum uint32               // The minimum commit number of returned nodes.
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -150,11 +146,11 @@ func (e seekError) Error() string {
 	return "seek error: " + e.err.Error()
 }
 
-func newNodeIterator(trie *Trie, start []byte, filter NodeFilter) NodeIterator {
+func newNodeIterator(trie *Trie, start []byte, minCommitNum uint32) NodeIterator {
 	if trie.Hash() == emptyState {
 		return new(nodeIterator)
 	}
-	it := &nodeIterator{trie: trie, filter: filter}
+	it := &nodeIterator{trie: trie, minCommitNum: minCommitNum}
 	it.err = it.seek(start)
 	return it
 }
@@ -308,8 +304,8 @@ func (it *nodeIterator) seek(prefix []byte) error {
 // peek creates the next state of the iterator.
 func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, error) {
 	if len(it.stack) == 0 {
-		if f, n := it.filter, it.trie.root; f != nil && n != nil {
-			if !f(nil, n.commitNum()) {
+		if n := it.trie.root; n != nil {
+			if n.commitNum() < it.minCommitNum {
 				return nil, nil, nil, errIteratorEnd
 			}
 		}
@@ -368,12 +364,9 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			child := node.Children[i]
 			if child != nil {
 				hash, _ := child.cache()
-				path := append(it.path, byte(i))
-				if it.filter != nil {
-					if _, ok := child.(*hashNode); ok || hash != nil {
-						if !it.filter(path, child.commitNum()) {
-							continue
-						}
+				if _, ok := child.(*hashNode); ok || hash != nil {
+					if child.commitNum() < it.minCommitNum {
+						continue
 					}
 				}
 
@@ -388,19 +381,17 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 					state.hash = thor.BytesToBytes32(hash.hash)
 				}
 				parent.index = i - 1
-				return state, path, true
+				return state, append(it.path, byte(i)), true
 			}
 		}
 	case *shortNode:
 		// Short node, return the pointer singleton child
 		if parent.index < 0 {
 			hash, _ := node.Val.cache()
-			path := append(it.path, node.Key...)
-			if it.filter != nil {
-				if _, ok := node.Val.(*hashNode); ok || hash != nil {
-					if !it.filter(path, node.Val.commitNum()) {
-						break
-					}
+
+			if _, ok := node.Val.(*hashNode); ok || hash != nil {
+				if node.Val.commitNum() < it.minCommitNum {
+					break
 				}
 			}
 
@@ -414,7 +405,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			if hash != nil {
 				state.hash = thor.BytesToBytes32(hash.hash)
 			}
-			return state, path, true
+			return state, append(it.path, node.Key...), true
 		}
 	}
 	return parent, it.path, false

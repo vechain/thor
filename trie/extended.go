@@ -83,10 +83,11 @@ func (e *ExtendedTrie) RootNode() *Node {
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
-// the key after the given start key.
-func (e *ExtendedTrie) NodeIterator(start []byte, filter NodeFilter) NodeIterator {
+// the key after the given start key. It filters out nodes that have commit number smaller than
+// minCommitNum.
+func (e *ExtendedTrie) NodeIterator(start []byte, minCommitNum uint32) NodeIterator {
 	t := &e.trie
-	return newNodeIterator(t, start, filter)
+	return newNodeIterator(t, start, minCommitNum)
 }
 
 // Get returns the value and metadata for key stored in the trie.

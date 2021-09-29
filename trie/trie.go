@@ -98,7 +98,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key.
 func (t *Trie) NodeIterator(start []byte) NodeIterator {
-	return newNodeIterator(t, start, nil)
+	return newNodeIterator(t, start, 0)
 }
 
 // Get returns the value for key stored in the trie.
