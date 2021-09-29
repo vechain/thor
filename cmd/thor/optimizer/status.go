@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package pruner
+package optimizer
 
 import (
 	"encoding/json"
@@ -12,8 +12,8 @@ import (
 )
 
 type status struct {
-	Base uint32
-	Top  uint32 // the largest already known almost final block number
+	Base        uint32
+	AccountBase uint32
 }
 
 func (s *status) Load(db *muxdb.MuxDB) error {
