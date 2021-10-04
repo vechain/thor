@@ -274,9 +274,9 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:           cacheMB,
-		TrieRootCacheCapacity:         128,
-		TrieCachedNodeTTL:             64,
-		TrieLeafBankSlotCapacity:      128,
+		TrieRootCacheCapacity:         64,
+		TrieCachedNodeTTL:             180,
+		TrieLeafBankSlotCapacity:      64,
 		TrieLeafBankSlotCacheCapacity: 16,
 		TrieHistNodePartitionFactor:   360, // !! DON'T touch this value, or db will get corrupted
 		OpenFilesCacheCapacity:        fdCache,
