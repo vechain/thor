@@ -12,6 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -76,7 +77,7 @@ func (p *Optimizer) loop() error {
 		lastLogTime = time.Now().UnixNano()
 	)
 	if err := status.Load(p.db); err != nil {
-		return err
+		return errors.Wrap(err, "load stats")
 	}
 
 	for {
@@ -90,21 +91,21 @@ func (p *Optimizer) loop() error {
 
 		steadyChain, err := p.waitUntilSteady(target)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "waitUntilSteady")
 		}
 		startTime := time.Now().UnixNano()
 		if err := p.alignToPartition(status.Base, target, func(alignedBase, alignedTarget uint32) error {
 			summary, err := steadyChain.GetBlockSummary(alignedTarget)
+			if err != nil {
+				return errors.Wrap(err, "GetBlockSummary")
+			}
 			// no need to update leaf bank for index trie
 			if p.prune {
 				// prune the index trie
-				if err != nil {
-					return err
-				}
 				indexTrie := p.db.NewTrie(chain.IndexTrieName, summary.IndexRoot, summary.Header.Number())
 				indexTrie.SetNoFillCache(true)
 				if err := indexTrie.Prune(p.ctx, alignedBase); err != nil {
-					return err
+					return errors.Wrap(err, "prune index trie")
 				}
 			}
 			// optimize storage tries
@@ -119,16 +120,16 @@ func (p *Optimizer) loop() error {
 			if err := p.alignToPartition(status.AccountBase, accountTarget, func(alignedBase, alignedTarget uint32) error {
 				header, err := steadyChain.GetBlockHeader(alignedTarget)
 				if err != nil {
-					return err
+					return errors.Wrap(err, "GetBlockHeader")
 				}
 				accTrie := p.db.NewTrie(state.AccountTrieName, header.StateRoot(), header.Number())
 				accTrie.SetNoFillCache(true)
 				if err := p.updateLeafBank(accTrie, alignedBase); err != nil {
-					return err
+					return errors.Wrap(err, "update account trie leaf bank")
 				}
 				if p.prune {
 					if err := accTrie.Prune(p.ctx, alignedBase); err != nil {
-						return err
+						return errors.Wrap(err, "prune account trie")
 					}
 				}
 				return nil
@@ -146,7 +147,7 @@ func (p *Optimizer) loop() error {
 		}
 		status.Base = target + 1
 		if err := status.Save(p.db); err != nil {
-			return err
+			return errors.Wrap(err, "save status")
 		}
 	}
 }
@@ -161,7 +162,7 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 		if leaf := accIter.Leaf(); leaf != nil {
 			var acc state.Account
 			if err := rlp.DecodeBytes(leaf.Value, &acc); err != nil {
-				return err
+				return errors.Wrap(err, "decode account")
 			}
 			if len(acc.StorageRoot) == 0 {
 				// skip, no storage
@@ -170,7 +171,7 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 
 			var meta state.AccountMetadata
 			if err := rlp.DecodeBytes(leaf.Meta, &meta); err != nil {
-				return err
+				return errors.Wrap(err, "decode account metadata")
 			}
 			if meta.StorageCommitNum < base {
 				// skip, no storage updates
@@ -183,11 +184,11 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 			)
 			sTrie.SetNoFillCache(true)
 			if err := p.updateLeafBank(sTrie, base); err != nil {
-				return err
+				return errors.Wrap(err, "update storage trie leaf bank")
 			}
 			if p.prune {
 				if err := sTrie.Prune(p.ctx, base); err != nil {
-					return err
+					return errors.Wrap(err, "prune storage trie")
 				}
 			}
 		}
