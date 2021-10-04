@@ -41,8 +41,7 @@ type Trie struct {
 	secure      bool
 	root        thor.Bytes32
 	commitNum   uint32
-	ext         *trie.ExtendedTrie
-	err         error
+	init        func() (*trie.ExtendedTrie, error)
 	dirty       bool
 	noFillCache bool
 	fastLeafGet func(nodeCommitNum uint32) (*trie.Leaf, error)
@@ -65,13 +64,23 @@ func New(
 		commitNum: commitNum,
 	}
 
-	if rootNode := t.back.Cache.GetRootNode(name, root, commitNum); rootNode != nil {
-		t.ext = trie.NewExtendedCached(rootNode, t.newDatabase())
-	} else {
-		t.ext, t.err = trie.NewExtended(root, commitNum, t.newDatabase())
-	}
-	if t.ext != nil {
-		t.ext.SetCachedNodeTTL(cachedNodeTTL)
+	var (
+		ext *trie.ExtendedTrie
+		err error
+	)
+	t.init = func() (*trie.ExtendedTrie, error) {
+		if ext != nil || err != nil {
+			return ext, err
+		}
+		if rootNode := t.back.Cache.GetRootNode(name, root, commitNum); rootNode != nil {
+			ext = trie.NewExtendedCached(rootNode, t.newDatabase())
+		} else {
+			ext, err = trie.NewExtended(root, commitNum, t.newDatabase())
+		}
+		if ext != nil {
+			ext.SetCachedNodeTTL(cachedNodeTTL)
+		}
+		return ext, err
 	}
 	return t
 }
@@ -164,11 +173,17 @@ func (t *Trie) newDatabase() trie.Database {
 
 // Copy make a copy of this trie.
 func (t *Trie) Copy() *Trie {
+	ext, err := t.init()
 	cpy := *t
-	if t.ext != nil {
-		cpy.ext = trie.NewExtendedCached(t.ext.RootNode(), cpy.newDatabase())
-		cpy.ext.SetCachedNodeTTL(t.ext.CachedNodeTTL())
+	if ext != nil {
+		extCpy := trie.NewExtendedCached(ext.RootNode(), cpy.newDatabase())
+		extCpy.SetCachedNodeTTL(ext.CachedNodeTTL())
+		cpy.init = func() (*trie.ExtendedTrie, error) {
+			return extCpy, nil
+		}
 		cpy.noFillCache = false
+	} else {
+		cpy.init = func() (*trie.ExtendedTrie, error) { return nil, err }
 	}
 	return &cpy
 }
@@ -176,17 +191,19 @@ func (t *Trie) Copy() *Trie {
 // CacheRoot caches the current root node.
 // Returns true if it is properly cached.
 func (t *Trie) CacheRoot() bool {
-	if t.err != nil {
+	ext, err := t.init()
+	if err != nil {
 		return false
 	}
-	return t.back.Cache.AddRootNode(t.name, t.ext.RootNode())
+	return t.back.Cache.AddRootNode(t.name, ext.RootNode())
 }
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
-	if t.err != nil {
-		return nil, nil, t.err
+	ext, err := t.init()
+	if err != nil {
+		return nil, nil, err
 	}
 	if t.secure {
 		h := hasherPool.Get().(hash.Hash)
@@ -199,14 +216,15 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 		b.b = h.Sum(b.b[:0])
 		key = b.b
 	}
-	return t.ext.Get(key)
+	return ext.Get(key)
 }
 
 // FastGet uses a fast way to query the value for key stored in the trie.
 // See VIP-212 for detail.
 func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) ([]byte, []byte, error) {
-	if t.err != nil {
-		return nil, nil, t.err
+	ext, err := t.init()
+	if err != nil {
+		return nil, nil, err
 	}
 	if t.secure {
 		h := hasherPool.Get().(hash.Hash)
@@ -257,7 +275,7 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 	}
 	defer func() { t.fastLeafGet = nil }()
 
-	val, meta, err := t.ext.Get(key)
+	val, meta, err := ext.Get(key)
 	if err != nil {
 		if miss, ok := err.(*trie.MissingNodeError); ok {
 			if la, ok := miss.Err.(*leafAvailable); ok {
@@ -276,8 +294,9 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, val, meta []byte) error {
-	if t.err != nil {
-		return t.err
+	ext, err := t.init()
+	if err != nil {
+		return err
 	}
 	t.dirty = true
 	if t.secure {
@@ -291,21 +310,22 @@ func (t *Trie) Update(key, val, meta []byte) error {
 		b.b = h.Sum(b.b[:0])
 		key = b.b
 	}
-	return t.ext.Update(key, val, meta)
+	return ext.Update(key, val, meta)
 }
 
 // Hash returns the root hash of the trie.
 func (t *Trie) Hash() thor.Bytes32 {
-	if t.err != nil {
+	ext, err := t.init()
+	if err != nil {
 		return t.root
 	}
-	return t.ext.Hash()
+	return ext.Hash()
 }
 
 // Commit writes all nodes to the trie database.
 func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
-	if t.err != nil {
-		err = t.err
+	ext, err := t.init()
+	if err != nil {
 		return
 	}
 	defer func() {
@@ -322,7 +342,7 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 			cErr       error
 		)
 		// commit the trie
-		root, cErr = t.ext.CommitTo(&struct {
+		root, cErr = ext.CommitTo(&struct {
 			trie.DatabaseWriter
 			trie.DatabaseKeyEncoder
 		}{
@@ -350,10 +370,11 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key
 func (t *Trie) NodeIterator(start []byte, minCommitNum uint32) trie.NodeIterator {
-	if t.err != nil {
-		return &errorIterator{t.err}
+	ext, err := t.init()
+	if err != nil {
+		return &errorIterator{err}
 	}
-	return t.ext.NodeIterator(start, minCommitNum)
+	return ext.NodeIterator(start, minCommitNum)
 }
 
 // SetNoFillCache enable or disable cache filling.
@@ -363,9 +384,6 @@ func (t *Trie) SetNoFillCache(b bool) {
 
 // Prune prunes redundant nodes in the range of [baseCommitNum, thisCommitNum].
 func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
-	if t.err != nil {
-		return t.err
-	}
 
 	if t.dirty {
 		return errors.New("dirty trie")
