@@ -106,7 +106,7 @@ func (t *Trie) newDatabase() trie.Database {
 			}
 			defer func() {
 				if err == nil && !t.noFillCache {
-					t.back.Cache.AddNodeBlob(t.name, key, blob)
+					t.back.Cache.AddNodeBlob(t.name, key, blob, false)
 				}
 			}()
 
@@ -331,7 +331,7 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 					return err
 				}
 				if !t.noFillCache {
-					t.back.Cache.AddNodeBlob(t.name, key, blob)
+					t.back.Cache.AddNodeBlob(t.name, key, blob, true)
 				}
 				return nil
 			}),
