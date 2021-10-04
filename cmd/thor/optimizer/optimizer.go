@@ -54,7 +54,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository, prune bool) *Optimizer {
 	}
 	o.goes.Go(func() {
 		if err := o.loop(); err != nil {
-			if err != context.Canceled {
+			if err != context.Canceled && errors.Cause(err) != context.Canceled {
 				log.Warn("optimizer interrupted", "error", err)
 			}
 		}
@@ -265,8 +265,7 @@ func (p *Optimizer) waitUntilSteady(target uint32) (*chain.Chain, error) {
 
 			set := make(map[thor.Address]struct{})
 			// reverse iterate the chain and collect signers.
-
-			for header := best.Header; header.Number() >= target; {
+			for i, header := 0, best.Header; i < proposerCount*3 && header.Number() >= target; i++ {
 				signer, _ := header.Signer()
 				set[signer] = struct{}{}
 
