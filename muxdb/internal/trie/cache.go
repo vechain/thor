@@ -19,8 +19,14 @@ import (
 
 // Cache is the cache layer for trie.
 type Cache struct {
-	nodes       *freecache.Cache // caches node blobs.
-	roots       *lru.ARCCache    // caches root nodes.
+	// nodes caches node blobs.
+	// It's logically divided into two parts.
+	// A. takes the node path as key. Filled with newly committed node blobs.
+	// B. takes the full node key as key. Filled with recently queired node blobs which
+	// are not in part A.
+	nodes *freecache.Cache
+	// caches root nodes.
+	roots       *lru.ARCCache
 	nodeStats   cacheStats
 	rootStats   cacheStats
 	lastLogTime int64
@@ -48,32 +54,37 @@ func (c *Cache) log() {
 }
 
 // AddNodeBlob adds node blob into the cache.
-func (c *Cache) AddNodeBlob(name string, key HistNodeKey, node []byte) {
+func (c *Cache) AddNodeBlob(name string, key HistNodeKey, blob []byte, isCommitting bool) {
 	if c == nil {
 		return
 	}
-
 	k := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(k)
+	if isCommitting {
+		// concat name with path as cache key
+		k.b = append(k.b[:0], name...)
+		k.b = append(k.b, key.PathBlob()...)
 
-	// concat name with path as cache key
-	k.b = append(k.b[:0], name...)
-	k.b = append(k.b, key.PathBlob()...)
+		v := bufferPool.Get().(*buffer)
+		defer bufferPool.Put(v)
 
-	v := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(v)
+		// concat commit number with blob as cache value
+		v.b = appendUint32(v.b[:0], key.CommitNum())
+		v.b = append(v.b, blob...)
 
-	// concat commit number with blob as cache value
-	v.b = appendUint32(v.b[:0], key.CommitNum())
-	v.b = append(v.b, node...)
-
-	_ = c.nodes.Set(k.b, v.b, 0)
+		_ = c.nodes.Set(k.b, v.b, 0)
+	} else {
+		// concat name with full hist key as cache key
+		k.b = append(k.b[:0], name...)
+		k.b = append(k.b, key...)
+		_ = c.nodes.Set(k.b, blob, 0)
+	}
 }
 
 // GetNodeBlob returns the cached node blob.
-func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) (node []byte) {
+func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 	if c == nil {
-		return
+		return nil
 	}
 
 	get := c.nodes.Get
@@ -100,10 +111,19 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) (node []byt
 			}
 		}
 	}
+	buf.b = append(buf.b[:0], name...)
+	buf.b = append(buf.b, key...)
+
+	if val, _ := get(buf.b); len(val) > 0 {
+		if !peek {
+			c.nodeStats.Hit()
+		}
+		return val
+	}
 	if !peek {
 		c.nodeStats.Miss()
 	}
-	return
+	return nil
 }
 
 type rootNodeKey struct {
@@ -138,7 +158,7 @@ func (c *Cache) GetRootNode(name string, root thor.Bytes32, commitNum uint32) *t
 
 	if sub, has := c.roots.Get(name); has {
 		if cached, has := sub.(*lru.Cache).Get(rootNodeKey{root, commitNum}); has {
-			if c.rootStats.Hit()%1000 == 0 {
+			if c.rootStats.Hit()%2000 == 0 {
 				c.log()
 			}
 			return cached.(*trie.Node)
