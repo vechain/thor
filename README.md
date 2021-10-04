@@ -164,7 +164,6 @@ The [Dockerfile](https://raw.githubusercontent.com/vechain/thor/master/Dockerfil
 
 * [VeChain Explorer (Official)](https://explore.vechain.org)
 * [VeChainStats](https://vechainstats.com/)
-* [VechainThorScan](https://vechainthorscan.com/)
 * [Vexplorer](https://vexplorer.io/)
 * [Insight](https://insight.vecha.in/)
 
