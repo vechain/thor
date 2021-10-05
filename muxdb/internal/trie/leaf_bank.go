@@ -33,18 +33,15 @@ type leafBankSlot struct {
 // LeafBank records accumulated trie leaves to help accelerate trie leaf access
 // according to VIP-212.
 type LeafBank struct {
-	store            kv.Store
-	slots            *lru.ARCCache
-	perSlotLeavesCap int
+	store kv.Store
+	slots *lru.ARCCache
 }
 
 // NewLeafBank creates a new LeafBank instance.
 // The slotCap indicates the capacity of cached per-trie slots.
-// The perSlotLeavesCap indicates capacity of leaves cache of a trie slot.
-func NewLeafBank(store kv.Store, slotCap int, perSlotLeavesCap int) *LeafBank {
+func NewLeafBank(store kv.Store, slotCap int) *LeafBank {
 	b := &LeafBank{
-		store:            kv.Bucket(string(LeafBankSpace)).NewStore(store),
-		perSlotLeavesCap: perSlotLeavesCap,
+		store: kv.Bucket(string(LeafBankSpace)).NewStore(store),
 	}
 	b.slots, _ = lru.NewARC(slotCap)
 	return b
@@ -59,8 +56,9 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 		// the trie has no leaf recorded yet
 		return nil, nil
 	} else {
-		cache, _ := lru.New(b.perSlotLeavesCap)
-		return &leafBankSlot{binary.BigEndian.Uint32(data), cache}, nil
+		slot := &leafBankSlot{maxCommitNum: binary.BigEndian.Uint32(data)}
+		slot.cache, _ = lru.New(32)
+		return slot, nil
 	}
 }
 

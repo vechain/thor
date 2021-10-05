@@ -273,15 +273,14 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	log.Debug("fd cache", "n", fdCache)
 
 	opts := muxdb.Options{
-		TrieNodeCacheSizeMB:           cacheMB,
-		TrieRootCacheCapacity:         64,
-		TrieCachedNodeTTL:             180,
-		TrieLeafBankSlotCapacity:      64,
-		TrieLeafBankSlotCacheCapacity: 16,
-		TrieHistNodePartitionFactor:   360, // !! DON'T touch this value, or db will get corrupted
-		OpenFilesCacheCapacity:        fdCache,
-		ReadCacheMB:                   256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:                 128,
+		TrieNodeCacheSizeMB:         cacheMB,
+		TrieRootCacheCapacity:       256,
+		TrieCachedNodeTTL:           180,
+		TrieLeafBankSlotCapacity:    256,
+		TrieHistNodePartitionFactor: 360, // !! DON'T touch this value, or db will get corrupted
+		OpenFilesCacheCapacity:      fdCache,
+		ReadCacheMB:                 256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:               128,
 	}
 
 	if ctx.Bool(disablePrunerFlag.Name) {
