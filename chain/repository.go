@@ -248,15 +248,15 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 	if err != nil {
 		return err
 	}
-
-	steadyID := r.steadyID.Load().(thor.Bytes32)
 	steadyNum := parentSummary.SteadyNum // initially inherits parent's steady num.
-
-	if has, err := r.NewChain(parentSummary.Header.ID()).HasBlock(steadyID); err != nil {
-		return err
-	} else if has {
-		// the chain of the new block contains the steady id,
-		steadyNum = block.Number(steadyID)
+	newSteadyID := r.steadyID.Load().(thor.Bytes32)
+	if newSteadyNum := block.Number(newSteadyID); steadyNum != newSteadyNum {
+		if has, err := r.NewChain(parentSummary.Header.ID()).HasBlock(newSteadyID); err != nil {
+			return err
+		} else if has {
+			// the chain of the new block contains the new steady id,
+			steadyNum = newSteadyNum
+		}
 	}
 
 	if _, err := r.saveBlock(newBlock, receipts, indexRoot, steadyNum); err != nil {
