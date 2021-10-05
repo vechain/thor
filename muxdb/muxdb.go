@@ -49,8 +49,6 @@ type Options struct {
 	TrieCachedNodeTTL int
 	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
 	TrieLeafBankSlotCapacity int
-	// TrieLeafBankSlotCacheCapacity defines per slot cache capacity for leaf bank.
-	TrieLeafBankSlotCacheCapacity int
 	// TrieHistNodePartitionFactor defines the partition factor for history nodes.
 	// It must be consistant over the lifetime of the DB.
 	TrieHistNodePartitionFactor trie.PartitionFactor
@@ -118,7 +116,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			HistPtnFactor:    options.TrieHistNodePartitionFactor,
 			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
 		},
-		trieLeafBank:      trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity, options.TrieLeafBankSlotCacheCapacity),
+		trieLeafBank:      trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity),
 		trieCachedNodeTTL: options.TrieCachedNodeTTL,
 	}, nil
 }
@@ -137,7 +135,7 @@ func NewMem() *MuxDB {
 			HistPtnFactor:    1,
 			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
 		},
-		trieLeafBank:      trie.NewLeafBank(engine, 1, 1),
+		trieLeafBank:      trie.NewLeafBank(engine, 1),
 		trieCachedNodeTTL: 32,
 	}
 }
