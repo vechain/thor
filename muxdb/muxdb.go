@@ -34,7 +34,6 @@ type engine interface {
 type Trie = trie.Trie
 
 type TrieLeafBank = trie.LeafBank
-type TrieSaveLeaf = trie.SaveLeaf
 
 // TrieDedupedNodePartitionFactor the partition factor for deduped nodes.
 const TrieDedupedNodePartitionFactor = trie.PartitionFactor(500000)
