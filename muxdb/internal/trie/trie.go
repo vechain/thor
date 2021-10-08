@@ -71,7 +71,7 @@ func New(
 		if ext != nil || err != nil {
 			return ext, err
 		}
-		if rootNode := t.back.Cache.GetRootNode(name, root, commitNum); rootNode != nil {
+		if rootNode := t.back.Cache.GetRootNode(name, root, commitNum, t.noFillCache); rootNode != nil {
 			ext = trie.NewExtendedCached(rootNode, t.newDatabase())
 		} else {
 			ext, err = trie.NewExtended(root, commitNum, t.newDatabase())
