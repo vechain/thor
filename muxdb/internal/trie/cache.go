@@ -151,20 +151,33 @@ func (c *Cache) AddRootNode(name string, n *trie.Node) bool {
 }
 
 // GetRootNode returns the cached root node.
-func (c *Cache) GetRootNode(name string, root thor.Bytes32, commitNum uint32) *trie.Node {
+func (c *Cache) GetRootNode(name string, root thor.Bytes32, commitNum uint32, peek bool) *trie.Node {
 	if c == nil {
 		return nil
 	}
 
-	if sub, has := c.roots.Get(name); has {
-		if cached, has := sub.(*lru.Cache).Get(rootNodeKey{root, commitNum}); has {
-			if c.rootStats.Hit()%2000 == 0 {
-				c.log()
+	getByName := c.roots.Get
+	if peek {
+		getByName = c.roots.Peek
+	}
+
+	if sub, has := getByName(name); has {
+		getByKey := sub.(*lru.Cache).Get
+		if peek {
+			getByKey = sub.(*lru.Cache).Peek
+		}
+		if cached, has := getByKey(rootNodeKey{root, commitNum}); has {
+			if !peek {
+				if c.rootStats.Hit()%2000 == 0 {
+					c.log()
+				}
 			}
 			return cached.(*trie.Node)
 		}
 	}
-	c.rootStats.Miss()
+	if !peek {
+		c.rootStats.Miss()
+	}
 	return nil
 }
 
