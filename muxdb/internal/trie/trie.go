@@ -237,11 +237,12 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 		}
 		if !gotLeaf {
 			var err error
-			if leaf, leafCommitNum, err = leafBank.Lookup(t.name, key); err != nil {
+			if leaf, leafCommitNum, err = leafBank.lookup(t.name, key); err != nil {
 				return nil, err
 			}
 			gotLeaf = true
 		}
+		// not ready
 		if leaf == nil {
 			return nil, nil
 		}
@@ -253,7 +254,7 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 				return leaf, nil
 			}
 		} else {
-			// enough for empty leaf
+			// got empty leaf
 			if nodeCommitNum <= leafCommitNum {
 				return leaf, nil
 			}
@@ -365,26 +366,10 @@ func (t *Trie) SetNoFillCache(b bool) {
 
 // Prune prunes redundant nodes in the range of [baseCommitNum, thisCommitNum].
 func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
-
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
-
-	// debounced context checker
-	checkContext := func() func() error {
-		count := 0
-		return func() error {
-			count++
-			if count%500 == 0 {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-			}
-			return nil
-		}
-	}()
+	checkContext := newContextChecker(ctx, 500)
 
 	return t.back.Store.Batch(func(putter kv.Putter) error {
 		var (
@@ -430,6 +415,47 @@ func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
 	})
 }
 
+// DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
+func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, leafBank *LeafBank) error {
+	if t.dirty {
+		return errors.New("dirty trie")
+	}
+	checkContext := newContextChecker(ctx, 500)
+
+	return leafBank.update(t.name, t.commitNum, func(save saveLeaf) error {
+		it := t.NodeIterator(nil, baseCommitNum)
+		for it.Next(true) {
+			if err := checkContext(); err != nil {
+				return err
+			}
+			if leaf := it.Leaf(); leaf != nil {
+				if err := save(it.LeafKey(), leaf); err != nil {
+					return err
+				}
+			}
+		}
+		return it.Error()
+	})
+}
+
+// newContextChecker creates a debounced context checker.
+func newContextChecker(ctx context.Context, debounce int) func() error {
+	count := 0
+	return func() error {
+		count++
+		if count > debounce {
+			count = 0
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		return nil
+	}
+}
+
+// verifyNodeHash verifies the hash of the node blob (trailing excluded).
 func verifyNodeHash(blob, expectedHash []byte) (bool, error) {
 	// strip the trailing
 	_, _, trailing, err := rlp.Split(blob)

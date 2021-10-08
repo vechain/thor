@@ -28,7 +28,7 @@ const (
 	propsStoreName = "optimizer.props"
 	statusKey      = "status"
 
-	minSpan = 1800  // 5 hours
+	minSpan = 3600  // 10 hours
 	maxSpan = 18000 // 50 hours
 )
 
@@ -124,8 +124,8 @@ func (p *Optimizer) loop() error {
 				}
 				accTrie := p.db.NewTrie(state.AccountTrieName, header.StateRoot(), header.Number())
 				accTrie.SetNoFillCache(true)
-				if err := p.updateLeafBank(accTrie, alignedBase); err != nil {
-					return errors.Wrap(err, "update account trie leaf bank")
+				if err := accTrie.DumpLeaves(p.ctx, alignedBase, p.db.TrieLeafBank()); err != nil {
+					return errors.Wrap(err, "dump account trie leaves")
 				}
 				if p.prune {
 					if err := accTrie.Prune(p.ctx, alignedBase); err != nil {
@@ -183,8 +183,8 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 				meta.StorageCommitNum,
 			)
 			sTrie.SetNoFillCache(true)
-			if err := p.updateLeafBank(sTrie, base); err != nil {
-				return errors.Wrap(err, "update storage trie leaf bank")
+			if err := sTrie.DumpLeaves(p.ctx, base, p.db.TrieLeafBank()); err != nil {
+				return errors.Wrap(err, "dump storage trie leaves")
 			}
 			if p.prune {
 				if err := sTrie.Prune(p.ctx, base); err != nil {
@@ -194,20 +194,6 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 		}
 	}
 	return accIter.Error()
-}
-
-func (p *Optimizer) updateLeafBank(trie *muxdb.Trie, base uint32) error {
-	return p.db.TrieLeafBank().Update(trie.Name(), trie.CommitNum(), func(save muxdb.TrieSaveLeaf) error {
-		it := trie.NodeIterator(nil, base)
-		for it.Next(true) {
-			if leaf := it.Leaf(); leaf != nil {
-				if err := save(it.LeafKey(), leaf); err != nil {
-					return err
-				}
-			}
-		}
-		return it.Error()
-	})
 }
 
 // alignToPartition aligns to deduped node partition. Aligned partition becomes a checkpoint.
