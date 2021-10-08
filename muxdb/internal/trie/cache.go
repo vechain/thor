@@ -58,26 +58,26 @@ func (c *Cache) AddNodeBlob(name string, key HistNodeKey, blob []byte, isCommitt
 	if c == nil {
 		return
 	}
-	k := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(k)
+	k := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(k)
 	if isCommitting {
 		// concat name with path as cache key
-		k.b = append(k.b[:0], name...)
-		k.b = append(k.b, key.PathBlob()...)
+		k.buf = append(k.buf[:0], name...)
+		k.buf = append(k.buf, key.PathBlob()...)
 
-		v := bufferPool.Get().(*buffer)
-		defer bufferPool.Put(v)
+		v := hasherPool.Get().(*hasher)
+		defer hasherPool.Put(v)
 
 		// concat commit number with blob as cache value
-		v.b = appendUint32(v.b[:0], key.CommitNum())
-		v.b = append(v.b, blob...)
+		v.buf = appendUint32(v.buf[:0], key.CommitNum())
+		v.buf = append(v.buf, blob...)
 
-		_ = c.nodes.Set(k.b, v.b, 0)
+		_ = c.nodes.Set(k.buf, v.buf, 0)
 	} else {
 		// concat name with full hist key as cache key
-		k.b = append(k.b[:0], name...)
-		k.b = append(k.b, key...)
-		_ = c.nodes.Set(k.b, blob, 0)
+		k.buf = append(k.buf[:0], name...)
+		k.buf = append(k.buf, key...)
+		_ = c.nodes.Set(k.buf, blob, 0)
 	}
 }
 
@@ -92,14 +92,14 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 		get = c.nodes.Peek
 	}
 
-	buf := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(buf)
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
 
 	// concat name with path as cache key
-	buf.b = append(buf.b[:0], name...)
-	buf.b = append(buf.b, key.PathBlob()...)
+	h.buf = append(h.buf[:0], name...)
+	h.buf = append(h.buf, key.PathBlob()...)
 
-	if val, _ := get(buf.b); len(val) > 0 {
+	if val, _ := get(h.buf); len(val) > 0 {
 		// compare the commit number
 		if binary.BigEndian.Uint32(val) == key.CommitNum() {
 			// then verify hash
@@ -111,10 +111,10 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 			}
 		}
 	}
-	buf.b = append(buf.b[:0], name...)
-	buf.b = append(buf.b, key...)
+	h.buf = append(h.buf[:0], name...)
+	h.buf = append(h.buf, key...)
 
-	if val, _ := get(buf.b); len(val) > 0 {
+	if val, _ := get(h.buf); len(val) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}

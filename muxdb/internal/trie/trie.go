@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"hash"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
@@ -206,15 +205,9 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 		return nil, nil, err
 	}
 	if t.secure {
-		h := hasherPool.Get().(hash.Hash)
+		h := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(h)
-		b := bufferPool.Get().(*buffer)
-		defer bufferPool.Put(b)
-
-		h.Reset()
-		h.Write(key)
-		b.b = h.Sum(b.b[:0])
-		key = b.b
+		key = h.Hash(key)
 	}
 	return ext.Get(key)
 }
@@ -227,15 +220,9 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 		return nil, nil, err
 	}
 	if t.secure {
-		h := hasherPool.Get().(hash.Hash)
+		h := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(h)
-		b := bufferPool.Get().(*buffer)
-		defer bufferPool.Put(b)
-
-		h.Reset()
-		h.Write(key)
-		b.b = h.Sum(b.b[:0])
-		key = b.b
+		key = h.Hash(key)
 	}
 	// setup fast leaf getter
 	var (
@@ -300,15 +287,9 @@ func (t *Trie) Update(key, val, meta []byte) error {
 	}
 	t.dirty = true
 	if t.secure {
-		h := hasherPool.Get().(hash.Hash)
+		h := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(h)
-		b := bufferPool.Get().(*buffer)
-		defer bufferPool.Put(b)
-
-		h.Reset()
-		h.Write(key)
-		b.b = h.Sum(b.b[:0])
-		key = b.b
+		key = h.Hash(key)
 	}
 	return ext.Update(key, val, meta)
 }
@@ -458,16 +439,10 @@ func verifyNodeHash(blob, expectedHash []byte) (bool, error) {
 
 	node := blob[:len(blob)-len(trailing)]
 
-	h := hasherPool.Get().(hash.Hash)
+	h := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(h)
-	b := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(b)
 
-	h.Reset()
-	h.Write(node)
-	b.b = h.Sum(b.b[:0])
-
-	return bytes.Equal(expectedHash, b.b), nil
+	return bytes.Equal(expectedHash, h.Hash(node)), nil
 }
 
 // individual functions of trie backend interface.
