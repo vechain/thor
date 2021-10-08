@@ -187,16 +187,6 @@ func (t *Trie) Copy() *Trie {
 	return &cpy
 }
 
-// CacheRoot caches the current root node.
-// Returns true if it is properly cached.
-func (t *Trie) CacheRoot() bool {
-	ext, err := t.init()
-	if err != nil {
-		return false
-	}
-	return t.back.Cache.AddRootNode(t.name, ext.RootNode())
-}
-
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
@@ -315,6 +305,9 @@ func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 			t.root = root
 			t.commitNum = commitNum
 			t.dirty = false
+			if !t.noFillCache {
+				t.back.Cache.AddRootNode(t.name, ext.RootNode())
+			}
 		}
 	}()
 

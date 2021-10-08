@@ -291,14 +291,6 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 	return c.GetBlockHeader(n)
 }
 
-// CacheIndexTrie cache the index trie for later access.
-func (c *Chain) CacheIndexTrie() bool {
-	if trie, err := c.lazyInit(); err == nil {
-		return trie.CacheRoot()
-	}
-	return false
-}
-
 // NewBestChain create a chain with best block as head.
 func (r *Repository) NewBestChain() *Chain {
 	return newChain(r, r.BestBlockSummary().Header.ID())
@@ -315,7 +307,6 @@ func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, newBlock *block.Bl
 		newID  = newBlock.Header().ID()
 		trie   = r.db.NewTrie(IndexTrieName, parentIndexRoot, newNum-1)
 	)
-	defer trie.CacheRoot()
 
 	// map block number to block ID
 	if err := trie.Update(newID[:4], newID[:], nil); err != nil {

@@ -256,9 +256,6 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 	signer, _ := header.Signer()
 	chain := c.repo.NewChain(header.ParentID())
 
-	// cache index trie for later block commit
-	defer chain.CacheIndexTrie()
-
 	rt := runtime.New(
 		chain,
 		state,
