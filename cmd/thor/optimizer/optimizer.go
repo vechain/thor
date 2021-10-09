@@ -20,6 +20,7 @@ import (
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 )
 
 var log = log15.New("pkg", "optimizer")
@@ -28,7 +29,7 @@ const (
 	propsStoreName = "optimizer.props"
 	statusKey      = "status"
 
-	minSpan = 3600  // 10 hours
+	minSpan = 1800  // 5 hours
 	maxSpan = 18000 // 50 hours
 )
 
@@ -124,7 +125,7 @@ func (p *Optimizer) loop() error {
 				}
 				accTrie := p.db.NewTrie(state.AccountTrieName, header.StateRoot(), header.Number())
 				accTrie.SetNoFillCache(true)
-				if err := accTrie.DumpLeaves(p.ctx, alignedBase, p.db.TrieLeafBank()); err != nil {
+				if err := accTrie.DumpLeaves(p.ctx, alignedBase, p.db.TrieLeafBank(), transformAccountLeaf); err != nil {
 					return errors.Wrap(err, "dump account trie leaves")
 				}
 				if p.prune {
@@ -169,21 +170,23 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 				continue
 			}
 
-			var meta state.AccountMetadata
-			if err := rlp.DecodeBytes(leaf.Meta, &meta); err != nil {
-				return errors.Wrap(err, "decode account metadata")
-			}
-			if meta.StorageCommitNum < base {
+			am := state.AccountMetadata(leaf.Meta)
+			storageCommitNum := am.StorageCommitNum()
+			if storageCommitNum < base {
 				// skip, no storage updates
 				continue
 			}
+			addr, ok := am.Address()
+			if !ok {
+				return errors.New("account metadata: missing address")
+			}
 			sTrie := p.db.NewTrie(
-				state.StorageTrieName(meta.Addr, meta.StorageInitCommitNum),
+				state.StorageTrieName(addr, am.StorageInitCommitNum()),
 				thor.BytesToBytes32(acc.StorageRoot),
-				meta.StorageCommitNum,
+				storageCommitNum,
 			)
 			sTrie.SetNoFillCache(true)
-			if err := sTrie.DumpLeaves(p.ctx, base, p.db.TrieLeafBank()); err != nil {
+			if err := sTrie.DumpLeaves(p.ctx, base, p.db.TrieLeafBank(), transformStorageLeaf); err != nil {
 				return errors.Wrap(err, "dump storage trie leaves")
 			}
 			if p.prune {
@@ -276,5 +279,22 @@ func (p *Optimizer) waitUntilSteady(target uint32) (*chain.Chain, error) {
 			return nil, p.ctx.Err()
 		case <-ticker.C():
 		}
+	}
+}
+
+// transformStorageLeaf transforms storage leaf before saving into leaf bank.
+// Leaf bank is for point read, so the metadata which is the preimage of storage key,
+// can be fully dropped to save disk space.
+func transformStorageLeaf(leaf *trie.Leaf) *trie.Leaf {
+	return &trie.Leaf{Value: leaf.Value}
+}
+
+// transformAccountLeaf transforms account leaf before saving into leaf bank.
+// Leaf bank is for point read, so the address part of metadata can be skipped
+// to save disk space.
+func transformAccountLeaf(leaf *trie.Leaf) *trie.Leaf {
+	return &trie.Leaf{
+		Value: leaf.Value,
+		Meta:  state.AccountMetadata(leaf.Meta).SkipAddress(),
 	}
 }
