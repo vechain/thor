@@ -122,7 +122,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	co := newCachedObject(s.db, a)
+	co := newCachedObject(s.db, addr, a)
 	s.cache[addr] = co
 	return co, nil
 }
@@ -343,7 +343,7 @@ func (s *State) Exists(addr thor.Address) (bool, error) {
 // That's set balance, energy and code to zero value.
 func (s *State) Delete(addr thor.Address) {
 	s.sm.Put(codeKey(addr), []byte(nil))
-	s.updateAccount(addr, emptyAccount(addr))
+	s.updateAccount(addr, emptyAccount())
 	// increase the barrier value
 	s.setStorageBarrier(addr, s.getStorageBarrier(addr)+1)
 }
@@ -368,7 +368,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
-	trie := s.db.NewSecureTrie(StorageTrieName(addr, acc.meta.StorageInitCommitNum), root, acc.meta.StorageCommitNum)
+	trie := s.db.NewSecureTrie(StorageTrieName(addr, acc.storageInitCommitNum), root, acc.storageCommitNum)
 
 	barrier := s.getStorageBarrier(addr)
 
@@ -470,15 +470,15 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 				var sTrie *muxdb.Trie
 				if len(c.data.StorageRoot) == 0 {
 					// storage was empty or destructed
-					c.data.meta.StorageInitCommitNum = newCommitNum
+					c.data.storageInitCommitNum = newCommitNum
 				}
 				if len(c.data.StorageRoot) > 0 && c.baseStorageTrie != nil {
 					sTrie = c.baseStorageTrie.Copy()
 				} else {
 					sTrie = s.db.NewSecureTrie(
-						StorageTrieName(addr, c.data.meta.StorageInitCommitNum),
+						StorageTrieName(addr, c.data.storageInitCommitNum),
 						thor.BytesToBytes32(c.data.StorageRoot),
-						c.data.meta.StorageCommitNum)
+						c.data.storageCommitNum)
 				}
 				for k, v := range c.storage {
 					if err := saveStorage(sTrie, k, v); err != nil {
@@ -486,11 +486,11 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 					}
 				}
 				c.data.StorageRoot = sTrie.Hash().Bytes()
-				c.data.meta.StorageCommitNum = newCommitNum
+				c.data.storageCommitNum = newCommitNum
 				stage.storageTries = append(stage.storageTries, sTrie)
 			}
 		}
-		if err := saveAccount(stage.trie, &c.data); err != nil {
+		if err := saveAccount(stage.trie, addr, &c.data); err != nil {
 			return nil, &Error{err}
 		}
 	}

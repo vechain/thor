@@ -6,6 +6,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -13,11 +14,44 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// AccountMetadata includes account metadata.
-type AccountMetadata struct {
-	Addr                 thor.Address
-	StorageCommitNum     uint32
-	StorageInitCommitNum uint32
+// AccountMetadata helps encode/decode account metadata.
+type AccountMetadata []byte
+
+// NewAccountMetadata builds the account metadata. addr is optional.
+func NewAccountMetadata(storageCommitNum, storageInitCommitNum uint32, addr *thor.Address) AccountMetadata {
+	var buf []byte
+	if addr != nil {
+		buf = make([]byte, 28)
+		copy(buf[8:], addr[:])
+	} else {
+		buf = make([]byte, 8)
+	}
+	binary.BigEndian.PutUint32(buf, storageCommitNum)
+	binary.BigEndian.PutUint32(buf[4:], storageInitCommitNum)
+	return buf
+}
+
+// StorageCommitNum returns the storage commit number.
+func (m AccountMetadata) StorageCommitNum() uint32 {
+	return binary.BigEndian.Uint32(m)
+}
+
+// StorageInitCommitNum returns the initial storage commit number.
+func (m AccountMetadata) StorageInitCommitNum() uint32 {
+	return binary.BigEndian.Uint32(m[4:])
+}
+
+// Address returns the account address.
+func (m AccountMetadata) Address() (thor.Address, bool) {
+	if len(m) == 8 {
+		return thor.Address{}, false
+	}
+	return thor.BytesToAddress(m[8:28]), true
+}
+
+// SkipAddress returns the account metadata without address.
+func (m AccountMetadata) SkipAddress() AccountMetadata {
+	return m[:8]
 }
 
 // Account is the Thor consensus representation of an account.
@@ -30,7 +64,7 @@ type Account struct {
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 
-	meta AccountMetadata
+	storageCommitNum, storageInitCommitNum uint32
 }
 
 // IsEmpty returns if an account is empty.
@@ -65,9 +99,8 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 	return new(big.Int).Add(a.Energy, x)
 }
 
-func emptyAccount(addr thor.Address) *Account {
+func emptyAccount() *Account {
 	a := Account{Balance: &big.Int{}, Energy: &big.Int{}}
-	a.meta.Addr = addr
 	return &a
 }
 
@@ -79,25 +112,23 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, leafBank *muxdb.TrieLeafBa
 		return nil, err
 	}
 	if len(data) == 0 {
-		return emptyAccount(addr), nil
+		return emptyAccount(), nil
 	}
 	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
 		return nil, err
-
 	}
-	if err := rlp.DecodeBytes(meta, &a.meta); err != nil {
-		return nil, err
-	}
+	am := AccountMetadata(meta)
+	a.storageCommitNum, a.storageInitCommitNum = am.StorageCommitNum(), am.StorageInitCommitNum()
 	return &a, nil
 }
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie *muxdb.Trie, a *Account) error {
+func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.Update(a.meta.Addr[:], nil, nil)
+		return trie.Update(addr[:], nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
@@ -105,11 +136,8 @@ func saveAccount(trie *muxdb.Trie, a *Account) error {
 		return err
 	}
 
-	meta, err := rlp.EncodeToBytes(&a.meta)
-	if err != nil {
-		return err
-	}
-	return trie.Update(a.meta.Addr[:], data, meta)
+	am := NewAccountMetadata(a.storageCommitNum, a.storageInitCommitNum, &addr)
+	return trie.Update(addr[:], data, am)
 }
 
 // loadStorage load storage data for given key.
