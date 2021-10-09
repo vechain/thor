@@ -409,7 +409,8 @@ func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
 }
 
 // DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
-func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, leafBank *LeafBank) error {
+// transform is optional to transform leaf before passing into leaf bank.
+func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, leafBank *LeafBank, transform func(*trie.Leaf) *trie.Leaf) error {
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
@@ -422,6 +423,9 @@ func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, leafBank *L
 				return err
 			}
 			if leaf := it.Leaf(); leaf != nil {
+				if transform != nil {
+					leaf = transform(leaf)
+				}
 				if err := save(it.LeafKey(), leaf); err != nil {
 					return err
 				}
