@@ -84,7 +84,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		DisableSeeksCompaction:        true,
 		CompactionTableSizeMultiplier: 2,
 		VibrantKeys: []*util.Range{
-			util.BytesPrefix([]byte{trie.LeafBankSpace}),
+			util.BytesPrefix([]byte{trie.HistSpace}),
 		},
 	}
 
