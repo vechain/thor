@@ -48,12 +48,9 @@ func TestCachedObject(t *testing.T) {
 		Balance:     &big.Int{},
 		CodeHash:    codeHash,
 		StorageRoot: storageRoot[:],
-		meta: AccountMetadata{
-			Addr: addr,
-		},
 	}
 
-	obj := newCachedObject(db, &account)
+	obj := newCachedObject(db, addr, &account)
 
 	assert.Equal(t,
 		M(code, nil),

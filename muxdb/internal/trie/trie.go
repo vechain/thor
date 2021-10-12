@@ -131,7 +131,7 @@ func (t *Trie) newDatabase() trie.Database {
 			// have to lookup nodes
 			err = t.back.Store.Snapshot(func(getter kv.Getter) error {
 				// Get node from hist space first, then from deduped space.
-				// Don't change the order, or the trie might be broken when during pruning.
+				// Don't change the order, or the trie might be broken after pruning.
 				if data, err := histBkt.NewGetter(getter).Get(key); err != nil {
 					if !t.back.Store.IsNotFound(err) {
 						return err
