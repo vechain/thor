@@ -29,6 +29,7 @@ var log = log15.New("pkg", "muxdb.trie")
 type Backend struct {
 	Store            kv.Store
 	Cache            *Cache
+	LeafBank         *LeafBank
 	HistPtnFactor    PartitionFactor
 	DedupedPtnFactor PartitionFactor
 }
@@ -204,7 +205,10 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 
 // FastGet uses a fast way to query the value for key stored in the trie.
 // See VIP-212 for detail.
-func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) ([]byte, []byte, error) {
+func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, error) {
+	if t.back.LeafBank == nil {
+		return t.Get(key)
+	}
 	ext, err := t.init()
 	if err != nil {
 		return nil, nil, err
@@ -227,7 +231,7 @@ func (t *Trie) FastGet(key []byte, leafBank *LeafBank, steadyCommitNum uint32) (
 		}
 		if !gotLeaf {
 			var err error
-			if leaf, leafCommitNum, err = leafBank.lookup(t.name, key); err != nil {
+			if leaf, leafCommitNum, err = t.back.LeafBank.Lookup(t.name, key); err != nil {
 				return nil, err
 			}
 			gotLeaf = true
@@ -410,13 +414,16 @@ func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
 
 // DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
 // transform is optional to transform leaf before passing into leaf bank.
-func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, leafBank *LeafBank, transform func(*trie.Leaf) *trie.Leaf) error {
+func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform func(*trie.Leaf) *trie.Leaf) error {
+	if t.back.LeafBank == nil {
+		return errors.New("nil leaf bank")
+	}
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
 	checkContext := newContextChecker(ctx, 500)
 
-	return leafBank.update(t.name, t.commitNum, func(save saveLeaf) error {
+	return t.back.LeafBank.Update(t.name, t.commitNum, func(save saveLeaf) error {
 		it := t.NodeIterator(nil, baseCommitNum)
 		for it.Next(true) {
 			if err := checkContext(); err != nil {

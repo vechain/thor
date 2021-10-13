@@ -68,7 +68,6 @@ type MuxDB struct {
 	engine            engine
 	storageCloser     io.Closer
 	trieBackend       *trie.Backend
-	trieLeafBank      *trie.LeafBank
 	trieCachedNodeTTL int
 }
 
@@ -111,11 +110,11 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		storageCloser: storage,
 		trieBackend: &trie.Backend{
 			Store:            engine,
+			LeafBank:         trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity),
 			Cache:            trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
 			HistPtnFactor:    options.TrieHistNodePartitionFactor,
 			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
 		},
-		trieLeafBank:      trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity),
 		trieCachedNodeTTL: options.TrieCachedNodeTTL,
 	}, nil
 }
@@ -134,7 +133,6 @@ func NewMem() *MuxDB {
 			HistPtnFactor:    1,
 			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
 		},
-		trieLeafBank:      trie.NewLeafBank(engine, 1),
 		trieCachedNodeTTL: 32,
 	}
 }
@@ -189,8 +187,4 @@ func (db *MuxDB) LowEngine() kv.Store {
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
-}
-
-func (db *MuxDB) TrieLeafBank() *TrieLeafBank {
-	return db.trieLeafBank
 }

@@ -118,7 +118,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if co, ok := s.cache[addr]; ok {
 		return co, nil
 	}
-	a, err := loadAccount(s.trie, addr, s.db.TrieLeafBank(), s.steadyCommitNum)
+	a, err := loadAccount(s.trie, addr, s.steadyCommitNum)
 	if err != nil {
 		return nil, err
 	}

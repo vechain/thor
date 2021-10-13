@@ -62,10 +62,10 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 	}
 }
 
-// lookup lookups a leaf from the trie named name by the given leafKey.
+// Lookup lookups a leaf from the trie named name by the given leafKey.
 // The returned leaf might be nil if no leaf recorded yet.
 // The commitNum indicates up to which commit number the leaf is valid.
-func (b *LeafBank) lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
+func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
 	// get slot from slots cache or create a new one.
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
@@ -106,8 +106,8 @@ func (b *LeafBank) lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 	}
 }
 
-// update saves a batch of leaves for the trie named name.
-func (b *LeafBank) update(name string, maxCommitNum uint32, batch func(save saveLeaf) error) (err error) {
+// Update saves a batch of leaves for the trie named name.
+func (b *LeafBank) Update(name string, maxCommitNum uint32, batch func(save saveLeaf) error) (err error) {
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)

@@ -61,7 +61,7 @@ func (co *cachedObject) GetStorage(key thor.Bytes32, steadyCommitNum uint32) (rl
 	trie := co.getOrCreateStorageTrie()
 
 	// load from trie
-	v, err := loadStorage(trie, key, co.db.TrieLeafBank(), steadyCommitNum)
+	v, err := loadStorage(trie, key, steadyCommitNum)
 	if err != nil {
 		return nil, err
 	}
