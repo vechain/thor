@@ -40,7 +40,6 @@ type Optimizer struct {
 	ctx    context.Context
 	cancel func()
 	goes   co.Goes
-	prune  bool
 }
 
 // New creates and starts the optimizer.
@@ -51,10 +50,9 @@ func New(db *muxdb.MuxDB, repo *chain.Repository, prune bool) *Optimizer {
 		repo:   repo,
 		ctx:    ctx,
 		cancel: cancel,
-		prune:  prune,
 	}
 	o.goes.Go(func() {
-		if err := o.loop(); err != nil {
+		if err := o.loop(prune); err != nil {
 			if err != context.Canceled && errors.Cause(err) != context.Canceled {
 				log.Warn("optimizer interrupted", "error", err)
 			}
@@ -70,7 +68,7 @@ func (p *Optimizer) Stop() {
 }
 
 // loop is the main loop.
-func (p *Optimizer) loop() error {
+func (p *Optimizer) loop(prune bool) error {
 	log.Info("optimizer started")
 
 	var (
@@ -90,18 +88,18 @@ func (p *Optimizer) loop() error {
 			target = max
 		}
 
-		steadyChain, err := p.waitUntilSteady(target)
+		targetChain, err := p.waitUntilSteady(target)
 		if err != nil {
 			return errors.Wrap(err, "waitUntilSteady")
 		}
 		startTime := time.Now().UnixNano()
 		if err := p.alignToPartition(status.Base, target, func(alignedBase, alignedTarget uint32) error {
-			summary, err := steadyChain.GetBlockSummary(alignedTarget)
+			summary, err := targetChain.GetBlockSummary(alignedTarget)
 			if err != nil {
 				return errors.Wrap(err, "GetBlockSummary")
 			}
 			// no need to update leaf bank for index trie
-			if p.prune {
+			if prune {
 				// prune the index trie
 				indexTrie := p.db.NewTrie(chain.IndexTrieName, summary.IndexRoot, summary.Header.Number())
 				indexTrie.SetNoFillCache(true)
@@ -109,29 +107,29 @@ func (p *Optimizer) loop() error {
 					return errors.Wrap(err, "prune index trie")
 				}
 			}
-			// optimize storage tries
-			return p.optimizeStorageTries(alignedBase, summary.Header)
+			accTrie := p.db.NewTrie(state.AccountTrieName, summary.Header.StateRoot(), summary.Header.Number())
+			accTrie.SetNoFillCache(true)
+			if err := accTrie.DumpLeaves(p.ctx, alignedBase, transformAccountLeaf); err != nil {
+				return errors.Wrap(err, "dump account trie leaves")
+			}
+			return p.optimizeStorageTries(accTrie, alignedBase, prune)
 		}); err != nil {
 			return err
 		}
 
-		// optimize the account trie.
-		if target > thor.MaxStateHistory {
+		// prune the account trie.
+		if prune && target > thor.MaxStateHistory {
 			accountTarget := target - thor.MaxStateHistory
 			if err := p.alignToPartition(status.AccountBase, accountTarget, func(alignedBase, alignedTarget uint32) error {
-				header, err := steadyChain.GetBlockHeader(alignedTarget)
+				header, err := targetChain.GetBlockHeader(alignedTarget)
 				if err != nil {
 					return errors.Wrap(err, "GetBlockHeader")
 				}
 				accTrie := p.db.NewTrie(state.AccountTrieName, header.StateRoot(), header.Number())
 				accTrie.SetNoFillCache(true)
-				if err := accTrie.DumpLeaves(p.ctx, alignedBase, p.db.TrieLeafBank(), transformAccountLeaf); err != nil {
-					return errors.Wrap(err, "dump account trie leaves")
-				}
-				if p.prune {
-					if err := accTrie.Prune(p.ctx, alignedBase); err != nil {
-						return errors.Wrap(err, "prune account trie")
-					}
+
+				if err := accTrie.Prune(p.ctx, alignedBase); err != nil {
+					return errors.Wrap(err, "prune account trie")
 				}
 				return nil
 			}); err != nil {
@@ -153,11 +151,8 @@ func (p *Optimizer) loop() error {
 	}
 }
 
-func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) error {
-	accTrie := p.db.NewTrie(state.AccountTrieName, header.StateRoot(), header.Number())
-	accTrie.SetNoFillCache(true)
+func (p *Optimizer) optimizeStorageTries(accTrie *muxdb.Trie, base uint32, prune bool) error {
 	accIter := accTrie.NodeIterator(nil, base)
-
 	// iterate updated accounts since the base
 	for accIter.Next(true) {
 		if leaf := accIter.Leaf(); leaf != nil {
@@ -186,10 +181,10 @@ func (p *Optimizer) optimizeStorageTries(base uint32, header *block.Header) erro
 				storageCommitNum,
 			)
 			sTrie.SetNoFillCache(true)
-			if err := sTrie.DumpLeaves(p.ctx, base, p.db.TrieLeafBank(), transformStorageLeaf); err != nil {
+			if err := sTrie.DumpLeaves(p.ctx, base, transformStorageLeaf); err != nil {
 				return errors.Wrap(err, "dump storage trie leaves")
 			}
-			if p.prune {
+			if prune {
 				if err := sTrie.Prune(p.ctx, base); err != nil {
 					return errors.Wrap(err, "prune storage trie")
 				}
