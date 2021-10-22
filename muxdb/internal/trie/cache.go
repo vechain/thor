@@ -19,12 +19,10 @@ import (
 
 // Cache is the cache layer for trie.
 type Cache struct {
-	// nodes caches node blobs.
-	// It's logically divided into two parts.
-	// A. takes the node path as key. Filled with newly committed node blobs.
-	// B. takes the full node key as key. Filled with recently queired node blobs which
-	// are not in part A.
-	nodes *freecache.Cache
+	// caches recently queried node blobs. Using full node key as key.
+	queriedNodes *freecache.Cache
+	// caches newly committed node blobs. Using node path as key.
+	committedNodes *freecache.Cache
 	// caches root nodes.
 	roots       *lru.ARCCache
 	nodeStats   cacheStats
@@ -34,8 +32,10 @@ type Cache struct {
 
 // NewCache creates a cache object with the given cache size.
 func NewCache(sizeMB int, rootCap int) *Cache {
+	sizeBytes := sizeMB * 1024 * 1024
 	var cache Cache
-	cache.nodes = freecache.NewCache(sizeMB * 1024 * 1024)
+	cache.queriedNodes = freecache.NewCache(sizeBytes / 10)
+	cache.committedNodes = freecache.NewCache(sizeBytes - sizeBytes/10)
 	cache.roots, _ = lru.NewARC(rootCap)
 	cache.lastLogTime = time.Now().UnixNano()
 	return &cache
@@ -72,12 +72,12 @@ func (c *Cache) AddNodeBlob(name string, key HistNodeKey, blob []byte, isCommitt
 		v.buf = appendUint32(v.buf[:0], key.CommitNum())
 		v.buf = append(v.buf, blob...)
 
-		_ = c.nodes.Set(k.buf, v.buf, 0)
+		_ = c.committedNodes.Set(k.buf, v.buf, 0)
 	} else {
 		// concat name with full hist key as cache key
 		k.buf = append(k.buf[:0], name...)
 		k.buf = append(k.buf, key...)
-		_ = c.nodes.Set(k.buf, blob, 0)
+		_ = c.queriedNodes.Set(k.buf, blob, 0)
 	}
 }
 
@@ -87,9 +87,11 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 		return nil
 	}
 
-	get := c.nodes.Get
+	lookupQueried := c.queriedNodes.Get
+	lookupCommitted := c.committedNodes.Get
 	if peek {
-		get = c.nodes.Peek
+		lookupQueried = c.queriedNodes.Peek
+		lookupCommitted = c.committedNodes.Peek
 	}
 
 	h := hasherPool.Get().(*hasher)
@@ -99,7 +101,7 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 	h.buf = append(h.buf[:0], name...)
 	h.buf = append(h.buf, key.PathBlob()...)
 
-	if val, _ := get(h.buf); len(val) > 0 {
+	if val, _ := lookupCommitted(h.buf); len(val) > 0 {
 		// compare the commit number
 		if binary.BigEndian.Uint32(val) == key.CommitNum() {
 			// then verify hash
@@ -111,10 +113,9 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 			}
 		}
 	}
-	h.buf = append(h.buf[:0], name...)
-	h.buf = append(h.buf, key...)
 
-	if val, _ := get(h.buf); len(val) > 0 {
+	h.buf = append(h.buf[:len(name)], key...)
+	if val, _ := lookupQueried(h.buf); len(val) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}
