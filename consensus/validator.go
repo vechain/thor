@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/poa"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -24,16 +23,16 @@ import (
 func (c *Consensus) validate(
 	state *state.State,
 	block *block.Block,
-	parentSummay *chain.BlockSummary,
+	parent *block.Header,
 	nowTimestamp uint64,
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
-	if err := c.validateBlockHeader(header, parentSummay, nowTimestamp); err != nil {
+	if err := c.validateBlockHeader(header, parent, nowTimestamp); err != nil {
 		return nil, nil, err
 	}
 
-	candidates, err := c.validateProposer(header, parentSummay.Header, state)
+	candidates, err := c.validateProposer(header, parent, state)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,9 +90,7 @@ func (c *Consensus) validate(
 	return stage, receipts, nil
 }
 
-func (c *Consensus) validateBlockHeader(header *block.Header, parentSummary *chain.BlockSummary, nowTimestamp uint64) error {
-	parent := parentSummary.Header
-
+func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Header, nowTimestamp uint64) error {
 	if header.Timestamp() <= parent.Timestamp() {
 		return consensusError(fmt.Sprintf("block timestamp behind parents: parent %v, current %v", parent.Timestamp(), header.Timestamp()))
 	}
@@ -128,9 +125,15 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parentSummary *cha
 			return consensusError(fmt.Sprintf("block signature length invalid: want 146, have %v", len(header.Signature())))
 		}
 
-		alpha := parentSummary.Beta()
+		var alpha []byte
 		if header.Number() == VIP214 {
 			alpha = thor.Bytes32{}.Bytes()
+		} else {
+			parentBeta, err := parent.Beta()
+			if err != nil {
+				return consensusError(fmt.Sprintf("failed to verify parent block's VRF Signature: %v", err))
+			}
+			alpha = parentBeta
 		}
 		if !bytes.Equal(header.Alpha(), alpha) {
 			return consensusError(fmt.Sprintf("block alpha invalid: want %v, have %v", hexutil.Encode(alpha), hexutil.Encode(header.Alpha())))

@@ -75,7 +75,7 @@ func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64) (*state.Stage
 		return nil, nil, consensusError(fmt.Sprintf("block txs features invalid: want %v, have %v", features, header.TxsFeatures()))
 	}
 
-	stage, receipts, err := c.validate(state, blk, parentSummary, nowTimestamp)
+	stage, receipts, err := c.validate(state, blk, parentSummary.Header, nowTimestamp)
 	if err != nil {
 		return nil, nil, err
 	}

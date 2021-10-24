@@ -34,50 +34,38 @@ func NewSeeder(repo *chain.Repository) *Seeder {
 }
 
 // Generate creates a seed for the given parent block's header.
-func (seeder *Seeder) Generate(parentID thor.Bytes32) (thor.Bytes32, error) {
+func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed thor.Bytes32, err error) {
 	blockNum := block.Number(parentID) + 1
 
 	epoch := blockNum / epochInterval
 	if epoch <= 1 {
-		return thor.Bytes32{}, nil
+		return
 	}
 	seedNum := (epoch - 1) * epochInterval
 
-	blockID, err := seeder.repo.NewChain(parentID).GetBlockID(seedNum)
+	seedBlk, err := seeder.repo.NewChain(parentID).GetBlockHeader(seedNum)
 	if err != nil {
-		return thor.Bytes32{}, err
+		return
 	}
 
-	seedSummary, err := seeder.repo.GetBlockSummary(blockID)
-	if err != nil {
-		return thor.Bytes32{}, err
-	}
-
-	if len(seedSummary.Beta()) == 0 {
-		return thor.Bytes32{}, nil
-	}
-
-	if v, ok := seeder.cache[seedSummary.Header.ID()]; ok {
+	if v, ok := seeder.cache[seedBlk.ID()]; ok {
 		return v, nil
 	}
 
-	hasher := thor.NewBlake2b()
-	sum := seedSummary
-	for i := 0; i < int(epochInterval); i++ {
-		hasher.Write(sum.Beta())
+	defer func() {
+		if err != nil && !seed.IsZero() {
+			seeder.cache[seedBlk.ID()] = seed
+		}
+	}()
 
-		sum, err = seeder.repo.GetBlockSummary(sum.Header.ParentID())
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-		if len(sum.Beta()) == 0 {
-			break
-		}
+	beta, err := seedBlk.Beta()
+	if err != nil {
+		return
 	}
 
-	var seed thor.Bytes32
-	hasher.Sum(seed[:0])
+	if beta == nil {
+		return thor.Bytes32{}, nil
+	}
 
-	seeder.cache[seedSummary.Header.ID()] = seed
-	return seed, nil
+	return thor.Blake2b(beta), nil
 }

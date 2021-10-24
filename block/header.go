@@ -213,7 +213,7 @@ func (h *Header) Alpha() []byte {
 // Beta verifies the VRF proof in header's signature and returns the beta.
 func (h *Header) Beta() (beta []byte, err error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {
-		return []byte{}, nil
+		return nil, nil
 	}
 
 	if cached := h.cache.beta.Load(); cached != nil {
