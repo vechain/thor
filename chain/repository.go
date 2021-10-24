@@ -144,16 +144,11 @@ func (r *Repository) setBestBlock(b *block.Block) error {
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32) error {
 	return r.data.Batch(func(putter kv.PutFlusher) error {
 		var (
-			header = block.Header()
-			id     = header.ID()
-			txs    = block.Transactions()
+			header  = block.Header()
+			id      = header.ID()
+			txs     = block.Transactions()
+			summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size())}
 		)
-
-		beta, err := header.Beta()
-		if err != nil {
-			return err
-		}
-		summary := BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), extension{beta}}
 
 		if n := len(txs); n > 0 {
 			key := makeTxKey(id, txInfix)

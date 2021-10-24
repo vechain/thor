@@ -6,7 +6,10 @@
 package chain
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -16,6 +19,28 @@ const (
 	txInfix      = byte(0)
 	receiptInfix = byte(1)
 )
+
+// BlockSummary presents block summary.
+type BlockSummary struct {
+	Header    *block.Header
+	IndexRoot thor.Bytes32
+	Txs       []thor.Bytes32
+	Size      uint64
+}
+
+// the key for tx/receipt.
+// it consists of: ( block id | infix | index )
+type txKey [32 + 1 + 8]byte
+
+func makeTxKey(blockID thor.Bytes32, infix byte) (k txKey) {
+	copy(k[:], blockID[:])
+	k[32] = infix
+	return
+}
+
+func (k *txKey) SetIndex(i uint64) {
+	binary.BigEndian.PutUint64(k[33:], i)
+}
 
 func saveRLP(w kv.Putter, key []byte, val interface{}) error {
 	data, err := rlp.EncodeToBytes(val)
