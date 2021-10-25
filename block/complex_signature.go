@@ -22,7 +22,7 @@ func NewComplexSignature(proof, signature []byte) (ComplexSignature, error) {
 	}
 
 	var ms ComplexSignature
-	ms = make([]byte, 0, 146)
+	ms = make([]byte, 0, ComplexSigSize)
 	ms = append(ms, signature...)
 	ms = append(ms, proof...)
 

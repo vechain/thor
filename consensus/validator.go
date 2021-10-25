@@ -121,8 +121,8 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 	}
 
 	if header.Number() >= VIP214 {
-		if len(header.Signature()) != 146 {
-			return consensusError(fmt.Sprintf("block signature length invalid: want 146, have %v", len(header.Signature())))
+		if len(header.Signature()) != block.ComplexSigSize {
+			return consensusError(fmt.Sprintf("block signature length invalid: want %d have %v", block.ComplexSigSize, len(header.Signature())))
 		}
 
 		var alpha []byte

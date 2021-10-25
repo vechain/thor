@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/block"
 	. "github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -121,7 +122,7 @@ func TestHeaderEncoding(t *testing.T) {
 	assert.EqualError(t, err, "rlp: input contains more than one value")
 
 	var proof [81]byte
-	var alpha [36]byte
+	var alpha [32]byte
 	rand.Read(proof[:])
 	rand.Read(alpha[:])
 
@@ -198,8 +199,8 @@ func TestEncodingBadExtension(t *testing.T) {
 }
 
 func TestEncodingExtension(t *testing.T) {
-	var sig [146]byte
-	var alpha [36]byte
+	var sig [block.ComplexSigSize]byte
+	var alpha [32]byte
 	rand.Read(sig[:])
 	rand.Read(alpha[:])
 

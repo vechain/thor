@@ -213,7 +213,7 @@ func (h *Header) Alpha() []byte {
 // Beta verifies the VRF proof in header's signature and returns the beta.
 func (h *Header) Beta() (beta []byte, err error) {
 	if h.Number() == 0 || len(h.body.Signature) == 65 {
-		return nil, nil
+		return
 	}
 
 	if cached := h.cache.beta.Load(); cached != nil {
@@ -225,7 +225,7 @@ func (h *Header) Beta() (beta []byte, err error) {
 		}
 	}()
 
-	if len(h.body.Signature) != 146 {
+	if len(h.body.Signature) != ComplexSigSize {
 		return nil, errors.New("invalid signature length")
 	}
 	pub, err := h.pubkey()
@@ -250,7 +250,7 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	// After fork VIP-214 block signature is complex signature
-	if len(body.Extension.Alpha) > 0 && len(body.Signature) != 146 {
+	if len(body.Extension.Alpha) > 0 && len(body.Signature) != ComplexSigSize {
 		return errors.New("rlp: invalid header")
 	}
 

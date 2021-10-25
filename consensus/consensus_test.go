@@ -343,7 +343,7 @@ func TestValidateBlockHeader(t *testing.T) {
 				blk := tc.original.WithSignature(block.ComplexSignature(tc.original.Header().Signature()).Signature())
 
 				err = tc.consent(blk)
-				expected := consensusError("block signature length invalid: want 146, have 65")
+				expected := consensusError("block signature length invalid: want 146 have 65")
 				assert.Equal(t, expected, err)
 			},
 		},
