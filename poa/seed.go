@@ -22,19 +22,19 @@ func mockEpochInterval(interval uint32) {
 // Seeder generates seed for poa scheduler.
 type Seeder struct {
 	repo  *chain.Repository
-	cache map[thor.Bytes32]thor.Bytes32
+	cache map[thor.Bytes32][]byte
 }
 
 // NewSeeder creates a seeder
 func NewSeeder(repo *chain.Repository) *Seeder {
 	return &Seeder{
 		repo,
-		make(map[thor.Bytes32]thor.Bytes32),
+		make(map[thor.Bytes32][]byte),
 	}
 }
 
 // Generate creates a seed for the given parent block's header.
-func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed thor.Bytes32, err error) {
+func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed []byte, err error) {
 	blockNum := block.Number(parentID) + 1
 
 	epoch := blockNum / epochInterval
@@ -53,19 +53,10 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed thor.Bytes32, err er
 	}
 
 	defer func() {
-		if err != nil && !seed.IsZero() {
+		if err == nil {
 			seeder.cache[seedBlk.ID()] = seed
 		}
 	}()
 
-	beta, err := seedBlk.Beta()
-	if err != nil {
-		return
-	}
-
-	if beta == nil {
-		return thor.Bytes32{}, nil
-	}
-
-	return thor.Blake2b(beta), nil
+	return seedBlk.Beta()
 }

@@ -32,7 +32,7 @@ func TestSeeder_Generate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cache := make(map[thor.Bytes32]thor.Bytes32)
+	cache := make(map[thor.Bytes32][]byte)
 
 	var b1ID thor.Bytes32
 	binary.BigEndian.PutUint32(b1ID[:4], 1)
@@ -54,14 +54,14 @@ func TestSeeder_Generate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b2ID, err := repo.NewBestChain().GetBlockID(epochInterval * 3)
+	b30ID, err := repo.NewBestChain().GetBlockID(epochInterval * 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	type fields struct {
 		repo  *chain.Repository
-		cache map[thor.Bytes32]thor.Bytes32
+		cache map[thor.Bytes32][]byte
 	}
 	type args struct {
 		parentID thor.Bytes32
@@ -70,11 +70,11 @@ func TestSeeder_Generate(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want    thor.Bytes32
+		want    []byte
 		wantErr bool
 	}{
-		{"early stage seeder should return empty bytes32", fields{repo, cache}, args{b1ID}, thor.Bytes32{}, false},
-		{"seed block without beta should return empty bytes32", fields{repo, cache}, args{b2ID}, thor.Bytes32{}, false},
+		{"early stage seeder should return nil slice", fields{repo, cache}, args{b1ID}, []byte(nil), false},
+		{"seed block without beta should return nil slice", fields{repo, cache}, args{b30ID}, []byte(nil), false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -114,23 +114,24 @@ func TestSeeder_Generate(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		var beta []byte
-		if len(sum.Beta()) > 0 {
-			beta = sum.Beta()
-		} else {
-			beta = thor.Bytes32{}.Bytes()
+		parentBeta, err := sum.Header.Beta()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(parentBeta) == 0 {
+			parentBeta = thor.Bytes32{}.Bytes()
 		}
 
 		b := new(block.Builder).
 			ParentID(parent.Header().ID()).
-			Alpha(beta).
+			Alpha(parentBeta).
 			Build()
 
 		sig, err := crypto.Sign(b.Header().SigningHash().Bytes(), priv)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, beta)
+		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, parentBeta)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,37 +148,22 @@ func TestSeeder_Generate(t *testing.T) {
 		parent = b
 	}
 
-	// 56 - 65
-	for i := 1; i <= int(epochInterval); i++ {
-		b := new(block.Builder).
-			ParentID(parent.Header().ID()).
-			Build().WithSignature(sig[:])
-
-		if err := repo.AddBlock(b, nil); err != nil {
-			t.Fatal(err)
-		}
-		parent = b
-	}
 	if err := repo.SetBestBlockID(parent.Header().ID()); err != nil {
 		t.Fatal(err)
 	}
 
-	var b51Seed thor.Bytes32
-	hasher := thor.NewBlake2b()
 	chain := repo.NewBestChain()
-	for i := 40; i >= 36; i-- {
-		id, err := chain.GetBlockID(uint32(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		sum, err := repo.GetBlockSummary(id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		hasher.Write(sum.Beta())
+	b40, err := chain.GetBlockHeader(40)
+	if err != nil {
+		t.Fatal(err)
 	}
-	hasher.Sum(b51Seed[:0])
+
+	b40beta, err := b40.Beta()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b51Seed := b40beta
 
 	b51ID, err := chain.GetBlockID(51)
 	if err != nil {
@@ -188,37 +174,15 @@ func TestSeeder_Generate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var b61Seed thor.Bytes32
-	h := thor.NewBlake2b()
-	for i := 50; i >= 41; i-- {
-		id, err := chain.GetBlockID(uint32(i))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		sum, err := repo.GetBlockSummary(id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		h.Write(sum.Beta())
-	}
-	h.Sum(b61Seed[:0])
-
-	b61ID, err := chain.GetBlockID(61)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	tests = []struct {
 		name    string
 		fields  fields
 		args    args
-		want    thor.Bytes32
+		want    []byte
 		wantErr bool
 	}{
-		{"block 51 seed,should sum up from block 40 to 36", fields{repo, cache}, args{b51ID}, b51Seed, false},
+		{"block 51 seed,should be block 40", fields{repo, cache}, args{b51ID}, b51Seed, false},
 		{"block in 1 epoch should share seed", fields{repo, cache}, args{b52ID}, b51Seed, false},
-		{"block 61 seed,should sum up from block 50 to 41", fields{repo, cache}, args{b61ID}, b61Seed, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -90,12 +90,12 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	if parent.Number()+1 < p.forkConfig.VIP214 {
 		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
 	} else {
-		var seed thor.Bytes32
+		var seed []byte
 		seed, err = p.seeder.Generate(parent.ID())
 		if err != nil {
 			return nil, err
 		}
-		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Number(), parent.Timestamp(), seed[:])
+		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Number(), parent.Timestamp(), seed)
 	}
 	if err != nil {
 		return nil, err
