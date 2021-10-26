@@ -623,17 +623,11 @@ func TestValidateProposer(t *testing.T) {
 		testFunc func(*testing.T)
 	}{
 		{
-			"ErrSignerUnavailable", func(t *testing.T) {
+			"ErrInvalidSignature", func(t *testing.T) {
 				blk := tc.builder(tc.parent.Header()).Build()
-				_, theErr := blk.Header().Signer()
 
 				err = tc.consent(blk)
-				expected := consensusError(
-					fmt.Sprintf(
-						"block signer unavailable: %v",
-						theErr,
-					),
-				)
+				expected := consensusError("block signature length invalid: want 65 have 0")
 
 				assert.Equal(t, expected, err)
 			},

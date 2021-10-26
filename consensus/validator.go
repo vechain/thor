@@ -120,9 +120,18 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		VIP214 = 1
 	}
 
-	if header.Number() >= VIP214 {
-		if len(header.Signature()) != block.ComplexSigSize {
-			return consensusError(fmt.Sprintf("block signature length invalid: want %d have %v", block.ComplexSigSize, len(header.Signature())))
+	signature := header.Signature()
+
+	if header.Number() < VIP214 {
+		if len(header.Alpha()) > 0 {
+			return consensusError("invlid block, alpha should be empty before VIP214")
+		}
+		if len(signature) != 65 {
+			return consensusError(fmt.Sprintf("block signature length invalid: want 65 have %v", len(signature)))
+		}
+	} else {
+		if len(signature) != block.ComplexSigSize {
+			return consensusError(fmt.Sprintf("block signature length invalid: want %d have %v", block.ComplexSigSize, len(signature)))
 		}
 
 		var alpha []byte

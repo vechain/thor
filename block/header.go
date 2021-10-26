@@ -249,11 +249,6 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 
-	// After fork VIP-214 block signature is complex signature
-	if len(body.Extension.Alpha) > 0 && len(body.Signature) != ComplexSigSize {
-		return errors.New("rlp: invalid header")
-	}
-
 	*h = Header{body: body}
 	return nil
 }
