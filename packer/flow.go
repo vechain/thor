@@ -181,7 +181,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	} else {
 		var alpha []byte
 		if f.runtime.Context().Number == VIP214 {
-			alpha = thor.Bytes32{}.Bytes()
+			alpha = f.parentHeader.StateRoot().Bytes()
 		} else {
 			parentBeta, err := f.parentHeader.Beta()
 			if err != nil {

@@ -136,7 +136,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 		var alpha []byte
 		if header.Number() == VIP214 {
-			alpha = thor.Bytes32{}.Bytes()
+			alpha = parent.StateRoot().Bytes()
 		} else {
 			parentBeta, err := parent.Beta()
 			if err != nil {

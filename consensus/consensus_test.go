@@ -154,7 +154,7 @@ func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKe
 	if h.Number() >= tc.forkConfig.VIP214 {
 		var alpha []byte
 		if h.Number() == tc.forkConfig.VIP214 {
-			alpha = thor.Bytes32{}.Bytes()
+			alpha = tc.parent.Header().StateRoot().Bytes()
 		} else {
 			beta, err := tc.parent.Header().Beta()
 			if err != nil {
@@ -359,7 +359,7 @@ func TestValidateBlockHeader(t *testing.T) {
 				expected := consensusError(
 					fmt.Sprintf(
 						"block alpha invalid: want %v, have %v",
-						thor.Bytes32{},
+						tc.parent.Header().StateRoot(),
 						thor.Bytes32(alpha),
 					),
 				)
