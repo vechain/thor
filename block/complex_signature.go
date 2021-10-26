@@ -13,12 +13,12 @@ import (
 type ComplexSignature []byte
 
 // NewComplexSignature creates a new signature.
-func NewComplexSignature(proof, signature []byte) (ComplexSignature, error) {
-	if len(proof) != 81 {
-		return nil, errors.New("invalid proof length, 81 bytes required")
-	}
+func NewComplexSignature(signature, proof []byte) (ComplexSignature, error) {
 	if len(signature) != 65 {
 		return nil, errors.New("invalid signature length, 65 bytes required")
+	}
+	if len(proof) != 81 {
+		return nil, errors.New("invalid proof length, 81 bytes required")
 	}
 
 	var ms ComplexSignature

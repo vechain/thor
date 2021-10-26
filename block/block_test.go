@@ -126,7 +126,7 @@ func TestHeaderEncoding(t *testing.T) {
 	rand.Read(proof[:])
 	rand.Read(alpha[:])
 
-	complex, err := NewComplexSignature(proof[:], sig[:])
+	complex, err := NewComplexSignature(sig[:], proof[:])
 	if err != nil {
 		t.Fatal(err)
 	}

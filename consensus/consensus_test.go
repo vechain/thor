@@ -174,7 +174,7 @@ func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKe
 			return nil, err
 		}
 
-		sig, err := block.NewComplexSignature(proof, ec)
+		sig, err := block.NewComplexSignature(ec, proof)
 		if err != nil {
 			return nil, err
 		}

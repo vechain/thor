@@ -200,7 +200,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		sig, err := block.NewComplexSignature(proof, ec)
+		sig, err := block.NewComplexSignature(ec, proof)
 		if err != nil {
 			return nil, nil, nil, err
 		}

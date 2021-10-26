@@ -135,7 +135,7 @@ func TestSeeder_Generate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cs, err := block.NewComplexSignature(proof, sig)
+		cs, err := block.NewComplexSignature(sig, proof)
 		if err != nil {
 			t.Fatal(err)
 		}
