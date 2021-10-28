@@ -115,14 +115,9 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		return consensusError(fmt.Sprintf("block total score invalid: parent %v, current %v", parent.TotalScore(), header.TotalScore()))
 	}
 
-	VIP214 := c.forkConfig.VIP214
-	if VIP214 == 0 {
-		VIP214 = 1
-	}
-
 	signature := header.Signature()
 
-	if header.Number() < VIP214 {
+	if header.Number() < c.forkConfig.VIP214 {
 		if len(header.Alpha()) > 0 {
 			return consensusError("invlid block, alpha should be empty before VIP214")
 		}
@@ -134,14 +129,16 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 			return consensusError(fmt.Sprintf("block signature length invalid: want %d have %v", block.ComplexSigSize, len(signature)))
 		}
 
+		parentBeta, err := parent.Beta()
+		if err != nil {
+			return consensusError(fmt.Sprintf("failed to verify parent block's VRF Signature: %v", err))
+		}
+
 		var alpha []byte
-		if header.Number() == VIP214 {
+		// initial value of chained VRF
+		if len(parentBeta) == 0 {
 			alpha = parent.StateRoot().Bytes()
 		} else {
-			parentBeta, err := parent.Beta()
-			if err != nil {
-				return consensusError(fmt.Sprintf("failed to verify parent block's VRF Signature: %v", err))
-			}
 			alpha = parentBeta
 		}
 		if !bytes.Equal(header.Alpha(), alpha) {

@@ -274,9 +274,10 @@ func (h *Header) String() string {
 	TxsFeatures:    %v
 	StateRoot:      %v
 	ReceiptsRoot:   %v
+	Alpha:          0x%x
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.
