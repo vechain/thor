@@ -76,6 +76,12 @@ func (b *Builder) TransactionFeatures(features tx.Features) *Builder {
 	return b
 }
 
+// Alpha set the alpha.
+func (b *Builder) Alpha(alpha []byte) *Builder {
+	b.headerBody.Extension.Alpha = append([]byte(nil), alpha...)
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}

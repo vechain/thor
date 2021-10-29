@@ -15,6 +15,10 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+const (
+	ComplexSigSize = 81 + 65
+)
+
 // Block is an immutable block type.
 type Block struct {
 	header *Header

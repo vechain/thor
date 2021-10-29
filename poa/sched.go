@@ -12,22 +12,31 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// Scheduler to schedule the time when a proposer to produce a block.
-type Scheduler struct {
+// Scheduler defines the interface of schedulers.
+type Scheduler interface {
+	Schedule(nowTime uint64) (newBlockTime uint64)
+	IsTheTime(newBlockTime uint64) bool
+	Updates(newBlockTime uint64) (updates []Proposer, score uint64)
+}
+
+// SchedulerV1 to schedule the time when a proposer to produce a block.
+type SchedulerV1 struct {
 	proposer          Proposer
 	actives           []Proposer
 	parentBlockNumber uint32
 	parentBlockTime   uint64
 }
 
-// NewScheduler create a Scheduler object.
+var _ Scheduler = (*SchedulerV1)(nil)
+
+// NewSchedulerV1 create a SchedulerV1 object.
 // `addr` is the proposer to be scheduled.
 // If `addr` is not listed in `proposers`, an error returned.
-func NewScheduler(
+func NewSchedulerV1(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
-	parentBlockTime uint64) (*Scheduler, error) {
+	parentBlockTime uint64) (*SchedulerV1, error) {
 
 	actives := make([]Proposer, 0, len(proposers))
 	listed := false
@@ -46,7 +55,7 @@ func NewScheduler(
 		return nil, errors.New("unauthorized block proposer")
 	}
 
-	return &Scheduler{
+	return &SchedulerV1{
 		proposer,
 		actives,
 		parentBlockNumber,
@@ -54,14 +63,14 @@ func NewScheduler(
 	}, nil
 }
 
-func (s *Scheduler) whoseTurn(t uint64) Proposer {
+func (s *SchedulerV1) whoseTurn(t uint64) Proposer {
 	index := dprp(s.parentBlockNumber, t) % uint64(len(s.actives))
 	return s.actives[index]
 }
 
 // Schedule to determine time of the proposer to produce a block, according to `nowTime`.
 // `newBlockTime` is promised to be >= nowTime and > parentBlockTime
-func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
+func (s *SchedulerV1) Schedule(nowTime uint64) (newBlockTime uint64) {
 	const T = thor.BlockInterval
 
 	newBlockTime = s.parentBlockTime + T
@@ -83,7 +92,7 @@ func (s *Scheduler) Schedule(nowTime uint64) (newBlockTime uint64) {
 }
 
 // IsTheTime returns if the newBlockTime is correct for the proposer.
-func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
+func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
 	if s.parentBlockTime >= newBlockTime {
 		// invalid block time
 		return false
@@ -97,8 +106,8 @@ func (s *Scheduler) IsTheTime(newBlockTime uint64) bool {
 	return s.whoseTurn(newBlockTime).Address == s.proposer.Address
 }
 
-// Updates returns proposers whose status are change, and the score when new block time is assumed to be newBlockTime.
-func (s *Scheduler) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
+// Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
+func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 
 	toDeactivate := make(map[thor.Address]Proposer)
 

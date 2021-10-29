@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
+	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -163,11 +164,44 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, t
 	for _, tx := range f.txs {
 		builder.Transaction(tx)
 	}
-	newBlock := builder.Build()
 
-	sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
-	if err != nil {
-		return nil, nil, nil, err
+	if f.runtime.Context().Number < f.packer.forkConfig.VIP214 {
+		newBlock := builder.Build()
+
+		sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return newBlock.WithSignature(sig), stage, f.receipts, nil
+	} else {
+		parentBeta, err := f.parentHeader.Beta()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		var alpha []byte
+		// initial value of chained VRF
+		if len(parentBeta) == 0 {
+			alpha = f.parentHeader.StateRoot().Bytes()
+		} else {
+			alpha = parentBeta
+		}
+
+		newBlock := builder.Alpha(alpha).Build()
+		ec, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(privateKey, alpha)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		sig, err := block.NewComplexSignature(ec, proof)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		return newBlock.WithSignature(sig), stage, f.receipts, nil
 	}
-	return newBlock.WithSignature(sig), stage, f.receipts, nil
 }

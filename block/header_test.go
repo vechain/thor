@@ -17,8 +17,9 @@ func TestHeader_BetterThan(t *testing.T) {
 		body  headerBody
 		cache struct {
 			signingHash atomic.Value
-			signer      atomic.Value
 			id          atomic.Value
+			pubkey      atomic.Value
+			beta        atomic.Value
 		}
 	}
 	type args struct {
