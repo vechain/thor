@@ -49,15 +49,8 @@ func NewSchedulerV2(
 		if p.Address == addr {
 			proposer = p
 			listed = true
-
-			list = append(list, struct {
-				addr thor.Address
-				hash thor.Bytes32
-			}{
-				p.Address,
-				thor.Blake2b(seed, num[:], p.Address.Bytes()),
-			})
-		} else if p.Active {
+		}
+		if p.Active || p.Address == addr {
 			list = append(list, struct {
 				addr thor.Address
 				hash thor.Bytes32
@@ -100,8 +93,8 @@ func (s *SchedulerV2) Schedule(nowTime uint64) (newBlockTime uint64) {
 	}
 
 	offset := (newBlockTime-s.parentBlockTime)/T - 1
-	for i := uint64(0); i < uint64(len(s.shuffled)); i++ {
-		index := (i + offset) % uint64(len(s.shuffled))
+	for i, n := uint64(0), uint64(len(s.shuffled)); i < n; i++ {
+		index := (i + offset) % n
 		if s.shuffled[index] == s.proposer.Address {
 			return newBlockTime + i*T
 		}
@@ -134,7 +127,6 @@ func (s *SchedulerV2) IsScheduled(blockTime uint64, proposer thor.Address) bool 
 }
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
-// In scheduler v2, Updates only deactivate proposers.
 func (s *SchedulerV2) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
 	T := thor.BlockInterval
 

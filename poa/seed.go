@@ -43,20 +43,25 @@ func (seeder *Seeder) Generate(parentID thor.Bytes32) (seed []byte, err error) {
 	}
 	seedNum := (epoch - 1) * epochInterval
 
-	seedBlk, err := seeder.repo.NewChain(parentID).GetBlockHeader(seedNum)
+	seedID, err := seeder.repo.NewChain(parentID).GetBlockID(seedNum)
 	if err != nil {
 		return
 	}
 
-	if v, ok := seeder.cache[seedBlk.ID()]; ok {
+	if v, ok := seeder.cache[seedID]; ok {
 		return v, nil
 	}
 
 	defer func() {
 		if err == nil {
-			seeder.cache[seedBlk.ID()] = seed
+			seeder.cache[seedID] = seed
 		}
 	}()
 
-	return seedBlk.Beta()
+	summary, err := seeder.repo.GetBlockSummary(seedID)
+	if err != nil {
+		return
+	}
+
+	return summary.Header.Beta()
 }
