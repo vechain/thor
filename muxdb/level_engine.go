@@ -66,73 +66,76 @@ func (ldb *levelEngine) Delete(key []byte) error {
 	return ldb.db.Delete(key, &writeOpt)
 }
 
-func (ldb *levelEngine) Snapshot(fn func(kv.Getter) error) error {
+func (ldb *levelEngine) Snapshot() kv.Snapshot {
 	s, err := ldb.db.GetSnapshot()
-	if err != nil {
-		return err
-	}
-	defer s.Release()
-
-	return fn(&struct {
+	return &struct {
 		kv.GetFunc
 		kv.HasFunc
 		kv.IsNotFoundFunc
+		kv.ReleaseFunc
 	}{
-		func(key []byte) ([]byte, error) { return s.Get(key, &readOpt) },
-		func(key []byte) (bool, error) { return s.Has(key, &readOpt) },
+		func(key []byte) ([]byte, error) {
+			if err != nil {
+				return nil, err
+			}
+			return s.Get(key, &readOpt)
+		},
+		func(key []byte) (bool, error) {
+			if err != nil {
+				return false, err
+			}
+			return s.Has(key, &readOpt)
+		},
 		ldb.IsNotFound,
-	})
+		func() {
+			if s != nil {
+				s.Release()
+			}
+		},
+	}
 }
 
-func (ldb *levelEngine) Batch(fn func(kv.Putter) error) error {
-	batch := ldb.batchPool.Get().(*leveldb.Batch)
-	batch.Reset()
-	defer ldb.batchPool.Put(batch)
+func (ldb *levelEngine) Bulk() kv.Bulk {
+	const idealBatchSize = 128 * 1024
+	var batch *leveldb.Batch
 
-	flushIfNeeded := func() error {
-		// TODO: ideal batch size?
-		if len(batch.Dump()) >= 128*1024 {
-			if err := ldb.db.Write(batch, &writeOpt); err != nil {
-				return err
-			}
+	getBatch := func() *leveldb.Batch {
+		if batch == nil {
+			batch = ldb.batchPool.Get().(*leveldb.Batch)
 			batch.Reset()
 		}
+		return batch
+	}
+	flush := func(minSize int) error {
+		if batch != nil && len(batch.Dump()) >= minSize {
+			if batch.Len() > 0 {
+				if err := ldb.db.Write(batch, &writeOpt); err != nil {
+					return err
+				}
+			}
+			ldb.batchPool.Put(batch)
+			batch = nil
+		}
 		return nil
 	}
 
-	if err := fn(&struct {
+	return &struct {
 		kv.PutFunc
 		kv.DeleteFunc
+		kv.FlushFunc
 	}{
 		func(key, val []byte) error {
-			batch.Put(key, val)
-			return flushIfNeeded()
+			getBatch().Put(key, val)
+			return flush(idealBatchSize)
 		},
 		func(key []byte) error {
-			batch.Delete(key)
-			return flushIfNeeded()
+			getBatch().Delete(key)
+			return flush(idealBatchSize)
 		},
-	}); err != nil {
-		return err
+		func() error { return flush(0) },
 	}
-	if batch.Len() == 0 {
-		return nil
-	}
-	return ldb.db.Write(batch, &writeOpt)
 }
 
-func (ldb *levelEngine) Iterate(rng kv.Range, fn func(kv.Pair) (bool, error)) error {
-	it := ldb.db.NewIterator((*util.Range)(&rng), &scanOpt)
-	defer it.Release()
-
-	for it.Next() {
-		next, err := fn(it)
-		if err != nil {
-			return err
-		}
-		if !next {
-			break
-		}
-	}
-	return it.Error()
+func (ldb *levelEngine) Iterate(r kv.Range) kv.Iterator {
+	return ldb.db.NewIterator((*util.Range)(&r), &scanOpt)
 }
