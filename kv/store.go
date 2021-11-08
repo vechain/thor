@@ -18,10 +18,25 @@ type Putter interface {
 	Delete(key []byte) error
 }
 
-// Pair defines key-value pair.
-type Pair interface {
+// Snapshot is the store's snapshot.
+type Snapshot interface {
+	Getter
+	Release()
+}
+
+// Bulk is the bulk putter.
+type Bulk interface {
+	Putter
+	Flush() error
+}
+
+// Iterator iterates over kv pairs.
+type Iterator interface {
+	Next() bool
 	Key() []byte
 	Value() []byte
+	Release()
+	Error() error
 }
 
 // Range is the key range.
@@ -35,7 +50,7 @@ type Store interface {
 	Getter
 	Putter
 
-	Snapshot(fn func(Getter) error) error
-	Batch(fn func(Putter) error) error
-	Iterate(r Range, fn func(Pair) (bool, error)) error
+	Snapshot() Snapshot
+	Bulk() Bulk
+	Iterate(r Range) Iterator
 }

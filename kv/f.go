@@ -10,23 +10,31 @@ package kv
 type (
 	GetFunc        func(key []byte) ([]byte, error)
 	HasFunc        func(key []byte) (bool, error)
+	IsNotFoundFunc func(err error) bool
 	PutFunc        func(key, val []byte) error
 	DeleteFunc     func(key []byte) error
-	SnapshotFunc   func(fn func(Getter) error) error
-	BatchFunc      func(fn func(Putter) error) error
-	IterateFunc    func(rng Range, fn func(Pair) (bool, error)) error
-	IsNotFoundFunc func(err error) bool
+	SnapshotFunc   func() Snapshot
+	BulkFunc       func() Bulk
+	IterateFunc    func(r Range) Iterator
+	FlushFunc      func() error
+	NextFunc       func() bool
 	KeyFunc        func() []byte
 	ValueFunc      func() []byte
+	ReleaseFunc    func()
+	ErrorFunc      func() error
 )
 
-func (f GetFunc) Get(key []byte) ([]byte, error)                           { return f(key) }
-func (f HasFunc) Has(key []byte) (bool, error)                             { return f(key) }
-func (f PutFunc) Put(key, val []byte) error                                { return f(key, val) }
-func (f DeleteFunc) Delete(key []byte) error                               { return f(key) }
-func (f SnapshotFunc) Snapshot(fn func(Getter) error) error                { return f(fn) }
-func (f BatchFunc) Batch(fn func(Putter) error) error                      { return f(fn) }
-func (f IterateFunc) Iterate(rng Range, fn func(Pair) (bool, error)) error { return f(rng, fn) }
-func (f IsNotFoundFunc) IsNotFound(err error) bool                         { return f(err) }
-func (f KeyFunc) Key() []byte                                              { return f() }
-func (f ValueFunc) Value() []byte                                          { return f() }
+func (f GetFunc) Get(key []byte) ([]byte, error)   { return f(key) }
+func (f HasFunc) Has(key []byte) (bool, error)     { return f(key) }
+func (f IsNotFoundFunc) IsNotFound(err error) bool { return f(err) }
+func (f PutFunc) Put(key, val []byte) error        { return f(key, val) }
+func (f DeleteFunc) Delete(key []byte) error       { return f(key) }
+func (f SnapshotFunc) Snapshot() Snapshot          { return f() }
+func (f BulkFunc) Bulk() Bulk                      { return f() }
+func (f IterateFunc) Iterate(r Range) Iterator     { return f(r) }
+func (f FlushFunc) Flush() error                   { return f() }
+func (f NextFunc) Next() bool                      { return f() }
+func (f KeyFunc) Key() []byte                      { return f() }
+func (f ValueFunc) Value() []byte                  { return f() }
+func (f ReleaseFunc) Release()                     { f() }
+func (f ErrorFunc) Error() error                   { return f() }

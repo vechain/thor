@@ -68,51 +68,62 @@ func (b Bucket) NewStore(src Store) Store {
 		Getter
 		Putter
 		SnapshotFunc
-		BatchFunc
+		BulkFunc
 		IterateFunc
 	}{
 		b.NewGetter(src),
 		b.NewPutter(src),
-		func(fn func(Getter) error) error {
-			return src.Snapshot(func(g Getter) error {
-				return fn(b.NewGetter(g))
-			})
+		func() Snapshot {
+			snapshot := src.Snapshot()
+			return &struct {
+				Getter
+				ReleaseFunc
+			}{
+				b.NewGetter(snapshot),
+				snapshot.Release,
+			}
 		},
-		func(fn func(Putter) error) error {
-			return src.Batch(func(p Putter) error {
-				return fn(b.NewPutter(p))
-			})
+		func() Bulk {
+			bulk := src.Bulk()
+			return &struct {
+				Putter
+				FlushFunc
+			}{
+				b.NewPutter(bulk),
+				bulk.Flush,
+			}
 		},
-		func(rng Range, fn func(Pair) (bool, error)) error {
+		func(r Range) Iterator {
 			{
 				buf := bufPool.Get().(*buf)
 				defer bufPool.Put(buf)
-				buf.k = append(append(buf.k[:0], b...), rng.Start...)
-				rng.Start = buf.k
+				buf.k = append(append(buf.k[:0], b...), r.Start...)
+				r.Start = buf.k
 			}
 
-			if len(rng.Limit) == 0 {
-				rng.Limit = util.BytesPrefix([]byte(b)).Limit
+			if len(r.Limit) == 0 {
+				r.Limit = util.BytesPrefix([]byte(b)).Limit
 			} else {
 				buf := bufPool.Get().(*buf)
 				defer bufPool.Put(buf)
-				buf.k = append(append(buf.k[:0], b...), rng.Limit...)
-				rng.Limit = buf.k
+				buf.k = append(append(buf.k[:0], b...), r.Limit...)
+				r.Limit = buf.k
 			}
-
-			var cur Pair
-			pair := &struct {
+			iter := src.Iterate(r)
+			return &struct {
+				NextFunc
 				KeyFunc
 				ValueFunc
+				ReleaseFunc
+				ErrorFunc
 			}{
-				func() []byte { return cur.Key()[len(b):] },
-				func() []byte { return cur.Value() },
+				iter.Next,
+				// strip the bucket
+				func() []byte { return iter.Key()[len(b):] },
+				iter.Value,
+				iter.Release,
+				iter.Error,
 			}
-
-			return src.Iterate(rng, func(p Pair) (bool, error) {
-				cur = p
-				return fn(pair)
-			})
 		},
 	}
 }
