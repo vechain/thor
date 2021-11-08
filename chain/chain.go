@@ -103,47 +103,39 @@ func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
 // GetTransactionMeta returns tx meta by given tx id.
 func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 	// precheck. point access is faster than range access.
-	if _, err := c.repo.txIndexer.Get(id[:]); err != nil {
-		if c.repo.txIndexer.IsNotFound(err) {
-			return nil, errNotFound
-		}
+	if has, err := c.repo.txIndexer.Has(id[:]); err != nil {
 		return nil, err
+	} else if !has {
+		return nil, errNotFound
 	}
 
-	var (
-		rng  = kv.Range(*util.BytesPrefix(id[:]))
-		meta *TxMeta
-	)
-
-	if err := c.repo.txIndexer.Iterate(rng, func(p kv.Pair) (bool, error) {
-		if len(p.Key()) != 64 { // skip the pure txid key
-			return true, nil
+	iter := c.repo.txIndexer.Iterate(kv.Range(*util.BytesPrefix(id[:])))
+	defer iter.Release()
+	for iter.Next() {
+		if len(iter.Key()) != 64 { // skip the pure txid key
+			continue
 		}
 
-		blockID := thor.BytesToBytes32(p.Key()[32:])
+		blockID := thor.BytesToBytes32(iter.Key()[32:])
 
 		has, err := c.HasBlock(blockID)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
 		if has {
 			var sMeta storageTxMeta
-			if err := rlp.DecodeBytes(p.Value(), &sMeta); err != nil {
-				return false, err
+			if err := rlp.DecodeBytes(iter.Value(), &sMeta); err != nil {
+				return nil, err
 			}
-			meta = &TxMeta{
+			return &TxMeta{
 				BlockID:  blockID,
 				Index:    sMeta.Index,
 				Reverted: sMeta.Reverted,
-			}
-			return false, nil
+			}, nil
 		}
-		return true, nil
-	}); err != nil {
-		return nil, err
 	}
-	if meta != nil {
-		return meta, nil
+	if err := iter.Error(); err != nil {
+		return nil, err
 	}
 	return nil, errNotFound
 }

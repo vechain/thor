@@ -177,62 +177,60 @@ func (r *Repository) SetSteadyBlockID(id thor.Bytes32) error {
 
 func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32, steadyNum uint32) (*BlockSummary, error) {
 	var (
-		header  = block.Header()
-		id      = header.ID()
-		txs     = block.Transactions()
-		summary = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), steadyNum}
+		header      = block.Header()
+		id          = header.ID()
+		txs         = block.Transactions()
+		summary     = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), steadyNum}
+		bulk        = r.db.NewStore("").Bulk()
+		indexPutter = kv.Bucket(txIndexStoreName).NewPutter(bulk)
+		dataPutter  = kv.Bucket(dataStoreName).NewPutter(bulk)
 	)
 
-	if err := r.txIndexer.Batch(func(putter kv.Putter) error {
-		if len(txs) > 0 {
-			buf := make([]byte, 64)
-			copy(buf[32:], id[:])
-			for i, tx := range txs {
-				txid := tx.ID()
-				// to accelerate point access
-				if err := putter.Put(txid[:], nil); err != nil {
-					return err
-				}
+	if len(txs) > 0 {
+		// index txs
+		buf := make([]byte, 64)
+		copy(buf[32:], id[:])
+		for i, tx := range txs {
+			txid := tx.ID()
+			summary.Txs = append(summary.Txs, txid)
 
-				copy(buf, txid[:])
-				if err := saveRLP(putter, buf, &storageTxMeta{
-					Index:    uint64(i),
-					Reverted: receipts[i].Reverted,
-				}); err != nil {
-					return err
-				}
+			// to accelerate point access
+			if err := indexPutter.Put(txid[:], nil); err != nil {
+				return nil, err
+			}
+
+			copy(buf, txid[:])
+			if err := saveRLP(indexPutter, buf, &storageTxMeta{
+				Index:    uint64(i),
+				Reverted: receipts[i].Reverted,
+			}); err != nil {
+				return nil, err
 			}
 		}
-		return nil
-	}); err != nil {
+
+		// save tx & receipt data
+		key := makeTxKey(id, txInfix)
+		for i, tx := range txs {
+			key.SetIndex(uint64(i))
+			if err := saveTransaction(dataPutter, key, tx); err != nil {
+				return nil, err
+			}
+			r.caches.txs.Add(key, tx)
+		}
+		key = makeTxKey(id, receiptInfix)
+		for i, receipt := range receipts {
+			key.SetIndex(uint64(i))
+			if err := saveReceipt(dataPutter, key, receipt); err != nil {
+				return nil, err
+			}
+			r.caches.receipts.Add(key, receipt)
+		}
+	}
+	if err := saveBlockSummary(dataPutter, &summary); err != nil {
 		return nil, err
 	}
-	return &summary, r.data.Batch(func(putter kv.Putter) error {
-		if len(txs) > 0 {
-			key := makeTxKey(id, txInfix)
-			for i, tx := range txs {
-				key.SetIndex(uint64(i))
-				if err := saveTransaction(putter, key, tx); err != nil {
-					return err
-				}
-				r.caches.txs.Add(key, tx)
-				summary.Txs = append(summary.Txs, tx.ID())
-			}
-			key = makeTxKey(id, receiptInfix)
-			for i, receipt := range receipts {
-				key.SetIndex(uint64(i))
-				if err := saveReceipt(putter, key, receipt); err != nil {
-					return err
-				}
-				r.caches.receipts.Add(key, receipt)
-			}
-		}
-		if err := saveBlockSummary(putter, &summary); err != nil {
-			return err
-		}
-		r.caches.summaries.Add(id, &summary)
-		return nil
-	})
+	r.caches.summaries.Add(id, &summary)
+	return &summary, bulk.Flush()
 }
 
 // AddBlock add a new block with its receipts into repository.
