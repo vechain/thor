@@ -6,7 +6,6 @@
 package state
 
 import (
-	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
@@ -27,33 +26,29 @@ func (s *Stage) Hash() thor.Bytes32 {
 
 // Commit commits all changes into main accounts trie and storage tries.
 func (s *Stage) Commit() (root thor.Bytes32, err error) {
-	codeStore := s.db.NewStore(codeStoreName)
-
-	// write codes
-	if err = codeStore.Batch(func(w kv.Putter) error {
-		for hash, code := range s.codes {
-			if err := w.Put(hash[:], code); err != nil {
-				return err
-			}
+	defer func() {
+		if err != nil {
+			err = &Error{err}
 		}
-		return nil
-	}); err != nil {
-		err = &Error{err}
+	}()
+	// write codes
+	codeBulk := s.db.NewStore(codeStoreName).Bulk()
+	for hash, code := range s.codes {
+		if err = codeBulk.Put(hash[:], code); err != nil {
+			return
+		}
+	}
+	if err = codeBulk.Flush(); err != nil {
 		return
 	}
 
 	// commit storage tries
 	for _, t := range s.storageTries {
 		if _, err = t.Commit(s.newCommitNum); err != nil {
-			err = &Error{err}
 			return
 		}
 	}
 
 	// commit accounts trie
-	if root, err = s.trie.Commit(s.newCommitNum); err != nil {
-		err = &Error{err}
-		return
-	}
-	return
+	return s.trie.Commit(s.newCommitNum)
 }

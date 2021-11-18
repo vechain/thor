@@ -47,7 +47,7 @@ func TestTrie(t *testing.T) {
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
-		M(loadAccount(trie, addr, db.TrieLeafBank(), 0)),
+		M(loadAccount(trie, addr, 0)),
 		M(emptyAccount(), nil),
 		"should load an empty account")
 
@@ -62,7 +62,7 @@ func TestTrie(t *testing.T) {
 	}
 	saveAccount(trie, addr, &acc1)
 	assert.Equal(t,
-		M(loadAccount(trie, addr, db.TrieLeafBank(), 0)),
+		M(loadAccount(trie, addr, 0)),
 		M(&acc1, nil))
 
 	saveAccount(trie, addr, emptyAccount())
@@ -78,13 +78,13 @@ func TestStorageTrie(t *testing.T) {
 
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,
-		M(loadStorage(trie, key, db.TrieLeafBank(), 0)),
+		M(loadStorage(trie, key, 0)),
 		M(rlp.RawValue(nil), nil))
 
 	value := rlp.RawValue("value")
 	saveStorage(trie, key, value)
 	assert.Equal(t,
-		M(loadStorage(trie, key, db.TrieLeafBank(), 0)),
+		M(loadStorage(trie, key, 0)),
 		M(value, nil))
 
 	saveStorage(trie, key, nil)
