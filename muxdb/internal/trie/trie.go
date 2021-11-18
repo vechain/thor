@@ -8,6 +8,7 @@ package trie
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -17,21 +18,18 @@ import (
 	"github.com/vechain/thor/trie"
 )
 
-const (
-	HistSpace     = byte(0) // the space saves historical trie nodes.
-	DedupedSpace  = byte(1) // the space saves deduped trie nodes.
-	LeafBankSpace = byte(2) // the space for leaf bank.
-)
-
 var log = log15.New("pkg", "muxdb.trie")
 
 // Backend is the backend of the trie.
 type Backend struct {
-	Store            kv.Store
-	Cache            *Cache
-	LeafBank         *LeafBank
-	HistPtnFactor    PartitionFactor
+	Store    kv.Store
+	Cache    *Cache
+	LeafBank *LeafBank
+	HistSpace,
+	DedupedSpace byte
+	HistPtnFactor,
 	DedupedPtnFactor PartitionFactor
+	CachedNodeTTL int
 }
 
 // Trie is the managed trie.
@@ -54,7 +52,6 @@ func New(
 	secure bool,
 	root thor.Bytes32,
 	commitNum uint32,
-	cachedNodeTTL int,
 ) *Trie {
 	t := &Trie{
 		back:      back,
@@ -78,7 +75,7 @@ func New(
 			ext, err = trie.NewExtended(root, commitNum, t.newDatabase())
 		}
 		if ext != nil {
-			ext.SetCachedNodeTTL(cachedNodeTTL)
+			ext.SetCachedNodeTTL(t.back.CachedNodeTTL)
 		}
 		return ext, err
 	}
@@ -95,12 +92,30 @@ func (t *Trie) CommitNum() uint32 {
 	return t.commitNum
 }
 
+func (t *Trie) makeHistNodeKey(dst []byte, hash []byte, commitNum uint32, path []byte) []byte {
+	dst = append(dst, t.back.HistSpace)                            // space
+	dst = append(dst, t.name...)                                   // trie name
+	dst = appendUint32(dst, t.back.HistPtnFactor.Which(commitNum)) // partition id
+	dst = encodePath(dst, path)                                    // path
+	dst = appendUint32(dst, commitNum)                             // commit num
+	dst = append(dst, hash...)                                     // node hash
+	return dst
+}
+
+func (t *Trie) makeDedupedNodeKey(dst []byte, commitNum uint32, path []byte) []byte {
+	dst = append(dst, t.back.DedupedSpace)                            // space
+	dst = append(dst, t.name...)                                      // trie name
+	dst = appendUint32(dst, t.back.DedupedPtnFactor.Which(commitNum)) // partition id
+	dst = encodePath(dst, path)                                       // path
+	return dst
+}
+
 // newDatabase creates a database instance for low-level trie construction.
 func (t *Trie) newDatabase() trie.Database {
 	var (
-		histBkt    = kv.Bucket(string(HistSpace) + t.name)
-		dedupedBkt = kv.Bucket(string(DedupedSpace) + t.name)
-		dedupedKey DedupedNodeKey
+		thisHash      []byte
+		thisCommitNum uint32
+		thisPath      []byte
 	)
 
 	return &struct {
@@ -108,20 +123,20 @@ func (t *Trie) newDatabase() trie.Database {
 		trie.DatabaseWriter
 		trie.DatabaseKeyEncoder
 	}{
-		kv.GetFunc(func(key []byte) (blob []byte, err error) {
+		kv.GetFunc(func(_ []byte) (blob []byte, err error) {
 			// get from cache
-			if blob = t.back.Cache.GetNodeBlob(t.name, key, t.noFillCache); len(blob) > 0 {
+			if blob = t.back.Cache.GetNodeBlob(t.name, thisHash, thisCommitNum, thisPath, t.noFillCache); len(blob) > 0 {
 				return
 			}
 			defer func() {
 				if err == nil && !t.noFillCache {
-					t.back.Cache.AddNodeBlob(t.name, key, blob, false)
+					t.back.Cache.AddNodeBlob(t.name, thisHash, thisCommitNum, thisPath, blob, false)
 				}
 			}()
 
 			// if cache missed, try fast leaf get
 			if t.fastLeafGet != nil {
-				if leaf, err := t.fastLeafGet(HistNodeKey(key).CommitNum()); err != nil {
+				if leaf, err := t.fastLeafGet(thisCommitNum); err != nil {
 					return nil, err
 				} else if leaf != nil {
 					// good, leaf got. returns a special error to short-circuit further node lookups.
@@ -130,44 +145,42 @@ func (t *Trie) newDatabase() trie.Database {
 			}
 
 			// have to lookup nodes
-			err = t.back.Store.Snapshot(func(getter kv.Getter) error {
-				// Get node from hist space first, then from deduped space.
-				// Don't change the order, or the trie might be broken after pruning.
-				if data, err := histBkt.NewGetter(getter).Get(key); err != nil {
-					if !t.back.Store.IsNotFound(err) {
-						return err
-					}
-					// not found in hist space, fallback to deduped space
-				} else {
-					blob = data
-					return nil
-				}
+			snapshot := t.back.Store.Snapshot()
+			defer snapshot.Release()
 
-				// get from deduped space
-				dKey := dedupedKey.FromHistKey(t.back.DedupedPtnFactor, HistNodeKey(key))
-				if data, err := dedupedBkt.NewGetter(getter).Get(dKey); err != nil {
-					return err
-				} else {
-					// the deduped node key uses path as db key.
-					// to ensure the node is correct, we need to verify the node hash.
-					if ok, err := verifyNodeHash(data, HistNodeKey(key).Hash()); err != nil {
-						return err
-					} else if !ok {
-						return errors.New("node hash checksum error")
-					}
-					blob = data
-					return nil
+			k := hasherPool.Get().(*hasher)
+			defer hasherPool.Put(k)
+
+			// Get node from hist space first, then from deduped space.
+			// Don't change the order, or the trie might be broken after pruning.
+			k.buf = t.makeHistNodeKey(k.buf[:0], thisHash, thisCommitNum, thisPath)
+			if blob, err = snapshot.Get(k.buf); err != nil {
+				if !snapshot.IsNotFound(err) {
+					return
 				}
-			})
+				// not found in hist space, fallback to deduped space
+				// get from deduped space
+				k.buf = t.makeDedupedNodeKey(k.buf[:0], thisCommitNum, thisPath)
+				if blob, err = snapshot.Get(k.buf); err != nil {
+					return
+				}
+				// the deduped node key uses path as db key.
+				// to ensure the node is correct, we need to verify the node hash.
+				if ok, err := verifyNodeHash(blob, thisHash); err != nil {
+					return nil, err
+				} else if !ok {
+					return nil, errors.New("node hash checksum error")
+				}
+			}
 			return
 		}),
 		nil, // nil is ok
-		func() databaseKeyEncodeFunc {
-			var histKey HistNodeKey
-			return func(hash []byte, commitNum uint32, path []byte) []byte {
-				return histKey.Encode(t.back.HistPtnFactor, hash, commitNum, path)
-			}
-		}(),
+		databaseKeyEncodeFunc(func(hash []byte, commitNum uint32, path []byte) []byte {
+			thisHash = hash
+			thisCommitNum = commitNum
+			thisPath = path
+			return nil
+		}),
 	}
 }
 
@@ -299,51 +312,55 @@ func (t *Trie) Hash() thor.Bytes32 {
 }
 
 // Commit writes all nodes to the trie database.
-func (t *Trie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
+func (t *Trie) Commit(newCommitNum uint32) (thor.Bytes32, error) {
 	ext, err := t.init()
 	if err != nil {
-		return
+		return thor.Bytes32{}, err
 	}
-	defer func() {
-		if err == nil {
-			t.root = root
-			t.commitNum = commitNum
-			t.dirty = false
-			if !t.noFillCache {
-				t.back.Cache.AddRootNode(t.name, ext.RootNode())
-			}
-		}
-	}()
 
-	err = t.back.Store.Batch(func(putter kv.Putter) error {
-		var (
-			histPutter = kv.Bucket(string(HistSpace) + t.name).NewPutter(putter)
-			cErr       error
-		)
-		// commit the trie
-		root, cErr = ext.CommitTo(&struct {
-			trie.DatabaseWriter
-			trie.DatabaseKeyEncoder
-		}{
-			kv.PutFunc(func(key, blob []byte) error {
-				if err := histPutter.Put(key, blob); err != nil {
-					return err
-				}
-				if !t.noFillCache {
-					t.back.Cache.AddNodeBlob(t.name, key, blob, true)
-				}
-				return nil
-			}),
-			func() databaseKeyEncodeFunc {
-				var histKey HistNodeKey
-				return func(hash []byte, commitNum uint32, path []byte) []byte {
-					return histKey.Encode(t.back.HistPtnFactor, hash, commitNum, path)
-				}
-			}(),
-		}, commitNum)
-		return cErr
-	})
-	return
+	var (
+		thisHash []byte
+		thisPath []byte
+		bulk     = t.back.Store.Bulk()
+		k        = hasherPool.Get().(*hasher)
+	)
+	defer hasherPool.Put(k)
+
+	// commit the trie
+	newRoot, err := ext.CommitTo(&struct {
+		trie.DatabaseWriter
+		trie.DatabaseKeyEncoder
+	}{
+		kv.PutFunc(func(_, blob []byte) error {
+			k.buf = t.makeHistNodeKey(k.buf[:0], thisHash, newCommitNum, thisPath)
+			if err := bulk.Put(k.buf, blob); err != nil {
+				return err
+			}
+			if !t.noFillCache {
+				t.back.Cache.AddNodeBlob(t.name, thisHash, newCommitNum, thisPath, blob, true)
+			}
+			return nil
+		}),
+		databaseKeyEncodeFunc(func(hash []byte, commitNum uint32, path []byte) []byte {
+			thisHash = hash
+			thisPath = path
+			return nil
+		}),
+	}, newCommitNum)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	if err := bulk.Flush(); err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	t.root = newRoot
+	t.commitNum = newCommitNum
+	t.dirty = false
+	if !t.noFillCache {
+		t.back.Cache.AddRootNode(t.name, ext.RootNode())
+	}
+	return newRoot, nil
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
@@ -361,85 +378,94 @@ func (t *Trie) SetNoFillCache(b bool) {
 	t.noFillCache = b
 }
 
-// Prune prunes redundant nodes in the range of [baseCommitNum, thisCommitNum].
-func (t *Trie) Prune(ctx context.Context, baseCommitNum uint32) error {
+// DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
+// transform transforms leaves before passing into leaf bank.
+func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform func(*trie.Leaf) *trie.Leaf) error {
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
-	checkContext := newContextChecker(ctx, 500)
+	if t.back.LeafBank == nil {
+		return errors.New("nil leaf bank")
+	}
 
-	return t.back.Store.Batch(func(putter kv.Putter) error {
-		var (
-			dedupedKey    DedupedNodeKey
-			dedupedPutter = kv.Bucket(string(DedupedSpace) + t.name).NewPutter(putter)
-			rootCommitNum = t.commitNum
-			histBkt       = kv.Bucket(string(HistSpace) + t.name)
-			histPutter    = histBkt.NewPutter(putter)
-			histRng       = kv.Range{
-				Start: appendUint32(nil, t.back.HistPtnFactor.Which(baseCommitNum)),
-				Limit: appendUint32(nil, t.back.HistPtnFactor.Which(rootCommitNum)+1),
+	var (
+		checkContext = newContextChecker(ctx, 500)
+		leafUpdater  = t.back.LeafBank.NewUpdater(t.name, t.commitNum)
+		iter         = t.NodeIterator(nil, baseCommitNum)
+	)
+
+	for iter.Next(true) {
+		if err := checkContext(); err != nil {
+			return err
+		}
+
+		if leaf := iter.Leaf(); leaf != nil {
+			if err := leafUpdater.Update(iter.LeafKey(), transform(leaf)); err != nil {
+				return err
 			}
-			it = t.NodeIterator(nil, baseCommitNum)
-		)
-		for it.Next(true) {
+		}
+	}
+	if err := iter.Error(); err != nil {
+		return err
+	}
+	return leafUpdater.Commit()
+}
+
+// DumpAndCleanNodes dumps historical nodes into deduped space and cleanup redundant historical nodes.
+func (t *Trie) DumpAndCleanNodes(ctx context.Context, baseCommitNum uint32) error {
+	if t.dirty {
+		return errors.New("dirty trie")
+	}
+	var (
+		checkContext = newContextChecker(ctx, 500)
+		bulk         = t.back.Store.Bulk()
+		k            = hasherPool.Get().(*hasher)
+	)
+	defer hasherPool.Put(k)
+
+	{
+		// save all new nodes into deduped space
+		iter := t.NodeIterator(nil, baseCommitNum)
+		for iter.Next(true) {
 			if err := checkContext(); err != nil {
 				return err
 			}
-			// save all new nodes into deduped space
-			if err := it.Node(true, func(blob []byte) error {
-				key := dedupedKey.Encode(t.back.DedupedPtnFactor, it.CommitNum(), it.Path())
-				return dedupedPutter.Put(key, blob)
+
+			if err := iter.Node(true, func(blob []byte) error {
+				k.buf = t.makeDedupedNodeKey(k.buf[:0], iter.CommitNum(), iter.Path())
+				return bulk.Put(k.buf, blob)
 			}); err != nil {
 				return err
 			}
 		}
-		if err := it.Error(); err != nil {
+		if err := iter.Error(); err != nil {
 			return err
 		}
+	}
 
-		// clean hist nodes
-		return histBkt.NewStore(t.back.Store).Iterate(histRng, func(pair kv.Pair) (bool, error) {
-			if err := checkContext(); err != nil {
-				return false, err
-			}
-			if cn := HistNodeKey(pair.Key()).CommitNum(); cn >= baseCommitNum && cn <= rootCommitNum {
-				if err := histPutter.Delete(pair.Key()); err != nil {
-					return false, err
-				}
-			}
-			return true, nil
+	{
+		// then clean up redundant hist nodes
+		pidStart, pidLimit := t.back.HistPtnFactor.Which(baseCommitNum), t.back.HistPtnFactor.Which(t.commitNum)+1
+		iter := t.back.Store.Iterate(kv.Range{
+			Start: appendUint32(append([]byte{t.back.HistSpace}, t.name...), pidStart),
+			Limit: appendUint32(append([]byte{t.back.HistSpace}, t.name...), pidLimit),
 		})
-	})
-}
-
-// DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
-// transform is optional to transform leaf before passing into leaf bank.
-func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform func(*trie.Leaf) *trie.Leaf) error {
-	if t.back.LeafBank == nil {
-		return errors.New("nil leaf bank")
-	}
-	if t.dirty {
-		return errors.New("dirty trie")
-	}
-	checkContext := newContextChecker(ctx, 500)
-
-	return t.back.LeafBank.Update(t.name, t.commitNum, func(save saveLeaf) error {
-		it := t.NodeIterator(nil, baseCommitNum)
-		for it.Next(true) {
-			if err := checkContext(); err != nil {
-				return err
-			}
-			if leaf := it.Leaf(); leaf != nil {
-				if transform != nil {
-					leaf = transform(leaf)
-				}
-				if err := save(it.LeafKey(), leaf); err != nil {
+		defer iter.Release()
+		for iter.Next() {
+			histKey := iter.Key()
+			// TODO: better way to extract commit number
+			nodeCommitNum := binary.BigEndian.Uint32(histKey[len(histKey)-4-32:])
+			if nodeCommitNum <= t.commitNum {
+				if err := bulk.Delete(histKey); err != nil {
 					return err
 				}
 			}
 		}
-		return it.Error()
-	})
+		if err := iter.Error(); err != nil {
+			return err
+		}
+	}
+	return bulk.Flush()
 }
 
 // newContextChecker creates a debounced context checker.
@@ -475,7 +501,7 @@ func verifyNodeHash(blob, expectedHash []byte) (bool, error) {
 	return bytes.Equal(expectedHash, h.Hash(node)), nil
 }
 
-// individual functions of trie backend interface.
+// individual functions of trie database interface.
 type (
 	databaseKeyEncodeFunc func(hash []byte, commitNum uint32, path []byte) []byte
 )

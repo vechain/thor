@@ -54,35 +54,37 @@ func (c *Cache) log() {
 }
 
 // AddNodeBlob adds node blob into the cache.
-func (c *Cache) AddNodeBlob(name string, key HistNodeKey, blob []byte, isCommitting bool) {
+func (c *Cache) AddNodeBlob(name string, hash []byte, commitNum uint32, path []byte, blob []byte, isCommitting bool) {
 	if c == nil {
 		return
 	}
 	k := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(k)
 	if isCommitting {
-		// concat name with path as cache key
+		// committing cache key: concat name with path as cache key
 		k.buf = append(k.buf[:0], name...)
-		k.buf = append(k.buf, key.PathBlob()...)
+		k.buf = append(k.buf, path...)
 
 		v := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(v)
 
 		// concat commit number with blob as cache value
-		v.buf = appendUint32(v.buf[:0], key.CommitNum())
+		v.buf = appendUint32(v.buf[:0], commitNum)
 		v.buf = append(v.buf, blob...)
 
 		_ = c.committedNodes.Set(k.buf, v.buf, 0)
 	} else {
-		// concat name with full hist key as cache key
+		// query cache key: take the hash of all node key info as query cache key
 		k.buf = append(k.buf[:0], name...)
-		k.buf = append(k.buf, key...)
-		_ = c.queriedNodes.Set(k.buf, blob, 0)
+		k.buf = append(k.buf, hash...)
+		k.buf = appendUint32(k.buf, commitNum)
+		k.buf = append(k.buf, path...)
+		_ = c.queriedNodes.Set(k.Hash(k.buf), blob, 0)
 	}
 }
 
 // GetNodeBlob returns the cached node blob.
-func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
+func (c *Cache) GetNodeBlob(name string, hash []byte, commitNum uint32, path []byte, peek bool) []byte {
 	if c == nil {
 		return nil
 	}
@@ -94,18 +96,18 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 		lookupCommitted = c.committedNodes.Peek
 	}
 
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
+	k := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(k)
 
-	// concat name with path as cache key
-	h.buf = append(h.buf[:0], name...)
-	h.buf = append(h.buf, key.PathBlob()...)
+	// committing cache key: concat name with path as cache key
+	k.buf = append(k.buf[:0], name...)
+	k.buf = append(k.buf, path...)
 
-	if val, _ := lookupCommitted(h.buf); len(val) > 0 {
+	if val, _ := lookupCommitted(k.buf); len(val) > 0 {
 		// compare the commit number
-		if binary.BigEndian.Uint32(val) == key.CommitNum() {
+		if binary.BigEndian.Uint32(val) == commitNum {
 			// then verify hash
-			if ok, _ := verifyNodeHash(val[4:], key.Hash()); ok {
+			if ok, _ := verifyNodeHash(val[4:], hash); ok {
 				if !peek {
 					c.nodeStats.Hit()
 				}
@@ -114,8 +116,11 @@ func (c *Cache) GetNodeBlob(name string, key HistNodeKey, peek bool) []byte {
 		}
 	}
 
-	h.buf = append(h.buf[:len(name)], key...)
-	if val, _ := lookupQueried(h.buf); len(val) > 0 {
+	// query cache key: take the hash of all node key info as query cache key
+	k.buf = append(k.buf[:len(name)], hash...)
+	k.buf = appendUint32(k.buf, commitNum)
+	k.buf = append(k.buf, path...)
+	if val, _ := lookupQueried(k.Hash(k.buf)); len(val) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}

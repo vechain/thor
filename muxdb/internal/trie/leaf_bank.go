@@ -15,14 +15,13 @@ import (
 	"github.com/vechain/thor/trie"
 )
 
+const slotCacheSize = 64
+
 // storageLeaf is the entity stored in leaf bank.
 type storageLeaf struct {
 	*trie.Leaf
 	CommitNum uint32
 }
-
-// saveLeaf defines the function to save the leaf.
-type saveLeaf func(key []byte, leaf *trie.Leaf) error
 
 // leafBankSlot presents per-trie state and cached leaves.
 type leafBankSlot struct {
@@ -40,24 +39,21 @@ type LeafBank struct {
 // NewLeafBank creates a new LeafBank instance.
 // The slotCap indicates the capacity of cached per-trie slots.
 func NewLeafBank(store kv.Store, slotCap int) *LeafBank {
-	b := &LeafBank{
-		store: kv.Bucket(string(LeafBankSpace)).NewStore(store),
-	}
+	b := &LeafBank{store: store}
 	b.slots, _ = lru.NewARC(slotCap)
 	return b
 }
 
 func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
-	getter := kv.Bucket(name).NewGetter(b.store)
-	if data, err := getter.Get(nil); err != nil {
-		if !getter.IsNotFound(err) {
+	if data, err := b.store.Get([]byte(name)); err != nil {
+		if !b.store.IsNotFound(err) {
 			return nil, err
 		}
 		// the trie has no leaf recorded yet
 		return nil, nil
 	} else {
 		slot := &leafBankSlot{maxCommitNum: binary.BigEndian.Uint32(data)}
-		slot.cache, _ = lru.New(32)
+		slot.cache, _ = lru.New(slotCacheSize)
 		return slot, nil
 	}
 }
@@ -106,41 +102,57 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 	}
 }
 
-// Update saves a batch of leaves for the trie named name.
-func (b *LeafBank) Update(name string, maxCommitNum uint32, batch func(save saveLeaf) error) (err error) {
+// NewUpdater creates the leaf updater for a trie with the given name.
+func (b *LeafBank) NewUpdater(name string, rootCommitNum uint32) *LeafUpdater {
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
-		defer func() {
-			if err == nil {
-				// the slot may be evicted at this point, but it's OK that
-				// newly created slot loads out-of-date maxCommitNum.
-				atomic.StoreUint32(&slot.maxCommitNum, maxCommitNum)
-			}
-		}()
 	}
 
-	return b.store.Batch(func(putter kv.Putter) error {
-		putter = kv.Bucket(name).NewPutter(putter)
-		if err := batch(func(key []byte, leaf *trie.Leaf) error {
-			data, err := rlp.EncodeToBytes(&storageLeaf{
-				leaf,
-				maxCommitNum,
-			})
-			if err != nil {
-				return err
-			}
-			if slot != nil {
-				// invalidate cached leaves.
-				// the slot may be evicted at this point, but it's OK that
-				// newly created slot loads out-of-date storageLeaf.
-				slot.cache.Remove(string(key))
-			}
-			return putter.Put(key, data)
-		}); err != nil {
-			return err
-		}
-		// at last, save the max commit number.
-		return putter.Put(nil, appendUint32(nil, maxCommitNum))
+	return &LeafUpdater{
+		slot:          slot,
+		bulk:          kv.Bucket(name).NewStore(b.store).Bulk(),
+		rootCommitNum: rootCommitNum,
+	}
+}
+
+// LeafUpdater helps to record trie leaves.
+type LeafUpdater struct {
+	slot          *leafBankSlot // might be nil
+	bulk          kv.Bulk
+	rootCommitNum uint32
+}
+
+// Update updates the leaf for the given key.
+func (u *LeafUpdater) Update(key []byte, leaf *trie.Leaf) error {
+	data, err := rlp.EncodeToBytes(&storageLeaf{
+		leaf,
+		u.rootCommitNum, // inherits root's commit number
 	})
+	if err != nil {
+		return err
+	}
+	if u.slot != nil {
+		// invalidate cached leaves.
+		// the slot may be evicted at this point, but it's OK that
+		// newly created slot loads out-of-date storageLeaf.
+		u.slot.cache.Remove(string(key))
+	}
+	return u.bulk.Put(key, data)
+}
+
+// Commit commits updates into leafbank.
+func (u *LeafUpdater) Commit() error {
+	if err := u.bulk.Put(nil, appendUint32(nil, u.rootCommitNum)); err != nil {
+		return err
+	}
+	if err := u.bulk.Flush(); err != nil {
+		return err
+	}
+	if u.slot != nil {
+		// the slot may be evicted at this point, but it's OK that
+		// newly created slot loads out-of-date maxCommitNum.
+		atomic.StoreUint32(&u.slot.maxCommitNum, u.rootCommitNum)
+	}
+	return nil
 }

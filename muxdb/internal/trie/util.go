@@ -21,3 +21,41 @@ func (pf PartitionFactor) Which(cn uint32) (pid uint32) {
 	// convert to uint64 to avoid overflow
 	return uint32((uint64(cn) + uint64(pf) - 1) / uint64(pf))
 }
+
+// encodePath encodes the path into 4-bytes aligned compact format.
+// The encoded paths are in lexicographical order even with suffix appended.
+func encodePath(dst []byte, path []byte) []byte {
+	if len(path) == 0 {
+		return append(dst, 0, 0, 0, 0)
+	}
+	for i := 0; i < len(path); i += 7 {
+		dst = appendUint32(dst, encodePath32(path[i:]))
+	}
+	return dst
+}
+
+// encodePath32 encodes at most 7 path elements into uint32.
+func encodePath32(path []byte) uint32 {
+	n := len(path)
+	if n > 7 {
+		n = 8 // means have subsequent path elements.
+	}
+
+	var v uint32
+	for i := 0; i < 7; i++ {
+		if i < n {
+			v |= uint32(path[i])
+		}
+		v <<= 4
+	}
+	return v | uint32(n)
+}
+
+func appendUint32(b []byte, v uint32) []byte {
+	return append(b,
+		byte(v>>24),
+		byte(v>>16),
+		byte(v>>8),
+		byte(v),
+	)
+}
