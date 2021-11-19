@@ -131,9 +131,9 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	}
 
 	var (
-		op    OpCode        // current opcode
-		mem   = NewMemory() // bound memory
-		stack = newstack()  // local stack
+		op    OpCode                     // current opcode
+		mem   = NewMemory()              // bound memory
+		stack = stackPool.Get().(*Stack) // local stack
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -144,6 +144,8 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
 	)
+	defer stackPool.Put(stack)
+	stack.reset()
 	contract.Input = input
 
 	if in.cfg.Debug {
