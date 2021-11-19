@@ -273,20 +273,21 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	log.Debug("fd cache", "n", fdCache)
 
 	opts := muxdb.Options{
-		TrieNodeCacheSizeMB:         cacheMB,
-		TrieRootCacheCapacity:       256,
-		TrieCachedNodeTTL:           180,
-		TrieLeafBankSlotCapacity:    256,
-		TrieHistNodePartitionFactor: 360, // !! DON'T touch this value, or db will get corrupted
-		OpenFilesCacheCapacity:      fdCache,
-		ReadCacheMB:                 256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:               128,
+		TrieNodeCacheSizeMB:        cacheMB,
+		TrieRootCacheCapacity:      256,
+		TrieCachedNodeTTL:          180, // 30 mins
+		TrieLeafBankSlotCapacity:   256,
+		TrieDedupedPartitionFactor: 250000, // about 1 month
+		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
+		OpenFilesCacheCapacity:     fdCache,
+		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:              256,
 	}
 
-	if ctx.Bool(disablePrunerFlag.Name) {
-		// when pruner is disabled, set larger hist partition factor to
-		// gain much better db compression ratio.
-		opts.TrieHistNodePartitionFactor = 250000 // !! DON'T touch this value, or db will get corrupted
+	if opts.TrieWillCleanHistory {
+		opts.TrieHistPartitionFactor = 360 // 1 hour
+	} else {
+		opts.TrieHistPartitionFactor = 125000 // about 2 weeks
 	}
 
 	path := filepath.Join(dir, "main.db")
