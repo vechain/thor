@@ -9,34 +9,34 @@ package muxdb
 
 import (
 	"io"
+	"runtime"
 
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/muxdb/internal/trie"
 	"github.com/vechain/thor/thor"
 )
 
 const (
-	namedStoreSpace = byte(32)
+	trieHistSpace     = byte(0) // the key space for historical trie nodes.
+	trieDedupedSpace  = byte(1) // the key space for deduped trie nodes.
+	trieLeafBankSpace = byte(2) // the key space for the trie leaf bank.
+	namedStoreSpace   = byte(3) // the key space for named store.
 )
 
 type engine interface {
 	kv.Store
-	Close() error
+	io.Closer
 }
 
 // Trie is the managed trie.
 type Trie = trie.Trie
-
-type TrieLeafBank = trie.LeafBank
-
-// TrieDedupedNodePartitionFactor the partition factor for deduped nodes.
-const TrieDedupedNodePartitionFactor = trie.PartitionFactor(500000)
+type TriePartitionFactor = trie.PartitionFactor
 
 // Options optional parameters for MuxDB.
 type Options struct {
@@ -48,9 +48,12 @@ type Options struct {
 	TrieCachedNodeTTL int
 	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
 	TrieLeafBankSlotCapacity int
-	// TrieHistNodePartitionFactor defines the partition factor for history nodes.
-	// It must be consistant over the lifetime of the DB.
-	TrieHistNodePartitionFactor trie.PartitionFactor
+	// TrieHistPartitionFactor is the partition factor for historical trie nodes.
+	TrieHistPartitionFactor trie.PartitionFactor
+	// TrieDedupedPartitionFactor is the partition factor for deduped trie nodes.
+	TrieDedupedPartitionFactor trie.PartitionFactor
+	// TrieWillCleanHistory is the hint to tell if historical nodes will be cleaned.
+	TrieWillCleanHistory bool
 
 	// OpenFilesCacheCapacity is the capacity of open files caching for underlying database.
 	OpenFilesCacheCapacity int
@@ -58,64 +61,85 @@ type Options struct {
 	ReadCacheMB int
 	// WriteBufferMB is the size of write buffer for underlying database.
 	WriteBufferMB int
-	// DisablePageCache Disable page cache for database file.
-	// It's for test purpose only.
-	DisablePageCache bool
 }
 
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
-	engine            engine
-	storageCloser     io.Closer
-	trieBackend       *trie.Backend
-	trieCachedNodeTTL int
+	engine      engine
+	trieBackend *trie.Backend
+	beforeClose func() error
 }
 
 // Open opens or creates DB at the given path.
 func Open(path string, options *Options) (*MuxDB, error) {
 	// prepare leveldb options
 	ldbOpts := opt.Options{
-		OpenFilesCacheCapacity:        options.OpenFilesCacheCapacity,
-		BlockCacheCapacity:            options.ReadCacheMB * opt.MiB,
-		WriteBuffer:                   options.WriteBufferMB * opt.MiB,
-		Filter:                        filter.NewBloomFilter(10),
-		BlockSize:                     1024 * 32, // balance performance of point reads and compression ratio.
-		DisableSeeksCompaction:        true,
-		CompactionTableSizeMultiplier: 2,
-		VibrantKeys: []*util.Range{
-			util.BytesPrefix([]byte{trie.HistSpace}),
-		},
+		OpenFilesCacheCapacity: options.OpenFilesCacheCapacity,
+		BlockCacheCapacity:     options.ReadCacheMB * opt.MiB,
+		WriteBuffer:            options.WriteBufferMB * opt.MiB,
+		Filter:                 filter.NewBloomFilter(10),
+		BlockSize:              1024 * 16, // balance performance of point reads and compression ratio.
+		SkipL0SeeksCompaction:  true,
+		IteratorSamplingRate:   -1,
+		// workaround for the known issue: https://github.com/golang/go/issues/26650
+		// which slows down writting WAL.
+		DisableJournal: runtime.GOOS == "darwin",
 	}
 
-	storage, err := openLevelFileStorage(path, false, options.DisablePageCache)
-	if err != nil {
-		return nil, err
+	if options.TrieWillCleanHistory {
+		// this option gets disk space efficiently reclaimed.
+		// only set when pruner enabled.
+		ldbOpts.OverflowPrefix = []byte{trieHistSpace}
 	}
 
 	// open leveldb
-	ldb, err := leveldb.Open(storage, &ldbOpts)
+	ldb, err := leveldb.OpenFile(path, &ldbOpts)
 	if _, corrupted := err.(*dberrors.ErrCorrupted); corrupted {
-		ldb, err = leveldb.Recover(storage, &ldbOpts)
+		ldb, err = leveldb.RecoverFile(path, &ldbOpts)
 	}
 	if err != nil {
-		storage.Close()
 		return nil, err
 	}
 
 	// as engine
 	engine := newLevelEngine(ldb)
 
+	var ptnConfig triePartitionConfig
+	if err := ptnConfig.Load(engine); err != nil {
+		if !engine.IsNotFound(err) {
+			ldb.Close()
+			return nil, err
+		}
+
+		// not configured. save in db to avoid trie corruption
+		// when partition factor occasionally tweaked.
+		ptnConfig.Hist = options.TrieHistPartitionFactor
+		ptnConfig.Deduped = options.TrieDedupedPartitionFactor
+
+		if err := ptnConfig.Save(engine); err != nil {
+			ldb.Close()
+			return nil, err
+		}
+	}
+
 	return &MuxDB{
-		engine:        engine,
-		storageCloser: storage,
+		engine: engine,
 		trieBackend: &trie.Backend{
 			Store:            engine,
-			LeafBank:         trie.NewLeafBank(engine, options.TrieLeafBankSlotCapacity),
 			Cache:            trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
-			HistPtnFactor:    options.TrieHistNodePartitionFactor,
-			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
+			LeafBank:         trie.NewLeafBank(kv.Bucket(trieLeafBankSpace).NewStore(engine), options.TrieLeafBankSlotCapacity),
+			HistSpace:        trieHistSpace,
+			DedupedSpace:     trieDedupedSpace,
+			HistPtnFactor:    ptnConfig.Hist,
+			DedupedPtnFactor: ptnConfig.Deduped,
+			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
-		trieCachedNodeTTL: options.TrieCachedNodeTTL,
+		beforeClose: func() error {
+			if runtime.GOOS == "darwin" {
+				return ldb.FlushMem()
+			}
+			return nil
+		},
 	}, nil
 }
 
@@ -126,24 +150,32 @@ func NewMem() *MuxDB {
 
 	engine := newLevelEngine(ldb)
 	return &MuxDB{
-		engine:        engine,
-		storageCloser: storage,
+		engine: engine,
 		trieBackend: &trie.Backend{
 			Store:            engine,
+			HistSpace:        trieHistSpace,
+			DedupedSpace:     trieDedupedSpace,
 			HistPtnFactor:    1,
-			DedupedPtnFactor: TrieDedupedNodePartitionFactor,
+			DedupedPtnFactor: 1,
+			CachedNodeTTL:    32,
 		},
-		trieCachedNodeTTL: 32,
 	}
 }
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	err := db.engine.Close()
-	if err1 := db.storageCloser.Close(); err == nil {
-		err = err1
+	if db.beforeClose != nil {
+		db.beforeClose()
 	}
-	return err
+	return db.engine.Close()
+}
+
+func (db *MuxDB) TrieHistPartitionFactor() TriePartitionFactor {
+	return db.trieBackend.HistPtnFactor
+}
+
+func (db *MuxDB) TrieDedupedPartitionFactor() TriePartitionFactor {
+	return db.trieBackend.DedupedPtnFactor
 }
 
 // NewTrie creates trie either with existing root node.
@@ -157,7 +189,6 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie
 		false,
 		root,
 		commitNum,
-		db.trieCachedNodeTTL,
 	)
 }
 
@@ -170,7 +201,6 @@ func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32)
 		true,
 		root,
 		commitNum,
-		db.trieCachedNodeTTL,
 	)
 }
 
@@ -179,12 +209,35 @@ func (db *MuxDB) NewStore(name string) kv.Store {
 	return kv.Bucket(string(namedStoreSpace) + name).NewStore(db.engine)
 }
 
-// LowEngine returns underlying kv-engine. It's for test purpose only.
-func (db *MuxDB) LowEngine() kv.Store {
-	return db.engine
-}
-
 // IsNotFound returns if the error indicates key not found.
 func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
+}
+
+const (
+	configStoreName  = "muxdb.config"
+	triePtnConfigKey = "triePtn"
+)
+
+type triePartitionConfig struct {
+	Hist    trie.PartitionFactor
+	Deduped trie.PartitionFactor
+}
+
+func (c *triePartitionConfig) Load(getter kv.Getter) error {
+	getter = kv.Bucket(string(namedStoreSpace) + configStoreName).NewGetter(getter)
+	data, err := getter.Get([]byte(triePtnConfigKey))
+	if err != nil {
+		return err
+	}
+	return rlp.DecodeBytes(data, c)
+}
+
+func (c *triePartitionConfig) Save(putter kv.Putter) error {
+	data, err := rlp.EncodeToBytes(c)
+	if err != nil {
+		return err
+	}
+	putter = kv.Bucket(string(namedStoreSpace) + configStoreName).NewPutter(putter)
+	return putter.Put([]byte(triePtnConfigKey), data)
 }
