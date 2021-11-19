@@ -8,7 +8,7 @@ package optimizer
 import (
 	"encoding/json"
 
-	"github.com/vechain/thor/muxdb"
+	"github.com/vechain/thor/kv"
 )
 
 type status struct {
@@ -16,9 +16,9 @@ type status struct {
 	AccountBase uint32
 }
 
-func (s *status) Load(db *muxdb.MuxDB) error {
-	data, err := db.NewStore(propsStoreName).Get([]byte(statusKey))
-	if err != nil && !db.IsNotFound(err) {
+func (s *status) Load(getter kv.Getter) error {
+	data, err := getter.Get([]byte(statusKey))
+	if err != nil && !getter.IsNotFound(err) {
 		return err
 	}
 	if len(data) == 0 {
@@ -27,10 +27,10 @@ func (s *status) Load(db *muxdb.MuxDB) error {
 	return json.Unmarshal(data, s)
 }
 
-func (s *status) Save(db *muxdb.MuxDB) error {
+func (s *status) Save(putter kv.Putter) error {
 	data, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
-	return db.NewStore(propsStoreName).Put([]byte(statusKey), data)
+	return putter.Put([]byte(statusKey), data)
 }
