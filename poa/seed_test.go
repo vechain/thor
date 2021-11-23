@@ -94,7 +94,7 @@ func TestSeeder_Generate(t *testing.T) {
 	}
 
 	// 31 - 35
-	parent = repo.BestBlock()
+	parent, _ = repo.GetBlock(repo.BestBlockSummary().Header.ID())
 	for i := 1; i <= int(epochInterval/2); i++ {
 		b := new(block.Builder).
 			ParentID(parent.Header().ID()).

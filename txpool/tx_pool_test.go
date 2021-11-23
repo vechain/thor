@@ -49,6 +49,10 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0)
+	stage, _ := st.Stage(1)
+	root1, _ := stage.Commit()
+
 	var sig [65]byte
 	rand.Read(sig[:])
 
@@ -57,7 +61,7 @@ func TestSubscribeNewTx(t *testing.T) {
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
-		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
+		StateRoot(root1).
 		Build().WithSignature(sig[:])
 	if err := pool.repo.AddBlock(b1, nil); err != nil {
 		t.Fatal(err)
@@ -124,6 +128,10 @@ func TestWashTxs(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0)
+	stage, _ := st.Stage(1)
+	root1, _ := stage.Commit()
+
 	var sig [65]byte
 	rand.Read(sig[:])
 	b1 := new(block.Builder).
@@ -131,7 +139,7 @@ func TestAdd(t *testing.T) {
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
-		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
+		StateRoot(root1).
 		Build().WithSignature(sig[:])
 	pool.repo.AddBlock(b1, nil)
 	pool.repo.SetBestBlockID(b1.Header().ID())
