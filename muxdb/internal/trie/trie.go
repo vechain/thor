@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
@@ -94,8 +95,8 @@ func (t *Trie) CommitNum() uint32 {
 
 func (t *Trie) makeHistNodeKey(dst []byte, hash []byte, commitNum uint32, path []byte) []byte {
 	dst = append(dst, t.back.HistSpace)                            // space
-	dst = append(dst, t.name...)                                   // trie name
 	dst = appendUint32(dst, t.back.HistPtnFactor.Which(commitNum)) // partition id
+	dst = append(dst, t.name...)                                   // trie name
 	dst = encodePath(dst, path)                                    // path
 	dst = appendUint32(dst, commitNum)                             // commit num
 	dst = append(dst, hash...)                                     // node hash
@@ -104,8 +105,8 @@ func (t *Trie) makeHistNodeKey(dst []byte, hash []byte, commitNum uint32, path [
 
 func (t *Trie) makeDedupedNodeKey(dst []byte, commitNum uint32, path []byte) []byte {
 	dst = append(dst, t.back.DedupedSpace)                            // space
-	dst = append(dst, t.name...)                                      // trie name
 	dst = appendUint32(dst, t.back.DedupedPtnFactor.Which(commitNum)) // partition id
+	dst = append(dst, t.name...)                                      // trie name
 	dst = encodePath(dst, path)                                       // path
 	return dst
 }
@@ -445,24 +446,26 @@ func (t *Trie) DumpAndCleanNodes(ctx context.Context, baseCommitNum uint32) erro
 
 	{
 		// then clean up redundant hist nodes
-		pidStart, pidLimit := t.back.HistPtnFactor.Which(baseCommitNum), t.back.HistPtnFactor.Which(t.commitNum)+1
-		iter := t.back.Store.Iterate(kv.Range{
-			Start: appendUint32(append([]byte{t.back.HistSpace}, t.name...), pidStart),
-			Limit: appendUint32(append([]byte{t.back.HistSpace}, t.name...), pidLimit),
-		})
-		defer iter.Release()
-		for iter.Next() {
-			histKey := iter.Key()
-			// TODO: better way to extract commit number
-			nodeCommitNum := binary.BigEndian.Uint32(histKey[len(histKey)-4-32:])
-			if nodeCommitNum <= t.commitNum {
-				if err := bulk.Delete(histKey); err != nil {
-					return err
+		p0, p1 := t.back.HistPtnFactor.Which(baseCommitNum), t.back.HistPtnFactor.Which(t.commitNum)
+		for pid := p0; pid < p1+1; pid++ {
+			if err := func() error {
+				k.buf = append(appendUint32(append(k.buf[:0], t.back.HistSpace), pid), t.name...)
+				iter := t.back.Store.Iterate(kv.Range(*util.BytesPrefix(k.buf)))
+				defer iter.Release()
+				for iter.Next() {
+					histKey := iter.Key()
+					// TODO: better way to extract commit number
+					nodeCommitNum := binary.BigEndian.Uint32(histKey[len(histKey)-4-32:])
+					if nodeCommitNum <= t.commitNum {
+						if err := bulk.Delete(histKey); err != nil {
+							return err
+						}
+					}
 				}
+				return iter.Error()
+			}(); err != nil {
+				return err
 			}
-		}
-		if err := iter.Error(); err != nil {
-			return err
 		}
 	}
 	return bulk.Flush()
