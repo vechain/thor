@@ -76,9 +76,9 @@ func (s *Server) Self() *discover.Node {
 }
 
 // Start start the server.
-func (s *Server) Start(protocols []*Protocol) error {
+func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 	for _, proto := range protocols {
-		cpy := proto.Protocol
+		cpy := *proto
 		run := cpy.Run
 		cpy.Run = func(peer *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 			dir := "outbound"
@@ -108,18 +108,15 @@ func (s *Server) Start(protocols []*Protocol) error {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
-		for _, proto := range protocols {
-			topicToRegister := discv5.Topic(proto.DiscTopic)
-			log.Debug("registering topic", "topic", topicToRegister)
-			s.goes.Go(func() {
-				s.discv5.RegisterTopic(topicToRegister, s.done)
-			})
-		}
-		if len(protocols) > 0 {
-			topicToSearch := discv5.Topic(protocols[len(protocols)-1].DiscTopic)
-			log.Debug("searching topic", "topic", topicToSearch)
-			s.goes.Go(func() { s.discoverLoop(topicToSearch) })
-		}
+		log.Debug("registering topic", "topic", topic)
+		s.goes.Go(func() {
+			s.discv5.RegisterTopic(topic, s.done)
+		})
+
+		log.Debug("searching topic", "topic", topic)
+		s.goes.Go(func() {
+			s.discoverLoop(topic)
+		})
 
 		s.goes.Go(s.fetchBootstrap)
 	}
