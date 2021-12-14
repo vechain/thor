@@ -87,10 +87,12 @@ func (b Bucket) NewStore(src Store) Store {
 			bulk := src.Bulk()
 			return &struct {
 				Putter
-				FlushFunc
+				EnableAutoFlushFunc
+				WriteFunc
 			}{
 				b.NewPutter(bulk),
-				bulk.Flush,
+				bulk.EnableAutoFlush,
+				bulk.Write,
 			}
 		},
 		func(r Range) Iterator {

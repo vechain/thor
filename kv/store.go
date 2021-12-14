@@ -27,7 +27,8 @@ type Snapshot interface {
 // Bulk is the bulk putter.
 type Bulk interface {
 	Putter
-	Flush() error
+	EnableAutoFlush() // if set, the bulk will be non-atomic
+	Write() error
 }
 
 // Iterator iterates over kv pairs.
