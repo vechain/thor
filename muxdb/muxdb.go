@@ -8,6 +8,7 @@
 package muxdb
 
 import (
+	"context"
 	"io"
 	"runtime"
 
@@ -79,8 +80,6 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		WriteBuffer:            options.WriteBufferMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
 		BlockSize:              1024 * 16, // balance performance of point reads and compression ratio.
-		SkipL0SeeksCompaction:  true,
-		IteratorSamplingRate:   -1,
 		// workaround for the known issue: https://github.com/golang/go/issues/26650
 		// which slows down writting WAL.
 		DisableJournal: runtime.GOOS == "darwin",
@@ -128,6 +127,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			Store:            engine,
 			Cache:            trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
 			LeafBank:         trie.NewLeafBank(kv.Bucket(trieLeafBankSpace).NewStore(engine), options.TrieLeafBankSlotCapacity),
+			LeafBankSpace:    trieLeafBankSpace,
 			HistSpace:        trieHistSpace,
 			DedupedSpace:     trieDedupedSpace,
 			HistPtnFactor:    ptnConfig.Hist,
@@ -153,6 +153,7 @@ func NewMem() *MuxDB {
 		engine: engine,
 		trieBackend: &trie.Backend{
 			Store:            engine,
+			LeafBankSpace:    trieLeafBankSpace,
 			HistSpace:        trieHistSpace,
 			DedupedSpace:     trieDedupedSpace,
 			HistPtnFactor:    1,
@@ -182,26 +183,33 @@ func (db *MuxDB) TrieDedupedPartitionFactor() TriePartitionFactor {
 //
 // If root is zero or blake2b hash of an empty string, the trie is
 // initially empty.
-func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
+func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
 	return trie.New(
 		db.trieBackend,
 		name,
 		false,
 		root,
 		commitNum,
+		distinctNum,
 	)
 }
 
 // NewSecureTrie creates secure trie.
 // In a secure trie, keys are hashed using blake2b. It prevents depth attack.
-func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum uint32) *Trie {
+func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
 	return trie.New(
 		db.trieBackend,
 		name,
 		true,
 		root,
 		commitNum,
+		distinctNum,
 	)
+}
+
+// CleanTrieHistory clean trie history within [startCommitNum, limitCommitNum).
+func (db *MuxDB) CleanTrieHistory(ctx context.Context, startCommitNum, limitCommitNum uint32) error {
+	return trie.CleanHistory(ctx, db.trieBackend, startCommitNum, limitCommitNum)
 }
 
 // NewStore creates named kv-store.

@@ -118,20 +118,29 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 		}
 		return nil
 	}
+	var autoFlush bool
 
 	return &struct {
 		kv.PutFunc
 		kv.DeleteFunc
-		kv.FlushFunc
+		kv.EnableAutoFlushFunc
+		kv.WriteFunc
 	}{
 		func(key, val []byte) error {
 			getBatch().Put(key, val)
-			return flush(idealBatchSize)
+			if autoFlush {
+				return flush(idealBatchSize)
+			}
+			return nil
 		},
 		func(key []byte) error {
 			getBatch().Delete(key)
-			return flush(idealBatchSize)
+			if autoFlush {
+				return flush(idealBatchSize)
+			}
+			return nil
 		},
+		func() { autoFlush = true },
 		func() error { return flush(0) },
 	}
 }
