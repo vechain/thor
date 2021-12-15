@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -31,6 +32,7 @@ type node interface {
 	fstring(string) string
 	cache() (*hashNode, bool)
 	commitNum() uint32
+	distinctNum() uint32
 }
 
 type (
@@ -46,6 +48,7 @@ type (
 	hashNode struct {
 		hash []byte
 		cNum uint32 // the commit number
+		dNum uint32 // the number to distinguish commits with the same commit number
 	}
 	valueNode struct {
 		value []byte
@@ -88,14 +91,33 @@ func (n *fullNode) commitNum() uint32 {
 	}
 	return 0
 }
+
+func (n *fullNode) distinctNum() uint32 {
+	if n.flags.hash != nil {
+		return n.flags.hash.dNum
+	}
+	return 0
+}
+
 func (n *shortNode) commitNum() uint32 {
 	if n.flags.hash != nil {
 		return n.flags.hash.cNum
 	}
 	return 0
 }
-func (n *hashNode) commitNum() uint32  { return n.cNum }
-func (n *valueNode) commitNum() uint32 { return 0 }
+
+func (n *shortNode) distinctNum() uint32 {
+	if n.flags.hash != nil {
+		return n.flags.hash.dNum
+	}
+	return 0
+}
+
+func (n *hashNode) commitNum() uint32   { return n.cNum }
+func (n *hashNode) distinctNum() uint32 { return n.dNum }
+
+func (n *valueNode) commitNum() uint32   { return 0 }
+func (n *valueNode) distinctNum() uint32 { return 0 }
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
@@ -137,7 +159,7 @@ func (ml *metaList) Next() ([]byte, error) {
 		return nil, io.EOF
 	}
 
-	_, content, rest, err := rlp.Split(*ml)
+	content, rest, err := rlp.SplitString(*ml)
 	if err != nil {
 		return nil, err
 	}
@@ -146,26 +168,40 @@ func (ml *metaList) Next() ([]byte, error) {
 	return content, nil
 }
 
-// commitNumList is a list of commit numbers.
-type commitNumList []uint32
+// numList is a list of commit & distinct numbers.
+type numList []byte
 
 // Next returns the commit number of the current child hash node and move to the next none.
 // It returns io.EOF if reaches end.
-func (cnl *commitNumList) Next() (uint32, error) {
-	if cnl == nil {
-		return 0, nil
+func (nl *numList) Next() (cNum uint32, dNum uint32, err error) {
+	if nl == nil {
+		return 0, 0, nil
 	}
-	if len(*cnl) == 0 {
-		return 0, io.EOF
+	if len(*nl) == 0 {
+		return 0, 0, io.EOF
 	}
 
-	cn := (*cnl)[0]
-	*cnl = (*cnl)[1:]
-	return cn, nil
+	content, rest, err := rlp.SplitString(*nl)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if len(content) > 8 {
+		return 0, 0, errors.New("encoded number too long")
+	}
+
+	*nl = rest
+
+	var n uint64
+	for _, b := range content {
+		n <<= 8
+		n |= uint64(b)
+	}
+	return uint32(n), uint32(n >> 32), nil
 }
 
 // decodeTrailing decodes the trailing buffer.
-func decodeTrailing(buf []byte) (*metaList, *commitNumList, error) {
+func decodeTrailing(buf []byte) (*metaList, *numList, error) {
 	if len(buf) == 0 {
 		return nil, nil, nil
 	}
@@ -175,12 +211,15 @@ func decodeTrailing(buf []byte) (*metaList, *commitNumList, error) {
 		return nil, nil, err
 	}
 
-	var cnList []uint32
-	if err := rlp.DecodeBytes(rest, &cnList); err != nil {
+	nBuf, rest, err := rlp.SplitList(rest)
+	if err != nil {
 		return nil, nil, err
 	}
+	if len(rest) > 0 {
+		return nil, nil, errors.New("unexpected content after trailing")
+	}
 
-	return (*metaList)(&mBuf), (*commitNumList)(&cnList), nil
+	return (*metaList)(&mBuf), (*numList)(&nBuf), nil
 }
 
 func encodeTrailing(w io.Writer, collapsed node) error {
@@ -206,22 +245,22 @@ func encodeTrailing(w io.Writer, collapsed node) error {
 		return err
 	}
 
-	var cnList []uint32
+	var nList []uint64
 	switch n := collapsed.(type) {
 	case *shortNode:
 		if h, ok := n.Val.(*hashNode); ok {
-			cnList = append(cnList, h.commitNum())
+			nList = append(nList, uint64(h.cNum)|(uint64(h.dNum)<<32))
 		}
 	case *fullNode:
 		for i := 0; i < 16; i++ {
 			if h, ok := n.Children[i].(*hashNode); ok {
-				cnList = append(cnList, h.commitNum())
+				nList = append(nList, uint64(h.cNum)|(uint64(h.dNum)<<32))
 			}
 		}
 	default:
 		panic(fmt.Sprintf("encode trailing, unexpected node: %v", n))
 	}
-	return rlp.Encode(w, cnList)
+	return rlp.Encode(w, nList)
 }
 
 func mustDecodeNode(hash *hashNode, buf []byte) node {
@@ -245,7 +284,7 @@ func mustDecodeNode(hash *hashNode, buf []byte) node {
 }
 
 // decodeNode parses the RLP encoding of a trie node.
-func decodeNode(hash *hashNode, buf []byte, ml *metaList, cnl *commitNumList) (node, error) {
+func decodeNode(hash *hashNode, buf []byte, ml *metaList, nl *numList) (node, error) {
 	if len(buf) == 0 {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -255,17 +294,17 @@ func decodeNode(hash *hashNode, buf []byte, ml *metaList, cnl *commitNumList) (n
 	}
 	switch c, _ := rlp.CountValues(elems); c {
 	case 2:
-		n, err := decodeShort(hash, buf, elems, ml, cnl)
+		n, err := decodeShort(hash, buf, elems, ml, nl)
 		return n, wrapError(err, "short")
 	case 17:
-		n, err := decodeFull(hash, buf, elems, ml, cnl)
+		n, err := decodeFull(hash, buf, elems, ml, nl)
 		return n, wrapError(err, "full")
 	default:
 		return nil, fmt.Errorf("invalid number of list elements: %v", c)
 	}
 }
 
-func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, cnl *commitNumList) (*shortNode, error) {
+func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*shortNode, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
 		return nil, err
@@ -290,17 +329,17 @@ func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, cnl *commitNum
 		return &shortNode{key, vn, flag}, nil
 	}
 
-	r, _, err := decodeRef(rest, ml, cnl)
+	r, _, err := decodeRef(rest, ml, nl)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
 	return &shortNode{key, r, flag}, nil
 }
 
-func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, cnl *commitNumList) (*fullNode, error) {
+func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*fullNode, error) {
 	n := &fullNode{flags: nodeFlag{hash: hash}}
 	for i := 0; i < 16; i++ {
-		cld, rest, err := decodeRef(elems, ml, cnl)
+		cld, rest, err := decodeRef(elems, ml, nl)
 		if err != nil {
 			return n, wrapError(err, fmt.Sprintf("[%d]", i))
 		}
@@ -327,7 +366,7 @@ func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, cnl *commitNumL
 
 const hashLen = len(thor.Bytes32{})
 
-func decodeRef(buf []byte, ml *metaList, cnl *commitNumList) (node, []byte, error) {
+func decodeRef(buf []byte, ml *metaList, nl *numList) (node, []byte, error) {
 	kind, val, rest, err := rlp.Split(buf)
 	if err != nil {
 		return nil, buf, err
@@ -346,11 +385,11 @@ func decodeRef(buf []byte, ml *metaList, cnl *commitNumList) (node, []byte, erro
 		// empty node
 		return nil, rest, nil
 	case kind == rlp.String && len(val) == 32:
-		cn, err := cnl.Next()
+		cNum, dNum, err := nl.Next()
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid commit number: %v", err)
 		}
-		return &hashNode{append([]byte(nil), val...), cn}, rest, nil
+		return &hashNode{append([]byte(nil), val...), cNum, dNum}, rest, nil
 	default:
 		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}

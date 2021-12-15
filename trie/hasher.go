@@ -29,6 +29,9 @@ type hasher struct {
 	tmp           sliceBuffer
 	sha           hash.Hash
 	cachedNodeTTL int
+	extended      bool
+	cNumNew       uint32
+	dNumNew       uint32
 }
 
 type sliceBuffer []byte
@@ -52,9 +55,21 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher(cachedNodeTTL int) *hasher {
+func newHasher() *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.cachedNodeTTL = 0
+	h.extended = false
+	h.cNumNew = 0
+	h.dNumNew = 0
+	return h
+}
+
+func newHasherExtended(cNumNew, dNumNew uint32, cachedNodeTTL int) *hasher {
 	h := hasherPool.Get().(*hasher)
 	h.cachedNodeTTL = cachedNodeTTL
+	h.extended = true
+	h.cNumNew = cNumNew
+	h.dNumNew = dNumNew
 	return h
 }
 
@@ -64,7 +79,7 @@ func returnHasherToPool(h *hasher) {
 
 // hash collapses a node down into a hash node, also returning a copy of the
 // original node initialized with the computed hash to replace the original one.
-func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool, commitNum *uint32) (node, node, error) {
+func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
 	if hash, dirty := n.cache(); hash != nil {
 		if db == nil {
@@ -72,12 +87,12 @@ func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool, commit
 		}
 
 		if !dirty {
-			if commitNum == nil { // non-extended
+			if !h.extended {
 				return hash, hash, nil
 			}
 			// extended trie
 			if !force { // non-root node
-				if *commitNum > n.commitNum()+uint32(h.cachedNodeTTL) {
+				if h.cNumNew > hash.cNum+uint32(h.cachedNodeTTL) {
 					return hash, hash, nil
 				}
 				return hash, n, nil
@@ -86,11 +101,11 @@ func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool, commit
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
-	collapsed, cached, err := h.hashChildren(n, db, path, commitNum)
+	collapsed, cached, err := h.hashChildren(n, db, path)
 	if err != nil {
 		return nil, n, err
 	}
-	hashed, err := h.store(collapsed, db, path, force, commitNum)
+	hashed, err := h.store(collapsed, db, path, force)
 	if err != nil {
 		return nil, n, err
 	}
@@ -116,7 +131,7 @@ func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool, commit
 // hashChildren replaces the children of a node with their hashes if the encoded
 // size of the child is larger than a hash, returning the collapsed node as well
 // as a replacement for the original node with the child hashes cached in.
-func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte, commitNum *uint32) (node, node, error) {
+func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (node, node, error) {
 	var err error
 
 	switch n := original.(type) {
@@ -128,7 +143,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte, com
 
 		if _, ok := n.Val.(*valueNode); !ok {
 
-			collapsed.Val, cached.Val, err = h.hash(n.Val, db, append(path, n.Key...), false, commitNum)
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, append(path, n.Key...), false)
 			if err != nil {
 				return original, original, err
 			}
@@ -144,7 +159,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte, com
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, append(path, byte(i)), false, commitNum)
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, append(path, byte(i)), false)
 				if err != nil {
 					return original, original, err
 				}
@@ -164,7 +179,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte, com
 	}
 }
 
-func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool, commitNum *uint32) (node, error) {
+func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node, error) {
 	// Don't store hashes or empty nodes.
 	if _, isHash := n.(*hashNode); n == nil || isHash {
 		return n, nil
@@ -187,16 +202,17 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool, commi
 	}
 	if db != nil {
 		// extended
-		if commitNum != nil {
-			hash.cNum = *commitNum
+		if h.extended {
 			if err := encodeTrailing(&h.tmp, n); err != nil {
 				return nil, err
 			}
+			hash.cNum = h.cNumNew
+			hash.dNum = h.dNumNew
 		}
 
 		key := hash.hash
 		if ke, ok := db.(DatabaseKeyEncoder); ok {
-			key = ke.Encode(hash.hash, hash.cNum, path)
+			key = ke.Encode(hash.hash, h.cNumNew, h.dNumNew, path)
 		}
 		return hash, db.Put(key, h.tmp)
 	}

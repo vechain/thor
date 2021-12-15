@@ -44,15 +44,23 @@ func (n *Node) CommitNum() uint32 {
 	return 0
 }
 
+// DistinctNum returns the node's distinct number. 0 is returned if the node is dirty.
+func (n *Node) DistinctNum() uint32 {
+	if n.node != nil {
+		return n.node.distinctNum()
+	}
+	return 0
+}
+
 // NewExtended creates an extended trie.
-func NewExtended(root thor.Bytes32, commitNum uint32, db Database) (*ExtendedTrie, error) {
+func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database) (*ExtendedTrie, error) {
 	isRootEmpty := (root == thor.Bytes32{}) || root == emptyRoot
 	if !isRootEmpty && db == nil {
 		panic("trie.NewExtended: cannot use existing root without a database")
 	}
 	ext := ExtendedTrie{Trie{db: db}, 0}
 	if !isRootEmpty {
-		rootnode, _, err := ext.trie.resolveHash(&hashNode{root[:], commitNum}, nil)
+		rootnode, _, err := ext.trie.resolveHash(&hashNode{root[:], commitNum, distinctNum}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +74,7 @@ func NewExtendedCached(rootNode *Node, db Database) *ExtendedTrie {
 	return &ExtendedTrie{Trie{root: rootNode.node, db: db}, 0}
 }
 
-// SetCacheTTL sets life time of a cached node. The life time is equivalent to
+// SetCachedNodeTTL sets life time of a cached node. The life time is equivalent to
 // the differenc of commit number.
 func (e *ExtendedTrie) SetCachedNodeTTL(ttl int) {
 	e.cachedNodeTTL = ttl
@@ -84,10 +92,10 @@ func (e *ExtendedTrie) RootNode() *Node {
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key. It filters out nodes that have commit number smaller than
-// minCommitNum.
-func (e *ExtendedTrie) NodeIterator(start []byte, minCommitNum uint32) NodeIterator {
+// baseCommitNum.
+func (e *ExtendedTrie) NodeIterator(start []byte, baseCommitNum uint32) NodeIterator {
 	t := &e.trie
-	return newNodeIterator(t, start, minCommitNum)
+	return newNodeIterator(t, start, baseCommitNum)
 }
 
 // Get returns the value and metadata for key stored in the trie.
@@ -149,12 +157,12 @@ func (e *ExtendedTrie) Hash() thor.Bytes32 {
 //
 // Committing flushes nodes from memory.
 // Subsequent Get calls will load nodes from the database.
-func (e *ExtendedTrie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
+func (e *ExtendedTrie) Commit(commitNum, distinctNum uint32) (root thor.Bytes32, err error) {
 	t := &e.trie
 	if t.db == nil {
 		panic("Commit called on trie with nil database")
 	}
-	return e.CommitTo(t.db, commitNum)
+	return e.CommitTo(t.db, commitNum, distinctNum)
 }
 
 // CommitTo writes all nodes with the given commit number to the given database.
@@ -163,9 +171,9 @@ func (e *ExtendedTrie) Commit(commitNum uint32) (root thor.Bytes32, err error) {
 // load nodes from the trie's database. Calling code must ensure that
 // the changes made to db are written back to the trie's attached
 // database before using the trie.
-func (e *ExtendedTrie) CommitTo(db DatabaseWriter, commitNum uint32) (root thor.Bytes32, err error) {
+func (e *ExtendedTrie) CommitTo(db DatabaseWriter, commitNum, distinctNum uint32) (root thor.Bytes32, err error) {
 	t := &e.trie
-	hash, cached, err := e.hashRoot(db, commitNum)
+	hash, cached, err := e.hashRoot(db, commitNum, distinctNum)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -173,12 +181,12 @@ func (e *ExtendedTrie) CommitTo(db DatabaseWriter, commitNum uint32) (root thor.
 	return thor.BytesToBytes32(hash.(*hashNode).hash), nil
 }
 
-func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum uint32) (node, node, error) {
+func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum, distinctNum uint32) (node, node, error) {
 	t := &e.trie
 	if t.root == nil {
 		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
 	}
-	h := newHasher(e.cachedNodeTTL)
+	h := newHasherExtended(commitNum, distinctNum, e.cachedNodeTTL)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, nil, true, &commitNum)
+	return h.hash(t.root, db, nil, true)
 }

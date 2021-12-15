@@ -91,6 +91,9 @@ type NodeIterator interface {
 	// CommitNum returns the commit number of the current node.
 	CommitNum() uint32
 
+	// DistinctNum returns the distinct number of the current node.
+	DistinctNum() uint32
+
 	// Parent returns the hash of the parent of the current node. The hash may be the one
 	// grandparent if the immediate parent is an internal node with no hash.
 	Parent() thor.Bytes32
@@ -126,11 +129,11 @@ type nodeIteratorState struct {
 }
 
 type nodeIterator struct {
-	trie         *Trie                // Trie being iterated
-	stack        []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
-	path         []byte               // Path to the current node
-	err          error                // Failure set in case of an internal error in the iterator
-	minCommitNum uint32               // The minimum commit number of returned nodes.
+	trie          *Trie                // Trie being iterated
+	stack         []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+	path          []byte               // Path to the current node
+	err           error                // Failure set in case of an internal error in the iterator
+	baseCommitNum uint32               // The minimum commit number of returned nodes.
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -146,11 +149,11 @@ func (e seekError) Error() string {
 	return "seek error: " + e.err.Error()
 }
 
-func newNodeIterator(trie *Trie, start []byte, minCommitNum uint32) NodeIterator {
+func newNodeIterator(trie *Trie, start []byte, baseCommitNum uint32) NodeIterator {
 	if trie.Hash() == emptyState {
 		return new(nodeIterator)
 	}
-	it := &nodeIterator{trie: trie, minCommitNum: minCommitNum}
+	it := &nodeIterator{trie: trie, baseCommitNum: baseCommitNum}
 	it.err = it.seek(start)
 	return it
 }
@@ -174,10 +177,10 @@ func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) err
 		return handler(st.blob)
 	}
 
-	h := newHasher(0)
+	h := newHasher()
 	defer returnHasherToPool(h)
 
-	collapsed, _, _ := h.hashChildren(st.node, nil, it.path, nil)
+	collapsed, _, _ := h.hashChildren(st.node, nil, it.path)
 
 	h.tmp.Reset()
 	_ = rlp.Encode(&h.tmp, collapsed)
@@ -194,6 +197,17 @@ func (it *nodeIterator) CommitNum() uint32 {
 	n := it.stack[len(it.stack)-1].node
 	if n != nil {
 		return n.commitNum()
+	}
+	return 0
+}
+
+func (it *nodeIterator) DistinctNum() uint32 {
+	if len(it.stack) == 0 {
+		return 0
+	}
+	n := it.stack[len(it.stack)-1].node
+	if n != nil {
+		return n.distinctNum()
 	}
 	return 0
 }
@@ -226,15 +240,15 @@ func (it *nodeIterator) LeafKey() []byte {
 func (it *nodeIterator) LeafProof() [][]byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
-			hasher := newHasher(0)
+			hasher := newHasher()
 			defer returnHasherToPool(hasher)
 
 			proofs := make([][]byte, 0, len(it.stack))
 
 			for i, item := range it.stack[:len(it.stack)-1] {
 				// Gather nodes that end up as hash nodes (or the root)
-				node, _, _ := hasher.hashChildren(item.node, nil, nil, nil)
-				hashed, _ := hasher.store(node, nil, nil, false, nil)
+				node, _, _ := hasher.hashChildren(item.node, nil, nil)
+				hashed, _ := hasher.store(node, nil, nil, false)
 				if _, ok := hashed.(*hashNode); ok || i == 0 {
 					enc, _ := rlp.EncodeToBytes(node)
 					proofs = append(proofs, enc)
@@ -305,7 +319,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, error) {
 	if len(it.stack) == 0 {
 		if n := it.trie.root; n != nil {
-			if n.commitNum() < it.minCommitNum {
+			if n.commitNum() < it.baseCommitNum {
 				return nil, nil, nil, errIteratorEnd
 			}
 		}
@@ -365,7 +379,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			if child != nil {
 				hash, _ := child.cache()
 				if _, ok := child.(*hashNode); ok || hash != nil {
-					if child.commitNum() < it.minCommitNum {
+					if child.commitNum() < it.baseCommitNum {
 						continue
 					}
 				}
@@ -390,7 +404,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			hash, _ := node.Val.cache()
 
 			if _, ok := node.Val.(*hashNode); ok || hash != nil {
-				if node.Val.commitNum() < it.minCommitNum {
+				if node.Val.commitNum() < it.baseCommitNum {
 					break
 				}
 			}
@@ -475,6 +489,10 @@ func (it *differenceIterator) Node(extended bool, handler func(blob []byte) erro
 
 func (it *differenceIterator) CommitNum() uint32 {
 	return it.b.CommitNum()
+}
+
+func (it *differenceIterator) DistinctNum() uint32 {
+	return it.b.DistinctNum()
 }
 
 func (it *differenceIterator) Parent() thor.Bytes32 {
@@ -586,6 +604,10 @@ func (it *unionIterator) Node(extended bool, handler func(blob []byte) error) er
 
 func (it *unionIterator) CommitNum() uint32 {
 	return (*it.items)[0].CommitNum()
+}
+
+func (it *unionIterator) DistinctNum() uint32 {
+	return (*it.items)[0].DistinctNum()
 }
 
 func (it *unionIterator) Parent() thor.Bytes32 {

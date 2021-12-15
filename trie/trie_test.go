@@ -612,7 +612,7 @@ func deleteString(trie *Trie, k string) {
 
 func TestExtended(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, db)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db)
 
 	vals1 := []struct{ k, v string }{
 		{"do", "verb"},
@@ -645,7 +645,7 @@ func TestExtended(t *testing.T) {
 		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
 	}
 
-	root1, err := tr.Commit(1)
+	root1, err := tr.Commit(1, 0)
 	if err != nil {
 		t.Errorf("commit failed %v", err)
 	}
@@ -653,12 +653,12 @@ func TestExtended(t *testing.T) {
 	for _, v := range vals2 {
 		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
 	}
-	root2, err := tr.Commit(2)
+	root2, err := tr.Commit(2, 0)
 	if err != nil {
 		t.Errorf("commit failed %v", err)
 	}
 
-	tr1, _ := NewExtended(root1, 1, db)
+	tr1, _ := NewExtended(root1, 1, 0, db)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -672,7 +672,7 @@ func TestExtended(t *testing.T) {
 		}
 	}
 
-	tr2, _ := NewExtended(root2, 2, db)
+	tr2, _ := NewExtended(root2, 2, 0, db)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -689,7 +689,7 @@ func TestExtended(t *testing.T) {
 
 func TestExtendedCached(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, db)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db)
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},

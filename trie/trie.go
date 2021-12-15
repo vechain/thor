@@ -56,7 +56,7 @@ type DatabaseWriter interface {
 // If the database implements this interface, everytime before save the node, Encode is called and its
 // return-value will be the saving key instead of node hash.
 type DatabaseKeyEncoder interface {
-	Encode(hash []byte, commitNum uint32, path []byte) []byte
+	Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte
 }
 
 // Trie is a Merkle Patricia Trie.
@@ -86,7 +86,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		rootnode, _, err := trie.resolveHash(&hashNode{root[:], 0}, nil)
+		rootnode, _, err := trie.resolveHash(&hashNode{root[:], 0, 0}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -423,7 +423,7 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node, []byte, error) {
 	key := n.hash
 	if ke, ok := t.db.(DatabaseKeyEncoder); ok {
-		key = ke.Encode(n.hash, n.cNum, prefix)
+		key = ke.Encode(n.hash, n.cNum, n.dNum, prefix)
 	}
 	buf, err := t.db.Get(key)
 	if err != nil || len(buf) == 0 {
@@ -476,7 +476,7 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
 		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
 	}
-	h := newHasher(0)
+	h := newHasher()
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, nil, true, nil)
+	return h.hash(t.root, db, nil, true)
 }
