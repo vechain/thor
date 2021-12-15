@@ -59,7 +59,7 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 }
 
 // Lookup lookups a leaf from the trie named name by the given leafKey.
-// The returned leaf might be nil if no leaf recorded yet.
+// The returned leaf might be nil if no leaf recorded yet, or later touched.
 // The commitNum indicates up to which commit number the leaf is valid.
 func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
 	// get slot from slots cache or create a new one.
@@ -93,6 +93,10 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		// return empty leaf with max commit number.
 		return &trie.Leaf{}, atomic.LoadUint32(&slot.maxCommitNum), nil
 	} else {
+		// touched
+		if len(data) == 0 {
+			return nil, 0, nil
+		}
 		var sLeaf storageLeaf
 		if err := rlp.DecodeBytes(data, &sLeaf); err != nil {
 			return nil, 0, err
@@ -102,16 +106,28 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 	}
 }
 
+// TouchLeaves marks leaves to touched-state.
+func (b *LeafBank) TouchLeaves(name string, keys [][]byte, putter kv.Putter) error {
+	putter = kv.Bucket(name).NewPutter(putter)
+	for _, key := range keys {
+		if err := putter.Put(key, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewUpdater creates the leaf updater for a trie with the given name.
 func (b *LeafBank) NewUpdater(name string, rootCommitNum uint32) *LeafUpdater {
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
 	}
-
+	bulk := kv.Bucket(name).NewStore(b.store).Bulk()
+	bulk.EnableAutoFlush()
 	return &LeafUpdater{
 		slot:          slot,
-		bulk:          kv.Bucket(name).NewStore(b.store).Bulk(),
+		bulk:          bulk,
 		rootCommitNum: rootCommitNum,
 	}
 }
@@ -146,7 +162,7 @@ func (u *LeafUpdater) Commit() error {
 	if err := u.bulk.Put(nil, appendUint32(nil, u.rootCommitNum)); err != nil {
 		return err
 	}
-	if err := u.bulk.Flush(); err != nil {
+	if err := u.bulk.Write(); err != nil {
 		return err
 	}
 	if u.slot != nil {

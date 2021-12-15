@@ -13,7 +13,6 @@ import (
 
 	"github.com/coocood/freecache"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
 )
 
@@ -54,37 +53,37 @@ func (c *Cache) log() {
 }
 
 // AddNodeBlob adds node blob into the cache.
-func (c *Cache) AddNodeBlob(name string, hash []byte, commitNum uint32, path []byte, blob []byte, isCommitting bool) {
+func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []byte, blob []byte, isCommitting bool) {
 	if c == nil {
 		return
 	}
 	k := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(k)
-	if isCommitting {
-		// committing cache key: concat name with path as cache key
-		k.buf = append(k.buf[:0], name...)
-		k.buf = append(k.buf, path...)
 
+	k.buf = append(k.buf[:0], name...)
+	k.buf = append(k.buf, path...)
+
+	if isCommitting {
+		// committing cache key: name + path
 		v := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(v)
 
-		// concat commit number with blob as cache value
+		// concat commit & distinct number with blob as cache value
 		v.buf = appendUint32(v.buf[:0], commitNum)
+		v.buf = appendUint32(v.buf, distinctNum)
 		v.buf = append(v.buf, blob...)
 
 		_ = c.committedNodes.Set(k.buf, v.buf, 0)
 	} else {
-		// query cache key: take the hash of all node key info as query cache key
-		k.buf = append(k.buf[:0], name...)
-		k.buf = append(k.buf, hash...)
+		// querying cache key: name + path + commitNum + distinctNum
 		k.buf = appendUint32(k.buf, commitNum)
-		k.buf = append(k.buf, path...)
-		_ = c.queriedNodes.Set(k.Hash(k.buf), blob, 0)
+		k.buf = appendUint32(k.buf, distinctNum)
+		_ = c.queriedNodes.Set(k.buf, blob, 0)
 	}
 }
 
 // GetNodeBlob returns the cached node blob.
-func (c *Cache) GetNodeBlob(name string, hash []byte, commitNum uint32, path []byte, peek bool) []byte {
+func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []byte, peek bool) []byte {
 	if c == nil {
 		return nil
 	}
@@ -99,28 +98,23 @@ func (c *Cache) GetNodeBlob(name string, hash []byte, commitNum uint32, path []b
 	k := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(k)
 
-	// committing cache key: concat name with path as cache key
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
 
+	// lookup from committing cache
 	if val, _ := lookupCommitted(k.buf); len(val) > 0 {
-		// compare the commit number
-		if binary.BigEndian.Uint32(val) == commitNum {
-			// then verify hash
-			if ok, _ := verifyNodeHash(val[4:], hash); ok {
-				if !peek {
-					c.nodeStats.Hit()
-				}
-				return val[4:]
+		if binary.BigEndian.Uint64(val) == (uint64(commitNum)<<32)|uint64(distinctNum) {
+			if !peek {
+				c.nodeStats.Hit()
 			}
+			return val[8:]
 		}
 	}
 
-	// query cache key: take the hash of all node key info as query cache key
-	k.buf = append(k.buf[:len(name)], hash...)
+	// fallback to querying cache
 	k.buf = appendUint32(k.buf, commitNum)
-	k.buf = append(k.buf, path...)
-	if val, _ := lookupQueried(k.Hash(k.buf)); len(val) > 0 {
+	k.buf = appendUint32(k.buf, distinctNum)
+	if val, _ := lookupQueried(k.buf); len(val) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}
@@ -130,11 +124,6 @@ func (c *Cache) GetNodeBlob(name string, hash []byte, commitNum uint32, path []b
 		c.nodeStats.Miss()
 	}
 	return nil
-}
-
-type rootNodeKey struct {
-	root      thor.Bytes32
-	commitNum uint32
 }
 
 // AddRootNode add the root node into the cache.
@@ -152,12 +141,13 @@ func (c *Cache) AddRootNode(name string, n *trie.Node) bool {
 		sub, _ = lru.New(4)
 		c.roots.Add(name, sub)
 	}
-	sub.Add(rootNodeKey{n.Hash(), n.CommitNum()}, n)
+	key := (uint64(n.CommitNum()) << 32) | uint64(n.DistinctNum())
+	sub.Add(key, n)
 	return true
 }
 
 // GetRootNode returns the cached root node.
-func (c *Cache) GetRootNode(name string, root thor.Bytes32, commitNum uint32, peek bool) *trie.Node {
+func (c *Cache) GetRootNode(name string, commitNum, distinctNum uint32, peek bool) *trie.Node {
 	if c == nil {
 		return nil
 	}
@@ -172,7 +162,8 @@ func (c *Cache) GetRootNode(name string, root thor.Bytes32, commitNum uint32, pe
 		if peek {
 			getByKey = sub.(*lru.Cache).Peek
 		}
-		if cached, has := getByKey(rootNodeKey{root, commitNum}); has {
+		key := (uint64(commitNum) << 32) | uint64(distinctNum)
+		if cached, has := getByKey(key); has {
 			if !peek {
 				if c.rootStats.Hit()%2000 == 0 {
 					c.log()
