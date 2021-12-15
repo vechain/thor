@@ -6,9 +6,11 @@
 package chain
 
 import (
+	"encoding/binary"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/kv"
@@ -79,11 +81,11 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 			return nil, err
 		}
 
-		indexRoot, err := repo.indexBlock(thor.Bytes32{}, genesis)
+		indexRoot, err := repo.indexBlock(thor.Bytes32{}, 0, genesis, 0)
 		if err != nil {
 			return nil, err
 		}
-		if summary, err := repo.saveBlock(genesis, nil, indexRoot, 0); err != nil {
+		if summary, err := repo.saveBlock(genesis, nil, indexRoot, 0, 0); err != nil {
 			return nil, err
 		} else if err := repo.setBestBlockSummary(summary); err != nil {
 			return nil, err
@@ -175,12 +177,12 @@ func (r *Repository) SetSteadyBlockID(id thor.Bytes32) error {
 	return nil
 }
 
-func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32, steadyNum uint32) (*BlockSummary, error) {
+func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRoot thor.Bytes32, conflicts, steadyNum uint32) (*BlockSummary, error) {
 	var (
 		header      = block.Header()
 		id          = header.ID()
 		txs         = block.Transactions()
-		summary     = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), steadyNum}
+		summary     = BlockSummary{header, indexRoot, []thor.Bytes32{}, uint64(block.Size()), conflicts, steadyNum}
 		bulk        = r.db.NewStore("").Bulk()
 		indexPutter = kv.Bucket(txIndexStoreName).NewPutter(bulk)
 		dataPutter  = kv.Bucket(dataStoreName).NewPutter(bulk)
@@ -230,11 +232,11 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, indexRo
 		return nil, err
 	}
 	r.caches.summaries.Add(id, &summary)
-	return &summary, bulk.Flush()
+	return &summary, bulk.Write()
 }
 
 // AddBlock add a new block with its receipts into repository.
-func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error {
+func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts, conflicts uint32) error {
 	parentSummary, err := r.GetBlockSummary(newBlock.Header().ParentID())
 	if err != nil {
 		if r.IsNotFound(err) {
@@ -242,7 +244,7 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 		}
 		return err
 	}
-	indexRoot, err := r.indexBlock(parentSummary.IndexRoot, newBlock)
+	indexRoot, err := r.indexBlock(parentSummary.IndexRoot, parentSummary.Conflicts, newBlock, conflicts)
 	if err != nil {
 		return err
 	}
@@ -257,10 +259,27 @@ func (r *Repository) AddBlock(newBlock *block.Block, receipts tx.Receipts) error
 		}
 	}
 
-	if _, err := r.saveBlock(newBlock, receipts, indexRoot, steadyNum); err != nil {
+	if _, err := r.saveBlock(newBlock, receipts, indexRoot, conflicts, steadyNum); err != nil {
 		return err
 	}
 	return nil
+}
+
+// ScanConflicts returns the count of saved blocks with the given blockNum.
+func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
+	var prefix [4]byte
+	binary.BigEndian.PutUint32(prefix[:], blockNum)
+
+	iter := r.data.Iterate(kv.Range(*util.BytesPrefix(prefix[:])))
+	defer iter.Release()
+
+	count := uint32(0)
+	for iter.Next() {
+		if len(iter.Key()) == 32 {
+			count++
+		}
+	}
+	return count, iter.Error()
 }
 
 // GetBlockSummary get block summary by block id.

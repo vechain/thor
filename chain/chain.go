@@ -62,7 +62,7 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 			if indexTrie == nil && initErr == nil {
 				var summary *BlockSummary
 				if summary, initErr = repo.GetBlockSummary(headID); initErr == nil {
-					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot, summary.Header.Number())
+					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot, summary.Header.Number(), summary.Conflicts)
 				}
 			}
 			return indexTrie, initErr
@@ -293,11 +293,11 @@ func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
 	return newChain(r, headID)
 }
 
-func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, newBlock *block.Block) (thor.Bytes32, error) {
+func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, parentConflicts uint32, newBlock *block.Block, newConflicts uint32) (thor.Bytes32, error) {
 	var (
-		newNum = newBlock.Header().Number()
 		newID  = newBlock.Header().ID()
-		trie   = r.db.NewTrie(IndexTrieName, parentIndexRoot, newNum-1)
+		newNum = newBlock.Header().Number()
+		trie   = r.db.NewTrie(IndexTrieName, parentIndexRoot, newNum-1, parentConflicts)
 	)
 
 	// map block number to block ID
@@ -305,5 +305,5 @@ func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, newBlock *block.Bl
 		return thor.Bytes32{}, err
 	}
 
-	return trie.Commit(newNum)
+	return trie.Commit(newNum, newConflicts)
 }

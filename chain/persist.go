@@ -26,6 +26,7 @@ type BlockSummary struct {
 	IndexRoot thor.Bytes32
 	Txs       []thor.Bytes32
 	Size      uint64
+	Conflicts uint32
 	SteadyNum uint32
 }
 
