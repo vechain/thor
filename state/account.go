@@ -17,41 +17,42 @@ import (
 // AccountMetadata helps encode/decode account metadata.
 type AccountMetadata []byte
 
-// NewAccountMetadata builds the account metadata. addr is optional.
-func NewAccountMetadata(storageCommitNum, storageInitCommitNum uint32, addr *thor.Address) AccountMetadata {
-	var buf []byte
-	if addr != nil {
-		buf = make([]byte, 28)
-		copy(buf[8:], addr[:])
-	} else {
-		buf = make([]byte, 8)
-	}
-	binary.BigEndian.PutUint32(buf, storageCommitNum)
-	binary.BigEndian.PutUint32(buf[4:], storageInitCommitNum)
+// NewAccountMetadata builds the account metadata.
+func NewAccountMetadata(storageInitCommitNum, storageCommitNum, storageDistinctNum uint32, addr thor.Address) AccountMetadata {
+	buf := make([]byte, 32)
+	binary.BigEndian.PutUint32(buf, storageInitCommitNum)
+	binary.BigEndian.PutUint32(buf[4:], storageCommitNum)
+	binary.BigEndian.PutUint32(buf[8:], storageDistinctNum)
+	copy(buf[12:], addr[:])
 	return buf
-}
-
-// StorageCommitNum returns the storage commit number.
-func (m AccountMetadata) StorageCommitNum() uint32 {
-	return binary.BigEndian.Uint32(m)
 }
 
 // StorageInitCommitNum returns the initial storage commit number.
 func (m AccountMetadata) StorageInitCommitNum() uint32 {
+	return binary.BigEndian.Uint32(m)
+}
+
+// StorageCommitNum returns the commit number of the last storage update.
+func (m AccountMetadata) StorageCommitNum() uint32 {
 	return binary.BigEndian.Uint32(m[4:])
+}
+
+// StorageDistinctNum returns the distinct number of the last storage update.
+func (m AccountMetadata) StorageDistinctNum() uint32 {
+	return binary.BigEndian.Uint32(m[8:])
 }
 
 // Address returns the account address.
 func (m AccountMetadata) Address() (thor.Address, bool) {
-	if len(m) == 8 {
+	if len(m) != 32 {
 		return thor.Address{}, false
 	}
-	return thor.BytesToAddress(m[8:28]), true
+	return thor.BytesToAddress(m[12:32]), true
 }
 
 // SkipAddress returns the account metadata without address.
 func (m AccountMetadata) SkipAddress() AccountMetadata {
-	return m[:8]
+	return m[:12]
 }
 
 // Account is the Thor consensus representation of an account.
@@ -64,7 +65,7 @@ type Account struct {
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 
-	storageCommitNum, storageInitCommitNum uint32
+	storageInitCommitNum, storageCommitNum, storageDistinctNum uint32
 }
 
 // IsEmpty returns if an account is empty.
@@ -106,8 +107,8 @@ func emptyAccount() *Account {
 
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyCommitNum uint32) (*Account, error) {
-	data, meta, err := trie.FastGet(addr[:], steadyCommitNum)
+func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, error) {
+	data, meta, err := trie.FastGet(addr[:], steadyBlockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,9 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyCommitNum uint32) (*
 		return nil, err
 	}
 	am := AccountMetadata(meta)
-	a.storageCommitNum, a.storageInitCommitNum = am.StorageCommitNum(), am.StorageInitCommitNum()
+	a.storageInitCommitNum = am.StorageInitCommitNum()
+	a.storageCommitNum = am.StorageCommitNum()
+	a.storageDistinctNum = am.StorageDistinctNum()
 	return &a, nil
 }
 
@@ -136,13 +139,13 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 		return err
 	}
 
-	am := NewAccountMetadata(a.storageCommitNum, a.storageInitCommitNum, &addr)
+	am := NewAccountMetadata(a.storageInitCommitNum, a.storageCommitNum, a.storageDistinctNum, addr)
 	return trie.Update(addr[:], data, am)
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyCommitNum uint32) (rlp.RawValue, error) {
-	v, _, err := trie.FastGet(key[:], steadyCommitNum)
+func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
+	v, _, err := trie.FastGet(key[:], steadyBlockNum)
 	return v, err
 }
 

@@ -12,11 +12,12 @@ import (
 
 // Stage abstracts changes on the main accounts trie.
 type Stage struct {
-	db           *muxdb.MuxDB
-	trie         *muxdb.Trie
-	storageTries []*muxdb.Trie
-	codes        map[thor.Bytes32][]byte
-	newCommitNum uint32
+	db                *muxdb.MuxDB
+	trie              *muxdb.Trie
+	storageTries      []*muxdb.Trie
+	codes             map[thor.Bytes32][]byte
+	newBlockNum       uint32
+	newBlockConflicts uint32
 }
 
 // Hash computes hash of the main accounts trie.
@@ -32,23 +33,25 @@ func (s *Stage) Commit() (root thor.Bytes32, err error) {
 		}
 	}()
 	// write codes
-	codeBulk := s.db.NewStore(codeStoreName).Bulk()
-	for hash, code := range s.codes {
-		if err = codeBulk.Put(hash[:], code); err != nil {
+	if len(s.codes) > 0 {
+		codeBulk := s.db.NewStore(codeStoreName).Bulk()
+		for hash, code := range s.codes {
+			if err = codeBulk.Put(hash[:], code); err != nil {
+				return
+			}
+		}
+		if err = codeBulk.Write(); err != nil {
 			return
 		}
-	}
-	if err = codeBulk.Flush(); err != nil {
-		return
 	}
 
 	// commit storage tries
 	for _, t := range s.storageTries {
-		if _, err = t.Commit(s.newCommitNum); err != nil {
+		if _, err = t.Commit(s.newBlockNum, s.newBlockConflicts); err != nil {
 			return
 		}
 	}
 
 	// commit accounts trie
-	return s.trie.Commit(s.newCommitNum)
+	return s.trie.Commit(s.newBlockNum, s.newBlockConflicts)
 }

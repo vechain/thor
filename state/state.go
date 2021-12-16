@@ -46,20 +46,20 @@ func (e *Error) Error() string {
 
 // State manages the world state.
 type State struct {
-	db              *muxdb.MuxDB
-	trie            *muxdb.Trie                    // the accounts trie reader
-	cache           map[thor.Address]*cachedObject // cache of accounts trie
-	sm              *stackedmap.StackedMap         // keeps revisions of accounts state
-	steadyCommitNum uint32
+	db             *muxdb.MuxDB
+	trie           *muxdb.Trie                    // the accounts trie reader
+	cache          map[thor.Address]*cachedObject // cache of accounts trie
+	sm             *stackedmap.StackedMap         // keeps revisions of accounts state
+	steadyBlockNum uint32
 }
 
 // New create state object.
-func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum, steadyCommitNum uint32) *State {
+func New(db *muxdb.MuxDB, root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
 	state := State{
-		db:              db,
-		trie:            db.NewSecureTrie(AccountTrieName, root, commitNum),
-		cache:           make(map[thor.Address]*cachedObject),
-		steadyCommitNum: steadyCommitNum,
+		db:             db,
+		trie:           db.NewSecureTrie(AccountTrieName, root, blockNum, blockConflicts),
+		cache:          make(map[thor.Address]*cachedObject),
+		steadyBlockNum: steadyBlockNum,
 	}
 
 	state.sm = stackedmap.New(func(key interface{}) (interface{}, bool, error) {
@@ -69,8 +69,8 @@ func New(db *muxdb.MuxDB, root thor.Bytes32, commitNum, steadyCommitNum uint32) 
 }
 
 // Checkout checkouts to another state.
-func (s *State) Checkout(root thor.Bytes32, commitNum, steadyCommitNum uint32) *State {
-	return New(s.db, root, commitNum, steadyCommitNum)
+func (s *State) Checkout(root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
+	return New(s.db, root, blockNum, blockConflicts, steadyBlockNum)
 }
 
 // cacheGetter implements stackedmap.MapGetter.
@@ -103,7 +103,7 @@ func (s *State) cacheGetter(key interface{}) (value interface{}, exist bool, err
 		if err != nil {
 			return nil, false, err
 		}
-		v, err := obj.GetStorage(k.key, s.steadyCommitNum)
+		v, err := obj.GetStorage(k.key, s.steadyBlockNum)
 		if err != nil {
 			return nil, false, err
 		}
@@ -118,7 +118,7 @@ func (s *State) getCachedObject(addr thor.Address) (*cachedObject, error) {
 	if co, ok := s.cache[addr]; ok {
 		return co, nil
 	}
-	a, err := loadAccount(s.trie, addr, s.steadyCommitNum)
+	a, err := loadAccount(s.trie, addr, s.steadyBlockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,11 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
-	trie := s.db.NewSecureTrie(StorageTrieName(addr, acc.storageInitCommitNum), root, acc.storageCommitNum)
+	trie := s.db.NewSecureTrie(
+		StorageTrieName(addr, acc.storageInitCommitNum),
+		root,
+		acc.storageCommitNum,
+		acc.storageDistinctNum)
 
 	barrier := s.getStorageBarrier(addr)
 
@@ -392,7 +396,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 }
 
 // Stage makes a stage object to compute hash of trie or commit all changes.
-func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
+func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 	type changed struct {
 		data            Account
 		storage         map[thor.Bytes32]rlp.RawValue
@@ -457,10 +461,11 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 	}
 
 	stage := &Stage{
-		db:           s.db,
-		trie:         s.trie.Copy(),
-		codes:        codes,
-		newCommitNum: newCommitNum,
+		db:                s.db,
+		trie:              s.trie.Copy(),
+		codes:             codes,
+		newBlockNum:       newBlockNum,
+		newBlockConflicts: newBlockConflicts,
 	}
 
 	for addr, c := range changes {
@@ -470,7 +475,7 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 				var sTrie *muxdb.Trie
 				if len(c.data.StorageRoot) == 0 {
 					// storage was empty or destructed
-					c.data.storageInitCommitNum = newCommitNum
+					c.data.storageInitCommitNum = newBlockNum
 				}
 				if len(c.data.StorageRoot) > 0 && c.baseStorageTrie != nil {
 					sTrie = c.baseStorageTrie.Copy()
@@ -478,7 +483,8 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 					sTrie = s.db.NewSecureTrie(
 						StorageTrieName(addr, c.data.storageInitCommitNum),
 						thor.BytesToBytes32(c.data.StorageRoot),
-						c.data.storageCommitNum)
+						c.data.storageCommitNum,
+						c.data.storageDistinctNum)
 				}
 				for k, v := range c.storage {
 					if err := saveStorage(sTrie, k, v); err != nil {
@@ -486,7 +492,8 @@ func (s *State) Stage(newCommitNum uint32) (*Stage, error) {
 					}
 				}
 				c.data.StorageRoot = sTrie.Hash().Bytes()
-				c.data.storageCommitNum = newCommitNum
+				c.data.storageCommitNum = newBlockNum
+				c.data.storageDistinctNum = newBlockConflicts
 				stage.storageTries = append(stage.storageTries, sTrie)
 			}
 		}

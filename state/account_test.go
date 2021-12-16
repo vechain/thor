@@ -38,12 +38,9 @@ func TestAccount(t *testing.T) {
 	assert.True(t, acc.IsEmpty())
 }
 
-func newTrie() *muxdb.Trie {
-	return muxdb.NewMem().NewSecureTrie("", thor.Bytes32{}, 0)
-}
 func TestTrie(t *testing.T) {
 	db := muxdb.NewMem()
-	trie := db.NewSecureTrie("", thor.Bytes32{}, 0)
+	trie := db.NewSecureTrie("", thor.Bytes32{}, 0, 0)
 
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
@@ -58,7 +55,7 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
-		0, 0,
+		0, 0, 0,
 	}
 	saveAccount(trie, addr, &acc1)
 	assert.Equal(t,
@@ -74,7 +71,7 @@ func TestTrie(t *testing.T) {
 
 func TestStorageTrie(t *testing.T) {
 	db := muxdb.NewMem()
-	trie := db.NewSecureTrie("", thor.Bytes32{}, 0)
+	trie := db.NewSecureTrie("", thor.Bytes32{}, 0, 0)
 
 	key := thor.BytesToBytes32([]byte("key"))
 	assert.Equal(t,

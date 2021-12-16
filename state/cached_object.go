@@ -39,14 +39,15 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 	trie := co.db.NewSecureTrie(
 		StorageTrieName(co.addr, co.data.storageInitCommitNum),
 		thor.BytesToBytes32(co.data.StorageRoot),
-		co.data.storageCommitNum)
+		co.data.storageCommitNum,
+		co.data.storageDistinctNum)
 
 	co.cache.storageTrie = trie
 	return trie
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Bytes32, steadyCommitNum uint32) (rlp.RawValue, error) {
+func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage != nil {
@@ -61,7 +62,7 @@ func (co *cachedObject) GetStorage(key thor.Bytes32, steadyCommitNum uint32) (rl
 	trie := co.getOrCreateStorageTrie()
 
 	// load from trie
-	v, err := loadStorage(trie, key, steadyCommitNum)
+	v, err := loadStorage(trie, key, steadyBlockNum)
 	if err != nil {
 		return nil, err
 	}
