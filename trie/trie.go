@@ -52,6 +52,14 @@ type DatabaseWriter interface {
 	Put(key, value []byte) error
 }
 
+// DatabaseReaderTo wraps the GetTo method of backing store for the trie.
+// The purpose of this interface is to reuse read buffer and avoid allocs.
+// If the database implements this interface, DatabaseReader.Get will not be called when resolving nodes.
+type DatabaseReaderTo interface {
+	// GetTo gets value for the given key and append to dst.
+	GetTo(key, dst []byte) (value []byte, err error)
+}
+
 // DatabaseKeyEncoder defines the method how to produce database key.
 // If the database implements this interface, everytime before save the node, Encode is called and its
 // return-value will be the saving key instead of node hash.
@@ -86,7 +94,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		rootnode, _, err := trie.resolveHash(&hashNode{root[:], 0, 0}, nil)
+		rootnode, err := trie.resolveHash(&hashNode{root[:], 0, 0}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +132,7 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 		t.root = newroot
 	}
 	if value != nil {
-		return value.value, nil
+		return value.Value, nil
 	}
 	return nil, nil
 }
@@ -154,7 +162,7 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value *valueNode, new
 		}
 		return value, n, didResolve, err
 	case *hashNode:
-		child, _, err := t.resolveHash(n, key[:pos])
+		child, err := t.resolveHash(n, key[:pos])
 		if err != nil {
 			return nil, n, true, err
 		}
@@ -188,7 +196,7 @@ func (t *Trie) Update(key, value []byte) {
 func (t *Trie) TryUpdate(key, value []byte) error {
 	k := keybytesToHex(key)
 	if len(value) != 0 {
-		_, n, err := t.insert(t.root, nil, k, &valueNode{value: value})
+		_, n, err := t.insert(t.root, nil, k, &valueNode{Value: value})
 		if err != nil {
 			return err
 		}
@@ -208,7 +216,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if v, ok := n.(*valueNode); ok {
 			_v := value.(*valueNode)
 			// dirty when value or meta is not equal
-			return !bytes.Equal(v.value, _v.value) || !bytes.Equal(v.meta, _v.meta), value, nil
+			return !bytes.Equal(v.Value, _v.Value) || !bytes.Equal(v.meta, _v.meta), value, nil
 		}
 		return true, value, nil
 	}
@@ -259,7 +267,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, _, err := t.resolveHash(n, prefix)
+		rn, err := t.resolveHash(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -390,7 +398,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
 		// the path to the value in the trie.
-		rn, _, err := t.resolveHash(n, prefix)
+		rn, err := t.resolveHash(n, prefix)
 		if err != nil {
 			return false, nil, err
 		}
@@ -414,22 +422,35 @@ func concat(s1 []byte, s2 ...byte) []byte {
 
 func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 	if n, ok := n.(*hashNode); ok {
-		node, _, err := t.resolveHash(n, prefix)
+		node, err := t.resolveHash(n, prefix)
 		return node, err
 	}
 	return n, nil
 }
 
-func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node, []byte, error) {
-	key := n.hash
+func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node node, err error) {
+	key := n.Hash
 	if ke, ok := t.db.(DatabaseKeyEncoder); ok {
-		key = ke.Encode(n.hash, n.cNum, n.dNum, prefix)
+		key = ke.Encode(n.Hash, n.cNum, n.dNum, prefix)
 	}
-	buf, err := t.db.Get(key)
-	if err != nil || len(buf) == 0 {
-		return nil, nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
+
+	var blob []byte
+	if r, ok := t.db.(DatabaseReaderTo); ok {
+		h := newHasher()
+		defer returnHasherToPool(h)
+		if blob, err = r.GetTo(key, h.tmp[:0]); err != nil {
+			return nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
+		}
+		h.tmp = blob
+	} else {
+		if blob, err = t.db.Get(key); err != nil {
+			return nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
+		}
 	}
-	return mustDecodeNode(n, buf), buf, nil
+	if len(blob) == 0 {
+		return nil, &MissingNodeError{NodeHash: n, Path: prefix}
+	}
+	return mustDecodeNode(n, blob), nil
 }
 
 // Root returns the root hash of the trie.
@@ -441,7 +462,7 @@ func (t *Trie) Root() []byte { return t.Hash().Bytes() }
 func (t *Trie) Hash() thor.Bytes32 {
 	hash, cached, _ := t.hashRoot(nil)
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).hash)
+	return thor.BytesToBytes32(hash.(*hashNode).Hash)
 }
 
 // Commit writes all nodes to the trie's database.
@@ -469,12 +490,12 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
 		return (thor.Bytes32{}), err
 	}
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).hash), nil
+	return thor.BytesToBytes32(hash.(*hashNode).Hash), nil
 }
 
 func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
-		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
+		return &hashNode{Hash: emptyRoot.Bytes()}, nil, nil
 	}
 	h := newHasher()
 	defer returnHasherToPool(h)

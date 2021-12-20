@@ -46,12 +46,12 @@ type (
 		flags nodeFlag
 	}
 	hashNode struct {
-		hash []byte
+		Hash []byte
 		cNum uint32 // the commit number
 		dNum uint32 // the number to distinguish commits with the same commit number
 	}
 	valueNode struct {
-		value []byte
+		Value []byte
 		meta  []byte // metadata of the value
 	}
 )
@@ -63,12 +63,12 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 
 // EncodeRLP encodes a hash node into the consensus RLP format.
 func (n *hashNode) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, n.hash)
+	return rlp.Encode(w, n.Hash)
 }
 
 // EncodeRLP encodes a value node into the consensus RLP format.
 func (n *valueNode) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, n.value)
+	return rlp.Encode(w, n.Value)
 }
 
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
@@ -140,10 +140,10 @@ func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
 func (n *hashNode) fstring(ind string) string {
-	return fmt.Sprintf("<%x> ", n.hash)
+	return fmt.Sprintf("<%x> ", n.Hash)
 }
 func (n *valueNode) fstring(ind string) string {
-	return fmt.Sprintf("%x ", n.value)
+	return fmt.Sprintf("%x ", n.Value)
 }
 
 // metaList is the splitted rlp list of metadata.
@@ -222,47 +222,6 @@ func decodeTrailing(buf []byte) (*metaList, *numList, error) {
 	return (*metaList)(&mBuf), (*numList)(&nBuf), nil
 }
 
-func encodeTrailing(w io.Writer, collapsed node) error {
-	var metaList [][]byte
-	var collectMeta func(n node)
-	collectMeta = func(n node) {
-		switch n := n.(type) {
-		case *shortNode:
-			collectMeta(n.Val)
-		case *fullNode:
-			for _, c := range n.Children {
-				collectMeta(c)
-			}
-		case *valueNode:
-			// skip empty node
-			if len(n.value) > 0 {
-				metaList = append(metaList, n.meta)
-			}
-		}
-	}
-	collectMeta(collapsed)
-	if err := rlp.Encode(w, metaList); err != nil {
-		return err
-	}
-
-	var nList []uint64
-	switch n := collapsed.(type) {
-	case *shortNode:
-		if h, ok := n.Val.(*hashNode); ok {
-			nList = append(nList, uint64(h.cNum)|(uint64(h.dNum)<<32))
-		}
-	case *fullNode:
-		for i := 0; i < 16; i++ {
-			if h, ok := n.Children[i].(*hashNode); ok {
-				nList = append(nList, uint64(h.cNum)|(uint64(h.dNum)<<32))
-			}
-		}
-	default:
-		panic(fmt.Sprintf("encode trailing, unexpected node: %v", n))
-	}
-	return rlp.Encode(w, nList)
-}
-
 func mustDecodeNode(hash *hashNode, buf []byte) node {
 	_, _, trailing, err := rlp.Split(buf)
 	if err != nil {
@@ -322,7 +281,7 @@ func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (
 			return nil, fmt.Errorf("invalid value meta: %v", err)
 		}
 
-		vn := &valueNode{value: append([]byte(nil), val...)}
+		vn := &valueNode{Value: append([]byte(nil), val...)}
 		if len(meta) > 0 {
 			vn.meta = append([]byte(nil), meta...)
 		}
@@ -355,7 +314,7 @@ func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*
 			return nil, fmt.Errorf("invalid value meta: %v", err)
 		}
 
-		vn := &valueNode{value: append([]byte(nil), val...)}
+		vn := &valueNode{Value: append([]byte(nil), val...)}
 		if len(meta) > 0 {
 			vn.meta = append([]byte(nil), meta...)
 		}

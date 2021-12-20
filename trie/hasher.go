@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -148,9 +147,10 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 				return original, original, err
 			}
 		}
-		if collapsed.Val == nil {
-			collapsed.Val = &valueNode{} // Ensure that nil children are encoded as empty strings.
-		}
+		// no need when using frlp
+		// if collapsed.Val == nil {
+		// 	collapsed.Val = &valueNode{} // Ensure that nil children are encoded as empty strings.
+		// }
 		return collapsed, cached, nil
 
 	case *fullNode:
@@ -163,14 +163,17 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 				if err != nil {
 					return original, original, err
 				}
-			} else {
-				collapsed.Children[i] = &valueNode{} // Ensure that nil children are encoded as empty strings.
 			}
+			// no need when using frlp
+			// else {
+			// 	collapsed.Children[i] = &valueNode{} // Ensure that nil children are encoded as empty strings.
+			// }
 		}
 		cached.Children[16] = n.Children[16]
-		if collapsed.Children[16] == nil {
-			collapsed.Children[16] = &valueNode{}
-		}
+		// no need when using frlp
+		// if collapsed.Children[16] == nil {
+		// 	collapsed.Children[16] = &valueNode{}
+		// }
 		return collapsed, cached, nil
 
 	default:
@@ -186,7 +189,7 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := frlp.Encode(&h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
 
@@ -198,21 +201,21 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	if hash == nil {
 		h.sha.Reset()
 		h.sha.Write(h.tmp)
-		hash = &hashNode{hash: h.sha.Sum(nil)}
+		hash = &hashNode{Hash: h.sha.Sum(nil)}
 	}
 	if db != nil {
 		// extended
 		if h.extended {
-			if err := encodeTrailing(&h.tmp, n); err != nil {
+			if err := frlp.EncodeTrailing(&h.tmp, n); err != nil {
 				return nil, err
 			}
 			hash.cNum = h.cNumNew
 			hash.dNum = h.dNumNew
 		}
 
-		key := hash.hash
+		key := hash.Hash
 		if ke, ok := db.(DatabaseKeyEncoder); ok {
-			key = ke.Encode(hash.hash, h.cNumNew, h.dNumNew, path)
+			key = ke.Encode(hash.Hash, h.cNumNew, h.dNumNew, path)
 		}
 		return hash, db.Put(key, h.tmp)
 	}

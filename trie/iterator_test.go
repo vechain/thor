@@ -343,7 +343,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		it := tr.NodeIterator(nil)
 		checkIteratorNoDups(t, it, seen)
 		missing, ok := it.Error().(*MissingNodeError)
-		if !ok || !bytes.Equal(missing.NodeHash.hash, rkey) {
+		if !ok || !bytes.Equal(missing.NodeHash.Hash, rkey) {
 			t.Fatal("didn't hit missing node, got", it.Error())
 		}
 
@@ -381,7 +381,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {
 		t.Fatal("want MissingNodeError, got", it.Error())
-	} else if !bytes.Equal(missing.NodeHash.hash, barNodeHash) {
+	} else if !bytes.Equal(missing.NodeHash.Hash, barNodeHash) {
 		t.Fatal("wrong node missing")
 	}
 

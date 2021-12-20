@@ -30,7 +30,7 @@ func (n *Node) Dirty() bool {
 func (n *Node) Hash() (hash thor.Bytes32) {
 	if n.node != nil {
 		if h, _ := n.node.cache(); h != nil {
-			copy(hash[:], h.hash)
+			copy(hash[:], h.Hash)
 		}
 	}
 	return
@@ -60,7 +60,7 @@ func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database) 
 	}
 	ext := ExtendedTrie{Trie{db: db}, 0}
 	if !isRootEmpty {
-		rootnode, _, err := ext.trie.resolveHash(&hashNode{root[:], commitNum, distinctNum}, nil)
+		rootnode, err := ext.trie.resolveHash(&hashNode{root[:], commitNum, distinctNum}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func (e *ExtendedTrie) Get(key []byte) (val, meta []byte, err error) {
 		t.root = newroot
 	}
 	if value != nil {
-		return value.value, value.meta, nil
+		return value.Value, value.meta, nil
 	}
 	return nil, nil, nil
 }
@@ -131,7 +131,7 @@ func (e *ExtendedTrie) Update(key, value, meta []byte) error {
 
 	k := keybytesToHex(key)
 	if len(value) != 0 {
-		_, n, err := t.insert(t.root, nil, k, &valueNode{value: value, meta: meta})
+		_, n, err := t.insert(t.root, nil, k, &valueNode{Value: value, meta: meta})
 		if err != nil {
 			return err
 		}
@@ -178,13 +178,13 @@ func (e *ExtendedTrie) CommitTo(db DatabaseWriter, commitNum, distinctNum uint32
 		return thor.Bytes32{}, err
 	}
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).hash), nil
+	return thor.BytesToBytes32(hash.(*hashNode).Hash), nil
 }
 
 func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum, distinctNum uint32) (node, node, error) {
 	t := &e.trie
 	if t.root == nil {
-		return &hashNode{hash: emptyRoot.Bytes()}, nil, nil
+		return &hashNode{Hash: emptyRoot.Bytes()}, nil, nil
 	}
 	h := newHasherExtended(commitNum, distinctNum, e.cachedNodeTTL)
 	defer returnHasherToPool(h)

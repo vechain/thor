@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -56,7 +55,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			nodes = append(nodes, n)
 		case *hashNode:
 			var err error
-			tn, _, err = t.resolveHash(n, nil)
+			tn, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
@@ -77,9 +76,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
-				enc, _ := rlp.EncodeToBytes(n)
+				enc, _ := frlp.EncodeToBytes(n)
 				if ok {
-					proofDb.Put(hash.hash, enc)
+					proofDb.Put(hash.Hash, enc)
 				} else {
 					proofDb.Put(thor.Blake2b(enc).Bytes(), enc)
 				}
@@ -112,9 +111,9 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 			return nil, nil, i
 		case *hashNode:
 			key = keyrest
-			wantHash = cld.hash
+			wantHash = cld.Hash
 		case *valueNode:
-			return cld.value, nil, i + 1
+			return cld.Value, nil, i + 1
 		}
 	}
 }

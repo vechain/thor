@@ -21,7 +21,6 @@ import (
 	"container/heap"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -125,7 +124,6 @@ type nodeIteratorState struct {
 	parent  thor.Bytes32 // Hash of the first full ancestor node (nil if current is the root)
 	index   int          // Child to be processed next
 	pathlen int          // Length of the path to this node
-	blob    []byte       // The blob of the node
 }
 
 type nodeIterator struct {
@@ -173,9 +171,6 @@ func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) err
 	if st.hash.IsZero() {
 		return nil
 	}
-	if len(st.blob) > 0 {
-		return handler(st.blob)
-	}
 
 	h := newHasher()
 	defer returnHasherToPool(h)
@@ -183,9 +178,9 @@ func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) err
 	collapsed, _, _ := h.hashChildren(st.node, nil, it.path)
 
 	h.tmp.Reset()
-	_ = rlp.Encode(&h.tmp, collapsed)
+	_ = frlp.Encode(&h.tmp, collapsed)
 	if extended {
-		_ = encodeTrailing(&h.tmp, collapsed)
+		_ = frlp.EncodeTrailing(&h.tmp, collapsed)
 	}
 	return handler(h.tmp)
 }
@@ -222,7 +217,7 @@ func (it *nodeIterator) Parent() thor.Bytes32 {
 func (it *nodeIterator) Leaf() *Leaf {
 	if len(it.stack) > 0 {
 		if node, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
-			return &Leaf{node.value, node.meta}
+			return &Leaf{node.Value, node.meta}
 		}
 	}
 	return nil
@@ -250,7 +245,7 @@ func (it *nodeIterator) LeafProof() [][]byte {
 				node, _, _ := hasher.hashChildren(item.node, nil, nil)
 				hashed, _ := hasher.store(node, nil, nil, false)
 				if _, ok := hashed.(*hashNode); ok || i == 0 {
-					enc, _ := rlp.EncodeToBytes(node)
+					enc, _ := frlp.EncodeToBytes(node)
 					proofs = append(proofs, enc)
 				}
 			}
@@ -359,13 +354,12 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 	if hash, ok := st.node.(*hashNode); ok {
-		resolved, blob, err := tr.resolveHash(hash, path)
+		resolved, err := tr.resolveHash(hash, path)
 		if err != nil {
 			return err
 		}
 		st.node = resolved
-		st.blob = blob
-		st.hash = thor.BytesToBytes32(hash.hash)
+		st.hash = thor.BytesToBytes32(hash.Hash)
 	}
 	return nil
 }
@@ -392,7 +386,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 				}
 
 				if hash != nil {
-					state.hash = thor.BytesToBytes32(hash.hash)
+					state.hash = thor.BytesToBytes32(hash.Hash)
 				}
 				parent.index = i - 1
 				return state, append(it.path, byte(i)), true
@@ -417,7 +411,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			}
 
 			if hash != nil {
-				state.hash = thor.BytesToBytes32(hash.hash)
+				state.hash = thor.BytesToBytes32(hash.Hash)
 			}
 			return state, append(it.path, node.Key...), true
 		}
