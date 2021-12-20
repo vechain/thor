@@ -33,7 +33,10 @@ type Bulk interface {
 
 // Iterator iterates over kv pairs.
 type Iterator interface {
+	First() bool
+	Last() bool
 	Next() bool
+	Prev() bool
 	Key() []byte
 	Value() []byte
 	Release()

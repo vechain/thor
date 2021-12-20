@@ -113,13 +113,19 @@ func (b Bucket) NewStore(src Store) Store {
 			}
 			iter := src.Iterate(r)
 			return &struct {
+				FirstFunc
+				LastFunc
 				NextFunc
+				PrevFunc
 				KeyFunc
 				ValueFunc
 				ReleaseFunc
 				ErrorFunc
 			}{
+				iter.First,
+				iter.Last,
 				iter.Next,
+				iter.Prev,
 				// strip the bucket
 				func() []byte { return iter.Key()[len(b):] },
 				iter.Value,

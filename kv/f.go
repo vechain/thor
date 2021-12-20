@@ -18,7 +18,10 @@ type (
 	IterateFunc         func(r Range) Iterator
 	EnableAutoFlushFunc func()
 	WriteFunc           func() error
+	FirstFunc           func() bool
+	LastFunc            func() bool
 	NextFunc            func() bool
+	PrevFunc            func() bool
 	KeyFunc             func() []byte
 	ValueFunc           func() []byte
 	ReleaseFunc         func()
@@ -35,7 +38,10 @@ func (f BulkFunc) Bulk() Bulk                      { return f() }
 func (f IterateFunc) Iterate(r Range) Iterator     { return f(r) }
 func (f EnableAutoFlushFunc) EnableAutoFlush()     { f() }
 func (f WriteFunc) Write() error                   { return f() }
+func (f FirstFunc) First() bool                    { return f() }
+func (f LastFunc) Last() bool                      { return f() }
 func (f NextFunc) Next() bool                      { return f() }
+func (f PrevFunc) Prev() bool                      { return f() }
 func (f KeyFunc) Key() []byte                      { return f() }
 func (f ValueFunc) Value() []byte                  { return f() }
 func (f ReleaseFunc) Release()                     { f() }
