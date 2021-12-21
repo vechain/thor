@@ -27,6 +27,7 @@ type storageLeaf struct {
 type leafBankSlot struct {
 	maxCommitNum uint32     // max recorded commit number
 	cache        *lru.Cache // cached leaves
+	getter       kv.Getter
 }
 
 // LeafBank records accumulated trie leaves to help accelerate trie leaf access
@@ -52,7 +53,9 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 		// the trie has no leaf recorded yet
 		return nil, nil
 	} else {
-		slot := &leafBankSlot{maxCommitNum: binary.BigEndian.Uint32(data)}
+		slot := &leafBankSlot{
+			maxCommitNum: binary.BigEndian.Uint32(data),
+			getter:       kv.Bucket(name).NewGetter(b.store)}
 		slot.cache, _ = lru.New(slotCacheSize)
 		return slot, nil
 	}
@@ -84,9 +87,8 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		return sLeaf.Leaf, sLeaf.CommitNum, nil
 	}
 
-	getter := kv.Bucket(name).NewGetter(b.store)
-	if data, err := getter.Get(leafKey); err != nil {
-		if !getter.IsNotFound(err) {
+	if data, err := slot.getter.Get(leafKey); err != nil {
+		if !slot.getter.IsNotFound(err) {
 			return nil, 0, err
 		}
 		// not found

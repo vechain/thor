@@ -468,6 +468,7 @@ func (t *Trie) DumpNodes(ctx context.Context, baseCommitNum uint32, handleLeaf f
 	return bulk.Write()
 }
 
+// CleanHistory cleans history nodes within [startCommitNum, limitCommitNum).
 func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommitNum uint32) error {
 	if limitCommitNum == 0 {
 		return nil
