@@ -83,16 +83,16 @@ func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []b
 }
 
 // GetNodeBlob returns the cached node blob.
-func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []byte, peek bool) []byte {
+func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []byte, peek bool, dst []byte) []byte {
 	if c == nil {
 		return nil
 	}
 
-	lookupQueried := c.queriedNodes.Get
-	lookupCommitted := c.committedNodes.Get
+	lookupQueried := c.queriedNodes.GetFn
+	lookupCommitted := c.committedNodes.GetFn
 	if peek {
-		lookupQueried = c.queriedNodes.Peek
-		lookupCommitted = c.committedNodes.Peek
+		lookupQueried = c.queriedNodes.PeekFn
+		lookupCommitted = c.committedNodes.PeekFn
 	}
 
 	k := hasherPool.Get().(*hasher)
@@ -102,23 +102,32 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 	k.buf = append(k.buf, path...)
 
 	// lookup from committing cache
-	if val, _ := lookupCommitted(k.buf); len(val) > 0 {
-		if binary.BigEndian.Uint64(val) == (uint64(commitNum)<<32)|uint64(distinctNum) {
-			if !peek {
-				c.nodeStats.Hit()
-			}
-			return val[8:]
+	var blob []byte
+	lookupCommitted(k.buf, func(b []byte) error {
+		if binary.BigEndian.Uint64(b) == (uint64(commitNum)<<32)|uint64(distinctNum) {
+			blob = append(dst, b[8:]...)
 		}
+		return nil
+	})
+	if len(blob) > 0 {
+		if !peek {
+			c.nodeStats.Hit()
+		}
+		return blob
 	}
 
 	// fallback to querying cache
 	k.buf = appendUint32(k.buf, commitNum)
 	k.buf = appendUint32(k.buf, distinctNum)
-	if val, _ := lookupQueried(k.buf); len(val) > 0 {
+	lookupQueried(k.buf, func(b []byte) error {
+		blob = append(dst, b...)
+		return nil
+	})
+	if len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}
-		return val
+		return blob
 	}
 	if !peek {
 		c.nodeStats.Miss()

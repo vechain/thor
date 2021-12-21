@@ -118,13 +118,14 @@ func (t *Trie) newDatabase() trie.Database {
 	)
 
 	return &struct {
+		trie.DatabaseReaderTo
+		trie.DatabaseKeyEncoder
 		trie.DatabaseReader
 		trie.DatabaseWriter
-		trie.DatabaseKeyEncoder
 	}{
-		kv.GetFunc(func(_ []byte) (blob []byte, err error) {
+		databaseGetTo(func(_ []byte, dst []byte) (blob []byte, err error) {
 			// get from cache
-			if blob = t.back.Cache.GetNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, t.noFillCache); len(blob) > 0 {
+			if blob = t.back.Cache.GetNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, t.noFillCache, dst); len(blob) > 0 {
 				return
 			}
 			defer func() {
@@ -168,9 +169,11 @@ func (t *Trie) newDatabase() trie.Database {
 					return nil, errors.New("node hash checksum error")
 				}
 			}
+			if cap(dst)-len(dst) > len(blob) {
+				blob = append(dst, blob...)
+			}
 			return
 		}),
-		nil, // nil is ok
 		databaseKeyEncodeFunc(func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
 			thisHash = hash
 			thisCommitNum = commitNum
@@ -178,6 +181,8 @@ func (t *Trie) newDatabase() trie.Database {
 			thisPath = path
 			return nil
 		}),
+		nil,
+		nil,
 	}
 }
 
@@ -500,10 +505,15 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 // individual functions of trie database interface.
 type (
 	databaseKeyEncodeFunc func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte
+	databaseGetTo         func(key, dst []byte) ([]byte, error)
 )
 
 func (f databaseKeyEncodeFunc) Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
 	return f(hash, commitNum, distinctNum, path)
+}
+
+func (f databaseGetTo) GetTo(key, dst []byte) ([]byte, error) {
+	return f(key, dst)
 }
 
 var (
