@@ -12,8 +12,8 @@ import (
 )
 
 type status struct {
-	Base        uint32
-	AccountBase uint32
+	Base      uint32
+	PruneBase uint32
 }
 
 func (s *status) Load(getter kv.Getter) error {
