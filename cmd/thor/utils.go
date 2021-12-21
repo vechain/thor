@@ -262,13 +262,6 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
 	log.Debug("cache size(MB)", "size", cacheMB)
 
-	// go-ethereum stuff
-	// Ensure Go's GC ignores the database cache for trigger percentage
-	gogc := math.Max(10, math.Min(100, 50/(float64(cacheMB)/1024)))
-
-	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
-	debug.SetGCPercent(int(gogc))
-
 	fdCache := suggestFDCache()
 	log.Debug("fd cache", "n", fdCache)
 
@@ -277,17 +270,25 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          180, // 30 mins
 		TrieLeafBankSlotCapacity:   256,
-		TrieDedupedPartitionFactor: 250000, // about 1 month
+		TrieDedupedPartitionFactor: 200000,
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
 		OpenFilesCacheCapacity:     fdCache,
 		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:              256,
+		WriteBufferMB:              128,
 	}
 
+	// go-ethereum stuff
+	// Ensure Go's GC ignores the database cache for trigger percentage
+	totalCacheMB := cacheMB + opts.ReadCacheMB + opts.WriteBufferMB*2
+	gogc := math.Max(10, math.Min(100, 50/(float64(totalCacheMB)/1024)))
+
+	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
+	debug.SetGCPercent(int(gogc))
+
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 360 // 1 hour
+		opts.TrieHistPartitionFactor = 500
 	} else {
-		opts.TrieHistPartitionFactor = 125000 // about 2 weeks
+		opts.TrieHistPartitionFactor = 100000
 	}
 
 	path := filepath.Join(dir, "main.db")
