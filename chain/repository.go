@@ -282,6 +282,17 @@ func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
 	return count, iter.Error()
 }
 
+// GetMaxBlockNum returns the max committed block number.
+func (r *Repository) GetMaxBlockNum() (uint32, error) {
+	iter := r.data.Iterate(kv.Range{})
+	defer iter.Release()
+
+	if iter.Last() {
+		return binary.BigEndian.Uint32(iter.Key()), iter.Error()
+	}
+	return 0, iter.Error()
+}
+
 // GetBlockSummary get block summary by block id.
 func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, err error) {
 	var cached interface{}
