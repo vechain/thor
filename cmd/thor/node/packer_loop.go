@@ -13,7 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/packer"
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
@@ -128,17 +131,31 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}
 
-	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
-	if err != nil {
+	var (
+		newBlock                   *block.Block
+		receipts                   tx.Receipts
+		execElapsed, commitElapsed mclock.AbsTime
+		prevTrunk, curTrunk        *chain.Chain
+	)
+
+	if err := n.guardBlockProcessing(flow.ParentHeader().Number()+1, func(conflicts uint32) error {
+		var (
+			stage *state.Stage
+			err   error
+		)
+		if newBlock, stage, receipts, err = flow.Pack(n.master.PrivateKey, conflicts); err != nil {
+			return err
+		}
+		execElapsed := mclock.Now() - startTime
+
+		if prevTrunk, curTrunk, err = n.commitBlock(stage, newBlock, receipts, conflicts); err != nil {
+			return errors.WithMessage(err, "commit block")
+		}
+		commitElapsed = mclock.Now() - startTime - execElapsed
+		return nil
+	}); err != nil {
 		return err
 	}
-	execElapsed := mclock.Now() - startTime
-
-	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
-	if err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	commitElapsed := mclock.Now() - startTime - execElapsed
 
 	n.processFork(prevTrunk, curTrunk)
 

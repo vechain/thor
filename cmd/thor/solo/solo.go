@@ -143,7 +143,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
 	if err != nil {
 		return errors.WithMessage(err, "pack")
 	}
@@ -159,7 +159,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 
 	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts); err != nil {
+	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
 	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {

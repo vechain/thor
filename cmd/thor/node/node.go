@@ -37,23 +37,25 @@ import (
 
 var log = log15.New("pkg", "node")
 
-type Node struct {
-	goes     co.Goes
-	packer   *packer.Packer
-	cons     *consensus.Consensus
-	consLock sync.Mutex
+// error when the block larger than known max block number + 1
+var errBlockTemporaryUnprocessable = errors.New("block temporary unprocessable")
 
+type Node struct {
+	goes           co.Goes
+	packer         *packer.Packer
+	cons           *consensus.Consensus
 	master         *Master
 	repo           *chain.Repository
 	logDB          *logdb.LogDB
 	txPool         *txpool.TxPool
 	txStashPath    string
 	comm           *comm.Communicator
-	commitLock     sync.Mutex
 	targetGasLimit uint64
 	skipLogs       bool
 	logDBFailed    bool
 	bandwidth      bandwidth.Bandwidth
+	maxBlockNum    uint32
+	processLock    sync.Mutex
 }
 
 func New(
@@ -83,6 +85,11 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
+	maxBlockNum, err := n.repo.GetMaxBlockNum()
+	if err != nil {
+		return err
+	}
+	n.maxBlockNum = maxBlockNum
 	n.comm.Sync(n.handleBlockStream)
 
 	n.goes.Go(func() { n.houseKeeping(ctx) })
@@ -156,7 +163,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
-					(consensus.IsParentMissing(err) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					((consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
 					log.Debug("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
@@ -245,21 +252,61 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
+// guardBlockProcessing adds lock on block processing and maintains block conflicts.
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) error {
+	n.processLock.Lock()
+	defer n.processLock.Unlock()
 
-	// consensus object is not thread-safe
-	n.consLock.Lock()
-	startTime := mclock.Now()
-	stage, receipts, err := n.cons.Process(blk, uint64(time.Now().Unix()))
-	execElapsed := mclock.Now() - startTime
-	n.consLock.Unlock()
+	if blockNum > n.maxBlockNum {
+		if blockNum > n.maxBlockNum+1 {
+			// the block is surely unprocessable now
+			return errBlockTemporaryUnprocessable
+		}
+		n.maxBlockNum = blockNum
+		return process(0)
+	}
 
+	conflicts, err := n.repo.ScanConflicts(blockNum)
 	if err != nil {
+		return err
+	}
+	return process(conflicts)
+}
+
+func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
+	var (
+		execElapsed, commitElapsed mclock.AbsTime
+		prevTrunk, curTrunk        *chain.Chain
+		receipts                   tx.Receipts
+		startTime                  = mclock.Now()
+	)
+
+	if blk.Header().Number() <= n.maxBlockNum {
+		fmt.Println(blk.Header().Number())
+	}
+	if err := n.guardBlockProcessing(blk.Header().Number(), func(conflicts uint32) error {
+		var (
+			stage *state.Stage
+			err   error
+		)
+
+		if stage, receipts, err = n.cons.Process(blk, uint64(time.Now().Unix()), conflicts); err != nil {
+			return err
+		}
+		execElapsed = mclock.Now() - startTime
+
+		if prevTrunk, curTrunk, err = n.commitBlock(stage, blk, receipts, conflicts); err != nil {
+			log.Error("failed to commit block", "err", err)
+			return err
+		}
+		commitElapsed = mclock.Now() - startTime - execElapsed
+		return nil
+	}); err != nil {
 		switch {
 		case consensus.IsKnownBlock(err):
 			stats.UpdateIgnored(1)
 			return false, nil
-		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err):
+		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:
 			stats.UpdateQueued(1)
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, blk.Header())
@@ -270,13 +317,6 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		return false, err
 	}
 
-	prevTrunk, curTrunk, err := n.commitBlock(stage, blk, receipts)
-	if err != nil {
-		log.Error("failed to commit block", "err", err)
-		return false, err
-	}
-	commitElapsed := mclock.Now() - startTime - execElapsed
-
 	if v, updated := n.bandwidth.Update(blk.Header(), time.Duration(execElapsed+commitElapsed)); updated {
 		log.Debug("bandwidth updated", "gps", v)
 	}
@@ -286,10 +326,7 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
 }
 
-func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts) (*chain.Chain, *chain.Chain, error) {
-	n.commitLock.Lock()
-	defer n.commitLock.Unlock()
-
+func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts, newBlockConflicts uint32) (*chain.Chain, *chain.Chain, error) {
 	var (
 		prevBest      = n.repo.BestBlockSummary()
 		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header)
@@ -324,7 +361,7 @@ func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts t
 		return nil, nil, errors.Wrap(err, "commit state")
 	}
 
-	if err := n.repo.AddBlock(newBlock, receipts); err != nil {
+	if err := n.repo.AddBlock(newBlock, receipts, newBlockConflicts); err != nil {
 		return nil, nil, errors.Wrap(err, "add block")
 	}
 
