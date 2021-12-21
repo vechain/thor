@@ -25,6 +25,7 @@ func (c *Consensus) validate(
 	block *block.Block,
 	parent *block.Header,
 	nowTimestamp uint64,
+	blockConflicts uint32,
 ) (*state.Stage, tx.Receipts, error) {
 	header := block.Header()
 
@@ -41,7 +42,7 @@ func (c *Consensus) validate(
 		return nil, nil, err
 	}
 
-	stage, receipts, err := c.verifyBlock(block, state)
+	stage, receipts, err := c.verifyBlock(block, state, blockConflicts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -247,7 +248,7 @@ func (c *Consensus) validateBlockBody(blk *block.Block) error {
 	return nil
 }
 
-func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
 	var totalGasUsed uint64
 	txs := blk.Transactions()
 	receipts := make(tx.Receipts, 0, len(txs))
@@ -328,7 +329,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State) (*state.St
 		}
 	}
 
-	stage, err := state.Stage(header.Number())
+	stage, err := state.Stage(header.Number(), blockConflicts)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -96,12 +96,12 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
-		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
+		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2), 0))
 
-		if err := repo.AddBlock(blk, receipts); err != nil {
+		if err := repo.AddBlock(blk, receipts, 0); err != nil {
 			t.Fatal(err)
 		}
 		repo.SetBestBlockID(blk.Header().ID())
@@ -157,24 +157,24 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey)
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := repo.AddBlock(blk, receipts); err != nil {
+	if err := repo.AddBlock(blk, receipts, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number(), 0)
+	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number(), 0, 0)
 
 	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState := state.New(db, b0.Header().StateRoot(), 0, 0)
+	geneState := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 
 	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }

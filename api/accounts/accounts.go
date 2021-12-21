@@ -48,7 +48,7 @@ func New(
 
 func (a *Accounts) getCode(addr thor.Address, summary *chain.BlockSummary) ([]byte, error) {
 	code, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.SteadyNum).
+		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
 		GetCode(addr)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 }
 
 func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*Account, error) {
-	state := a.stater.NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.SteadyNum)
+	state := a.stater.NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*
 
 func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, summary *chain.BlockSummary) (thor.Bytes32, error) {
 	storage, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.SteadyNum).
+		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
 		GetStorage(addr, key)
 
 	if err != nil {
@@ -200,7 +200,7 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 		return nil, err
 	}
 	header := summary.Header
-	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.SteadyNum)
+	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 
 	signer, _ := header.Signer()
 	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,

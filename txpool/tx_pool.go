@@ -236,7 +236,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 	}
 
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
-		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.SteadyNum)
+		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
 		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
 		if err != nil {
 			return txRejectedError{err.Error()}
@@ -357,7 +357,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 	}()
 
-	state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.SteadyNum)
+	state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
 	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
 	if err != nil {
 		return nil, 0, err

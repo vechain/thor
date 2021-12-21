@@ -95,14 +95,14 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey)
+	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	con := New(repo, stater, forkConfig)
 
-	if _, _, err := con.Process(b1, flow.When()); err != nil {
+	if _, _, err := con.Process(b1, flow.When(), 0); err != nil {
 		return nil, err
 	}
 
@@ -110,7 +110,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	if err := repo.AddBlock(b1, receipts); err != nil {
+	if err := repo.AddBlock(b1, receipts, 0); err != nil {
 		return nil, err
 	}
 
@@ -126,12 +126,12 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	b2, _, _, err := flow2.Pack(proposer2.PrivateKey)
+	b2, _, _, err := flow2.Pack(proposer2.PrivateKey, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, _, err := con.Process(b2, flow2.When()); err != nil {
+	if _, _, err := con.Process(b2, flow2.When(), 0); err != nil {
 		return nil, err
 	}
 
@@ -206,7 +206,7 @@ func (tc *testConsensus) builder(header *block.Header) *block.Builder {
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
-	_, _, err := tc.con.Process(blk, tc.time)
+	_, _, err := tc.con.Process(blk, tc.time, 0)
 	return err
 }
 

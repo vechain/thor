@@ -109,14 +109,14 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddBlock(block, receipts); err != nil {
+	if err := repo.AddBlock(block, receipts, 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
