@@ -78,7 +78,11 @@ func (ldb *levelEngine) Snapshot() kv.Snapshot {
 			if err != nil {
 				return nil, err
 			}
-			return s.Get(key, &readOpt)
+			val, err := s.Get(key, &readOpt)
+			if err != nil {
+				return nil, err
+			}
+			return val, nil
 		},
 		func(key []byte) (bool, error) {
 			if err != nil {

@@ -79,7 +79,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		BlockCacheCapacity:     options.ReadCacheMB * opt.MiB,
 		WriteBuffer:            options.WriteBufferMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
-		BlockSize:              1024 * 16, // balance performance of point reads and compression ratio.
+		BlockSize:              1024 * 32, // balance performance of point reads and compression ratio.
 		// workaround for the known issue: https://github.com/golang/go/issues/26650
 		// which slows down writting WAL.
 		DisableJournal: runtime.GOOS == "darwin",
