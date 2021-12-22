@@ -8,6 +8,7 @@ package kv
 // Getter defines methods to read kv.
 type Getter interface {
 	Get(key []byte) ([]byte, error)
+	GetTo(key, dst []byte) ([]byte, error)
 	Has(key []byte) (bool, error)
 	IsNotFound(err error) bool
 }

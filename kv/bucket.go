@@ -18,6 +18,7 @@ type Bucket string
 func (b Bucket) NewGetter(src Getter) Getter {
 	return &struct {
 		GetFunc
+		GetToFunc
 		HasFunc
 		IsNotFoundFunc
 	}{
@@ -27,6 +28,13 @@ func (b Bucket) NewGetter(src Getter) Getter {
 			buf.k = append(append(buf.k[:0], b...), key...)
 
 			return src.Get(buf.k)
+		},
+		func(key, dst []byte) ([]byte, error) {
+			buf := bufPool.Get().(*buf)
+			defer bufPool.Put(buf)
+			buf.k = append(append(buf.k[:0], b...), key...)
+
+			return src.GetTo(buf.k, dst)
 		},
 		func(key []byte) (bool, error) {
 			buf := bufPool.Get().(*buf)
