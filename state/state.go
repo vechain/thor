@@ -460,9 +460,14 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 		return nil, &Error{jerr}
 	}
 
+	trieCpy, err := s.trie.Copy()
+	if err != nil {
+		return nil, &Error{err}
+	}
+
 	stage := &Stage{
 		db:                s.db,
-		trie:              s.trie.Copy(),
+		trie:              trieCpy,
 		codes:             codes,
 		newBlockNum:       newBlockNum,
 		newBlockConflicts: newBlockConflicts,
@@ -478,7 +483,9 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 					c.data.storageInitCommitNum = newBlockNum
 				}
 				if len(c.data.StorageRoot) > 0 && c.baseStorageTrie != nil {
-					sTrie = c.baseStorageTrie.Copy()
+					if sTrie, err = c.baseStorageTrie.Copy(); err != nil {
+						return nil, &Error{err}
+					}
 				} else {
 					sTrie = s.db.NewSecureTrie(
 						StorageTrieName(addr, c.data.storageInitCommitNum),

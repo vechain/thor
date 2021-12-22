@@ -62,7 +62,7 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 }
 
 // Lookup lookups a leaf from the trie named name by the given leafKey.
-// The returned leaf might be nil if no leaf recorded yet, or later touched.
+// The returned leaf might be nil if no leaf recorded yet, or deleted.
 // The commitNum indicates up to which commit number the leaf is valid.
 func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
 	// get slot from slots cache or create a new one.
@@ -87,7 +87,10 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		return sLeaf.Leaf, sLeaf.CommitNum, nil
 	}
 
-	if data, err := slot.getter.Get(leafKey); err != nil {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	if data, err := slot.getter.GetTo(leafKey, h.buf[:0]); err != nil {
 		if !slot.getter.IsNotFound(err) {
 			return nil, 0, err
 		}
@@ -95,7 +98,8 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		// return empty leaf with max commit number.
 		return &trie.Leaf{}, atomic.LoadUint32(&slot.maxCommitNum), nil
 	} else {
-		// touched
+		h.buf = data
+		// deleted
 		if len(data) == 0 {
 			return nil, 0, nil
 		}
@@ -106,17 +110,6 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		slot.cache.Add(strLeafKey, &sLeaf)
 		return sLeaf.Leaf, sLeaf.CommitNum, nil
 	}
-}
-
-// TouchLeaves marks leaves to touched-state.
-func (b *LeafBank) TouchLeaves(name string, keys [][]byte, putter kv.Putter) error {
-	putter = kv.Bucket(name).NewPutter(putter)
-	for _, key := range keys {
-		if err := putter.Put(key, nil); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // NewUpdater creates the leaf updater for a trie with the given name.

@@ -41,9 +41,9 @@ type Trie struct {
 	distinctNum uint32
 	init        func() (*trie.ExtendedTrie, error)
 	dirty       bool
+	bulk        kv.Bulk // pending ops
 	noFillCache bool
 	fastLeafGet func(nodeCommitNum uint32) (*trie.Leaf, error)
-	touchedKeys [][]byte
 }
 
 // New creates a managed trie.
@@ -114,7 +114,7 @@ func (t *Trie) newDatabase() trie.Database {
 		thisHash                       []byte
 		thisCommitNum, thisDistinctNum uint32
 		thisPath                       []byte
-		buf                            []byte
+		keyBuf                         []byte
 	)
 
 	return &struct {
@@ -123,7 +123,7 @@ func (t *Trie) newDatabase() trie.Database {
 		trie.DatabaseReader
 		trie.DatabaseWriter
 	}{
-		databaseGetTo(func(_ []byte, dst []byte) (blob []byte, err error) {
+		kv.GetToFunc(func(_ []byte, dst []byte) (blob []byte, err error) {
 			// get from cache
 			if blob = t.back.Cache.GetNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, t.noFillCache, dst); len(blob) > 0 {
 				return
@@ -150,27 +150,25 @@ func (t *Trie) newDatabase() trie.Database {
 
 			// Get node from hist space first, then from deduped space.
 			// Don't change the order, or the trie might be broken after pruning.
-			buf = t.makeHistNodeKey(buf[:0], thisCommitNum, thisDistinctNum, thisPath)
-			if blob, err = snapshot.Get(buf); err != nil {
+			keyBuf = t.makeHistNodeKey(keyBuf[:0], thisCommitNum, thisDistinctNum, thisPath)
+			if blob, err = snapshot.GetTo(keyBuf, dst); err != nil {
 				if !snapshot.IsNotFound(err) {
 					return
 				}
 				// not found in hist space, fallback to deduped space
 				// get from deduped space
-				buf = t.makeDedupedNodeKey(buf[:0], thisCommitNum, thisPath)
-				if blob, err = snapshot.Get(buf); err != nil {
+				keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisCommitNum, thisPath)
+				if blob, err = snapshot.GetTo(keyBuf, dst); err != nil {
 					return
 				}
-				// the deduped node key uses path as db key.
-				// to ensure the node is correct, we need to verify the node hash.
-				if ok, err := verifyNodeHash(blob, thisHash); err != nil {
-					return nil, err
-				} else if !ok {
-					return nil, errors.New("node hash checksum error")
-				}
 			}
-			if cap(dst)-len(dst) > len(blob) {
-				blob = append(dst, blob...)
+
+			// to ensure the node is correct, we need to verify the node hash.
+			// TODO: later can skip this step
+			if ok, err := verifyNodeHash(blob[len(dst):], thisHash); err != nil {
+				return nil, err
+			} else if !ok {
+				return nil, errors.New("node hash checksum error")
 			}
 			return
 		}),
@@ -187,7 +185,11 @@ func (t *Trie) newDatabase() trie.Database {
 }
 
 // Copy make a copy of this trie.
-func (t *Trie) Copy() *Trie {
+// It returns error if the trie is dirty.
+func (t *Trie) Copy() (*Trie, error) {
+	if t.dirty || t.bulk != nil {
+		return nil, errors.New("dirty trie")
+	}
 	ext, err := t.init()
 	cpy := *t
 	if ext != nil {
@@ -196,16 +198,11 @@ func (t *Trie) Copy() *Trie {
 		cpy.init = func() (*trie.ExtendedTrie, error) {
 			return extCpy, nil
 		}
-		if len(cpy.touchedKeys) > 0 {
-			cpy.touchedKeys = append([][]byte(nil), cpy.touchedKeys...)
-		} else {
-			cpy.touchedKeys = nil
-		}
 		cpy.noFillCache = false
 	} else {
 		cpy.init = func() (*trie.ExtendedTrie, error) { return nil, err }
 	}
-	return &cpy
+	return &cpy, nil
 }
 
 // Get returns the value for key stored in the trie.
@@ -269,7 +266,8 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 					// good, that's the leaf!
 					return leaf, nil
 				}
-			} else { // got empty leaf
+			} else {
+				// empty leaf, means the leaf key is not existing
 				return leaf, nil
 			}
 		}
@@ -305,9 +303,24 @@ func (t *Trie) Update(key, val, meta []byte) error {
 		h := hasherPool.Get().(*hasher)
 		defer hasherPool.Put(h)
 		key = h.Hash(key)
+	}
+	if len(val) == 0 { // deletion
+		// In practical, the leaf bank is not updated every commit.
+		// Suppose a key is set and is soon deleted, it might be
+		// missing in leaf bank records. In this case, inexistence assertion
+		// of the leaf bank is incorrect. So here we records delete keys,
+		// to keep the integrity of the leaf bank.
 		if t.back.LeafBank != nil {
-			keyCpy := append([]byte(nil), key...)
-			t.touchedKeys = append(t.touchedKeys, keyCpy)
+			if t.bulk == nil {
+				t.bulk = t.back.Store.Bulk()
+			}
+			h := hasherPool.Get().(*hasher)
+			defer hasherPool.Put(h)
+			h.buf = append(h.buf[:0], t.back.LeafBankSpace)
+			h.buf = append(h.buf, t.name...)
+			h.buf = append(h.buf, key...)
+
+			t.bulk.Put(h.buf, nil)
 		}
 	}
 	return ext.Update(key, val, meta)
@@ -332,9 +345,13 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 	var (
 		thisCommitNum, thisDistinctNum uint32
 		thisPath                       []byte
-		bulk                           = t.back.Store.Bulk()
+		bulk                           = t.bulk
 		buf                            []byte
 	)
+
+	if bulk == nil {
+		bulk = t.back.Store.Bulk()
+	}
 
 	// commit the trie
 	newRoot, err := ext.CommitTo(&struct {
@@ -362,13 +379,6 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 		return thor.Bytes32{}, err
 	}
 
-	if t.back.LeafBank != nil {
-		putter := kv.Bucket(t.back.LeafBankSpace).NewPutter(bulk)
-		if err := t.back.LeafBank.TouchLeaves(t.name, t.touchedKeys, putter); err != nil {
-			return thor.Bytes32{}, err
-		}
-	}
-
 	if err := bulk.Write(); err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -377,7 +387,7 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 	t.commitNum = newCommitNum
 	t.distinctNum = newDistinctNum
 	t.dirty = false
-	t.touchedKeys = t.touchedKeys[:0]
+	t.bulk = nil
 	if !t.noFillCache {
 		t.back.Cache.AddRootNode(t.name, ext.RootNode())
 	}
@@ -506,20 +516,11 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 // individual functions of trie database interface.
 type (
 	databaseKeyEncodeFunc func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte
-	databaseGetTo         func(key, dst []byte) ([]byte, error)
 )
 
 func (f databaseKeyEncodeFunc) Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
 	return f(hash, commitNum, distinctNum, path)
 }
-
-func (f databaseGetTo) GetTo(key, dst []byte) ([]byte, error) {
-	return f(key, dst)
-}
-
-var (
-	_ trie.DatabaseKeyEncoder = databaseKeyEncodeFunc(nil)
-)
 
 // leafAvailable is a special error type to short circuit trie get method.
 type leafAvailable struct {
