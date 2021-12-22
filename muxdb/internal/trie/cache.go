@@ -33,8 +33,8 @@ type Cache struct {
 func NewCache(sizeMB int, rootCap int) *Cache {
 	sizeBytes := sizeMB * 1024 * 1024
 	var cache Cache
-	cache.queriedNodes = freecache.NewCache(sizeBytes / 10)
-	cache.committedNodes = freecache.NewCache(sizeBytes - sizeBytes/10)
+	cache.queriedNodes = freecache.NewCache(sizeBytes / 4)
+	cache.committedNodes = freecache.NewCache(sizeBytes - sizeBytes/4)
 	cache.roots, _ = lru.NewARC(rootCap)
 	cache.lastLogTime = time.Now().UnixNano()
 	return &cache
