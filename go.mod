@@ -44,4 +44,4 @@ require (
 	gopkg.in/yaml.v2 v2.3.0
 )
 
-replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20211213155903-6be146ba3d3f
+replace github.com/syndtr/goleveldb => github.com/vechain/goleveldb v1.0.1-0.20211222044317-26c94f2f8e7e
