@@ -54,6 +54,15 @@ func (ldb *levelEngine) Get(key []byte) ([]byte, error) {
 	return val, nil
 }
 
+func (ldb *levelEngine) GetTo(key, dst []byte) ([]byte, error) {
+	val, err := ldb.db.GetTo(key, dst, &readOpt)
+	// val will be []byte{} if error occurs, which is not expected
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
 func (ldb *levelEngine) Has(key []byte) (bool, error) {
 	return ldb.db.Has(key, &readOpt)
 }
@@ -70,6 +79,7 @@ func (ldb *levelEngine) Snapshot() kv.Snapshot {
 	s, err := ldb.db.GetSnapshot()
 	return &struct {
 		kv.GetFunc
+		kv.GetToFunc
 		kv.HasFunc
 		kv.IsNotFoundFunc
 		kv.ReleaseFunc
@@ -79,6 +89,16 @@ func (ldb *levelEngine) Snapshot() kv.Snapshot {
 				return nil, err
 			}
 			val, err := s.Get(key, &readOpt)
+			if err != nil {
+				return nil, err
+			}
+			return val, nil
+		},
+		func(key, dst []byte) ([]byte, error) {
+			if err != nil {
+				return nil, err
+			}
+			val, err := s.GetTo(key, dst, &readOpt)
 			if err != nil {
 				return nil, err
 			}
