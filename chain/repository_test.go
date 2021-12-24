@@ -22,11 +22,19 @@ func M(args ...interface{}) []interface{} {
 	return args
 }
 
-func newTestRepo() *Repository {
+func newTestRepo() (*muxdb.MuxDB, *Repository) {
 	db := muxdb.NewMem()
 	g := genesis.NewDevnet()
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
+	repo, err := NewRepository(db, b0)
+	if err != nil {
+		panic(err)
+	}
+	return db, repo
+}
+
+func reopenRepo(db *muxdb.MuxDB, b0 *block.Block) *Repository {
 	repo, err := NewRepository(db, b0)
 	if err != nil {
 		panic(err)
@@ -89,4 +97,52 @@ func TestRepository(t *testing.T) {
 
 		assert.Equal(t, tx.Receipts{receipt1}.RootHash(), gotReceipts.RootHash())
 	}
+}
+
+func TestConflicts(t *testing.T) {
+	_, repo := newTestRepo()
+	b0 := repo.GenesisBlock()
+
+	b1 := newBlock(b0, 10)
+	repo.AddBlock(b1, nil, 0)
+
+	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
+	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.ScanConflicts(1)))
+
+	b1x := newBlock(b0, 20)
+	repo.AddBlock(b1x, nil, 1)
+	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
+	assert.Equal(t, []interface{}{uint32(2), nil}, M(repo.ScanConflicts(1)))
+}
+
+func TestSteadyBlockID(t *testing.T) {
+	db, repo := newTestRepo()
+	b0 := repo.GenesisBlock()
+
+	assert.Equal(t, b0.Header().ID(), repo.SteadyBlockID())
+
+	b1 := newBlock(b0, 10)
+	repo.AddBlock(b1, nil, 0)
+
+	assert.Nil(t, repo.SetSteadyBlockID(b1.Header().ID()))
+	assert.Equal(t, b1.Header().ID(), repo.SteadyBlockID())
+
+	b2 := newBlock(b1, 10)
+	repo.AddBlock(b2, nil, 0)
+
+	assert.Nil(t, repo.SetSteadyBlockID(b2.Header().ID()))
+	assert.Equal(t, b2.Header().ID(), repo.SteadyBlockID())
+
+	b2x := newBlock(b1, 10)
+	repo.AddBlock(b2x, nil, 1)
+	assert.Error(t, repo.SetSteadyBlockID(b2x.Header().ID()))
+	assert.Equal(t, b2.Header().ID(), repo.SteadyBlockID())
+
+	b3 := newBlock(b2, 10)
+	repo.AddBlock(b3, nil, 0)
+	assert.Nil(t, repo.SetSteadyBlockID(b3.Header().ID()))
+	assert.Equal(t, b3.Header().ID(), repo.SteadyBlockID())
+
+	repo = reopenRepo(db, b0)
+	assert.Equal(t, b3.Header().ID(), repo.SteadyBlockID())
 }

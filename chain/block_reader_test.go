@@ -14,7 +14,7 @@ import (
 )
 
 func TestBlockReader(t *testing.T) {
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
@@ -54,7 +54,7 @@ func TestBlockReader(t *testing.T) {
 }
 
 func TestBlockReaderFork(t *testing.T) {
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)

@@ -26,7 +26,7 @@ func newTx() *tx.Transaction {
 func TestChain(t *testing.T) {
 	tx1 := newTx()
 
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
 	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
