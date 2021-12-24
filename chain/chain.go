@@ -215,22 +215,41 @@ func (c *Chain) HasBlock(id thor.Bytes32) (bool, error) {
 //
 // The returned ids are in ascending order.
 func (c *Chain) Exclude(other *Chain) ([]thor.Bytes32, error) {
+	oHeadID := other.headID
+	oHeadNum := block.Number(oHeadID)
 	var ids []thor.Bytes32
-	// use int64 to prevent infinite loop
-	for i := int64(block.Number(c.headID)); i >= 0; i-- {
-		id, err := c.GetBlockID(uint32(i))
-		if err != nil {
-			return nil, err
-		}
-		has, err := other.HasBlock(id)
-		if err != nil {
-			return nil, err
-		}
-		if has {
+
+	id := c.headID
+	for {
+		n := block.Number(id)
+		if n == 0 {
 			break
 		}
-		ids = append(ids, id)
+
+		if n > oHeadNum {
+			ids = append(ids, id)
+		} else if n == oHeadNum {
+			if id == oHeadID {
+				break
+			}
+			ids = append(ids, id)
+		} else {
+			has, err := other.HasBlock(id)
+			if err != nil {
+				return nil, err
+			}
+			if has {
+				break
+			}
+			ids = append(ids, id)
+		}
+		var err error
+		id, err = c.GetBlockID(n - 1)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	// reverse
 	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
 		ids[i], ids[j] = ids[j], ids[i]
