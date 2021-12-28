@@ -19,13 +19,15 @@ package vm
 import (
 	"errors"
 	"fmt"
+	"hash"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -36,6 +38,27 @@ var (
 	errExecutionReverted     = errors.New("evm: execution reverted")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
+
+// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type keccak256 struct {
+	state keccakState
+	hash  common.Hash
+}
+
+var keccak256Pool = sync.Pool{
+	New: func() interface{} {
+		return &keccak256{
+			state: sha3.NewLegacyKeccak256().(keccakState),
+		}
+	},
+}
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.peek()
@@ -371,16 +394,21 @@ func opSAR(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 }
 
 func opSha3(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	offset, size := stack.pop(), stack.pop()
-	data := memory.Get(offset.Int64(), size.Int64())
-	hash := crypto.Keccak256(data)
+	offset, size := stack.pop(), stack.peek()
+	data := memory.GetPtr(offset.Int64(), size.Int64())
+	evm.interpreter.intPool.put(offset)
+
+	hasher := keccak256Pool.Get().(*keccak256)
+
+	hasher.state.Reset()
+	hasher.state.Write(data)
+	hasher.state.Read(hasher.hash[:])
 
 	if evm.vmConfig.EnablePreimageRecording {
-		evm.StateDB.AddPreimage(common.BytesToHash(hash), data)
+		evm.StateDB.AddPreimage(hasher.hash, common.CopyBytes(data))
 	}
-	stack.push(evm.interpreter.intPool.get().SetBytes(hash))
-
-	evm.interpreter.intPool.put(offset, size)
+	size.SetBytes(hasher.hash[:])
+	keccak256Pool.Put(hasher)
 	return nil, nil
 }
 
@@ -585,7 +613,7 @@ func opPop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 
 func opMload(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset := stack.pop()
-	val := evm.interpreter.intPool.get().SetBytes(memory.Get(offset.Int64(), 32))
+	val := evm.interpreter.intPool.get().SetBytes(memory.GetPtr(offset.Int64(), 32))
 	stack.push(val)
 
 	evm.interpreter.intPool.put(offset)
