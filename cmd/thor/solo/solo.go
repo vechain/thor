@@ -162,21 +162,26 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
+	realElapsed := mclock.Now() - startTime
+
 	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
 		return errors.WithMessage(err, "set best block")
 	}
 
 	if !s.skipLogs {
-		if err := s.logDB.Log(func(w *logdb.Writer) error {
-			return w.Write(b, receipts)
-		}); err != nil {
-			return errors.WithMessage(err, "commit log")
+		w := s.logDB.NewWriter()
+		if err := w.Write(b, receipts); err != nil {
+			return errors.WithMessage(err, "write logs")
+		}
+
+		if err := w.Commit(); err != nil {
+			return errors.WithMessage(err, "commit logs")
 		}
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
-	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
 		log.Debug("bandwidth updated", "gps", v)
 	}
 

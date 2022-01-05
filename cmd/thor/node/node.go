@@ -41,7 +41,6 @@ var log = log15.New("pkg", "node")
 var errBlockTemporaryUnprocessable = errors.New("block temporary unprocessable")
 
 type Node struct {
-	goes           co.Goes
 	packer         *packer.Packer
 	cons           *consensus.Consensus
 	master         *Master
@@ -56,6 +55,7 @@ type Node struct {
 	bandwidth      bandwidth.Bandwidth
 	maxBlockNum    uint32
 	processLock    sync.Mutex
+	logWorker      *worker
 }
 
 func New(
@@ -85,18 +85,24 @@ func New(
 }
 
 func (n *Node) Run(ctx context.Context) error {
+	logWorker := newWorker()
+	defer logWorker.Close()
+
+	n.logWorker = logWorker
+
 	maxBlockNum, err := n.repo.GetMaxBlockNum()
 	if err != nil {
 		return err
 	}
 	n.maxBlockNum = maxBlockNum
-	n.comm.Sync(n.handleBlockStream)
 
-	n.goes.Go(func() { n.houseKeeping(ctx) })
-	n.goes.Go(func() { n.txStashLoop(ctx) })
-	n.goes.Go(func() { n.packerLoop(ctx) })
+	var goes co.Goes
+	goes.Go(func() { n.comm.Sync(ctx, n.handleBlockStream) })
+	goes.Go(func() { n.houseKeeping(ctx) })
+	goes.Go(func() { n.txStashLoop(ctx) })
+	goes.Go(func() { n.packerLoop(ctx) })
 
-	n.goes.Wait()
+	goes.Wait()
 	return nil
 }
 
@@ -276,33 +282,66 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 	return process(conflicts)
 }
 
-func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
-	var (
-		execElapsed, commitElapsed mclock.AbsTime
-		prevTrunk, curTrunk        *chain.Chain
-		receipts                   tx.Receipts
-		startTime                  = mclock.Now()
-	)
+func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
+	var isTrunk *bool
 
-	if blk.Header().Number() <= n.maxBlockNum {
-		fmt.Println(blk.Header().Number())
-	}
-	if err := n.guardBlockProcessing(blk.Header().Number(), func(conflicts uint32) error {
+	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
 		var (
-			stage *state.Stage
-			err   error
+			startTime     = mclock.Now()
+			oldBest       = n.repo.BestBlockSummary()
+			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
+			logEnabled    = becomeNewBest && !n.skipLogs && !n.logDBFailed
 		)
 
-		if stage, receipts, err = n.cons.Process(blk, uint64(time.Now().Unix()), conflicts); err != nil {
+		isTrunk = &becomeNewBest
+		// process the new block
+		stage, receipts, err := n.cons.Process(newBlock, uint64(time.Now().Unix()), conflicts)
+		if err != nil {
 			return err
 		}
-		execElapsed = mclock.Now() - startTime
 
-		if prevTrunk, curTrunk, err = n.commitBlock(stage, blk, receipts, conflicts); err != nil {
-			log.Error("failed to commit block", "err", err)
-			return err
+		// write logs
+		if logEnabled {
+			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
+				return errors.Wrap(err, "write logs")
+			}
 		}
-		commitElapsed = mclock.Now() - startTime - execElapsed
+
+		execElapsed := mclock.Now() - startTime
+
+		// commit produced states
+		if _, err := stage.Commit(); err != nil {
+			return errors.Wrap(err, "commit state")
+		}
+
+		// ad the new block into repository
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
+			return errors.Wrap(err, "add block")
+		}
+
+		realElapsed := mclock.Now() - startTime
+
+		// sync the log-writing task
+		if logEnabled {
+			if err := n.logWorker.Sync(); err != nil {
+				log.Warn("failed to write logs", "err", err)
+				n.logDBFailed = true
+			}
+		}
+
+		if becomeNewBest {
+			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+				return err
+			}
+			n.processFork(newBlock, oldBest.Header.ID())
+		}
+		commitElapsed := mclock.Now() - startTime - execElapsed
+
+		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
+			log.Debug("bandwidth updated", "gps", v)
+		}
+
+		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 		return nil
 	}); err != nil {
 		switch {
@@ -312,96 +351,78 @@ func (n *Node) processBlock(blk *block.Block, stats *blockStats) (bool, error) {
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:
 			stats.UpdateQueued(1)
 		case consensus.IsCritical(err):
-			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, blk.Header())
+			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
 			log.Error(msg, "err", err)
 		default:
 			log.Error("failed to process block", "err", err)
 		}
 		return false, err
 	}
-
-	if v, updated := n.bandwidth.Update(blk.Header(), time.Duration(execElapsed+commitElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
-	}
-
-	stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, blk.Header().GasUsed())
-	n.processFork(prevTrunk, curTrunk)
-	return prevTrunk.HeadID() != curTrunk.HeadID(), nil
+	return *isTrunk, nil
 }
 
-func (n *Node) commitBlock(stage *state.Stage, newBlock *block.Block, receipts tx.Receipts, newBlockConflicts uint32) (*chain.Chain, *chain.Chain, error) {
-	var (
-		prevBest      = n.repo.BestBlockSummary()
-		becomeNewBest = newBlock.Header().BetterThan(prevBest.Header)
-		awaitLog      = func() {}
-	)
-	defer awaitLog()
-
-	if becomeNewBest && !n.skipLogs && !n.logDBFailed {
-		done := make(chan struct{})
-		awaitLog = func() { <-done }
-
-		go func() {
-			defer close(done)
-
-			diff, err := n.repo.NewChain(newBlock.Header().ParentID()).Exclude(
-				n.repo.NewChain(prevBest.Header.ID()))
-			if err != nil {
-				n.logDBFailed = true
-				log.Warn("failed to write logs", "err", err)
-				return
-			}
-
-			if err := n.writeLogs(diff, newBlock, receipts); err != nil {
-				n.logDBFailed = true
-				log.Warn("failed to write logs", "err", err)
-				return
-			}
-		}()
+func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
+	var w *logdb.Writer
+	if int64(newBlock.Header().Timestamp()) < time.Now().Unix()-24*3600 {
+		// turn off log sync to quickly catch up
+		w = n.logDB.NewWriterSyncOff()
+	} else {
+		w = n.logDB.NewWriter()
 	}
-
-	if _, err := stage.Commit(); err != nil {
-		return nil, nil, errors.Wrap(err, "commit state")
-	}
-
-	if err := n.repo.AddBlock(newBlock, receipts, newBlockConflicts); err != nil {
-		return nil, nil, errors.Wrap(err, "add block")
-	}
-
-	if becomeNewBest {
-		// to wait for log written
-		awaitLog()
-		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-			return nil, nil, err
+	defer func() {
+		if err != nil {
+			n.logWorker.Run(w.Rollback)
 		}
+	}()
+
+	oldTrunk := n.repo.NewChain(oldBestBlockID)
+	newTrunk := n.repo.NewChain(newBlock.Header().ParentID())
+
+	oldBranch, err := oldTrunk.Exclude(newTrunk)
+	if err != nil {
+		return err
 	}
 
-	return n.repo.NewChain(prevBest.Header.ID()), n.repo.NewBestChain(), nil
-}
+	// to clear logs on the old branch.
+	if len(oldBranch) > 0 {
+		n.logWorker.Run(func() error {
+			return w.Truncate(block.Number(oldBranch[0]))
+		})
+	}
 
-func (n *Node) writeLogs(diff []thor.Bytes32, newBlock *block.Block, newReceipts tx.Receipts) error {
-	// write full trunk blocks to prevent logs dropped
-	// in rare condition of long fork
-	return n.logDB.Log(func(w *logdb.Writer) error {
-		for _, id := range diff {
-			b, err := n.repo.GetBlock(id)
-			if err != nil {
-				return err
-			}
-			receipts, err := n.repo.GetBlockReceipts(id)
-			if err != nil {
-				return err
-			}
-			if err := w.Write(b, receipts); err != nil {
-				return err
-			}
+	newBranch, err := newTrunk.Exclude(oldTrunk)
+	if err != nil {
+		return err
+	}
+	// write logs on the new branch.
+	for _, id := range newBranch {
+		block, err := n.repo.GetBlock(id)
+		if err != nil {
+			return err
 		}
-		return w.Write(newBlock, newReceipts)
+		receipts, err := n.repo.GetBlockReceipts(id)
+		if err != nil {
+			return err
+		}
+		n.logWorker.Run(func() error {
+			return w.Write(block, receipts)
+		})
+	}
+
+	n.logWorker.Run(func() error {
+		if err := w.Write(newBlock, newReceipts); err != nil {
+			return err
+		}
+		return w.Commit()
 	})
+	return nil
 }
 
-func (n *Node) processFork(prevTrunk, curTrunk *chain.Chain) {
-	sideIds, err := prevTrunk.Exclude(curTrunk)
+func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
+	oldTrunk := n.repo.NewChain(oldBestBlockID)
+	newTrunk := n.repo.NewChain(newBlock.Header().ParentID())
+
+	sideIds, err := oldTrunk.Exclude(newTrunk)
 	if err != nil {
 		log.Warn("failed to process fork", "err", err)
 		return
