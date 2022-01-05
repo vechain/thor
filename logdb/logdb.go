@@ -500,12 +500,17 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 					refIDQuery + "," +
 					refIDQuery + ")"
 
+				var eventData []byte
+				if len(ev.Data) > 0 {
+					eventData = ev.Data
+				}
+
 				if err := w.exec(
 					query,
 					newSequence(blockNum, eventCount),
 					blockTimestamp,
 					clauseIndex,
-					ev.Data,
+					eventData,
 					blockID[:],
 					txID[:],
 					txOrigin[:],
