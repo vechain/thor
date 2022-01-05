@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/kv"
@@ -60,9 +61,10 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 		headID,
 		func() (*muxdb.Trie, error) {
 			if indexTrie == nil && initErr == nil {
-				var summary *BlockSummary
-				if summary, initErr = repo.GetBlockSummary(headID); initErr == nil {
+				if summary, err := repo.GetBlockSummary(headID); err == nil {
 					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot, summary.Header.Number(), summary.Conflicts)
+				} else {
+					initErr = errors.Wrap(err, "lazy init chain")
 				}
 			}
 			return indexTrie, initErr

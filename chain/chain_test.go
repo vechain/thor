@@ -70,4 +70,13 @@ func TestChain(t *testing.T) {
 
 	assert.Equal(t, M([]thor.Bytes32{b3.Header().ID()}, nil), M(c1.Exclude(c2)))
 	assert.Equal(t, M([]thor.Bytes32{b3x.Header().ID()}, nil), M(c2.Exclude(c1)))
+
+	dangleID := thor.Bytes32{0, 0, 0, 4}
+	dangleChain := repo.NewChain(dangleID)
+
+	_, err = c1.Exclude(dangleChain)
+	assert.Error(t, err)
+
+	_, err = dangleChain.Exclude(c1)
+	assert.Error(t, err)
 }
