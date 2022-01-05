@@ -144,9 +144,12 @@ func TestEvents(t *testing.T) {
 			})
 		}
 
-		if err := db.Log(func(w *logdb.Writer) error {
-			return w.Write(b, receipts)
-		}); err != nil {
+		w := db.NewWriter()
+		if err := w.Write(b, receipts); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := w.Commit(); err != nil {
 			t.Fatal(err)
 		}
 	}
