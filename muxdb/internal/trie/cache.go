@@ -45,8 +45,13 @@ func (c *Cache) log() {
 	last := atomic.SwapInt64(&c.lastLogTime, now)
 
 	if now-last > int64(time.Second*20) {
-		c.nodeStats.Log("node cache stats")
-		c.rootStats.Log("root cache stats")
+		log1, ok1 := c.nodeStats.ShouldLog("node cache stats")
+		log2, ok2 := c.rootStats.ShouldLog("root cache stats")
+
+		if ok1 || ok2 {
+			log1()
+			log2()
+		}
 	} else {
 		atomic.CompareAndSwapInt64(&c.lastLogTime, now, last)
 	}
@@ -188,26 +193,37 @@ func (c *Cache) GetRootNode(name string, commitNum, distinctNum uint32, peek boo
 }
 
 type cacheStats struct {
-	hit, miss int64
+	hit, miss   int64
+	lastHitRate float64
 }
 
 func (cs *cacheStats) Hit() int64  { return atomic.AddInt64(&cs.hit, 1) }
 func (cs *cacheStats) Miss() int64 { return atomic.AddInt64(&cs.miss, 1) }
 
-func (cs *cacheStats) Log(msg string) {
+func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 	hit := atomic.LoadInt64(&cs.hit)
 	miss := atomic.LoadInt64(&cs.miss)
 	lookups := hit + miss
 
-	var hitrate string
-	if lookups > 0 {
-		hitrate = fmt.Sprintf("%.3f", float64(hit)/float64(lookups))
-	} else {
-		hitrate = "n/a"
+	hitrate := float64(hit) / float64(lookups)
+
+	f := func() {
+		var str string
+		if lookups > 0 {
+			str = fmt.Sprintf("%.3f", hitrate)
+		} else {
+			str = "n/a"
+		}
+
+		log.Info(msg,
+			"lookups", lookups,
+			"hitrate", str,
+		)
 	}
 
-	log.Info(msg,
-		"lookups", lookups,
-		"hitrate", hitrate,
-	)
+	if int(hitrate*1000) != int(cs.lastHitRate*1000) {
+		cs.lastHitRate = hitrate
+		return f, true
+	}
+	return f, false
 }
