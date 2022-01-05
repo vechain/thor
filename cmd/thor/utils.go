@@ -361,14 +361,16 @@ func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logd
 	if err != nil {
 		return nil, errors.Wrap(err, "initialize block chain")
 	}
-	if err := logDB.Log(func(w *logdb.Writer) error {
-		return w.Write(genesisBlock, tx.Receipts{{
-			Outputs: []*tx.Output{
-				{Events: genesisEvents, Transfers: genesisTransfers},
-			},
-		}})
-	}); err != nil {
+	w := logDB.NewWriter()
+	if err := w.Write(genesisBlock, tx.Receipts{{
+		Outputs: []*tx.Output{
+			{Events: genesisEvents, Transfers: genesisTransfers},
+		},
+	}}); err != nil {
 		return nil, errors.Wrap(err, "write genesis logs")
+	}
+	if err := w.Commit(); err != nil {
+		return nil, errors.Wrap(err, "commit genesis logs")
 	}
 	return repo, nil
 }

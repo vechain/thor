@@ -53,38 +53,45 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	defer func() { pb.NotPrint = true }()
 	bestChain := repo.NewBestChain()
 
-	if err := logDB.Log(func(w *logdb.Writer) error {
-		for i := startPos; i <= bestNum; i++ {
+	w := logDB.NewWriterSyncOff()
 
-			b, err := bestChain.GetBlock(i)
-			if err != nil {
-				return err
-			}
-			receipts, err := repo.GetBlockReceipts(b.Header().ID())
-			if err != nil {
-				return errors.Wrap(err, "get block receipts")
-			}
-			if err := w.Write(b, receipts); err != nil {
-				return err
-			}
-			if w.Len() > 2048 {
-				if err := w.Flush(); err != nil {
-					return err
-				}
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			pb.Add64(1)
-		}
-		return nil
-	}); err != nil {
-		if err == context.Canceled {
+	if err := w.Truncate(startPos); err != nil {
+		return err
+	}
+
+	for i := startPos; i <= bestNum; i++ {
+		b, err := bestChain.GetBlock(i)
+		if err != nil {
 			return err
 		}
-		return errors.Wrap(err, "write logs")
+		receipts, err := repo.GetBlockReceipts(b.Header().ID())
+		if err != nil {
+			return errors.Wrap(err, "get block receipts")
+		}
+		if err := w.Write(b, receipts); err != nil {
+			return err
+		}
+		if w.UncommittedCount() > 2048 {
+			if err := w.Commit(); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			if err := w.Commit(); err != nil {
+				return err
+			}
+			return ctx.Err()
+		default:
+		}
+		pb.Add64(1)
+		// recreate the chain to avoid the internal trie holds too many nodes.
+		if n := i - startPos; n > 0 && n%500000 == 0 {
+			bestChain = repo.NewChain(bestChain.HeadID())
+		}
+	}
+	if err := w.Commit(); err != nil {
+		return err
 	}
 	pb.Finish()
 	return nil
