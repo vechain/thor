@@ -10,7 +10,6 @@ package muxdb
 import (
 	"context"
 	"io"
-	"runtime"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -68,7 +67,6 @@ type Options struct {
 type MuxDB struct {
 	engine      engine
 	trieBackend *trie.Backend
-	beforeClose func() error
 }
 
 // Open opens or creates DB at the given path.
@@ -80,9 +78,6 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		WriteBuffer:            options.WriteBufferMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
 		BlockSize:              1024 * 32, // balance performance of point reads and compression ratio.
-		// workaround for the known issue: https://github.com/golang/go/issues/26650
-		// which slows down writting WAL.
-		DisableJournal: runtime.GOOS == "darwin",
 	}
 
 	if options.TrieWillCleanHistory {
@@ -134,12 +129,6 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			DedupedPtnFactor: ptnConfig.Deduped,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
-		beforeClose: func() error {
-			if runtime.GOOS == "darwin" {
-				return ldb.FlushMem()
-			}
-			return nil
-		},
 	}, nil
 }
 
@@ -165,9 +154,6 @@ func NewMem() *MuxDB {
 
 // Close closes the DB.
 func (db *MuxDB) Close() error {
-	if db.beforeClose != nil {
-		db.beforeClose()
-	}
 	return db.engine.Close()
 }
 
