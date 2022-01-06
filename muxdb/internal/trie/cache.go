@@ -193,8 +193,8 @@ func (c *Cache) GetRootNode(name string, commitNum, distinctNum uint32, peek boo
 }
 
 type cacheStats struct {
-	hit, miss   int64
-	lastHitRate float64
+	hit, miss int64
+	flag      int32
 }
 
 func (cs *cacheStats) Hit() int64  { return atomic.AddInt64(&cs.hit, 1) }
@@ -206,8 +206,8 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 	lookups := hit + miss
 
 	hitrate := float64(hit) / float64(lookups)
-
-	f := func() {
+	flag := int32(hitrate * 1000)
+	return func() {
 		var str string
 		if lookups > 0 {
 			str = fmt.Sprintf("%.3f", hitrate)
@@ -219,11 +219,6 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			"lookups", lookups,
 			"hitrate", str,
 		)
-	}
-
-	if int(hitrate*1000) != int(cs.lastHitRate*1000) {
-		cs.lastHitRate = hitrate
-		return f, true
-	}
-	return f, false
+		atomic.StoreInt32(&cs.flag, flag)
+	}, atomic.LoadInt32(&cs.flag) == flag
 }
