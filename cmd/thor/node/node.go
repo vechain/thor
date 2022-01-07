@@ -222,7 +222,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	log.Debug("enter tx stash loop")
 	defer log.Debug("leave tx stash loop")
 
-	db, err := leveldb.OpenFile(n.txStashPath, &opt.Options{})
+	db, err := leveldb.OpenFile(n.txStashPath, &opt.Options{NoFullFSync: true})
 	if err != nil {
 		log.Error("create tx stash", "err", err)
 		return
