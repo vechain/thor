@@ -22,21 +22,13 @@ const (
 	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
-type conn struct {
-	*sql.DB
-	stmtCache *stmtCache
-}
-
-func (c *conn) Close() error {
-	c.stmtCache.Clear()
-	return c.DB.Close()
-}
-
 type LogDB struct {
 	path          string
 	driverVersion string
-	conn          *conn
-	connSyncOff   *conn
+	db            *sql.DB
+	wconn         *sql.Conn
+	wconnSyncOff  *sql.Conn
+	stmtCache     *stmtCache
 }
 
 // New create or open log db at given path.
@@ -51,17 +43,21 @@ func New(path string) (logDB *LogDB, err error) {
 		}
 	}()
 
-	dbSyncOff, err := sql.Open("sqlite3", path+"?_journal=wal&cache=shared&_sync=off")
+	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+		return nil, err
+	}
+
+	wconn1, err := db.Conn(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil {
-			_ = dbSyncOff.Close()
-		}
-	}()
 
-	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+	wconn2, err := db.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
 		return nil, err
 	}
 
@@ -69,42 +65,26 @@ func New(path string) (logDB *LogDB, err error) {
 	return &LogDB{
 		path:          path,
 		driverVersion: driverVer,
-		conn:          &conn{db, newStmtCache(db)},
-		connSyncOff:   &conn{dbSyncOff, newStmtCache(dbSyncOff)},
+		db:            db,
+		wconn:         wconn1,
+		wconnSyncOff:  wconn2,
+		stmtCache:     newStmtCache(db),
 	}, nil
 }
 
 // NewMem create a log db in ram.
 func NewMem() (*LogDB, error) {
-	path := "file::memory:"
-	db, err := sql.Open("sqlite3", path+"?cache=shared")
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	c := &conn{db, newStmtCache(db)}
-	driverVer, _, _ := sqlite3.Version()
-	return &LogDB{
-		path:          path,
-		driverVersion: driverVer,
-		conn:          c,
-		connSyncOff:   c,
-	}, nil
+	return New("file::memory:")
 }
 
 // Close close the log db.
-func (db *LogDB) Close() error {
-	err := db.conn.Close()
-	if db.conn != db.connSyncOff {
-		err1 := db.connSyncOff.Close()
-		if err == nil {
-			err = err1
-		}
+func (db *LogDB) Close() (err error) {
+	err = db.wconn.Close()
+	if err1 := db.wconnSyncOff.Close(); err == nil {
+		err = err1
+	}
+	if err1 := db.db.Close(); err == nil {
+		err = err1
 	}
 	return err
 }
@@ -232,7 +212,7 @@ FROM (%v) t
 }
 
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interface{}) ([]*Event, error) {
-	rows, err := db.conn.QueryContext(ctx, query, args...)
+	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +279,7 @@ func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interfac
 }
 
 func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...interface{}) ([]*Transfer, error) {
-	rows, err := db.conn.QueryContext(ctx, query, args...)
+	rows, err := db.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +338,7 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 // NewestBlockID query newest written block id.
 func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
 	var data []byte
-	row := db.conn.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
+	row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
 			SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
 			UNION
 			SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
@@ -380,7 +360,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
 	seq := newSequence(block.Number(id), 0)
-	row := db.conn.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
+	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
 		// no need to check ErrNoRows
@@ -391,12 +371,12 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 
 // NewWriter creates a log writer.
 func (db *LogDB) NewWriter() *Writer {
-	return &Writer{conn: db.conn}
+	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
 }
 
 // NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
 func (db *LogDB) NewWriterSyncOff() *Writer {
-	return &Writer{conn: db.connSyncOff}
+	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
 }
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
@@ -408,7 +388,8 @@ func topicValue(topics []thor.Bytes32, i int) []byte {
 
 // Writer is the transactional log writer.
 type Writer struct {
-	conn *conn
+	conn      *sql.Conn
+	stmtCache *stmtCache
 
 	tx               *sql.Tx
 	uncommittedCount int
@@ -596,11 +577,11 @@ func (w *Writer) UncommittedCount() int {
 
 func (w *Writer) exec(query string, args ...interface{}) (err error) {
 	if w.tx == nil {
-		if w.tx, err = w.conn.Begin(); err != nil {
+		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
 			return
 		}
 	}
-	if _, err = w.tx.Stmt(w.conn.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
+	if _, err = w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
 		return
 	}
 	w.uncommittedCount++
