@@ -199,9 +199,10 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
 	if hash == nil {
+		hash = &hashNode{}
 		h.sha.Reset()
 		h.sha.Write(h.tmp)
-		hash = &hashNode{Hash: h.sha.Sum(nil)}
+		h.sha.Sum(hash.Hash[:0])
 	}
 	if db != nil {
 		// extended
@@ -213,9 +214,9 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 			hash.dNum = h.dNumNew
 		}
 
-		key := hash.Hash
+		key := hash.Hash[:]
 		if ke, ok := db.(DatabaseKeyEncoder); ok {
-			key = ke.Encode(hash.Hash, h.cNumNew, h.dNumNew, path)
+			key = ke.Encode(hash.Hash[:], h.cNumNew, h.dNumNew, path)
 		}
 		return hash, db.Put(key, h.tmp)
 	}

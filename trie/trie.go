@@ -94,7 +94,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		rootnode, err := trie.resolveHash(&hashNode{root[:], 0, 0}, nil)
+		rootnode, err := trie.resolveHash(&hashNode{Hash: root}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -429,9 +429,9 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 }
 
 func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node node, err error) {
-	key := n.Hash
+	key := n.Hash[:]
 	if ke, ok := t.db.(DatabaseKeyEncoder); ok {
-		key = ke.Encode(n.Hash, n.cNum, n.dNum, prefix)
+		key = ke.Encode(n.Hash[:], n.cNum, n.dNum, prefix)
 	}
 
 	var blob []byte
@@ -462,7 +462,7 @@ func (t *Trie) Root() []byte { return t.Hash().Bytes() }
 func (t *Trie) Hash() thor.Bytes32 {
 	hash, cached, _ := t.hashRoot(nil)
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).Hash)
+	return hash.(*hashNode).Hash
 }
 
 // Commit writes all nodes to the trie's database.
@@ -490,12 +490,12 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
 		return (thor.Bytes32{}), err
 	}
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).Hash), nil
+	return hash.(*hashNode).Hash, nil
 }
 
 func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
-		return &hashNode{Hash: emptyRoot.Bytes()}, nil, nil
+		return &hashNode{Hash: emptyRoot}, nil, nil
 	}
 	h := newHasher()
 	defer returnHasherToPool(h)

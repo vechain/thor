@@ -359,7 +359,7 @@ func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
 			return err
 		}
 		st.node = resolved
-		st.hash = thor.BytesToBytes32(hash.Hash)
+		st.hash = hash.Hash
 	}
 	return nil
 }
@@ -386,7 +386,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 				}
 
 				if hash != nil {
-					state.hash = thor.BytesToBytes32(hash.Hash)
+					state.hash = hash.Hash
 				}
 				parent.index = i - 1
 				return state, append(it.path, byte(i)), true
@@ -411,7 +411,7 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 			}
 
 			if hash != nil {
-				state.hash = thor.BytesToBytes32(hash.Hash)
+				state.hash = hash.Hash
 			}
 			return state, append(it.path, node.Key...), true
 		}

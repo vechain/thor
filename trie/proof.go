@@ -78,7 +78,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			} else {
 				enc, _ := frlp.EncodeToBytes(n)
 				if ok {
-					proofDb.Put(hash.Hash, enc)
+					proofDb.Put(hash.Hash[:], enc)
 				} else {
 					proofDb.Put(thor.Blake2b(enc).Bytes(), enc)
 				}
@@ -94,13 +94,13 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 // wrong value.
 func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
 	key = keybytesToHex(key)
-	wantHash := rootHash[:]
+	wantHash := rootHash
 	for i := 0; ; i++ {
-		buf, _ := proofDb.Get(wantHash)
+		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
 		}
-		n, err := decodeNode(&hashNode{wantHash, 0, 0}, buf, nil, nil)
+		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil, nil)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
 		}

@@ -30,7 +30,7 @@ func (n *Node) Dirty() bool {
 func (n *Node) Hash() (hash thor.Bytes32) {
 	if n.node != nil {
 		if h, _ := n.node.cache(); h != nil {
-			copy(hash[:], h.Hash)
+			return h.Hash
 		}
 	}
 	return
@@ -60,7 +60,7 @@ func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database) 
 	}
 	ext := ExtendedTrie{Trie{db: db}, 0}
 	if !isRootEmpty {
-		rootnode, err := ext.trie.resolveHash(&hashNode{root[:], commitNum, distinctNum}, nil)
+		rootnode, err := ext.trie.resolveHash(&hashNode{Hash: root, cNum: commitNum, dNum: distinctNum}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -178,13 +178,13 @@ func (e *ExtendedTrie) CommitTo(db DatabaseWriter, commitNum, distinctNum uint32
 		return thor.Bytes32{}, err
 	}
 	t.root = cached
-	return thor.BytesToBytes32(hash.(*hashNode).Hash), nil
+	return hash.(*hashNode).Hash, nil
 }
 
 func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum, distinctNum uint32) (node, node, error) {
 	t := &e.trie
 	if t.root == nil {
-		return &hashNode{Hash: emptyRoot.Bytes()}, nil, nil
+		return &hashNode{Hash: emptyRoot}, nil, nil
 	}
 	h := newHasherExtended(commitNum, distinctNum, e.cachedNodeTTL)
 	defer returnHasherToPool(h)

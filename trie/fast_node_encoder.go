@@ -75,7 +75,7 @@ func fastEncodeNode(w *lowrlp.Encoder, n node) error {
 		}
 		w.ListEnd(offset)
 	case *hashNode:
-		w.EncodeString(n.Hash)
+		w.EncodeString(n.Hash[:])
 	case *valueNode:
 		w.EncodeString(n.Value)
 	default:

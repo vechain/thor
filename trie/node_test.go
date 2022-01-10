@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/thor"
 )
 
 // func TestCanUnload(t *testing.T) {
@@ -65,7 +66,7 @@ func BenchmarkEncodeFullNode(b *testing.B) {
 	var buf sliceBuffer
 	f := &fullNode{}
 	for i := 0; i < len(f.Children); i++ {
-		f.Children[i] = &hashNode{Hash: randBytes(32)}
+		f.Children[i] = &hashNode{Hash: thor.BytesToBytes32(randBytes(32))}
 	}
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
@@ -77,7 +78,7 @@ func BenchmarkFastEncodeFullNode(b *testing.B) {
 	var buf sliceBuffer
 	f := &fullNode{}
 	for i := 0; i < len(f.Children); i++ {
-		f.Children[i] = &hashNode{Hash: randBytes(32)}
+		f.Children[i] = &hashNode{Hash: thor.BytesToBytes32(randBytes(32))}
 	}
 
 	for i := 0; i < b.N; i++ {

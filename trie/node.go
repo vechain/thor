@@ -46,7 +46,7 @@ type (
 		flags nodeFlag
 	}
 	hashNode struct {
-		Hash []byte
+		Hash thor.Bytes32
 		cNum uint32 // the commit number
 		dNum uint32 // the number to distinguish commits with the same commit number
 	}
@@ -348,7 +348,7 @@ func decodeRef(buf []byte, ml *metaList, nl *numList) (node, []byte, error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("invalid commit number: %v", err)
 		}
-		return &hashNode{append([]byte(nil), val...), cNum, dNum}, rest, nil
+		return &hashNode{Hash: thor.BytesToBytes32(val), cNum: cNum, dNum: dNum}, rest, nil
 	default:
 		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}
