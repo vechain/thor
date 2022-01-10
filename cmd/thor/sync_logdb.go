@@ -390,7 +390,11 @@ func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID th
 			}
 
 			for _, b := range buf {
-				ch <- b
+				select {
+				case ch <- b:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 			buf = buf[:0]
 		}
