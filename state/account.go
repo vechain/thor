@@ -6,7 +6,9 @@
 package state
 
 import (
+	"hash"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
@@ -145,7 +147,10 @@ func emptyAccount() *Account {
 // loadAccount load an account object by address in trie.
 // It returns empty account is no account found at the address.
 func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, error) {
-	data, meta, err := trie.FastGet(addr[:], steadyBlockNum)
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	data, meta, err := trie.FastGet(h.Hash(addr[:]), steadyBlockNum)
 	if err != nil {
 		return nil, err
 	}
@@ -166,9 +171,12 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*A
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
 func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.Update(addr[:], nil, nil)
+		return trie.Update(h.Hash(addr[:]), nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
@@ -177,21 +185,50 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 	}
 
 	am := NewAccountMetadata(a.storageInitCommitNum, a.storageCommitNum, a.storageDistinctNum, addr)
-	return trie.Update(addr[:], data, am)
+	return trie.Update(h.Hash(addr[:]), data, am)
 }
 
 // loadStorage load storage data for given key.
 func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
-	v, _, err := trie.FastGet(key[:], steadyBlockNum)
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	v, _, err := trie.FastGet(h.Hash(key[:]), steadyBlockNum)
 	return v, err
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
 func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
 	return trie.Update(
-		key[:],
+		h.Hash(key[:]),
 		data,
 		key[:], // key preimage as metadata
 	)
+}
+
+type hasher struct {
+	h   hash.Hash
+	buf []byte
+}
+
+func (h *hasher) Hash(in []byte) []byte {
+	if h.h == nil {
+		h.h = thor.NewBlake2b()
+	} else {
+		h.h.Reset()
+	}
+
+	h.h.Write(in)
+	h.buf = h.h.Sum(h.buf[:0])
+	return h.buf
+}
+
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return &hasher{}
+	},
 }

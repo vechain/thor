@@ -57,7 +57,7 @@ type State struct {
 func New(db *muxdb.MuxDB, root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
 	state := State{
 		db:             db,
-		trie:           db.NewSecureTrie(AccountTrieName, root, blockNum, blockConflicts),
+		trie:           db.NewTrie(AccountTrieName, root, blockNum, blockConflicts),
 		cache:          make(map[thor.Address]*cachedObject),
 		steadyBlockNum: steadyBlockNum,
 	}
@@ -368,7 +368,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
-	trie := s.db.NewSecureTrie(
+	trie := s.db.NewTrie(
 		StorageTrieName(addr, acc.storageInitCommitNum),
 		root,
 		acc.storageCommitNum,
@@ -487,7 +487,7 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 						return nil, &Error{err}
 					}
 				} else {
-					sTrie = s.db.NewSecureTrie(
+					sTrie = s.db.NewTrie(
 						StorageTrieName(addr, c.data.storageInitCommitNum),
 						thor.BytesToBytes32(c.data.StorageRoot),
 						c.data.storageCommitNum,

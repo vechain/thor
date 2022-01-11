@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -374,4 +375,24 @@ func wrapError(err error, ctx string) error {
 
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
+}
+
+// VerifyNodeHash verifies the hash of the node blob (trailing excluded).
+func VerifyNodeHash(blob, expectedHash []byte) (bool, error) {
+	// strip the trailing
+	_, _, trailing, err := rlp.Split(blob)
+	if err != nil {
+		return false, err
+	}
+
+	node := blob[:len(blob)-len(trailing)]
+
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	h.sha.Reset()
+	h.sha.Write(node)
+	h.tmp = h.sha.Sum(h.tmp[:0])
+
+	return bytes.Equal(expectedHash, h.tmp), nil
 }
