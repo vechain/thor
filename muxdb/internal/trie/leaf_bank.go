@@ -87,10 +87,10 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		return sLeaf.Leaf, sLeaf.CommitNum, nil
 	}
 
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
+	buf := bufferPool.Get().(*buffer)
+	defer bufferPool.Put(buf)
 
-	if data, err := slot.getter.GetTo(leafKey, h.buf[:0]); err != nil {
+	if data, err := slot.getter.GetTo(leafKey, buf.buf[:0]); err != nil {
 		if !slot.getter.IsNotFound(err) {
 			return nil, 0, err
 		}
@@ -98,7 +98,7 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 		// return empty leaf with max commit number.
 		return &trie.Leaf{}, atomic.LoadUint32(&slot.maxCommitNum), nil
 	} else {
-		h.buf = data
+		buf.buf = data
 		// deleted
 		if len(data) == 0 {
 			return nil, 0, nil

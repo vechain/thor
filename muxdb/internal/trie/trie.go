@@ -35,7 +35,6 @@ type Backend struct {
 type Trie struct {
 	back        *Backend
 	name        string
-	secure      bool
 	root        thor.Bytes32
 	commitNum   uint32
 	distinctNum uint32
@@ -50,7 +49,6 @@ type Trie struct {
 func New(
 	back *Backend,
 	name string,
-	secure bool,
 	root thor.Bytes32,
 	commitNum uint32,
 	distinctNum uint32,
@@ -58,7 +56,6 @@ func New(
 	t := &Trie{
 		back:        back,
 		name:        name,
-		secure:      secure,
 		root:        root,
 		commitNum:   commitNum,
 		distinctNum: distinctNum,
@@ -165,7 +162,7 @@ func (t *Trie) newDatabase() trie.Database {
 
 			// to ensure the node is correct, we need to verify the node hash.
 			// TODO: later can skip this step
-			if ok, err := verifyNodeHash(blob[len(dst):], thisHash); err != nil {
+			if ok, err := trie.VerifyNodeHash(blob[len(dst):], thisHash); err != nil {
 				return nil, err
 			} else if !ok {
 				return nil, errors.New("node hash checksum error")
@@ -212,11 +209,6 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if t.secure {
-		h := hasherPool.Get().(*hasher)
-		defer hasherPool.Put(h)
-		key = h.Hash(key)
-	}
 	return ext.Get(key)
 }
 
@@ -226,15 +218,12 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 	if t.back.LeafBank == nil {
 		return t.Get(key)
 	}
+
 	ext, err := t.init()
 	if err != nil {
 		return nil, nil, err
 	}
-	if t.secure {
-		h := hasherPool.Get().(*hasher)
-		defer hasherPool.Put(h)
-		key = h.Hash(key)
-	}
+
 	// setup fast leaf getter
 	var (
 		leaf          *trie.Leaf
@@ -299,11 +288,6 @@ func (t *Trie) Update(key, val, meta []byte) error {
 		return err
 	}
 	t.dirty = true
-	if t.secure {
-		h := hasherPool.Get().(*hasher)
-		defer hasherPool.Put(h)
-		key = h.Hash(key)
-	}
 	if len(val) == 0 { // deletion
 		// In practical, the leaf bank is not updated every commit.
 		// Suppose a key is set and is soon deleted, it might be
@@ -314,13 +298,13 @@ func (t *Trie) Update(key, val, meta []byte) error {
 			if t.bulk == nil {
 				t.bulk = t.back.Store.Bulk()
 			}
-			h := hasherPool.Get().(*hasher)
-			defer hasherPool.Put(h)
-			h.buf = append(h.buf[:0], t.back.LeafBankSpace)
-			h.buf = append(h.buf, t.name...)
-			h.buf = append(h.buf, key...)
+			buf := bufferPool.Get().(*buffer)
+			defer bufferPool.Put(buf)
+			buf.buf = append(buf.buf[:0], t.back.LeafBankSpace)
+			buf.buf = append(buf.buf, t.name...)
+			buf.buf = append(buf.buf, key...)
 
-			t.bulk.Put(h.buf, nil)
+			t.bulk.Put(buf.buf, nil)
 		}
 	}
 	return ext.Update(key, val, meta)

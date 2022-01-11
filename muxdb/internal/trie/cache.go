@@ -62,16 +62,16 @@ func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []b
 	if c == nil {
 		return
 	}
-	k := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(k)
+	k := bufferPool.Get().(*buffer)
+	defer bufferPool.Put(k)
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
 
 	if isCommitting {
 		// committing cache key: name + path
-		v := hasherPool.Get().(*hasher)
-		defer hasherPool.Put(v)
+		v := bufferPool.Get().(*buffer)
+		defer bufferPool.Put(v)
 
 		// concat commit & distinct number with blob as cache value
 		v.buf = appendUint32(v.buf[:0], commitNum)
@@ -100,8 +100,8 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 		lookupCommitted = c.committedNodes.PeekFn
 	}
 
-	k := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(k)
+	k := bufferPool.Get().(*buffer)
+	defer bufferPool.Put(k)
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)

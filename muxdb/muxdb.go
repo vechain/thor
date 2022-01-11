@@ -174,20 +174,6 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum, distinctNum 
 	return trie.New(
 		db.trieBackend,
 		name,
-		false,
-		root,
-		commitNum,
-		distinctNum,
-	)
-}
-
-// NewSecureTrie creates secure trie.
-// In a secure trie, keys are hashed using blake2b. It prevents depth attack.
-func (db *MuxDB) NewSecureTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
-	return trie.New(
-		db.trieBackend,
-		name,
-		true,
 		root,
 		commitNum,
 		distinctNum,

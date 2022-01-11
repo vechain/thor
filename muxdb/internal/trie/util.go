@@ -6,10 +6,8 @@
 package trie
 
 import (
-	"bytes"
 	"context"
-
-	"github.com/ethereum/go-ethereum/rlp"
+	"sync"
 )
 
 // PartitionFactor is factor to partition trie nodes bases on commit number.
@@ -67,22 +65,6 @@ func appendUint32(b []byte, v uint32) []byte {
 	)
 }
 
-// verifyNodeHash verifies the hash of the node blob (trailing excluded).
-func verifyNodeHash(blob, expectedHash []byte) (bool, error) {
-	// strip the trailing
-	_, _, trailing, err := rlp.Split(blob)
-	if err != nil {
-		return false, err
-	}
-
-	node := blob[:len(blob)-len(trailing)]
-
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
-	return bytes.Equal(expectedHash, h.Hash(node)), nil
-}
-
 // newContextChecker creates a debounced context checker.
 func newContextChecker(ctx context.Context, debounce int) func() error {
 	count := 0
@@ -98,4 +80,14 @@ func newContextChecker(ctx context.Context, debounce int) func() error {
 		}
 		return nil
 	}
+}
+
+type buffer struct {
+	buf []byte
+}
+
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return &buffer{}
+	},
 }
