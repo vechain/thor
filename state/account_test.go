@@ -90,3 +90,28 @@ func TestStorageTrie(t *testing.T) {
 		M([]byte(nil), []byte(nil), nil),
 		"empty storage value should be deleted")
 }
+
+func TestAccountMetadata(t *testing.T) {
+	var (
+		addr   = thor.BytesToAddress([]byte("addr"))
+		initCN = uint32(1)
+		cn     = uint32(2)
+		dn     = uint32(3)
+	)
+
+	m := NewAccountMetadata(initCN, cn, dn, addr)
+
+	assert.Equal(t, initCN, m.StorageInitCommitNum())
+	assert.Equal(t, cn, m.StorageCommitNum())
+	assert.Equal(t, dn, m.StorageDistinctNum())
+
+	_addr, ok := m.Address()
+	assert.True(t, ok)
+	assert.Equal(t, addr, _addr)
+
+	m = m.SkipAddress()
+
+	_addr, ok = m.Address()
+	assert.False(t, ok)
+	assert.True(t, _addr.IsZero())
+}

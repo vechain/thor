@@ -6,10 +6,11 @@
 package state
 
 import (
-	"encoding/binary"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pkg/errors"
+	"github.com/vechain/thor/lowrlp"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
@@ -19,40 +20,76 @@ type AccountMetadata []byte
 
 // NewAccountMetadata builds the account metadata.
 func NewAccountMetadata(storageInitCommitNum, storageCommitNum, storageDistinctNum uint32, addr thor.Address) AccountMetadata {
-	buf := make([]byte, 32)
-	binary.BigEndian.PutUint32(buf, storageInitCommitNum)
-	binary.BigEndian.PutUint32(buf[4:], storageCommitNum)
-	binary.BigEndian.PutUint32(buf[8:], storageDistinctNum)
-	copy(buf[12:], addr[:])
-	return buf
+	w := lowrlp.NewEncoder()
+	defer w.Release()
+
+	w.EncodeUint(uint64(storageInitCommitNum))
+	w.EncodeUint(uint64(storageCommitNum))
+	w.EncodeUint(uint64(storageDistinctNum))
+	w.EncodeString(addr[:])
+	return w.ToBytes()
+}
+
+func (m AccountMetadata) split(i int) ([]byte, []byte) {
+	var (
+		content []byte
+		rest    = m
+		err     error
+	)
+	for ; i >= 0; i-- {
+		if content, rest, err = rlp.SplitString(rest); err != nil {
+			panic(errors.Wrap(err, "decode account metadata"))
+		}
+	}
+	return content, rest
+}
+
+func (m AccountMetadata) splitUint32(i int) uint32 {
+	c, _ := m.split(i)
+	if len(c) > 4 { // 32-bit max
+		panic(errors.New("decode account metadata: content too long"))
+	}
+	var n uint32
+	for _, b := range c {
+		n <<= 8
+		n |= uint32(b)
+	}
+	return n
 }
 
 // StorageInitCommitNum returns the initial storage commit number.
 func (m AccountMetadata) StorageInitCommitNum() uint32 {
-	return binary.BigEndian.Uint32(m)
+	return m.splitUint32(0)
 }
 
 // StorageCommitNum returns the commit number of the last storage update.
 func (m AccountMetadata) StorageCommitNum() uint32 {
-	return binary.BigEndian.Uint32(m[4:])
+	return m.splitUint32(1)
 }
 
 // StorageDistinctNum returns the distinct number of the last storage update.
 func (m AccountMetadata) StorageDistinctNum() uint32 {
-	return binary.BigEndian.Uint32(m[8:])
+	return m.splitUint32(2)
 }
 
 // Address returns the account address.
 func (m AccountMetadata) Address() (thor.Address, bool) {
-	if len(m) != 32 {
-		return thor.Address{}, false
+	if n, err := rlp.CountValues(m); err != nil {
+		panic(errors.Wrap(err, "decode account metadata"))
+	} else if n == 4 {
+		c, _ := m.split(3)
+		if len(c) != 20 {
+			panic(errors.New("decode account metadata: unexpected address length"))
+		}
+		return thor.BytesToAddress(c), true
 	}
-	return thor.BytesToAddress(m[12:32]), true
+	return thor.Address{}, false
 }
 
 // SkipAddress returns the account metadata without address.
 func (m AccountMetadata) SkipAddress() AccountMetadata {
-	return m[:12]
+	_, rest := m.split(2)
+	return m[:len(m)-len(rest)]
 }
 
 // Account is the Thor consensus representation of an account.
