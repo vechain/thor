@@ -403,5 +403,14 @@ func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID th
 			chain = repo.NewChain(headID)
 		}
 	}
+
+	// pump remained blocks
+	for _, b := range buf {
+		select {
+		case ch <- b:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	return nil
 }
