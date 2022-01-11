@@ -83,6 +83,7 @@ func (db *LogDB) Close() (err error) {
 	if err1 := db.wconnSyncOff.Close(); err == nil {
 		err = err1
 	}
+	db.stmtCache.Clear()
 	if err1 := db.db.Close(); err == nil {
 		err = err1
 	}
