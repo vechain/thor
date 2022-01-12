@@ -6,6 +6,7 @@
 package state
 
 import (
+	"bytes"
 	"hash"
 	"math/big"
 	"sync"
@@ -206,7 +207,7 @@ func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
 	return trie.Update(
 		h.Hash(key[:]),
 		data,
-		key[:], // key preimage as metadata
+		bytes.TrimLeft(key[:], "\x00"), // key preimage as metadata
 	)
 }
 
