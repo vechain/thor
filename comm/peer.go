@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	maxKnownTxs    = 32768 // Maximum transactions IDs to keep in the known list (prevent DOS)
+	maxKnownTxs    = 65536 // Maximum transactions IDs to keep in the known list (prevent DOS)
 	maxKnownBlocks = 1024  // Maximum block IDs to keep in the known list (prevent DOS)
 )
 
@@ -83,10 +83,10 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(hash thor.Bytes32) {
-	// that's 1~5 block intervals
-	expiration := int64(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(5)+1)))
+	// that's 10~100 block intervals
+	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(91)+10)))
 
-	deadline := time.Now().Unix() + expiration
+	deadline := mclock.Now() + expiration
 	p.knownTxs.Add(hash, deadline)
 }
 
@@ -101,7 +101,7 @@ func (p *Peer) IsTransactionKnown(hash thor.Bytes32) bool {
 	if !ok {
 		return false
 	}
-	return deadline.(int64) > time.Now().Unix()
+	return deadline.(mclock.AbsTime) > mclock.Now()
 }
 
 // IsBlockKnown returns if the block is known.
