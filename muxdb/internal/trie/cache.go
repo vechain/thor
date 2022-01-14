@@ -67,22 +67,21 @@ func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []b
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
+	k.buf = appendUint32(k.buf, distinctNum)
 
 	if isCommitting {
-		// committing cache key: name + path
+		// committing cache key: name + path + distinctNum
 		v := bufferPool.Get().(*buffer)
 		defer bufferPool.Put(v)
 
-		// concat commit & distinct number with blob as cache value
+		// concat commit number with blob as cache value
 		v.buf = appendUint32(v.buf[:0], commitNum)
-		v.buf = appendUint32(v.buf, distinctNum)
 		v.buf = append(v.buf, blob...)
 
 		_ = c.committedNodes.Set(k.buf, v.buf, 0)
 	} else {
-		// querying cache key: name + path + commitNum + distinctNum
+		// querying cache key: name + path + distinctNum + commitNum
 		k.buf = appendUint32(k.buf, commitNum)
-		k.buf = appendUint32(k.buf, distinctNum)
 		_ = c.queriedNodes.Set(k.buf, blob, 0)
 	}
 }
@@ -105,12 +104,13 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
+	k.buf = appendUint32(k.buf, distinctNum)
 
 	// lookup from committing cache
 	var blob []byte
 	lookupCommitted(k.buf, func(b []byte) error {
-		if binary.BigEndian.Uint64(b) == (uint64(commitNum)<<32)|uint64(distinctNum) {
-			blob = append(dst, b[8:]...)
+		if binary.BigEndian.Uint32(b) == commitNum {
+			blob = append(dst, b[4:]...)
 		}
 		return nil
 	})
@@ -123,7 +123,6 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 
 	// fallback to querying cache
 	k.buf = appendUint32(k.buf, commitNum)
-	k.buf = appendUint32(k.buf, distinctNum)
 	lookupQueried(k.buf, func(b []byte) error {
 		blob = append(dst, b...)
 		return nil
@@ -220,5 +219,5 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			"hitrate", str,
 		)
 		atomic.StoreInt32(&cs.flag, flag)
-	}, atomic.LoadInt32(&cs.flag) == flag
+	}, atomic.LoadInt32(&cs.flag) != flag
 }
