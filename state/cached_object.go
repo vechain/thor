@@ -37,7 +37,7 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 	}
 
 	trie := co.db.NewTrie(
-		StorageTrieName(co.addr, co.data.storageInitCommitNum),
+		StorageTrieName(co.addr),
 		thor.BytesToBytes32(co.data.StorageRoot),
 		co.data.storageCommitNum,
 		co.data.storageDistinctNum)

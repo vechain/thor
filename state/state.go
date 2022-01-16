@@ -7,7 +7,6 @@ package state
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -27,12 +26,8 @@ const (
 )
 
 // StorageTrieName returns the name of storage trie.
-func StorageTrieName(addr thor.Address, initCommitNum uint32) string {
-	var buf [25]byte
-	buf[0] = StorageTrieNamePrefix[0]
-	copy(buf[1:], addr[:])
-	binary.BigEndian.PutUint32(buf[21:], initCommitNum)
-	return string(buf[:])
+func StorageTrieName(addr thor.Address) string {
+	return StorageTrieNamePrefix + string(addr[:])
 }
 
 // Error is the error caused by state access failure.
@@ -369,7 +364,7 @@ func (s *State) BuildStorageTrie(addr thor.Address) (*muxdb.Trie, error) {
 	root := thor.BytesToBytes32(acc.StorageRoot)
 
 	trie := s.db.NewTrie(
-		StorageTrieName(addr, acc.storageInitCommitNum),
+		StorageTrieName(addr),
 		root,
 		acc.storageCommitNum,
 		acc.storageDistinctNum)
@@ -478,17 +473,13 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 		if !c.data.IsEmpty() {
 			if len(c.storage) > 0 {
 				var sTrie *muxdb.Trie
-				if len(c.data.StorageRoot) == 0 {
-					// storage was empty or destructed
-					c.data.storageInitCommitNum = newBlockNum
-				}
 				if len(c.data.StorageRoot) > 0 && c.baseStorageTrie != nil {
 					if sTrie, err = c.baseStorageTrie.Copy(); err != nil {
 						return nil, &Error{err}
 					}
 				} else {
 					sTrie = s.db.NewTrie(
-						StorageTrieName(addr, c.data.storageInitCommitNum),
+						StorageTrieName(addr),
 						thor.BytesToBytes32(c.data.StorageRoot),
 						c.data.storageCommitNum,
 						c.data.storageDistinctNum)

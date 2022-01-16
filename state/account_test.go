@@ -55,7 +55,7 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
-		0, 0, 0,
+		0, 0,
 	}
 	saveAccount(trie, addr, &acc1)
 	assert.Equal(t,
@@ -93,15 +93,13 @@ func TestStorageTrie(t *testing.T) {
 
 func TestAccountMetadata(t *testing.T) {
 	var (
-		addr   = thor.BytesToAddress([]byte("addr"))
-		initCN = uint32(1)
-		cn     = uint32(2)
-		dn     = uint32(3)
+		addr = thor.BytesToAddress([]byte("addr"))
+		cn   = uint32(1)
+		dn   = uint32(2)
 	)
 
-	m := NewAccountMetadata(initCN, cn, dn, addr)
+	m := NewAccountMetadata(cn, dn, addr)
 
-	assert.Equal(t, initCN, m.StorageInitCommitNum())
 	assert.Equal(t, cn, m.StorageCommitNum())
 	assert.Equal(t, dn, m.StorageDistinctNum())
 

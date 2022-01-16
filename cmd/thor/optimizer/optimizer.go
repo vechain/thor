@@ -141,7 +141,7 @@ func (p *Optimizer) newStorageTrieIfUpdated(accLeaf *trie.Leaf, base uint32) *mu
 			}
 
 			return p.db.NewTrie(
-				state.StorageTrieName(addr, am.StorageInitCommitNum()),
+				state.StorageTrieName(addr),
 				thor.BytesToBytes32(acc.StorageRoot),
 				scn,
 				am.StorageDistinctNum(),

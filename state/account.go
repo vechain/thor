@@ -22,11 +22,10 @@ import (
 type AccountMetadata []byte
 
 // NewAccountMetadata builds the account metadata.
-func NewAccountMetadata(storageInitCommitNum, storageCommitNum, storageDistinctNum uint32, addr thor.Address) AccountMetadata {
+func NewAccountMetadata(storageCommitNum, storageDistinctNum uint32, addr thor.Address) AccountMetadata {
 	w := lowrlp.NewEncoder()
 	defer w.Release()
 
-	w.EncodeUint(uint64(storageInitCommitNum))
 	w.EncodeUint(uint64(storageCommitNum))
 	w.EncodeUint(uint64(storageDistinctNum))
 	w.EncodeString(addr[:])
@@ -60,27 +59,22 @@ func (m AccountMetadata) splitUint32(i int) uint32 {
 	return n
 }
 
-// StorageInitCommitNum returns the initial storage commit number.
-func (m AccountMetadata) StorageInitCommitNum() uint32 {
-	return m.splitUint32(0)
-}
-
 // StorageCommitNum returns the commit number of the last storage update.
 func (m AccountMetadata) StorageCommitNum() uint32 {
-	return m.splitUint32(1)
+	return m.splitUint32(0)
 }
 
 // StorageDistinctNum returns the distinct number of the last storage update.
 func (m AccountMetadata) StorageDistinctNum() uint32 {
-	return m.splitUint32(2)
+	return m.splitUint32(1)
 }
 
 // Address returns the account address.
 func (m AccountMetadata) Address() (thor.Address, bool) {
 	if n, err := rlp.CountValues(m); err != nil {
 		panic(errors.Wrap(err, "decode account metadata"))
-	} else if n == 4 {
-		c, _ := m.split(3)
+	} else if n == 3 {
+		c, _ := m.split(2)
 		if len(c) != 20 {
 			panic(errors.New("decode account metadata: unexpected address length"))
 		}
@@ -91,7 +85,7 @@ func (m AccountMetadata) Address() (thor.Address, bool) {
 
 // SkipAddress returns the account metadata without address.
 func (m AccountMetadata) SkipAddress() AccountMetadata {
-	_, rest := m.split(2)
+	_, rest := m.split(1)
 	return m[:len(m)-len(rest)]
 }
 
@@ -105,7 +99,7 @@ type Account struct {
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
 
-	storageInitCommitNum, storageCommitNum, storageDistinctNum uint32
+	storageCommitNum, storageDistinctNum uint32
 }
 
 // IsEmpty returns if an account is empty.
@@ -163,7 +157,6 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*A
 		return nil, err
 	}
 	am := AccountMetadata(meta)
-	a.storageInitCommitNum = am.StorageInitCommitNum()
 	a.storageCommitNum = am.StorageCommitNum()
 	a.storageDistinctNum = am.StorageDistinctNum()
 	return &a, nil
@@ -185,7 +178,7 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 		return err
 	}
 
-	am := NewAccountMetadata(a.storageInitCommitNum, a.storageCommitNum, a.storageDistinctNum, addr)
+	am := NewAccountMetadata(a.storageCommitNum, a.storageDistinctNum, addr)
 	return trie.Update(h.Hash(addr[:]), data, am)
 }
 
