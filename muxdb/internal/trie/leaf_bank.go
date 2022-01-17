@@ -34,20 +34,22 @@ type leafBankSlot struct {
 // according to VIP-212.
 type LeafBank struct {
 	store kv.Store
+	space byte
 	slots *lru.ARCCache
 }
 
 // NewLeafBank creates a new LeafBank instance.
 // The slotCap indicates the capacity of cached per-trie slots.
-func NewLeafBank(store kv.Store, slotCap int) *LeafBank {
-	b := &LeafBank{store: store}
+func NewLeafBank(store kv.Store, space byte, slotCap int) *LeafBank {
+	b := &LeafBank{store: store, space: space}
 	b.slots, _ = lru.NewARC(slotCap)
 	return b
 }
 
 func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
-	if data, err := b.store.Get([]byte(name)); err != nil {
-		if !b.store.IsNotFound(err) {
+	getter := kv.Bucket(string(b.space) + name).NewGetter(b.store)
+	if data, err := getter.Get(nil); err != nil {
+		if !getter.IsNotFound(err) {
 			return nil, err
 		}
 		// the trie has no leaf recorded yet
@@ -55,7 +57,7 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 	} else {
 		slot := &leafBankSlot{
 			maxCommitNum: binary.BigEndian.Uint32(data),
-			getter:       kv.Bucket(name).NewGetter(b.store)}
+			getter:       getter}
 		slot.cache, _ = lru.New(slotCacheSize)
 		return slot, nil
 	}
@@ -112,13 +114,30 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 	}
 }
 
+// MarkDeletion marks the key of a trie named with name has been deleted.
+//
+// In practical, the leaf bank is not updated every commit. Suppose a key is set and
+// is soon deleted, it might be missing in leaf bank records. In this case,
+// inexistence assertion of the leaf bank is incorrect. So here we records delete keys,
+// to keep the integrity of the leaf bank.
+func (b *LeafBank) MarkDeletion(putter kv.Putter, name string, key []byte) error {
+	buf := bufferPool.Get().(*buffer)
+	defer bufferPool.Put(buf)
+
+	buf.buf = append(buf.buf[:0], b.space)
+	buf.buf = append(buf.buf, name...)
+	buf.buf = append(buf.buf, key...)
+
+	return putter.Put(buf.buf, nil)
+}
+
 // NewUpdater creates the leaf updater for a trie with the given name.
 func (b *LeafBank) NewUpdater(name string, rootCommitNum uint32) *LeafUpdater {
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
 	}
-	bulk := kv.Bucket(name).NewStore(b.store).Bulk()
+	bulk := kv.Bucket(string(b.space) + name).NewStore(b.store).Bulk()
 	bulk.EnableAutoFlush()
 	return &LeafUpdater{
 		slot:          slot,

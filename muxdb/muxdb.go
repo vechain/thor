@@ -117,13 +117,21 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		}
 	}
 
+	trieCache := trie.NewCache(
+		options.TrieNodeCacheSizeMB,
+		options.TrieRootCacheCapacity)
+
+	trieLeafBank := trie.NewLeafBank(
+		engine,
+		trieLeafBankSpace,
+		options.TrieLeafBankSlotCapacity)
+
 	return &MuxDB{
 		engine: engine,
 		trieBackend: &trie.Backend{
 			Store:            engine,
-			Cache:            trie.NewCache(options.TrieNodeCacheSizeMB, options.TrieRootCacheCapacity),
-			LeafBank:         trie.NewLeafBank(kv.Bucket(trieLeafBankSpace).NewStore(engine), options.TrieLeafBankSlotCapacity),
-			LeafBankSpace:    trieLeafBankSpace,
+			Cache:            trieCache,
+			LeafBank:         trieLeafBank,
 			HistSpace:        trieHistSpace,
 			DedupedSpace:     trieDedupedSpace,
 			HistPtnFactor:    ptnConfig.Hist,
@@ -143,7 +151,8 @@ func NewMem() *MuxDB {
 		engine: engine,
 		trieBackend: &trie.Backend{
 			Store:            engine,
-			LeafBankSpace:    trieLeafBankSpace,
+			Cache:            nil,
+			LeafBank:         nil,
 			HistSpace:        trieHistSpace,
 			DedupedSpace:     trieDedupedSpace,
 			HistPtnFactor:    1,

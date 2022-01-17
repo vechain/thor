@@ -23,7 +23,6 @@ type Backend struct {
 	Store    kv.Store
 	Cache    *Cache
 	LeafBank *LeafBank
-	LeafBankSpace,
 	HistSpace,
 	DedupedSpace byte
 	HistPtnFactor,
@@ -289,22 +288,14 @@ func (t *Trie) Update(key, val, meta []byte) error {
 	}
 	t.dirty = true
 	if len(val) == 0 { // deletion
-		// In practical, the leaf bank is not updated every commit.
-		// Suppose a key is set and is soon deleted, it might be
-		// missing in leaf bank records. In this case, inexistence assertion
-		// of the leaf bank is incorrect. So here we records delete keys,
-		// to keep the integrity of the leaf bank.
 		if t.back.LeafBank != nil {
 			if t.bulk == nil {
 				t.bulk = t.back.Store.Bulk()
 			}
-			buf := bufferPool.Get().(*buffer)
-			defer bufferPool.Put(buf)
-			buf.buf = append(buf.buf[:0], t.back.LeafBankSpace)
-			buf.buf = append(buf.buf, t.name...)
-			buf.buf = append(buf.buf, key...)
 
-			t.bulk.Put(buf.buf, nil)
+			if err := t.back.LeafBank.MarkDeletion(t.bulk, t.name, key); err != nil {
+				return err
+			}
 		}
 	}
 	return ext.Update(key, val, meta)
