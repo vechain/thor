@@ -1,9 +1,9 @@
-// Copyright (c) 2019 The VeChainThor developers
+// Copyright (c) 2022 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package muxdb
+package engine
 
 import (
 	"sync"
@@ -25,8 +25,8 @@ type levelEngine struct {
 	batchPool *sync.Pool
 }
 
-// newLevelEngine create leveldb instance which implements engine interface.
-func newLevelEngine(db *leveldb.DB) engine {
+// NewLevelEngine creates leveldb instance which implements the Engine interface.
+func NewLevelEngine(db *leveldb.DB) Engine {
 	return &levelEngine{
 		db,
 		&sync.Pool{

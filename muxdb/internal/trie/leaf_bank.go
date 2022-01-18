@@ -7,6 +7,7 @@ package trie
 
 import (
 	"encoding/binary"
+	"math"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -17,8 +18,8 @@ import (
 
 const slotCacheSize = 64
 
-// storageLeaf is the entity stored in leaf bank.
-type storageLeaf struct {
+// LeafRecord is the entity stored in leaf bank.
+type LeafRecord struct {
 	*trie.Leaf
 	CommitNum uint32
 }
@@ -48,36 +49,35 @@ func NewLeafBank(store kv.Store, space byte, slotCap int) *LeafBank {
 
 func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 	getter := kv.Bucket(string(b.space) + name).NewGetter(b.store)
+	var maxCommitNum uint32
 	if data, err := getter.Get(nil); err != nil {
 		if !getter.IsNotFound(err) {
 			return nil, err
 		}
-		// the trie has no leaf recorded yet
-		return nil, nil
 	} else {
-		slot := &leafBankSlot{
-			maxCommitNum: binary.BigEndian.Uint32(data),
-			getter:       getter}
-		slot.cache, _ = lru.New(slotCacheSize)
-		return slot, nil
+		maxCommitNum = binary.BigEndian.Uint32(data)
 	}
+
+	slot := &leafBankSlot{
+		maxCommitNum: maxCommitNum,
+		getter:       getter}
+	slot.cache, _ = lru.New(slotCacheSize)
+	return slot, nil
 }
 
 // Lookup lookups a leaf from the trie named name by the given leafKey.
-// The returned leaf might be nil if no leaf recorded yet, or deleted.
-// The commitNum indicates up to which commit number the leaf is valid.
-func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitNum uint32, err error) {
+// The returned leaf might be nil if the key is never seen (with latest commitNum),
+// or was ever seen but can't be located now (touched, with commitNum == -1 (math.MaxUint32)).
+// LeafRecord.CommitNum indicates up to which commit number the leaf is valid.
+func (b *LeafBank) Lookup(name string, leafKey []byte) (*LeafRecord, error) {
 	// get slot from slots cache or create a new one.
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
 		slot = cached.(*leafBankSlot)
 	} else {
+		var err error
 		if slot, err = b.newSlot(name); err != nil {
-			return nil, 0, err
-		}
-		if slot == nil {
-			// the trie has no leaf recorded yet
-			return nil, 0, nil
+			return nil, err
 		}
 		b.slots.Add(name, slot)
 	}
@@ -85,8 +85,8 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 	// lookup from the slot's cache if any.
 	strLeafKey := string(leafKey)
 	if cached, ok := slot.cache.Get(strLeafKey); ok {
-		sLeaf := cached.(*storageLeaf)
-		return sLeaf.Leaf, sLeaf.CommitNum, nil
+		rec := cached.(*LeafRecord)
+		return rec, nil
 	}
 
 	buf := bufferPool.Get().(*buffer)
@@ -94,33 +94,37 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (leaf *trie.Leaf, commitN
 
 	if data, err := slot.getter.GetTo(leafKey, buf.buf[:0]); err != nil {
 		if !slot.getter.IsNotFound(err) {
-			return nil, 0, err
+			return nil, err
 		}
-		// not found
-		// return empty leaf with max commit number.
-		return &trie.Leaf{}, atomic.LoadUint32(&slot.maxCommitNum), nil
+		// not seen till slot.maxCommitNum
+		return &LeafRecord{CommitNum: atomic.LoadUint32(&slot.maxCommitNum)}, nil
 	} else {
 		buf.buf = data
-		// deleted
-		if len(data) == 0 {
-			return nil, 0, nil
+		var rec LeafRecord
+		if len(data) > 0 {
+			if err := rlp.DecodeBytes(data, &rec); err != nil {
+				return nil, err
+			}
+			if len(rec.Meta) == 0 {
+				rec.Meta = nil // normalize
+			}
+		} else {
+			// ever seen, but can't be located now (touched)
+			rec.CommitNum = math.MaxUint32
 		}
-		var sLeaf storageLeaf
-		if err := rlp.DecodeBytes(data, &sLeaf); err != nil {
-			return nil, 0, err
-		}
-		slot.cache.Add(strLeafKey, &sLeaf)
-		return sLeaf.Leaf, sLeaf.CommitNum, nil
+		slot.cache.Add(strLeafKey, &rec)
+		return &rec, nil
 	}
 }
 
-// MarkDeletion marks the key of a trie named with name has been deleted.
+// Touch touches the key. Now it just sets an empty value for the given key.
+// Later if the engine supports conditional update, we can do real touch.
 //
 // In practical, the leaf bank is not updated every commit. Suppose a key is set and
 // is soon deleted, it might be missing in leaf bank records. In this case,
-// inexistence assertion of the leaf bank is incorrect. So here we records delete keys,
-// to keep the integrity of the leaf bank.
-func (b *LeafBank) MarkDeletion(putter kv.Putter, name string, key []byte) error {
+// inexistence assertion of the leaf bank is incorrect. To keep the integrity of the leaf bank,
+// this method should be called everytime a key is deleted from the trie.
+func (b *LeafBank) Touch(putter kv.Putter, name string, key []byte) error {
 	buf := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(buf)
 
@@ -155,7 +159,7 @@ type LeafUpdater struct {
 
 // Update updates the leaf for the given key.
 func (u *LeafUpdater) Update(key []byte, leaf *trie.Leaf) error {
-	data, err := rlp.EncodeToBytes(&storageLeaf{
+	data, err := rlp.EncodeToBytes(&LeafRecord{
 		leaf,
 		u.rootCommitNum, // inherits root's commit number
 	})

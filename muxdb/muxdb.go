@@ -9,7 +9,6 @@ package muxdb
 
 import (
 	"context"
-	"io"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -18,6 +17,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/kv"
+	"github.com/vechain/thor/muxdb/internal/engine"
 	"github.com/vechain/thor/muxdb/internal/trie"
 	"github.com/vechain/thor/thor"
 )
@@ -28,11 +28,6 @@ const (
 	trieLeafBankSpace = byte(2) // the key space for the trie leaf bank.
 	namedStoreSpace   = byte(3) // the key space for named store.
 )
-
-type engine interface {
-	kv.Store
-	io.Closer
-}
 
 // Trie is the managed trie.
 type Trie = trie.Trie
@@ -65,7 +60,7 @@ type Options struct {
 
 // MuxDB is the database to efficiently store state trie and block-chain data.
 type MuxDB struct {
-	engine      engine
+	engine      engine.Engine
 	trieBackend *trie.Backend
 }
 
@@ -97,7 +92,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	}
 
 	// as engine
-	engine := newLevelEngine(ldb)
+	engine := engine.NewLevelEngine(ldb)
 
 	var ptnConfig triePartitionConfig
 	if err := ptnConfig.Load(engine); err != nil {
@@ -146,7 +141,7 @@ func NewMem() *MuxDB {
 	storage := storage.NewMemStorage()
 	ldb, _ := leveldb.Open(storage, nil)
 
-	engine := newLevelEngine(ldb)
+	engine := engine.NewLevelEngine(ldb)
 	return &MuxDB{
 		engine: engine,
 		trieBackend: &trie.Backend{

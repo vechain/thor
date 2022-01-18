@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"math"
 
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/kv"
@@ -224,39 +225,32 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 	}
 
 	// setup fast leaf getter
-	var (
-		leaf          *trie.Leaf
-		leafCommitNum uint32
-		gotLeaf       bool
-	)
-
+	var leafRec *LeafRecord
 	t.fastLeafGet = func(nodeCommitNum uint32) (*trie.Leaf, error) {
 		// short circuit if the node is too new
 		if nodeCommitNum > steadyCommitNum {
 			return nil, nil
 		}
-		if !gotLeaf {
+		if leafRec == nil {
 			var err error
-			if leaf, leafCommitNum, err = t.back.LeafBank.Lookup(t.name, key); err != nil {
+			if leafRec, err = t.back.LeafBank.Lookup(t.name, key); err != nil {
 				return nil, err
 			}
-			gotLeaf = true
 		}
-		// leafbank is not ready or the leaf is later touched
-		if leaf == nil {
+
+		if leafRec.CommitNum == math.MaxUint32 {
+			// ever seen but can't be located now (touched).
 			return nil, nil
 		}
 
-		// see VIP-212 for detail.
-		if nodeCommitNum <= leafCommitNum {
-			if len(leaf.Value) > 0 {
-				if leafCommitNum <= steadyCommitNum {
-					// good, that's the leaf!
-					return leaf, nil
+		if nodeCommitNum <= leafRec.CommitNum {
+			if leafRec.Leaf != nil {
+				if leafRec.CommitNum <= steadyCommitNum {
+					return leafRec.Leaf, nil
 				}
 			} else {
-				// empty leaf, means the leaf key is not existing
-				return leaf, nil
+				// never seen till leafRec.CommitNum.
+				return &trie.Leaf{}, nil
 			}
 		}
 		return nil, nil
@@ -293,7 +287,7 @@ func (t *Trie) Update(key, val, meta []byte) error {
 				t.bulk = t.back.Store.Bulk()
 			}
 
-			if err := t.back.LeafBank.MarkDeletion(t.bulk, t.name, key); err != nil {
+			if err := t.back.LeafBank.Touch(t.bulk, t.name, key); err != nil {
 				return err
 			}
 		}
