@@ -357,8 +357,11 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 	}()
 
-	state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
-	baseGasPrice, err := builtin.Params.Native(state).Get(thor.KeyBaseGasPrice)
+	// recreate state everytime to avoid high RAM usage when the pool at hight water-mark.
+	newState := func() *state.State {
+		return p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
+	}
+	baseGasPrice, err := builtin.Params.Native(newState()).Get(thor.KeyBaseGasPrice)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -384,7 +387,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 			continue
 		}
 		// settled, out of energy or dep broken
-		executable, err := txObj.Executable(chain, state, headSummary.Header)
+		executable, err := txObj.Executable(chain, newState(), headSummary.Header)
 		if err != nil {
 			toRemove = append(toRemove, txObj)
 			log.Debug("tx washed out", "id", txObj.ID(), "err", err)
