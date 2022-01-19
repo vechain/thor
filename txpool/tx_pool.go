@@ -236,6 +236,13 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 	}
 
 	if isChainSynced(uint64(time.Now().Unix()), headSummary.Header.Timestamp()) {
+		if !localSubmitted {
+			// reject when pool size exceeds 120% of limit
+			if p.all.Len() >= p.options.Limit*12/10 {
+				return txRejectedError{"pool is full"}
+			}
+		}
+
 		state := p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
 		executable, err := txObj.Executable(p.repo.NewChain(headSummary.Header.ID()), state, headSummary.Header)
 		if err != nil {
@@ -266,7 +273,9 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 			return txRejectedError{err.Error()}
 		}
 		log.Debug("tx added", "id", newTx.ID())
-		p.txFeed.Send(&TxEvent{newTx, nil})
+		p.goes.Go(func() {
+			p.txFeed.Send(&TxEvent{newTx, nil})
+		})
 	}
 	atomic.AddUint32(&p.addedAfterWash, 1)
 	return nil
