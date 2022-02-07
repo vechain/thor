@@ -9,7 +9,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"math"
 
 	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/kv"
@@ -238,15 +237,15 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 			}
 		}
 
-		if leafRec.CommitNum == math.MaxUint32 {
-			// ever seen but can't be located now (touched).
+		// touched or slot empty
+		if leafRec.CommitNum == 0 {
 			return nil, nil
 		}
 
 		if nodeCommitNum <= leafRec.CommitNum {
-			if leafRec.Leaf != nil {
+			if len(leafRec.Value) > 0 {
 				if leafRec.CommitNum <= steadyCommitNum {
-					return leafRec.Leaf, nil
+					return &trie.Leaf{Value: leafRec.Value, Meta: leafRec.Meta}, nil
 				}
 			} else {
 				// never seen till leafRec.CommitNum.

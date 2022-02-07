@@ -6,7 +6,6 @@
 package trie
 
 import (
-	"math"
 	"strconv"
 	"testing"
 
@@ -45,9 +44,7 @@ func TestLeafbank(t *testing.T) {
 				t.Fatal(err)
 			}
 			assert.Equal(t, &LeafRecord{
-				Leaf: &trie.Leaf{
-					Value: []byte(strconv.Itoa(i)),
-				},
+				Value:     []byte(strconv.Itoa(i)),
 				CommitNum: 100,
 			}, rec)
 		}
@@ -60,7 +57,6 @@ func TestLeafbank(t *testing.T) {
 		}
 
 		assert.Equal(t, &LeafRecord{
-			Leaf:      nil,
 			CommitNum: 100,
 		}, rec)
 	})
@@ -78,9 +74,6 @@ func TestLeafbank(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Equal(t, &LeafRecord{
-			Leaf:      nil,
-			CommitNum: math.MaxUint32,
-		}, rec)
+		assert.Equal(t, &LeafRecord{}, rec)
 	})
 }

@@ -7,11 +7,11 @@ package trie
 
 import (
 	"encoding/binary"
-	"math"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/trie"
 )
@@ -20,8 +20,8 @@ const slotCacheSize = 64
 
 // LeafRecord is the entity stored in leaf bank.
 type LeafRecord struct {
-	*trie.Leaf
-	CommitNum uint32
+	Value, Meta []byte
+	CommitNum   uint32
 }
 
 // leafBankSlot presents per-trie state and cached leaves.
@@ -52,7 +52,7 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 	var maxCommitNum uint32
 	if data, err := getter.Get(nil); err != nil {
 		if !getter.IsNotFound(err) {
-			return nil, err
+			return nil, errors.Wrap(err, "get from leafbank")
 		}
 	} else {
 		maxCommitNum = binary.BigEndian.Uint32(data)
@@ -66,10 +66,10 @@ func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
 }
 
 // Lookup lookups a leaf from the trie named name by the given leafKey.
-// The returned leaf might be nil if the key is never seen (with latest commitNum),
-// or was ever seen but can't be located now (touched, with commitNum == -1 (math.MaxUint32)).
+// The returned leaf might be nil (empty value) if the key is never seen (with max slot commitNum),
+// or was ever seen but can't be located now (touched, with commitNum == 0).
 // LeafRecord.CommitNum indicates up to which commit number the leaf is valid.
-func (b *LeafBank) Lookup(name string, leafKey []byte) (*LeafRecord, error) {
+func (b *LeafBank) Lookup(name string, leafKey []byte) (rec *LeafRecord, err error) {
 	// get slot from slots cache or create a new one.
 	var slot *leafBankSlot
 	if cached, ok := b.slots.Get(name); ok {
@@ -89,31 +89,36 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (*LeafRecord, error) {
 		return rec, nil
 	}
 
+	defer func() {
+		if err == nil {
+			slot.cache.Add(strLeafKey, rec)
+		}
+	}()
+
 	buf := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(buf)
 
 	if data, err := slot.getter.GetTo(leafKey, buf.buf[:0]); err != nil {
 		if !slot.getter.IsNotFound(err) {
-			return nil, err
+			return nil, errors.Wrap(err, "get from leafbank")
 		}
 		// not seen till slot.maxCommitNum
 		return &LeafRecord{CommitNum: atomic.LoadUint32(&slot.maxCommitNum)}, nil
 	} else {
 		buf.buf = data
-		var rec LeafRecord
 		if len(data) > 0 {
+			var rec LeafRecord
 			if err := rlp.DecodeBytes(data, &rec); err != nil {
-				return nil, err
+				panic(errors.Wrap(err, "decode leaf record"))
 			}
 			if len(rec.Meta) == 0 {
 				rec.Meta = nil // normalize
 			}
+			return &rec, nil
 		} else {
 			// ever seen, but can't be located now (touched)
-			rec.CommitNum = math.MaxUint32
+			return &LeafRecord{}, nil
 		}
-		slot.cache.Add(strLeafKey, &rec)
-		return &rec, nil
 	}
 }
 
@@ -159,18 +164,21 @@ type LeafUpdater struct {
 
 // Update updates the leaf for the given key.
 func (u *LeafUpdater) Update(key []byte, leaf *trie.Leaf) error {
-	data, err := rlp.EncodeToBytes(&LeafRecord{
-		leaf,
-		u.rootCommitNum, // inherits root's commit number
-	})
+	rec := LeafRecord{
+		Value:     leaf.Value,
+		Meta:      leaf.Meta,
+		CommitNum: u.rootCommitNum, // inherits root's commit number
+	}
+	data, err := rlp.EncodeToBytes(&rec)
 	if err != nil {
 		return err
 	}
 	if u.slot != nil {
-		// invalidate cached leaves.
-		// the slot may be evicted at this point, but it's OK that
-		// newly created slot loads out-of-date storageLeaf.
-		u.slot.cache.Remove(string(key))
+		strKey := string(key)
+		if u.slot.cache.Contains(strKey) {
+			// update cached records.
+			u.slot.cache.Add(string(key), &rec)
+		}
 	}
 	return u.bulk.Put(key, data)
 }
