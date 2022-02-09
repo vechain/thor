@@ -300,14 +300,14 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return err
 		}
 
+		execElapsed := mclock.Now() - startTime
+
 		// write logs
 		if logEnabled {
 			if err := n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
 				return errors.Wrap(err, "write logs")
 			}
 		}
-
-		execElapsed := mclock.Now() - startTime
 
 		// commit produced states
 		if _, err := stage.Commit(); err != nil {
