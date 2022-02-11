@@ -62,11 +62,11 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	code, err := a.getCode(addr, h)
+	code, err := a.getCode(addr, summary)
 	if err != nil {
 		return err
 	}
