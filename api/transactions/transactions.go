@@ -23,6 +23,11 @@ type Transactions struct {
 	pool *txpool.TxPool
 }
 
+// lucas
+type EthTransaction struct {
+	ChainTag byte
+}
+
 func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		repo,
@@ -113,7 +118,33 @@ func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.By
 
 	return convertReceipt(receipt, summary.Header, tx)
 }
+
 func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Request) error {
+	var rawTx *RawTx
+	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "body"))
+	}
+	tx, err := rawTx.decode()
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
+	}
+
+	if err := t.pool.AddLocal(tx); err != nil {
+		if txpool.IsBadTx(err) {
+			return utils.BadRequest(err)
+		}
+		if txpool.IsTxRejected(err) {
+			return utils.Forbidden(err)
+		}
+		return err
+	}
+	return utils.WriteJSON(w, map[string]string{
+		"id": tx.ID().String(),
+	})
+}
+
+
+func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -216,6 +247,7 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	sub.Path("/eth").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendEthereumTransaction))
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }
