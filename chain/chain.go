@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/trie"
 	"github.com/vechain/thor/tx"
 )
 
@@ -62,7 +63,7 @@ func newChain(repo *Repository, headID thor.Bytes32) *Chain {
 		func() (*muxdb.Trie, error) {
 			if indexTrie == nil && initErr == nil {
 				if summary, err := repo.GetBlockSummary(headID); err == nil {
-					indexTrie = repo.db.NewTrie(IndexTrieName, summary.IndexRoot, summary.Header.Number(), summary.Conflicts)
+					indexTrie = repo.db.NewNonCryptoTrie(IndexTrieName, trie.NonCryptoNodeHash, summary.Header.Number(), summary.Conflicts)
 				} else {
 					initErr = errors.Wrap(err, "lazy init chain")
 				}
@@ -314,17 +315,22 @@ func (r *Repository) NewChain(headID thor.Bytes32) *Chain {
 	return newChain(r, headID)
 }
 
-func (r *Repository) indexBlock(parentIndexRoot thor.Bytes32, parentConflicts uint32, newBlock *block.Block, newConflicts uint32) (thor.Bytes32, error) {
+func (r *Repository) indexBlock(parentConflicts uint32, newBlockID thor.Bytes32, newConflicts uint32) error {
 	var (
-		newID  = newBlock.Header().ID()
-		newNum = newBlock.Header().Number()
-		trie   = r.db.NewTrie(IndexTrieName, parentIndexRoot, newNum-1, parentConflicts)
+		newNum = block.Number(newBlockID)
+		root   thor.Bytes32
 	)
 
-	// map block number to block ID
-	if err := trie.Update(newID[:4], newID[:], nil); err != nil {
-		return thor.Bytes32{}, err
+	if newNum != 0 { // not a genesis block
+		root = trie.NonCryptoNodeHash
 	}
 
-	return trie.Commit(newNum, newConflicts)
+	trie := r.db.NewNonCryptoTrie(IndexTrieName, root, newNum-1, parentConflicts)
+	// map block number to block ID
+	if err := trie.Update(newBlockID[:4], newBlockID[:], nil); err != nil {
+		return err
+	}
+
+	_, err := trie.Commit(newNum, newConflicts)
+	return err
 }
