@@ -181,6 +181,18 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum, distinctNum 
 		root,
 		commitNum,
 		distinctNum,
+		false,
+	)
+}
+
+func (db *MuxDB) NewNonCryptoTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
+	return trie.New(
+		db.trieBackend,
+		name,
+		root,
+		commitNum,
+		distinctNum,
+		true,
 	)
 }
 

@@ -42,7 +42,7 @@ func TestTrie(t *testing.T) {
 
 	t.Run("basic", func(t *testing.T) {
 		back := newBackend()
-		tr := New(back, name, thor.Bytes32{}, 0, 0)
+		tr := New(back, name, thor.Bytes32{}, 0, 0, false)
 		assert.Equal(t, name, tr.Name())
 
 		assert.False(t, tr.dirty)
@@ -58,7 +58,7 @@ func TestTrie(t *testing.T) {
 
 	t.Run("hash root", func(t *testing.T) {
 		back := newBackend()
-		tr := New(back, name, thor.Bytes32{}, 0, 0)
+		tr := New(back, name, thor.Bytes32{}, 0, 0, false)
 
 		_tr := new(trie.Trie)
 
@@ -75,7 +75,7 @@ func TestTrie(t *testing.T) {
 
 	t.Run("fast get", func(t *testing.T) {
 		back := newBackend()
-		tr := New(back, name, thor.Bytes32{}, 0, 0)
+		tr := New(back, name, thor.Bytes32{}, 0, 0, false)
 
 		var roots []thor.Bytes32
 		for i := 0; i < 100; i++ {
@@ -91,7 +91,7 @@ func TestTrie(t *testing.T) {
 			roots = append(roots, root)
 		}
 
-		tr = New(back, name, roots[10], 10, 0)
+		tr = New(back, name, roots[10], 10, 0, false)
 
 		if err := tr.DumpLeaves(context.Background(), 0, func(l *trie.Leaf) *trie.Leaf {
 			return &trie.Leaf{

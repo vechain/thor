@@ -37,6 +37,7 @@ type Trie struct {
 	root        thor.Bytes32
 	commitNum   uint32
 	distinctNum uint32
+	nonCrypto   bool
 	init        func() (*trie.ExtendedTrie, error)
 	dirty       bool
 	bulk        kv.Bulk // pending ops
@@ -51,6 +52,7 @@ func New(
 	root thor.Bytes32,
 	commitNum uint32,
 	distinctNum uint32,
+	nonCrypto bool,
 ) *Trie {
 	t := &Trie{
 		back:        back,
@@ -58,6 +60,7 @@ func New(
 		root:        root,
 		commitNum:   commitNum,
 		distinctNum: distinctNum,
+		nonCrypto:   nonCrypto,
 	}
 
 	var (
@@ -69,9 +72,9 @@ func New(
 			return ext, err
 		}
 		if rootNode := t.back.Cache.GetRootNode(name, commitNum, distinctNum, t.noFillCache); rootNode != nil {
-			ext = trie.NewExtendedCached(rootNode, t.newDatabase())
+			ext = trie.NewExtendedCached(rootNode, t.newDatabase(), nonCrypto)
 		} else {
-			ext, err = trie.NewExtended(root, commitNum, distinctNum, t.newDatabase())
+			ext, err = trie.NewExtended(root, commitNum, distinctNum, t.newDatabase(), nonCrypto)
 		}
 		if ext != nil {
 			ext.SetCachedNodeTTL(t.back.CachedNodeTTL)
@@ -161,10 +164,12 @@ func (t *Trie) newDatabase() trie.Database {
 
 			// to ensure the node is correct, we need to verify the node hash.
 			// TODO: later can skip this step
-			if ok, err := trie.VerifyNodeHash(blob[len(dst):], thisHash); err != nil {
-				return nil, err
-			} else if !ok {
-				return nil, errors.New("node hash checksum error")
+			if !t.nonCrypto {
+				if ok, err := trie.VerifyNodeHash(blob[len(dst):], thisHash); err != nil {
+					return nil, err
+				} else if !ok {
+					return nil, errors.New("node hash checksum error")
+				}
 			}
 			return
 		}),
@@ -189,7 +194,7 @@ func (t *Trie) Copy() (*Trie, error) {
 	ext, err := t.init()
 	cpy := *t
 	if ext != nil {
-		extCpy := trie.NewExtendedCached(ext.RootNode(), cpy.newDatabase())
+		extCpy := trie.NewExtendedCached(ext.RootNode(), cpy.newDatabase(), t.nonCrypto)
 		extCpy.SetCachedNodeTTL(cpy.back.CachedNodeTTL)
 		cpy.init = func() (*trie.ExtendedTrie, error) {
 			return extCpy, nil
@@ -428,7 +433,7 @@ func (t *Trie) DumpNodes(ctx context.Context, baseCommitNum uint32, handleLeaf f
 			return err
 		}
 
-		if err := iter.Node(true, func(blob []byte) error {
+		if err := iter.Node(func(blob []byte) error {
 			buf = t.makeDedupedNodeKey(buf[:0], iter.CommitNum(), iter.Path())
 			return bulk.Put(buf, blob)
 		}); err != nil {
@@ -504,14 +509,14 @@ type errorIterator struct {
 	err error
 }
 
-func (i *errorIterator) Next(bool) bool                           { return false }
-func (i *errorIterator) Error() error                             { return i.err }
-func (i *errorIterator) Hash() thor.Bytes32                       { return thor.Bytes32{} }
-func (i *errorIterator) Node(bool, func(blob []byte) error) error { return i.err }
-func (i *errorIterator) CommitNum() uint32                        { return 0 }
-func (i *errorIterator) DistinctNum() uint32                      { return 0 }
-func (i *errorIterator) Parent() thor.Bytes32                     { return thor.Bytes32{} }
-func (i *errorIterator) Path() []byte                             { return nil }
-func (i *errorIterator) Leaf() *trie.Leaf                         { return nil }
-func (i *errorIterator) LeafKey() []byte                          { return nil }
-func (i *errorIterator) LeafProof() [][]byte                      { return nil }
+func (i *errorIterator) Next(bool) bool                     { return false }
+func (i *errorIterator) Error() error                       { return i.err }
+func (i *errorIterator) Hash() thor.Bytes32                 { return thor.Bytes32{} }
+func (i *errorIterator) Node(func(blob []byte) error) error { return i.err }
+func (i *errorIterator) CommitNum() uint32                  { return 0 }
+func (i *errorIterator) DistinctNum() uint32                { return 0 }
+func (i *errorIterator) Parent() thor.Bytes32               { return thor.Bytes32{} }
+func (i *errorIterator) Path() []byte                       { return nil }
+func (i *errorIterator) Leaf() *trie.Leaf                   { return nil }
+func (i *errorIterator) LeafKey() []byte                    { return nil }
+func (i *errorIterator) LeafProof() [][]byte                { return nil }
