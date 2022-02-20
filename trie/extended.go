@@ -12,6 +12,7 @@ import "github.com/vechain/thor/thor"
 type ExtendedTrie struct {
 	trie          Trie
 	cachedNodeTTL int
+	nonCrypto     bool
 }
 
 // Node contains the internal node object.
@@ -53,12 +54,12 @@ func (n *Node) DistinctNum() uint32 {
 }
 
 // NewExtended creates an extended trie.
-func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database) (*ExtendedTrie, error) {
+func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database, nonCrypto bool) (*ExtendedTrie, error) {
 	isRootEmpty := (root == thor.Bytes32{}) || root == emptyRoot
 	if !isRootEmpty && db == nil {
 		panic("trie.NewExtended: cannot use existing root without a database")
 	}
-	ext := ExtendedTrie{Trie{db: db}, 0}
+	ext := ExtendedTrie{trie: Trie{db: db}, nonCrypto: nonCrypto}
 	if !isRootEmpty {
 		rootnode, err := ext.trie.resolveHash(&hashNode{Hash: root, cNum: commitNum, dNum: distinctNum}, nil)
 		if err != nil {
@@ -69,9 +70,14 @@ func NewExtended(root thor.Bytes32, commitNum, distinctNum uint32, db Database) 
 	return &ext, nil
 }
 
+// IsNonCrypto returns whether the trie is a non-crypto trie.
+func (e *ExtendedTrie) IsNonCrypto() bool {
+	return e.nonCrypto
+}
+
 // NewExtendedCached creates an extended trie with the given root node.
-func NewExtendedCached(rootNode *Node, db Database) *ExtendedTrie {
-	return &ExtendedTrie{Trie{root: rootNode.node, db: db}, 0}
+func NewExtendedCached(rootNode *Node, db Database, nonCrypto bool) *ExtendedTrie {
+	return &ExtendedTrie{trie: Trie{root: rootNode.node, db: db}, nonCrypto: nonCrypto}
 }
 
 // SetCachedNodeTTL sets life time of a cached node. The life time is equivalent to
@@ -95,7 +101,7 @@ func (e *ExtendedTrie) RootNode() *Node {
 // baseCommitNum.
 func (e *ExtendedTrie) NodeIterator(start []byte, baseCommitNum uint32) NodeIterator {
 	t := &e.trie
-	return newNodeIterator(t, start, baseCommitNum)
+	return newNodeIterator(t, start, baseCommitNum, true, e.nonCrypto)
 }
 
 // Get returns the value and metadata for key stored in the trie.
@@ -186,7 +192,7 @@ func (e *ExtendedTrie) hashRoot(db DatabaseWriter, commitNum, distinctNum uint32
 	if t.root == nil {
 		return &hashNode{Hash: emptyRoot}, nil, nil
 	}
-	h := newHasherExtended(commitNum, distinctNum, e.cachedNodeTTL)
+	h := newHasherExtended(commitNum, distinctNum, e.cachedNodeTTL, e.nonCrypto)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, nil, true)
 }

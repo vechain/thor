@@ -31,6 +31,7 @@ type hasher struct {
 	extended      bool
 	cNumNew       uint32
 	dNumNew       uint32
+	nonCrypto     bool
 }
 
 type sliceBuffer []byte
@@ -60,15 +61,17 @@ func newHasher() *hasher {
 	h.extended = false
 	h.cNumNew = 0
 	h.dNumNew = 0
+	h.nonCrypto = false
 	return h
 }
 
-func newHasherExtended(cNumNew, dNumNew uint32, cachedNodeTTL int) *hasher {
+func newHasherExtended(cNumNew, dNumNew uint32, cachedNodeTTL int, nonCrypto bool) *hasher {
 	h := hasherPool.Get().(*hasher)
 	h.cachedNodeTTL = cachedNodeTTL
 	h.extended = true
 	h.cNumNew = cNumNew
 	h.dNumNew = dNumNew
+	h.nonCrypto = nonCrypto
 	return h
 }
 
@@ -189,8 +192,21 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := frlp.Encode(&h.tmp, n); err != nil {
+	if err := frlp.Encode(&h.tmp, n, h.nonCrypto); err != nil {
 		panic("encode error: " + err.Error())
+	}
+
+	if h.nonCrypto {
+		// fullnode and shortnode with non-value child are forced
+		// just like normal trie.
+		switch n := n.(type) {
+		case *fullNode:
+			force = true
+		case *shortNode:
+			if _, ok := n.Val.(*valueNode); !ok {
+				force = true
+			}
+		}
 	}
 
 	if len(h.tmp) < 32 && !force {
@@ -200,9 +216,13 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	hash, _ := n.cache()
 	if hash == nil {
 		hash = &hashNode{}
-		h.sha.Reset()
-		h.sha.Write(h.tmp)
-		h.sha.Sum(hash.Hash[:0])
+		if h.nonCrypto {
+			hash.Hash = NonCryptoNodeHash
+		} else {
+			h.sha.Reset()
+			h.sha.Write(h.tmp)
+			h.sha.Sum(hash.Hash[:0])
+		}
 	}
 	if db != nil {
 		// extended

@@ -85,7 +85,7 @@ type NodeIterator interface {
 	Hash() thor.Bytes32
 
 	// Node calls the handler with the blob of the current node if any.
-	Node(extended bool, handler func(blob []byte) error) error
+	Node(handler func(blob []byte) error) error
 
 	// CommitNum returns the commit number of the current node.
 	CommitNum() uint32
@@ -132,6 +132,8 @@ type nodeIterator struct {
 	path          []byte               // Path to the current node
 	err           error                // Failure set in case of an internal error in the iterator
 	baseCommitNum uint32               // The minimum commit number of returned nodes.
+	extended      bool                 // If the trie is extended.
+	nonCrypto     bool                 // If the trie is non-crypto.
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -147,11 +149,16 @@ func (e seekError) Error() string {
 	return "seek error: " + e.err.Error()
 }
 
-func newNodeIterator(trie *Trie, start []byte, baseCommitNum uint32) NodeIterator {
+func newNodeIterator(trie *Trie, start []byte, baseCommitNum uint32, extended, nonCrypto bool) NodeIterator {
 	if trie.Hash() == emptyState {
 		return new(nodeIterator)
 	}
-	it := &nodeIterator{trie: trie, baseCommitNum: baseCommitNum}
+	it := &nodeIterator{
+		trie:          trie,
+		baseCommitNum: baseCommitNum,
+		extended:      extended,
+		nonCrypto:     nonCrypto,
+	}
 	it.err = it.seek(start)
 	return it
 }
@@ -163,7 +170,7 @@ func (it *nodeIterator) Hash() thor.Bytes32 {
 	return it.stack[len(it.stack)-1].hash
 }
 
-func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) error {
+func (it *nodeIterator) Node(handler func(blob []byte) error) error {
 	if len(it.stack) == 0 {
 		return nil
 	}
@@ -173,13 +180,16 @@ func (it *nodeIterator) Node(extended bool, handler func(blob []byte) error) err
 	}
 
 	h := newHasher()
+	h.extended = it.extended
+	h.nonCrypto = it.nonCrypto
 	defer returnHasherToPool(h)
 
 	collapsed, _, _ := h.hashChildren(st.node, nil, it.path)
 
 	h.tmp.Reset()
-	_ = frlp.Encode(&h.tmp, collapsed)
-	if extended {
+	_ = frlp.Encode(&h.tmp, collapsed, it.nonCrypto)
+
+	if it.extended {
 		_ = frlp.EncodeTrailing(&h.tmp, collapsed)
 	}
 	return handler(h.tmp)
@@ -245,7 +255,7 @@ func (it *nodeIterator) LeafProof() [][]byte {
 				node, _, _ := hasher.hashChildren(item.node, nil, nil)
 				hashed, _ := hasher.store(node, nil, nil, false)
 				if _, ok := hashed.(*hashNode); ok || i == 0 {
-					enc, _ := frlp.EncodeToBytes(node)
+					enc := frlp.EncodeToBytes(node, false)
 					proofs = append(proofs, enc)
 				}
 			}
@@ -477,8 +487,8 @@ func (it *differenceIterator) Hash() thor.Bytes32 {
 	return it.b.Hash()
 }
 
-func (it *differenceIterator) Node(extended bool, handler func(blob []byte) error) error {
-	return it.b.Node(extended, handler)
+func (it *differenceIterator) Node(handler func(blob []byte) error) error {
+	return it.b.Node(handler)
 }
 
 func (it *differenceIterator) CommitNum() uint32 {
@@ -592,8 +602,8 @@ func (it *unionIterator) Hash() thor.Bytes32 {
 	return (*it.items)[0].Hash()
 }
 
-func (it *unionIterator) Node(extended bool, handler func(blob []byte) error) error {
-	return (*it.items)[0].Node(extended, handler)
+func (it *unionIterator) Node(handler func(blob []byte) error) error {
+	return (*it.items)[0].Node(handler)
 }
 
 func (it *unionIterator) CommitNum() uint32 {

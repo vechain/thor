@@ -27,6 +27,9 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
+var NonCryptoNodeHash = thor.BytesToBytes32(bytes.Repeat([]byte{0xff}, 32))
+var nonCryptoNodeHashPlaceholder = []byte{0}
+
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
 
 type node interface {
@@ -141,57 +144,42 @@ func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
 func (n *hashNode) fstring(ind string) string {
-	return fmt.Sprintf("<%x> ", n.Hash)
+	return fmt.Sprintf("<%v> ", n.Hash)
 }
 func (n *valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", n.Value)
 }
 
-// metaList is the splitted rlp list of metadata.
-type metaList []byte
+// trailing is the splitted rlp list of extra data of the trie node.
+type trailing []byte
 
-// Next returns the current metadata and move to the next one.
-// It will return io.EOF when positioned on the end.
-func (ml *metaList) Next() ([]byte, error) {
-	if ml == nil {
+func (t *trailing) next() ([]byte, error) {
+	if t == nil {
 		return nil, nil
 	}
-	if len(*ml) == 0 {
+	if len(*t) == 0 {
 		return nil, io.EOF
 	}
 
-	content, rest, err := rlp.SplitString(*ml)
+	content, rest, err := rlp.SplitString(*t)
 	if err != nil {
 		return nil, err
 	}
 
-	*ml = rest
+	*t = rest
 	return content, nil
 }
 
-// numList is a list of commit & distinct numbers.
-type numList []byte
-
-// Next returns the commit number of the current child hash node and move to the next none.
+// NextNum decodes the current list element to commit/distinct number and move to the next one.
 // It returns io.EOF if reaches end.
-func (nl *numList) Next() (cNum uint32, dNum uint32, err error) {
-	if nl == nil {
-		return 0, 0, nil
-	}
-	if len(*nl) == 0 {
-		return 0, 0, io.EOF
-	}
-
-	content, rest, err := rlp.SplitString(*nl)
+func (t *trailing) NextNum() (cNum uint32, dNum uint32, err error) {
+	content, err := t.next()
 	if err != nil {
 		return 0, 0, err
 	}
-
 	if len(content) > 8 {
 		return 0, 0, errors.New("encoded number too long")
 	}
-
-	*nl = rest
 
 	var n uint64
 	for _, b := range content {
@@ -201,50 +189,34 @@ func (nl *numList) Next() (cNum uint32, dNum uint32, err error) {
 	return uint32(n), uint32(n >> 32), nil
 }
 
-// decodeTrailing decodes the trailing buffer.
-func decodeTrailing(buf []byte) (*metaList, *numList, error) {
-	if len(buf) == 0 {
-		return nil, nil, nil
-	}
-
-	mBuf, rest, err := rlp.SplitList(buf)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	nBuf, rest, err := rlp.SplitList(rest)
-	if err != nil {
-		return nil, nil, err
-	}
-	if len(rest) > 0 {
-		return nil, nil, errors.New("unexpected content after trailing")
-	}
-
-	return (*metaList)(&mBuf), (*numList)(&nBuf), nil
+// NextMeta returns the current list element as leaf metadata and move to the next one.
+// It returns io.EOF if reaches end.
+func (t *trailing) NextMeta() ([]byte, error) {
+	return t.next()
 }
 
 func mustDecodeNode(hash *hashNode, buf []byte) node {
-	_, _, trailing, err := rlp.Split(buf)
+	_, _, rest, err := rlp.Split(buf)
 	if err != nil {
-		panic(fmt.Sprintf("node %x: %v", hash, err))
+		panic(fmt.Sprintf("node %v: %v", hash.Hash, err))
 	}
-	ml, cnl, err := decodeTrailing(trailing)
+	trailing := (*trailing)(&rest)
+	if len(rest) == 0 {
+		trailing = nil
+	}
+	buf = buf[:len(buf)-len(rest)]
+	n, err := decodeNode(hash, buf, trailing)
 	if err != nil {
-		panic(fmt.Sprintf("decode trailing, node %x: %v", hash, err))
+		panic(fmt.Sprintf("node %v: %v", hash.Hash, err))
 	}
-	buf = buf[:len(buf)-len(trailing)]
-	n, err := decodeNode(hash, buf, ml, cnl)
-	if err != nil {
-		panic(fmt.Sprintf("node %x: %v", hash, err))
-	}
-	if (ml != nil && len(*ml) != 0) || (cnl != nil && len(*cnl) != 0) {
-		panic(fmt.Sprintf("node %x: trailing buffer not fully consumed", hash))
+	if trailing != nil && len(*trailing) != 0 {
+		panic(fmt.Sprintf("node %v: trailing buffer not fully consumed", hash.Hash))
 	}
 	return n
 }
 
 // decodeNode parses the RLP encoding of a trie node.
-func decodeNode(hash *hashNode, buf []byte, ml *metaList, nl *numList) (node, error) {
+func decodeNode(hash *hashNode, buf []byte, trailing *trailing) (node, error) {
 	if len(buf) == 0 {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -254,17 +226,17 @@ func decodeNode(hash *hashNode, buf []byte, ml *metaList, nl *numList) (node, er
 	}
 	switch c, _ := rlp.CountValues(elems); c {
 	case 2:
-		n, err := decodeShort(hash, buf, elems, ml, nl)
+		n, err := decodeShort(hash, buf, elems, trailing)
 		return n, wrapError(err, "short")
 	case 17:
-		n, err := decodeFull(hash, buf, elems, ml, nl)
+		n, err := decodeFull(hash, buf, elems, trailing)
 		return n, wrapError(err, "full")
 	default:
 		return nil, fmt.Errorf("invalid number of list elements: %v", c)
 	}
 }
 
-func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*shortNode, error) {
+func decodeShort(hash *hashNode, buf, elems []byte, trailing *trailing) (*shortNode, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
 		return nil, err
@@ -277,7 +249,7 @@ func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		meta, err := ml.Next()
+		meta, err := trailing.NextMeta()
 		if err != nil {
 			return nil, fmt.Errorf("invalid value meta: %v", err)
 		}
@@ -289,17 +261,17 @@ func decodeShort(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (
 		return &shortNode{key, vn, flag}, nil
 	}
 
-	r, _, err := decodeRef(rest, ml, nl)
+	r, _, err := decodeRef(rest, trailing)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
 	return &shortNode{key, r, flag}, nil
 }
 
-func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*fullNode, error) {
+func decodeFull(hash *hashNode, buf, elems []byte, trailing *trailing) (*fullNode, error) {
 	n := &fullNode{flags: nodeFlag{hash: hash}}
 	for i := 0; i < 16; i++ {
-		cld, rest, err := decodeRef(elems, ml, nl)
+		cld, rest, err := decodeRef(elems, trailing)
 		if err != nil {
 			return n, wrapError(err, fmt.Sprintf("[%d]", i))
 		}
@@ -310,7 +282,7 @@ func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*
 		return n, err
 	}
 	if len(val) > 0 {
-		meta, err := ml.Next()
+		meta, err := trailing.NextMeta()
 		if err != nil {
 			return nil, fmt.Errorf("invalid value meta: %v", err)
 		}
@@ -326,33 +298,38 @@ func decodeFull(hash *hashNode, buf, elems []byte, ml *metaList, nl *numList) (*
 
 const hashLen = len(thor.Bytes32{})
 
-func decodeRef(buf []byte, ml *metaList, nl *numList) (node, []byte, error) {
+func decodeRef(buf []byte, trailing *trailing) (node, []byte, error) {
 	kind, val, rest, err := rlp.Split(buf)
 	if err != nil {
 		return nil, buf, err
 	}
-	switch {
-	case kind == rlp.List:
+	if kind == rlp.List {
 		// 'embedded' node reference. The encoding must be smaller
 		// than a hash in order to be valid.
 		if size := len(buf) - len(rest); size > hashLen {
 			err := fmt.Errorf("oversized embedded node (size is %d bytes, want size < %d)", size, hashLen)
 			return nil, buf, err
 		}
-		n, err := decodeNode(nil, buf, ml, nil)
+		n, err := decodeNode(nil, buf, trailing)
 		return n, rest, err
-	case kind == rlp.String && len(val) == 0:
+	}
+	// string kind
+	valLen := len(val)
+	if valLen == 0 {
 		// empty node
 		return nil, rest, nil
-	case kind == rlp.String && len(val) == 32:
-		cNum, dNum, err := nl.Next()
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid commit number: %v", err)
-		}
-		return &hashNode{Hash: thor.BytesToBytes32(val), cNum: cNum, dNum: dNum}, rest, nil
-	default:
-		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}
+	cNum, dNum, err := trailing.NextNum()
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid commit number: %v", err)
+	}
+	if valLen == 32 {
+		return &hashNode{Hash: thor.BytesToBytes32(val), cNum: cNum, dNum: dNum}, rest, nil
+	}
+	if valLen == 1 && val[0] == nonCryptoNodeHashPlaceholder[0] {
+		return &hashNode{Hash: NonCryptoNodeHash, cNum: cNum, dNum: dNum}, rest, nil
+	}
+	return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0, 1 or 32)", len(val))
 }
 
 // wraps a decoding error with information about the path to the

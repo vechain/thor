@@ -76,7 +76,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
-				enc, _ := frlp.EncodeToBytes(n)
+				enc := frlp.EncodeToBytes(n, false)
 				if ok {
 					proofDb.Put(hash.Hash[:], enc)
 				} else {
@@ -100,7 +100,7 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
 		}
-		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil, nil)
+		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
 		}

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/thor"
 )
 
@@ -612,7 +613,7 @@ func deleteString(trie *Trie, k string) {
 
 func TestExtended(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
 
 	vals1 := []struct{ k, v string }{
 		{"do", "verb"},
@@ -658,7 +659,7 @@ func TestExtended(t *testing.T) {
 		t.Errorf("commit failed %v", err)
 	}
 
-	tr1, _ := NewExtended(root1, 1, 0, db)
+	tr1, _ := NewExtended(root1, 1, 0, db, false)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -672,7 +673,7 @@ func TestExtended(t *testing.T) {
 		}
 	}
 
-	tr2, _ := NewExtended(root2, 2, 0, db)
+	tr2, _ := NewExtended(root2, 2, 0, db, false)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -687,9 +688,43 @@ func TestExtended(t *testing.T) {
 	}
 }
 
+type kedb struct {
+	*ethdb.MemDatabase
+}
+
+func (db *kedb) Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
+	var k [8]byte
+	binary.BigEndian.PutUint32(k[:], commitNum)
+	binary.BigEndian.PutUint32(k[4:], distinctNum)
+	return append(k[:], path...)
+}
+
+func TestNonCryptoExtended(t *testing.T) {
+	db := &kedb{ethdb.NewMemDatabase()}
+
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, true)
+	var root thor.Bytes32
+	n := uint32(100)
+	for i := uint32(0); i < n; i++ {
+		var k [4]byte
+		binary.BigEndian.PutUint32(k[:], i)
+		tr.Update(k[:], thor.Blake2b(k[:]).Bytes(), nil)
+		root, _ = tr.Commit(i, 0)
+	}
+
+	tr, _ = NewExtended(root, n-1, 0, db, true)
+	for i := uint32(0); i < n; i++ {
+		var k [4]byte
+		binary.BigEndian.PutUint32(k[:], i)
+		val, _, err := tr.Get(k[:])
+		assert.Nil(t, err)
+		assert.Equal(t, thor.Blake2b(k[:]).Bytes(), val)
+	}
+}
+
 func TestExtendedCached(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
@@ -703,7 +738,7 @@ func TestExtendedCached(t *testing.T) {
 		tr.Update([]byte(val.k), []byte(val.v), nil)
 	}
 
-	tr = NewExtendedCached(tr.RootNode(), db)
+	tr = NewExtendedCached(tr.RootNode(), db, false)
 
 	for _, val := range vals {
 		v, _, _ := tr.Get([]byte(val.k))

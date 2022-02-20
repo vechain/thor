@@ -83,6 +83,6 @@ func BenchmarkFastEncodeFullNode(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
-		frlp.Encode(&buf, f)
+		frlp.Encode(&buf, f, false)
 	}
 }
