@@ -9,12 +9,14 @@ import (
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -23,10 +25,29 @@ type Transactions struct {
 	pool *txpool.TxPool
 }
 
-// lucas
-type EthTransaction struct {
-	ChainTag byte
-}
+// // VIP-215 https://ethereum.org/en/developers/docs/transactions/
+// type EthTransaction struct {
+// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
+// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+// 	Nonce                uint64              `json:"nonce"`
+// 	To                   string              `json:"to"`
+// 	Data                 []string            `json:"data"`
+// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+// 	GasLimit             []uint64            `json:"gasLimit"`
+// 	Value                []string            `json:"value"`
+// 	PrivateKey           []byte              `json:"secretKey"`
+// }
+
+// {
+// 	from: "0xEA674fdDe714fd979de3EdF0F56AA9716B898ec8",
+// 	to: "0xac03bb73b6a9e108530aff4df5077c2b3d481e5a",
+// 	gasLimit: "21000",
+// 	maxFeePerGas: "300",
+// 	maxPriorityFeePerGas: "10",
+// 	nonce: "0",
+// 	value: "10000000000"
+// }
 
 func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
@@ -149,10 +170,28 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	tx, err := rawTx.decode()
+	ethTx, err := rawTx.decodeEth()
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
+
+	// do mapping
+	tx := &Transaction{ nonce: ethTx.Nonce }
+
+	// t := &Transaction{
+	// 	ChainTag:     tx.ChainTag(),
+	// 	ID:           tx.ID(),
+	// 	Origin:       origin,
+	// 	BlockRef:     hexutil.Encode(br[:]),
+	// 	Expiration:   tx.Expiration(),
+	// 	Nonce:        math.HexOrDecimal64(tx.Nonce()),
+	// 	Size:         uint32(tx.Size()),
+	// 	GasPriceCoef: tx.GasPriceCoef(),
+	// 	Gas:          tx.Gas(),
+	// 	DependsOn:    tx.DependsOn(),
+	// 	Clauses:      cls,
+	// 	Delegator:    delegator,
+	// }
 
 	if err := t.pool.AddLocal(tx); err != nil {
 		if txpool.IsBadTx(err) {
@@ -163,9 +202,7 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 		}
 		return err
 	}
-	return utils.WriteJSON(w, map[string]string{
-		"id": tx.ID().String(),
-	})
+	return utils.WriteJSON(w, map[string]string{"id": "0x0"})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
