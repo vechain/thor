@@ -26,3 +26,4 @@ package.json
 /vendor/
 
 .fake_gopath_suffix
+.idea/
