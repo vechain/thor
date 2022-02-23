@@ -26,8 +26,4 @@ package.json
 /vendor/
 
 .fake_gopath_suffix
-.idea/modules.xml
-
-.idea/thor.iml
-
-.idea/vcs.xml
+.idea/
