@@ -6,6 +6,7 @@
 package transactions
 
 import (
+	"bytes"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,7 +26,7 @@ type Transactions struct {
 	pool *txpool.TxPool
 }
 
-// // VIP-215 https://ethereum.org/en/developers/docs/transactions/
+// // VIP-215 https://ethereum.org/en/developers/docs/transactions/ ETH object to be posted
 // type EthTransaction struct {
 // 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
 // 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
@@ -164,7 +165,7 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 	})
 }
 
-
+// VIP-215
 func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req *http.Request) error {
 	var rawTx *RawTx
 	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
@@ -175,8 +176,44 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	// do mapping
-	tx := &Transaction{ nonce: ethTx.Nonce }
+	var chainTag byte = 1
+
+	// needs to be this guy
+	// type Transaction struct {
+	// 	body body
+	
+	// 	cache struct {
+	// 		signingHash  atomic.Value
+	// 		origin       atomic.Value
+	// 		id           atomic.Value
+	// 		unprovedWork atomic.Value
+	// 		size         atomic.Value
+	// 		intrinsicGas atomic.Value
+	// 		hash         atomic.Value
+	// 		delegator    atomic.Value
+	// 	}
+	// }
+
+	body := &tx.body { chainTag: chainTag }
+
+	// do mapping from ethTx to tx
+	// tx := &Transaction{ nonce: ethTx.Nonce }
+	tx := &tx.Transaction { 
+		// body: body,
+		//ChainTag: chainTag,
+		//ID:              (ethTx.Nonce),
+		// Origin:       origin,
+		// BlockRef:     hexutil.Encode(br[:]),
+		// Expiration:   tx.Expiration(),
+		// Nonce:        math.HexOrDecimal64(tx.Nonce()),
+		// Size:         uint32(tx.Size()),
+		// GasPriceCoef: tx.GasPriceCoef(),
+		// Gas:          tx.Gas(),
+		// DependsOn:    tx.DependsOn(),
+		// Clauses:      cls,
+		// Delegator:    delegator,
+	}
+	
 
 	// t := &Transaction{
 	// 	ChainTag:     tx.ChainTag(),
@@ -284,6 +321,7 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	// VIP-215
 	sub.Path("/eth").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendEthereumTransaction))
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
