@@ -9,8 +9,8 @@ package muxdb
 
 import (
 	"context"
+	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -29,9 +29,13 @@ const (
 	namedStoreSpace   = byte(3) // the key space for named store.
 )
 
+const (
+	propStoreName = "muxdb.props"
+	configKey     = "config"
+)
+
 // Trie is the managed trie.
 type Trie = trie.Trie
-type TriePartitionFactor = trie.PartitionFactor
 
 // Options optional parameters for MuxDB.
 type Options struct {
@@ -44,9 +48,9 @@ type Options struct {
 	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
 	TrieLeafBankSlotCapacity int
 	// TrieHistPartitionFactor is the partition factor for historical trie nodes.
-	TrieHistPartitionFactor trie.PartitionFactor
+	TrieHistPartitionFactor uint32
 	// TrieDedupedPartitionFactor is the partition factor for deduped trie nodes.
-	TrieDedupedPartitionFactor trie.PartitionFactor
+	TrieDedupedPartitionFactor uint32
 	// TrieWillCleanHistory is the hint to tell if historical nodes will be cleaned.
 	TrieWillCleanHistory bool
 
@@ -94,22 +98,15 @@ func Open(path string, options *Options) (*MuxDB, error) {
 	// as engine
 	engine := engine.NewLevelEngine(ldb)
 
-	var ptnConfig triePartitionConfig
-	if err := ptnConfig.Load(engine); err != nil {
-		if !engine.IsNotFound(err) {
-			ldb.Close()
-			return nil, err
-		}
-
-		// not configured. save in db to avoid trie corruption
-		// when partition factor occasionally tweaked.
-		ptnConfig.Hist = options.TrieHistPartitionFactor
-		ptnConfig.Deduped = options.TrieDedupedPartitionFactor
-
-		if err := ptnConfig.Save(engine); err != nil {
-			ldb.Close()
-			return nil, err
-		}
+	propStore := kv.Bucket(string(namedStoreSpace) + propStoreName).NewStore(engine)
+	// persists critical options to avoid corruption when tweaked.
+	cfg := config{
+		HistPtnFactor:    options.TrieHistPartitionFactor,
+		DedupedPtnFactor: options.TrieDedupedPartitionFactor,
+	}
+	if err := cfg.LoadOrSave(propStore); err != nil {
+		ldb.Close()
+		return nil, err
 	}
 
 	trieCache := trie.NewCache(
@@ -129,8 +126,8 @@ func Open(path string, options *Options) (*MuxDB, error) {
 			LeafBank:         trieLeafBank,
 			HistSpace:        trieHistSpace,
 			DedupedSpace:     trieDedupedSpace,
-			HistPtnFactor:    ptnConfig.Hist,
-			DedupedPtnFactor: ptnConfig.Deduped,
+			HistPtnFactor:    cfg.HistPtnFactor,
+			DedupedPtnFactor: cfg.DedupedPtnFactor,
 			CachedNodeTTL:    options.TrieCachedNodeTTL,
 		},
 	}, nil
@@ -162,15 +159,7 @@ func (db *MuxDB) Close() error {
 	return db.engine.Close()
 }
 
-func (db *MuxDB) TrieHistPartitionFactor() TriePartitionFactor {
-	return db.trieBackend.HistPtnFactor
-}
-
-func (db *MuxDB) TrieDedupedPartitionFactor() TriePartitionFactor {
-	return db.trieBackend.DedupedPtnFactor
-}
-
-// NewTrie creates trie either with existing root node.
+// NewTrie creates trie with existing root node.
 //
 // If root is zero or blake2b hash of an empty string, the trie is
 // initially empty.
@@ -185,6 +174,10 @@ func (db *MuxDB) NewTrie(name string, root thor.Bytes32, commitNum, distinctNum 
 	)
 }
 
+// NewNonCryptoTrie creates non-crypto trie with existing root node.
+//
+// If root is zero or blake2b hash of an empty string, the trie is
+// initially empty.
 func (db *MuxDB) NewNonCryptoTrie(name string, root thor.Bytes32, commitNum, distinctNum uint32) *Trie {
 	return trie.New(
 		db.trieBackend,
@@ -211,30 +204,27 @@ func (db *MuxDB) IsNotFound(err error) bool {
 	return db.engine.IsNotFound(err)
 }
 
-const (
-	configStoreName  = "muxdb.config"
-	triePtnConfigKey = "triePtn"
-)
-
-type triePartitionConfig struct {
-	Hist    trie.PartitionFactor
-	Deduped trie.PartitionFactor
+type config struct {
+	HistPtnFactor    uint32
+	DedupedPtnFactor uint32
 }
 
-func (c *triePartitionConfig) Load(getter kv.Getter) error {
-	getter = kv.Bucket(string(namedStoreSpace) + configStoreName).NewGetter(getter)
-	data, err := getter.Get([]byte(triePtnConfigKey))
+func (c *config) LoadOrSave(store kv.Store) error {
+	// try to load
+	data, err := store.Get([]byte(configKey))
+	if err == nil {
+		// and decode
+		return json.Unmarshal(data, c)
+	}
+
+	if !store.IsNotFound(err) {
+		return err
+	}
+	// not found
+	// encode and save
+	data, err = json.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return rlp.DecodeBytes(data, c)
-}
-
-func (c *triePartitionConfig) Save(putter kv.Putter) error {
-	data, err := rlp.EncodeToBytes(c)
-	if err != nil {
-		return err
-	}
-	putter = kv.Bucket(string(namedStoreSpace) + configStoreName).NewPutter(putter)
-	return putter.Put([]byte(triePtnConfigKey), data)
+	return store.Put([]byte(configKey), data)
 }

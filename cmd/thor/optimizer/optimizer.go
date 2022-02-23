@@ -86,9 +86,6 @@ func (p *Optimizer) loop(prune bool) error {
 	for {
 		// select target
 		target := status.Base + period
-		if status.Base == 0 {
-			target++ // in consideration of the trie node partition alignment
-		}
 
 		targetChain, err := p.awaitUntilSteady(target)
 		if err != nil {
@@ -185,13 +182,13 @@ func (p *Optimizer) dumpStateLeaves(targetChain *chain.Chain, base, target uint3
 
 // dumpTrieNodes dumps index/account/storage trie nodes committed within [base, target] into deduped space.
 func (p *Optimizer) dumpTrieNodes(targetChain *chain.Chain, base, target uint32) error {
-	summary, err := targetChain.GetBlockSummary(target)
+	summary, err := targetChain.GetBlockSummary(target - 1)
 	if err != nil {
 		return err
 	}
 
 	// dump index trie
-	indexTrie := p.db.NewTrie(chain.IndexTrieName, summary.IndexRoot, summary.Header.Number(), summary.Conflicts)
+	indexTrie := p.db.NewNonCryptoTrie(chain.IndexTrieName, trie.NonCryptoNodeHash, summary.Header.Number(), summary.Conflicts)
 	indexTrie.SetNoFillCache(true)
 
 	if err := indexTrie.DumpNodes(p.ctx, base, nil); err != nil {
@@ -223,22 +220,16 @@ func (p *Optimizer) dumpTrieNodes(targetChain *chain.Chain, base, target uint32)
 
 // pruneTries prunes index/account/storage tries in the range [base, target).
 func (p *Optimizer) pruneTries(targetChain *chain.Chain, base, target uint32) error {
-	// aligns to the deduped partition, to let the end of a partition becomes a checkpoint.
-	dedupedPtnFactor := p.db.TrieDedupedPartitionFactor()
-	for i := dedupedPtnFactor.Which(base); i < dedupedPtnFactor.Which(target-1)+1; i++ {
-		start, limit := dedupedPtnFactor.Range(i)
-		if start < base {
-			start = base
-		}
-		if limit > target-1 {
-			limit = target - 1
-		}
-		if err := p.dumpTrieNodes(targetChain, start, limit); err != nil {
-			return errors.Wrap(err, "dump trie nodes")
-		}
+	if err := p.dumpTrieNodes(targetChain, base, target); err != nil {
+		return errors.Wrap(err, "dump trie nodes")
 	}
 
-	if err := p.db.CleanTrieHistory(p.ctx, base, target); err != nil {
+	cleanBase := base
+	if base == 0 {
+		// keeps genesis state history like the previous version.
+		cleanBase = 1
+	}
+	if err := p.db.CleanTrieHistory(p.ctx, cleanBase, target); err != nil {
 		return errors.Wrap(err, "clean trie history")
 	}
 	return nil

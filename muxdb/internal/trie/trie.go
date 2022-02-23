@@ -26,7 +26,7 @@ type Backend struct {
 	HistSpace,
 	DedupedSpace byte
 	HistPtnFactor,
-	DedupedPtnFactor PartitionFactor
+	DedupedPtnFactor uint32
 	CachedNodeTTL int
 }
 
@@ -90,20 +90,20 @@ func (t *Trie) Name() string {
 }
 
 func (t *Trie) makeHistNodeKey(dst []byte, commitNum, distinctNum uint32, path []byte) []byte {
-	dst = append(dst, t.back.HistSpace)                            // space
-	dst = appendUint32(dst, t.back.HistPtnFactor.Which(commitNum)) // partition id
-	dst = append(dst, t.name...)                                   // trie name
-	dst = encodePath(dst, path)                                    // path
-	dst = appendUint32(dst, commitNum)                             // commit num
-	dst = appendUint32(dst, distinctNum)                           // distinct num
+	dst = append(dst, t.back.HistSpace)                     // space
+	dst = appendUint32(dst, commitNum/t.back.HistPtnFactor) // partition id
+	dst = append(dst, t.name...)                            // trie name
+	dst = encodePath(dst, path)                             // path
+	dst = appendUint32(dst, commitNum)                      // commit num
+	dst = appendUint32(dst, distinctNum)                    // distinct num
 	return dst
 }
 
 func (t *Trie) makeDedupedNodeKey(dst []byte, commitNum uint32, path []byte) []byte {
-	dst = append(dst, t.back.DedupedSpace)                            // space
-	dst = appendUint32(dst, t.back.DedupedPtnFactor.Which(commitNum)) // partition id
-	dst = append(dst, t.name...)                                      // trie name
-	dst = encodePath(dst, path)                                       // path
+	dst = append(dst, t.back.DedupedSpace)                     // space
+	dst = appendUint32(dst, commitNum/t.back.DedupedPtnFactor) // partition id
+	dst = append(dst, t.name...)                               // trie name
+	dst = encodePath(dst, path)                                // path
 	return dst
 }
 
@@ -459,8 +459,8 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 	var (
 		checkContext = newContextChecker(ctx, 5000)
 		iter         = back.Store.Iterate(kv.Range{
-			Start: appendUint32([]byte{back.HistSpace}, back.HistPtnFactor.Which(startCommitNum)),
-			Limit: appendUint32([]byte{back.HistSpace}, back.HistPtnFactor.Which(limitCommitNum-1)+1),
+			Start: appendUint32([]byte{back.HistSpace}, startCommitNum/back.HistPtnFactor),
+			Limit: appendUint32([]byte{back.HistSpace}, (limitCommitNum-1)/back.HistPtnFactor+1),
 		})
 		bulk = back.Store.Bulk()
 	)
