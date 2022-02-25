@@ -26,30 +26,6 @@ type Transactions struct {
 	pool *txpool.TxPool
 }
 
-// // VIP-215 https://ethereum.org/en/developers/docs/transactions/ ETH object to be posted
-// type EthTransaction struct {
-// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// 	PrivateKey           []byte              `json:"secretKey"`
-// }
-
-// {
-// 	from: "0xEA674fdDe714fd979de3EdF0F56AA9716B898ec8",
-// 	to: "0xac03bb73b6a9e108530aff4df5077c2b3d481e5a",
-// 	gasLimit: "21000",
-// 	maxFeePerGas: "300",
-// 	maxPriorityFeePerGas: "10",
-// 	nonce: "0",
-// 	value: "10000000000"
-// }
-
 func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		repo,
@@ -194,25 +170,25 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	// 	}
 	// }
 
-	body := &tx.body { chainTag: chainTag }
+	// body := &tx.body { chainTag: chainTag }
 
-	// do mapping from ethTx to tx
-	// tx := &Transaction{ nonce: ethTx.Nonce }
-	tx := &tx.Transaction { 
-		// body: body,
-		//ChainTag: chainTag,
-		//ID:              (ethTx.Nonce),
-		// Origin:       origin,
-		// BlockRef:     hexutil.Encode(br[:]),
-		// Expiration:   tx.Expiration(),
-		// Nonce:        math.HexOrDecimal64(tx.Nonce()),
-		// Size:         uint32(tx.Size()),
-		// GasPriceCoef: tx.GasPriceCoef(),
-		// Gas:          tx.Gas(),
-		// DependsOn:    tx.DependsOn(),
-		// Clauses:      cls,
-		// Delegator:    delegator,
-	}
+	// // do mapping from ethTx to tx
+	// // tx := &Transaction{ nonce: ethTx.Nonce }
+	tx := &tx.Transaction { }
+	// 	// body: body,
+	// 	//ChainTag: chainTag,
+	// 	//ID:              (ethTx.Nonce),
+	// 	// Origin:       origin,
+	// 	// BlockRef:     hexutil.Encode(br[:]),
+	// 	// Expiration:   tx.Expiration(),
+	// 	// Nonce:        math.HexOrDecimal64(tx.Nonce()),
+	// 	// Size:         uint32(tx.Size()),
+	// 	// GasPriceCoef: tx.GasPriceCoef(),
+	// 	// Gas:          tx.Gas(),
+	// 	// DependsOn:    tx.DependsOn(),
+	// 	// Clauses:      cls,
+	// 	// Delegator:    delegator,
+	// }
 	
 
 	// t := &Transaction{

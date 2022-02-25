@@ -43,6 +43,51 @@ type Transaction struct {
 	}
 }
 
+//Transaction transaction
+// type Transaction struct {
+// 	ID           thor.Bytes32        `json:"id"`
+// 	ChainTag     byte                `json:"chainTag"`
+// 	BlockRef     string              `json:"blockRef"`
+// 	Expiration   uint32              `json:"expiration"`
+// 	Clauses      Clauses             `json:"clauses"`
+// 	GasPriceCoef uint8               `json:"gasPriceCoef"`
+// 	Gas          uint64              `json:"gas"`
+// 	Origin       thor.Address        `json:"origin"`
+// 	Delegator    *thor.Address       `json:"delegator"`
+// 	Nonce        math.HexOrDecimal64 `json:"nonce"`
+// 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
+// 	Size         uint32              `json:"size"`
+// 	Meta         *TxMeta             `json:"meta"`
+// }
+
+// VIP-215
+// type EthTransaction struct {
+// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
+// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+// 	Nonce                uint64              `json:"nonce"`
+// 	To                   string              `json:"to"`
+// 	Data                 []string            `json:"data"`
+// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+// 	GasLimit             []uint64            `json:"gasLimit"`
+// 	Value                []string            `json:"value"`
+// 	PrivateKey           []byte              `json:"secretKey"`
+// }
+
+// VIP-215
+type EthTransaction struct {
+	GasPrice             uint64            `json:"gasPrice"`
+	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+	Nonce                uint64              `json:"nonce"`
+	To                   string              `json:"to"`
+	Data                 []string            `json:"data"`
+	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+	GasLimit             []uint64            `json:"gasLimit"`
+	Value                []string            `json:"value"`
+	// PrivateKey           []byte              `json:"secretKey"`
+}
+
 // body describes details of a tx.
 type body struct {
 	ChainTag     byte
@@ -514,4 +559,49 @@ func dataGas(data []byte) (uint64, error) {
 		return 0, errIntrinsicGasOverflow
 	}
 	return gas, nil
+}
+
+
+func CreateBody(chainTag byte) *body {
+    return &body{
+        ChainTag: chainTag,
+    }
+}
+
+func CreateTransaction(chainTag byte) *Transaction {
+    return &Transaction{
+        body: *CreateBody(chainTag),
+    }
+}
+
+func convertETHTransaction(ethTx *EthTransaction) (*Transaction, error) {
+	// data, err := hexutil.Decode(ethTx.Data)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	t := &Transaction{
+		//Nonce:    ethTx.Nonce,
+		body: body{ Nonce: ethTx.Nonce, },
+		// ChainTag:     tx.ChainTag(),
+		// ID:           tx.ID(),
+		// Origin:       origin,
+		// BlockRef:     hexutil.Encode(br[:]),
+		// Expiration:   tx.Expiration(),
+		// Nonce:        math.HexOrDecimal64(ethTx.Nonce()),
+		// Size:         uint32(tx.Size()),
+		// GasPriceCoef: tx.GasPriceCoef(),
+		// Gas:          tx.Gas(),
+		// DependsOn:    tx.DependsOn(),
+		// Clauses:      cls,
+		// Delegator:    delegator,
+	}
+
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// for i, clause := range ethTx.Clauses {
+	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
+	// }
+	return t, nil
 }

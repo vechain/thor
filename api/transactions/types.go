@@ -124,6 +124,48 @@ type rawTransaction struct {
 	Meta *TxMeta `json:"meta"`
 }
 
+
+// func convertETHTransaction(ethTx *EthTransaction) (*tx.Transaction, error) {
+// 	data, err := hexutil.Decode(ethTx.Data)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	tx, err := tx.New(
+// 		tx.ChainTag(ethTx.ChainTag),
+// 		tx.BlockRef(block.Ref(ethTx.BlockRef)),
+// 		tx.Expiration(ethTx.Expiration),
+// 		tx.GasPriceCoef(ethTx.GasPriceCoef),
+// 		tx.Gas(ethTx.Gas),
+// 		tx.Origin(thor.BytesToAddress(ethTx.Origin)),
+// 		tx.Nonce(ethTx.Nonce),
+// 		tx.Data(data),
+// 	)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	for i, clause := range ethTx.Clauses {
+// 		tx.Clause(i, clause.To, clause.Value, clause.Data)
+// 	}
+// 	return tx, nil
+// }
+
+// func convertETHTransaction(tx *tx.Transaction) (*EthTransaction, error) {
+// 	var ethTx EthTransaction
+// 	// ethTx.GasPrice = uint64(tx.GasPrice())
+// 	ethTx.Nonce = uint64(tx.Nonce())
+// 	// ethTx.To = tx.To().String()
+// 	// ethTx.Data = tx.Data()
+// 	// ethTx.GasLimit = make([]uint64, len(tx.GasLimit()))
+// 	// ethTx.Value = make([]string, len(tx.Value()))
+// 	// for i, gas := range tx.GasLimit() {
+// 	// 	ethTx.GasLimit[i] = uint64(gas)
+// 	// }
+// 	// for i, v := range tx.Value() {
+// 	// 	ethTx.Value[i] = v.String()
+// 	// }
+// 	return &ethTx, nil
+// }
+
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
