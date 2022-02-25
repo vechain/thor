@@ -270,7 +270,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          60, // 10 mins
 		TrieLeafBankSlotCapacity:   256,
-		TrieDedupedPartitionFactor: 1000000,
+		TrieDedupedPartitionFactor: math.MaxUint32,
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
 		OpenFilesCacheCapacity:     fdCache,
 		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
@@ -286,9 +286,9 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 500
+		opts.TrieHistPartitionFactor = 1000
 	} else {
-		opts.TrieHistPartitionFactor = 100000
+		opts.TrieHistPartitionFactor = 500000
 	}
 
 	path := filepath.Join(dir, "main.db")
