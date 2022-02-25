@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
@@ -74,19 +75,19 @@ type Transaction struct {
 // 	PrivateKey           []byte              `json:"secretKey"`
 // }
 
-// VIP-215
-type EthTransaction struct {
-	GasPrice             uint64            `json:"gasPrice"`
-	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	To                   string              `json:"to"`
-	Data                 []string            `json:"data"`
-	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	GasLimit             []uint64            `json:"gasLimit"`
-	Value                []string            `json:"value"`
-	// PrivateKey           []byte              `json:"secretKey"`
-}
+// // VIP-215
+// type EthTransaction struct {
+// 	GasPrice             uint64            `json:"gasPrice"`
+// 	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+// 	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+// 	Nonce                uint64              `json:"nonce"`
+// 	To                   string              `json:"to"`
+// 	Data                 []string            `json:"data"`
+// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+// 	GasLimit             []uint64            `json:"gasLimit"`
+// 	Value                []string            `json:"value"`
+// 	// PrivateKey           []byte              `json:"secretKey"`
+// }
 
 // body describes details of a tx.
 type body struct {
@@ -561,20 +562,19 @@ func dataGas(data []byte) (uint64, error) {
 	return gas, nil
 }
 
+// func CreateBody(chainTag byte) *body {
+//     return &body{
+//         ChainTag: chainTag,
+//     }
+// }
 
-func CreateBody(chainTag byte) *body {
-    return &body{
-        ChainTag: chainTag,
-    }
-}
+// func CreateTransaction(chainTag byte) *Transaction {
+//     return &Transaction{
+//         body: *CreateBody(chainTag),
+//     }
+// }
 
-func CreateTransaction(chainTag byte) *Transaction {
-    return &Transaction{
-        body: *CreateBody(chainTag),
-    }
-}
-
-func convertETHTransaction(ethTx *EthTransaction) (*Transaction, error) {
+func ConvertETHTransaction(ethTx *types.EthTransaction) (*Transaction, error) {
 	// data, err := hexutil.Decode(ethTx.Data)
 	// if err != nil {
 	// 	return nil, err

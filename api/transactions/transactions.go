@@ -6,11 +6,9 @@
 package transactions
 
 import (
-	"bytes"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -152,8 +150,6 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}
 
-	var chainTag byte = 1
-
 	// needs to be this guy
 	// type Transaction struct {
 	// 	body body
@@ -174,7 +170,11 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 
 	// // do mapping from ethTx to tx
 	// // tx := &Transaction{ nonce: ethTx.Nonce }
-	tx := &tx.Transaction { }
+	
+
+	// tx.Transaction.
+	et, err := tx.ConvertETHTransaction(ethTx)
+
 	// 	// body: body,
 	// 	//ChainTag: chainTag,
 	// 	//ID:              (ethTx.Nonce),
@@ -206,7 +206,7 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	// 	Delegator:    delegator,
 	// }
 
-	if err := t.pool.AddLocal(tx); err != nil {
+	if err := t.pool.AddLocal(et); err != nil {
 		if txpool.IsBadTx(err) {
 			return utils.BadRequest(err)
 		}

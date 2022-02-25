@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -76,27 +77,27 @@ type Transaction struct {
 // 	PrivateKey           []byte              `json:"secretKey"`
 // }
 
-// VIP-215
-type EthTransaction struct {
-	GasPrice             uint64            `json:"gasPrice"`
-	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	To                   string              `json:"to"`
-	Data                 []string            `json:"data"`
-	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	GasLimit             []uint64            `json:"gasLimit"`
-	Value                []string            `json:"value"`
-	// PrivateKey           []byte              `json:"secretKey"`
-}
+// // VIP-215
+// type EthTransaction struct {
+// 	GasPrice             uint64            `json:"gasPrice"`
+// 	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+// 	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+// 	Nonce                uint64              `json:"nonce"`
+// 	To                   string              `json:"to"`
+// 	Data                 []string            `json:"data"`
+// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+// 	GasLimit             []uint64            `json:"gasLimit"`
+// 	Value                []string            `json:"value"`
+// 	// PrivateKey           []byte              `json:"secretKey"`
+// }
 
 // VIP-215
-func (rtx *RawTx) decodeEth() (*EthTransaction, error) {
+func (rtx *RawTx) decodeEth() (*types.EthTransaction, error) {
 	data, err := hexutil.Decode(rtx.Raw)
 	if err != nil {
 		return nil, err
 	}
-	var tx *EthTransaction
+	var tx *types.EthTransaction
 	if err := rlp.DecodeBytes(data, &tx); err != nil {
 		return nil, err
 	}
