@@ -7,36 +7,37 @@ package trie
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"sync"
 )
 
-// encodePath encodes the path into 4-bytes aligned compact format.
-// The encoded paths are in lexicographical order even with suffix appended.
+// encodePath encodes the path into compact form.
 func encodePath(dst []byte, path []byte) []byte {
-	if len(path) == 0 {
-		return append(dst, 0, 0, 0, 0)
+	d := len(path)
+	s := d / 4
+	if s > math.MaxUint8 {
+		panic(fmt.Errorf("unexpected length of path: %v", d))
 	}
-	for i := 0; i < len(path); i += 7 {
-		dst = appendUint32(dst, encodePath32(path[i:]))
+	// the prefix s is to split the trie into sub tries.
+	dst = append(dst, byte(s))
+
+	// the last nibble of the encoded path is d % 4
+	for i := 0; i <= d; i += 4 {
+		switch d - i {
+		case 0:
+			dst = append(dst, 0, 0)
+		case 1:
+			dst = append(dst, path[i]<<4, 1)
+		case 2:
+			dst = append(dst, (path[i]<<4)|path[i+1], 2)
+		case 3:
+			dst = append(dst, (path[i]<<4)|path[i+1], (path[i+2]<<4)|3)
+		default:
+			dst = append(dst, (path[i]<<4)|path[i+1], (path[i+2]<<4)|path[i+3])
+		}
 	}
 	return dst
-}
-
-// encodePath32 encodes at most 7 path elements into uint32.
-func encodePath32(path []byte) uint32 {
-	n := len(path)
-	if n > 7 {
-		n = 8 // means have subsequent path elements.
-	}
-
-	var v uint32
-	for i := 0; i < 7; i++ {
-		if i < n {
-			v |= uint32(path[i])
-		}
-		v <<= 4
-	}
-	return v | uint32(n)
 }
 
 func appendUint32(b []byte, v uint32) []byte {

@@ -10,34 +10,19 @@ import (
 	"testing"
 )
 
-func Test_encodePath32(t *testing.T) {
-	tests := []struct {
-		path []byte
-		want uint32
-	}{
-		{[]byte{}, 0x00000000},
-		{[]byte{0}, 0x00000001},
-		{[]byte{0, 1}, 0x01000002},
-		{[]byte{0, 1, 2, 3, 4, 5, 6}, 0x01234567},       // len == 7
-		{[]byte{0, 1, 2, 3, 4, 5, 6, 7}, 0x01234568},    // len > 7
-		{[]byte{0, 1, 2, 3, 4, 5, 6, 7, 8}, 0x01234568}, // len > 7
-	}
-	for _, tt := range tests {
-		if got := encodePath32(tt.path); got != tt.want {
-			t.Errorf("encodePath32() = %v, want %v", got, tt.want)
-		}
-	}
-}
-
 func Test_encodePath(t *testing.T) {
 	tests := []struct {
 		path []byte
 		want []byte
 	}{
-		{[]byte{}, []byte{0, 0, 0, 0}},
-		{[]byte{0}, []byte{0, 0, 0, 1}},
-		{[]byte{0, 1, 2, 3, 4, 5, 6}, []byte{1, 0x23, 0x45, 0x67}},
-		{[]byte{0, 1, 2, 3, 4, 5, 6, 7}, []byte{1, 0x23, 0x45, 0x68, 0x70, 0, 0, 1}},
+		{[]byte{}, []byte{0, 0, 0}},
+		{[]byte{8}, []byte{0, 0x80, 1}},
+		{[]byte{8, 9}, []byte{0, 0x89, 2}},
+		{[]byte{8, 9, 0xa}, []byte{0, 0x89, 0xa3}},
+		{[]byte{8, 9, 0xa, 0xb}, []byte{1, 0x89, 0xab, 0, 0}},
+		{[]byte{8, 9, 0xa, 0xb, 0xc}, []byte{1, 0x89, 0xab, 0xc0, 1}},
+		{[]byte{8, 9, 0xa, 0xb, 0xc, 0xd}, []byte{1, 0x89, 0xab, 0xcd, 2}},
+		{[]byte{8, 9, 0xa, 0xb, 0xc, 0xd, 0xe}, []byte{1, 0x89, 0xab, 0xcd, 0xe3}},
 	}
 	for _, tt := range tests {
 		if got := encodePath(nil, tt.path); !reflect.DeepEqual(got, tt.want) {
