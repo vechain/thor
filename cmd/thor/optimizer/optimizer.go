@@ -69,8 +69,8 @@ func (p *Optimizer) loop(prune bool) error {
 	log.Info("optimizer started")
 
 	const (
-		period        = 1000  // the period to update leafbank.
-		prunePeriod   = 10000 // the period to prune tries.
+		period        = 5000  // the period to update leafbank.
+		prunePeriod   = 50000 // the period to prune tries.
 		pruneReserved = 70000 // must be > thor.MaxStateHistory
 	)
 
