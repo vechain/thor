@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	// "github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
 
@@ -141,14 +141,14 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 
 // VIP-215
 func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req *http.Request) error {
-	var rawTx *RawTx
-	if err := utils.ParseJSON(req.Body, &rawTx); err != nil {
+	var ethTx *EthTransaction
+	if err := utils.ParseJSON(req.Body, &ethTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	ethTx, err := rawTx.decodeEth()
-	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "raw"))
-	}
+	// ethTx, err := rawTx.decodeEth()
+	// if err != nil {
+	// 	return utils.BadRequest(errors.WithMessage(err, "raw"))
+	// }
 
 	// needs to be this guy
 	// type Transaction struct {
@@ -169,11 +169,11 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	// body := &tx.body { chainTag: chainTag }
 
 	// // do mapping from ethTx to tx
-	// // tx := &Transaction{ nonce: ethTx.Nonce }
+	// var tx := &Transaction //{ nonce: ethTx.Nonce }
 	
 
 	// tx.Transaction.
-	et, err := tx.ConvertETHTransaction(ethTx)
+	//et, err := ConvertETHTransaction(ethTx)
 
 	// 	// body: body,
 	// 	//ChainTag: chainTag,
@@ -206,15 +206,15 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	// 	Delegator:    delegator,
 	// }
 
-	if err := t.pool.AddLocal(et); err != nil {
-		if txpool.IsBadTx(err) {
-			return utils.BadRequest(err)
-		}
-		if txpool.IsTxRejected(err) {
-			return utils.Forbidden(err)
-		}
-		return err
-	}
+	// if err := t.pool.AddLocal(tx); err != nil {
+	// 	if txpool.IsBadTx(err) {
+	// 		return utils.BadRequest(err)
+	// 	}
+	// 	if txpool.IsTxRejected(err) {
+	// 		return utils.Forbidden(err)
+	// 	}
+	// 	return err
+	// }
 	return utils.WriteJSON(w, map[string]string{"id": "0x0"})
 }
 

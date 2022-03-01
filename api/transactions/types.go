@@ -10,7 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
+	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -64,45 +64,31 @@ type Transaction struct {
 }
 
 // VIP-215
-// type EthTransaction struct {
-// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// 	PrivateKey           []byte              `json:"secretKey"`
-// }
-
-// // VIP-215
-// type EthTransaction struct {
-// 	GasPrice             uint64            `json:"gasPrice"`
-// 	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// 	// PrivateKey           []byte              `json:"secretKey"`
-// }
-
-// VIP-215
-func (rtx *RawTx) decodeEth() (*types.EthTransaction, error) {
-	data, err := hexutil.Decode(rtx.Raw)
-	if err != nil {
-		return nil, err
-	}
-	var tx *types.EthTransaction
-	if err := rlp.DecodeBytes(data, &tx); err != nil {
-		return nil, err
-	}
-	return tx, nil
+type EthTransaction struct {
+	// GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
+	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+	Nonce                uint64              `json:"nonce"`
+	// To                   string              `json:"to"`
+	// Data                 []string            `json:"data"`
+	// // AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
+	// GasLimit             []uint64            `json:"gasLimit"`
+	// Value                []string            `json:"value"`
+	// PrivateKey           []byte              `json:"secretKey"`
 }
+
+// // VIP-215 (NOT REQUIRED)
+// func (rtx *RawTx) decodeEth() (*EthTransaction, error) {
+// 	data, err := hexutil.Decode(rtx.Raw)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	var tx *EthTransaction
+// 	if err := rlp.DecodeBytes(data, &tx); err != nil {
+// 		return nil, err
+// 	}
+// 	return tx, nil
+// }
 
 type RawTx struct {
 	Raw string `json:"raw"`
@@ -124,6 +110,30 @@ type rawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
 }
+
+// func convertETHTransaction(ethTx *EthTransaction) (*tx.Transaction, error) {
+// 	// data, err := hexutil.Decode(ethTx.Data)
+// 	// if err != nil {
+// 	// 	return nil, err
+// 	// }
+// 	tx, err := tx.New()
+// 	// 	tx.ChainTag(ethTx.ChainTag),
+// 	// 	tx.BlockRef(block.Ref(ethTx.BlockRef)),
+// 	// 	tx.Expiration(ethTx.Expiration),
+// 	// 	tx.GasPriceCoef(ethTx.GasPriceCoef),
+// 	// 	tx.Gas(ethTx.Gas),
+// 	// 	tx.Origin(thor.BytesToAddress(ethTx.Origin)),
+// 	// 	tx.Nonce(ethTx.Nonce),
+// 	// 	tx.Data(data),
+// 	// )
+// 	// if err != nil {
+// 	// 	return nil, err
+// 	// }
+// 	// for i, clause := range ethTx.Clauses {
+// 	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
+// 	// }
+// 	return tx, nil
+// }
 
 
 // func convertETHTransaction(ethTx *EthTransaction) (*tx.Transaction, error) {
