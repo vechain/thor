@@ -15,12 +15,10 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	// "github.com/vechain/thor/api/transactions"
 	"github.com/vechain/thor/metric"
 	"github.com/vechain/thor/thor"
 )
@@ -46,33 +44,6 @@ type Transaction struct {
 	}
 }
 
-// VIP-215
-type EthTransaction struct {
-	// GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	// // To                   string              `json:"to"`
-	// Data                 []string            `json:"data"`
-	// // AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	// GasLimit             []uint64            `json:"gasLimit"`
-	// Value                []string            `json:"value"`
-	// PrivateKey           []byte              `json:"secretKey"`
-}
-
-// // VIP-215
-// type EthTransaction struct {
-// 	GasPrice             uint64            `json:"gasPrice"`
-// 	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// 	// PrivateKey           []byte              `json:"secretKey"`
-// }
 
 // body describes details of a tx.
 type body struct {
@@ -518,6 +489,28 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 	return total, nil
 }
 
+// VIP-215
+func CreateTransaction(nonce uint64, chainTag byte) *Transaction {
+    return &Transaction{
+        body: *createBody(nonce, chainTag),
+    }
+}
+
+// VIP-215
+func createBody(nonce uint64, chainTag byte) *body {
+    return &body{
+        Nonce: nonce,
+		ChainTag: chainTag,
+		// t.body.BlockRef,
+		// t.body.Expiration,
+		// t.body.Clauses,
+		// t.body.GasPriceCoef,
+		// t.body.Gas,
+		// t.body.DependsOn,
+		// &t.body.Reserved,
+    }
+}
+
 // see core.IntrinsicGas
 func dataGas(data []byte) (uint64, error) {
 	if len(data) == 0 {
@@ -546,47 +539,3 @@ func dataGas(data []byte) (uint64, error) {
 	}
 	return gas, nil
 }
-
-// func CreateBody(chainTag byte) *body {
-//     return &body{
-//         ChainTag: chainTag,
-//     }
-// }
-
-// func CreateTransaction(chainTag byte) *Transaction {
-//     return &Transaction{
-//         body: *CreateBody(chainTag),
-//     }
-// }
-
-// func CastETHTransaction(ethTx *transactions.EthTransaction) (*Transaction, error) {
-// 	// data, err := hexutil.Decode(ethTx.Data)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-
-// 	t := &Transaction{
-// 		//Nonce:    ethTx.Nonce,
-// 		body: body{ Nonce: ethTx.Nonce, },
-// 		// ChainTag:     tx.ChainTag(),
-// 		// ID:           tx.ID(),
-// 		// Origin:       origin,
-// 		// BlockRef:     hexutil.Encode(br[:]),
-// 		// Expiration:   tx.Expiration(),
-// 		// Nonce:        math.HexOrDecimal64(ethTx.Nonce()),
-// 		// Size:         uint32(tx.Size()),
-// 		// GasPriceCoef: tx.GasPriceCoef(),
-// 		// Gas:          tx.Gas(),
-// 		// DependsOn:    tx.DependsOn(),
-// 		// Clauses:      cls,
-// 		// Delegator:    delegator,
-// 	}
-
-// // 	// if err != nil {
-// // 	// 	return nil, err
-// // 	// }
-// // 	// for i, clause := range ethTx.Clauses {
-// // 	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
-// // 	// }
-// 	return t, nil
-// }

@@ -7,9 +7,13 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+
 	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
@@ -63,32 +67,29 @@ type Transaction struct {
 	Meta         *TxMeta             `json:"meta"`
 }
 
-// VIP-215
-type EthTransaction struct {
-	// GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	// To                   string              `json:"to"`
-	// Data                 []string            `json:"data"`
-	// // AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	// GasLimit             []uint64            `json:"gasLimit"`
-	// Value                []string            `json:"value"`
-	// PrivateKey           []byte              `json:"secretKey"`
-}
-
-// // VIP-215 (NOT REQUIRED)
-// func (rtx *RawTx) decodeEth() (*EthTransaction, error) {
-// 	data, err := hexutil.Decode(rtx.Raw)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	var tx *EthTransaction
-// 	if err := rlp.DecodeBytes(data, &tx); err != nil {
-// 		return nil, err
-// 	}
-// 	return tx, nil
+// // VIP-215
+// type EthTransaction struct {
+// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
+// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
+// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
+// 	Nonce                uint64              `json:"nonce"`
+// 	To                   string              `json:"to"`
+// 	Data                 []string            `json:"data"`
+// 	GasLimit             []uint64            `json:"gasLimit"`
+// 	Value                []string            `json:"value"`
 // }
+
+// VIP-215
+// LegacyTx is the transaction data of regular Ethereum transactions.
+type EthTransaction struct {
+	Nonce    uint64          `json:"nonce"` // nonce of sender account
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          `json:"gasLimit"` // gas limit
+	To       *common.Address `json:"to"` // nil means contract creation
+	Value    *big.Int        `json:"value"`// wei amount
+	Data     []byte          // contract invocation input data
+	V, R, S  *big.Int        // signature values
+}
 
 type RawTx struct {
 	Raw string `json:"raw"`
@@ -111,71 +112,30 @@ type rawTransaction struct {
 	Meta *TxMeta `json:"meta"`
 }
 
-// func convertETHTransaction(ethTx *EthTransaction) (*tx.Transaction, error) {
-// 	// data, err := hexutil.Decode(ethTx.Data)
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-// 	tx, err := tx.New()
-// 	// 	tx.ChainTag(ethTx.ChainTag),
-// 	// 	tx.BlockRef(block.Ref(ethTx.BlockRef)),
-// 	// 	tx.Expiration(ethTx.Expiration),
-// 	// 	tx.GasPriceCoef(ethTx.GasPriceCoef),
-// 	// 	tx.Gas(ethTx.Gas),
-// 	// 	tx.Origin(thor.BytesToAddress(ethTx.Origin)),
-// 	// 	tx.Nonce(ethTx.Nonce),
-// 	// 	tx.Data(data),
-// 	// )
-// 	// if err != nil {
-// 	// 	return nil, err
-// 	// }
-// 	// for i, clause := range ethTx.Clauses {
-// 	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
-// 	// }
-// 	return tx, nil
-// }
+func convertETHTransaction(ethTx *EthTransaction) (*types.Transaction, error) {
+	// tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
+	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, big.NewInt(0), common.FromHex("0x00"))
+	// do the mapping
+	// tx, err := tx.New()
+	// 	tx.ChainTag(ethTx.ChainTag),
+	// 	tx.BlockRef(block.Ref(ethTx.BlockRef)),
+	// 	tx.Expiration(ethTx.Expiration),
+	// 	tx.GasPriceCoef(ethTx.GasPriceCoef),
+	// 	tx.Gas(ethTx.Gas),
+	// 	tx.Origin(thor.BytesToAddress(ethTx.Origin)),
+	// 	tx.Nonce(ethTx.Nonce),
+	// 	tx.Data(data),
+	// )
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// for i, clause := range ethTx.Clauses {
+	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
+	// }
+	return tx, nil
+}
 
 
-// func convertETHTransaction(ethTx *EthTransaction) (*tx.Transaction, error) {
-// 	data, err := hexutil.Decode(ethTx.Data)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	tx, err := tx.New(
-// 		tx.ChainTag(ethTx.ChainTag),
-// 		tx.BlockRef(block.Ref(ethTx.BlockRef)),
-// 		tx.Expiration(ethTx.Expiration),
-// 		tx.GasPriceCoef(ethTx.GasPriceCoef),
-// 		tx.Gas(ethTx.Gas),
-// 		tx.Origin(thor.BytesToAddress(ethTx.Origin)),
-// 		tx.Nonce(ethTx.Nonce),
-// 		tx.Data(data),
-// 	)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	for i, clause := range ethTx.Clauses {
-// 		tx.Clause(i, clause.To, clause.Value, clause.Data)
-// 	}
-// 	return tx, nil
-// }
-
-// func convertETHTransaction(tx *tx.Transaction) (*EthTransaction, error) {
-// 	var ethTx EthTransaction
-// 	// ethTx.GasPrice = uint64(tx.GasPrice())
-// 	ethTx.Nonce = uint64(tx.Nonce())
-// 	// ethTx.To = tx.To().String()
-// 	// ethTx.Data = tx.Data()
-// 	// ethTx.GasLimit = make([]uint64, len(tx.GasLimit()))
-// 	// ethTx.Value = make([]string, len(tx.Value()))
-// 	// for i, gas := range tx.GasLimit() {
-// 	// 	ethTx.GasLimit[i] = uint64(gas)
-// 	// }
-// 	// for i, v := range tx.Value() {
-// 	// 	ethTx.Value[i] = v.String()
-// 	// }
-// 	return &ethTx, nil
-// }
 
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {

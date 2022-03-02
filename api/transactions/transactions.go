@@ -15,7 +15,8 @@ import (
 	"github.com/vechain/thor/api/utils"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
-	// "github.com/vechain/thor/tx"
+	"github.com/vechain/thor/tx"
+
 	"github.com/vechain/thor/txpool"
 )
 
@@ -145,77 +146,19 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 	if err := utils.ParseJSON(req.Body, &ethTx); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	// ethTx, err := rawTx.decodeEth()
-	// if err != nil {
-	// 	return utils.BadRequest(errors.WithMessage(err, "raw"))
-	// }
 
-	// needs to be this guy
-	// type Transaction struct {
-	// 	body body
-	
-	// 	cache struct {
-	// 		signingHash  atomic.Value
-	// 		origin       atomic.Value
-	// 		id           atomic.Value
-	// 		unprovedWork atomic.Value
-	// 		size         atomic.Value
-	// 		intrinsicGas atomic.Value
-	// 		hash         atomic.Value
-	// 		delegator    atomic.Value
-	// 	}
-	// }
+	tx := tx.CreateTransaction(*&ethTx.Nonce, 0x27)
 
-	// body := &tx.body { chainTag: chainTag }
-
-	// // do mapping from ethTx to tx
-	// var tx := &Transaction //{ nonce: ethTx.Nonce }
-	
-
-	// tx.Transaction.
-	//et, err := ConvertETHTransaction(ethTx)
-
-	// 	// body: body,
-	// 	//ChainTag: chainTag,
-	// 	//ID:              (ethTx.Nonce),
-	// 	// Origin:       origin,
-	// 	// BlockRef:     hexutil.Encode(br[:]),
-	// 	// Expiration:   tx.Expiration(),
-	// 	// Nonce:        math.HexOrDecimal64(tx.Nonce()),
-	// 	// Size:         uint32(tx.Size()),
-	// 	// GasPriceCoef: tx.GasPriceCoef(),
-	// 	// Gas:          tx.Gas(),
-	// 	// DependsOn:    tx.DependsOn(),
-	// 	// Clauses:      cls,
-	// 	// Delegator:    delegator,
-	// }
-	
-
-	// t := &Transaction{
-	// 	ChainTag:     tx.ChainTag(),
-	// 	ID:           tx.ID(),
-	// 	Origin:       origin,
-	// 	BlockRef:     hexutil.Encode(br[:]),
-	// 	Expiration:   tx.Expiration(),
-	// 	Nonce:        math.HexOrDecimal64(tx.Nonce()),
-	// 	Size:         uint32(tx.Size()),
-	// 	GasPriceCoef: tx.GasPriceCoef(),
-	// 	Gas:          tx.Gas(),
-	// 	DependsOn:    tx.DependsOn(),
-	// 	Clauses:      cls,
-	// 	Delegator:    delegator,
-	// }
-
-	// if err := t.pool.AddLocal(tx); err != nil {
-	// 	if txpool.IsBadTx(err) {
-	// 		return utils.BadRequest(err)
-	// 	}
-	// 	if txpool.IsTxRejected(err) {
-	// 		return utils.Forbidden(err)
-	// 	}
-	// 	return err
-	// }
-	return utils.WriteJSON(w, map[string]string{"id": "0x0"})
+	if err := t.pool.AddLocal(tx); err != nil {
+		if txpool.IsBadTx(err) {
+			return utils.BadRequest(err)
+		}
+		if txpool.IsTxRejected(err) {
+			return utils.Forbidden(err)
+		}
+		return err
+	}
+	return utils.WriteJSON(w, map[string]string{"id": string(ethTx.Nonce)})
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
