@@ -25,24 +25,28 @@ func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum 
 
 	var (
 		ctx, cancel = context.WithCancel(_ctx)
-		stream      = make(chan *block.Block, 2048)
+		fetched     = make(chan []*block.Block, 1)
+		warmedUp    = make(chan *block.Block, 2048)
 		goes        co.Goes
-		pumpErr     error
+		fetchErr    error
 	)
 	defer goes.Wait()
 	goes.Go(func() {
-		defer close(stream)
-		pumpErr = pumpBlocks(ctx, peer, ancestor+1, stream)
+		defer close(fetched)
+		fetchErr = fetchBlocks(ctx, peer, ancestor+1, fetched)
+	})
+	goes.Go(func() {
+		defer close(warmedUp)
+		warmupBlocks(ctx, fetched, warmedUp)
 	})
 	defer cancel()
-	if err := handler(ctx, stream); err != nil {
+	if err := handler(ctx, warmedUp); err != nil {
 		return err
 	}
-	return pumpErr
+	return fetchErr
 }
 
-func pumpBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, stream chan<- *block.Block) error {
-	var blocks []*block.Block
+func fetchBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, fetched chan<- []*block.Block) error {
 	for {
 		result, err := proto.GetBlocksFromNumber(ctx, peer, fromBlockNum)
 		if err != nil {
@@ -52,7 +56,7 @@ func pumpBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, stream cha
 			return nil
 		}
 
-		blocks = blocks[:0]
+		blocks := make([]*block.Block, 0, len(result))
 		for _, raw := range result {
 			var blk block.Block
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
@@ -66,7 +70,16 @@ func pumpBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, stream cha
 		}
 
 		select {
-		case <-co.Parallel(func(queue chan<- func()) {
+		case fetched <- blocks:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp chan<- *block.Block) {
+	<-co.Parallel(func(queue chan<- func()) {
+		for blocks := range fetched {
 			for _, blk := range blocks {
 				h := blk.Header()
 				queue <- func() {
@@ -83,30 +96,28 @@ func pumpBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, stream cha
 					}
 				}
 			}
-		}):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
 
-		for _, blk := range blocks {
-			// when queued blocks count > 10% channel cap,
-			// send nil block to throttle to reduce mem pressure.
-			if len(stream)*10 > cap(stream) {
-				const targetSize = 2048
-				for i := 0; i < int(blk.Size())/targetSize-1; i++ {
-					select {
-					case stream <- nil:
-					default:
+			for _, blk := range blocks {
+				select {
+				case <-ctx.Done():
+					return
+				case warmedUp <- blk:
+				}
+
+				// when queued blocks count > 10% warmed up channel cap,
+				// send nil block to throttle to reduce mem pressure.
+				if len(warmedUp)*10 > cap(warmedUp) {
+					const targetSize = 2048
+					for i := 0; i < int(blk.Size())/targetSize-1; i++ {
+						select {
+						case warmedUp <- nil:
+						default:
+						}
 					}
 				}
 			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case stream <- blk:
-			}
 		}
-	}
+	})
 }
 
 func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32) (uint32, error) {
