@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	// "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -67,18 +66,6 @@ type Transaction struct {
 	Meta         *TxMeta             `json:"meta"`
 }
 
-// // VIP-215
-// type EthTransaction struct {
-// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// }
-
 // VIP-215
 // LegacyTx is the transaction data of regular Ethereum transactions.
 type EthTransaction struct {
@@ -111,31 +98,6 @@ type rawTransaction struct {
 	RawTx
 	Meta *TxMeta `json:"meta"`
 }
-
-func convertETHTransaction(ethTx *EthTransaction) (*types.Transaction, error) {
-	// tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, gasPrice, common.FromHex(code))
-	tx := types.NewTransaction(0, common.HexToAddress("0x01"), big.NewInt(0), 3000000, big.NewInt(0), common.FromHex("0x00"))
-	// do the mapping
-	// tx, err := tx.New()
-	// 	tx.ChainTag(ethTx.ChainTag),
-	// 	tx.BlockRef(block.Ref(ethTx.BlockRef)),
-	// 	tx.Expiration(ethTx.Expiration),
-	// 	tx.GasPriceCoef(ethTx.GasPriceCoef),
-	// 	tx.Gas(ethTx.Gas),
-	// 	tx.Origin(thor.BytesToAddress(ethTx.Origin)),
-	// 	tx.Nonce(ethTx.Nonce),
-	// 	tx.Data(data),
-	// )
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// for i, clause := range ethTx.Clauses {
-	// 	tx.Clause(i, clause.To, clause.Value, clause.Data)
-	// }
-	return tx, nil
-}
-
-
 
 //convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
