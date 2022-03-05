@@ -19,31 +19,39 @@ func encodePath(dst []byte, path []byte) []byte {
 	if s > math.MaxUint8 {
 		panic(fmt.Errorf("unexpected length of path: %v", d))
 	}
-	// the prefix s is to split the trie into sub tries.
+	// the prefix s is to split the trie into sub tries with depth 4.
 	dst = append(dst, byte(s))
 
-	// the last nibble of the encoded path is d % 4
-	for i := 0; i <= d; i += 4 {
+	// further on, a sub trie is divided to depth-2 sub tries.
+	for i := 0; ; i += 4 {
 		switch d - i {
 		case 0:
-			dst = append(dst, 0, 0)
+			return append(dst, 0)
 		case 1:
-			dst = append(dst, path[i]<<4, 1)
+			return append(dst, (path[i]<<3)|1)
 		case 2:
-			dst = append(dst, (path[i]<<4)|path[i+1], 2)
+			t := (uint16(path[i]) << 4) | uint16(path[i+1])
+			return appendUint16(dst, 0x8000|(t<<7))
 		case 3:
-			dst = append(dst, (path[i]<<4)|path[i+1], (path[i+2]<<4)|3)
+			t := (uint16(path[i]) << 8) | (uint16(path[i+1]) << 4) | uint16(path[i+2])
+			return appendUint16(dst, 0x8000|(t<<3)|1)
 		default:
 			dst = append(dst, (path[i]<<4)|path[i+1], (path[i+2]<<4)|path[i+3])
 		}
 	}
-	return dst
 }
 
 func appendUint32(b []byte, v uint32) []byte {
 	return append(b,
 		byte(v>>24),
 		byte(v>>16),
+		byte(v>>8),
+		byte(v),
+	)
+}
+
+func appendUint16(b []byte, v uint16) []byte {
+	return append(b,
 		byte(v>>8),
 		byte(v),
 	)
