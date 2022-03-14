@@ -45,7 +45,7 @@ func TestTrie(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("account1"))
 	assert.Equal(t,
 		M(loadAccount(trie, addr, 0)),
-		M(emptyAccount(), nil),
+		M(emptyAccount(), &AccountMetadata{}, nil),
 		"should load an empty account")
 
 	acc1 := Account{
@@ -55,14 +55,18 @@ func TestTrie(t *testing.T) {
 		[]byte("master"),
 		[]byte("code hash"),
 		[]byte("storage root"),
-		0, 0,
 	}
-	saveAccount(trie, addr, &acc1)
+	meta1 := AccountMetadata{
+		StorageID:          []byte("sid"),
+		StorageCommitNum:   1,
+		StorageDistinctNum: 2,
+	}
+	saveAccount(trie, addr, &acc1, &meta1)
 	assert.Equal(t,
 		M(loadAccount(trie, addr, 0)),
-		M(&acc1, nil))
+		M(&acc1, &meta1, nil))
 
-	saveAccount(trie, addr, emptyAccount())
+	saveAccount(trie, addr, emptyAccount(), &meta1)
 	assert.Equal(t,
 		M(trie.Get(addr[:])),
 		M([]byte(nil), []byte(nil), nil),
@@ -89,27 +93,4 @@ func TestStorageTrie(t *testing.T) {
 		M(trie.Get(key[:])),
 		M([]byte(nil), []byte(nil), nil),
 		"empty storage value should be deleted")
-}
-
-func TestAccountMetadata(t *testing.T) {
-	var (
-		addr = thor.BytesToAddress([]byte("addr"))
-		cn   = uint32(1)
-		dn   = uint32(2)
-	)
-
-	m := NewAccountMetadata(cn, dn, addr)
-
-	assert.Equal(t, cn, m.StorageCommitNum())
-	assert.Equal(t, dn, m.StorageDistinctNum())
-
-	_addr, ok := m.Address()
-	assert.True(t, ok)
-	assert.Equal(t, addr, _addr)
-
-	m = m.SkipAddress()
-
-	_addr, ok = m.Address()
-	assert.False(t, ok)
-	assert.True(t, _addr.IsZero())
 }

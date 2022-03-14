@@ -21,7 +21,7 @@ func TestCachedObject(t *testing.T) {
 	db := muxdb.NewMem()
 	addr := thor.Address{}
 
-	stgTrie := db.NewTrie(StorageTrieName(addr), thor.Bytes32{}, 0, 0)
+	stgTrie := db.NewTrie(StorageTrieName([]byte("sid")), thor.Bytes32{}, 0, 0)
 	storages := []struct {
 		k thor.Bytes32
 		v rlp.RawValue
@@ -50,7 +50,7 @@ func TestCachedObject(t *testing.T) {
 		StorageRoot: storageRoot[:],
 	}
 
-	obj := newCachedObject(db, addr, &account)
+	obj := newCachedObject(db, addr, &account, &AccountMetadata{StorageID: []byte("sid")})
 
 	assert.Equal(t,
 		M(code, nil),
@@ -60,6 +60,5 @@ func TestCachedObject(t *testing.T) {
 		assert.Equal(t,
 			M(s.v, nil),
 			M(obj.GetStorage(s.k, 0)))
-
 	}
 }
