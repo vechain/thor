@@ -490,25 +490,33 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 }
 
 // VIP-215
-func CreateTransaction(nonce uint64, chainTag byte) *Transaction {
-    return &Transaction{
-        body: *createBody(nonce, chainTag),
+func CreateFromETHTransaction(nonce uint64, chainTag byte, gasPrice big.Int) *Transaction {
+    return &Transaction {
+        body: *createBody(nonce, chainTag, gasPrice),
     }
 }
 
 // VIP-215
-func createBody(nonce uint64, chainTag byte) *body {
-    return &body{
+func createBody(nonce uint64, chainTag byte, gasPrice big.Int) *body {
+	var gp uint64 = uint64(gasPrice.Uint64())
+    return &body {
         Nonce: nonce,
 		ChainTag: chainTag,
-		// t.body.BlockRef,
+		GasPriceCoef: calcuateGasPriceCoef(gp),
+		// BlockRef: blockRef,
 		// t.body.Expiration,
 		// t.body.Clauses,
 		// t.body.GasPriceCoef,
 		// t.body.Gas,
 		// t.body.DependsOn,
-		// &t.body.Reserved,
+		// &t.body.Reserved, // TODO?: features.contants.EthFeatures
     }
+}
+
+func calcuateGasPriceCoef(gasPrice uint64) uint8 {
+	// Calculate gas price coefficient.
+	// Refer to https://github.com/proximacapital/VIPs/blob/vip-215/vips/VIP-215.md
+	return uint8(256 * ( gasPrice - 1 ) - 1)
 }
 
 // see core.IntrinsicGas

@@ -70,6 +70,7 @@ type Transaction struct {
 // LegacyTx is the transaction data of regular Ethereum transactions.
 type EthTransaction struct {
 	Nonce    uint64          `json:"nonce"` // nonce of sender account
+	ChainID	 *big.Int        `json:"chainId"` // chain id of the network
 	GasPrice *big.Int        // wei per gas
 	Gas      uint64          `json:"gasLimit"` // gas limit
 	To       *common.Address `json:"to"` // nil means contract creation
