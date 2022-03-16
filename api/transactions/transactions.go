@@ -147,13 +147,10 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 
-	// if  verifySignature() != true {
-		// throw error
-	//
-
-	tx := tx.CreateTransaction(*&ethTx.Nonce, *&ethTx.To, *&ethTx.Data)
-
-	
+	tx, err := tx.CreateFromETHTransaction(*&ethTx.Nonce, byte(ethTx.ChainID), *&ethTx.GasPrice, *&ethTx.V, *&ethTx.R, *&ethTx.S)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "raw"))
+	}
 
 	if err := t.pool.AddLocal(tx); err != nil {
 		if txpool.IsBadTx(err) {

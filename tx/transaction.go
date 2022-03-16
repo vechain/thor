@@ -27,6 +27,9 @@ var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 )
 
+var (
+	errInvalidSignature = errors.New("invalid signature")
+)
 
 // Transaction is an immutable tx type.
 type Transaction struct {
@@ -490,10 +493,16 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 }
 
 // VIP-215
-func CreateFromETHTransaction(nonce uint64, chainTag byte, gasPrice big.Int) *Transaction {
-    return &Transaction {
-        body: *createBody(nonce, chainTag, gasPrice),
+func CreateFromETHTransaction(nonce uint64, chainTag byte, gasPrice *big.Int, v byte, r, s *big.Int) (*Transaction, error) {
+	if !crypto.ValidateSignatureValues(v, r, s, false) {
+		return nil, errInvalidSignature
+	}
+
+	tx:= &Transaction {
+        body: *createBody(nonce, chainTag, *gasPrice),
     }
+
+	return tx, nil
 }
 
 // VIP-215
@@ -503,12 +512,13 @@ func createBody(nonce uint64, chainTag byte, gasPrice big.Int) *body {
         Nonce: nonce,
 		ChainTag: chainTag,
 		GasPriceCoef: calcuateGasPriceCoef(gp),
-		// BlockRef: blockRef,
-		// t.body.Expiration,
-		// t.body.Clauses,
-		// t.body.GasPriceCoef,
-		// t.body.Gas,
-		// t.body.DependsOn,
+		// BlockRef     uint64
+		// Expiration   uint32
+		// Clauses      []*Clause
+		// Gas          uint64
+		// DependsOn    *thor.Bytes32 `rlp:"nil"`
+		// Reserved     reserved
+		// Signature    []byte
 		// &t.body.Reserved, // TODO?: features.contants.EthFeatures
     }
 }
