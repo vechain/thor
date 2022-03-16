@@ -196,23 +196,19 @@ func (it *nodeIterator) Node(handler func(blob []byte) error) error {
 }
 
 func (it *nodeIterator) CommitNum() uint32 {
-	if len(it.stack) == 0 {
-		return 0
-	}
-	n := it.stack[len(it.stack)-1].node
-	if n != nil {
-		return n.commitNum()
+	for i := len(it.stack) - 1; i >= 0; i-- {
+		if st := it.stack[i]; !st.hash.IsZero() {
+			return st.node.commitNum()
+		}
 	}
 	return 0
 }
 
 func (it *nodeIterator) DistinctNum() uint32 {
-	if len(it.stack) == 0 {
-		return 0
-	}
-	n := it.stack[len(it.stack)-1].node
-	if n != nil {
-		return n.distinctNum()
+	for i := len(it.stack) - 1; i >= 0; i-- {
+		if st := it.stack[i]; !st.hash.IsZero() {
+			return st.node.distinctNum()
+		}
 	}
 	return 0
 }
