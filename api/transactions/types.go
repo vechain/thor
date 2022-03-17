@@ -76,7 +76,8 @@ type EthTransaction struct {
 	To       *common.Address `json:"to"` // nil means contract creation
 	Value    *big.Int        `json:"value"`// wei amount
 	Data     []byte          // contract invocation input data
-	V, R, S  *big.Int        // signature values
+	V 	  	 byte            `json:"v"` // signature
+	R, S     *big.Int        // signature values
 }
 
 type RawTx struct {

@@ -147,7 +147,7 @@ func (t *Transactions) handleSendEthereumTransaction(w http.ResponseWriter, req 
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 
-	tx, err := tx.CreateFromETHTransaction(*&ethTx.Nonce, byte(ethTx.ChainID), *&ethTx.GasPrice, *&ethTx.V, *&ethTx.R, *&ethTx.S)
+	tx, err := tx.CreateFromETHTransaction(*&ethTx.Nonce, *&ethTx.ChainID, *&ethTx.GasPrice, *&ethTx.V, *&ethTx.R, *&ethTx.S)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "raw"))
 	}

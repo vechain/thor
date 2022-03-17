@@ -519,7 +519,7 @@ func createBody(nonce uint64, chainTag byte, gasPrice big.Int) *body {
 		// DependsOn    *thor.Bytes32 `rlp:"nil"`
 		// Reserved     reserved
 		// Signature    []byte
-		// &t.body.Reserved, // TODO?: features.contants.EthFeatures
+		Reserved: reserved{Features: EthTxnFeature},
     }
 }
 
