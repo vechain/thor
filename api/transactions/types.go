@@ -7,9 +7,13 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -63,44 +67,17 @@ type Transaction struct {
 }
 
 // VIP-215
-// type EthTransaction struct {
-// 	GasPrice             *math.HexOrDecimal256            `json:"gasPrice"`
-// 	MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-// 	MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-// 	Nonce                uint64              `json:"nonce"`
-// 	To                   string              `json:"to"`
-// 	Data                 []string            `json:"data"`
-// 	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-// 	GasLimit             []uint64            `json:"gasLimit"`
-// 	Value                []string            `json:"value"`
-// 	PrivateKey           []byte              `json:"secretKey"`
-// }
-
-// VIP-215
+// LegacyTx is the transaction data of regular Ethereum transactions.
 type EthTransaction struct {
-	GasPrice             uint64            `json:"gasPrice"`
-	// MaxFeePerGas         *math.HexOrDecimal256            `json:"maxFeePerGas"`
-	// MaxPriorityFeePerGas *math.HexOrDecimal256            `json:"maxPriorityFeePerGas"`
-	Nonce                uint64              `json:"nonce"`
-	To                   string              `json:"to"`
-	Data                 []string            `json:"data"`
-	// AccessLists          []*types.AccessList `json:"accessLists,omitempty"`
-	GasLimit             []uint64            `json:"gasLimit"`
-	Value                []string            `json:"value"`
-	// PrivateKey           []byte              `json:"secretKey"`
-}
-
-// VIP-215
-func (rtx *RawTx) decodeEth() (*EthTransaction, error) {
-	data, err := hexutil.Decode(rtx.Raw)
-	if err != nil {
-		return nil, err
-	}
-	var tx *EthTransaction
-	if err := rlp.DecodeBytes(data, &tx); err != nil {
-		return nil, err
-	}
-	return tx, nil
+	Nonce    uint64          `json:"nonce"` // nonce of sender account
+	ChainID	 *big.Int        `json:"chainId"` // chain id of the network
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          `json:"gasLimit"` // gas limit
+	To       *common.Address `json:"to"` // nil means contract creation
+	Value    *big.Int        `json:"value"`// wei amount
+	Data     []byte          // contract invocation input data
+	V 	  	 byte            `json:"v"` // signature
+	R, S     *big.Int        // signature values
 }
 
 type RawTx struct {
