@@ -69,8 +69,8 @@ func (p *Optimizer) loop(prune bool) error {
 	log.Info("optimizer started")
 
 	const (
-		period        = 5000  // the period to update leafbank.
-		prunePeriod   = 50000 // the period to prune tries.
+		period        = 2000  // the period to update leafbank.
+		prunePeriod   = 10000 // the period to prune tries.
 		pruneReserved = 70000 // must be > thor.MaxStateHistory
 	)
 
@@ -124,26 +124,29 @@ func (p *Optimizer) loop(prune bool) error {
 
 // newStorageTrieIfUpdated creates a storage trie object from the account leaf if the storage trie updated since base.
 func (p *Optimizer) newStorageTrieIfUpdated(accLeaf *trie.Leaf, base uint32) *muxdb.Trie {
-	var acc state.Account
+	if len(accLeaf.Meta) == 0 {
+		return nil
+	}
+
+	var (
+		acc  state.Account
+		meta state.AccountMetadata
+	)
 	if err := rlp.DecodeBytes(accLeaf.Value, &acc); err != nil {
 		panic(errors.Wrap(err, "decode account"))
 	}
 
-	if len(acc.StorageRoot) > 0 {
-		am := state.AccountMetadata(accLeaf.Meta)
-		if scn := am.StorageCommitNum(); scn >= base {
-			addr, ok := am.Address()
-			if !ok {
-				panic(errors.New("account metadata: missing address"))
-			}
+	if err := rlp.DecodeBytes(accLeaf.Meta, &meta); err != nil {
+		panic(errors.Wrap(err, "decode account metadata"))
+	}
 
-			return p.db.NewTrie(
-				state.StorageTrieName(addr),
-				thor.BytesToBytes32(acc.StorageRoot),
-				scn,
-				am.StorageDistinctNum(),
-			)
-		}
+	if meta.StorageCommitNum >= base {
+		return p.db.NewTrie(
+			state.StorageTrieName(meta.StorageID),
+			thor.BytesToBytes32(acc.StorageRoot),
+			meta.StorageCommitNum,
+			meta.StorageDistinctNum,
+		)
 	}
 	return nil
 }
@@ -162,10 +165,7 @@ func (p *Optimizer) dumpStateLeaves(targetChain *chain.Chain, base, target uint3
 		if sTrie := p.newStorageTrieIfUpdated(leaf, base); sTrie != nil {
 			sTries = append(sTries, sTrie)
 		}
-		return &trie.Leaf{
-			Value: leaf.Value,
-			Meta:  state.AccountMetadata(leaf.Meta).SkipAddress(), // skip address to save space
-		}
+		return leaf
 	}); err != nil {
 		return err
 	}

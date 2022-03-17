@@ -268,7 +268,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:        cacheMB,
 		TrieRootCacheCapacity:      256,
-		TrieCachedNodeTTL:          60, // 10 mins
+		TrieCachedNodeTTL:          30, // 5min
 		TrieLeafBankSlotCapacity:   256,
 		TrieDedupedPartitionFactor: math.MaxUint32,
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
