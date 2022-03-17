@@ -7,9 +7,13 @@ package transactions
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
@@ -60,6 +64,20 @@ type Transaction struct {
 	DependsOn    *thor.Bytes32       `json:"dependsOn"`
 	Size         uint32              `json:"size"`
 	Meta         *TxMeta             `json:"meta"`
+}
+
+// VIP-215
+// LegacyTx is the transaction data of regular Ethereum transactions.
+type EthTransaction struct {
+	Nonce    uint64          `json:"nonce"` // nonce of sender account
+	ChainID	 *big.Int        `json:"chainId"` // chain id of the network
+	GasPrice *big.Int        // wei per gas
+	Gas      uint64          `json:"gasLimit"` // gas limit
+	To       *common.Address `json:"to"` // nil means contract creation
+	Value    *big.Int        `json:"value"`// wei amount
+	Data     []byte          // contract invocation input data
+	V 	  	 byte            `json:"v"` // signature
+	R, S     *big.Int        // signature values
 }
 
 type RawTx struct {

@@ -27,6 +27,10 @@ var (
 	errIntrinsicGasOverflow = errors.New("intrinsic gas overflow")
 )
 
+var (
+	errInvalidSignature = errors.New("invalid signature")
+)
+
 // Transaction is an immutable tx type.
 type Transaction struct {
 	body body
@@ -42,6 +46,7 @@ type Transaction struct {
 		delegator    atomic.Value
 	}
 }
+
 
 // body describes details of a tx.
 type body struct {
@@ -485,6 +490,43 @@ func IntrinsicGas(clauses ...*Clause) (uint64, error) {
 		}
 	}
 	return total, nil
+}
+
+// VIP-215
+func CreateFromETHTransaction(nonce uint64, chainTag byte, gasPrice *big.Int, v byte, r, s *big.Int) (*Transaction, error) {
+	if !crypto.ValidateSignatureValues(v, r, s, false) {
+		return nil, errInvalidSignature
+	}
+
+	tx:= &Transaction {
+        body: *createBody(nonce, chainTag, *gasPrice),
+    }
+
+	return tx, nil
+}
+
+// VIP-215
+func createBody(nonce uint64, chainTag byte, gasPrice big.Int) *body {
+	var gp uint64 = uint64(gasPrice.Uint64())
+    return &body {
+        Nonce: nonce,
+		ChainTag: chainTag,
+		GasPriceCoef: calcuateGasPriceCoef(gp),
+		// BlockRef     uint64
+		// Expiration   uint32
+		// Clauses      []*Clause
+		// Gas          uint64
+		// DependsOn    *thor.Bytes32 `rlp:"nil"`
+		// Reserved     reserved
+		// Signature    []byte
+		Reserved: reserved{Features: EthTxnFeature},
+    }
+}
+
+func calcuateGasPriceCoef(gasPrice uint64) uint8 {
+	// Calculate gas price coefficient.
+	// Refer to https://github.com/proximacapital/VIPs/blob/vip-215/vips/VIP-215.md
+	return uint8(256 * ( gasPrice - 1 ) - 1)
 }
 
 // see core.IntrinsicGas
