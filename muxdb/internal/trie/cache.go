@@ -29,12 +29,17 @@ type Cache struct {
 	lastLogTime int64
 }
 
+// implements freecache.Timer
+type dummyTimer struct{}
+
+func (dummyTimer) Now() uint32 { return 0 }
+
 // NewCache creates a cache object with the given cache size.
 func NewCache(sizeMB int, rootCap int) *Cache {
 	sizeBytes := sizeMB * 1024 * 1024
 	var cache Cache
-	cache.queriedNodes = freecache.NewCache(sizeBytes / 4)
-	cache.committedNodes = freecache.NewCache(sizeBytes - sizeBytes/4)
+	cache.queriedNodes = freecache.NewCacheCustomTimer(sizeBytes/4, dummyTimer{})
+	cache.committedNodes = freecache.NewCacheCustomTimer(sizeBytes-sizeBytes/4, dummyTimer{})
 	cache.roots, _ = lru.NewARC(rootCap)
 	cache.lastLogTime = time.Now().UnixNano()
 	return &cache

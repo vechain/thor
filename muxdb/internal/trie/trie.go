@@ -325,7 +325,9 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 				return err
 			}
 			if !t.noFillCache {
-				t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, true)
+				if len(thisPath) > 0 { // no need to cache root node
+					t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, true)
+				}
 			}
 			return nil
 		}),
