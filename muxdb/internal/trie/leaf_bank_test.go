@@ -73,6 +73,6 @@ func TestLeafbank(t *testing.T) {
 
 		rec, err := lb.Lookup(name, []byte(strconv.Itoa(1)))
 		assert.NoError(t, err)
-		assert.Equal(t, &LeafRecord{}, rec)
+		assert.Equal(t, &LeafRecord{SlotCommitNum: 101}, rec)
 	})
 }
