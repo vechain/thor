@@ -19,6 +19,7 @@ type cachedObject struct {
 	db   *muxdb.MuxDB
 	addr thor.Address
 	data Account
+	meta AccountMetadata
 
 	cache struct {
 		code        []byte
@@ -27,8 +28,8 @@ type cachedObject struct {
 	}
 }
 
-func newCachedObject(db *muxdb.MuxDB, addr thor.Address, data *Account) *cachedObject {
-	return &cachedObject{db: db, addr: addr, data: *data}
+func newCachedObject(db *muxdb.MuxDB, addr thor.Address, data *Account, meta *AccountMetadata) *cachedObject {
+	return &cachedObject{db: db, addr: addr, data: *data, meta: *meta}
 }
 
 func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
@@ -36,11 +37,15 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 		return co.cache.storageTrie
 	}
 
+	if len(co.data.StorageRoot) == 0 {
+		return nil
+	}
+
 	trie := co.db.NewTrie(
-		StorageTrieName(co.addr),
+		StorageTrieName(co.meta.StorageID),
 		thor.BytesToBytes32(co.data.StorageRoot),
-		co.data.storageCommitNum,
-		co.data.storageDistinctNum)
+		co.meta.StorageCommitNum,
+		co.meta.StorageDistinctNum)
 
 	co.cache.storageTrie = trie
 	return trie
@@ -60,6 +65,9 @@ func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp
 	// not found in cache
 
 	trie := co.getOrCreateStorageTrie()
+	if trie == nil {
+		return nil, nil
+	}
 
 	// load from trie
 	v, err := loadStorage(trie, key, steadyBlockNum)

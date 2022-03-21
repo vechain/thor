@@ -8,9 +8,9 @@ package trie
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 
 	"github.com/inconshreveable/log15"
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/trie"
@@ -40,7 +40,7 @@ type Trie struct {
 	nonCrypto   bool
 	init        func() (*trie.ExtendedTrie, error)
 	dirty       bool
-	bulk        kv.Bulk // pending ops
+	deletions   []string
 	noFillCache bool
 	fastLeafGet func(nodeCommitNum uint32) (*trie.Leaf, error)
 }
@@ -94,7 +94,7 @@ func (t *Trie) makeHistNodeKey(dst []byte, commitNum, distinctNum uint32, path [
 	dst = appendUint32(dst, commitNum/t.back.HistPtnFactor) // partition id
 	dst = append(dst, t.name...)                            // trie name
 	dst = encodePath(dst, path)                             // path
-	dst = appendUint32(dst, commitNum)                      // commit num
+	dst = appendUint32(dst, commitNum%t.back.HistPtnFactor) // commit num mod
 	dst = appendUint32(dst, distinctNum)                    // distinct num
 	return dst
 }
@@ -143,35 +143,32 @@ func (t *Trie) newDatabase() trie.Database {
 				}
 			}
 
-			// have to lookup nodes
+			defer func() {
+				if err == nil && !t.nonCrypto {
+					// to ensure the node is correct, we need to verify the node hash.
+					// TODO: later can skip this step
+					if ok, err1 := trie.VerifyNodeHash(blob[len(dst):], thisHash); err1 != nil {
+						err = errors.Wrap(err1, "verify node hash")
+					} else if !ok {
+						err = errors.New("node hash checksum error")
+					}
+				}
+			}()
+
+			// query in db
 			snapshot := t.back.Store.Snapshot()
 			defer snapshot.Release()
 
-			// Get node from hist space first, then from deduped space.
-			// Don't change the order, or the trie might be broken after pruning.
+			// get from hist space first
 			keyBuf = t.makeHistNodeKey(keyBuf[:0], thisCommitNum, thisDistinctNum, thisPath)
-			if blob, err = snapshot.GetTo(keyBuf, dst); err != nil {
-				if !snapshot.IsNotFound(err) {
-					return
-				}
-				// not found in hist space, fallback to deduped space
-				// get from deduped space
-				keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisCommitNum, thisPath)
-				if blob, err = snapshot.GetTo(keyBuf, dst); err != nil {
-					return
-				}
+			if blob, err = snapshot.GetTo(keyBuf, dst); err == nil || !snapshot.IsNotFound(err) {
+				// found or error
+				return
 			}
 
-			// to ensure the node is correct, we need to verify the node hash.
-			// TODO: later can skip this step
-			if !t.nonCrypto {
-				if ok, err := trie.VerifyNodeHash(blob[len(dst):], thisHash); err != nil {
-					return nil, err
-				} else if !ok {
-					return nil, errors.New("node hash checksum error")
-				}
-			}
-			return
+			// then from deduped space
+			keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisCommitNum, thisPath)
+			return snapshot.GetTo(keyBuf, dst)
 		}),
 		databaseKeyEncodeFunc(func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
 			thisHash = hash
@@ -188,7 +185,7 @@ func (t *Trie) newDatabase() trie.Database {
 // Copy make a copy of this trie.
 // It returns error if the trie is dirty.
 func (t *Trie) Copy() (*Trie, error) {
-	if t.dirty || t.bulk != nil {
+	if t.dirty {
 		return nil, errors.New("dirty trie")
 	}
 	ext, err := t.init()
@@ -242,20 +239,15 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 			}
 		}
 
-		// touched or slot empty
-		if leafRec.CommitNum == 0 {
+		// can't be determined
+		if leafRec.Leaf == nil {
 			return nil, nil
 		}
 
-		if nodeCommitNum <= leafRec.CommitNum {
-			if len(leafRec.Value) > 0 {
-				if leafRec.CommitNum <= steadyCommitNum {
-					return &trie.Leaf{Value: leafRec.Value, Meta: leafRec.Meta}, nil
-				}
-			} else {
-				// never seen till leafRec.CommitNum.
-				return &trie.Leaf{}, nil
-			}
+		// if [nodeCN, steadyCN] and [leafCN, slotCN] have intersection,
+		// the leaf will be the correct one.
+		if nodeCommitNum <= leafRec.SlotCommitNum && leafRec.CommitNum <= steadyCommitNum {
+			return leafRec.Leaf, nil
 		}
 		return nil, nil
 	}
@@ -287,13 +279,7 @@ func (t *Trie) Update(key, val, meta []byte) error {
 	t.dirty = true
 	if len(val) == 0 { // deletion
 		if t.back.LeafBank != nil {
-			if t.bulk == nil {
-				t.bulk = t.back.Store.Bulk()
-			}
-
-			if err := t.back.LeafBank.Touch(t.bulk, t.name, key); err != nil {
-				return err
-			}
+			t.deletions = append(t.deletions, string(key))
 		}
 	}
 	return ext.Update(key, val, meta)
@@ -318,12 +304,14 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 	var (
 		thisCommitNum, thisDistinctNum uint32
 		thisPath                       []byte
-		bulk                           = t.bulk
+		bulk                           = t.back.Store.Bulk()
 		buf                            []byte
 	)
 
-	if bulk == nil {
-		bulk = t.back.Store.Bulk()
+	if t.back.LeafBank != nil {
+		if err := t.back.LeafBank.LogDeletions(bulk, t.name, t.deletions, newCommitNum); err != nil {
+			return thor.Bytes32{}, err
+		}
 	}
 
 	// commit the trie
@@ -337,7 +325,9 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 				return err
 			}
 			if !t.noFillCache {
-				t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, true)
+				if len(thisPath) > 0 { // no need to cache root node
+					t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, true)
+				}
 			}
 			return nil
 		}),
@@ -360,7 +350,7 @@ func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error)
 	t.commitNum = newCommitNum
 	t.distinctNum = newDistinctNum
 	t.dirty = false
-	t.bulk = nil
+	t.deletions = nil
 	if !t.noFillCache {
 		t.back.Cache.AddRootNode(t.name, ext.RootNode())
 	}
@@ -389,12 +379,15 @@ func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform f
 		return errors.New("dirty trie")
 	}
 	if t.back.LeafBank == nil {
-		return errors.New("nil leaf bank")
+		return nil
 	}
 
+	leafUpdater, err := t.back.LeafBank.NewUpdater(t.name, baseCommitNum, t.commitNum)
+	if err != nil {
+		return err
+	}
 	var (
 		checkContext = newContextChecker(ctx, 5000)
-		leafUpdater  = t.back.LeafBank.NewUpdater(t.name, t.commitNum)
 		iter         = t.NodeIterator(nil, baseCommitNum)
 	)
 
@@ -404,7 +397,7 @@ func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform f
 		}
 
 		if leaf := iter.Leaf(); leaf != nil {
-			if err := leafUpdater.Update(iter.LeafKey(), transform(leaf)); err != nil {
+			if err := leafUpdater.Update(iter.LeafKey(), transform(leaf), iter.CommitNum()); err != nil {
 				return err
 			}
 		}
@@ -473,7 +466,9 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 		}
 		key := iter.Key()
 		// TODO: better way to extract commit number
-		nodeCommitNum := binary.BigEndian.Uint32(key[len(key)-8:])
+		ptn := binary.BigEndian.Uint32(key[1:])
+		mod := binary.BigEndian.Uint32(key[len(key)-8:])
+		nodeCommitNum := ptn*back.HistPtnFactor + mod
 		if nodeCommitNum >= startCommitNum && nodeCommitNum < limitCommitNum {
 			if err := bulk.Delete(key); err != nil {
 				return err

@@ -16,19 +16,28 @@ import (
 	"github.com/vechain/thor/trie"
 )
 
-const slotCacheSize = 64
+const (
+	entityPrefix          = "e"
+	deletionJournalPrefix = "d"
+)
 
-// LeafRecord is the entity stored in leaf bank.
+// LeafRecord presents the queried leaf record.
 type LeafRecord struct {
+	*trie.Leaf
+	CommitNum     uint32 // which commit number the leaf was committed
+	SlotCommitNum uint32 // up to which commit number this leaf is valid
+}
+
+// leafEntity is the entity stored in leaf bank.
+type leafEntity struct {
 	Value, Meta []byte
 	CommitNum   uint32
 }
 
-// leafBankSlot presents per-trie state and cached leaves.
-type leafBankSlot struct {
-	maxCommitNum uint32     // max recorded commit number
-	cache        *lru.Cache // cached leaves
-	getter       kv.Getter
+// trieSlot holds the state of a trie slot.
+type trieSlot struct {
+	getter    kv.Getter
+	commitNum uint32 // the commit number of this slot
 }
 
 // LeafBank records accumulated trie leaves to help accelerate trie leaf access
@@ -47,154 +56,169 @@ func NewLeafBank(store kv.Store, space byte, slotCap int) *LeafBank {
 	return b
 }
 
-func (b *LeafBank) newSlot(name string) (*leafBankSlot, error) {
-	getter := kv.Bucket(string(b.space) + name).NewGetter(b.store)
-	var maxCommitNum uint32
-	if data, err := getter.Get(nil); err != nil {
-		if !getter.IsNotFound(err) {
-			return nil, errors.Wrap(err, "get from leafbank")
-		}
-	} else {
-		maxCommitNum = binary.BigEndian.Uint32(data)
+func (b *LeafBank) slotBucket(name string) kv.Bucket {
+	return kv.Bucket(string(b.space) + entityPrefix + name)
+}
+
+func (b *LeafBank) deletionJournalBucket(name string) kv.Bucket {
+	return kv.Bucket(string(b.space) + deletionJournalPrefix + name)
+}
+
+// getSlot gets slot from slots cache or create a new one.
+func (b *LeafBank) getSlot(name string) (*trieSlot, error) {
+	if cached, ok := b.slots.Get(name); ok {
+		return cached.(*trieSlot), nil
 	}
 
-	slot := &leafBankSlot{
-		maxCommitNum: maxCommitNum,
-		getter:       getter}
-	slot.cache, _ = lru.New(slotCacheSize)
+	slot := &trieSlot{getter: b.slotBucket(name).NewGetter(b.store)}
+	if data, err := slot.getter.Get(nil); err != nil {
+		if !slot.getter.IsNotFound(err) {
+			return nil, errors.Wrap(err, "get slot from leafbank")
+		}
+	} else {
+		slot.commitNum = binary.BigEndian.Uint32(data)
+	}
+
+	b.slots.Add(name, slot)
 	return slot, nil
 }
 
-// Lookup lookups a leaf from the trie named name by the given leafKey.
-// The returned leaf might be nil (empty value) if the key is never seen (with max slot commitNum),
-// or was ever seen but can't be located now (touched, with commitNum == 0).
-// LeafRecord.CommitNum indicates up to which commit number the leaf is valid.
-func (b *LeafBank) Lookup(name string, leafKey []byte) (rec *LeafRecord, err error) {
-	// get slot from slots cache or create a new one.
-	var slot *leafBankSlot
-	if cached, ok := b.slots.Get(name); ok {
-		slot = cached.(*leafBankSlot)
-	} else {
-		var err error
-		if slot, err = b.newSlot(name); err != nil {
+// Lookup lookups a leaf record by the given leafKey for the trie named by name.
+// LeafRecord.Leaf might be nil if the leaf can't be determined.
+func (b *LeafBank) Lookup(name string, leafKey []byte) (*LeafRecord, error) {
+	slot, err := b.getSlot(name)
+	if err != nil {
+		return nil, err
+	}
+
+	slotCommitNum := atomic.LoadUint32(&slot.commitNum)
+	if slotCommitNum == 0 {
+		// an empty slot always gives undetermined value.
+		return &LeafRecord{}, nil
+	}
+
+	if data, err := slot.getter.Get(leafKey); err != nil {
+		if !slot.getter.IsNotFound(err) {
+			return nil, errors.Wrap(err, "get entity from leafbank")
+		}
+		// never seen, which means it has been an empty leaf until slotCommitNum.
+		return &LeafRecord{
+			Leaf:          &trie.Leaf{},
+			CommitNum:     0,
+			SlotCommitNum: slotCommitNum,
+		}, nil
+	} else if len(data) > 0 {
+		// entity found
+		var ent leafEntity
+		if err := rlp.DecodeBytes(data, &ent); err != nil {
+			return nil, errors.Wrap(err, "decode leaf entity")
+		}
+		if len(ent.Meta) == 0 {
+			ent.Meta = nil // normalize
+		}
+
+		if slotCommitNum < ent.CommitNum {
+			slotCommitNum = ent.CommitNum
+		}
+
+		return &LeafRecord{
+			Leaf: &trie.Leaf{
+				Value: ent.Value,
+				Meta:  ent.Meta,
+			},
+			CommitNum:     ent.CommitNum,
+			SlotCommitNum: slotCommitNum,
+		}, nil
+	}
+
+	// ever seen, but in undetermined state
+	return &LeafRecord{}, nil
+}
+
+// LogDeletions saves the journal of leaf-key deletions which issued by one trie-commit.
+func (b *LeafBank) LogDeletions(putter kv.Putter, name string, keys []string, commitNum uint32) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	bkt := b.deletionJournalBucket(name) + kv.Bucket(appendUint32(nil, commitNum))
+	putter = bkt.NewPutter(putter)
+	for _, k := range keys {
+		if err := putter.Put([]byte(k), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// NewUpdater creates a leaf-updater for a trie slot with the given name.
+func (b *LeafBank) NewUpdater(name string, baseCommitNum, targetCommitNum uint32) (*LeafUpdater, error) {
+	slot, err := b.getSlot(name)
+	if err != nil {
+		return nil, err
+	}
+
+	bulk := b.slotBucket(name).
+		NewStore(b.store).
+		Bulk()
+	bulk.EnableAutoFlush()
+
+	// traverse the deletion-journal and write to the slot
+	iter := b.deletionJournalBucket(name).
+		NewStore(b.store).
+		Iterate(kv.Range{
+			Start: appendUint32(nil, baseCommitNum),
+			Limit: appendUint32(nil, targetCommitNum+1),
+		})
+	defer iter.Release()
+	for iter.Next() {
+		// skip commit number to get leaf key
+		leafKey := iter.Key()[4:]
+		// put empty value to mark the leaf to undetermined state
+		if err := bulk.Put(leafKey, nil); err != nil {
 			return nil, err
 		}
-		b.slots.Add(name, slot)
+	}
+	if err := iter.Error(); err != nil {
+		return nil, err
 	}
 
-	// lookup from the slot's cache if any.
-	strLeafKey := string(leafKey)
-	if cached, ok := slot.cache.Get(strLeafKey); ok {
-		rec := cached.(*LeafRecord)
-		return rec, nil
-	}
-
-	defer func() {
-		if err == nil {
-			slot.cache.Add(strLeafKey, rec)
-		}
-	}()
-
-	buf := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(buf)
-
-	if data, err := slot.getter.GetTo(leafKey, buf.buf[:0]); err != nil {
-		if !slot.getter.IsNotFound(err) {
-			return nil, errors.Wrap(err, "get from leafbank")
-		}
-		// not seen till slot.maxCommitNum
-		return &LeafRecord{CommitNum: atomic.LoadUint32(&slot.maxCommitNum)}, nil
-	} else {
-		buf.buf = data
-		if len(data) > 0 {
-			var rec LeafRecord
-			if err := rlp.DecodeBytes(data, &rec); err != nil {
-				panic(errors.Wrap(err, "decode leaf record"))
-			}
-			if len(rec.Meta) == 0 {
-				rec.Meta = nil // normalize
-			}
-			return &rec, nil
-		} else {
-			// ever seen, but can't be located now (touched)
-			return &LeafRecord{}, nil
-		}
-	}
-}
-
-// Touch touches the key. Now it just sets an empty value for the given key.
-// Later if the engine supports conditional update, we can do real touch.
-//
-// In practical, the leaf bank is not updated every commit. Suppose a key is set and
-// is soon deleted, it might be missing in leaf bank records. In this case,
-// inexistence assertion of the leaf bank is incorrect. To keep the integrity of the leaf bank,
-// this method should be called everytime a key is deleted from the trie.
-func (b *LeafBank) Touch(putter kv.Putter, name string, key []byte) error {
-	buf := bufferPool.Get().(*buffer)
-	defer bufferPool.Put(buf)
-
-	buf.buf = append(buf.buf[:0], b.space)
-	buf.buf = append(buf.buf, name...)
-	buf.buf = append(buf.buf, key...)
-
-	return putter.Put(buf.buf, nil)
-}
-
-// NewUpdater creates the leaf updater for a trie with the given name.
-func (b *LeafBank) NewUpdater(name string, rootCommitNum uint32) *LeafUpdater {
-	var slot *leafBankSlot
-	if cached, ok := b.slots.Get(name); ok {
-		slot = cached.(*leafBankSlot)
-	}
-	bulk := kv.Bucket(string(b.space) + name).NewStore(b.store).Bulk()
-	bulk.EnableAutoFlush()
 	return &LeafUpdater{
-		slot:          slot,
-		bulk:          bulk,
-		rootCommitNum: rootCommitNum,
-	}
+		slot:            slot,
+		bulk:            bulk,
+		targetCommitNum: targetCommitNum,
+	}, nil
 }
 
 // LeafUpdater helps to record trie leaves.
 type LeafUpdater struct {
-	slot          *leafBankSlot // might be nil
-	bulk          kv.Bulk
-	rootCommitNum uint32
+	slot            *trieSlot
+	bulk            kv.Bulk
+	targetCommitNum uint32
 }
 
 // Update updates the leaf for the given key.
-func (u *LeafUpdater) Update(key []byte, leaf *trie.Leaf) error {
-	rec := LeafRecord{
+func (u *LeafUpdater) Update(leafKey []byte, leaf *trie.Leaf, leafCommitNum uint32) error {
+	data, err := rlp.EncodeToBytes(&leafEntity{
 		Value:     leaf.Value,
 		Meta:      leaf.Meta,
-		CommitNum: u.rootCommitNum, // inherits root's commit number
-	}
-	data, err := rlp.EncodeToBytes(&rec)
+		CommitNum: leafCommitNum,
+	})
 	if err != nil {
 		return err
 	}
-	if u.slot != nil {
-		strKey := string(key)
-		if u.slot.cache.Contains(strKey) {
-			// update cached records.
-			u.slot.cache.Add(string(key), &rec)
-		}
-	}
-	return u.bulk.Put(key, data)
+	return u.bulk.Put(leafKey, data)
 }
 
 // Commit commits updates into leafbank.
 func (u *LeafUpdater) Commit() error {
-	if err := u.bulk.Put(nil, appendUint32(nil, u.rootCommitNum)); err != nil {
+	// save slot commit number
+	if err := u.bulk.Put(nil, appendUint32(nil, u.targetCommitNum)); err != nil {
 		return err
 	}
 	if err := u.bulk.Write(); err != nil {
 		return err
 	}
-	if u.slot != nil {
-		// the slot may be evicted at this point, but it's OK that
-		// newly created slot loads out-of-date maxCommitNum.
-		atomic.StoreUint32(&u.slot.maxCommitNum, u.rootCommitNum)
-	}
+	atomic.StoreUint32(&u.slot.commitNum, u.targetCommitNum)
 	return nil
 }

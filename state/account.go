@@ -12,81 +12,15 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pkg/errors"
-	"github.com/vechain/thor/lowrlp"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
-// AccountMetadata helps encode/decode account metadata.
-type AccountMetadata []byte
-
-// NewAccountMetadata builds the account metadata.
-func NewAccountMetadata(storageCommitNum, storageDistinctNum uint32, addr thor.Address) AccountMetadata {
-	w := lowrlp.NewEncoder()
-	defer w.Release()
-
-	w.EncodeUint(uint64(storageCommitNum))
-	w.EncodeUint(uint64(storageDistinctNum))
-	w.EncodeString(addr[:])
-	return w.ToBytes()
-}
-
-func (m AccountMetadata) split(i int) ([]byte, []byte) {
-	var (
-		content []byte
-		rest    = m
-		err     error
-	)
-	for ; i >= 0; i-- {
-		if content, rest, err = rlp.SplitString(rest); err != nil {
-			panic(errors.Wrap(err, "decode account metadata"))
-		}
-	}
-	return content, rest
-}
-
-func (m AccountMetadata) splitUint32(i int) uint32 {
-	c, _ := m.split(i)
-	if len(c) > 4 { // 32-bit max
-		panic(errors.New("decode account metadata: content too long"))
-	}
-	var n uint32
-	for _, b := range c {
-		n <<= 8
-		n |= uint32(b)
-	}
-	return n
-}
-
-// StorageCommitNum returns the commit number of the last storage update.
-func (m AccountMetadata) StorageCommitNum() uint32 {
-	return m.splitUint32(0)
-}
-
-// StorageDistinctNum returns the distinct number of the last storage update.
-func (m AccountMetadata) StorageDistinctNum() uint32 {
-	return m.splitUint32(1)
-}
-
-// Address returns the account address.
-func (m AccountMetadata) Address() (thor.Address, bool) {
-	if n, err := rlp.CountValues(m); err != nil {
-		panic(errors.Wrap(err, "decode account metadata"))
-	} else if n == 3 {
-		c, _ := m.split(2)
-		if len(c) != 20 {
-			panic(errors.New("decode account metadata: unexpected address length"))
-		}
-		return thor.BytesToAddress(c), true
-	}
-	return thor.Address{}, false
-}
-
-// SkipAddress returns the account metadata without address.
-func (m AccountMetadata) SkipAddress() AccountMetadata {
-	_, rest := m.split(1)
-	return m[:len(m)-len(rest)]
+// AccountMetadata is the account metadata.
+type AccountMetadata struct {
+	StorageID          []byte // the unique id of the storage trie.
+	StorageCommitNum   uint32 // the commit number of the last storage update.
+	StorageDistinctNum uint32 // the distinct number of the last storage update.
 }
 
 // Account is the Thor consensus representation of an account.
@@ -98,8 +32,6 @@ type Account struct {
 	Master      []byte // master address
 	CodeHash    []byte // hash of code
 	StorageRoot []byte // merkle root of the storage trie
-
-	storageCommitNum, storageDistinctNum uint32
 }
 
 // IsEmpty returns if an account is empty.
@@ -139,32 +71,36 @@ func emptyAccount() *Account {
 	return &a
 }
 
-// loadAccount load an account object by address in trie.
+// loadAccount load an account object and its metadata by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, error) {
+func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, *AccountMetadata, error) {
 	h := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(h)
 
 	data, meta, err := trie.FastGet(h.Hash(addr[:]), steadyBlockNum)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(data) == 0 {
-		return emptyAccount(), nil
+		return emptyAccount(), &AccountMetadata{}, nil
 	}
 	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	am := AccountMetadata(meta)
-	a.storageCommitNum = am.StorageCommitNum()
-	a.storageDistinctNum = am.StorageDistinctNum()
-	return &a, nil
+
+	var am AccountMetadata
+	if len(meta) > 0 {
+		if err := rlp.DecodeBytes(meta, &am); err != nil {
+			return nil, nil, err
+		}
+	}
+	return &a, &am, nil
 }
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
+func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMetadata) error {
 	h := hasherPool.Get().(*hasher)
 	defer hasherPool.Put(h)
 
@@ -178,8 +114,13 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
 		return err
 	}
 
-	am := NewAccountMetadata(a.storageCommitNum, a.storageDistinctNum, addr)
-	return trie.Update(h.Hash(addr[:]), data, am)
+	var mdata []byte
+	if len(a.StorageRoot) > 0 { // discard metadata if storage root is empty
+		if mdata, err = rlp.EncodeToBytes(am); err != nil {
+			return err
+		}
+	}
+	return trie.Update(h.Hash(addr[:]), data, mdata)
 }
 
 // loadStorage load storage data for given key.
