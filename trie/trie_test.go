@@ -613,7 +613,7 @@ func deleteString(trie *Trie, k string) {
 
 func TestExtended(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, db, false)
 
 	vals1 := []struct{ k, v string }{
 		{"do", "verb"},
@@ -646,7 +646,7 @@ func TestExtended(t *testing.T) {
 		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
 	}
 
-	root1, err := tr.Commit(1, 0)
+	root1, err := tr.Commit(1)
 	if err != nil {
 		t.Errorf("commit failed %v", err)
 	}
@@ -654,12 +654,12 @@ func TestExtended(t *testing.T) {
 	for _, v := range vals2 {
 		tr.Update([]byte(v.k), []byte(v.v), thor.Blake2b([]byte(v.v)).Bytes())
 	}
-	root2, err := tr.Commit(2, 0)
+	root2, err := tr.Commit(2)
 	if err != nil {
 		t.Errorf("commit failed %v", err)
 	}
 
-	tr1, _ := NewExtended(root1, 1, 0, db, false)
+	tr1, _ := NewExtended(root1, 1, db, false)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -673,7 +673,7 @@ func TestExtended(t *testing.T) {
 		}
 	}
 
-	tr2, _ := NewExtended(root2, 2, 0, db, false)
+	tr2, _ := NewExtended(root2, 2, db, false)
 	if err != nil {
 		t.Errorf("new failed %v", err)
 	}
@@ -692,27 +692,26 @@ type kedb struct {
 	*ethdb.MemDatabase
 }
 
-func (db *kedb) Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
+func (db *kedb) Encode(hash []byte, seq uint64, path []byte) []byte {
 	var k [8]byte
-	binary.BigEndian.PutUint32(k[:], commitNum)
-	binary.BigEndian.PutUint32(k[4:], distinctNum)
+	binary.BigEndian.PutUint64(k[:], seq)
 	return append(k[:], path...)
 }
 
 func TestNonCryptoExtended(t *testing.T) {
 	db := &kedb{ethdb.NewMemDatabase()}
 
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, true)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, db, true)
 	var root thor.Bytes32
 	n := uint32(100)
 	for i := uint32(0); i < n; i++ {
 		var k [4]byte
 		binary.BigEndian.PutUint32(k[:], i)
 		tr.Update(k[:], thor.Blake2b(k[:]).Bytes(), nil)
-		root, _ = tr.Commit(i, 0)
+		root, _ = tr.Commit(uint64(i))
 	}
 
-	tr, _ = NewExtended(root, n-1, 0, db, true)
+	tr, _ = NewExtended(root, uint64(n-1), db, true)
 	for i := uint32(0); i < n; i++ {
 		var k [4]byte
 		binary.BigEndian.PutUint32(k[:], i)
@@ -724,7 +723,7 @@ func TestNonCryptoExtended(t *testing.T) {
 
 func TestExtendedCached(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, db, false)
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},

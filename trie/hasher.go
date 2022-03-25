@@ -25,13 +25,14 @@ import (
 )
 
 type hasher struct {
-	tmp           sliceBuffer
-	sha           hash.Hash
-	cachedNodeTTL int
-	extended      bool
-	cNumNew       uint32
-	dNumNew       uint32
-	nonCrypto     bool
+	tmp      sliceBuffer
+	sha      hash.Hash
+	cacheGen uint16
+	cacheTTL uint16
+
+	extended  bool
+	seq       uint64
+	nonCrypto bool
 }
 
 type sliceBuffer []byte
@@ -49,28 +50,28 @@ func (b *sliceBuffer) Reset() {
 var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
-			tmp: make(sliceBuffer, 0, 550), // cap is as large as a full fullNode.
+			tmp: make(sliceBuffer, 0, 700), // cap is as large as a full fullNode.
 			sha: thor.NewBlake2b(),
 		}
 	},
 }
 
-func newHasher() *hasher {
+func newHasher(cacheGen, cacheTTL uint16) *hasher {
 	h := hasherPool.Get().(*hasher)
-	h.cachedNodeTTL = 0
+	h.cacheGen = cacheGen
+	h.cacheTTL = cacheTTL
 	h.extended = false
-	h.cNumNew = 0
-	h.dNumNew = 0
+	h.seq = 0
 	h.nonCrypto = false
 	return h
 }
 
-func newHasherExtended(cNumNew, dNumNew uint32, cachedNodeTTL int, nonCrypto bool) *hasher {
+func newHasherExtended(cacheGen, cacheTTL uint16, seq uint64, nonCrypto bool) *hasher {
 	h := hasherPool.Get().(*hasher)
-	h.cachedNodeTTL = cachedNodeTTL
+	h.cacheGen = cacheGen
+	h.cacheTTL = cacheTTL
 	h.extended = true
-	h.cNumNew = cNumNew
-	h.dNumNew = dNumNew
+	h.seq = seq
 	h.nonCrypto = nonCrypto
 	return h
 }
@@ -83,20 +84,20 @@ func returnHasherToPool(h *hasher) {
 // original node initialized with the computed hash to replace the original one.
 func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use available cached data
-	if hash, dirty := n.cache(); hash != nil {
+	if hash, dirty, gen := n.cache(); hash != nil {
 		if db == nil {
 			return hash, n, nil
 		}
 
 		if !dirty {
-			if !h.extended {
-				return hash, hash, nil
-			}
-			// extended trie
 			if !force { // non-root node
-				if h.cNumNew > hash.cNum+uint32(h.cachedNodeTTL) {
+				if h.cacheGen-gen > h.cacheTTL { // drop cached nodes exceeds life-time
 					return hash, hash, nil
 				}
+				return hash, n, nil
+			}
+
+			if !h.extended {
 				return hash, n, nil
 			}
 			// else for extended trie, always store root node regardless of dirty flag
@@ -172,7 +173,6 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 			// 	collapsed.Children[i] = &valueNode{} // Ensure that nil children are encoded as empty strings.
 			// }
 		}
-		cached.Children[16] = n.Children[16]
 		// no need when using frlp
 		// if collapsed.Children[16] == nil {
 		// 	collapsed.Children[16] = &valueNode{}
@@ -213,7 +213,7 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}
 	// Larger nodes are replaced by their hash and stored in the database.
-	hash, _ := n.cache()
+	hash, _, _ := n.cache()
 	if hash == nil {
 		hash = &hashNode{}
 		if h.nonCrypto {
@@ -230,13 +230,12 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 			if err := frlp.EncodeTrailing(&h.tmp, n); err != nil {
 				return nil, err
 			}
-			hash.cNum = h.cNumNew
-			hash.dNum = h.dNumNew
+			hash.seq = h.seq
 		}
 
 		key := hash.Hash[:]
 		if ke, ok := db.(DatabaseKeyEncoder); ok {
-			key = ke.Encode(hash.Hash[:], h.cNumNew, h.dNumNew, path)
+			key = ke.Encode(hash.Hash[:], h.seq, path)
 		}
 		return hash, db.Put(key, h.tmp)
 	}

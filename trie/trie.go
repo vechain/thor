@@ -64,7 +64,7 @@ type DatabaseReaderTo interface {
 // If the database implements this interface, everytime before save the node, Encode is called and its
 // return-value will be the saving key instead of node hash.
 type DatabaseKeyEncoder interface {
-	Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte
+	Encode(hash []byte, seq uint64, path []byte) []byte
 }
 
 // Trie is a Merkle Patricia Trie.
@@ -75,11 +75,14 @@ type DatabaseKeyEncoder interface {
 type Trie struct {
 	root node
 	db   Database
+
+	cacheGen uint16 // cache generation counter for next committed nodes
+	cacheTTL uint16 // the life time of cached nodes
 }
 
 // newFlag returns the cache flag value for a newly created node.
 func (t *Trie) newFlag() nodeFlag {
-	return nodeFlag{dirty: true}
+	return nodeFlag{dirty: true, gen: t.cacheGen}
 }
 
 // New creates a trie with an existing root node from db.
@@ -106,7 +109,7 @@ func New(root thor.Bytes32, db Database) (*Trie, error) {
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key.
 func (t *Trie) NodeIterator(start []byte) NodeIterator {
-	return newNodeIterator(t, start, 0, false, false)
+	return newNodeIterator(t, start, func(seq uint64) bool { return true }, false, false)
 }
 
 // Get returns the value for key stored in the trie.
@@ -431,12 +434,12 @@ func (t *Trie) resolve(n node, prefix []byte) (node, error) {
 func (t *Trie) resolveHash(n *hashNode, prefix []byte) (node node, err error) {
 	key := n.Hash[:]
 	if ke, ok := t.db.(DatabaseKeyEncoder); ok {
-		key = ke.Encode(n.Hash[:], n.cNum, n.dNum, prefix)
+		key = ke.Encode(n.Hash[:], n.seq, prefix)
 	}
 
 	var blob []byte
 	if r, ok := t.db.(DatabaseReaderTo); ok {
-		h := newHasher()
+		h := newHasher(0, 0)
 		defer returnHasherToPool(h)
 		if blob, err = r.GetTo(key, h.tmp[:0]); err != nil {
 			return nil, &MissingNodeError{NodeHash: n, Path: prefix, Err: err}
@@ -490,6 +493,7 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root thor.Bytes32, err error) {
 		return (thor.Bytes32{}), err
 	}
 	t.root = cached
+	t.cacheGen++
 	return hash.(*hashNode).Hash, nil
 }
 
@@ -497,7 +501,7 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
 		return &hashNode{Hash: emptyRoot}, nil, nil
 	}
-	h := newHasher()
+	h := newHasher(t.cacheGen, t.cacheTTL)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, nil, true)
 }

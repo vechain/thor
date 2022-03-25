@@ -409,32 +409,32 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 
 func TestIteratorNodeFilter(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
+	tr, _ := NewExtended(thor.Bytes32{}, 0, db, false)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v), nil)
 	}
-	root1, _ := tr.Commit(1, 0)
+	root1, _ := tr.Commit(1)
 	_ = root1
 	for _, val := range testdata2 {
 		tr.Update([]byte(val.k), []byte(val.v), nil)
 	}
-	root2, _ := tr.Commit(2, 0)
+	root2, _ := tr.Commit(2)
 
-	tr, _ = NewExtended(root2, 2, 0, db, false)
+	tr, _ = NewExtended(root2, 2, db, false)
 
-	it := tr.NodeIterator(nil, 1)
+	it := tr.NodeIterator(nil, func(seq uint64) bool { return seq >= 1 })
 
 	for it.Next(true) {
 		if h := it.Hash(); !h.IsZero() {
-			assert.True(t, it.CommitNum() >= 1)
+			assert.True(t, it.SeqNum() >= 1)
 		}
 	}
 
-	it = tr.NodeIterator(nil, 2)
+	it = tr.NodeIterator(nil, func(seq uint64) bool { return seq >= 2 })
 
 	for it.Next(true) {
 		if h := it.Hash(); !h.IsZero() {
-			assert.True(t, it.CommitNum() >= 2)
+			assert.True(t, it.SeqNum() >= 2)
 		}
 	}
 }
