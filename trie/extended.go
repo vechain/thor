@@ -110,14 +110,14 @@ func (e *ExtendedTrie) NodeIterator(start []byte, baseCommitNum uint32) NodeIter
 func (e *ExtendedTrie) Get(key []byte) (val, meta []byte, err error) {
 	t := &e.trie
 
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	value, newroot, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	if t.root != newroot {
+		t.root = newroot
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if didResolve {
-		t.root = newroot
-	}
 	if value != nil {
 		return value.Value, value.meta, nil
 	}

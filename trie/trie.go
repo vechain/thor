@@ -123,13 +123,12 @@ func (t *Trie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	value, newroot, err := t.tryGet(t.root, keybytesToHex(key), 0)
+	if t.root != newroot {
+		t.root = newroot
+	}
 	if err != nil {
 		return nil, err
-	}
-
-	if didResolve {
-		t.root = newroot
 	}
 	if value != nil {
 		return value.Value, nil
@@ -137,37 +136,38 @@ func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	return nil, nil
 }
 
-func (t *Trie) tryGet(origNode node, key []byte, pos int) (value *valueNode, newnode node, didResolve bool, err error) {
+func (t *Trie) tryGet(origNode node, key []byte, pos int) (value *valueNode, newnode node, err error) {
 	switch n := (origNode).(type) {
 	case nil:
-		return nil, nil, false, nil
+		return nil, nil, nil
 	case *valueNode:
-		return n, n, false, nil
+		return n, n, nil
 	case *shortNode:
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
-			return nil, n, false, nil
+			return nil, n, nil
 		}
-		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
-		if err == nil && didResolve {
+		value, newnode, err = t.tryGet(n.Val, key, pos+len(n.Key))
+		if newnode != nil && newnode != n.Val {
 			n = n.copy()
 			n.Val = newnode
 		}
-		return value, n, didResolve, err
+		return value, n, err
 	case *fullNode:
-		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
-		if err == nil && didResolve {
+		child := n.Children[key[pos]]
+		value, newnode, err = t.tryGet(child, key, pos+1)
+		if newnode != nil && newnode != child {
 			n = n.copy()
 			n.Children[key[pos]] = newnode
 		}
-		return value, n, didResolve, err
+		return value, n, err
 	case *hashNode:
 		child, err := t.resolveHash(n, key[:pos])
 		if err != nil {
-			return nil, n, true, err
+			return nil, n, err
 		}
-		value, newnode, _, err := t.tryGet(child, key, pos)
-		return value, newnode, true, err
+		value, newnode, err := t.tryGet(child, key, pos)
+		return value, newnode, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}
