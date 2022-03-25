@@ -8,7 +8,9 @@ package kv
 // Getter defines methods to read kv.
 type Getter interface {
 	Get(key []byte) ([]byte, error)
+	GetTo(key, dst []byte) ([]byte, error)
 	Has(key []byte) (bool, error)
+	IsNotFound(err error) bool
 }
 
 // Putter defines methods to write kv.
@@ -17,16 +19,29 @@ type Putter interface {
 	Delete(key []byte) error
 }
 
-// PutFlusher defines putter with Flush method.
-type PutFlusher interface {
-	Putter
-	Flush() error
+// Snapshot is the store's snapshot.
+type Snapshot interface {
+	Getter
+	Release()
 }
 
-// Pair defines key-value pair.
-type Pair interface {
+// Bulk is the bulk putter.
+type Bulk interface {
+	Putter
+	EnableAutoFlush() // if set, the bulk will be non-atomic
+	Write() error
+}
+
+// Iterator iterates over kv pairs.
+type Iterator interface {
+	First() bool
+	Last() bool
+	Next() bool
+	Prev() bool
 	Key() []byte
 	Value() []byte
+	Release()
+	Error() error
 }
 
 // Range is the key range.
@@ -40,8 +55,7 @@ type Store interface {
 	Getter
 	Putter
 
-	Snapshot(fn func(Getter) error) error
-	Batch(fn func(PutFlusher) error) error
-	Iterate(r Range, fn func(Pair) bool) error
-	IsNotFound(err error) bool
+	Snapshot() Snapshot
+	Bulk() Bulk
+	Iterate(r Range) Iterator
 }

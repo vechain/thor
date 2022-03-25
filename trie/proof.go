@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -54,9 +53,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case hashNode:
+		case *hashNode:
 			var err error
-			tn, _, err = t.resolveHash(n, nil, false)
+			tn, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
@@ -71,17 +70,18 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 		// if encoding doesn't work and we're not writing to any database.
 		n, _, _ = hasher.hashChildren(n, nil, nil)
 		hn, _ := hasher.store(n, nil, nil, false)
-		if hash, ok := hn.(hashNode); ok || i == 0 {
+		if hash, ok := hn.(*hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
-				enc, _ := rlp.EncodeToBytes(n)
-				if !ok {
-					hash = thor.Blake2b(enc).Bytes()
+				enc := frlp.EncodeToBytes(n, false)
+				if ok {
+					proofDb.Put(hash.Hash[:], enc)
+				} else {
+					proofDb.Put(thor.Blake2b(enc).Bytes(), enc)
 				}
-				proofDb.Put(hash, enc)
 			}
 		}
 	}
@@ -94,13 +94,13 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 // wrong value.
 func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
 	key = keybytesToHex(key)
-	wantHash := rootHash[:]
+	wantHash := rootHash
 	for i := 0; ; i++ {
-		buf, _ := proofDb.Get(wantHash)
+		buf, _ := proofDb.Get(wantHash[:])
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
 		}
-		n, err := decodeNode(wantHash, buf)
+		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
 		}
@@ -109,11 +109,11 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 		case nil:
 			// The trie doesn't contain the key.
 			return nil, nil, i
-		case hashNode:
+		case *hashNode:
 			key = keyrest
-			wantHash = cld
-		case valueNode:
-			return cld, nil, i + 1
+			wantHash = cld.Hash
+		case *valueNode:
+			return cld.Value, nil, i + 1
 		}
 	}
 }
@@ -130,11 +130,11 @@ func get(tn node, key []byte) ([]byte, node) {
 		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
-		case hashNode:
+		case *hashNode:
 			return key, n
 		case nil:
 			return key, nil
-		case valueNode:
+		case *valueNode:
 			return nil, n
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))

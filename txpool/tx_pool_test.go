@@ -49,6 +49,10 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+	stage, _ := st.Stage(1, 0)
+	root1, _ := stage.Commit()
+
 	var sig [65]byte
 	rand.Read(sig[:])
 
@@ -57,9 +61,9 @@ func TestSubscribeNewTx(t *testing.T) {
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
-		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
+		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	if err := pool.repo.AddBlock(b1, nil); err != nil {
+	if err := pool.repo.AddBlock(b1, nil, 0); err != nil {
 		t.Fatal(err)
 	}
 	pool.repo.SetBestBlockID(b1.Header().ID())
@@ -79,7 +83,7 @@ func TestWashTxs(t *testing.T) {
 	pool := newPool(1, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
-	txs, _, err := pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Zero(t, len(txs))
 	assert.Zero(t, len(pool.Executables()))
@@ -87,20 +91,23 @@ func TestWashTxs(t *testing.T) {
 	tx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
 	assert.Nil(t, pool.AddLocal(tx1)) // this tx won't participate in the wash out.
 
-	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+	stage, _ := st.Stage(1, 0)
+	root1, _ := stage.Commit()
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
-		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
+		StateRoot(root1).
 		Build()
-	pool.repo.AddBlock(b1, nil)
+	pool.repo.AddBlock(b1, nil, 0)
 
-	txs, _, err = pool.wash(pool.repo.BestBlock().Header())
+	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
@@ -112,7 +119,7 @@ func TestWashTxs(t *testing.T) {
 	txObj3, _ := resolveTx(tx3, false)
 	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
 
-	txs, removedCount, err := pool.wash(pool.repo.BestBlock().Header())
+	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
 	assert.Equal(t, 1, removedCount)
@@ -121,6 +128,10 @@ func TestWashTxs(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
+	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+	stage, _ := st.Stage(1, 0)
+	root1, _ := stage.Commit()
+
 	var sig [65]byte
 	rand.Read(sig[:])
 	b1 := new(block.Builder).
@@ -128,9 +139,9 @@ func TestAdd(t *testing.T) {
 		Timestamp(uint64(time.Now().Unix())).
 		TotalScore(100).
 		GasLimit(10000000).
-		StateRoot(pool.repo.GenesisBlock().Header().StateRoot()).
+		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	pool.repo.AddBlock(b1, nil)
+	pool.repo.AddBlock(b1, nil, 0)
 	pool.repo.SetBestBlockID(b1.Header().ID())
 	acc := genesis.DevAccounts()[0]
 

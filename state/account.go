@@ -6,12 +6,22 @@
 package state
 
 import (
+	"bytes"
+	"hash"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
+
+// AccountMetadata is the account metadata.
+type AccountMetadata struct {
+	StorageID          []byte // the unique id of the storage trie.
+	StorageCommitNum   uint32 // the commit number of the last storage update.
+	StorageDistinctNum uint32 // the distinct number of the last storage update.
+}
 
 // Account is the Thor consensus representation of an account.
 // RLP encoded objects are stored in main account trie.
@@ -57,48 +67,103 @@ func (a *Account) CalcEnergy(blockTime uint64) *big.Int {
 }
 
 func emptyAccount() *Account {
-	return &Account{Balance: &big.Int{}, Energy: &big.Int{}}
+	a := Account{Balance: &big.Int{}, Energy: &big.Int{}}
+	return &a
 }
 
-// loadAccount load an account object by address in trie.
+// loadAccount load an account object and its metadata by address in trie.
 // It returns empty account is no account found at the address.
-func loadAccount(trie *muxdb.Trie, addr thor.Address) (*Account, error) {
-	data, err := trie.Get(addr[:])
+func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, *AccountMetadata, error) {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	data, meta, err := trie.FastGet(h.Hash(addr[:]), steadyBlockNum)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(data) == 0 {
-		return emptyAccount(), nil
+		return emptyAccount(), &AccountMetadata{}, nil
 	}
 	var a Account
 	if err := rlp.DecodeBytes(data, &a); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &a, nil
+
+	var am AccountMetadata
+	if len(meta) > 0 {
+		if err := rlp.DecodeBytes(meta, &am); err != nil {
+			return nil, nil, err
+		}
+	}
+	return &a, &am, nil
 }
 
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
-func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account) error {
+func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMetadata) error {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
 	if a.IsEmpty() {
 		// delete if account is empty
-		return trie.Update(addr[:], nil)
+		return trie.Update(h.Hash(addr[:]), nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
 	if err != nil {
 		return err
 	}
-	return trie.Update(addr[:], data)
+
+	var mdata []byte
+	if len(a.StorageRoot) > 0 { // discard metadata if storage root is empty
+		if mdata, err = rlp.EncodeToBytes(am); err != nil {
+			return err
+		}
+	}
+	return trie.Update(h.Hash(addr[:]), data, mdata)
 }
 
 // loadStorage load storage data for given key.
-func loadStorage(trie *muxdb.Trie, key thor.Bytes32) (rlp.RawValue, error) {
-	return trie.Get(key[:])
+func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	v, _, err := trie.FastGet(h.Hash(key[:]), steadyBlockNum)
+	return v, err
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
 func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
-	return trie.Update(key[:], data)
+	h := hasherPool.Get().(*hasher)
+	defer hasherPool.Put(h)
+
+	return trie.Update(
+		h.Hash(key[:]),
+		data,
+		bytes.TrimLeft(key[:], "\x00"), // key preimage as metadata
+	)
+}
+
+type hasher struct {
+	h   hash.Hash
+	buf []byte
+}
+
+func (h *hasher) Hash(in []byte) []byte {
+	if h.h == nil {
+		h.h = thor.NewBlake2b()
+	} else {
+		h.h.Reset()
+	}
+
+	h.h.Write(in)
+	h.buf = h.h.Sum(h.buf[:0])
+	return h.buf
+}
+
+var hasherPool = sync.Pool{
+	New: func() interface{} {
+		return &hasher{}
+	},
 }

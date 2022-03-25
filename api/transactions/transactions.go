@@ -31,8 +31,8 @@ func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 }
 
 func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*rawTransaction, error) {
-
-	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
+	chain := t.repo.NewChain(head)
+	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
 			if allowPending {
@@ -70,7 +70,8 @@ func (t *Transactions) getRawTransaction(txID thor.Bytes32, head thor.Bytes32, a
 }
 
 func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, allowPending bool) (*Transaction, error) {
-	tx, meta, err := t.repo.NewChain(head).GetTransaction(txID)
+	chain := t.repo.NewChain(head)
+	tx, meta, err := chain.GetTransaction(txID)
 	if err != nil {
 		if t.repo.IsNotFound(err) {
 			if allowPending {
@@ -203,7 +204,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 
 func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 	if head == "" {
-		return t.repo.BestBlock().Header().ID(), nil
+		return t.repo.BestBlockSummary().Header.ID(), nil
 	}
 	h, err := thor.ParseBytes32(head)
 	if err != nil {

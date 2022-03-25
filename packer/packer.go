@@ -49,11 +49,11 @@ func New(
 }
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
-func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.StateRoot())
+func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *Flow, err error) {
+	state := p.stater.NewState(parent.Header.StateRoot(), parent.Header.Number(), parent.Conflicts, parent.SteadyNum)
 
 	var features tx.Features
-	if parent.Number()+1 >= p.forkConfig.VIP191 {
+	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
@@ -87,15 +87,15 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 
 	// calc the time when it's turn to produce block
 	var sched poa.Scheduler
-	if parent.Number()+1 < p.forkConfig.VIP214 {
-		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Number(), parent.Timestamp())
+	if parent.Header.Number()+1 < p.forkConfig.VIP214 {
+		sched, err = poa.NewSchedulerV1(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp())
 	} else {
 		var seed []byte
-		seed, err = p.seeder.Generate(parent.ID())
+		seed, err = p.seeder.Generate(parent.Header.ID())
 		if err != nil {
 			return nil, err
 		}
-		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Number(), parent.Timestamp(), seed)
+		sched, err = poa.NewSchedulerV2(p.nodeMaster, proposers, parent.Header.Number(), parent.Header.Timestamp(), seed)
 	}
 	if err != nil {
 		return nil, err
@@ -111,51 +111,51 @@ func (p *Packer) Schedule(parent *block.Header, nowTimestamp uint64) (flow *Flow
 	}
 
 	rt := runtime.New(
-		p.repo.NewChain(parent.ID()),
+		p.repo.NewChain(parent.Header.ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: beneficiary,
 			Signer:      p.nodeMaster,
-			Number:      parent.Number() + 1,
+			Number:      parent.Header.Number() + 1,
 			Time:        newBlockTime,
-			GasLimit:    p.gasLimit(parent.GasLimit()),
-			TotalScore:  parent.TotalScore() + score,
+			GasLimit:    p.gasLimit(parent.Header.GasLimit()),
+			TotalScore:  parent.Header.TotalScore() + score,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent.Header, rt, features), nil
 }
 
 // Mock create a packing flow upon given parent, but with a designated timestamp.
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
-func (p *Packer) Mock(parent *block.Header, targetTime uint64, gasLimit uint64) (*Flow, error) {
-	state := p.stater.NewState(parent.StateRoot())
+func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, error) {
+	state := p.stater.NewState(parent.Header.StateRoot(), parent.Header.Number(), parent.Conflicts, parent.SteadyNum)
 
 	var features tx.Features
-	if parent.Number()+1 >= p.forkConfig.VIP191 {
+	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
 		features |= tx.DelegationFeature
 	}
 
 	gl := gasLimit
 	if gasLimit == 0 {
-		gl = p.gasLimit(parent.GasLimit())
+		gl = p.gasLimit(parent.Header.GasLimit())
 	}
 
 	rt := runtime.New(
-		p.repo.NewChain(parent.ID()),
+		p.repo.NewChain(parent.Header.ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: p.nodeMaster,
 			Signer:      p.nodeMaster,
-			Number:      parent.Number() + 1,
+			Number:      parent.Header.Number() + 1,
 			Time:        targetTime,
 			GasLimit:    gl,
-			TotalScore:  parent.TotalScore() + 1,
+			TotalScore:  parent.Header.TotalScore() + 1,
 		},
 		p.forkConfig)
 
-	return newFlow(p, parent, rt, features), nil
+	return newFlow(p, parent.Header, rt, features), nil
 }
 
 func (p *Packer) gasLimit(parentGasLimit uint64) uint64 {

@@ -12,61 +12,74 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/block"
+	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/comm/proto"
 )
 
-func (c *Communicator) sync(peer *Peer, headNum uint32, handler HandleBlockStream) error {
-	ancestor, err := c.findCommonAncestor(peer, headNum)
+func download(_ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32, handler HandleBlockStream) error {
+	ancestor, err := findCommonAncestor(_ctx, repo, peer, headNum)
 	if err != nil {
 		return errors.WithMessage(err, "find common ancestor")
 	}
-	return c.download(peer, ancestor+1, handler)
-}
 
-func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockStream) error {
 	var (
-		ctx, cancel = context.WithCancel(c.ctx)
-		blockCh     = make(chan *block.Block, 2048)
+		ctx, cancel = context.WithCancel(_ctx)
+		fetched     = make(chan []*block.Block, 1)
+		warmedUp    = make(chan *block.Block, 2048)
 		goes        co.Goes
-		handlerErr  error
+		fetchErr    error
 	)
 	defer goes.Wait()
-	defer close(blockCh)
-
 	goes.Go(func() {
-		defer cancel()
-		handlerErr = handler(ctx, blockCh)
+		defer close(fetched)
+		fetchErr = fetchBlocks(ctx, peer, ancestor+1, fetched)
 	})
+	goes.Go(func() {
+		defer close(warmedUp)
+		warmupBlocks(ctx, fetched, warmedUp)
+	})
+	defer cancel()
+	if err := handler(ctx, warmedUp); err != nil {
+		return err
+	}
+	return fetchErr
+}
 
-	var blocks []*block.Block
+func fetchBlocks(ctx context.Context, peer *Peer, fromBlockNum uint32, fetched chan<- []*block.Block) error {
 	for {
-		result, err := proto.GetBlocksFromNumber(ctx, peer, fromNum)
+		result, err := proto.GetBlocksFromNumber(ctx, peer, fromBlockNum)
 		if err != nil {
-			if handlerErr != nil {
-				return handlerErr
-			}
 			return err
 		}
 		if len(result) == 0 {
-			return handlerErr
+			return nil
 		}
 
-		blocks = blocks[:0]
+		blocks := make([]*block.Block, 0, len(result))
 		for _, raw := range result {
 			var blk block.Block
 			if err := rlp.DecodeBytes(raw, &blk); err != nil {
 				return errors.Wrap(err, "invalid block")
 			}
-			if blk.Header().Number() != fromNum {
+			if blk.Header().Number() != fromBlockNum {
 				return errors.New("broken sequence")
 			}
-			fromNum++
+			fromBlockNum++
 			blocks = append(blocks, &blk)
 		}
 
 		select {
-		case <-co.Parallel(func(queue chan<- func()) {
+		case fetched <- blocks:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func warmupBlocks(ctx context.Context, fetched <-chan []*block.Block, warmedUp chan<- *block.Block) {
+	<-co.Parallel(func(queue chan<- func()) {
+		for blocks := range fetched {
 			for _, blk := range blocks {
 				h := blk.Header()
 				queue <- func() {
@@ -83,49 +96,41 @@ func (c *Communicator) download(peer *Peer, fromNum uint32, handler HandleBlockS
 					}
 				}
 			}
-		}):
-		case <-ctx.Done():
-			if handlerErr != nil {
-				return handlerErr
-			}
-			return ctx.Err()
-		}
 
-		for _, blk := range blocks {
-			// when queued blocks count > 10% channel cap,
-			// send nil block to throttle to reduce mem pressure.
-			if len(blockCh)*10 > cap(blockCh) {
-				const targetSize = 2048
-				for i := 0; i < int(blk.Size())/targetSize-1; i++ {
-					select {
-					case blockCh <- nil:
-					default:
+			for _, blk := range blocks {
+				select {
+				case <-ctx.Done():
+					return
+				case warmedUp <- blk:
+				}
+
+				// when queued blocks count > 10% warmed up channel cap,
+				// send nil block to throttle to reduce mem pressure.
+				if len(warmedUp)*10 > cap(warmedUp) {
+					const targetSize = 2048
+					for i := 0; i < int(blk.Size())/targetSize-1; i++ {
+						select {
+						case warmedUp <- nil:
+						default:
+						}
 					}
 				}
 			}
-			select {
-			case <-ctx.Done():
-				if handlerErr != nil {
-					return handlerErr
-				}
-				return ctx.Err()
-			case blockCh <- blk:
-			}
 		}
-	}
+	})
 }
 
-func (c *Communicator) findCommonAncestor(peer *Peer, headNum uint32) (uint32, error) {
+func findCommonAncestor(ctx context.Context, repo *chain.Repository, peer *Peer, headNum uint32) (uint32, error) {
 	if headNum == 0 {
 		return headNum, nil
 	}
 
 	isOverlapped := func(num uint32) (bool, error) {
-		result, err := proto.GetBlockIDByNumber(c.ctx, peer, num)
+		result, err := proto.GetBlockIDByNumber(ctx, peer, num)
 		if err != nil {
 			return false, err
 		}
-		id, err := c.repo.NewBestChain().GetBlockID(num)
+		id, err := repo.NewBestChain().GetBlockID(num)
 		if err != nil {
 			return false, err
 		}

@@ -83,8 +83,8 @@ func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock 
 		return false, nil
 	}
 
-	checkpoint := state.NewCheckpoint()
-	defer state.RevertTo(checkpoint)
+	// checkpoint := state.NewCheckpoint()
+	// defer state.RevertTo(checkpoint)
 
 	if _, _, _, _, err := o.resolved.BuyGas(state, headBlock.Timestamp()+thor.BlockInterval); err != nil {
 		return false, err

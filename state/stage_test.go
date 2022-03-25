@@ -18,7 +18,7 @@ import (
 func TestStage(t *testing.T) {
 	db := muxdb.NewMem()
 
-	state := New(db, thor.Bytes32{})
+	state := New(db, thor.Bytes32{}, 0, 0, 0)
 
 	addr := thor.BytesToAddress([]byte("acc1"))
 
@@ -36,7 +36,7 @@ func TestStage(t *testing.T) {
 		state.SetStorage(addr, k, v)
 	}
 
-	stage, err := state.Stage()
+	stage, err := state.Stage(1, 0)
 	assert.Nil(t, err)
 
 	hash := stage.Hash()
@@ -46,7 +46,7 @@ func TestStage(t *testing.T) {
 
 	assert.Equal(t, hash, root)
 
-	state = New(db, root)
+	state = New(db, root, 1, 0, 0)
 
 	assert.Equal(t, M(balance, nil), M(state.GetBalance(addr)))
 	assert.Equal(t, M(code, nil), M(state.GetCode(addr)))

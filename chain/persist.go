@@ -23,9 +23,10 @@ const (
 // BlockSummary presents block summary.
 type BlockSummary struct {
 	Header    *block.Header
-	IndexRoot thor.Bytes32
 	Txs       []thor.Bytes32
 	Size      uint64
+	Conflicts uint32
+	SteadyNum uint32
 }
 
 // the key for tx/receipt.

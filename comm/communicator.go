@@ -63,68 +63,66 @@ func (c *Communicator) Synced() <-chan struct{} {
 }
 
 // Sync start synchronization process.
-func (c *Communicator) Sync(handler HandleBlockStream) {
+func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 	const initSyncInterval = 2 * time.Second
 	const syncInterval = 30 * time.Second
 
-	c.goes.Go(func() {
-		timer := time.NewTimer(0)
-		defer timer.Stop()
-		delay := initSyncInterval
-		syncCount := 0
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+	delay := initSyncInterval
+	syncCount := 0
 
-		shouldSynced := func() bool {
-			bestBlockTime := c.repo.BestBlock().Header().Timestamp()
-			now := uint64(time.Now().Unix())
-			if bestBlockTime+thor.BlockInterval >= now {
-				return true
-			}
-			if syncCount > 2 {
-				return true
-			}
-			return false
+	shouldSynced := func() bool {
+		bestBlockTime := c.repo.BestBlockSummary().Header.Timestamp()
+		now := uint64(time.Now().Unix())
+		if bestBlockTime+thor.BlockInterval >= now {
+			return true
 		}
+		if syncCount > 2 {
+			return true
+		}
+		return false
+	}
 
-		for {
-			timer.Stop()
-			timer = time.NewTimer(delay)
-			select {
-			case <-c.ctx.Done():
-				return
-			case <-timer.C:
-				log.Debug("synchronization start")
+	for {
+		timer.Stop()
+		timer = time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			log.Debug("synchronization start")
 
-				best := c.repo.BestBlock().Header()
-				// choose peer which has the head block with higher total score
-				peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
-					_, totalScore := peer.Head()
-					return totalScore >= best.TotalScore()
+			best := c.repo.BestBlockSummary().Header
+			// choose peer which has the head block with higher total score
+			peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
+				_, totalScore := peer.Head()
+				return totalScore >= best.TotalScore()
+			})
+			if peer == nil {
+				if c.peerSet.Len() < 3 {
+					log.Debug("no suitable peer to sync")
+					break
+				}
+				// if more than 3 peers connected, we are assumed to be the best
+				log.Debug("synchronization done, best assumed")
+			} else {
+				if err := download(ctx, c.repo, peer, best.Number(), handler); err != nil {
+					peer.logger.Debug("synchronization failed", "err", err)
+					break
+				}
+				peer.logger.Debug("synchronization done")
+			}
+			syncCount++
+
+			if shouldSynced() {
+				delay = syncInterval
+				c.onceSynced.Do(func() {
+					close(c.syncedCh)
 				})
-				if peer == nil {
-					if c.peerSet.Len() < 3 {
-						log.Debug("no suitable peer to sync")
-						break
-					}
-					// if more than 3 peers connected, we are assumed to be the best
-					log.Debug("synchronization done, best assumed")
-				} else {
-					if err := c.sync(peer, best.Number(), handler); err != nil {
-						peer.logger.Debug("synchronization failed", "err", err)
-						break
-					}
-					peer.logger.Debug("synchronization done")
-				}
-				syncCount++
-
-				if shouldSynced() {
-					delay = syncInterval
-					c.onceSynced.Do(func() {
-						close(c.syncedCh)
-					})
-				}
 			}
 		}
-	})
+	}
 }
 
 // Protocols returns all supported protocols.

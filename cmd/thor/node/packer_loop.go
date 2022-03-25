@@ -53,7 +53,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			n.packer.SetTargetGasLimit(suggested)
 		}
 
-		flow, err := n.packer.Schedule(n.repo.BestBlock().Header(), now)
+		flow, err := n.packer.Schedule(n.repo.BestBlockSummary(), now)
 		if err != nil {
 			if authorized {
 				authorized = false
@@ -86,7 +86,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Second):
-				best := n.repo.BestBlock().Header()
+				best := n.repo.BestBlockSummary().Header
 				/*  re-schedule regarding the following two conditions:
 				1. parent block needs to update and the new best is not proposed by the same one
 				2. best block is better than the block to be proposed
@@ -115,34 +115,66 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	startTime := mclock.Now()
-	for _, tx := range txs {
-		if err := flow.Adopt(tx); err != nil {
-			if packer.IsGasLimitReached(err) {
-				break
+	return n.guardBlockProcessing(flow.ParentHeader().Number()+1, func(conflicts uint32) error {
+		var (
+			startTime  = mclock.Now()
+			logEnabled = !n.skipLogs && !n.logDBFailed
+			oldBest    = n.repo.BestBlockSummary()
+		)
+
+		// adopt txs
+		for _, tx := range txs {
+			if err := flow.Adopt(tx); err != nil {
+				if packer.IsGasLimitReached(err) {
+					break
+				}
+				if packer.IsTxNotAdoptableNow(err) {
+					continue
+				}
+				txsToRemove = append(txsToRemove, tx)
 			}
-			if packer.IsTxNotAdoptableNow(err) {
-				continue
-			}
-			txsToRemove = append(txsToRemove, tx)
 		}
-	}
 
-	newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey)
-	if err != nil {
-		return err
-	}
-	execElapsed := mclock.Now() - startTime
+		// pack the new block
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts)
+		if err != nil {
+			return err
+		}
+		execElapsed := mclock.Now() - startTime
 
-	prevTrunk, curTrunk, err := n.commitBlock(stage, newBlock, receipts)
-	if err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	commitElapsed := mclock.Now() - startTime - execElapsed
+		// write logs
+		if logEnabled {
+			if n.writeLogs(newBlock, receipts, oldBest.Header.ID()); err != nil {
+				return errors.Wrap(err, "write logs")
+			}
+		}
 
-	n.processFork(prevTrunk, curTrunk)
+		// commit the state
+		if _, err := stage.Commit(); err != nil {
+			return errors.Wrap(err, "commit state")
+		}
 
-	if prevTrunk.HeadID() != curTrunk.HeadID() {
+		// add the new block into repository
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
+			return errors.Wrap(err, "add block")
+		}
+		realElapsed := mclock.Now() - startTime
+
+		// sync the log-writing task
+		if logEnabled {
+			if err := n.logWorker.Sync(); err != nil {
+				log.Warn("failed to write logs", "err", err)
+				n.logDBFailed = true
+			}
+		}
+
+		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
+			return err
+		}
+
+		n.processFork(newBlock, oldBest.Header.ID())
+		commitElapsed := mclock.Now() - startTime - execElapsed
+
 		n.comm.BroadcastBlock(newBlock)
 		log.Info("📦 new block packed",
 			"txs", len(receipts),
@@ -150,10 +182,10 @@ func (n *Node) pack(flow *packer.Flow) error {
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 			"id", shortID(newBlock.Header().ID()),
 		)
-	}
 
-	if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(execElapsed+commitElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
-	}
-	return nil
+		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
+			log.Debug("bandwidth updated", "gps", v)
+		}
+		return nil
+	})
 }

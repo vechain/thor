@@ -84,9 +84,9 @@ func TestP(t *testing.T) {
 	// defer pprof.StopCPUProfile()
 
 	for {
-		best := repo.BestBlock()
+		best := repo.BestBlockSummary()
 		p := packer.New(repo, stater, a1.Address, &a1.Address, thor.NoFork)
-		flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+		flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,12 +96,12 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
-		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2)))
+		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2), 0))
 
-		if err := repo.AddBlock(blk, receipts); err != nil {
+		if err := repo.AddBlock(blk, receipts, 0); err != nil {
 			t.Fatal(err)
 		}
 		repo.SetBestBlockID(blk.Header().ID())
@@ -111,8 +111,8 @@ func TestP(t *testing.T) {
 		}
 	}
 
-	best := repo.BestBlock()
-	fmt.Println(best.Header().Number(), best.Header().GasUsed())
+	best := repo.BestBlockSummary()
+	fmt.Println(best.Header.Number(), best.Header.GasUsed())
 	//	fmt.Println(best)
 }
 
@@ -150,31 +150,31 @@ func TestForkVIP191(t *testing.T) {
 	fc := thor.NoFork
 	fc.VIP191 = 1
 
-	best := repo.BestBlock()
+	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a1.Address, &a1.Address, fc)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, err := flow.Pack(a1.PrivateKey)
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2))
+	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := repo.AddBlock(blk, receipts); err != nil {
+	if err := repo.AddBlock(blk, receipts, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	headState := state.New(db, blk.Header().StateRoot())
+	headState := state.New(db, blk.Header().StateRoot(), blk.Header().Number(), 0, 0)
 
 	assert.Equal(t, M(builtin.Extension.V2.RuntimeBytecodes(), nil), M(headState.GetCode(builtin.Extension.Address)))
 
-	geneState := state.New(db, b0.Header().StateRoot())
+	geneState := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 
 	assert.Equal(t, M(builtin.Extension.RuntimeBytecodes(), nil), M(geneState.GetCode(builtin.Extension.Address)))
 }
@@ -200,9 +200,9 @@ func TestBlocklist(t *testing.T) {
 
 	thor.MockBlocklist([]string{a0.Address.String()})
 
-	best := repo.BestBlock()
+	best := repo.BestBlockSummary()
 	p := packer.New(repo, stater, a0.Address, &a0.Address, forkConfig)
-	flow, err := p.Schedule(best.Header(), uint64(time.Now().Unix()))
+	flow, err := p.Schedule(best, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}

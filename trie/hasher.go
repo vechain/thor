@@ -21,13 +21,17 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/thor"
 )
 
 type hasher struct {
-	tmp sliceBuffer
-	sha hash.Hash
+	tmp           sliceBuffer
+	sha           hash.Hash
+	cachedNodeTTL int
+	extended      bool
+	cNumNew       uint32
+	dNumNew       uint32
+	nonCrypto     bool
 }
 
 type sliceBuffer []byte
@@ -53,6 +57,21 @@ var hasherPool = sync.Pool{
 
 func newHasher() *hasher {
 	h := hasherPool.Get().(*hasher)
+	h.cachedNodeTTL = 0
+	h.extended = false
+	h.cNumNew = 0
+	h.dNumNew = 0
+	h.nonCrypto = false
+	return h
+}
+
+func newHasherExtended(cNumNew, dNumNew uint32, cachedNodeTTL int, nonCrypto bool) *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.cachedNodeTTL = cachedNodeTTL
+	h.extended = true
+	h.cNumNew = cNumNew
+	h.dNumNew = dNumNew
+	h.nonCrypto = nonCrypto
 	return h
 }
 
@@ -68,28 +87,34 @@ func (h *hasher) hash(n node, db DatabaseWriter, path []byte, force bool) (node,
 		if db == nil {
 			return hash, n, nil
 		}
+
 		if !dirty {
-			switch n.(type) {
-			case *fullNode, *shortNode:
+			if !h.extended {
 				return hash, hash, nil
-			default:
+			}
+			// extended trie
+			if !force { // non-root node
+				if h.cNumNew > hash.cNum+uint32(h.cachedNodeTTL) {
+					return hash, hash, nil
+				}
 				return hash, n, nil
 			}
+			// else for extended trie, always store root node regardless of dirty flag
 		}
 	}
 	// Trie not processed yet or needs storage, walk the children
 	collapsed, cached, err := h.hashChildren(n, db, path)
 	if err != nil {
-		return hashNode{}, n, err
+		return nil, n, err
 	}
 	hashed, err := h.store(collapsed, db, path, force)
 	if err != nil {
-		return hashNode{}, n, err
+		return nil, n, err
 	}
 	// Cache the hash of the node for later reuse and remove
 	// the dirty flag in commit mode. It's fine to assign these values directly
 	// without copying the node first because hashChildren copies it.
-	cachedHash, _ := hashed.(hashNode)
+	cachedHash, _ := hashed.(*hashNode)
 	switch cn := cached.(type) {
 	case *shortNode:
 		cn.flags.hash = cachedHash
@@ -118,16 +143,17 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 		collapsed.Key = hexToCompact(n.Key)
 		cached.Key = common.CopyBytes(n.Key)
 
-		if _, ok := n.Val.(valueNode); !ok {
+		if _, ok := n.Val.(*valueNode); !ok {
 
 			collapsed.Val, cached.Val, err = h.hash(n.Val, db, append(path, n.Key...), false)
 			if err != nil {
 				return original, original, err
 			}
 		}
-		if collapsed.Val == nil {
-			collapsed.Val = valueNode(nil) // Ensure that nil children are encoded as empty strings.
-		}
+		// no need when using frlp
+		// if collapsed.Val == nil {
+		// 	collapsed.Val = &valueNode{} // Ensure that nil children are encoded as empty strings.
+		// }
 		return collapsed, cached, nil
 
 	case *fullNode:
@@ -140,14 +166,17 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 				if err != nil {
 					return original, original, err
 				}
-			} else {
-				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 			}
+			// no need when using frlp
+			// else {
+			// 	collapsed.Children[i] = &valueNode{} // Ensure that nil children are encoded as empty strings.
+			// }
 		}
 		cached.Children[16] = n.Children[16]
-		if collapsed.Children[16] == nil {
-			collapsed.Children[16] = valueNode(nil)
-		}
+		// no need when using frlp
+		// if collapsed.Children[16] == nil {
+		// 	collapsed.Children[16] = &valueNode{}
+		// }
 		return collapsed, cached, nil
 
 	default:
@@ -158,13 +187,26 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 
 func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node, error) {
 	// Don't store hashes or empty nodes.
-	if _, isHash := n.(hashNode); n == nil || isHash {
+	if _, isHash := n.(*hashNode); n == nil || isHash {
 		return n, nil
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil {
+	if err := frlp.Encode(&h.tmp, n, h.nonCrypto); err != nil {
 		panic("encode error: " + err.Error())
+	}
+
+	if h.nonCrypto {
+		// fullnode and shortnode with non-value child are forced
+		// just like normal trie.
+		switch n := n.(type) {
+		case *fullNode:
+			force = true
+		case *shortNode:
+			if _, ok := n.Val.(*valueNode); !ok {
+				force = true
+			}
+		}
 	}
 
 	if len(h.tmp) < 32 && !force {
@@ -173,19 +215,30 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	// Larger nodes are replaced by their hash and stored in the database.
 	hash, _ := n.cache()
 	if hash == nil {
-		h.sha.Reset()
-		h.sha.Write(h.tmp)
-		hash = hashNode(h.sha.Sum(nil))
+		hash = &hashNode{}
+		if h.nonCrypto {
+			hash.Hash = NonCryptoNodeHash
+		} else {
+			h.sha.Reset()
+			h.sha.Write(h.tmp)
+			h.sha.Sum(hash.Hash[:0])
+		}
 	}
 	if db != nil {
-		if ex, ok := db.(DatabaseWriterEx); ok {
-			return hash, ex.PutEncoded(&NodeKey{
-				hash,
-				path,
-				false,
-			}, h.tmp)
+		// extended
+		if h.extended {
+			if err := frlp.EncodeTrailing(&h.tmp, n); err != nil {
+				return nil, err
+			}
+			hash.cNum = h.cNumNew
+			hash.dNum = h.dNumNew
 		}
-		return hash, db.Put(hash, h.tmp)
+
+		key := hash.Hash[:]
+		if ke, ok := db.(DatabaseKeyEncoder); ok {
+			key = ke.Encode(hash.Hash[:], h.cNumNew, h.dNumNew, path)
+		}
+		return hash, db.Put(key, h.tmp)
 	}
 	return hash, nil
 }

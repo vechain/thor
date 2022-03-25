@@ -110,7 +110,7 @@ func (s *Solo) loop(ctx context.Context) {
 }
 
 func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
-	best := s.repo.BestBlock()
+	best := s.repo.BestBlockSummary()
 	now := uint64(time.Now().Unix())
 
 	var txsToRemove []*tx.Transaction
@@ -125,7 +125,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		s.packer.SetTargetGasLimit(suggested)
 	}
 
-	flow, err := s.packer.Mock(best.Header(), now, s.gasLimit)
+	flow, err := s.packer.Mock(best, now, s.gasLimit)
 	if err != nil {
 		return errors.WithMessage(err, "mock packer")
 	}
@@ -143,7 +143,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		}
 	}
 
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
 	if err != nil {
 		return errors.WithMessage(err, "pack")
 	}
@@ -159,24 +159,29 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 
 	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts); err != nil {
+	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
 		return errors.WithMessage(err, "commit block")
 	}
+	realElapsed := mclock.Now() - startTime
+
 	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
 		return errors.WithMessage(err, "set best block")
 	}
 
 	if !s.skipLogs {
-		if err := s.logDB.Log(func(w *logdb.Writer) error {
-			return w.Write(b, receipts)
-		}); err != nil {
-			return errors.WithMessage(err, "commit log")
+		w := s.logDB.NewWriter()
+		if err := w.Write(b, receipts); err != nil {
+			return errors.WithMessage(err, "write logs")
+		}
+
+		if err := w.Commit(); err != nil {
+			return errors.WithMessage(err, "commit logs")
 		}
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
-	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(execElapsed+commitElapsed)); updated {
+	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
 		log.Debug("bandwidth updated", "gps", v)
 	}
 

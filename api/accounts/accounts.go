@@ -17,7 +17,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
@@ -47,9 +46,9 @@ func New(
 	}
 }
 
-func (a *Accounts) getCode(addr thor.Address, stateRoot thor.Bytes32) ([]byte, error) {
+func (a *Accounts) getCode(addr thor.Address, summary *chain.BlockSummary) ([]byte, error) {
 	code, err := a.stater.
-		NewState(stateRoot).
+		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
 		GetCode(addr)
 	if err != nil {
 		return nil, err
@@ -63,19 +62,19 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	code, err := a.getCode(addr, h.StateRoot())
+	code, err := a.getCode(addr, summary)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account, error) {
-	state := a.stater.NewState(header.StateRoot())
+func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*Account, error) {
+	state := a.stater.NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -84,7 +83,7 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	if err != nil {
 		return nil, err
 	}
-	energy, err := state.GetEnergy(addr, header.Timestamp())
+	energy, err := state.GetEnergy(addr, summary.Header.Timestamp())
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +95,9 @@ func (a *Accounts) getAccount(addr thor.Address, header *block.Header) (*Account
 	}, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, stateRoot thor.Bytes32) (thor.Bytes32, error) {
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, summary *chain.BlockSummary) (thor.Bytes32, error) {
 	storage, err := a.stater.
-		NewState(stateRoot).
+		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
 		GetStorage(addr, key)
 
 	if err != nil {
@@ -112,11 +111,11 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	acc, err := a.getAccount(addr, h)
+	acc, err := a.getAccount(addr, summary)
 	if err != nil {
 		return err
 	}
@@ -132,11 +131,11 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "key"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
-	storage, err := a.getStorage(addr, key, h.StateRoot())
+	storage, err := a.getStorage(addr, key, summary)
 	if err != nil {
 		return err
 	}
@@ -148,7 +147,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return err
 	}
@@ -172,7 +171,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		GasPrice: callData.GasPrice,
 		Caller:   callData.Caller,
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, h)
+	results, err := a.batchCall(req.Context(), batchCallData, summary)
 	if err != nil {
 		return err
 	}
@@ -195,12 +194,13 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	return utils.WriteJSON(w, results)
 }
 
-func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, header *block.Header) (results BatchCallResults, err error) {
+func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary) (results BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
 	}
-	state := a.stater.NewState(header.StateRoot())
+	header := summary.Header
+	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 
 	signer, _ := header.Signer()
 	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
@@ -311,9 +311,9 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	return
 }
 
-func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
+func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) {
 	if revision == "" || revision == "best" {
-		return a.repo.BestBlock().Header(), nil
+		return a.repo.BestBlockSummary(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)
@@ -327,7 +327,7 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 			}
 			return nil, err
 		}
-		return summary.Header, nil
+		return summary, nil
 	}
 	n, err := strconv.ParseUint(revision, 0, 0)
 	if err != nil {
@@ -336,14 +336,14 @@ func (a *Accounts) handleRevision(revision string) (*block.Header, error) {
 	if n > math.MaxUint32 {
 		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
 	}
-	h, err := a.repo.NewBestChain().GetBlockHeader(uint32(n))
+	summary, err := a.repo.NewBestChain().GetBlockSummary(uint32(n))
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return nil, err
 	}
-	return h, nil
+	return summary, nil
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {

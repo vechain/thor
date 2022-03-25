@@ -26,21 +26,21 @@ func newTx() *tx.Transaction {
 func TestChain(t *testing.T) {
 	tx1 := newTx()
 
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
 	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
-	repo.AddBlock(b1, tx.Receipts{tx1Receipt})
+	repo.AddBlock(b1, tx.Receipts{tx1Receipt}, 0)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, 0)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, 0)
 
 	b3x := newBlock(b2, 30)
-	repo.AddBlock(b3x, nil)
+	repo.AddBlock(b3x, nil, 1)
 
 	c := repo.NewChain(b3.Header().ID())
 
@@ -55,6 +55,8 @@ func TestChain(t *testing.T) {
 	assert.Equal(t, M(tx1Meta, nil), M(c.GetTransactionMeta(tx1.ID())))
 	assert.Equal(t, M(tx1, tx1Meta, nil), M(c.GetTransaction(tx1.ID())))
 	assert.Equal(t, M(tx1Receipt, nil), M(c.GetTransactionReceipt(tx1.ID())))
+	_, err = c.GetTransactionMeta(thor.Bytes32{})
+	assert.True(t, c.IsNotFound(err))
 
 	assert.Equal(t, M(true, nil), M(c.HasBlock(b1.Header().ID())))
 	assert.Equal(t, M(false, nil), M(c.HasBlock(b3x.Header().ID())))
@@ -68,4 +70,13 @@ func TestChain(t *testing.T) {
 
 	assert.Equal(t, M([]thor.Bytes32{b3.Header().ID()}, nil), M(c1.Exclude(c2)))
 	assert.Equal(t, M([]thor.Bytes32{b3x.Header().ID()}, nil), M(c2.Exclude(c1)))
+
+	dangleID := thor.Bytes32{0, 0, 0, 4}
+	dangleChain := repo.NewChain(dangleID)
+
+	_, err = c1.Exclude(dangleChain)
+	assert.Error(t, err)
+
+	_, err = dangleChain.Exclude(c1)
+	assert.Error(t, err)
 }

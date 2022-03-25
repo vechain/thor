@@ -15,6 +15,7 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/co"
 	"github.com/vechain/thor/logdb"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -32,7 +33,9 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 		}
 	}
 
-	bestNum := repo.BestBlock().Header().Number()
+	best := repo.BestBlockSummary()
+
+	bestNum := best.Header.Number()
 
 	if bestNum == startPos {
 		return nil
@@ -51,47 +54,61 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 		Start()
 
 	defer func() { pb.NotPrint = true }()
-	bestChain := repo.NewBestChain()
 
-	if err := logDB.Log(func(w *logdb.Writer) error {
-		for i := startPos; i <= bestNum; i++ {
+	w := logDB.NewWriterSyncOff()
 
-			b, err := bestChain.GetBlock(i)
-			if err != nil {
-				return err
-			}
-			receipts, err := repo.GetBlockReceipts(b.Header().ID())
-			if err != nil {
-				return errors.Wrap(err, "get block receipts")
-			}
-			if err := w.Write(b, receipts); err != nil {
-				return err
-			}
-			if w.Len() > 2048 {
-				if err := w.Flush(); err != nil {
-					return err
-				}
-			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			pb.Add64(1)
-		}
-		return nil
-	}); err != nil {
-		if err == context.Canceled {
+	if err := w.Truncate(startPos); err != nil {
+		return err
+	}
+
+	var (
+		goes    co.Goes
+		pumpErr error
+		ch      = make(chan *block.Block, 1000)
+		cancel  func()
+	)
+
+	ctx, cancel = context.WithCancel(ctx)
+	defer goes.Wait()
+	goes.Go(func() {
+		defer close(ch)
+		pumpErr = pumpBlockAndReceipts(ctx, repo, best.Header.ID(), startPos, bestNum, ch)
+	})
+
+	defer cancel()
+
+	for b := range ch {
+		receipts, err := repo.GetBlockReceipts(b.Header().ID())
+		if err != nil {
 			return err
 		}
-		return errors.Wrap(err, "write logs")
+		if err := w.Write(b, receipts); err != nil {
+			return err
+		}
+		if w.UncommittedCount() > 2048 {
+			if err := w.Commit(); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			if err := w.Commit(); err != nil {
+				return err
+			}
+			return ctx.Err()
+		default:
+		}
+		pb.Add64(1)
+	}
+	if err := w.Commit(); err != nil {
+		return err
 	}
 	pb.Finish()
-	return nil
+	return pumpErr
 }
 
 func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, error) {
-	best := repo.BestBlock().Header()
+	best := repo.BestBlockSummary().Header
 	if best.Number() == 0 {
 		return 0, nil
 	}
@@ -135,7 +152,6 @@ func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, 
 		header = summary.Header
 	}
 	return block.Number(header.ID()) + 1, nil
-
 }
 
 func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
@@ -149,7 +165,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 	const logStep = uint32(100)
 
 	var (
-		chain       = repo.NewBestChain()
+		best        = repo.BestBlockSummary()
 		evLogs      []*logdb.Event
 		trLogs      []*logdb.Transfer
 		logLimit    = uint32(0)
@@ -189,18 +205,31 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 		}
 	)
 
-	for i := uint32(1); i <= endBlockNum; i++ {
-		b, err := chain.GetBlock(i)
-		if err != nil {
-			return err
-		}
-		id := b.Header().ID()
+	var (
+		goes    co.Goes
+		pumpErr error
+		ch      = make(chan *block.Block, 512)
+		cancel  func()
+	)
 
-		if i > logLimit {
+	ctx, cancel = context.WithCancel(ctx)
+	defer goes.Wait()
+	goes.Go(func() {
+		defer close(ch)
+		pumpErr = pumpBlockAndReceipts(ctx, repo, best.Header.ID(), 1, endBlockNum, ch)
+	})
+
+	defer cancel()
+
+	for b := range ch {
+		id := b.Header().ID()
+		num := b.Header().Number()
+		if num > logLimit {
+			var err error
 			logLimit += logStep
 			evLogs, err = logDB.FilterEvents(context.TODO(), &logdb.EventFilter{
 				Range: &logdb.Range{
-					From: i,
+					From: num,
 					To:   logLimit,
 				},
 			})
@@ -209,7 +238,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 			}
 			trLogs, err = logDB.FilterTransfers(context.TODO(), &logdb.TransferFilter{
 				Range: &logdb.Range{
-					From: i,
+					From: num,
 					To:   logLimit,
 				},
 			})
@@ -236,7 +265,7 @@ func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository
 	}
 
 	pb.Finish()
-	return nil
+	return pumpErr
 }
 
 func verifyLogDBPerBlock(
@@ -325,4 +354,63 @@ func jsonDiff(expected, actual interface{}) string {
 		Context:  1,
 	})
 	return diff
+}
+
+func pumpBlockAndReceipts(ctx context.Context, repo *chain.Repository, headID thor.Bytes32, from, to uint32, ch chan<- *block.Block) error {
+	var (
+		chain = repo.NewChain(headID)
+		buf   []*block.Block
+	)
+	const bufLen = 256
+	for i := from; i <= to; i++ {
+		b, err := chain.GetBlock(i)
+		if err != nil {
+			return err
+		}
+
+		buf = append(buf, b)
+		if len(buf) >= bufLen {
+			select {
+			case <-co.Parallel(func(queue chan<- func()) {
+				for _, b := range buf {
+					h := b.Header()
+					queue <- func() {
+						h.ID()
+					}
+					for _, tx := range b.Transactions() {
+						tx := tx
+						queue <- func() {
+							tx.ID()
+						}
+					}
+				}
+			}):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			for _, b := range buf {
+				select {
+				case ch <- b:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			buf = buf[:0]
+		}
+		// recreate the chain to avoid the internal trie holds too many nodes.
+		if n := i - from; n > 0 && n%10000 == 0 {
+			chain = repo.NewChain(headID)
+		}
+	}
+
+	// pump remained blocks
+	for _, b := range buf {
+		select {
+		case ch <- b:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }

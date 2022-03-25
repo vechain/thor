@@ -18,16 +18,16 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
-// the key to last written block id.
 const (
-	configBlockIDKey = "blockID"
-	refIDQuery       = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
 type LogDB struct {
 	path          string
-	db            *sql.DB
 	driverVersion string
+	db            *sql.DB
+	wconn         *sql.Conn
+	wconnSyncOff  *sql.Conn
 	stmtCache     *stmtCache
 }
 
@@ -43,15 +43,31 @@ func New(path string) (logDB *LogDB, err error) {
 		}
 	}()
 
-	if _, err := db.Exec(configTableSchema + refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+	if _, err := db.Exec(refTableScheme + eventTableSchema + transferTableSchema); err != nil {
+		return nil, err
+	}
+
+	wconn1, err := db.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	wconn2, err := db.Conn(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := wconn2.ExecContext(context.Background(), "pragma synchronous=off"); err != nil {
 		return nil, err
 	}
 
 	driverVer, _, _ := sqlite3.Version()
 	return &LogDB{
 		path:          path,
-		db:            db,
 		driverVersion: driverVer,
+		db:            db,
+		wconn:         wconn1,
+		wconnSyncOff:  wconn2,
 		stmtCache:     newStmtCache(db),
 	}, nil
 }
@@ -62,9 +78,16 @@ func NewMem() (*LogDB, error) {
 }
 
 // Close close the log db.
-func (db *LogDB) Close() error {
+func (db *LogDB) Close() (err error) {
+	err = db.wconn.Close()
+	if err1 := db.wconnSyncOff.Close(); err == nil {
+		err = err1
+	}
 	db.stmtCache.Clear()
-	return db.db.Close()
+	if err1 := db.db.Close(); err == nil {
+		err = err1
+	}
+	return err
 }
 
 func (db *LogDB) Path() string {
@@ -315,26 +338,18 @@ func (db *LogDB) queryTransfers(ctx context.Context, query string, args ...inter
 
 // NewestBlockID query newest written block id.
 func (db *LogDB) NewestBlockID() (thor.Bytes32, error) {
-	// select from config if any
-	row := db.stmtCache.MustPrepare("SELECT value FROM config WHERE key=?").QueryRow(configBlockIDKey)
 	var data []byte
-	if err := row.Scan(&data); err != nil {
-		if sql.ErrNoRows != err {
-			return thor.Bytes32{}, err
-		}
-
-		// no config, query newest block ID from existing records
-		row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
+	row := db.stmtCache.MustPrepare(`SELECT MAX(data) FROM (
 			SELECT data FROM ref WHERE id=(SELECT blockId FROM transfer ORDER BY seq DESC LIMIT 1)
 			UNION
 			SELECT data FROM ref WHERE id=(SELECT blockId FROM event ORDER BY seq DESC LIMIT 1))`).QueryRow()
 
-		if err := row.Scan(&data); err != nil {
-			if sql.ErrNoRows != err {
-				return thor.Bytes32{}, err
-			}
+	if err := row.Scan(&data); err != nil {
+		if sql.ErrNoRows != err {
+			return thor.Bytes32{}, err
 		}
 	}
+
 	return thor.BytesToBytes32(data), nil
 }
 
@@ -346,7 +361,7 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 		SELECT * FROM (SELECT seq FROM event WHERE seq=? AND blockID=` + refIDQuery + ` LIMIT 1))`
 
 	seq := newSequence(block.Number(id), 0)
-	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id.Bytes(), seq, id.Bytes())
+	row := db.stmtCache.MustPrepare(query).QueryRow(seq, id[:], seq, id[:])
 	var count int
 	if err := row.Scan(&count); err != nil {
 		// no need to check ErrNoRows
@@ -355,190 +370,221 @@ func (db *LogDB) HasBlockID(id thor.Bytes32) (bool, error) {
 	return count > 0, nil
 }
 
-// Log write logs.
-func (db *LogDB) Log(f func(*Writer) error) error {
-	w := &Writer{db: db.db, stmtCache: db.stmtCache}
-	if err := f(w); err != nil {
-		if w.tx != nil {
-			_ = w.tx.Rollback()
-		}
-		return err
-	}
-	return w.Flush()
+// NewWriter creates a log writer.
+func (db *LogDB) NewWriter() *Writer {
+	return &Writer{conn: db.wconn, stmtCache: db.stmtCache}
+}
+
+// NewWriterSyncOff creates a log writer which applied 'pragma synchronous = off'.
+func (db *LogDB) NewWriterSyncOff() *Writer {
+	return &Writer{conn: db.wconnSyncOff, stmtCache: db.stmtCache}
 }
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
 	if i < len(topics) {
-		return topics[i].Bytes()
+		return topics[i][:]
 	}
 	return nil
 }
 
 // Writer is the transactional log writer.
 type Writer struct {
-	db          *sql.DB
-	stmtCache   *stmtCache
-	tx          *sql.Tx
-	len         int
-	lastBlockID thor.Bytes32
+	conn      *sql.Conn
+	stmtCache *stmtCache
+
+	tx               *sql.Tx
+	uncommittedCount int
+}
+
+// Truncate truncates the database by deleting logs after blockNum (included).
+func (w *Writer) Truncate(blockNum uint32) error {
+	seq := newSequence(blockNum, 0)
+	if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
+		return err
+	}
+	if err := w.exec("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Write writes all logs of the given block.
 func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
-
 	var (
-		num                       = b.Header().Number()
-		id                        = b.Header().ID()
-		ts                        = b.Header().Timestamp()
-		txs                       = b.Transactions()
-		eventCount, transferCount uint32
-	)
-	w.lastBlockID = id
-
-	if num > 0 && w.len == 0 {
-		seq := newSequence(num, 0)
-		if err := w.exec("DELETE FROM event WHERE seq >= ?", seq); err != nil {
-			return err
-		}
-		if err := w.exec("DELETE FROM transfer WHERE seq >= ?", seq); err != nil {
-			return err
-		}
-	}
-
-	if len(receipts) > 0 {
-		if err := w.exec(
-			"INSERT OR IGNORE INTO ref(data) VALUES(?)",
-			id.Bytes()); err != nil {
-			return err
-		}
-
-		for txIndex, receipt := range receipts {
-			if len(receipt.Outputs) > 0 {
-				var (
-					txID     thor.Bytes32
-					txOrigin thor.Address
-				)
-				if num != 0 {
-					txID = txs[txIndex].ID()
-					txOrigin, _ = txs[txIndex].Origin()
+		blockID        = b.Header().ID()
+		blockNum       = b.Header().Number()
+		blockTimestamp = b.Header().Timestamp()
+		txs            = b.Transactions()
+		eventCount,
+		transferCount uint32
+		isReceiptEmpty = func(r *tx.Receipt) bool {
+			for _, o := range r.Outputs {
+				if len(o.Events) > 0 || len(o.Transfers) > 0 {
+					return false
 				}
+			}
+			return true
+		}
+	)
 
+	for i, r := range receipts {
+		if isReceiptEmpty(r) {
+			continue
+		}
+
+		if eventCount == 0 && transferCount == 0 {
+			// block id is not yet inserted
+			if err := w.exec(
+				"INSERT OR IGNORE INTO ref(data) VALUES(?)",
+				blockID[:]); err != nil {
+				return err
+			}
+		}
+
+		var (
+			txID     thor.Bytes32
+			txOrigin thor.Address
+		)
+		if i < len(txs) { // block 0 has no tx, but has receipts
+			tx := txs[i]
+			txID = tx.ID()
+			txOrigin, _ = tx.Origin()
+
+		}
+		if err := w.exec(
+			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
+			txID[:], txOrigin[:]); err != nil {
+			return err
+		}
+
+		for clauseIndex, output := range r.Outputs {
+			for _, ev := range output.Events {
 				if err := w.exec(
-					"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
-					txID.Bytes(), txOrigin.Bytes()); err != nil {
+					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?),(?),(?),(?),(?)",
+					ev.Address[:],
+					topicValue(ev.Topics, 0),
+					topicValue(ev.Topics, 1),
+					topicValue(ev.Topics, 2),
+					topicValue(ev.Topics, 3),
+					topicValue(ev.Topics, 4)); err != nil {
 					return err
 				}
 
-				for clauseIndex, output := range receipt.Outputs {
-					for _, ev := range output.Events {
-						if err := w.exec(
-							"INSERT OR IGNORE INTO ref (data) VALUES(?),(?),(?),(?),(?),(?)",
-							ev.Address.Bytes(),
-							topicValue(ev.Topics, 0),
-							topicValue(ev.Topics, 1),
-							topicValue(ev.Topics, 2),
-							topicValue(ev.Topics, 3),
-							topicValue(ev.Topics, 4)); err != nil {
-							return err
-						}
+				const query = "INSERT OR IGNORE INTO event(seq, blockTime, clauseIndex, data, blockID, txID, txOrigin, address, topic0, topic1, topic2, topic3, topic4) " +
+					"VALUES(?,?,?,?," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + ")"
 
-						if err := w.exec(
-							fmt.Sprintf(
-								"INSERT OR REPLACE INTO event VALUES(?,%v,?,%v,%v,?,%v,%v,%v,%v,%v,%v,?)",
-								refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery),
-							newSequence(num, eventCount),
-							id.Bytes(),
-							ts,
-							txID.Bytes(),
-							txOrigin.Bytes(),
-							clauseIndex,
-							ev.Address.Bytes(),
-							topicValue(ev.Topics, 0),
-							topicValue(ev.Topics, 1),
-							topicValue(ev.Topics, 2),
-							topicValue(ev.Topics, 3),
-							topicValue(ev.Topics, 4),
-							ev.Data); err != nil {
-							return err
-						}
-
-						eventCount++
-					}
-
-					for _, tr := range output.Transfers {
-						if err := w.exec(
-							"INSERT OR IGNORE INTO ref (data) VALUES(?),(?)",
-							tr.Sender.Bytes(),
-							tr.Recipient.Bytes()); err != nil {
-							return err
-						}
-						if err := w.exec(
-							fmt.Sprintf(
-								"INSERT OR REPLACE INTO transfer VALUES(?,%v,?,%v,%v,?,%v,%v,?)",
-								refIDQuery, refIDQuery, refIDQuery, refIDQuery, refIDQuery),
-							newSequence(num, transferCount),
-							id.Bytes(),
-							ts,
-							txID.Bytes(),
-							txOrigin.Bytes(),
-							clauseIndex,
-							tr.Sender.Bytes(),
-							tr.Recipient.Bytes(),
-							tr.Amount.Bytes()); err != nil {
-							return err
-						}
-
-						transferCount++
-					}
+				var eventData []byte
+				if len(ev.Data) > 0 {
+					eventData = ev.Data
 				}
+
+				if err := w.exec(
+					query,
+					newSequence(blockNum, eventCount),
+					blockTimestamp,
+					clauseIndex,
+					eventData,
+					blockID[:],
+					txID[:],
+					txOrigin[:],
+					ev.Address[:],
+					topicValue(ev.Topics, 0),
+					topicValue(ev.Topics, 1),
+					topicValue(ev.Topics, 2),
+					topicValue(ev.Topics, 3),
+					topicValue(ev.Topics, 4)); err != nil {
+					return err
+				}
+				eventCount++
+			}
+
+			for _, tr := range output.Transfers {
+				if err := w.exec(
+					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?)",
+					tr.Sender[:],
+					tr.Recipient[:]); err != nil {
+					return err
+				}
+				const query = "INSERT OR IGNORE INTO transfer(seq, blockTime, clauseIndex, amount, blockID, txID, txOrigin, sender, recipient) " +
+					"VALUES(?,?,?,?," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + "," +
+					refIDQuery + ")"
+
+				if err := w.exec(
+					query,
+					newSequence(blockNum, transferCount),
+					blockTimestamp,
+					clauseIndex,
+					tr.Amount.Bytes(),
+					blockID[:],
+					txID[:],
+					txOrigin[:],
+					tr.Sender[:],
+					tr.Recipient[:]); err != nil {
+					return err
+				}
+				transferCount++
 			}
 		}
 	}
 	return nil
 }
 
-// Flush commits accumulated logs.
-func (w *Writer) Flush() (err error) {
+// Commit commits accumulated logs.
+func (w *Writer) Commit() (err error) {
 	if w.tx == nil {
 		return nil
 	}
 
 	defer func() {
-		if err != nil {
-			_ = w.tx.Rollback()
+		if err == nil {
+			w.tx = nil
+			w.uncommittedCount = 0
 		}
-		w.tx = nil
-		w.lastBlockID = thor.Bytes32{}
-		w.len = 0
 	}()
-
-	if block.Number(w.lastBlockID) > 0 {
-		if err := w.exec(
-			"INSERT OR REPLACE INTO config(key, value) VALUES(?,?)",
-			configBlockIDKey, w.lastBlockID.Bytes()); err != nil {
-			return err
-		}
-	}
 	return w.tx.Commit()
 }
 
-// Len returns count of pending logs.
-func (w *Writer) Len() int {
-	return w.len
+// Rollback rollback all uncommitted logs.
+func (w *Writer) Rollback() (err error) {
+	if w.tx == nil {
+		return nil
+	}
+	defer func() {
+		if err == nil {
+			w.tx = nil
+			w.uncommittedCount = 0
+		}
+	}()
+	return w.tx.Rollback()
 }
 
-func (w *Writer) exec(query string, args ...interface{}) error {
-	if w.tx == nil {
-		tx, err := w.db.Begin()
-		if err != nil {
-			return err
-		}
-		w.tx = tx
-	}
+// UncommittedCount returns the count of uncommitted logs.
+func (w *Writer) UncommittedCount() int {
+	return w.uncommittedCount
+}
 
-	if _, err := w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
-		return err
+func (w *Writer) exec(query string, args ...interface{}) (err error) {
+	if w.tx == nil {
+		if w.tx, err = w.conn.BeginTx(context.Background(), nil); err != nil {
+			return
+		}
 	}
-	w.len++
+	if _, err = w.tx.Stmt(w.stmtCache.MustPrepare(query)).Exec(args...); err != nil {
+		return
+	}
+	w.uncommittedCount++
 	return nil
 }

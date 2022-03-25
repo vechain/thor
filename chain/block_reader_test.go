@@ -14,20 +14,20 @@ import (
 )
 
 func TestBlockReader(t *testing.T) {
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil, 0)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, 0)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, 0)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil, 0)
 
 	repo.SetBestBlockID(b4.Header().ID())
 
@@ -54,23 +54,23 @@ func TestBlockReader(t *testing.T) {
 }
 
 func TestBlockReaderFork(t *testing.T) {
-	repo := newTestRepo()
+	_, repo := newTestRepo()
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil)
+	repo.AddBlock(b1, nil, 0)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil)
+	repo.AddBlock(b2, nil, 0)
 
 	b2x := newBlock(b1, 20)
-	repo.AddBlock(b2x, nil)
+	repo.AddBlock(b2x, nil, 1)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil)
+	repo.AddBlock(b3, nil, 0)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil)
+	repo.AddBlock(b4, nil, 0)
 
 	repo.SetBestBlockID(b4.Header().ID())
 

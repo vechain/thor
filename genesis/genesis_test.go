@@ -22,7 +22,7 @@ func TestTestnetGenesis(t *testing.T) {
 	b0, _, _, err := gene.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
-	st := state.New(db, b0.Header().StateRoot())
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 
 	v, err := st.Exists(thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d"))
 	assert.Nil(t, err)

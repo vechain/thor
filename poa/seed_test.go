@@ -45,7 +45,7 @@ func TestSeeder_Generate(t *testing.T) {
 			ParentID(parent.Header().ID()).
 			Build().WithSignature(sig[:])
 
-		if err := repo.AddBlock(b, nil); err != nil {
+		if err := repo.AddBlock(b, nil, 0); err != nil {
 			t.Fatal(err)
 		}
 		parent = b
@@ -94,13 +94,13 @@ func TestSeeder_Generate(t *testing.T) {
 	}
 
 	// 31 - 35
-	parent = repo.BestBlock()
+	parent, _ = repo.GetBlock(repo.BestBlockSummary().Header.ID())
 	for i := 1; i <= int(epochInterval/2); i++ {
 		b := new(block.Builder).
 			ParentID(parent.Header().ID()).
 			Build().WithSignature(sig[:])
 
-		if err := repo.AddBlock(b, nil); err != nil {
+		if err := repo.AddBlock(b, nil, 0); err != nil {
 			t.Fatal(err)
 		}
 		parent = b
@@ -142,7 +142,7 @@ func TestSeeder_Generate(t *testing.T) {
 
 		b = b.WithSignature(cs)
 
-		if err := repo.AddBlock(b, nil); err != nil {
+		if err := repo.AddBlock(b, nil, 0); err != nil {
 			t.Fatal(err)
 		}
 		parent = b

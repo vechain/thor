@@ -139,12 +139,12 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 }
 
 // Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey) (*block.Block, *state.Stage, tx.Receipts, error) {
+func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	stage, err := f.runtime.State().Stage()
+	stage, err := f.runtime.State().Stage(f.runtime.Context().Number, newBlockConflicts)
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -19,6 +19,7 @@ type cachedObject struct {
 	db   *muxdb.MuxDB
 	addr thor.Address
 	data Account
+	meta AccountMetadata
 
 	cache struct {
 		code        []byte
@@ -27,8 +28,8 @@ type cachedObject struct {
 	}
 }
 
-func newCachedObject(db *muxdb.MuxDB, addr thor.Address, data *Account) *cachedObject {
-	return &cachedObject{db: db, addr: addr, data: *data}
+func newCachedObject(db *muxdb.MuxDB, addr thor.Address, data *Account, meta *AccountMetadata) *cachedObject {
+	return &cachedObject{db: db, addr: addr, data: *data, meta: *meta}
 }
 
 func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
@@ -36,16 +37,22 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 		return co.cache.storageTrie
 	}
 
-	trie := co.db.NewSecureTrie(
-		StorageTrieName(thor.Blake2b(co.addr[:])),
-		thor.BytesToBytes32(co.data.StorageRoot))
+	if len(co.data.StorageRoot) == 0 {
+		return nil
+	}
+
+	trie := co.db.NewTrie(
+		StorageTrieName(co.meta.StorageID),
+		thor.BytesToBytes32(co.data.StorageRoot),
+		co.meta.StorageCommitNum,
+		co.meta.StorageDistinctNum)
 
 	co.cache.storageTrie = trie
 	return trie
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Bytes32) (rlp.RawValue, error) {
+func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
 	cache := &co.cache
 	// retrive from storage cache
 	if cache.storage != nil {
@@ -58,9 +65,12 @@ func (co *cachedObject) GetStorage(key thor.Bytes32) (rlp.RawValue, error) {
 	// not found in cache
 
 	trie := co.getOrCreateStorageTrie()
+	if trie == nil {
+		return nil, nil
+	}
 
 	// load from trie
-	v, err := loadStorage(trie, key)
+	v, err := loadStorage(trie, key, steadyBlockNum)
 	if err != nil {
 		return nil, err
 	}

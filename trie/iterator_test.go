@@ -18,14 +18,47 @@ package trie
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/thor"
 )
+
+// makeTestTrie create a sample test trie to test node-wise reconstruction.
+func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
+	// Create an empty trie
+	db := ethdb.NewMemDatabase()
+	trie, _ := New(thor.Bytes32{}, db)
+
+	// Fill it with some arbitrary data
+	content := make(map[string][]byte)
+	for i := byte(0); i < 255; i++ {
+		// Map the same data under multiple keys
+		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		// Add some other data to inflate the trie
+		for j := byte(3); j < 13; j++ {
+			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
+			content[string(key)] = val
+			trie.Update(key, val)
+		}
+	}
+	trie.Commit()
+
+	// Return the generated trie
+	return db, trie, content
+}
 
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
@@ -310,7 +343,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		it := tr.NodeIterator(nil)
 		checkIteratorNoDups(t, it, seen)
 		missing, ok := it.Error().(*MissingNodeError)
-		if !ok || !bytes.Equal(missing.NodeHash[:], rkey) {
+		if !ok || !bytes.Equal(missing.NodeHash.Hash[:], rkey) {
 			t.Fatal("didn't hit missing node, got", it.Error())
 		}
 
@@ -337,7 +370,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
 	root, _ := ctr.Commit()
-	barNodeHash, _ := thor.ParseBytes32("d32fb77ad25227d60b76d53a512d28137304c9c03556db08a1709563c7ae9c9f")
+	barNodeHash, _ := hex.DecodeString("d32fb77ad25227d60b76d53a512d28137304c9c03556db08a1709563c7ae9c9f")
 	barNode, _ := db.Get(barNodeHash[:])
 	db.Delete(barNodeHash[:])
 
@@ -348,7 +381,7 @@ func TestIteratorContinueAfterSeekError(t *testing.T) {
 	missing, ok := it.Error().(*MissingNodeError)
 	if !ok {
 		t.Fatal("want MissingNodeError, got", it.Error())
-	} else if missing.NodeHash != barNodeHash {
+	} else if !bytes.Equal(missing.NodeHash.Hash[:], barNodeHash) {
 		t.Fatal("wrong node missing")
 	}
 
@@ -372,4 +405,36 @@ func checkIteratorNoDups(t *testing.T, it NodeIterator, seen map[string]bool) in
 		seen[string(it.Path())] = true
 	}
 	return len(seen)
+}
+
+func TestIteratorNodeFilter(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	tr, _ := NewExtended(thor.Bytes32{}, 0, 0, db, false)
+	for _, val := range testdata1 {
+		tr.Update([]byte(val.k), []byte(val.v), nil)
+	}
+	root1, _ := tr.Commit(1, 0)
+	_ = root1
+	for _, val := range testdata2 {
+		tr.Update([]byte(val.k), []byte(val.v), nil)
+	}
+	root2, _ := tr.Commit(2, 0)
+
+	tr, _ = NewExtended(root2, 2, 0, db, false)
+
+	it := tr.NodeIterator(nil, 1)
+
+	for it.Next(true) {
+		if h := it.Hash(); !h.IsZero() {
+			assert.True(t, it.CommitNum() >= 1)
+		}
+	}
+
+	it = tr.NodeIterator(nil, 2)
+
+	for it.Next(true) {
+		if h := it.Hash(); !h.IsZero() {
+			assert.True(t, it.CommitNum() >= 2)
+		}
+	}
 }

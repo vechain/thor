@@ -251,7 +251,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v2", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v3", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
@@ -262,25 +262,37 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
 	log.Debug("cache size(MB)", "size", cacheMB)
 
+	fdCache := suggestFDCache()
+	log.Debug("fd cache", "n", fdCache)
+
+	opts := muxdb.Options{
+		TrieNodeCacheSizeMB:        cacheMB,
+		TrieRootCacheCapacity:      256,
+		TrieCachedNodeTTL:          30, // 5min
+		TrieLeafBankSlotCapacity:   256,
+		TrieDedupedPartitionFactor: math.MaxUint32,
+		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
+		OpenFilesCacheCapacity:     fdCache,
+		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
+		WriteBufferMB:              128,
+	}
+
 	// go-ethereum stuff
 	// Ensure Go's GC ignores the database cache for trigger percentage
-	gogc := math.Max(10, math.Min(100, 50/(float64(cacheMB)/1024)))
+	totalCacheMB := cacheMB + opts.ReadCacheMB + opts.WriteBufferMB*2
+	gogc := math.Max(10, math.Min(100, 50/(float64(totalCacheMB)/1024)))
 
 	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
 	debug.SetGCPercent(int(gogc))
 
-	fdCache := suggestFDCache()
-	log.Debug("fd cache", "n", fdCache)
+	if opts.TrieWillCleanHistory {
+		opts.TrieHistPartitionFactor = 1000
+	} else {
+		opts.TrieHistPartitionFactor = 500000
+	}
 
 	path := filepath.Join(dir, "main.db")
-	db, err := muxdb.Open(path, &muxdb.Options{
-		EncodedTrieNodeCacheSizeMB:   cacheMB,
-		DecodedTrieNodeCacheCapacity: 65536,
-		OpenFilesCacheCapacity:       fdCache,
-		ReadCacheMB:                  256, // rely on os page cache other than huge db read cache.
-		WriteBufferMB:                128,
-		PermanentTrie:                ctx.Bool(disablePrunerFlag.Name),
-	})
+	db, err := muxdb.Open(path, &opts)
 	if err != nil {
 		return nil, errors.Wrapf(err, "open main database [%v]", path)
 	}
@@ -349,14 +361,16 @@ func initChainRepository(gene *genesis.Genesis, mainDB *muxdb.MuxDB, logDB *logd
 	if err != nil {
 		return nil, errors.Wrap(err, "initialize block chain")
 	}
-	if err := logDB.Log(func(w *logdb.Writer) error {
-		return w.Write(genesisBlock, tx.Receipts{{
-			Outputs: []*tx.Output{
-				{Events: genesisEvents, Transfers: genesisTransfers},
-			},
-		}})
-	}); err != nil {
+	w := logDB.NewWriter()
+	if err := w.Write(genesisBlock, tx.Receipts{{
+		Outputs: []*tx.Output{
+			{Events: genesisEvents, Transfers: genesisTransfers},
+		},
+	}}); err != nil {
 		return nil, errors.Wrap(err, "write genesis logs")
+	}
+	if err := w.Commit(); err != nil {
+		return nil, errors.Wrap(err, "commit genesis logs")
 	}
 	return repo, nil
 }
@@ -522,7 +536,7 @@ func printStartupMessage1(
 	dataDir string,
 	forkConfig thor.ForkConfig,
 ) {
-	bestBlock := repo.BestBlock()
+	bestBlock := repo.BestBlockSummary()
 
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]
@@ -534,7 +548,7 @@ func printStartupMessage1(
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
-		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
 		master.Address(),
 		func() string {
@@ -576,7 +590,7 @@ func printSoloStartupMessage(
 	apiURL string,
 	forkConfig thor.ForkConfig,
 ) {
-	bestBlock := repo.BestBlock()
+	bestBlock := repo.BestBlockSummary()
 
 	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    
@@ -590,7 +604,7 @@ func printSoloStartupMessage(
 `,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
-		bestBlock.Header().ID(), bestBlock.Header().Number(), time.Unix(int64(bestBlock.Header().Timestamp()), 0),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
 		dataDir,
 		apiURL)

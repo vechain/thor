@@ -121,7 +121,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	assert.True(t, ok, "should have method")
 
 	constant := method.Const()
-	stage, err := c.rt.State().Stage()
+	stage, err := c.rt.State().Stage(0, 0)
 	assert.Nil(t, err, "should stage state")
 	stateRoot := stage.Hash()
 
@@ -140,7 +140,7 @@ func (c *ccase) Assert(t *testing.T) *ccase {
 	vmout, _, err := exec()
 	assert.Nil(t, err)
 	if constant || vmout.VMErr != nil {
-		stage, err := c.rt.State().Stage()
+		stage, err := c.rt.State().Stage(0, 0)
 		assert.Nil(t, err, "should stage state")
 		newStateRoot := stage.Hash()
 		assert.Equal(t, stateRoot, newStateRoot)
@@ -195,7 +195,7 @@ func TestParamsNative(t *testing.T) {
 		return nil
 	})
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot())
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
@@ -263,7 +263,7 @@ func TestAuthorityNative(t *testing.T) {
 		return nil
 	})
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot())
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{}, thor.NoFork)
@@ -369,7 +369,7 @@ func TestEnergyNative(t *testing.T) {
 	})
 
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot())
+	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 	chain := repo.NewChain(b0.Header().ID())
 
 	st.SetEnergy(addr, eng, b0.Header().Timestamp())
@@ -495,7 +495,7 @@ func TestPrototypeNative(t *testing.T) {
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
-	st := state.New(db, genesisBlock.Header().StateRoot())
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
 	chain := repo.NewChain(genesisBlock.Header().ID())
 
 	st.SetStorage(thor.Address(acc1), key, value)
@@ -768,32 +768,32 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, genesisBlock.Header().StateRoot())
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	launchTime := genesisBlock.Header().Timestamp()
 
 	for i := 1; i < 100; i++ {
 		st.SetBalance(acc1, big.NewInt(int64(i)))
 		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
-		stage, _ := st.Stage()
+		stage, _ := st.Stage(uint32(i), 0)
 		stateRoot, _ := stage.Commit()
 		b := new(block.Builder).
-			ParentID(repo.BestBlock().Header().ID()).
-			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
+			ParentID(repo.BestBlockSummary().Header.ID()).
+			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build().
 			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{})
+		repo.AddBlock(b, tx.Receipts{}, 0)
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
-	st = state.New(db, repo.BestBlock().Header().StateRoot())
+	st = state.New(db, repo.BestBlockSummary().Header.StateRoot(), repo.BestBlockSummary().Header.Number(), 0, 0)
 	chain := repo.NewBestChain()
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{
 		Number: thor.MaxStateHistory + 1,
-		Time:   repo.BestBlock().Header().Timestamp(),
+		Time:   repo.BestBlockSummary().Header.Timestamp(),
 	}, thor.NoFork)
 
 	test := &ctest{
@@ -838,32 +838,32 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	db := muxdb.NewMem()
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
-	st := state.New(db, genesisBlock.Header().StateRoot())
+	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	launchTime := genesisBlock.Header().Timestamp()
 
 	for i := 1; i < 100; i++ {
 		st.SetBalance(acc1, big.NewInt(int64(i)))
 		st.SetEnergy(acc1, big.NewInt(int64(i)), launchTime+uint64(i)*10)
-		stage, _ := st.Stage()
+		stage, _ := st.Stage(uint32(i), 0)
 		stateRoot, _ := stage.Commit()
 		b := new(block.Builder).
-			ParentID(repo.BestBlock().Header().ID()).
-			TotalScore(repo.BestBlock().Header().TotalScore() + 1).
+			ParentID(repo.BestBlockSummary().Header.ID()).
+			TotalScore(repo.BestBlockSummary().Header.TotalScore() + 1).
 			Timestamp(launchTime + uint64(i)*10).
 			StateRoot(stateRoot).
 			Build().
 			WithSignature(sig[:])
-		repo.AddBlock(b, tx.Receipts{})
+		repo.AddBlock(b, tx.Receipts{}, 0)
 		repo.SetBestBlockID(b.Header().ID())
 	}
 
-	st = state.New(db, repo.BestBlock().Header().StateRoot())
+	st = state.New(db, repo.BestBlockSummary().Header.StateRoot(), repo.BestBlockSummary().Header.Number(), 0, repo.BestBlockSummary().SteadyNum)
 	chain := repo.NewBestChain()
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{
-		Number: repo.BestBlock().Header().Number(),
-		Time:   repo.BestBlock().Header().Timestamp(),
+		Number: repo.BestBlockSummary().Header.Number(),
+		Time:   repo.BestBlockSummary().Header.Timestamp(),
 	}, thor.NoFork)
 
 	test := &ctest{
@@ -898,7 +898,7 @@ func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *e
 
 func TestExtensionNative(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{})
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
 	gene := genesis.NewDevnet()
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
@@ -920,9 +920,9 @@ func TestExtensionNative(t *testing.T) {
 
 	gasPayer := thor.BytesToAddress([]byte("gasPayer"))
 
-	err := repo.AddBlock(b1, nil)
+	err := repo.AddBlock(b1, nil, 0)
 	assert.Equal(t, err, nil)
-	err = repo.AddBlock(b2, nil)
+	err = repo.AddBlock(b2, nil, 0)
 	assert.Equal(t, err, nil)
 
 	assert.Equal(t, builtin.Extension.Address, builtin.Extension.Address)

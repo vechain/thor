@@ -5,18 +5,13 @@
 
 package logdb
 
-// create a table for events
 const (
-	configTableSchema = `CREATE TABLE IF NOT EXISTS config (
-	key CHAR(20) PRIMARY KEY,
-	value BLOB
-);`
-
 	refTableScheme = `CREATE TABLE IF NOT EXISTS ref (
 	id INTEGER PRIMARY KEY NOT NULL,
 	data BLOB NOT NULL UNIQUE
 );`
 
+	// creates events table
 	eventTableSchema = `CREATE TABLE IF NOT EXISTS event (
 	seq INTEGER PRIMARY KEY NOT NULL,
 	blockID	INTEGER NOT NULL,
@@ -39,7 +34,7 @@ CREATE INDEX IF NOT EXISTS event_i2 ON event(topic1, topic0, address) WHERE topi
 CREATE INDEX IF NOT EXISTS event_i3 ON event(topic2, topic0, address) WHERE topic2 IS NOT NULL;
 CREATE INDEX IF NOT EXISTS event_i4 ON event(topic3, topic0, address) WHERE topic3 IS NOT NULL;`
 
-	// create a table for transfer
+	// create transfers table
 	transferTableSchema = `CREATE TABLE IF NOT EXISTS transfer (
 	seq INTEGER PRIMARY KEY NOT NULL,
 	blockID	INTEGER NOT NULL,

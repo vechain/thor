@@ -21,7 +21,7 @@ func M(a ...interface{}) []interface{} {
 
 func TestEnergy(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{})
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -44,7 +44,7 @@ func TestEnergy(t *testing.T) {
 
 func TestEnergyGrowth(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{})
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
 
 	acc := thor.BytesToAddress([]byte("a1"))
 

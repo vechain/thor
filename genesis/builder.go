@@ -84,7 +84,7 @@ func (b *Builder) ComputeID() (thor.Bytes32, error) {
 
 // Build build genesis block according to presets.
 func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Events, transfers tx.Transfers, err error) {
-	state := stater.NewState(thor.Bytes32{})
+	state := stater.NewState(thor.Bytes32{}, 0, 0, 0)
 
 	for _, proc := range b.stateProcs {
 		if err := proc(state); err != nil {
@@ -112,7 +112,7 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		transfers = append(transfers, out.Transfers...)
 	}
 
-	stage, err := state.Stage()
+	stage, err := state.Stage(0, 0)
 	if err != nil {
 		return nil, nil, nil, errors.Wrap(err, "stage")
 	}

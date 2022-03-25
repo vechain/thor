@@ -6,47 +6,52 @@
 package state
 
 import (
-	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/thor"
 )
 
 // Stage abstracts changes on the main accounts trie.
 type Stage struct {
-	db           *muxdb.MuxDB
-	accountTrie  *muxdb.Trie
-	storageTries []*muxdb.Trie
-	codes        map[thor.Bytes32][]byte
+	db                *muxdb.MuxDB
+	trie              *muxdb.Trie
+	storageTries      []*muxdb.Trie
+	codes             map[thor.Bytes32][]byte
+	newBlockNum       uint32
+	newBlockConflicts uint32
 }
 
 // Hash computes hash of the main accounts trie.
 func (s *Stage) Hash() thor.Bytes32 {
-	return s.accountTrie.Hash()
+	return s.trie.Hash()
 }
 
 // Commit commits all changes into main accounts trie and storage tries.
-func (s *Stage) Commit() (thor.Bytes32, error) {
-	codeStore := s.db.NewStore(codeStoreName)
-
+func (s *Stage) Commit() (root thor.Bytes32, err error) {
+	defer func() {
+		if err != nil {
+			err = &Error{err}
+		}
+	}()
 	// write codes
-	if err := codeStore.Batch(func(w kv.PutFlusher) error {
+	if len(s.codes) > 0 {
+		codeBulk := s.db.NewStore(codeStoreName).Bulk()
 		for hash, code := range s.codes {
-			if err := w.Put(hash[:], code); err != nil {
-				return &Error{err}
+			if err = codeBulk.Put(hash[:], code); err != nil {
+				return
 			}
 		}
-		return nil
-	}); err != nil {
-		return thor.Bytes32{}, &Error{err}
+		if err = codeBulk.Write(); err != nil {
+			return
+		}
 	}
 
 	// commit storage tries
 	for _, t := range s.storageTries {
-		if _, err := t.Commit(); err != nil {
-			return thor.Bytes32{}, &Error{err}
+		if _, err = t.Commit(s.newBlockNum, s.newBlockConflicts); err != nil {
+			return
 		}
 	}
 
 	// commit accounts trie
-	return s.accountTrie.Commit()
+	return s.trie.Commit(s.newBlockNum, s.newBlockConflicts)
 }

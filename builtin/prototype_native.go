@@ -88,13 +88,13 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
-			header, err := env.Chain().GetBlockHeader(args.BlockNumber)
+			summary, err := env.Chain().GetBlockSummary(args.BlockNumber)
 			if err != nil {
 				panic(err)
 			}
 
 			env.UseGas(thor.SloadGas)
-			state := env.State().NewStater().NewState(header.StateRoot())
+			state := env.State().Checkout(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
 
 			env.UseGas(thor.GetBalanceGas)
 			val, err := state.GetBalance(thor.Address(args.Self))
@@ -130,16 +130,16 @@ func init() {
 
 			env.UseGas(thor.SloadGas)
 			env.UseGas(thor.SloadGas)
-			header, err := env.Chain().GetBlockHeader(args.BlockNumber)
+			summary, err := env.Chain().GetBlockSummary(args.BlockNumber)
 			if err != nil {
 				panic(err)
 			}
 
 			env.UseGas(thor.SloadGas)
-			state := env.State().NewStater().NewState(header.StateRoot())
+			state := env.State().Checkout(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
 
 			env.UseGas(thor.GetBalanceGas)
-			val, err := state.GetEnergy(thor.Address(args.Self), header.Timestamp())
+			val, err := state.GetEnergy(thor.Address(args.Self), summary.Header.Timestamp())
 			if err != nil {
 				panic(err)
 			}
