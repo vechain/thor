@@ -7,10 +7,12 @@ package trie
 
 import (
 	"encoding/binary"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru/simplelru"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/trie"
@@ -19,6 +21,8 @@ import (
 const (
 	entityPrefix          = "e"
 	deletionJournalPrefix = "d"
+
+	slotCacheSize = 64
 )
 
 // LeafRecord presents the queried leaf record.
@@ -30,14 +34,71 @@ type LeafRecord struct {
 
 // leafEntity is the entity stored in leaf bank.
 type leafEntity struct {
-	Value, Meta []byte
-	CommitNum   uint32
+	*trie.Leaf `rlp:"nil"`
+	CommitNum  uint32
 }
+
+var encodedEmptyLeafEntity, _ = rlp.EncodeToBytes(&leafEntity{})
 
 // trieSlot holds the state of a trie slot.
 type trieSlot struct {
 	getter    kv.Getter
 	commitNum uint32 // the commit number of this slot
+	cache     struct {
+		*simplelru.LRU
+		sync.Mutex
+	}
+}
+
+func (s *trieSlot) cacheEntity(key string, ent *leafEntity) {
+	s.cache.Lock()
+	defer s.cache.Unlock()
+	s.cache.Add(key, []*leafEntity{ent})
+}
+
+func (s *trieSlot) getCachedEntity(key string) *leafEntity {
+	s.cache.Lock()
+	defer s.cache.Unlock()
+	if cached, ok := s.cache.Get(key); ok {
+		return cached.([]*leafEntity)[0]
+	}
+	return nil
+}
+
+func (s *trieSlot) updateCachedEntity(key string, ent *leafEntity) {
+	s.cache.Lock()
+	defer s.cache.Unlock()
+	if cached, ok := s.cache.Peek(key); ok {
+		cached.([]*leafEntity)[0] = ent
+	}
+}
+
+func (s *trieSlot) getEntity(key []byte) (*leafEntity, error) {
+	strKey := string(key)
+	if cached := s.getCachedEntity(strKey); cached != nil {
+		return cached, nil
+	}
+
+	data, err := s.getter.Get(key)
+	if err != nil {
+		if !s.getter.IsNotFound(err) {
+			return nil, errors.Wrap(err, "get entity from leafbank")
+		}
+		// never seen, which means it has been an empty leaf until slotCommitNum.
+		return nil, nil
+	}
+
+	// entity found
+	var ent leafEntity
+	if err := rlp.DecodeBytes(data, &ent); err != nil {
+		return nil, errors.Wrap(err, "decode leaf entity")
+	}
+
+	if ent.Leaf != nil && len(ent.Leaf.Meta) == 0 {
+		ent.Meta = nil // normalize
+	}
+	s.cacheEntity(strKey, &ent)
+	return &ent, nil
 }
 
 // LeafBank records accumulated trie leaves to help accelerate trie leaf access
@@ -79,6 +140,7 @@ func (b *LeafBank) getSlot(name string) (*trieSlot, error) {
 		slot.commitNum = binary.BigEndian.Uint32(data)
 	}
 
+	slot.cache.LRU, _ = simplelru.NewLRU(slotCacheSize, nil)
 	b.slots.Add(name, slot)
 	return slot, nil
 }
@@ -97,42 +159,28 @@ func (b *LeafBank) Lookup(name string, leafKey []byte) (*LeafRecord, error) {
 		return &LeafRecord{}, nil
 	}
 
-	if data, err := slot.getter.Get(leafKey); err != nil {
-		if !slot.getter.IsNotFound(err) {
-			return nil, errors.Wrap(err, "get entity from leafbank")
-		}
-		// never seen, which means it has been an empty leaf until slotCommitNum.
+	ent, err := slot.getEntity(leafKey)
+	if err != nil {
+		return nil, err
+	}
+
+	if ent == nil { // never seen
 		return &LeafRecord{
 			Leaf:          &trie.Leaf{},
 			CommitNum:     0,
 			SlotCommitNum: slotCommitNum,
 		}, nil
-	} else if len(data) > 0 {
-		// entity found
-		var ent leafEntity
-		if err := rlp.DecodeBytes(data, &ent); err != nil {
-			return nil, errors.Wrap(err, "decode leaf entity")
-		}
-		if len(ent.Meta) == 0 {
-			ent.Meta = nil // normalize
-		}
-
-		if slotCommitNum < ent.CommitNum {
-			slotCommitNum = ent.CommitNum
-		}
-
-		return &LeafRecord{
-			Leaf: &trie.Leaf{
-				Value: ent.Value,
-				Meta:  ent.Meta,
-			},
-			CommitNum:     ent.CommitNum,
-			SlotCommitNum: slotCommitNum,
-		}, nil
 	}
 
-	// ever seen, but in undetermined state
-	return &LeafRecord{}, nil
+	if slotCommitNum < ent.CommitNum {
+		slotCommitNum = ent.CommitNum
+	}
+
+	return &LeafRecord{
+		Leaf:          ent.Leaf,
+		CommitNum:     ent.CommitNum,
+		SlotCommitNum: slotCommitNum,
+	}, nil
 }
 
 // LogDeletions saves the journal of leaf-key deletions which issued by one trie-commit.
@@ -175,9 +223,10 @@ func (b *LeafBank) NewUpdater(name string, baseCommitNum, targetCommitNum uint32
 		// skip commit number to get leaf key
 		leafKey := iter.Key()[4:]
 		// put empty value to mark the leaf to undetermined state
-		if err := bulk.Put(leafKey, nil); err != nil {
+		if err := bulk.Put(leafKey, encodedEmptyLeafEntity); err != nil {
 			return nil, err
 		}
+		slot.updateCachedEntity(string(leafKey), &leafEntity{})
 	}
 	if err := iter.Error(); err != nil {
 		return nil, err
@@ -199,15 +248,21 @@ type LeafUpdater struct {
 
 // Update updates the leaf for the given key.
 func (u *LeafUpdater) Update(leafKey []byte, leaf *trie.Leaf, leafCommitNum uint32) error {
-	data, err := rlp.EncodeToBytes(&leafEntity{
-		Value:     leaf.Value,
-		Meta:      leaf.Meta,
+	ent := &leafEntity{
+		Leaf:      leaf,
 		CommitNum: leafCommitNum,
-	})
+	}
+	data, err := rlp.EncodeToBytes(ent)
 	if err != nil {
 		return err
 	}
-	return u.bulk.Put(leafKey, data)
+
+	if err := u.bulk.Put(leafKey, data); err != nil {
+		return err
+	}
+
+	u.slot.updateCachedEntity(string(leafKey), ent)
+	return nil
 }
 
 // Commit commits updates into leafbank.
