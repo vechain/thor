@@ -63,16 +63,17 @@ func (c *Cache) log() {
 }
 
 // AddNodeBlob adds node blob into the cache.
-func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []byte, blob []byte, isCommitting bool) {
+func (c *Cache) AddNodeBlob(name string, seq sequence, path []byte, blob []byte, isCommitting bool) {
 	if c == nil {
 		return
 	}
+	cNum, dNum := seq.CommitNum(), seq.DistinctNum()
 	k := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(k)
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
-	k.buf = appendUint32(k.buf, distinctNum)
+	k.buf = appendUint32(k.buf, dNum)
 
 	if isCommitting {
 		// committing cache key: name + path + distinctNum
@@ -80,23 +81,24 @@ func (c *Cache) AddNodeBlob(name string, commitNum, distinctNum uint32, path []b
 		defer bufferPool.Put(v)
 
 		// concat commit number with blob as cache value
-		v.buf = appendUint32(v.buf[:0], commitNum)
+		v.buf = appendUint32(v.buf[:0], cNum)
 		v.buf = append(v.buf, blob...)
 
 		_ = c.committedNodes.Set(k.buf, v.buf, 0)
 	} else {
 		// querying cache key: name + path + distinctNum + commitNum
-		k.buf = appendUint32(k.buf, commitNum)
+		k.buf = appendUint32(k.buf, cNum)
 		_ = c.queriedNodes.Set(k.buf, blob, 0)
 	}
 }
 
 // GetNodeBlob returns the cached node blob.
-func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []byte, peek bool, dst []byte) []byte {
+func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, dst []byte) []byte {
 	if c == nil {
 		return nil
 	}
 
+	cNum, dNum := seq.CommitNum(), seq.DistinctNum()
 	lookupQueried := c.queriedNodes.GetFn
 	lookupCommitted := c.committedNodes.GetFn
 	if peek {
@@ -109,12 +111,12 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 
 	k.buf = append(k.buf[:0], name...)
 	k.buf = append(k.buf, path...)
-	k.buf = appendUint32(k.buf, distinctNum)
+	k.buf = appendUint32(k.buf, dNum)
 
 	// lookup from committing cache
 	var blob []byte
 	lookupCommitted(k.buf, func(b []byte) error {
-		if binary.BigEndian.Uint32(b) == commitNum {
+		if binary.BigEndian.Uint32(b) == cNum {
 			blob = append(dst, b[4:]...)
 		}
 		return nil
@@ -127,7 +129,7 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 	}
 
 	// fallback to querying cache
-	k.buf = appendUint32(k.buf, commitNum)
+	k.buf = appendUint32(k.buf, cNum)
 	lookupQueried(k.buf, func(b []byte) error {
 		blob = append(dst, b...)
 		return nil
@@ -145,7 +147,7 @@ func (c *Cache) GetNodeBlob(name string, commitNum, distinctNum uint32, path []b
 }
 
 // AddRootNode add the root node into the cache.
-func (c *Cache) AddRootNode(name string, n *trie.Node) bool {
+func (c *Cache) AddRootNode(name string, n trie.Node) bool {
 	if c == nil {
 		return false
 	}
@@ -159,15 +161,14 @@ func (c *Cache) AddRootNode(name string, n *trie.Node) bool {
 		sub, _ = lru.New(4)
 		c.roots.Add(name, sub)
 	}
-	key := (uint64(n.CommitNum()) << 32) | uint64(n.DistinctNum())
-	sub.Add(key, n)
+	sub.Add(n.SeqNum(), n)
 	return true
 }
 
 // GetRootNode returns the cached root node.
-func (c *Cache) GetRootNode(name string, commitNum, distinctNum uint32, peek bool) *trie.Node {
+func (c *Cache) GetRootNode(name string, seq uint64, peek bool) (trie.Node, bool) {
 	if c == nil {
-		return nil
+		return trie.Node{}, false
 	}
 
 	getByName := c.roots.Get
@@ -180,20 +181,19 @@ func (c *Cache) GetRootNode(name string, commitNum, distinctNum uint32, peek boo
 		if peek {
 			getByKey = sub.(*lru.Cache).Peek
 		}
-		key := (uint64(commitNum) << 32) | uint64(distinctNum)
-		if cached, has := getByKey(key); has {
+		if cached, has := getByKey(seq); has {
 			if !peek {
 				if c.rootStats.Hit()%2000 == 0 {
 					c.log()
 				}
 			}
-			return cached.(*trie.Node)
+			return cached.(trie.Node), true
 		}
 	}
 	if !peek {
 		c.rootStats.Miss()
 	}
-	return nil
+	return trie.Node{}, false
 }
 
 type cacheStats struct {
