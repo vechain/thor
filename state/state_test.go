@@ -165,7 +165,11 @@ func TestStorageBarrier(t *testing.T) {
 	stage, err := st.Stage(0, 0)
 	assert.Nil(t, err)
 
-	acc, _, err := loadAccount(stage.trie, addr, 0)
+	root, err := stage.Commit()
+	assert.Nil(t, err)
+
+	tr := db.NewTrie(AccountTrieName, root, 0, 0)
+	acc, _, err := loadAccount(tr, addr, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(acc.StorageRoot), "should skip storage writes when account deleteed then recreated")
 }
