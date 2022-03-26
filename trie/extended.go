@@ -45,20 +45,15 @@ func (n Node) SeqNum() uint64 {
 }
 
 // NewExtended creates an extended trie.
-func NewExtended(root thor.Bytes32, seq uint64, db Database, nonCrypto bool) (*ExtendedTrie, error) {
-	isRootEmpty := (root == thor.Bytes32{}) || root == emptyRoot
-	if !isRootEmpty && db == nil {
-		panic("trie.NewExtended: cannot use existing root without a database")
-	}
-	ext := ExtendedTrie{trie: Trie{db: db}, nonCrypto: nonCrypto}
-	if !isRootEmpty {
-		rootnode, err := ext.trie.resolveHash(&hashNode{Hash: root, seq: seq}, nil)
-		if err != nil {
-			return nil, err
+func NewExtended(root thor.Bytes32, seq uint64, db Database, nonCrypto bool) *ExtendedTrie {
+	ext := &ExtendedTrie{trie: Trie{db: db}, nonCrypto: nonCrypto}
+	if (root != thor.Bytes32{}) && root != emptyRoot {
+		if db == nil {
+			panic("trie.NewExtended: cannot use existing root without a database")
 		}
-		ext.trie.root = rootnode
+		ext.trie.root = &hashNode{Hash: root, seq: seq}
 	}
-	return &ext, nil
+	return ext
 }
 
 // IsNonCrypto returns whether the trie is a non-crypto trie.

@@ -223,6 +223,9 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 			h.sha.Write(h.tmp)
 			h.sha.Sum(hash.Hash[:0])
 		}
+	} else {
+		cpy := *hash
+		hash = &cpy
 	}
 	if db != nil {
 		// extended

@@ -613,7 +613,7 @@ func deleteString(trie *Trie, k string) {
 
 func TestExtended(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, db, false)
+	tr := NewExtended(thor.Bytes32{}, 0, db, false)
 
 	vals1 := []struct{ k, v string }{
 		{"do", "verb"},
@@ -659,10 +659,7 @@ func TestExtended(t *testing.T) {
 		t.Errorf("commit failed %v", err)
 	}
 
-	tr1, _ := NewExtended(root1, 1, db, false)
-	if err != nil {
-		t.Errorf("new failed %v", err)
-	}
+	tr1 := NewExtended(root1, 1, db, false)
 	for _, v := range vals1 {
 		val, meta, _ := tr1.Get([]byte(v.k))
 		if string(val) != v.v {
@@ -673,10 +670,7 @@ func TestExtended(t *testing.T) {
 		}
 	}
 
-	tr2, _ := NewExtended(root2, 2, db, false)
-	if err != nil {
-		t.Errorf("new failed %v", err)
-	}
+	tr2 := NewExtended(root2, 2, db, false)
 	for _, v := range append(vals1, vals2...) {
 		val, meta, _ := tr2.Get([]byte(v.k))
 		if string(val) != v.v {
@@ -701,7 +695,7 @@ func (db *kedb) Encode(hash []byte, seq uint64, path []byte) []byte {
 func TestNonCryptoExtended(t *testing.T) {
 	db := &kedb{ethdb.NewMemDatabase()}
 
-	tr, _ := NewExtended(thor.Bytes32{}, 0, db, true)
+	tr := NewExtended(thor.Bytes32{}, 0, db, true)
 	var root thor.Bytes32
 	n := uint32(100)
 	for i := uint32(0); i < n; i++ {
@@ -711,7 +705,7 @@ func TestNonCryptoExtended(t *testing.T) {
 		root, _ = tr.Commit(uint64(i))
 	}
 
-	tr, _ = NewExtended(root, uint64(n-1), db, true)
+	tr = NewExtended(root, uint64(n-1), db, true)
 	for i := uint32(0); i < n; i++ {
 		var k [4]byte
 		binary.BigEndian.PutUint32(k[:], i)
@@ -723,7 +717,7 @@ func TestNonCryptoExtended(t *testing.T) {
 
 func TestExtendedCached(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	tr, _ := NewExtended(thor.Bytes32{}, 0, db, false)
+	tr := NewExtended(thor.Bytes32{}, 0, db, false)
 
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
