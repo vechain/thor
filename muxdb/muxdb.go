@@ -44,7 +44,7 @@ type Options struct {
 	// TrieRootCacheCapacity is the capacity of the cache for trie root nodes.
 	TrieRootCacheCapacity int
 	// TrieCachedNodeTTL defines the life time(times of commit) of cached trie nodes.
-	TrieCachedNodeTTL int
+	TrieCachedNodeTTL uint16
 	// TrieLeafBankSlotCapacity defines max count of cached slot for leaf bank.
 	TrieLeafBankSlotCapacity int
 	// TrieHistPartitionFactor is the partition factor for historical trie nodes.

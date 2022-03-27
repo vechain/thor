@@ -27,18 +27,25 @@ type Backend struct {
 	DedupedSpace byte
 	HistPtnFactor,
 	DedupedPtnFactor uint32
-	CachedNodeTTL int
+	CachedNodeTTL uint16
 }
+
+// sequence helps convert sequence number from/to commitNum & distinctNum.
+type sequence uint64
+
+func makeSequence(commitNum, distinctNum uint32) sequence {
+	return sequence(commitNum) | (sequence(distinctNum) << 32)
+}
+
+func (s sequence) CommitNum() uint32   { return uint32(s) }
+func (s sequence) DistinctNum() uint32 { return uint32(s >> 32) }
 
 // Trie is the managed trie.
 type Trie struct {
-	back        *Backend
-	name        string
-	root        thor.Bytes32
-	commitNum   uint32
-	distinctNum uint32
-	nonCrypto   bool
-	init        func() (*trie.ExtendedTrie, error)
+	back *Backend
+	name string
+	ext  *trie.ExtendedTrie
+
 	dirty       bool
 	deletions   []string
 	noFillCache bool
@@ -55,32 +62,17 @@ func New(
 	nonCrypto bool,
 ) *Trie {
 	t := &Trie{
-		back:        back,
-		name:        name,
-		root:        root,
-		commitNum:   commitNum,
-		distinctNum: distinctNum,
-		nonCrypto:   nonCrypto,
+		back: back,
+		name: name,
 	}
 
-	var (
-		ext *trie.ExtendedTrie
-		err error
-	)
-	t.init = func() (*trie.ExtendedTrie, error) {
-		if ext != nil || err != nil {
-			return ext, err
-		}
-		if rootNode := t.back.Cache.GetRootNode(name, commitNum, distinctNum, t.noFillCache); rootNode != nil {
-			ext = trie.NewExtendedCached(rootNode, t.newDatabase(), nonCrypto)
-		} else {
-			ext, err = trie.NewExtended(root, commitNum, distinctNum, t.newDatabase(), nonCrypto)
-		}
-		if ext != nil {
-			ext.SetCachedNodeTTL(t.back.CachedNodeTTL)
-		}
-		return ext, err
+	seq := makeSequence(commitNum, distinctNum)
+	if rootNode, ok := back.Cache.GetRootNode(name, uint64(seq), false); ok {
+		t.ext = trie.NewExtendedCached(rootNode, t.newDatabase(), nonCrypto)
+	} else {
+		t.ext = trie.NewExtended(root, uint64(seq), t.newDatabase(), nonCrypto)
 	}
+	t.ext.SetCacheTTL(t.back.CachedNodeTTL)
 	return t
 }
 
@@ -89,7 +81,8 @@ func (t *Trie) Name() string {
 	return t.name
 }
 
-func (t *Trie) makeHistNodeKey(dst []byte, commitNum, distinctNum uint32, path []byte) []byte {
+func (t *Trie) makeHistNodeKey(dst []byte, seq sequence, path []byte) []byte {
+	commitNum, distinctNum := seq.CommitNum(), seq.DistinctNum()
 	dst = append(dst, t.back.HistSpace)                     // space
 	dst = appendUint32(dst, commitNum/t.back.HistPtnFactor) // partition id
 	dst = append(dst, t.name...)                            // trie name
@@ -99,7 +92,8 @@ func (t *Trie) makeHistNodeKey(dst []byte, commitNum, distinctNum uint32, path [
 	return dst
 }
 
-func (t *Trie) makeDedupedNodeKey(dst []byte, commitNum uint32, path []byte) []byte {
+func (t *Trie) makeDedupedNodeKey(dst []byte, seq sequence, path []byte) []byte {
+	commitNum := seq.CommitNum()
 	dst = append(dst, t.back.DedupedSpace)                     // space
 	dst = appendUint32(dst, commitNum/t.back.DedupedPtnFactor) // partition id
 	dst = append(dst, t.name...)                               // trie name
@@ -110,10 +104,10 @@ func (t *Trie) makeDedupedNodeKey(dst []byte, commitNum uint32, path []byte) []b
 // newDatabase creates a database instance for low-level trie construction.
 func (t *Trie) newDatabase() trie.Database {
 	var (
-		thisHash                       []byte
-		thisCommitNum, thisDistinctNum uint32
-		thisPath                       []byte
-		keyBuf                         []byte
+		thisHash []byte
+		thisSeq  sequence
+		thisPath []byte
+		keyBuf   []byte
 	)
 
 	return &struct {
@@ -124,18 +118,18 @@ func (t *Trie) newDatabase() trie.Database {
 	}{
 		kv.GetToFunc(func(_ []byte, dst []byte) (blob []byte, err error) {
 			// get from cache
-			if blob = t.back.Cache.GetNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, t.noFillCache, dst); len(blob) > 0 {
+			if blob = t.back.Cache.GetNodeBlob(t.name, thisSeq, thisPath, t.noFillCache, dst); len(blob) > 0 {
 				return
 			}
 			defer func() {
 				if err == nil && !t.noFillCache {
-					t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, false)
+					t.back.Cache.AddNodeBlob(t.name, thisSeq, thisPath, blob, false)
 				}
 			}()
 
 			// if cache missed, try fast leaf get
 			if t.fastLeafGet != nil {
-				if leaf, err := t.fastLeafGet(thisCommitNum); err != nil {
+				if leaf, err := t.fastLeafGet(thisSeq.CommitNum()); err != nil {
 					return nil, err
 				} else if leaf != nil {
 					// good, leaf got. returns a special error to short-circuit further node lookups.
@@ -144,7 +138,7 @@ func (t *Trie) newDatabase() trie.Database {
 			}
 
 			defer func() {
-				if err == nil && !t.nonCrypto {
+				if err == nil && !t.ext.IsNonCrypto() {
 					// to ensure the node is correct, we need to verify the node hash.
 					// TODO: later can skip this step
 					if ok, err1 := trie.VerifyNodeHash(blob[len(dst):], thisHash); err1 != nil {
@@ -160,20 +154,19 @@ func (t *Trie) newDatabase() trie.Database {
 			defer snapshot.Release()
 
 			// get from hist space first
-			keyBuf = t.makeHistNodeKey(keyBuf[:0], thisCommitNum, thisDistinctNum, thisPath)
+			keyBuf = t.makeHistNodeKey(keyBuf[:0], thisSeq, thisPath)
 			if blob, err = snapshot.GetTo(keyBuf, dst); err == nil || !snapshot.IsNotFound(err) {
 				// found or error
 				return
 			}
 
 			// then from deduped space
-			keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisCommitNum, thisPath)
+			keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisSeq, thisPath)
 			return snapshot.GetTo(keyBuf, dst)
 		}),
-		databaseKeyEncodeFunc(func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
+		databaseKeyEncodeFunc(func(hash []byte, seq uint64, path []byte) []byte {
 			thisHash = hash
-			thisCommitNum = commitNum
-			thisDistinctNum = distinctNum
+			thisSeq = sequence(seq)
 			thisPath = path
 			return nil
 		}),
@@ -183,46 +176,31 @@ func (t *Trie) newDatabase() trie.Database {
 }
 
 // Copy make a copy of this trie.
-// It returns error if the trie is dirty.
-func (t *Trie) Copy() (*Trie, error) {
-	if t.dirty {
-		return nil, errors.New("dirty trie")
-	}
-	ext, err := t.init()
+func (t *Trie) Copy() *Trie {
 	cpy := *t
-	if ext != nil {
-		extCpy := trie.NewExtendedCached(ext.RootNode(), cpy.newDatabase(), t.nonCrypto)
-		extCpy.SetCachedNodeTTL(cpy.back.CachedNodeTTL)
-		cpy.init = func() (*trie.ExtendedTrie, error) {
-			return extCpy, nil
-		}
-		cpy.noFillCache = false
+	cpy.ext = trie.NewExtendedCached(t.ext.RootNode(), cpy.newDatabase(), t.ext.IsNonCrypto())
+	cpy.ext.SetCacheTTL(cpy.back.CachedNodeTTL)
+	cpy.fastLeafGet = nil
+
+	if len(t.deletions) > 0 {
+		cpy.deletions = append([]string(nil), t.deletions...)
 	} else {
-		cpy.init = func() (*trie.ExtendedTrie, error) { return nil, err }
+		cpy.deletions = nil
 	}
-	return &cpy, nil
+	return &cpy
 }
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
-	ext, err := t.init()
-	if err != nil {
-		return nil, nil, err
-	}
-	return ext.Get(key)
+	return t.ext.Get(key)
 }
 
 // FastGet uses a fast way to query the value for key stored in the trie.
 // See VIP-212 for detail.
 func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, error) {
 	if t.back.LeafBank == nil {
-		return t.Get(key)
-	}
-
-	ext, err := t.init()
-	if err != nil {
-		return nil, nil, err
+		return t.ext.Get(key)
 	}
 
 	// setup fast leaf getter
@@ -253,7 +231,7 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 	}
 	defer func() { t.fastLeafGet = nil }()
 
-	val, meta, err := ext.Get(key)
+	val, meta, err := t.ext.Get(key)
 	if err != nil {
 		if miss, ok := err.(*trie.MissingNodeError); ok {
 			if la, ok := miss.Err.(*leafAvailable); ok {
@@ -272,99 +250,93 @@ func (t *Trie) FastGet(key []byte, steadyCommitNum uint32) ([]byte, []byte, erro
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, val, meta []byte) error {
-	ext, err := t.init()
-	if err != nil {
-		return err
-	}
 	t.dirty = true
 	if len(val) == 0 { // deletion
 		if t.back.LeafBank != nil {
 			t.deletions = append(t.deletions, string(key))
 		}
 	}
-	return ext.Update(key, val, meta)
+	return t.ext.Update(key, val, meta)
 }
 
-// Hash returns the root hash of the trie.
-func (t *Trie) Hash() thor.Bytes32 {
-	ext, err := t.init()
-	if err != nil {
-		return t.root
-	}
-	return ext.Hash()
-}
-
-// Commit writes all nodes to the trie database.
-func (t *Trie) Commit(newCommitNum, newDistinctNum uint32) (thor.Bytes32, error) {
-	ext, err := t.init()
-	if err != nil {
-		return thor.Bytes32{}, err
+// Stage processes trie updates and calculates the new root hash.
+func (t *Trie) Stage(newCommitNum, newDistinctNum uint32) (root thor.Bytes32, commit func() error) {
+	// the ext trie is lazy to load the root node.
+	// here force to load the root node to prevent missing root node
+	// when commit a non-modified trie.
+	if _, _, err := t.ext.Get(nil); err != nil {
+		return t.ext.Hash(), func() error { return err }
 	}
 
 	var (
-		thisCommitNum, thisDistinctNum uint32
-		thisPath                       []byte
-		bulk                           = t.back.Store.Bulk()
-		buf                            []byte
+		thisPath []byte
+		bulk     = t.back.Store.Bulk()
+		buf      []byte
 	)
 
-	if t.back.LeafBank != nil {
-		if err := t.back.LeafBank.LogDeletions(bulk, t.name, t.deletions, newCommitNum); err != nil {
-			return thor.Bytes32{}, err
-		}
-	}
+	// make a copy of the original trie to perform commit.
+	// so later if real commit is discarded, the original trie will be in
+	// correct state.
+	extCpy := *t.ext
+	newSeq := makeSequence(newCommitNum, newDistinctNum)
 
-	// commit the trie
-	newRoot, err := ext.CommitTo(&struct {
+	db := &struct {
 		trie.DatabaseWriter
 		trie.DatabaseKeyEncoder
 	}{
 		kv.PutFunc(func(_, blob []byte) error {
-			buf = t.makeHistNodeKey(buf[:0], thisCommitNum, thisDistinctNum, thisPath)
+			buf = t.makeHistNodeKey(buf[:0], newSeq, thisPath)
 			if err := bulk.Put(buf, blob); err != nil {
 				return err
 			}
 			if !t.noFillCache {
-				if len(thisPath) > 0 { // no need to cache root node
-					t.back.Cache.AddNodeBlob(t.name, thisCommitNum, thisDistinctNum, thisPath, blob, true)
-				}
+				t.back.Cache.AddNodeBlob(t.name, newSeq, thisPath, blob, true)
 			}
 			return nil
 		}),
-		databaseKeyEncodeFunc(func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
-			thisCommitNum = commitNum
-			thisDistinctNum = distinctNum
+		databaseKeyEncodeFunc(func(hash []byte, seq uint64, path []byte) []byte {
 			thisPath = path
 			return nil
 		}),
-	}, newCommitNum, newDistinctNum)
+	}
+
+	// commit the copied trie without flush to db
+	root, err := extCpy.CommitTo(db, uint64(newSeq))
 	if err != nil {
-		return thor.Bytes32{}, err
+		return root, func() error { return err }
 	}
 
-	if err := bulk.Write(); err != nil {
-		return thor.Bytes32{}, err
-	}
+	commit = func() error {
+		if t.back.LeafBank != nil {
+			if err := t.back.LeafBank.LogDeletions(bulk, t.name, t.deletions, newCommitNum); err != nil {
+				return err
+			}
+		}
+		// real-commit, flush to db
+		if err := bulk.Write(); err != nil {
+			return err
+		}
 
-	t.root = newRoot
-	t.commitNum = newCommitNum
-	t.distinctNum = newDistinctNum
-	t.dirty = false
-	t.deletions = nil
-	if !t.noFillCache {
-		t.back.Cache.AddRootNode(t.name, ext.RootNode())
+		t.dirty = false
+		t.deletions = t.deletions[:0]
+
+		// replace with the new root node after the copied trie committed
+		newRootNode := extCpy.RootNode()
+		t.ext.SetRootNode(newRootNode)
+		if !t.noFillCache {
+			t.back.Cache.AddRootNode(t.name, newRootNode)
+		}
+		return nil
 	}
-	return newRoot, nil
+	return
 }
 
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key
 func (t *Trie) NodeIterator(start []byte, baseCommitNum uint32) trie.NodeIterator {
-	ext, err := t.init()
-	if err != nil {
-		return &errorIterator{err}
-	}
-	return ext.NodeIterator(start, baseCommitNum)
+	return t.ext.NodeIterator(start, func(seq uint64) bool {
+		return sequence(seq).CommitNum() >= baseCommitNum
+	})
 }
 
 // SetNoFillCache enable or disable cache filling.
@@ -372,9 +344,9 @@ func (t *Trie) SetNoFillCache(b bool) {
 	t.noFillCache = b
 }
 
-// DumpLeaves dumps leaves in the range of [baseCommitNum, thisCommitNum] into leaf bank.
+// DumpLeaves dumps leaves in the range of [baseCommitNum, targetCommitNum] into leaf bank.
 // transform transforms leaves before passing into leaf bank.
-func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform func(*trie.Leaf) *trie.Leaf) error {
+func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum, targetCommitNum uint32, transform func(*trie.Leaf) *trie.Leaf) error {
 	if t.dirty {
 		return errors.New("dirty trie")
 	}
@@ -382,7 +354,7 @@ func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform f
 		return nil
 	}
 
-	leafUpdater, err := t.back.LeafBank.NewUpdater(t.name, baseCommitNum, t.commitNum)
+	leafUpdater, err := t.back.LeafBank.NewUpdater(t.name, baseCommitNum, targetCommitNum)
 	if err != nil {
 		return err
 	}
@@ -397,7 +369,8 @@ func (t *Trie) DumpLeaves(ctx context.Context, baseCommitNum uint32, transform f
 		}
 
 		if leaf := iter.Leaf(); leaf != nil {
-			if err := leafUpdater.Update(iter.LeafKey(), transform(leaf), iter.CommitNum()); err != nil {
+			seq := sequence(iter.SeqNum())
+			if err := leafUpdater.Update(iter.LeafKey(), transform(leaf), seq.CommitNum()); err != nil {
 				return err
 			}
 		}
@@ -427,7 +400,7 @@ func (t *Trie) DumpNodes(ctx context.Context, baseCommitNum uint32, handleLeaf f
 		}
 
 		if err := iter.Node(func(blob []byte) error {
-			buf = t.makeDedupedNodeKey(buf[:0], iter.CommitNum(), iter.Path())
+			buf = t.makeDedupedNodeKey(buf[:0], sequence(iter.SeqNum()), iter.Path())
 			return bulk.Put(buf, blob)
 		}); err != nil {
 			return err
@@ -483,11 +456,11 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 
 // individual functions of trie database interface.
 type (
-	databaseKeyEncodeFunc func(hash []byte, commitNum, distinctNum uint32, path []byte) []byte
+	databaseKeyEncodeFunc func(hash []byte, seq uint64, path []byte) []byte
 )
 
-func (f databaseKeyEncodeFunc) Encode(hash []byte, commitNum, distinctNum uint32, path []byte) []byte {
-	return f(hash, commitNum, distinctNum, path)
+func (f databaseKeyEncodeFunc) Encode(hash []byte, seq uint64, path []byte) []byte {
+	return f(hash, seq, path)
 }
 
 // leafAvailable is a special error type to short circuit trie get method.
@@ -498,20 +471,3 @@ type leafAvailable struct {
 func (*leafAvailable) Error() string {
 	return "leaf available"
 }
-
-// errorIterator an iterator always in error state.
-type errorIterator struct {
-	err error
-}
-
-func (i *errorIterator) Next(bool) bool                     { return false }
-func (i *errorIterator) Error() error                       { return i.err }
-func (i *errorIterator) Hash() thor.Bytes32                 { return thor.Bytes32{} }
-func (i *errorIterator) Node(func(blob []byte) error) error { return i.err }
-func (i *errorIterator) CommitNum() uint32                  { return 0 }
-func (i *errorIterator) DistinctNum() uint32                { return 0 }
-func (i *errorIterator) Parent() thor.Bytes32               { return thor.Bytes32{} }
-func (i *errorIterator) Path() []byte                       { return nil }
-func (i *errorIterator) Leaf() *trie.Leaf                   { return nil }
-func (i *errorIterator) LeafKey() []byte                    { return nil }
-func (i *errorIterator) LeafProof() [][]byte                { return nil }

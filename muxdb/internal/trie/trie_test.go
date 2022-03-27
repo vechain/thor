@@ -69,7 +69,8 @@ func TestTrie(t *testing.T) {
 				tr.Update(key, val, nil)
 				_tr.Update(key, val)
 			}
-			assert.Equal(t, _tr.Hash(), tr.Hash())
+			h, _ := tr.Stage(0, 0)
+			assert.Equal(t, _tr.Hash(), h)
 		}
 	})
 
@@ -84,16 +85,17 @@ func TestTrie(t *testing.T) {
 				val := []byte("v" + strconv.Itoa(j) + "_" + strconv.Itoa(i))
 				tr.Update(key, val, nil)
 			}
-			root, err := tr.Commit(uint32(i), 0)
-			if err != nil {
+			root, commit := tr.Stage(uint32(i), 0)
+			if err := commit(); err != nil {
 				t.Fatal(err)
 			}
+
 			roots = append(roots, root)
 		}
 
 		tr = New(back, name, roots[10], 10, 0, false)
 
-		if err := tr.DumpLeaves(context.Background(), 0, func(l *trie.Leaf) *trie.Leaf {
+		if err := tr.DumpLeaves(context.Background(), 0, 10, func(l *trie.Leaf) *trie.Leaf {
 			return &trie.Leaf{
 				Value: l.Value,
 				Meta:  []byte("from lb"),
