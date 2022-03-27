@@ -331,6 +331,6 @@ func (r *Repository) indexBlock(parentConflicts uint32, newBlockID thor.Bytes32,
 		return err
 	}
 
-	_, err := trie.Commit(newNum, newConflicts)
-	return err
+	_, commit := trie.Stage(newNum, newConflicts)
+	return commit()
 }
