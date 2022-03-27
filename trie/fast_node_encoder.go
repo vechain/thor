@@ -87,6 +87,6 @@ func fastEncodeNodeTrailing(w *lowrlp.Encoder, collapsed node) {
 			w.EncodeString(n.meta)
 		}
 	case *hashNode:
-		w.EncodeUint(uint64(n.cNum) | (uint64(n.dNum) << 32))
+		w.EncodeUint(n.seq)
 	}
 }

@@ -64,7 +64,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher()
+	hasher := newHasher(0, 0)
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
 		// if encoding doesn't work and we're not writing to any database.
@@ -100,7 +100,7 @@ func VerifyProof(rootHash thor.Bytes32, key []byte, proofDb DatabaseReader) (val
 		if buf == nil {
 			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
 		}
-		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil)
+		n, err := decodeNode(&hashNode{Hash: wantHash}, buf, nil, 0)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
 		}
