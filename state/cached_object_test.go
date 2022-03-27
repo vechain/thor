@@ -36,7 +36,10 @@ func TestCachedObject(t *testing.T) {
 		saveStorage(stgTrie, s.k, s.v)
 	}
 
-	storageRoot, _ := stgTrie.Commit(0, 0)
+	storageRoot, commit := stgTrie.Stage(0, 0)
+
+	err := commit()
+	assert.Nil(t, err)
 
 	code := make([]byte, 100)
 	rand.Read(code)
