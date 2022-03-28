@@ -161,7 +161,7 @@ func (p *Optimizer) dumpStateLeaves(targetChain *chain.Chain, base, target uint3
 	accTrie.SetNoFillCache(true)
 
 	var sTries []*muxdb.Trie
-	if err := accTrie.DumpLeaves(p.ctx, base, func(leaf *trie.Leaf) *trie.Leaf {
+	if err := accTrie.DumpLeaves(p.ctx, base, h.Header.Number(), func(leaf *trie.Leaf) *trie.Leaf {
 		if sTrie := p.newStorageTrieIfUpdated(leaf, base); sTrie != nil {
 			sTries = append(sTries, sTrie)
 		}
@@ -171,7 +171,7 @@ func (p *Optimizer) dumpStateLeaves(targetChain *chain.Chain, base, target uint3
 	}
 	for _, sTrie := range sTries {
 		sTrie.SetNoFillCache(true)
-		if err := sTrie.DumpLeaves(p.ctx, base, func(leaf *trie.Leaf) *trie.Leaf {
+		if err := sTrie.DumpLeaves(p.ctx, base, h.Header.Number(), func(leaf *trie.Leaf) *trie.Leaf {
 			return &trie.Leaf{Value: leaf.Value} // skip metadata to save space
 		}); err != nil {
 			return err

@@ -34,9 +34,8 @@ var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b
 
 type node interface {
 	fstring(string) string
-	cache() (*hashNode, bool)
-	commitNum() uint32
-	distinctNum() uint32
+	cache() (*hashNode, bool, uint16)
+	seqNum() uint64
 }
 
 type (
@@ -51,8 +50,7 @@ type (
 	}
 	hashNode struct {
 		Hash thor.Bytes32
-		cNum uint32 // the commit number
-		dNum uint32 // the number to distinguish commits with the same commit number
+		seq  uint64 // the sequence number
 	}
 	valueNode struct {
 		Value []byte
@@ -82,46 +80,32 @@ func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
 type nodeFlag struct {
 	hash  *hashNode // cached hash of the node (may be nil)
 	dirty bool      // whether the node has changes that must be written to the database
+	gen   uint16    // cache generation counter
 }
 
-func (n *fullNode) cache() (*hashNode, bool)  { return n.flags.hash, n.flags.dirty }
-func (n *shortNode) cache() (*hashNode, bool) { return n.flags.hash, n.flags.dirty }
-func (n *hashNode) cache() (*hashNode, bool)  { return nil, true }
-func (n *valueNode) cache() (*hashNode, bool) { return nil, true }
+func (n *fullNode) cache() (*hashNode, bool, uint16) { return n.flags.hash, n.flags.dirty, n.flags.gen }
+func (n *shortNode) cache() (*hashNode, bool, uint16) {
+	return n.flags.hash, n.flags.dirty, n.flags.gen
+}
+func (n *hashNode) cache() (*hashNode, bool, uint16)  { return nil, true, 0 }
+func (n *valueNode) cache() (*hashNode, bool, uint16) { return nil, true, 0 }
 
-func (n *fullNode) commitNum() uint32 {
+func (n *fullNode) seqNum() uint64 {
 	if n.flags.hash != nil {
-		return n.flags.hash.cNum
+		return n.flags.hash.seq
 	}
 	return 0
 }
 
-func (n *fullNode) distinctNum() uint32 {
+func (n *shortNode) seqNum() uint64 {
 	if n.flags.hash != nil {
-		return n.flags.hash.dNum
+		return n.flags.hash.seq
 	}
 	return 0
 }
 
-func (n *shortNode) commitNum() uint32 {
-	if n.flags.hash != nil {
-		return n.flags.hash.cNum
-	}
-	return 0
-}
-
-func (n *shortNode) distinctNum() uint32 {
-	if n.flags.hash != nil {
-		return n.flags.hash.dNum
-	}
-	return 0
-}
-
-func (n *hashNode) commitNum() uint32   { return n.cNum }
-func (n *hashNode) distinctNum() uint32 { return n.dNum }
-
-func (n *valueNode) commitNum() uint32   { return 0 }
-func (n *valueNode) distinctNum() uint32 { return 0 }
+func (n *hashNode) seqNum() uint64  { return n.seq }
+func (n *valueNode) seqNum() uint64 { return 0 }
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
@@ -170,23 +154,22 @@ func (t *trailing) next() ([]byte, error) {
 	return content, nil
 }
 
-// NextNum decodes the current list element to commit/distinct number and move to the next one.
+// NextSeq decodes the current list element to seq number and move to the next one.
 // It returns io.EOF if reaches end.
-func (t *trailing) NextNum() (cNum uint32, dNum uint32, err error) {
+func (t *trailing) NextSeq() (seq uint64, err error) {
 	content, err := t.next()
 	if err != nil {
-		return 0, 0, err
+		return 0, err
 	}
 	if len(content) > 8 {
-		return 0, 0, errors.New("encoded number too long")
+		return 0, errors.New("encoded seq too long")
 	}
 
-	var n uint64
 	for _, b := range content {
-		n <<= 8
-		n |= uint64(b)
+		seq <<= 8
+		seq |= uint64(b)
 	}
-	return uint32(n), uint32(n >> 32), nil
+	return
 }
 
 // NextMeta returns the current list element as leaf metadata and move to the next one.
@@ -195,7 +178,7 @@ func (t *trailing) NextMeta() ([]byte, error) {
 	return t.next()
 }
 
-func mustDecodeNode(hash *hashNode, buf []byte) node {
+func mustDecodeNode(hash *hashNode, buf []byte, cacheGen uint16) node {
 	_, _, rest, err := rlp.Split(buf)
 	if err != nil {
 		panic(fmt.Sprintf("node %v: %v", hash.Hash, err))
@@ -205,7 +188,7 @@ func mustDecodeNode(hash *hashNode, buf []byte) node {
 		trailing = nil
 	}
 	buf = buf[:len(buf)-len(rest)]
-	n, err := decodeNode(hash, buf, trailing)
+	n, err := decodeNode(hash, buf, trailing, cacheGen)
 	if err != nil {
 		panic(fmt.Sprintf("node %v: %v", hash.Hash, err))
 	}
@@ -216,7 +199,7 @@ func mustDecodeNode(hash *hashNode, buf []byte) node {
 }
 
 // decodeNode parses the RLP encoding of a trie node.
-func decodeNode(hash *hashNode, buf []byte, trailing *trailing) (node, error) {
+func decodeNode(hash *hashNode, buf []byte, trailing *trailing, cacheGen uint16) (node, error) {
 	if len(buf) == 0 {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -226,22 +209,22 @@ func decodeNode(hash *hashNode, buf []byte, trailing *trailing) (node, error) {
 	}
 	switch c, _ := rlp.CountValues(elems); c {
 	case 2:
-		n, err := decodeShort(hash, buf, elems, trailing)
+		n, err := decodeShort(hash, buf, elems, trailing, cacheGen)
 		return n, wrapError(err, "short")
 	case 17:
-		n, err := decodeFull(hash, buf, elems, trailing)
+		n, err := decodeFull(hash, buf, elems, trailing, cacheGen)
 		return n, wrapError(err, "full")
 	default:
 		return nil, fmt.Errorf("invalid number of list elements: %v", c)
 	}
 }
 
-func decodeShort(hash *hashNode, buf, elems []byte, trailing *trailing) (*shortNode, error) {
+func decodeShort(hash *hashNode, buf, elems []byte, trailing *trailing, cacheGen uint16) (*shortNode, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
 		return nil, err
 	}
-	flag := nodeFlag{hash: hash}
+	flag := nodeFlag{hash: hash, gen: cacheGen}
 	key := compactToHex(kbuf)
 	if hasTerm(key) {
 		// value node
@@ -261,17 +244,17 @@ func decodeShort(hash *hashNode, buf, elems []byte, trailing *trailing) (*shortN
 		return &shortNode{key, vn, flag}, nil
 	}
 
-	r, _, err := decodeRef(rest, trailing)
+	r, _, err := decodeRef(rest, trailing, cacheGen)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
 	return &shortNode{key, r, flag}, nil
 }
 
-func decodeFull(hash *hashNode, buf, elems []byte, trailing *trailing) (*fullNode, error) {
-	n := &fullNode{flags: nodeFlag{hash: hash}}
+func decodeFull(hash *hashNode, buf, elems []byte, trailing *trailing, cacheGen uint16) (*fullNode, error) {
+	n := &fullNode{flags: nodeFlag{hash: hash, gen: cacheGen}}
 	for i := 0; i < 16; i++ {
-		cld, rest, err := decodeRef(elems, trailing)
+		cld, rest, err := decodeRef(elems, trailing, cacheGen)
 		if err != nil {
 			return n, wrapError(err, fmt.Sprintf("[%d]", i))
 		}
@@ -298,7 +281,7 @@ func decodeFull(hash *hashNode, buf, elems []byte, trailing *trailing) (*fullNod
 
 const hashLen = len(thor.Bytes32{})
 
-func decodeRef(buf []byte, trailing *trailing) (node, []byte, error) {
+func decodeRef(buf []byte, trailing *trailing, cacheGen uint16) (node, []byte, error) {
 	kind, val, rest, err := rlp.Split(buf)
 	if err != nil {
 		return nil, buf, err
@@ -310,7 +293,7 @@ func decodeRef(buf []byte, trailing *trailing) (node, []byte, error) {
 			err := fmt.Errorf("oversized embedded node (size is %d bytes, want size < %d)", size, hashLen)
 			return nil, buf, err
 		}
-		n, err := decodeNode(nil, buf, trailing)
+		n, err := decodeNode(nil, buf, trailing, cacheGen)
 		return n, rest, err
 	}
 	// string kind
@@ -319,15 +302,15 @@ func decodeRef(buf []byte, trailing *trailing) (node, []byte, error) {
 		// empty node
 		return nil, rest, nil
 	}
-	cNum, dNum, err := trailing.NextNum()
+	seq, err := trailing.NextSeq()
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid commit number: %v", err)
+		return nil, nil, fmt.Errorf("invalid seq number: %v", err)
 	}
 	if valLen == 32 {
-		return &hashNode{Hash: thor.BytesToBytes32(val), cNum: cNum, dNum: dNum}, rest, nil
+		return &hashNode{Hash: thor.BytesToBytes32(val), seq: seq}, rest, nil
 	}
 	if valLen == 1 && val[0] == nonCryptoNodeHashPlaceholder[0] {
-		return &hashNode{Hash: NonCryptoNodeHash, cNum: cNum, dNum: dNum}, rest, nil
+		return &hashNode{Hash: NonCryptoNodeHash, seq: seq}, rest, nil
 	}
 	return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0, 1 or 32)", len(val))
 }

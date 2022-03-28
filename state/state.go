@@ -485,18 +485,8 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 		return nil, &Error{jerr}
 	}
 
-	trieCpy, err := s.trie.Copy()
-	if err != nil {
-		return nil, &Error{err}
-	}
-
-	stage := &Stage{
-		db:                s.db,
-		trie:              trieCpy,
-		codes:             codes,
-		newBlockNum:       newBlockNum,
-		newBlockConflicts: newBlockConflicts,
-	}
+	trieCpy := s.trie.Copy()
+	commits := make([]func() error, 0, len(changes)+2)
 
 	for addr, c := range changes {
 		// skip storage changes if account is empty
@@ -504,9 +494,7 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 			if len(c.storage) > 0 {
 				var sTrie *muxdb.Trie
 				if c.baseStorageTrie != nil {
-					if sTrie, err = c.baseStorageTrie.Copy(); err != nil {
-						return nil, &Error{err}
-					}
+					sTrie = c.baseStorageTrie.Copy()
 				} else {
 					sTrie = s.db.NewTrie(
 						StorageTrieName(c.meta.StorageID),
@@ -519,17 +507,36 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 						return nil, &Error{err}
 					}
 				}
-				c.data.StorageRoot = sTrie.Hash().Bytes()
+				sRoot, commit := sTrie.Stage(newBlockNum, newBlockConflicts)
+				c.data.StorageRoot = sRoot[:]
 				c.meta.StorageCommitNum = newBlockNum
 				c.meta.StorageDistinctNum = newBlockConflicts
-				stage.storageTries = append(stage.storageTries, sTrie)
+				commits = append(commits, commit)
 			}
 		}
-		if err := saveAccount(stage.trie, addr, &c.data, &c.meta); err != nil {
+		if err := saveAccount(trieCpy, addr, &c.data, &c.meta); err != nil {
 			return nil, &Error{err}
 		}
 	}
-	return stage, nil
+	root, commitAcc := trieCpy.Stage(newBlockNum, newBlockConflicts)
+	commitCodes := func() error {
+		if len(codes) > 0 {
+			bulk := s.db.NewStore(codeStoreName).Bulk()
+			for hash, code := range codes {
+				if err := bulk.Put(hash[:], code); err != nil {
+					return err
+				}
+			}
+			return bulk.Write()
+		}
+		return nil
+	}
+	commits = append(commits, commitAcc, commitCodes)
+
+	return &Stage{
+		root:    root,
+		commits: commits,
+	}, nil
 }
 
 type (
