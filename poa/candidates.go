@@ -53,8 +53,17 @@ func (c *Candidates) Pick(state *state.State) ([]Proposer, error) {
 			return nil, err
 		}
 
+		mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+		if err != nil {
+			return nil, err
+		}
+		maxBlockProposers := mbp.Uint64()
+		if maxBlockProposers == 0 || maxBlockProposers > thor.InitialMaxBlockProposers {
+			maxBlockProposers = thor.InitialMaxBlockProposers
+		}
+
 		satisfied = make([]int, 0, len(c.list))
-		for i := 0; i < len(c.list) && uint64(len(satisfied)) < thor.MaxBlockProposers; i++ {
+		for i := 0; i < len(c.list) && uint64(len(satisfied)) < maxBlockProposers; i++ {
 			bal, err := state.GetBalance(c.list[i].Endorsor)
 			if err != nil {
 				return nil, err

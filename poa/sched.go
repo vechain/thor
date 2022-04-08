@@ -112,7 +112,7 @@ func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score ui
 	toDeactivate := make(map[thor.Address]Proposer)
 
 	t := newBlockTime - thor.BlockInterval
-	for i := uint64(0); i < thor.MaxBlockProposers && t > s.parentBlockTime; i++ {
+	for i := uint64(0); i < thor.InitialMaxBlockProposers && t > s.parentBlockTime; i++ {
 		p := s.whoseTurn(t)
 		if p.Address != s.proposer.Address {
 			toDeactivate[p.Address] = p

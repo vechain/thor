@@ -40,13 +40,13 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Add(p2, p2, thor.Bytes32{})), M(true, nil)},
 		{M(aut.Add(p3, p3, thor.Bytes32{})), M(true, nil)},
-		{M(aut.Candidates(big.NewInt(10), thor.MaxBlockProposers)), M(
+		{M(aut.Candidates(big.NewInt(10), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p1, p1, thor.Bytes32{}, true}, {p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(20), thor.MaxBlockProposers)), M(
+		{M(aut.Candidates(big.NewInt(20), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
-		{M(aut.Candidates(big.NewInt(30), thor.MaxBlockProposers)), M(
+		{M(aut.Candidates(big.NewInt(30), thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
 		{M(aut.Candidates(big.NewInt(10), 2)), M(
@@ -59,7 +59,7 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Get(p1)), M(true, p1, thor.Bytes32{}, true, nil)},
 		{M(aut.Revoke(p1)), M(true, nil)},
 		{M(aut.Get(p1)), M(false, p1, thor.Bytes32{}, false, nil)},
-		{M(aut.Candidates(&big.Int{}, thor.MaxBlockProposers)), M(
+		{M(aut.Candidates(&big.Int{}, thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
 	}
