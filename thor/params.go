@@ -30,7 +30,7 @@ const (
 
 	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
 
-	MaxBlockProposers uint64 = 101
+	InitialMaxBlockProposers uint64 = 101
 
 	TolerableBlockPackingTime = 500 * time.Millisecond // the indicator to adjust target block gas limit
 
@@ -45,6 +45,7 @@ var (
 	KeyRewardRatio         = BytesToBytes32([]byte("reward-ratio"))
 	KeyBaseGasPrice        = BytesToBytes32([]byte("base-gas-price"))
 	KeyProposerEndorsement = BytesToBytes32([]byte("proposer-endorsement"))
+	KeyMaxBlockProposers   = BytesToBytes32([]byte("max-block-proposers"))
 
 	InitialRewardRatio         = big.NewInt(3e17) // 30%
 	InitialBaseGasPrice        = big.NewInt(1e15)
