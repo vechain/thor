@@ -62,7 +62,18 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 	if err != nil {
 		return nil, err
 	}
-	candidates, err := authority.Candidates(endorsement, thor.MaxBlockProposers)
+
+	mbp, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
+	if err != nil {
+		return nil, err
+	}
+
+	maxBlockProposers := mbp.Uint64()
+	if maxBlockProposers == 0 || maxBlockProposers > thor.InitialMaxBlockProposers {
+		maxBlockProposers = thor.InitialMaxBlockProposers
+	}
+
+	candidates, err := authority.Candidates(endorsement, maxBlockProposers)
 	if err != nil {
 		return nil, err
 	}
