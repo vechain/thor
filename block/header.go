@@ -99,7 +99,7 @@ func (h *Header) TxsFeatures() tx.Features {
 	return h.body.TxsRootFeatures.Features
 }
 
-// StateRoot returns account state merkle root just afert this block being applied.
+// StateRoot returns account state merkle root just after this block being applied.
 func (h *Header) StateRoot() thor.Bytes32 {
 	return h.body.StateRoot
 }
@@ -202,6 +202,11 @@ func (h *Header) Signer() (thor.Address, error) {
 // Alpha returns the alpha in the header.
 func (h *Header) Alpha() []byte {
 	return h.body.Extension.Alpha
+}
+
+// Vote returns the vote in the header.
+func (h *Header) Vote() *Vote {
+	return h.body.Extension.Vote
 }
 
 // Beta verifies the VRF proof in header's signature and returns the beta.
