@@ -82,6 +82,12 @@ func (b *Builder) Alpha(alpha []byte) *Builder {
 	return b
 }
 
+// Vote set the vote.
+func (b *Builder) Vote(vote *Vote) *Builder {
+	b.headerBody.Extension.Vote = vote
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
