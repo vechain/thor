@@ -216,7 +216,7 @@ type v2 struct {
 	Extension extension
 }
 
-// type extension struct{Alpha []byte; Vote *thor.Vote}
+// type extension struct{Alpha []byte; Vote *Vote}
 func TestExtensionV2(t *testing.T) {
 	com := COM
 

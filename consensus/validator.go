@@ -151,6 +151,16 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 	}
 
+	if header.Number() < c.forkConfig.FINALITY {
+		if header.Vote() != nil {
+			return consensusError("invlid block: vote should not present before fork FINALITY")
+		}
+	} else {
+		if err := block.TestVote(*header.Vote()); err != nil {
+			return consensusError("invalid block: " + err.Error())
+		}
+	}
+
 	return nil
 }
 
