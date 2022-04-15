@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/api/transactions"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
@@ -156,7 +157,7 @@ func initTransactionServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, block.WIT)
 	if err != nil {
 		t.Fatal(err)
 	}

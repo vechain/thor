@@ -95,7 +95,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey, 0)
+	b1, stage, receipts, err := flow.Pack(proposer.PrivateKey, 0, block.WIT)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	b2, _, _, err := flow2.Pack(proposer2.PrivateKey, 0)
+	b2, _, _, err := flow2.Pack(proposer2.PrivateKey, 0, block.WIT)
 	if err != nil {
 		return nil, err
 	}

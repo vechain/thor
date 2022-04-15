@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	ABI "github.com/vechain/thor/abi"
 	"github.com/vechain/thor/api/accounts"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
@@ -229,7 +230,7 @@ func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transa
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, block.WIT)
 	if err != nil {
 		t.Fatal(err)
 	}
