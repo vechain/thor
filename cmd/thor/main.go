@@ -20,6 +20,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/bft"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/optimizer"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -214,9 +215,17 @@ func defaultAction(ctx *cli.Context) error {
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
 
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig)
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+
+	}
+	defer func() { bftEngine.Close() }()
+
 	return node.New(
 		master,
 		repo,
+		bftEngine,
 		state.NewStater(mainDB),
 		logDB,
 		txPool,

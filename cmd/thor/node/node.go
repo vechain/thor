@@ -19,6 +19,7 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/vechain/thor/bft"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
@@ -47,22 +48,26 @@ type Node struct {
 	cons           *consensus.Consensus
 	master         *Master
 	repo           *chain.Repository
+	bft            *bft.BFTEngine
 	logDB          *logdb.LogDB
 	txPool         *txpool.TxPool
 	txStashPath    string
 	comm           *comm.Communicator
 	targetGasLimit uint64
 	skipLogs       bool
-	logDBFailed    bool
-	bandwidth      bandwidth.Bandwidth
-	maxBlockNum    uint32
-	processLock    sync.Mutex
-	logWorker      *worker
+	forkConfig     thor.ForkConfig
+
+	logDBFailed bool
+	bandwidth   bandwidth.Bandwidth
+	maxBlockNum uint32
+	processLock sync.Mutex
+	logWorker   *worker
 }
 
 func New(
 	master *Master,
 	repo *chain.Repository,
+	bft *bft.BFTEngine,
 	stater *state.Stater,
 	logDB *logdb.LogDB,
 	txPool *txpool.TxPool,
@@ -72,17 +77,20 @@ func New(
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Node {
+
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
 		cons:           consensus.New(repo, stater, forkConfig),
 		master:         master,
 		repo:           repo,
+		bft:            bft,
 		logDB:          logDB,
 		txPool:         txPool,
 		txStashPath:    txStashPath,
 		comm:           comm,
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
+		forkConfig:     forkConfig,
 	}
 }
 
@@ -300,18 +308,27 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			}
 		}
 		var (
-			startTime     = mclock.Now()
-			oldBest       = n.repo.BestBlockSummary()
-			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
-			logEnabled    = becomeNewBest && !n.skipLogs && !n.logDBFailed
+			startTime = mclock.Now()
+			oldBest   = n.repo.BestBlockSummary()
 		)
 
-		isTrunk = &becomeNewBest
+		err := n.bft.Accepts(newBlock.Header().ParentID())
+		if err != nil {
+			return err
+		}
+
 		// process the new block
 		stage, receipts, err := n.cons.Process(newBlock, uint64(time.Now().Unix()), conflicts)
 		if err != nil {
 			return err
 		}
+
+		becomeNewBest, finalize, err := n.bft.Process(newBlock.Header())
+		if err != nil {
+			return errors.Wrap(err, "bft engine")
+		}
+		logEnabled := becomeNewBest && !n.skipLogs && !n.logDBFailed
+		isTrunk = &becomeNewBest
 
 		execElapsed := mclock.Now() - startTime
 
@@ -327,7 +344,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "commit state")
 		}
 
-		// ad the new block into repository
+		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
 			return errors.Wrap(err, "add block")
 		}
@@ -342,12 +359,17 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			}
 		}
 
+		if err := finalize(); err != nil {
+			return errors.Wrap(err, "finalize bft")
+		}
+
 		if becomeNewBest {
 			if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
 				return err
 			}
 			n.processFork(newBlock, oldBest.Header.ID())
 		}
+
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
@@ -359,6 +381,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	}); err != nil {
 		switch {
 		case err == errKnownBlock:
+		case bft.IsConflictWithCommitted(err):
 			stats.UpdateIgnored(1)
 			return false, nil
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:
