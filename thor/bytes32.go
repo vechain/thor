@@ -65,6 +65,22 @@ func (b *Bytes32) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalText implements encoding.TextMarshaler.
+func (b Bytes32) MarshalText() ([]byte, error) {
+	return []byte(b.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnMarshaler.
+func (b *Bytes32) UnmarshalText(data []byte) error {
+	parsed, err := ParseBytes32(string(data))
+	if err != nil {
+		return err
+	}
+
+	*b = parsed
+	return nil
+}
+
 // ParseBytes32 convert string presented into Bytes32 type
 func ParseBytes32(s string) (Bytes32, error) {
 	if len(s) == 32*2 {
