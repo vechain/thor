@@ -36,7 +36,8 @@ const (
 
 	MaxStateHistory = 65535 // max guaranteed state history allowed to be accessed in EVM, presented in block number
 
-	EpochInterval = 8640 // blocks between two epochs.
+	SeederInterval     = 8640 // blocks between two seeder epochs.
+	CheckpointInterval = 180  // blocks between two bft checkpoints.
 )
 
 // Keys of governance params.

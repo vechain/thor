@@ -11,7 +11,7 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-var epochInterval uint32 = thor.EpochInterval
+var epochInterval uint32 = thor.SeederInterval
 
 // mockEpochInterval mocks the epoch interval。
 // TEST ONLY
