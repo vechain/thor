@@ -302,6 +302,16 @@ func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, er
 	return cached.(*BlockSummary), nil
 }
 
+// GetBlockHeader get block header by block id.
+func (r *Repository) GetBlockHeader(id thor.Bytes32) (*block.Header, error) {
+	sum, err := r.GetBlock(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return sum.Header(), nil
+}
+
 func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
 	cached, err := r.caches.txs.GetOrLoad(key, func() (interface{}, error) {
 		return loadTransaction(r.data, key)
