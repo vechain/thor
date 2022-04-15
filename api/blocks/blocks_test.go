@@ -109,7 +109,7 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
+	block, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, block.WIT)
 	if err != nil {
 		t.Fatal(err)
 	}
