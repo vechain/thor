@@ -164,6 +164,74 @@ func (engine *BFTEngine) Process(header *block.Header) (becomeNewBest bool, fina
 	return
 }
 
+// MarkVoted marks the voted checkpoint.
+// Not thread-safe!
+func (engine *BFTEngine) MarkVoted(parentID thor.Bytes32) error {
+	checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckpoint(block.Number(parentID)))
+	if err != nil {
+		return err
+	}
+
+	st, err := engine.getState(parentID, engine.repo.GetBlockHeader)
+	if err != nil {
+		return err
+	}
+
+	engine.voted[checkpoint] = st.Weight
+	return nil
+}
+
+// GetVote computes the vote for a given parent block ID.
+// Not thread-safe!
+func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
+	st, err := engine.getState(parentID, engine.repo.GetBlockHeader)
+	if err != nil {
+		return block.WIT, err
+	}
+
+	if st.Weight == 0 {
+		return block.WIT, nil
+	}
+
+	committed := engine.Committed()
+
+	// most recent justified checkpoint
+	var recentJC thor.Bytes32
+	var Weight = st.Weight
+	if st.JustifyAt != nil {
+		// if justied in this round, use this round's checkpoint
+		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckpoint(block.Number(parentID)))
+		if err != nil {
+			return block.WIT, err
+		}
+		recentJC = checkpoint
+	} else {
+		checkpoint, err := engine.findCheckpointByWeight(Weight, committed, parentID)
+		if err != nil {
+			return block.WIT, err
+		}
+		recentJC = checkpoint
+	}
+
+	// see https://github.com/vechain/VIPs/blob/master/vips/vip-220.md
+	for blockID, w := range engine.voted {
+		if block.Number(blockID) >= block.Number(committed) {
+			a, b := recentJC, blockID
+			if block.Number(blockID) > block.Number(recentJC) {
+				a, b = blockID, recentJC
+			}
+
+			if includes, err := engine.repo.NewChain(a).HasBlock(b); err != nil {
+				return block.WIT, err
+			} else if !includes && w >= Weight-1 {
+				return block.WIT, nil
+			}
+		}
+	}
+
+	return block.COM, nil
+}
+
 // Close closes bft engine.
 func (engine *BFTEngine) Close() {
 	if len(engine.voted) > 0 {
