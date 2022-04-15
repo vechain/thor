@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -115,7 +116,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.ParentHeader().Number()+1, func(conflicts uint32) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.skipLogs && !n.logDBFailed
@@ -135,10 +136,24 @@ func (n *Node) pack(flow *packer.Flow) error {
 			}
 		}
 
+		var vote block.Vote
+		if flow.Number() >= n.forkConfig.FINALITY {
+			var err error
+			vote, err = n.bft.GetVote(flow.ParentHeader().ID())
+			if err != nil {
+				return errors.Wrap(err, "get vote")
+			}
+		}
+
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, vote)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to pack block")
+		}
+
+		_, finalize, err := n.bft.Process(newBlock.Header())
+		if err != nil {
+			return errors.Wrap(err, "process block in bft engine")
 		}
 		execElapsed := mclock.Now() - startTime
 
@@ -166,6 +181,14 @@ func (n *Node) pack(flow *packer.Flow) error {
 				log.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
+		}
+
+		if err := finalize(); err != nil {
+			return errors.Wrap(err, "finalize bft")
+		}
+
+		if err := n.bft.MarkVoted(flow.ParentHeader().ID()); err != nil {
+			return errors.Wrap(err, "mark voted")
 		}
 
 		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
