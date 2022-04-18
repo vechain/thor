@@ -1295,7 +1295,7 @@ components:
       properties:
         isTrunk:
           type: boolean
-          description: whether the block is on th trunk
+          description: whether the block is on the trunk
 
   parameters:
     AddressInPath:
