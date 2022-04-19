@@ -12,14 +12,14 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-func saveWeight(putter kv.Putter, id thor.Bytes32, weight uint32) error {
+func saveQuality(putter kv.Putter, id thor.Bytes32, quality uint32) error {
 	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], weight)
+	binary.BigEndian.PutUint32(b[:], quality)
 
 	return putter.Put(id.Bytes(), b[:])
 }
 
-func loadWeight(getter kv.Getter, id thor.Bytes32) (uint32, error) {
+func loadQuality(getter kv.Getter, id thor.Bytes32) (uint32, error) {
 	b, err := getter.Get(id.Bytes())
 	if err != nil {
 		return 0, err

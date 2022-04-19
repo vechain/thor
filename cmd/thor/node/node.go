@@ -323,7 +323,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return err
 		}
 
-		becomeNewBest, finalize, err := n.bft.Process(newBlock.Header())
+		becomeNewBest, commitBFT, err := n.bft.Process(newBlock.Header())
 		if err != nil {
 			return errors.Wrap(err, "bft engine")
 		}
@@ -349,6 +349,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "add block")
 		}
 
+		if err := commitBFT(); err != nil {
+			return errors.Wrap(err, "bft commits")
+		}
+
 		realElapsed := mclock.Now() - startTime
 
 		// sync the log-writing task
@@ -357,10 +361,6 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				log.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
-		}
-
-		if err := finalize(); err != nil {
-			return errors.Wrap(err, "finalize bft")
 		}
 
 		if becomeNewBest {
@@ -381,7 +381,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	}); err != nil {
 		switch {
 		case err == errKnownBlock:
-		case bft.IsConflictWithCommitted(err):
+		case bft.IsConflictWithFinalized(err):
 			stats.UpdateIgnored(1)
 			return false, nil
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:

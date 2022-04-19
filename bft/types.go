@@ -8,8 +8,8 @@ import (
 	"errors"
 )
 
-var errConflictWithCommitted = errors.New("block conflict with committeed")
+var errConflictWithFinalized = errors.New("block conflict with committeed")
 
-func IsConflictWithCommitted(err error) bool {
-	return err == errConflictWithCommitted
+func IsConflictWithFinalized(err error) bool {
+	return err == errConflictWithFinalized
 }
