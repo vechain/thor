@@ -151,7 +151,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 			return errors.Wrap(err, "failed to pack block")
 		}
 
-		_, finalize, err := n.bft.Process(newBlock.Header())
+		_, commitBFT, err := n.bft.Process(newBlock.Header())
 		if err != nil {
 			return errors.Wrap(err, "process block in bft engine")
 		}
@@ -173,6 +173,10 @@ func (n *Node) pack(flow *packer.Flow) error {
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
 			return errors.Wrap(err, "add block")
 		}
+
+		if err := commitBFT(); err != nil {
+			return errors.Wrap(err, "bft commits")
+		}
 		realElapsed := mclock.Now() - startTime
 
 		// sync the log-writing task
@@ -181,10 +185,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 				log.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
-		}
-
-		if err := finalize(); err != nil {
-			return errors.Wrap(err, "finalize bft")
 		}
 
 		if err := n.bft.MarkVoted(flow.ParentHeader().ID()); err != nil {

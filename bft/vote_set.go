@@ -9,27 +9,26 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// voteSet tracks vote in a bft round
-type voteSet struct {
-	parentWeight uint32
-	checkpoint   uint32
-	threshold    uint64
-
-	votes     map[thor.Address]bool
-	comVotes  uint64
-	justifyAt *thor.Bytes32 // block reached justified in this round
-	commitAt  *thor.Bytes32 // block reached committed in this round
-}
-
 // bftState is the state summary of a bft round for a given block.
 type bftState struct {
-	Weight    uint32
-	JustifyAt *thor.Bytes32
-	CommitAt  *thor.Bytes32
+	Quality   uint32 // accumulated justified block count
+	Justified bool
+	CommitAt  *thor.Bytes32 // block reaches committed in this round
+}
+
+// voteSet tracks vote in a bft round.
+type voteSet struct {
+	parentQuality uint32
+	checkpoint    uint32
+	threshold     uint64
+
+	votes    map[thor.Address]bool
+	comVotes uint64
+	commitAt *thor.Bytes32
 }
 
 func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
-	var parentWeight uint32 // parent round bft weight
+	var parentQuality uint32 // quality of last round
 
 	blockNum := block.Number(parentID) + 1
 	checkpoint := getCheckpoint(blockNum)
@@ -52,20 +51,20 @@ func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
 	threshold := mbp * 2 / 3
 
 	if absRound == 0 {
-		parentWeight = 0
+		parentQuality = 0
 	} else {
 		var err error
-		parentWeight, err = engine.getWeight(sum.Header.ID())
+		parentQuality, err = engine.getQuality(sum.Header.ID())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &voteSet{
-		votes:        make(map[thor.Address]bool),
-		parentWeight: parentWeight,
-		checkpoint:   checkpoint,
-		threshold:    threshold,
+		votes:         make(map[thor.Address]bool),
+		parentQuality: parentQuality,
+		checkpoint:    checkpoint,
+		threshold:     threshold,
 	}, nil
 }
 
@@ -90,24 +89,22 @@ func (vs *voteSet) addVote(signer thor.Address, vote block.Vote, blockID thor.By
 		vs.comVotes++
 	}
 
-	if vs.justifyAt == nil && len(vs.votes) > int(vs.threshold) {
-		vs.justifyAt = &blockID
-	}
-
 	if vs.commitAt == nil && vs.comVotes > vs.threshold {
 		vs.commitAt = &blockID
 	}
 }
 
 func (vs *voteSet) getState() *bftState {
-	weight := vs.parentWeight
-	if vs.justifyAt != nil {
-		weight = weight + 1
+	justified := false
+	quality := vs.parentQuality
+	if len(vs.votes) > int(vs.threshold) {
+		justified = true
+		quality = quality + 1
 	}
 
 	return &bftState{
-		Weight:    weight,
-		JustifyAt: vs.justifyAt,
+		Quality:   quality,
+		Justified: justified,
 		CommitAt:  vs.commitAt,
 	}
 }
