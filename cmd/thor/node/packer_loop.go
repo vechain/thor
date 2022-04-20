@@ -151,8 +151,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 			return errors.Wrap(err, "failed to pack block")
 		}
 
-		_, commitBFT, err := n.bft.Process(newBlock.Header())
-		if err != nil {
+		if _, err = n.bft.Process(newBlock.Header()); err != nil {
 			return errors.Wrap(err, "process block in bft engine")
 		}
 		execElapsed := mclock.Now() - startTime
@@ -174,7 +173,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 			return errors.Wrap(err, "add block")
 		}
 
-		if err := commitBFT(); err != nil {
+		if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
 			return errors.Wrap(err, "bft commits")
 		}
 		realElapsed := mclock.Now() - startTime

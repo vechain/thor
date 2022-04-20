@@ -105,13 +105,10 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
 
 // Process processes block in bft engine and returns whether the block becomes new best.
 // Not thread-safe!
-func (engine *BFTEngine) Process(header *block.Header) (becomeNewBest bool, commit commitFunc, err error) {
-	commit = func() error { return nil }
-
+func (engine *BFTEngine) Process(header *block.Header) (bool, error) {
 	best := engine.repo.BestBlockSummary().Header
 	if header.Number() < engine.forkConfig.FINALITY || best.Number() < engine.forkConfig.FINALITY {
-		becomeNewBest = header.BetterThan(best)
-		return
+		return header.BetterThan(best), nil
 	}
 
 	newSt, err := engine.getState(header.ID(), func(id thor.Bytes32) (*block.Header, error) {
@@ -122,46 +119,51 @@ func (engine *BFTEngine) Process(header *block.Header) (becomeNewBest bool, comm
 		return engine.repo.GetBlockHeader(id)
 	})
 	if err != nil {
-		return
+		return false, err
 	}
 
 	bestSt, err := engine.getState(best.ID(), engine.repo.GetBlockHeader)
 	if err != nil {
-		return
+		return false, err
 	}
 
 	if newSt.Quality != bestSt.Quality {
-		becomeNewBest = newSt.Quality > bestSt.Quality
-	} else {
-		becomeNewBest = header.BetterThan(best)
+		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	commit = func() error {
-		// save quality if needed
-		if getStorePoint(header.Number()) == header.Number() {
-			if err := saveQuality(engine.store, header.ID(), newSt.Quality); err != nil {
-				return err
-			}
-			engine.caches.quality.Add(header.ID(), newSt.Quality)
-		}
+	return header.BetterThan(best), nil
+}
 
-		// update finalized if new block commits this round
-		if newSt.CommitAt != nil && header.ID() == *newSt.CommitAt && newSt.Quality > 1 {
-			id, err := engine.findCheckpointByQuality(newSt.Quality-1, engine.Finalized(), header.ParentID())
-			if err != nil {
-				return err
-			}
-
-			if err := engine.store.Put(finalizedKey, id[:]); err != nil {
-				return err
-			}
-			engine.finalized.Store(id)
-		}
-
+func (engine *BFTEngine) CommitBlock(blockID thor.Bytes32) error {
+	state, err := engine.getState(blockID, engine.repo.GetBlockHeader)
+	if err != nil {
 		return nil
 	}
 
-	return
+	blockNum := block.Number(blockID)
+
+	// save quality if needed
+	if getStorePoint(blockNum) == blockNum {
+		if err := saveQuality(engine.store, blockID, state.Quality); err != nil {
+			return err
+		}
+		engine.caches.quality.Add(blockID, state.Quality)
+	}
+
+	// update finalized if new block commits this round
+	if state.CommitAt != nil && blockID == *state.CommitAt && state.Quality > 1 {
+		id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), blockID)
+		if err != nil {
+			return err
+		}
+
+		if err := engine.store.Put(finalizedKey, id[:]); err != nil {
+			return err
+		}
+		engine.finalized.Store(id)
+	}
+
+	return nil
 }
 
 // MarkVoted marks the voted checkpoint.
