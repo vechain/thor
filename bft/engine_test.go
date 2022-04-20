@@ -122,7 +122,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	_, finalize, err := test.engine.Process(b.Header())
+	_, err = test.engine.Process(b.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = finalize(); err != nil {
+	if err = test.engine.CommitBlock(b.Header().ID()); err != nil {
 		return nil, err
 	}
 
@@ -214,12 +214,12 @@ func TestProcessBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newBest, commit, err := testBFT.engine.Process(summary.Header)
+	newBest, err := testBFT.engine.Process(summary.Header)
 
 	assert.Nil(t, err)
 	assert.True(t, newBest)
 
-	assert.Nil(t, commit())
+	assert.Nil(t, testBFT.engine.CommitBlock(summary.Header.ID()))
 }
 
 func TestNeverReachJustified(t *testing.T) {

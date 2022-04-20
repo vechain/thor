@@ -323,7 +323,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return err
 		}
 
-		becomeNewBest, commitBFT, err := n.bft.Process(newBlock.Header())
+		becomeNewBest, err := n.bft.Process(newBlock.Header())
 		if err != nil {
 			return errors.Wrap(err, "bft engine")
 		}
@@ -349,7 +349,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "add block")
 		}
 
-		if err := commitBFT(); err != nil {
+		if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
 			return errors.Wrap(err, "bft commits")
 		}
 
