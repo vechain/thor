@@ -190,7 +190,7 @@ func TestNewEngine(t *testing.T) {
 	}
 
 	genID := testBFT.repo.BestBlockSummary().Header.ID()
-	assert.Equal(t, genID, testBFT.engine.Committed())
+	assert.Equal(t, genID, testBFT.engine.Finalized())
 }
 
 func TestProcessBlock(t *testing.T) {
@@ -214,12 +214,12 @@ func TestProcessBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newBest, finalize, err := testBFT.engine.Process(summary.Header)
+	newBest, commit, err := testBFT.engine.Process(summary.Header)
 
 	assert.Nil(t, err)
 	assert.True(t, newBest)
 
-	assert.Nil(t, finalize())
+	assert.Nil(t, commit())
 }
 
 func TestNeverReachJustified(t *testing.T) {
@@ -237,10 +237,10 @@ func TestNeverReachJustified(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Nil(t, st.JustifyAt)
+	assert.False(t, st.Justified)
 	assert.Nil(t, st.CommitAt)
-	assert.Equal(t, uint32(0), st.Weight)
-	assert.Equal(t, genesisID, testBFT.engine.Committed())
+	assert.Equal(t, uint32(0), st.Quality)
+	assert.Equal(t, genesisID, testBFT.engine.Finalized())
 
 	for i := 0; i < 3; i++ {
 		if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
@@ -251,14 +251,14 @@ func TestNeverReachJustified(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Nil(t, st.JustifyAt)
+		assert.False(t, st.Justified)
 		assert.Nil(t, st.CommitAt)
-		assert.Equal(t, uint32(0), st.Weight)
-		assert.Equal(t, genesisID, testBFT.engine.Committed())
+		assert.Equal(t, uint32(0), st.Quality)
+		assert.Equal(t, genesisID, testBFT.engine.Finalized())
 	}
 }
 
-func TestCommitted(t *testing.T) {
+func TestFinalized(t *testing.T) {
 	testBFT, err := newTestBft(defaultFC)
 	if err != nil {
 		t.Fatal(err)
@@ -281,8 +281,8 @@ func TestCommitted(t *testing.T) {
 	}
 
 	// should be justify and commit at (MaxBlockProposers*2/3) + 1
-	assert.Equal(t, uint32(1), st.Weight)
-	assert.Equal(t, blkID, *st.JustifyAt)
+	assert.Equal(t, uint32(1), st.Quality)
+	assert.True(t, st.Justified)
 	assert.Equal(t, blkID, *st.CommitAt)
 
 	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
@@ -298,17 +298,50 @@ func TestCommitted(t *testing.T) {
 	}
 
 	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
-	assert.Equal(t, uint32(3), st.Weight)
-	assert.Equal(t, blkID, *st.JustifyAt)
+	assert.Equal(t, uint32(3), st.Quality)
+	assert.True(t, st.Justified)
 	assert.Equal(t, blkID, *st.CommitAt)
 
 	// chain stops the end of third bft round,should commit the second checkpoint
-	committed, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, committed, testBFT.engine.Committed())
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+}
+
+func TestAccepts(t *testing.T) {
+	testBFT, err := newTestBft(defaultFC)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+		t.Fatal(err)
+	}
+
+	branch, err := testBFT.buildBranch(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = testBFT.fastForward(thor.CheckpointInterval * 2); err != nil {
+		t.Fatal(err)
+	}
+
+	// new block in trunk should accept
+	err = testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
+	assert.Nil(t, err)
+
+	branchID, err := branch.GetBlockID(thor.CheckpointInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// blocks in trunk should be rejected
+	err = testBFT.engine.Accepts(branchID)
+	assert.Equal(t, errConflictWithFinalized, err)
 }
 
 func TestGetVote(t *testing.T) {
@@ -369,7 +402,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
-				assert.NotEqual(t, genesisID, testBFT.engine.Committed())
+				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
 				if err := testBFT.fastForward(1); err != nil {
 					t.Fatal(err)
@@ -418,7 +451,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
-				assert.NotEqual(t, genesisID, testBFT.engine.Committed())
+				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
 				branch, err := testBFT.buildBranch(2)
 				if err != nil {
@@ -463,7 +496,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
-				assert.NotEqual(t, genesisID, testBFT.engine.Committed())
+				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
 				branch, err := testBFT.buildBranch(8)
 				if err != nil {
@@ -559,8 +592,8 @@ func TestVoteSet(t *testing.T) {
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
-				assert.Equal(t, uint32(2), vs.getState().Weight)
-				assert.Nil(t, vs.getState().JustifyAt)
+				assert.Equal(t, uint32(2), vs.getState().Quality)
+				assert.False(t, vs.getState().Justified)
 				assert.Nil(t, vs.getState().CommitAt)
 			},
 		}, {
@@ -585,16 +618,16 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				st := vs.getState()
-				assert.Equal(t, uint32(3), st.Weight)
+				assert.Equal(t, uint32(3), st.Quality)
 				assert.Equal(t, *st.CommitAt, blkID)
-				assert.Equal(t, *st.JustifyAt, blkID)
+				assert.True(t, st.Justified)
 
 				// add vote after commits，commit/justify stays the same
 				vs.addVote(RandomAddress(), block.COM, RandomBytes32())
 				st = vs.getState()
-				assert.Equal(t, uint32(3), st.Weight)
+				assert.Equal(t, uint32(3), st.Quality)
 				assert.Equal(t, *st.CommitAt, blkID)
-				assert.Equal(t, *st.JustifyAt, blkID)
+				assert.True(t, st.Justified)
 			},
 		}, {
 			"add votes: justifies", func(t *testing.T) {
@@ -618,8 +651,8 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				st := vs.getState()
-				assert.Equal(t, uint32(3), st.Weight)
-				assert.Equal(t, *st.JustifyAt, blkID)
+				assert.Equal(t, uint32(3), st.Quality)
+				assert.True(t, st.Justified)
 				assert.Nil(t, st.CommitAt)
 			},
 		}, {
@@ -651,7 +684,7 @@ func TestVoteSet(t *testing.T) {
 
 				// justifies but not committed
 				st := vs.getState()
-				assert.Equal(t, *st.JustifyAt, blkID)
+				assert.True(t, st.Justified)
 				assert.Nil(t, st.CommitAt)
 
 				blkID = RandomBytes32()
