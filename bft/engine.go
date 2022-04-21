@@ -28,7 +28,6 @@ var (
 )
 
 type GetBlockHeader func(id thor.Bytes32) (*block.Header, error)
-type commitFunc func() error
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
 type BFTEngine struct {
@@ -134,6 +133,7 @@ func (engine *BFTEngine) Process(header *block.Header) (bool, error) {
 	return header.BetterThan(best), nil
 }
 
+// CommitBlock commits bft state to storage.
 func (engine *BFTEngine) CommitBlock(blockID thor.Bytes32) error {
 	state, err := engine.getState(blockID, engine.repo.GetBlockHeader)
 	if err != nil {
