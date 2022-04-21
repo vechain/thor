@@ -13,6 +13,10 @@ import (
 	"github.com/vechain/thor/tx"
 )
 
+type BFTEngine interface {
+	Finalized() thor.Bytes32
+}
+
 type JSONBlockSummary struct {
 	Number       uint32       `json:"number"`
 	ID           thor.Bytes32 `json:"id"`
@@ -29,6 +33,7 @@ type JSONBlockSummary struct {
 	ReceiptsRoot thor.Bytes32 `json:"receiptsRoot"`
 	Signer       thor.Address `json:"signer"`
 	IsTrunk      bool         `json:"isTrunk"`
+	IsFinalized  bool         `json:"isFinalized"`
 }
 
 type JSONCollapsedBlock struct {
@@ -88,7 +93,7 @@ type JSONExpandedBlock struct {
 	Transactions []*JSONEmbeddedTx `json:"transactions"`
 }
 
-func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool) *JSONBlockSummary {
+func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalized bool) *JSONBlockSummary {
 	header := summary.Header
 	signer, _ := header.Signer()
 
@@ -108,6 +113,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool) *JSONBlock
 		TxsRoot:      header.TxsRoot(),
 		TxsFeatures:  uint32(header.TxsFeatures()),
 		IsTrunk:      isTrunk,
+		IsFinalized:  isFinalized,
 	}
 }
 

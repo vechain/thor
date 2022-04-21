@@ -35,6 +35,7 @@ func New(
 	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
+	bft blocks.BFTEngine,
 	nw node.Network,
 	allowedOrigins string,
 	backtraceLimit uint32,
@@ -74,7 +75,7 @@ func New(
 		transfers.New(repo, logDB).
 			Mount(router, "/logs/transfer")
 	}
-	blocks.New(repo).
+	blocks.New(repo, bft).
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
