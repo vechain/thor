@@ -185,11 +185,20 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig)
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+
+	}
+	defer func() { bftEngine.Close() }()
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
+		bftEngine,
 		p2pcom.comm,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
@@ -214,13 +223,6 @@ func defaultAction(ctx *cli.Context) error {
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
-
-	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig)
-	if err != nil {
-		return errors.Wrap(err, "init bft engine")
-
-	}
-	defer func() { bftEngine.Close() }()
 
 	return node.New(
 		master,
@@ -293,7 +295,8 @@ func soloAction(ctx *cli.Context) error {
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
-		solo.Communicator{},
+		&solo.BFTEngine{},
+		&solo.Communicator{},
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),

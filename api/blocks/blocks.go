@@ -13,17 +13,20 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
 type Blocks struct {
 	repo *chain.Repository
+	bft  BFTEngine
 }
 
-func New(repo *chain.Repository) *Blocks {
+func New(repo *chain.Repository, bft BFTEngine) *Blocks {
 	return &Blocks{
 		repo,
+		bft,
 	}
 }
 
@@ -44,12 +47,21 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		}
 		return err
 	}
+
 	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())
 	if err != nil {
 		return err
 	}
 
-	jSummary := buildJSONBlockSummary(summary, isTrunk)
+	isFinalized := false
+	if isTrunk {
+		finalized := b.bft.Finalized()
+		if block.Number(finalized) >= summary.Header.Number() {
+			isFinalized = true
+		}
+	}
+
+	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
 	if expanded == "true" {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
