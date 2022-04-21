@@ -6,12 +6,12 @@ jobs:
   unit_tests:
     strategy:
       matrix:
-        go-version: [1.16.x]
+        go-version: [1.18.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - go-version: 1.14.x
+          - go-version: 1.16.x
             os: ubuntu-latest
-          - go-version: 1.15.x
+          - go-version: 1.17.x
             os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
