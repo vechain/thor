@@ -186,8 +186,10 @@ func (n *Node) pack(flow *packer.Flow) error {
 			}
 		}
 
-		if err := n.bft.MarkVoted(flow.ParentHeader().ID()); err != nil {
-			return errors.Wrap(err, "mark voted")
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
+			if err := n.bft.MarkVoted(newBlock.Header().ID()); err != nil {
+				return errors.Wrap(err, "mark voted")
+			}
 		}
 
 		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {

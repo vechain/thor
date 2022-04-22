@@ -30,6 +30,7 @@ var (
 type GetBlockHeader func(id thor.Bytes32) (*block.Header, error)
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
+// Not thread-safe!
 type BFTEngine struct {
 	repo       *chain.Repository
 	store      kv.Store
@@ -84,10 +85,6 @@ func (engine *BFTEngine) Finalized() thor.Bytes32 {
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
 func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
-	if block.Number(parentID) < engine.forkConfig.FINALITY {
-		return nil
-	}
-
 	finalized := engine.Finalized()
 	if block.Number(finalized) == 0 {
 		return nil
@@ -103,7 +100,6 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
 }
 
 // Process processes block in bft engine and returns whether the block becomes new best.
-// Not thread-safe!
 func (engine *BFTEngine) Process(header *block.Header) (bool, error) {
 	best := engine.repo.BestBlockSummary().Header
 	if header.Number() < engine.forkConfig.FINALITY || best.Number() < engine.forkConfig.FINALITY {
@@ -167,14 +163,13 @@ func (engine *BFTEngine) CommitBlock(blockID thor.Bytes32) error {
 }
 
 // MarkVoted marks the voted checkpoint.
-// Not thread-safe!
-func (engine *BFTEngine) MarkVoted(parentID thor.Bytes32) error {
-	checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckpoint(block.Number(parentID)))
+func (engine *BFTEngine) MarkVoted(blockID thor.Bytes32) error {
+	checkpoint, err := engine.repo.NewChain(blockID).GetBlockID(getCheckpoint(block.Number(blockID)))
 	if err != nil {
 		return err
 	}
 
-	st, err := engine.getState(parentID, engine.repo.GetBlockHeader)
+	st, err := engine.getState(blockID, engine.repo.GetBlockHeader)
 	if err != nil {
 		return err
 	}
@@ -184,7 +179,6 @@ func (engine *BFTEngine) MarkVoted(parentID thor.Bytes32) error {
 }
 
 // GetVote computes the vote for a given parent block ID.
-// Not thread-safe!
 func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
 	st, err := engine.getState(parentID, engine.repo.GetBlockHeader)
 	if err != nil {
@@ -268,7 +262,7 @@ func (engine *BFTEngine) getState(blockID thor.Bytes32, getHeader GetBlockHeader
 		return cached.(*bftState), nil
 	}
 
-	if block.Number(blockID) == 0 {
+	if block.Number(blockID) == 0 || block.Number(blockID) < engine.forkConfig.FINALITY {
 		return &bftState{}, nil
 	}
 
