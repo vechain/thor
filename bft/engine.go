@@ -99,20 +99,24 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
 	return nil
 }
 
-// Process processes block in bft engine and returns whether the block becomes new best.
-func (engine *BFTEngine) Process(header *block.Header) (bool, error) {
-	best := engine.repo.BestBlockSummary().Header
-	if header.Number() < engine.forkConfig.FINALITY || best.Number() < engine.forkConfig.FINALITY {
-		return header.BetterThan(best), nil
-	}
-
-	newSt, err := engine.getState(header.ID(), func(id thor.Bytes32) (*block.Header, error) {
+// Process process new block in bft engine.
+func (engine *BFTEngine) Process(h *block.Header) error {
+	_, err := engine.getState(h.ID(), func(id thor.Bytes32) (*block.Header, error) {
 		// header was not added to repo at this moment
-		if id == header.ID() {
-			return header, nil
+		if id == h.ID() {
+			return h, nil
 		}
 		return engine.repo.GetBlockHeader(id)
 	})
+
+	return err
+}
+
+// Select selects between the new block and the current best, return true if new one is better.
+func (engine *BFTEngine) Select(h *block.Header) (bool, error) {
+	best := engine.repo.BestBlockSummary().Header
+
+	newSt, err := engine.getState(h.ID(), engine.repo.GetBlockHeader)
 	if err != nil {
 		return false, err
 	}
@@ -126,7 +130,7 @@ func (engine *BFTEngine) Process(header *block.Header) (bool, error) {
 		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	return header.BetterThan(best), nil
+	return h.BetterThan(best), nil
 }
 
 // CommitBlock commits bft state to storage.

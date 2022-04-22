@@ -122,7 +122,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	_, err = test.engine.Process(b.Header())
+	err = test.engine.Process(b.Header())
 	if err != nil {
 		return nil, err
 	}
@@ -214,8 +214,10 @@ func TestProcessBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newBest, err := testBFT.engine.Process(summary.Header)
+	err = testBFT.engine.Process(summary.Header)
+	assert.Nil(t, err)
 
+	newBest, err := testBFT.engine.Select(summary.Header)
 	assert.Nil(t, err)
 	assert.True(t, newBest)
 
