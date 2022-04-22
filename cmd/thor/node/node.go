@@ -324,9 +324,20 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return err
 		}
 
-		becomeNewBest, err := n.bft.Process(newBlock.Header())
-		if err != nil {
-			return errors.Wrap(err, "bft engine")
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
+			if err := n.bft.Process(newBlock.Header()); err != nil {
+				return errors.Wrap(err, "process block in bft engine")
+			}
+		}
+
+		var becomeNewBest bool
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
+			becomeNewBest, err = n.bft.Select(newBlock.Header())
+			if err != nil {
+				return errors.Wrap(err, "bft select")
+			}
+		} else {
+			becomeNewBest = newBlock.Header().BetterThan(oldBest.Header)
 		}
 		logEnabled := becomeNewBest && !n.skipLogs && !n.logDBFailed
 		isTrunk = &becomeNewBest
@@ -349,9 +360,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
 			return errors.Wrap(err, "add block")
 		}
-
-		if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
-			return errors.Wrap(err, "bft commits")
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
+			if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
+				return errors.Wrap(err, "bft commits")
+			}
 		}
 
 		realElapsed := mclock.Now() - startTime
