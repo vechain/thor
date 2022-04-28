@@ -253,11 +253,20 @@ func (h *Header) DecodeRLP(s *rlp.Stream) error {
 }
 
 func (h *Header) String() string {
-	var signerStr string
+	var (
+		signerStr string
+		voteStr   string
+	)
 	if signer, err := h.Signer(); err != nil {
 		signerStr = "N/A"
 	} else {
 		signerStr = signer.String()
+	}
+
+	if v := h.Vote(); v == nil {
+		voteStr = "N/A"
+	} else {
+		voteStr = v.String()
 	}
 
 	return fmt.Sprintf(`Header(%v):
@@ -274,9 +283,10 @@ func (h *Header) String() string {
 	StateRoot:      %v
 	ReceiptsRoot:   %v
 	Alpha:          0x%x
+	Vote:           %v
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, voteStr, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.

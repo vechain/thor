@@ -14,6 +14,13 @@ const (
 	COM
 )
 
+func (v Vote) String() string {
+	if v == COM {
+		return "COM"
+	}
+	return "WIT"
+}
+
 func TestVote(v Vote) error {
 	if v == COM || v == WIT {
 		return nil
