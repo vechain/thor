@@ -11,17 +11,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/coocood/freecache"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/qianbin/directcache"
 	"github.com/vechain/thor/trie"
 )
 
 // Cache is the cache layer for trie.
 type Cache struct {
 	// caches recently queried node blobs. Using full node key as key.
-	queriedNodes *freecache.Cache
+	queriedNodes *directcache.Cache
 	// caches newly committed node blobs. Using node path as key.
-	committedNodes *freecache.Cache
+	committedNodes *directcache.Cache
 	// caches root nodes.
 	roots       *lru.ARCCache
 	nodeStats   cacheStats
@@ -29,17 +29,12 @@ type Cache struct {
 	lastLogTime int64
 }
 
-// implements freecache.Timer
-type dummyTimer struct{}
-
-func (dummyTimer) Now() uint32 { return 0 }
-
 // NewCache creates a cache object with the given cache size.
 func NewCache(sizeMB int, rootCap int) *Cache {
 	sizeBytes := sizeMB * 1024 * 1024
 	var cache Cache
-	cache.queriedNodes = freecache.NewCacheCustomTimer(sizeBytes/4, dummyTimer{})
-	cache.committedNodes = freecache.NewCacheCustomTimer(sizeBytes-sizeBytes/4, dummyTimer{})
+	cache.queriedNodes = directcache.New(sizeBytes / 4)
+	cache.committedNodes = directcache.New(sizeBytes - sizeBytes/4)
 	cache.roots, _ = lru.NewARC(rootCap)
 	cache.lastLogTime = time.Now().UnixNano()
 	return &cache
@@ -84,11 +79,11 @@ func (c *Cache) AddNodeBlob(name string, seq sequence, path []byte, blob []byte,
 		v.buf = appendUint32(v.buf[:0], cNum)
 		v.buf = append(v.buf, blob...)
 
-		_ = c.committedNodes.Set(k.buf, v.buf, 0)
+		_ = c.committedNodes.Set(k.buf, v.buf)
 	} else {
 		// querying cache key: name + path + distinctNum + commitNum
 		k.buf = appendUint32(k.buf, cNum)
-		_ = c.queriedNodes.Set(k.buf, blob, 0)
+		_ = c.queriedNodes.Set(k.buf, blob)
 	}
 }
 
@@ -99,12 +94,8 @@ func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, d
 	}
 
 	cNum, dNum := seq.CommitNum(), seq.DistinctNum()
-	lookupQueried := c.queriedNodes.GetFn
-	lookupCommitted := c.committedNodes.GetFn
-	if peek {
-		lookupQueried = c.queriedNodes.PeekFn
-		lookupCommitted = c.committedNodes.PeekFn
-	}
+	lookupQueried := c.queriedNodes.AdvGet
+	lookupCommitted := c.committedNodes.AdvGet
 
 	k := bufferPool.Get().(*buffer)
 	defer bufferPool.Put(k)
@@ -115,13 +106,11 @@ func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, d
 
 	// lookup from committing cache
 	var blob []byte
-	lookupCommitted(k.buf, func(b []byte) error {
+	if lookupCommitted(k.buf, func(b []byte) {
 		if binary.BigEndian.Uint32(b) == cNum {
 			blob = append(dst, b[4:]...)
 		}
-		return nil
-	})
-	if len(blob) > 0 {
+	}, peek) && len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}
@@ -130,11 +119,9 @@ func (c *Cache) GetNodeBlob(name string, seq sequence, path []byte, peek bool, d
 
 	// fallback to querying cache
 	k.buf = appendUint32(k.buf, cNum)
-	lookupQueried(k.buf, func(b []byte) error {
+	if lookupQueried(k.buf, func(b []byte) {
 		blob = append(dst, b...)
-		return nil
-	})
-	if len(blob) > 0 {
+	}, peek); len(blob) > 0 {
 		if !peek {
 			c.nodeStats.Hit()
 		}
