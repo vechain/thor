@@ -290,12 +290,13 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
+	bftEngine := solo.NewBFTEngine(repo)
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
-		&solo.BFTEngine{},
+		bftEngine,
 		&solo.Communicator{},
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
