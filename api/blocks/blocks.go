@@ -88,6 +88,9 @@ func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 	if revision == "" || revision == "best" {
 		return nil, nil
 	}
+	if revision == "finalized" {
+		return revision, nil
+	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)
 		if err != nil {
@@ -115,6 +118,8 @@ func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, e
 		if err != nil {
 			return
 		}
+	case string:
+		id = b.bft.Finalized()
 	default:
 		id = b.repo.BestBlockSummary().Header.ID()
 	}
@@ -132,5 +137,4 @@ func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
-
 }
