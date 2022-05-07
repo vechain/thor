@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tracers"
 
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/vm"
 )
 
 type TracerOption struct {
@@ -34,7 +34,7 @@ type StructLogRes struct {
 }
 
 // formatLogs formats EVM returned structured logs for json output
-func formatLogs(logs []vm.StructLog) []StructLogRes {
+func formatLogs(logs []tracers.StructLog) []StructLogRes {
 	formatted := make([]StructLogRes, len(logs))
 	for index, trace := range logs {
 		formatted[index] = StructLogRes{

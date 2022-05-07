@@ -15,13 +15,13 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package tracers is a collection of JavaScript transaction tracers.
-package tracers
+package js_tracer
 
 import (
 	"strings"
 	"unicode"
 
-	"github.com/vechain/thor/tracers/internal/tracers"
+	"github.com/vechain/thor/tracers/js_tracer/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

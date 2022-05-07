@@ -25,6 +25,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tracers"
+	"github.com/vechain/thor/tracers/js_tracer"
 	"github.com/vechain/thor/trie"
 	"github.com/vechain/thor/vm"
 )
@@ -111,14 +112,14 @@ func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID 
 		return nil, err
 	}
 	switch tr := tracer.(type) {
-	case *vm.StructLogger:
+	case *tracers.StructLogger:
 		return &ExecutionResult{
 			Gas:         gasUsed,
 			Failed:      output.VMErr != nil,
 			ReturnValue: hexutil.Encode(output.Data),
 			StructLogs:  formatLogs(tr.StructLogs()),
 		}, nil
-	case *tracers.Tracer:
+	case *js_tracer.Tracer:
 		return tr.GetResult()
 	default:
 		return nil, fmt.Errorf("bad tracer type %T", tracer)
@@ -135,17 +136,17 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	}
 	var tracer vm.Tracer
 	if opt.Name == "" {
-		tracer = vm.NewStructLogger(nil)
+		tracer = tracers.NewStructLogger(nil)
 	} else {
 		name := opt.Name
 		if !strings.HasSuffix(name, "Tracer") {
 			name += "Tracer"
 		}
-		code, ok := tracers.CodeByName(name)
+		code, ok := js_tracer.CodeByName(name)
 		if !ok {
 			return utils.BadRequest(errors.New("name: unsupported tracer"))
 		}
-		tr, err := tracers.New(code)
+		tr, err := js_tracer.New(code)
 		if err != nil {
 			return err
 		}
