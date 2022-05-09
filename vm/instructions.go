@@ -800,6 +800,13 @@ func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 
 func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	receiver := stack.popptr().Bytes20()
+
+	if evm.vmConfig.Debug {
+		bal := evm.StateDB.GetBalance(contract.Address())
+		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, bal)
+		evm.vmConfig.Tracer.CaptureExit([]byte{}, 0, nil)
+	}
+
 	if evm.OnSuicideContract != nil {
 		// let runtime do transfer things
 		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver))

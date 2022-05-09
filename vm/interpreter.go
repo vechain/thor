@@ -150,9 +150,9 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+					in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, cost, mem, stack, contract, in.returnData, in.evm.depth, err)
 				} else {
-					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+					in.cfg.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
 				}
 			}
 		}()
@@ -207,7 +207,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		}
 
 		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, mem, stack, contract, in.returnData, in.evm.depth, err)
 			logged = true
 		}
 

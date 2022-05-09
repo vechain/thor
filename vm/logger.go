@@ -13,8 +13,13 @@ import (
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
-	CaptureStart(from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) error
-	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
-	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) error
+	// Top call frame
+	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
+	// Rest of call frames
+	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) // !!
+	CaptureExit(output []byte, gasUsed uint64, err error)                                                      // !!
+	// Opcode level
+	CaptureState(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, rData []byte, depth int, err error)
+	CaptureFault(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error)
 }

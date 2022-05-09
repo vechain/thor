@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/holiman/uint256"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -165,14 +164,22 @@ func (evm *EVM) Depth() int {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	if evm.vmConfig.Debug && evm.depth == 0 {
+	if evm.vmConfig.Debug {
 		// Capture the tracer start/end events in debug mode
-		start := time.Now()
-		evm.vmConfig.Tracer.CaptureStart(caller.Address(), addr, false, input, gas, value)
+		if evm.depth == 0 {
+			start := time.Now()
+			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 
-		defer func() { // Lazy evaluation of the parameters
-			evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
-		}()
+			defer func() { // Lazy evaluation of the parameters
+				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+			}()
+		} else {
+			// Handle tracer events for entering and exiting a call frame
+			evm.vmConfig.Tracer.CaptureEnter(CALL, caller.Address(), addr, input, gas, value)
+			defer func() {
+				evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+			}()
+		}
 	}
 
 	return evm.call(caller, addr, input, gas, value)
@@ -250,6 +257,14 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.vmConfig.Debug {
+		evm.vmConfig.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
+		defer func() {
+			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+		}()
+	}
+
 	var (
 		snapshot = evm.StateDB.Snapshot()
 		to       = AccountRef(caller.Address())
@@ -282,6 +297,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
+	}
+
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.vmConfig.Debug {
+		evm.vmConfig.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, nil)
+		defer func() {
+			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+		}()
 	}
 
 	var (
@@ -323,6 +346,14 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 		defer func() { evm.interpreter.readOnly = false }()
 	}
 
+	// Invoke tracer hooks that signal entering/exiting a call frame
+	if evm.vmConfig.Debug {
+		evm.vmConfig.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
+		defer func() {
+			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+		}()
+	}
+
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -350,17 +381,46 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
 
-	if evm.vmConfig.Debug && evm.depth == 0 {
+	if evm.vmConfig.Debug {
 		// Capture the tracer start/end events in debug mode
-		start := time.Now()
-		evm.vmConfig.Tracer.CaptureStart(caller.Address(), contractAddr, true, code, gas, value)
+		if evm.depth == 0 {
+			start := time.Now()
+			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), contractAddr, true, code, gas, value)
 
-		defer func() { // Lazy evaluation of the parameters
-			evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
-		}()
+			defer func() { // Lazy evaluation of the parameters
+				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+			}()
+		} else {
+			// Handle tracer events for entering and exiting a call frame
+			evm.vmConfig.Tracer.CaptureEnter(CREATE, caller.Address(), contractAddr, code, gas, value)
+			defer func() {
+				evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+			}()
+		}
 	}
 
 	return evm.create(caller, code, gas, value, contractAddr)
+}
+
+// Create2 creates a new contract using code as deployment code.
+//
+// The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
+// instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
+func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+	// Cannot use crypto.CreateAddress2 function.
+	// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
+	contractAddr = CreateAddress2(caller.Address(), common.BigToHash(salt), crypto.Keccak256Hash(code).Bytes())
+
+	// Capture the tracer start/end events in debug mode
+	if evm.vmConfig.Debug {
+		// Handle tracer events for entering and exiting a call frame
+		evm.vmConfig.Tracer.CaptureEnter(CREATE2, caller.Address(), contractAddr, code, gas, endowment)
+		defer func() {
+			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
+		}()
+	}
+
+	return evm.create(caller, code, gas, endowment, contractAddr) // endowment is value.
 }
 
 // create creates a new contract using code as deployment code.
@@ -440,18 +500,6 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 		err = errMaxCodeSizeExceeded
 	}
 	return ret, contractAddr, contract.Gas, err
-
-}
-
-// Create2 creates a new contract using code as deployment code.
-//
-// The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
-// instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
-	// Cannot use crypto.CreateAddress2 function.
-	// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
-	contractAddr = CreateAddress2(caller.Address(), salt.Bytes32(), crypto.Keccak256Hash(code).Bytes())
-	return evm.create(caller, code, gas, endowment, contractAddr) // endowment is value.
 }
 
 // ChainConfig returns the environment's chain configuration
