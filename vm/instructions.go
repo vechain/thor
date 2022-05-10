@@ -30,13 +30,15 @@ import (
 )
 
 var (
-	errWriteProtection       = errors.New("evm: write protection")
-	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
-	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
+	ErrExecutionReverted = errors.New("evm: execution reverted")
 )
 
 var (
-	ErrExecutionReverted = errors.New("evm: execution reverted")
+	bigZero                  = new(big.Int)
+	tt255                    = math.BigPow(2, 255)
+	errWriteProtection       = errors.New("evm: write protection")
+	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
+	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
