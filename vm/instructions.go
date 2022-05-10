@@ -32,8 +32,11 @@ import (
 var (
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
-	errExecutionReverted     = errors.New("evm: execution reverted")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
+)
+
+var (
+	ErrExecutionReverted = errors.New("evm: execution reverted")
 )
 
 // keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
@@ -626,7 +629,7 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	}
 	contract.Gas += returnGas
 
-	if suberr == errExecutionReverted {
+	if suberr == ErrExecutionReverted {
 		return res, nil
 	}
 	return nil, nil
@@ -659,7 +662,7 @@ func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	}
 	contract.Gas += returnGas
 
-	if suberr == errExecutionReverted {
+	if suberr == ErrExecutionReverted {
 		return res, nil
 	}
 	return nil, nil
@@ -692,8 +695,8 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
-		memory.Set(retOffset, retSize, ret)
+	if err == nil || err == ErrExecutionReverted {
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -724,8 +727,8 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
-		memory.Set(retOffset, retSize, ret)
+	if err == nil || err == ErrExecutionReverted {
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -749,8 +752,8 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
-		memory.Set(retOffset, retSize, ret)
+	if err == nil || err == ErrExecutionReverted {
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -774,8 +777,8 @@ func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
-		memory.Set(retOffset, retSize, ret)
+	if err == nil || err == ErrExecutionReverted {
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil

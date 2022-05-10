@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/vechain/thor/vm"
 )
 
 type JSONLogger struct {
@@ -47,16 +47,13 @@ func (l *JSONLogger) CaptureStart(env *vm.EVM, from, to common.Address, create b
 	l.env = env
 }
 
-func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (l *JSONLogger) CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 	// TODO: Add rData to this interface as well
-	l.CaptureState(pc, op, gas, cost, scope, nil, depth, err)
+	l.CaptureState(pc, op, gas, cost, memory, stack, contract, nil, depth, err)
 }
 
 // CaptureState outputs state information on the logger.
-func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	memory := scope.Memory
-	stack := scope.Stack
-
+func (l *JSONLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
 	log := StructLog{
 		Pc:            pc,
 		Op:            op,
