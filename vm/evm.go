@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -446,10 +447,10 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 //
 // The different between Create2 with Create is Create2 uses sha3(0xff ++ msg.sender ++ salt ++ sha3(init_code))[12:]
 // instead of the usual sender-and-nonce-hash as the address where the contract is initialized at.
-func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
+func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	// Cannot use crypto.CreateAddress2 function.
 	// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
-	contractAddr = CreateAddress2(caller.Address(), common.BigToHash(salt), crypto.Keccak256Hash(code).Bytes())
+	contractAddr = CreateAddress2(caller.Address(), salt.Bytes32(), crypto.Keccak256Hash(code).Bytes())
 	return evm.create(caller, code, gas, endowment, contractAddr) // endowment is value.
 }
 

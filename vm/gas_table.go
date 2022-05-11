@@ -74,7 +74,7 @@ func gasCallDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *St
 		return 0, errGasUintOverflow
 	}
 
-	words, overflow := bigUint64(stack.Back(2))
+	words, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -100,7 +100,7 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 		return 0, errGasUintOverflow
 	}
 
-	words, overflow := bigUint64(stack.Back(2))
+	words, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -118,7 +118,7 @@ func gasReturnDataCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *
 func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
-		val  = evm.StateDB.GetState(contract.Address(), common.BigToHash(x))
+		val  = evm.StateDB.GetState(contract.Address(), x.Bytes32())
 	)
 	// This checks for 3 scenario's and calculates gas accordingly
 	// 1. From a zero-value address to a non-zero value         (NEW VALUE)
@@ -139,7 +139,7 @@ func gasSStore(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, m
 
 func makeGasLog(n uint64) gasFunc {
 	return func(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
-		requestedSize, overflow := bigUint64(stack.Back(1))
+		requestedSize, overflow := stack.Back(1).Uint64WithOverflow()
 		if overflow {
 			return 0, errGasUintOverflow
 		}
@@ -178,7 +178,7 @@ func gasSha3(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem
 		return 0, errGasUintOverflow
 	}
 
-	wordGas, overflow := bigUint64(stack.Back(1))
+	wordGas, overflow := stack.Back(1).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -202,7 +202,7 @@ func gasCodeCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack,
 		return 0, errGasUintOverflow
 	}
 
-	wordGas, overflow := bigUint64(stack.Back(2))
+	wordGas, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -226,7 +226,7 @@ func gasExtCodeCopy(gt params.GasTable, evm *EVM, contract *Contract, stack *Sta
 		return 0, errGasUintOverflow
 	}
 
-	wordGas, overflow := bigUint64(stack.Back(3))
+	wordGas, overflow := stack.Back(3).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -302,7 +302,7 @@ func gasCreate2(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 	if gas, overflow = math.SafeAdd(gas, params.Create2Gas); overflow {
 		return 0, errGasUintOverflow
 	}
-	wordGas, overflow := bigUint64(stack.Back(2))
+	wordGas, overflow := stack.Back(2).Uint64WithOverflow()
 	if overflow {
 		return 0, errGasUintOverflow
 	}
@@ -345,7 +345,7 @@ func gasCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem
 	var (
 		gas            = gt.Calls
 		transfersValue = stack.Back(2).Sign() != 0
-		address        = common.BigToAddress(stack.Back(1))
+		address        = common.Address(stack.Back(1).Bytes20())
 		eip158         = evm.ChainConfig().IsEIP158(evm.BlockNumber)
 	)
 	if eip158 {
@@ -415,7 +415,7 @@ func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 	if evm.ChainConfig().IsEIP150(evm.BlockNumber) {
 		gas = gt.Suicide
 		var (
-			address = common.BigToAddress(stack.Back(0))
+			address = common.Address(stack.Back(0).Bytes20())
 			eip158  = evm.ChainConfig().IsEIP158(evm.BlockNumber)
 		)
 
