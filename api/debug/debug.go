@@ -7,7 +7,6 @@ package debug
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -25,7 +24,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/tracers/js_tracer"
+	"github.com/vechain/thor/tracers/logger"
 	"github.com/vechain/thor/trie"
 	"github.com/vechain/thor/vm"
 )
@@ -101,29 +100,17 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 }
 
 //trace an existed transaction
-func (d *Debug) traceTransaction(ctx context.Context, tracer vm.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
+func (d *Debug) traceTransaction(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
 	rt, txExec, err := d.handleTxEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
 	}
 	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
-	gasUsed, output, err := txExec.NextClause()
+	_, _, err = txExec.NextClause()
 	if err != nil {
 		return nil, err
 	}
-	switch tr := tracer.(type) {
-	case *tracers.StructLogger:
-		return &ExecutionResult{
-			Gas:         gasUsed,
-			Failed:      output.VMErr != nil,
-			ReturnValue: hexutil.Encode(output.Data),
-			StructLogs:  formatLogs(tr.StructLogs()),
-		}, nil
-	case *js_tracer.Tracer:
-		return tr.GetResult()
-	default:
-		return nil, fmt.Errorf("bad tracer type %T", tracer)
-	}
+	return tracer.GetResult()
 }
 
 func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
@@ -134,19 +121,15 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	if opt == nil {
 		return utils.BadRequest(errors.New("body: empty body"))
 	}
-	var tracer vm.Tracer
+	var tracer tracers.Tracer
 	if opt.Name == "" {
-		tracer = tracers.NewStructLogger(nil)
+		tracer = logger.NewStructLogger(opt.Config)
 	} else {
 		name := opt.Name
 		if !strings.HasSuffix(name, "Tracer") {
 			name += "Tracer"
 		}
-		code, ok := js_tracer.CodeByName(name)
-		if !ok {
-			return utils.BadRequest(errors.New("name: unsupported tracer"))
-		}
-		tr, err := js_tracer.New(code)
+		tr, err := tracers.New(name, nil)
 		if err != nil {
 			return err
 		}
