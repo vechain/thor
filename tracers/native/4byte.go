@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/vechain/thor/tracers"
+	"github.com/vechain/thor/vm"
 )
 
 func init() {
@@ -83,7 +83,7 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	t.env = env
 
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber, env.Context.Random != nil)
+	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
 	t.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Save the outer calldata also
@@ -93,7 +93,7 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *fourByteTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *fourByteTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -124,16 +124,12 @@ func (t *fourByteTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (t *fourByteTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *fourByteTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
 }
-
-func (*fourByteTracer) CaptureTxStart(gasLimit uint64) {}
-
-func (*fourByteTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

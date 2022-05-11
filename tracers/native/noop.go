@@ -22,8 +22,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/vechain/thor/tracers"
+	"github.com/vechain/thor/vm"
 )
 
 func init() {
@@ -48,11 +48,11 @@ func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (t *noopTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *noopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *noopTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -63,10 +63,6 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 // execute any code.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
-
-func (*noopTracer) CaptureTxStart(gasLimit uint64) {}
-
-func (*noopTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns an empty json object.
 func (t *noopTracer) GetResult() (json.RawMessage, error) {

@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/vechain/thor/vm"
 )
 
@@ -107,12 +106,11 @@ type StructLogger struct {
 	cfg Config
 	env *vm.EVM
 
-	storage  map[common.Address]Storage
-	logs     []StructLog
-	output   []byte
-	err      error
-	gasLimit uint64
-	usedGas  uint64
+	storage map[common.Address]Storage
+	logs    []StructLog
+	output  []byte
+	err     error
+	usedGas uint64
 
 	interrupt uint32 // Atomic flag to signal execution interruption
 	reason    error  // Textual reason for the interruption
@@ -217,6 +215,7 @@ func (l *StructLogger) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, m
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {
 	l.output = output
 	l.err = err
+	l.usedGas = gasUsed
 	if l.cfg.Debug {
 		fmt.Printf("0x%x\n", output)
 		if err != nil {
@@ -257,14 +256,6 @@ func (l *StructLogger) Stop(err error) {
 	atomic.StoreUint32(&l.interrupt, 1)
 }
 
-func (l *StructLogger) CaptureTxStart(gasLimit uint64) {
-	l.gasLimit = gasLimit
-}
-
-func (l *StructLogger) CaptureTxEnd(restGas uint64) {
-	l.usedGas = l.gasLimit - restGas
-}
-
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
 
@@ -303,20 +294,6 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 			fmt.Fprintln(writer, "ReturnData:")
 			fmt.Fprint(writer, hex.Dump(log.ReturnData))
 		}
-		fmt.Fprintln(writer)
-	}
-}
-
-// WriteLogs writes vm logs in a readable format to the given writer
-func WriteLogs(writer io.Writer, logs []*types.Log) {
-	for _, log := range logs {
-		fmt.Fprintf(writer, "LOG%d: %x bn=%d txi=%x\n", len(log.Topics), log.Address, log.BlockNumber, log.TxIndex)
-
-		for i, topic := range log.Topics {
-			fmt.Fprintf(writer, "%08d  %x\n", i, topic)
-		}
-
-		fmt.Fprint(writer, hex.Dump(log.Data))
 		fmt.Fprintln(writer)
 	}
 }
@@ -388,10 +365,6 @@ func (t *mdLogger) CaptureEnter(typ vm.OpCode, from common.Address, to common.Ad
 }
 
 func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
-
-func (*mdLogger) CaptureTxStart(gasLimit uint64) {}
-
-func (*mdLogger) CaptureTxEnd(restGas uint64) {}
 
 // ExecutionResult groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as transaction

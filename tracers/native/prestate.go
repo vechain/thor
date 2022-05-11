@@ -23,10 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/vechain/thor/tracers"
+	"github.com/vechain/thor/vm"
 )
 
 func init() {
@@ -42,13 +40,13 @@ type account struct {
 }
 
 type prestateTracer struct {
-	env       *vm.EVM
-	prestate  prestate
-	create    bool
-	to        common.Address
-	gasLimit  uint64 // Amount of gas bought for the whole tx
-	interrupt uint32 // Atomic flag to signal execution interruption
-	reason    error  // Textual reason for the interruption
+	env                   *vm.EVM
+	prestate              prestate
+	create                bool
+	to                    common.Address
+	interrupt             uint32 // Atomic flag to signal execution interruption
+	reason                error  // Textual reason for the interruption
+	contractCreationCount uint32
 }
 
 func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
@@ -66,19 +64,9 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 	t.lookupAccount(from)
 	t.lookupAccount(to)
 
-	// The recipient balance includes the value transferred.
-	toBal := hexutil.MustDecodeBig(t.prestate[to].Balance)
-	toBal = new(big.Int).Sub(toBal, value)
-	t.prestate[to].Balance = hexutil.EncodeBig(toBal)
-
-	// The sender balance is after reducing: value and gasLimit.
-	// We need to re-add them to get the pre-tx balance.
-	fromBal := hexutil.MustDecodeBig(t.prestate[from].Balance)
-	gasPrice := env.TxContext.GasPrice
-	consumedGas := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(t.gasLimit))
-	fromBal.Add(fromBal, new(big.Int).Add(value, consumedGas))
-	t.prestate[from].Balance = hexutil.EncodeBig(fromBal)
-	t.prestate[from].Nonce--
+	if create {
+		t.contractCreationCount++
+	}
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
@@ -90,36 +78,35 @@ func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Durati
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
-	stack := scope.Stack
+func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
 	stackData := stack.Data()
 	stackLen := len(stackData)
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
-		slot := common.Hash(stackData[stackLen-1].Bytes32())
-		t.lookupStorage(scope.Contract.Address(), slot)
+		slot := common.BigToHash(stackData[stackLen-1])
+		t.lookupStorage(contract.Address(), slot)
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
-		addr := common.Address(stackData[stackLen-1].Bytes20())
+		addr := common.BigToAddress(stackData[stackLen-1])
 		t.lookupAccount(addr)
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
-		addr := common.Address(stackData[stackLen-2].Bytes20())
+		addr := common.BigToAddress(stackData[stackLen-2])
 		t.lookupAccount(addr)
 	case op == vm.CREATE:
-		addr := scope.Contract.Address()
-		nonce := t.env.StateDB.GetNonce(addr)
-		t.lookupAccount(crypto.CreateAddress(addr, nonce))
+		t.lookupAccount(t.env.NewContractAddress(t.env, t.contractCreationCount))
+		t.contractCreationCount++
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init := scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-		inithash := crypto.Keccak256(init)
+		init := memory.Get(int64(offset.Uint64()), int64(size.Uint64()))
+		inithash := (init)
 		salt := stackData[stackLen-4]
-		t.lookupAccount(crypto.CreateAddress2(scope.Contract.Address(), salt.Bytes32(), inithash))
+		t.lookupAccount(vm.CreateAddress2(contract.Address(), common.BigToHash(salt), inithash))
+		t.contractCreationCount++
 	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
-func (t *prestateTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, _ *vm.ScopeContext, depth int, err error) {
+func (t *prestateTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 }
 
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
@@ -130,12 +117,6 @@ func (t *prestateTracer) CaptureEnter(typ vm.OpCode, from common.Address, to com
 // execute any code.
 func (t *prestateTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
-
-func (t *prestateTracer) CaptureTxStart(gasLimit uint64) {
-	t.gasLimit = gasLimit
-}
-
-func (t *prestateTracer) CaptureTxEnd(restGas uint64) {}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).

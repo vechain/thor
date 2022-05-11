@@ -10,3 +10,8 @@ based on github.com/ethereum/go-ethereum/eth/tracers v1.8.14 tag
 2022-05-07
 
 introduce native tracers, forked from https://github.com/ethereum/go-ethereum/tree/63972e7548fc58cf1a862572277db4b8d7b0d255
+
++ updated vm implementation, added CaptureEnter and CaptureExit
++ remove CaptureTxStart CaptureTxEnd from Logger interface
++ update contract create function in `prestate`
++ remove js tracers
