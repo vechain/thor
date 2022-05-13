@@ -48,14 +48,6 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
 
-	if _, err := c.repo.GetBlockSummary(header.ID()); err != nil {
-		if !c.repo.IsNotFound(err) {
-			return nil, nil, err
-		}
-	} else {
-		return nil, nil, errKnownBlock
-	}
-
 	parentSummary, err := c.repo.GetBlockSummary(header.ParentID())
 	if err != nil {
 		if !c.repo.IsNotFound(err) {

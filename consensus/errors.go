@@ -12,7 +12,6 @@ import (
 var (
 	errFutureBlock   = errors.New("block in the future")
 	errParentMissing = errors.New("parent block is missing")
-	errKnownBlock    = errors.New("block already in the chain")
 )
 
 type consensusError string
@@ -30,11 +29,6 @@ func IsFutureBlock(err error) bool {
 // IsParentMissing ...
 func IsParentMissing(err error) bool {
 	return err == errParentMissing
-}
-
-// IsKnownBlock returns if the error means the block was already in the chain.
-func IsKnownBlock(err error) bool {
-	return err == errKnownBlock
 }
 
 // IsCritical returns if the error is consensus related.

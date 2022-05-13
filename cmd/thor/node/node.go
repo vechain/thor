@@ -37,8 +37,11 @@ import (
 
 var log = log15.New("pkg", "node")
 
-// error when the block larger than known max block number + 1
-var errBlockTemporaryUnprocessable = errors.New("block temporary unprocessable")
+var (
+	// error when the block larger than known max block number + 1
+	errBlockTemporaryUnprocessable = errors.New("block temporary unprocessable")
+	errKnownBlock                  = errors.New("block already in the chain")
+)
 
 type Node struct {
 	packer         *packer.Packer
@@ -192,7 +195,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			})
 			var stats blockStats
 			for i, block := range blocks {
-				if isTrunk, err := n.processBlock(block, &stats); err == nil || consensus.IsKnownBlock(err) {
+				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
 					log.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
 					if isTrunk {
@@ -286,6 +289,17 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 	var isTrunk *bool
 
 	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+		// Check whether the block was already there.
+		// It can be skipped if no conflicts.
+		if conflicts > 0 {
+			if _, err := n.repo.GetBlockSummary(newBlock.Header().ID()); err != nil {
+				if !n.repo.IsNotFound(err) {
+					return err
+				}
+			} else {
+				return errKnownBlock
+			}
+		}
 		var (
 			startTime     = mclock.Now()
 			oldBest       = n.repo.BestBlockSummary()
@@ -345,7 +359,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return nil
 	}); err != nil {
 		switch {
-		case consensus.IsKnownBlock(err):
+		case err == errKnownBlock:
 			stats.UpdateIgnored(1)
 			return false, nil
 		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:

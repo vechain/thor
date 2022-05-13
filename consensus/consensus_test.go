@@ -402,12 +402,6 @@ func TestVerifyBlock(t *testing.T) {
 		testFunc func(*testing.T)
 	}{
 		{
-			"KnownBlock", func(t *testing.T) {
-				err = tc.consent(tc.parent)
-				assert.Equal(t, err, errKnownBlock)
-			},
-		},
-		{
 			"ParentMissing", func(t *testing.T) {
 				builder := tc.builder(tc.original.Header())
 				blk, err := tc.sign(builder.ParentID(tc.original.Header().ID()))
