@@ -7,9 +7,7 @@ package state
 
 import (
 	"bytes"
-	"hash"
 	"math/big"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/vechain/thor/muxdb"
@@ -74,10 +72,8 @@ func emptyAccount() *Account {
 // loadAccount load an account object and its metadata by address in trie.
 // It returns empty account is no account found at the address.
 func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*Account, *AccountMetadata, error) {
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
-	data, meta, err := trie.FastGet(h.Hash(addr[:]), steadyBlockNum)
+	hashedKey := thor.Blake2b(addr[:])
+	data, meta, err := trie.FastGet(hashedKey[:], steadyBlockNum)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,12 +97,10 @@ func loadAccount(trie *muxdb.Trie, addr thor.Address, steadyBlockNum uint32) (*A
 // saveAccount save account into trie at given address.
 // If the given account is empty, the value for given address is deleted.
 func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMetadata) error {
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
 	if a.IsEmpty() {
+		hashedKey := thor.Blake2b(addr[:])
 		// delete if account is empty
-		return trie.Update(h.Hash(addr[:]), nil, nil)
+		return trie.Update(hashedKey[:], nil, nil)
 	}
 
 	data, err := rlp.EncodeToBytes(a)
@@ -120,50 +114,26 @@ func saveAccount(trie *muxdb.Trie, addr thor.Address, a *Account, am *AccountMet
 			return err
 		}
 	}
-	return trie.Update(h.Hash(addr[:]), data, mdata)
+	hashedKey := thor.Blake2b(addr[:])
+	return trie.Update(hashedKey[:], data, mdata)
 }
 
 // loadStorage load storage data for given key.
 func loadStorage(trie *muxdb.Trie, key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
-	v, _, err := trie.FastGet(h.Hash(key[:]), steadyBlockNum)
+	hashedKey := thor.Blake2b(key[:])
+	v, _, err := trie.FastGet(
+		hashedKey[:],
+		steadyBlockNum)
 	return v, err
 }
 
 // saveStorage save value for given key.
 // If the data is zero, the given key will be deleted.
 func saveStorage(trie *muxdb.Trie, key thor.Bytes32, data rlp.RawValue) error {
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
+	hashedKey := thor.Blake2b(key[:])
 	return trie.Update(
-		h.Hash(key[:]),
+		hashedKey[:],
 		data,
 		bytes.TrimLeft(key[:], "\x00"), // key preimage as metadata
 	)
-}
-
-type hasher struct {
-	h   hash.Hash
-	buf []byte
-}
-
-func (h *hasher) Hash(in []byte) []byte {
-	if h.h == nil {
-		h.h = thor.NewBlake2b()
-	} else {
-		h.h.Reset()
-	}
-
-	h.h.Write(in)
-	h.buf = h.h.Sum(h.buf[:0])
-	return h.buf
-}
-
-var hasherPool = sync.Pool{
-	New: func() interface{} {
-		return &hasher{}
-	},
 }

@@ -98,11 +98,7 @@ func (t *Transaction) ID() (id thor.Bytes32) {
 	if err != nil {
 		return
 	}
-	hw := thor.NewBlake2b()
-	hw.Write(t.SigningHash().Bytes())
-	hw.Write(origin.Bytes())
-	hw.Sum(id[:0])
-	return
+	return thor.Blake2b(t.SigningHash().Bytes(), origin[:])
 }
 
 // Hash returns hash of tx.
@@ -112,10 +108,9 @@ func (t *Transaction) Hash() (hash thor.Bytes32) {
 		return cached.(thor.Bytes32)
 	}
 	defer func() { t.cache.hash.Store(hash) }()
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, t)
-	hw.Sum(hash[:0])
-	return
+	return thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, t)
+	})
 }
 
 // UnprovedWork returns unproved work of this tx.
@@ -137,21 +132,19 @@ func (t *Transaction) UnprovedWork() (w *big.Int) {
 
 // EvaluateWork try to compute work when tx origin assumed.
 func (t *Transaction) EvaluateWork(origin thor.Address) func(nonce uint64) *big.Int {
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
-		t.body.ChainTag,
-		t.body.BlockRef,
-		t.body.Expiration,
-		t.body.Clauses,
-		t.body.GasPriceCoef,
-		t.body.Gas,
-		t.body.DependsOn,
-		&t.body.Reserved,
-		origin,
+	hashWithoutNonce := thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.ChainTag,
+			t.body.BlockRef,
+			t.body.Expiration,
+			t.body.Clauses,
+			t.body.GasPriceCoef,
+			t.body.Gas,
+			t.body.DependsOn,
+			&t.body.Reserved,
+			origin,
+		})
 	})
-
-	var hashWithoutNonce thor.Bytes32
-	hw.Sum(hashWithoutNonce[:0])
 
 	return func(nonce uint64) *big.Int {
 		var nonceBytes [8]byte
@@ -169,20 +162,19 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { t.cache.signingHash.Store(hash) }()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
-		t.body.ChainTag,
-		t.body.BlockRef,
-		t.body.Expiration,
-		t.body.Clauses,
-		t.body.GasPriceCoef,
-		t.body.Gas,
-		t.body.DependsOn,
-		t.body.Nonce,
-		&t.body.Reserved,
+	return thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			t.body.ChainTag,
+			t.body.BlockRef,
+			t.body.Expiration,
+			t.body.Clauses,
+			t.body.GasPriceCoef,
+			t.body.Gas,
+			t.body.DependsOn,
+			t.body.Nonce,
+			&t.body.Reserved,
+		})
 	})
-	hw.Sum(hash[:0])
-	return
 }
 
 // GasPriceCoef returns gas price coef.
@@ -242,11 +234,7 @@ func (t *Transaction) Origin() (thor.Address, error) {
 // DelegatorSigningHash returns hash of tx components for delegator to sign, by assuming originator address.
 // According to VIP-191, it's identical to tx id.
 func (t *Transaction) DelegatorSigningHash(origin thor.Address) (hash thor.Bytes32) {
-	hw := thor.NewBlake2b()
-	hw.Write(t.SigningHash().Bytes())
-	hw.Write(origin.Bytes())
-	hw.Sum(hash[:0])
-	return
+	return thor.Blake2b(t.SigningHash().Bytes(), origin[:])
 }
 
 // Delegator returns delegator address who would like to pay for gas fee.
