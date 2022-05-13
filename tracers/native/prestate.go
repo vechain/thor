@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/vechain/thor/tracers"
 	"github.com/vechain/thor/vm"
 )
@@ -98,7 +99,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
 		init := memory.Get(int64(offset.Uint64()), int64(size.Uint64()))
-		inithash := (init)
+		inithash := crypto.Keccak256(init)
 		salt := stackData[stackLen-4]
 		t.lookupAccount(vm.CreateAddress2(contract.Address(), common.BigToHash(salt), inithash))
 		t.contractCreationCount++
