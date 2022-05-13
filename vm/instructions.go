@@ -30,10 +30,6 @@ import (
 )
 
 var (
-	ErrExecutionReverted = errors.New("evm: execution reverted")
-)
-
-var (
 	bigZero                  = new(big.Int)
 	tt255                    = math.BigPow(2, 255)
 	errWriteProtection       = errors.New("evm: write protection")
