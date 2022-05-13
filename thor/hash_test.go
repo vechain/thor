@@ -6,26 +6,55 @@
 package thor_test
 
 import (
+	"hash"
+	"io"
+	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/vechain/thor/blake2b"
+	"github.com/vechain/thor/thor"
+	"golang.org/x/crypto/sha3"
 )
 
-func BenchmarkKeccak(b *testing.B) {
-	data := []byte("hello world")
-	for i := 0; i < b.N; i++ {
-		hash := sha3.NewKeccak256()
-		hash.Write(data)
-		hash.Sum(nil)
-	}
+func BenchmarkHash(b *testing.B) {
+	data := make([]byte, 10)
+	rand.New(rand.NewSource(1)).Read(data)
+
+	b.Run("keccak", func(b *testing.B) {
+		type keccakState interface {
+			hash.Hash
+			Read([]byte) (int, error)
+		}
+
+		k := sha3.NewLegacyKeccak256().(keccakState)
+		var b32 thor.Bytes32
+		for i := 0; i < b.N; i++ {
+			k.Write(data)
+			k.Read(b32[:])
+			k.Reset()
+		}
+	})
+
+	b.Run("blake2b", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			thor.Blake2b(data)
+		}
+	})
 }
 
 func BenchmarkBlake2b(b *testing.B) {
-	data := []byte("hello world")
-	for i := 0; i < b.N; i++ {
-		hash, _ := blake2b.New256(nil)
-		hash.Write(data)
-		hash.Sum(nil)
-	}
+	data := make([]byte, 100)
+	rand.New(rand.NewSource(1)).Read(data)
+	b.Run("Blake2b", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			thor.Blake2b(data).Bytes()
+		}
+	})
+
+	b.Run("BlakeFn", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			thor.Blake2bFn(func(w io.Writer) {
+				w.Write(data)
+			})
+		}
+	})
 }
