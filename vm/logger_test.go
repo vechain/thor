@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 type dummyContractRef struct {
@@ -54,8 +55,8 @@ func TestStoreCapture(t *testing.T) {
 		stack    = newstack()
 		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
 	)
-	stack.push(big.NewInt(1))
-	stack.push(big.NewInt(0))
+	stack.push(uint256.NewInt(1))
+	stack.push(uint256.NewInt(0))
 
 	var index common.Hash
 

@@ -49,7 +49,6 @@ type Interpreter struct {
 	evm      *EVM
 	cfg      Config
 	gasTable params.GasTable
-	intPool  *intPool
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
@@ -79,7 +78,6 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 		evm:      evm,
 		cfg:      cfg,
 		gasTable: evm.ChainConfig().GasTable(evm.BlockNumber),
-		intPool:  newIntPool(),
 	}
 }
 
@@ -131,9 +129,9 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	}
 
 	var (
-		op    OpCode                     // current opcode
-		mem   = NewMemory()              // bound memory
-		stack = stackPool.Get().(*Stack) // local stack
+		op    OpCode        // current opcode
+		mem   = NewMemory() // bound memory
+		stack = newstack()  // local stack
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -144,8 +142,8 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		gasCopy uint64 // for Tracer to log gas remaining before execution
 		logged  bool   // deferred Tracer should ignore already logged steps
 	)
-	defer stackPool.Put(stack)
-	stack.reset()
+	defer returnStack(stack)
+
 	contract.Input = input
 
 	if in.cfg.Debug {
@@ -188,7 +186,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		// calculate the new memory size and expand the memory to fit
 		// the operation
 		if operation.memorySize != nil {
-			memSize, overflow := bigUint64(operation.memorySize(stack))
+			memSize, overflow := operation.memorySize(stack)
 			if overflow {
 				return nil, errGasUintOverflow
 			}
@@ -215,11 +213,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 
 		// execute the operation
 		res, err := operation.execute(&pc, in.evm, contract, mem, stack)
-		// verifyPool is a build flag. Pool verification makes sure the integrity
-		// of the integer pool by comparing values to a default value.
-		if verifyPool {
-			verifyIntegerPool(in.intPool)
-		}
+
 		// if the operation clears the return data (e.g. it has returning data)
 		// set the last return to the result of the operation.
 		if operation.returns {

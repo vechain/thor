@@ -18,12 +18,12 @@ package vm
 
 import (
 	"bytes"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 type twoOperandTest struct {
@@ -39,31 +39,15 @@ func testTwoOperandOp(t *testing.T, tests []twoOperandTest, opFn func(pc *uint64
 		pc    = uint64(0)
 	)
 	for i, test := range tests {
-		x := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		shift := new(big.Int).SetBytes(common.Hex2Bytes(test.y))
-		expected := new(big.Int).SetBytes(common.Hex2Bytes(test.expected))
+		x := new(uint256.Int).SetBytes(common.FromHex(test.x))
+		shift := new(uint256.Int).SetBytes(common.FromHex(test.y))
+		expected := new(uint256.Int).SetBytes(common.FromHex(test.expected))
 		stack.push(x)
 		stack.push(shift)
 		opFn(&pc, env, nil, nil, stack)
 		actual := stack.pop()
 		if actual.Cmp(expected) != 0 {
 			t.Errorf("Testcase %d, expected  %v, got %v", i, expected, actual)
-		}
-		// Check pool usage
-		// 1.pool is not allowed to contain anything on the stack
-		// 2.pool is not allowed to contain the same pointers twice
-		if env.interpreter.intPool.pool.len() > 0 {
-
-			poolvals := make(map[*big.Int]struct{})
-			poolvals[actual] = struct{}{}
-
-			for env.interpreter.intPool.pool.len() > 0 {
-				key := env.interpreter.intPool.get()
-				if _, exist := poolvals[key]; exist {
-					t.Errorf("Testcase %d, pool contains double-entry", i)
-				}
-				poolvals[key] = struct{}{}
-			}
 		}
 	}
 }
@@ -76,21 +60,21 @@ func TestByteOp(t *testing.T) {
 	tests := []struct {
 		v        string
 		th       uint64
-		expected *big.Int
+		expected *uint256.Int
 	}{
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 0, big.NewInt(0xAB)},
-		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 1, big.NewInt(0xCD)},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 0, big.NewInt(0x00)},
-		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 1, big.NewInt(0xCD)},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 31, big.NewInt(0x30)},
-		{"0000000000000000000000000000000000000000000000000000000000102030", 30, big.NewInt(0x20)},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32, big.NewInt(0x0)},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFFFFFFFFFFFFFF, big.NewInt(0x0)},
+		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 0, uint256.NewInt(0xAB)},
+		{"ABCDEF0908070605040302010000000000000000000000000000000000000000", 1, uint256.NewInt(0xCD)},
+		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 0, uint256.NewInt(0x00)},
+		{"00CDEF090807060504030201ffffffffffffffffffffffffffffffffffffffff", 1, uint256.NewInt(0xCD)},
+		{"0000000000000000000000000000000000000000000000000000000000102030", 31, uint256.NewInt(0x30)},
+		{"0000000000000000000000000000000000000000000000000000000000102030", 30, uint256.NewInt(0x20)},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32, uint256.NewInt(0x0)},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFFFFFFFFFFFFFF, uint256.NewInt(0x0)},
 	}
 	pc := uint64(0)
 	for _, test := range tests {
-		val := new(big.Int).SetBytes(common.Hex2Bytes(test.v))
-		th := new(big.Int).SetUint64(test.th)
+		val := new(uint256.Int).SetBytes(common.FromHex(test.v))
+		th := uint256.NewInt(test.th)
 		stack.push(val)
 		stack.push(th)
 		opByte(&pc, env, nil, nil, stack)
@@ -212,7 +196,7 @@ func opBenchmark(bench *testing.B, op func(pc *uint64, evm *EVM, contract *Contr
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
 		for _, arg := range byteArgs {
-			a := new(big.Int).SetBytes(arg)
+			a := new(uint256.Int).SetBytes(arg)
 			stack.push(a)
 		}
 		op(&pc, env, nil, nil, stack)

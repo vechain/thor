@@ -17,10 +17,9 @@
 package vm
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 )
 
 // bitmapCache caches code bitmap.
@@ -32,11 +31,11 @@ var bitmapCache, _ = lru.NewARC(4096)
 type destinations map[common.Hash]bitvec
 
 // has checks whether code has a JUMPDEST at dest.
-func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool {
+func (d destinations) has(codehash common.Hash, code []byte, dest *uint256.Int) bool {
 	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
 	// Don't bother checking for JUMPDEST in that case.
-	udest := dest.Uint64()
-	if dest.BitLen() >= 63 || udest >= uint64(len(code)) {
+	udest, overflow := dest.Uint64WithOverflow()
+	if overflow || udest >= uint64(len(code)) {
 		return false
 	}
 

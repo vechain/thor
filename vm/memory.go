@@ -18,9 +18,8 @@ package vm
 
 import (
 	"fmt"
-	"math/big"
 
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 )
 
 // Memory implements a simple memory model for the ethereum virtual machine.
@@ -29,13 +28,12 @@ type Memory struct {
 	lastGasCost uint64
 }
 
-// NewMemory returns a new memory memory model.
+// NewMemory returns a new memory model.
 func NewMemory() *Memory {
 	return &Memory{}
 }
 
 // Set sets offset + size to value
-// change in v1.8.14 = v1.8.27
 func (m *Memory) Set(offset, size uint64, value []byte) {
 	// It's possible the offset is greater than 0 and size equals 0. This is because
 	// the calcMemSize (common.go) could potentially return 0 when size is zero (NO-OP)
@@ -51,17 +49,15 @@ func (m *Memory) Set(offset, size uint64, value []byte) {
 
 // Set32 sets the 32 bytes starting at offset to the value of val, left-padded with zeroes to
 // 32 bytes.
-// new in v1.8.14 = v1.8.27
-func (m *Memory) Set32(offset uint64, val *big.Int) {
+func (m *Memory) Set32(offset uint64, val *uint256.Int) {
 	// length of store may never be less than offset + size.
 	// The store should be resized PRIOR to setting the memory
 	if offset+32 > uint64(len(m.store)) {
 		panic("invalid memory: store empty")
 	}
-	// Zero the memory area
-	copy(m.store[offset:offset+32], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0})
 	// Fill in relevant bits
-	math.ReadBits(val, m.store[offset:offset+32])
+	b32 := val.Bytes32()
+	copy(m.store[offset:], b32[:])
 }
 
 // Resize resizes the memory to size
@@ -72,7 +68,7 @@ func (m *Memory) Resize(size uint64) {
 }
 
 // Get returns offset + size as a new slice
-func (m *Memory) Get(offset, size int64) (cpy []byte) {
+func (m *Memory) GetCopy(offset, size int64) (cpy []byte) {
 	if size == 0 {
 		return nil
 	}
@@ -110,6 +106,7 @@ func (m *Memory) Data() []byte {
 	return m.store
 }
 
+// Print dumps the content of the memory.
 func (m *Memory) Print() {
 	fmt.Printf("### mem %d bytes ###\n", len(m.store))
 	if len(m.store) > 0 {
