@@ -346,13 +346,6 @@ func VerifyNodeHash(blob, expectedHash []byte) (bool, error) {
 	}
 
 	node := blob[:len(blob)-len(trailing)]
-
-	h := hasherPool.Get().(*hasher)
-	defer hasherPool.Put(h)
-
-	h.sha.Reset()
-	h.sha.Write(node)
-	h.tmp = h.sha.Sum(h.tmp[:0])
-
-	return bytes.Equal(expectedHash, h.tmp), nil
+	have := thor.Blake2b(node)
+	return bytes.Equal(expectedHash, have.Bytes()), nil
 }

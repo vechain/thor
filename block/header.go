@@ -126,12 +126,7 @@ func (h *Header) ID() (id thor.Bytes32) {
 		return
 	}
 
-	hw := thor.NewBlake2b()
-	hw.Write(h.SigningHash().Bytes())
-	hw.Write(signer.Bytes())
-	hw.Sum(id[:0])
-
-	return
+	return thor.Blake2b(h.SigningHash().Bytes(), signer[:])
 }
 
 // SigningHash computes hash of all header fields excluding signature.
@@ -141,22 +136,21 @@ func (h *Header) SigningHash() (hash thor.Bytes32) {
 	}
 	defer func() { h.cache.signingHash.Store(hash) }()
 
-	hw := thor.NewBlake2b()
-	rlp.Encode(hw, []interface{}{
-		h.body.ParentID,
-		h.body.Timestamp,
-		h.body.GasLimit,
-		h.body.Beneficiary,
+	return thor.Blake2bFn(func(w io.Writer) {
+		rlp.Encode(w, []interface{}{
+			&h.body.ParentID,
+			h.body.Timestamp,
+			h.body.GasLimit,
+			&h.body.Beneficiary,
 
-		h.body.GasUsed,
-		h.body.TotalScore,
+			h.body.GasUsed,
+			h.body.TotalScore,
 
-		&h.body.TxsRootFeatures,
-		h.body.StateRoot,
-		h.body.ReceiptsRoot,
+			&h.body.TxsRootFeatures,
+			&h.body.StateRoot,
+			&h.body.ReceiptsRoot,
+		})
 	})
-	hw.Sum(hash[:0])
-	return
 }
 
 // Signature returns signature.

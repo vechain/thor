@@ -17,7 +17,6 @@
 package trie
 
 import (
-	"hash"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,7 +25,6 @@ import (
 
 type hasher struct {
 	tmp      sliceBuffer
-	sha      hash.Hash
 	cacheGen uint16
 	cacheTTL uint16
 
@@ -51,7 +49,6 @@ var hasherPool = sync.Pool{
 	New: func() interface{} {
 		return &hasher{
 			tmp: make(sliceBuffer, 0, 700), // cap is as large as a full fullNode.
-			sha: thor.NewBlake2b(),
 		}
 	},
 }
@@ -219,9 +216,7 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 		if h.nonCrypto {
 			hash.Hash = NonCryptoNodeHash
 		} else {
-			h.sha.Reset()
-			h.sha.Write(h.tmp)
-			h.sha.Sum(hash.Hash[:0])
+			hash.Hash = thor.Blake2b(h.tmp)
 		}
 	} else {
 		cpy := *hash
