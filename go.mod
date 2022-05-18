@@ -1,6 +1,6 @@
 module github.com/vechain/thor
 
-go 1.12
+go 1.13
 
 require (
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect

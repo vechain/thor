@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
 )
 
 // ContractRef is a reference to the contract's backing object
@@ -49,7 +50,7 @@ type Contract struct {
 	caller        ContractRef
 	self          ContractRef
 
-	jumpdests destinations // result of JUMPDEST analysis.
+	analysis bitvec
 
 	Code     []byte
 	CodeHash common.Hash
@@ -67,13 +68,6 @@ type Contract struct {
 // NewContract returns a new contract environment for the execution of EVM.
 func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
-
-	if parent, ok := caller.(*Contract); ok {
-		// Reuse JUMPDEST analysis from parent context if available.
-		c.jumpdests = parent.jumpdests
-	} else {
-		c.jumpdests = make(destinations)
-	}
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
@@ -150,4 +144,44 @@ func (c *Contract) SetCallCode(addr *common.Address, hash common.Hash, code []by
 	c.Code = code
 	c.CodeHash = hash
 	c.CodeAddr = addr
+}
+
+func (c *Contract) validJumpdest(dest *uint256.Int) bool {
+	udest, overflow := dest.Uint64WithOverflow()
+	// PC cannot go beyond len(code) and certainly can't be bigger than 63bits.
+	// Don't bother checking for JUMPDEST in that case.
+	if overflow || udest >= uint64(len(c.Code)) {
+		return false
+	}
+	// Only JUMPDESTs allowed for destinations
+	if OpCode(c.Code[udest]) != JUMPDEST {
+		return false
+	}
+	return c.isCode(udest)
+}
+
+// isCode returns true if the provided PC location is an actual opcode, as
+// opposed to a data-segment following a PUSHN operation.
+func (c *Contract) isCode(udest uint64) bool {
+	// Do we already have an analysis laying around?
+	if c.analysis != nil {
+		return c.analysis.codeSegment(udest)
+	}
+	// thor: although the codehash won't be empty currently, still keep the check logic.
+	//
+	// Do we have a contract hash already?
+	// If we do have a hash, that means it's a 'regular' contract.
+	if c.CodeHash != (common.Hash{}) {
+		analysis := getCodeBitmapCached(c.CodeHash, c.Code)
+		// Also stash it in current contract for faster access
+		c.analysis = analysis
+		return analysis.codeSegment(udest)
+	}
+	// We don't have the code hash, most likely a piece of initcode not already
+	// in state trie. In that case, we do an analysis, and save it locally, so
+	// we don't have to recalculate it for every JUMP instruction in the execution
+	// However, we don't save it within the parent context
+
+	c.analysis = codeBitmap(c.Code)
+	return c.analysis.codeSegment(udest)
 }
