@@ -17,111 +17,169 @@
 package tracers_test
 
 import (
+	"encoding/json"
+	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/chain"
+	"github.com/vechain/thor/genesis"
+	"github.com/vechain/thor/muxdb"
+	"github.com/vechain/thor/runtime"
+	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tracers"
+	"github.com/vechain/thor/tracers/logger"
+	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/xenv"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/tracers/native"
 )
 
-// // callTrace is the result of a callTracer run.
-// type callTrace struct {
-// 	Type    string          `json:"type"`
-// 	From    common.Address  `json:"from"`
-// 	To      common.Address  `json:"to"`
-// 	Input   hexutil.Bytes   `json:"input"`
-// 	Output  hexutil.Bytes   `json:"output"`
-// 	Gas     *hexutil.Uint64 `json:"gas,omitempty"`
-// 	GasUsed *hexutil.Uint64 `json:"gasUsed,omitempty"`
-// 	Value   *hexutil.Big    `json:"value,omitempty"`
-// 	Error   string          `json:"error,omitempty"`
-// 	Calls   []callTrace     `json:"calls,omitempty"`
-// }
+type callFrame struct {
+	Type    string                `json:"type"`
+	From    thor.Address          `json:"from"`
+	To      thor.Address          `json:"to,omitempty"`
+	Value   *math.HexOrDecimal256 `json:"value,omitempty"`
+	Gas     math.HexOrDecimal64   `json:"gas"`
+	GasUsed math.HexOrDecimal64   `json:"gasUsed"`
+	Input   hexutil.Bytes         `json:"input"`
+	Output  hexutil.Bytes         `json:"output,omitempty"`
+	Error   string                `json:"error,omitempty"`
+	Calls   []callFrame           `json:"calls,omitempty"`
+}
 
-// func BenchmarkTransactionTrace(b *testing.B) {
-// 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-// 	from := crypto.PubkeyToAddress(key.PublicKey)
-// 	gas := uint64(1000000) // 1M gas
-// 	to := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-// 	signer := types.LatestSignerForChainID(big.NewInt(1337))
-// 	tx, err := types.SignNewTx(key, signer,
-// 		&types.LegacyTx{
-// 			Nonce:    1,
-// 			GasPrice: big.NewInt(500),
-// 			Gas:      gas,
-// 			To:       &to,
-// 		})
-// 	if err != nil {
-// 		b.Fatal(err)
-// 	}
-// 	txContext := vm.TxContext{
-// 		Origin:   from,
-// 		GasPrice: tx.GasPrice(),
-// 	}
-// 	context := vm.BlockContext{
-// 		CanTransfer: core.CanTransfer,
-// 		Transfer:    core.Transfer,
-// 		Coinbase:    common.Address{},
-// 		BlockNumber: new(big.Int).SetUint64(uint64(5)),
-// 		Time:        new(big.Int).SetUint64(uint64(5)),
-// 		Difficulty:  big.NewInt(0xffffffff),
-// 		GasLimit:    gas,
-// 		BaseFee:     big.NewInt(8),
-// 	}
-// 	alloc := core.GenesisAlloc{}
-// 	// The code pushes 'deadbeef' into memory, then the other params, and calls CREATE2, then returns
-// 	// the address
-// 	loop := []byte{
-// 		byte(vm.JUMPDEST), //  [ count ]
-// 		byte(vm.PUSH1), 0, // jumpdestination
-// 		byte(vm.JUMP),
-// 	}
-// 	alloc[common.HexToAddress("0x00000000000000000000000000000000deadbeef")] = core.GenesisAccount{
-// 		Nonce:   1,
-// 		Code:    loop,
-// 		Balance: big.NewInt(1),
-// 	}
-// 	alloc[from] = core.GenesisAccount{
-// 		Nonce:   1,
-// 		Code:    []byte{},
-// 		Balance: big.NewInt(500000000000000),
-// 	}
-// 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
-// 	// Create the tracer, the EVM environment and run it
-// 	tracer := logger.NewStructLogger(&logger.Config{
-// 		Debug: false,
-// 		//DisableStorage: true,
-// 		//EnableMemory: false,
-// 		//EnableReturnData: false,
-// 	})
-// 	evm := vm.NewEVM(context, txContext, statedb, params.AllEthashProtocolChanges, vm.Config{Debug: true, Tracer: tracer})
-// 	msg, err := tx.AsMessage(signer, nil)
-// 	if err != nil {
-// 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
-// 	}
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
+type clause struct {
+	To    *thor.Address         `json:"to,omitempty"`
+	Value *math.HexOrDecimal256 `json:"value"`
+	Data  hexutil.Bytes         `json:"data"`
+}
 
-// 	for i := 0; i < b.N; i++ {
-// 		snap := statedb.Snapshot()
-// 		st := core.NewStateTransition(evm, msg, new(core.GasPool).AddGas(tx.Gas()))
-// 		_, err = st.TransitionDb()
-// 		if err != nil {
-// 			b.Fatal(err)
-// 		}
-// 		statedb.RevertToSnapshot(snap)
-// 		if have, want := len(tracer.StructLogs()), 244752; have != want {
-// 			b.Fatalf("trace wrong, want %d steps, have %d", want, have)
-// 		}
-// 		tracer.Reset()
-// 	}
-// }
+type account struct {
+	Balance *math.HexOrDecimal256        `json:"balance"`
+	Code    hexutil.Bytes                `json:"code"`
+	Nonce   uint64                       `json:"nonce"`
+	Storage map[common.Hash]thor.Bytes32 `json:"storage"`
+}
 
-func TestTracer(t *testing.T) {
-	tr, err := tracers.New("callTracer", nil)
+type context struct {
+	BlockNumber uint32       `json:"blockNumber"`
+	TxOrigin    thor.Address `json:"txOrigin"`
+	ClauseIndex uint32       `json:"clauseIndex"`
+	TxID        thor.Bytes32 `json:"txID"`
+}
+
+type traceTest struct {
+	State   map[common.Address]account `json:"state,omitempty"`
+	Clause  clause                     `json:"clause"`
+	Context context                    `json:"context"`
+	Calls   callFrame                  `json:"calls,omitempty"`
+}
+
+type prestate map[common.Address]account
+
+func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMessage {
+	db := muxdb.NewMem()
+	gene, _, _, err := genesis.NewTestnet().Build(state.NewStater(db))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(tr)
+
+	repo, _ := chain.NewRepository(db, gene)
+	st := state.New(db, gene.Header().StateRoot(), 0, 0, 0)
+	chain := repo.NewChain(gene.Header().ID())
+
+	for addr, account := range data.State {
+		st.SetBalance(thor.Address(addr), (*big.Int)(account.Balance))
+		if len(account.Code) > 0 {
+			st.SetCode(thor.Address(addr), account.Code)
+		}
+		for k, v := range account.Storage {
+			st.SetStorage(thor.Address(addr), thor.Bytes32(k), v)
+		}
+	}
+
+	rt := runtime.New(chain, st, &xenv.BlockContext{
+		Number: data.Context.BlockNumber,
+	}, thor.GetForkConfig(gene.Header().ID()))
+
+	var tr tracers.Tracer
+	if len(tracerName) > 0 {
+		tr, err = tracers.New(tracerName, nil)
+		assert.Nil(t, err)
+	} else {
+		tr = logger.NewStructLogger(&logger.Config{
+			EnableMemory:     true,
+			EnableReturnData: true,
+		})
+	}
+
+	rt.SetVMConfig(vm.Config{
+		Debug:  true,
+		Tracer: tr,
+	})
+
+	clause := tx.NewClause(data.Clause.To).WithValue((*big.Int)(data.Calls.Value)).WithData(data.Clause.Data)
+	exec, _ := rt.PrepareClause(clause, data.Context.ClauseIndex, uint64(data.Calls.Gas), &xenv.TransactionContext{
+		Origin: data.Context.TxOrigin,
+		ID:     data.Context.TxID,
+	})
+	_, _, err = exec()
+	assert.Nil(t, err)
+	result, err := tr.GetResult()
+	assert.Nil(t, err)
+	return result
+}
+
+func TestNewTracer(t *testing.T) {
+	_, err := tracers.New("callTracer", nil)
+	assert.Nil(t, err)
+}
+
+func TestTracers(t *testing.T) {
+	files, err := os.ReadDir("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), ".json") {
+			continue
+		}
+		f := file
+		t.Run(strings.TrimSuffix(f.Name(), ".json"), func(t *testing.T) {
+			var testData traceTest
+
+			if blob, err := os.ReadFile(filepath.Join("testdata", file.Name())); err != nil {
+				t.Fatalf("failed to read testcase: %v", err)
+			} else if err := json.Unmarshal(blob, &testData); err != nil {
+				t.Fatalf("failed to parse testcase: %v", err)
+			}
+
+			result := RunTracerTest(t, &testData, "callTracer")
+			var got callFrame
+			if err := json.Unmarshal(result, &got); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, testData.Calls, got)
+
+			result = RunTracerTest(t, &testData, "prestateTracer")
+			var pre prestate
+			if err := json.Unmarshal(result, &pre); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, prestate(testData.State), pre)
+
+			RunTracerTest(t, &testData, "")
+			RunTracerTest(t, &testData, "4byteTracer")
+		})
+
+	}
 }
