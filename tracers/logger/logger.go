@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/holiman/uint256"
 	"github.com/vechain/thor/vm"
 )
 
@@ -65,7 +66,7 @@ type StructLog struct {
 	GasCost       uint64                      `json:"gasCost"`
 	Memory        []byte                      `json:"memory,omitempty"`
 	MemorySize    int                         `json:"memSize"`
-	Stack         []*big.Int                  `json:"stack"`
+	Stack         []uint256.Int               `json:"stack"`
 	ReturnData    []byte                      `json:"returnData,omitempty"`
 	Storage       map[common.Hash]common.Hash `json:"-"`
 	Depth         int                         `json:"depth"`
@@ -78,7 +79,6 @@ type structLogMarshaling struct {
 	Gas         math.HexOrDecimal64
 	GasCost     math.HexOrDecimal64
 	Memory      hexutil.Bytes
-	Stack       []*math.HexOrDecimal256
 	ReturnData  hexutil.Bytes
 	OpName      string `json:"opName"`          // adds call to OpName() in MarshalJSON
 	ErrorString string `json:"error,omitempty"` // adds call to ErrorString() in MarshalJSON
@@ -161,9 +161,9 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, m
 		copy(mem, memory.Data())
 	}
 	// Copy a snapshot of the current stack state to a new buffer
-	var stck []*big.Int
+	var stck []uint256.Int
 	if !l.cfg.DisableStack {
-		stck = make([]*big.Int, len(stack.Data()))
+		stck = make([]uint256.Int, len(stack.Data()))
 		for i, item := range stack.Data() {
 			stck[i] = item
 		}
@@ -181,7 +181,7 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, m
 		// capture SLOAD opcodes and record the read entry in the local storage
 		if op == vm.SLOAD && stackLen >= 1 {
 			var (
-				address = common.BigToHash(stackData[stackLen-1])
+				address = common.Hash(stackData[stackLen-1].Bytes32())
 				value   = l.env.StateDB.GetState(contract.Address(), address)
 			)
 			l.storage[contract.Address()][address] = value
@@ -189,8 +189,8 @@ func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, m
 		} else if op == vm.SSTORE && stackLen >= 2 {
 			// capture SSTORE opcodes and record the written entry in the local storage.
 			var (
-				value   = common.BigToHash(stackData[stackLen-2])
-				address = common.BigToHash(stackData[stackLen-1])
+				value   = common.Hash(stackData[stackLen-2].Bytes32())
+				address = common.Hash(stackData[stackLen-1].Bytes32())
 			)
 			l.storage[contract.Address()][address] = value
 			storage = l.storage[contract.Address()].Copy()
@@ -277,7 +277,7 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
 			for i := len(log.Stack) - 1; i >= 0; i-- {
-				fmt.Fprintf(writer, "%08d  %x\n", len(log.Stack)-i-1, math.PaddedBigBytes(log.Stack[i], 32))
+				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
 		if len(log.Memory) > 0 {
@@ -340,7 +340,7 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memor
 		// format stack
 		var a []string
 		for _, elem := range stack.Data() {
-			a = append(a, fmt.Sprintf("0x%x", math.PaddedBigBytes(elem, 32)))
+			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
@@ -407,7 +407,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
 			for i, stackValue := range trace.Stack {
-				stack[i] = fmt.Sprintf("0x%x", math.PaddedBigBytes(stackValue, 32))
+				stack[i] = stackValue.Hex()
 			}
 			formatted[index].Stack = &stack
 		}

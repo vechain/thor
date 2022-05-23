@@ -30,8 +30,6 @@ import (
 )
 
 var (
-	bigZero                  = new(big.Int)
-	tt255                    = math.BigPow(2, 255)
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
@@ -694,7 +692,7 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 		stack.push(new(uint256.Int).SetOne())
 	}
 	if err == nil || err == ErrExecutionReverted {
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -726,7 +724,7 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 		stack.push(new(uint256.Int).SetOne())
 	}
 	if err == nil || err == ErrExecutionReverted {
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -751,7 +749,7 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 		stack.push(new(uint256.Int).SetOne())
 	}
 	if err == nil || err == ErrExecutionReverted {
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil
@@ -776,7 +774,7 @@ func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 		stack.push(new(uint256.Int).SetOne())
 	}
 	if err == nil || err == ErrExecutionReverted {
-		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
 	return ret, nil

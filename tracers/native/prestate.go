@@ -84,13 +84,13 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	stackLen := len(stackData)
 	switch {
 	case stackLen >= 1 && (op == vm.SLOAD || op == vm.SSTORE):
-		slot := common.BigToHash(stackData[stackLen-1])
+		slot := common.Hash(stackData[stackLen-1].Bytes32())
 		t.lookupStorage(contract.Address(), slot)
 	case stackLen >= 1 && (op == vm.EXTCODECOPY || op == vm.EXTCODEHASH || op == vm.EXTCODESIZE || op == vm.BALANCE || op == vm.SELFDESTRUCT):
-		addr := common.BigToAddress(stackData[stackLen-1])
+		addr := common.Address(stackData[stackLen-1].Bytes20())
 		t.lookupAccount(addr)
 	case stackLen >= 5 && (op == vm.DELEGATECALL || op == vm.CALL || op == vm.STATICCALL || op == vm.CALLCODE):
-		addr := common.BigToAddress(stackData[stackLen-2])
+		addr := common.Address(stackData[stackLen-2].Bytes20())
 		t.lookupAccount(addr)
 	case op == vm.CREATE:
 		t.lookupAccount(t.env.NewContractAddress(t.env, t.contractCreationCount))
@@ -98,10 +98,10 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 	case stackLen >= 4 && op == vm.CREATE2:
 		offset := stackData[stackLen-2]
 		size := stackData[stackLen-3]
-		init := memory.Get(int64(offset.Uint64()), int64(size.Uint64()))
+		init := memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
 		inithash := crypto.Keccak256(init)
 		salt := stackData[stackLen-4]
-		t.lookupAccount(vm.CreateAddress2(contract.Address(), common.BigToHash(salt), inithash))
+		t.lookupAccount(vm.CreateAddress2(contract.Address(), salt.Bytes32(), inithash))
 		t.contractCreationCount++
 	}
 }
