@@ -4,26 +4,21 @@
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 package block
 
-import "errors"
-
 // Vote represents the bft vote in block header.
-type Vote uint
+type Vote bool
 
 const (
-	WIT Vote = iota
-	COM
+	WIT Vote = false
+	COM Vote = true
 )
 
-func (v Vote) String() string {
-	if v == COM {
+func (v *Vote) String() string {
+	if v == nil {
+		return "N/A"
+	}
+
+	if *v == COM {
 		return "COM"
 	}
 	return "WIT"
-}
-
-func TestVote(v Vote) error {
-	if v == COM || v == WIT {
-		return nil
-	}
-	return errors.New("invalid BFT vote")
 }
