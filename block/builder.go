@@ -84,8 +84,7 @@ func (b *Builder) Alpha(alpha []byte) *Builder {
 
 // Vote set the vote.
 func (b *Builder) Vote(v Vote) *Builder {
-	vt := v
-	b.headerBody.Extension.Vote = &vt
+	b.headerBody.Extension.Vote = &v
 	return b
 }
 
