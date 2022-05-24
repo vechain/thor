@@ -41,16 +41,6 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
-### Dependency management
-
-Simply run:
-
-```shell
-make dep
-```
-
-If you keep getting network errors, it is suggested to use [Go Module Proxy](https://golang.org/cmd/go/#hdr-Module_proxy_protocol). [https://proxy.golang.org/](https://proxy.golang.org/) is one option.
-
 ### Building
 
 To build the main app `thor`, just run
