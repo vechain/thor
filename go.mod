@@ -1,6 +1,6 @@
 module github.com/vechain/thor
 
-go 1.13
+go 1.16
 
 require (
 	github.com/aristanetworks/goarista v0.0.0-20180222005525-c41ed3986faa // indirect
@@ -35,7 +35,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
-	github.com/vechain/go-ecvrf v0.0.0-20200326080414-5b7e9ee61906
+	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	gopkg.in/cheggaaa/pb.v1 v1.0.28

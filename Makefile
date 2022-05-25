@@ -28,11 +28,11 @@ dep:| go_version_check
 
 go_version_check:
 	@if test $(MAJOR) -lt 1; then \
-		echo "Go 1.13 or higher required"; \
+		echo "Go 1.16 or higher required"; \
 		exit 1; \
 	else \
-		if test $(MAJOR) -eq 1 -a $(MINOR) -lt 13; then \
-			echo "Go 1.13 or higher required"; \
+		if test $(MAJOR) -eq 1 -a $(MINOR) -lt 16; then \
+			echo "Go 1.16 or higher required"; \
 			exit 1; \
 		fi \
 	fi
