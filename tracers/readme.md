@@ -9,7 +9,7 @@ based on github.com/ethereum/go-ethereum/eth/tracers v1.8.14 tag
 
 2022-05-07
 
-introduce native tracers, forked from https://github.com/ethereum/go-ethereum/tree/63972e7548fc58cf1a862572277db4b8d7b0d255
+introduce native tracers, forked from https://github.com/ethereum/go-ethereum/tree/v1.10.18 (de23cf910b814867d5c5d1ad6164835d79069638)
 
 + updated vm implementation, added CaptureEnter and CaptureExit
 + remove CaptureTxStart CaptureTxEnd from Logger interface
