@@ -40,7 +40,6 @@ require (
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951 // indirect
-	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20180723110524-d53328019b21
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.3.0
 )
