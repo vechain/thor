@@ -227,7 +227,7 @@ func (h *Header) Beta() (beta []byte, err error) {
 		return
 	}
 
-	return ecvrf.NewSecp256k1Sha256Tai().Verify(pub, h.body.Extension.Alpha, ComplexSignature(h.body.Signature).Proof())
+	return ecvrf.Secp256k1Sha256Tai.Verify(pub, h.body.Extension.Alpha, ComplexSignature(h.body.Signature).Proof())
 }
 
 // EncodeRLP implements rlp.Encoder

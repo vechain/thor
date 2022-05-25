@@ -131,7 +131,7 @@ func TestSeeder_Generate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(priv, parentBeta)
+		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(priv, parentBeta)
 		if err != nil {
 			t.Fatal(err)
 		}

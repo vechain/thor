@@ -164,7 +164,7 @@ func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKe
 			}
 			alpha = beta
 		}
-		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(pk, alpha)
+		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(pk, alpha)
 		if err != nil {
 			return nil, err
 		}

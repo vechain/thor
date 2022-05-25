@@ -193,7 +193,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32) (*bl
 			return nil, nil, nil, err
 		}
 
-		_, proof, err := ecvrf.NewSecp256k1Sha256Tai().Prove(privateKey, alpha)
+		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(privateKey, alpha)
 		if err != nil {
 			return nil, nil, nil, err
 		}
