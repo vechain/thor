@@ -277,7 +277,7 @@ func WriteTrace(writer io.Writer, logs []StructLog) {
 		if len(log.Stack) > 0 {
 			fmt.Fprintln(writer, "Stack:")
 			for i := len(log.Stack) - 1; i >= 0; i-- {
-				fmt.Fprintf(writer, "%08d  %x\n", len(log.Stack)-i-1, log.Stack[i].Bytes32())
+				fmt.Fprintf(writer, "%08d  %s\n", len(log.Stack)-i-1, log.Stack[i].Hex())
 			}
 		}
 		if len(log.Memory) > 0 {
@@ -340,7 +340,7 @@ func (t *mdLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memor
 		// format stack
 		var a []string
 		for _, elem := range stack.Data() {
-			a = append(a, fmt.Sprintf("%x", elem.Bytes32()))
+			a = append(a, elem.Hex())
 		}
 		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
 		fmt.Fprintf(t.out, "%10v |", b)
@@ -407,7 +407,7 @@ func formatLogs(logs []StructLog) []StructLogRes {
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
 			for i, stackValue := range trace.Stack {
-				stack[i] = fmt.Sprintf("%x", stackValue.Bytes32())
+				stack[i] = stackValue.Hex()
 			}
 			formatted[index].Stack = &stack
 		}
