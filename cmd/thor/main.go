@@ -30,6 +30,9 @@ import (
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/txpool"
 	cli "gopkg.in/urfave/cli.v1"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/vechain/thor/tracers/native"
 )
 
 var (

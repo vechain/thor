@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"math"
 	"math/big"
 	"reflect"
@@ -28,10 +27,11 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vm"
 	"github.com/vechain/thor/xenv"
 )
 
-var errReverted = errors.New("evm: execution reverted")
+var errReverted = vm.ErrExecutionReverted
 
 type ctest struct {
 	rt         *runtime.Runtime

@@ -29,7 +29,7 @@ type Config struct {
 	// Debug enabled debugging Interpreter options
 	Debug bool
 	// Tracer is the op code logger
-	Tracer Tracer
+	Tracer Logger
 	// NoRecursion disabled Interpreter call, callcode,
 	// delegate call and create.
 	NoRecursion bool
@@ -102,7 +102,7 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation *operation, stac
 //
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation except for
-// errExecutionReverted which means revert-and-keep-gas-left.
+// ErrExecutionReverted which means revert-and-keep-gas-left.
 func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// Increment the call depth which is restricted to 1024
 	in.evm.depth++
@@ -150,9 +150,9 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		defer func() {
 			if err != nil {
 				if !logged {
-					in.cfg.Tracer.CaptureState(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+					in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, cost, mem, stack, contract, in.returnData, in.evm.depth, err)
 				} else {
-					in.cfg.Tracer.CaptureFault(in.evm, pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
+					in.cfg.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
 				}
 			}
 		}()
@@ -202,13 +202,15 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		if err != nil || !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
 		}
-		if memorySize > 0 {
-			mem.Resize(memorySize)
+
+		// Do tracing before memory expansion
+		if in.cfg.Debug {
+			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, mem, stack, contract, in.returnData, in.evm.depth, err)
+			logged = true
 		}
 
-		if in.cfg.Debug {
-			in.cfg.Tracer.CaptureState(in.evm, pc, op, gasCopy, cost, mem, stack, contract, in.evm.depth, err)
-			logged = true
+		if memorySize > 0 {
+			mem.Resize(memorySize)
 		}
 
 		// execute the operation
@@ -224,7 +226,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		case err != nil:
 			return nil, err
 		case operation.reverts:
-			return res, errExecutionReverted
+			return res, ErrExecutionReverted
 		case operation.halts:
 			return res, nil
 		case !operation.jumps:

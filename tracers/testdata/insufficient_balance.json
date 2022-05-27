@@ -1,0 +1,37 @@
+{
+    "context": {
+        "blockNumber": 42653,
+        "txOrigin": "0xa7df76f0b8e0d191c5f27563720d1edcd76876db",
+        "clauseIndex": 0,
+        "txID": "0x8cbb5bbc3c4f7850eb75e884933ab41f1e35e398c5b423bf347c3365bd39bf84"
+    },
+    "clause": {
+        "to": "0x9e9732322b301b489f2d8bd28443cf2599024a92",
+        "value": "0x9b6e64a8ec60000",
+        "data": "0x"
+    },
+    "state": {
+        "0x9e9732322b301b489f2d8bd28443cf2599024a92": {
+            "balance": "0x7f0e22963fbc9d737000",
+            "nonce": 0,
+            "code": "0x",
+            "storage": {}
+        },
+        "0xa7df76f0b8e0d191c5f27563720d1edcd76876db": {
+            "balance": "0x853a9ea7faea000",
+            "nonce": 0,
+            "code": "0x",
+            "storage": {}
+        }
+    },
+    "calls": {
+        "type": "CALL",
+        "from": "0xa7df76f0b8e0d191c5f27563720d1edcd76876db",
+        "to": "0x9e9732322b301b489f2d8bd28443cf2599024a92",
+        "value": "0x9b6e64a8ec60000",
+        "gas": "0x0",
+        "gasUsed": "0x0",
+        "input": "0x",
+        "error": "insufficient balance for transfer"
+    }
+}

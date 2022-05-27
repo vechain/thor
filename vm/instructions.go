@@ -32,7 +32,6 @@ import (
 var (
 	errWriteProtection       = errors.New("evm: write protection")
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
-	errExecutionReverted     = errors.New("evm: execution reverted")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
 
@@ -626,7 +625,7 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	}
 	contract.Gas += returnGas
 
-	if suberr == errExecutionReverted {
+	if suberr == ErrExecutionReverted {
 		return res, nil
 	}
 	return nil, nil
@@ -659,7 +658,7 @@ func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	}
 	contract.Gas += returnGas
 
-	if suberr == errExecutionReverted {
+	if suberr == ErrExecutionReverted {
 		return res, nil
 	}
 	return nil, nil
@@ -692,7 +691,7 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
+	if err == nil || err == ErrExecutionReverted {
 		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
@@ -724,7 +723,7 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
+	if err == nil || err == ErrExecutionReverted {
 		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
@@ -749,7 +748,7 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
+	if err == nil || err == ErrExecutionReverted {
 		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
@@ -774,7 +773,7 @@ func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 	} else {
 		stack.push(new(uint256.Int).SetOne())
 	}
-	if err == nil || err == errExecutionReverted {
+	if err == nil || err == ErrExecutionReverted {
 		memory.Set(retOffset, retSize, ret)
 	}
 	contract.Gas += returnGas
@@ -800,6 +799,13 @@ func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 
 func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	receiver := stack.popptr().Bytes20()
+
+	if evm.vmConfig.Debug {
+		bal := evm.StateDB.GetBalance(contract.Address())
+		evm.vmConfig.Tracer.CaptureEnter(SELFDESTRUCT, contract.Address(), receiver, []byte{}, 0, bal)
+		evm.vmConfig.Tracer.CaptureExit([]byte{}, 0, nil)
+	}
+
 	if evm.OnSuicideContract != nil {
 		// let runtime do transfer things
 		evm.OnSuicideContract(evm, contract.Address(), common.Address(receiver))
