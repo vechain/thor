@@ -172,6 +172,15 @@ func (e *ExtendedTrie) Commit(seq uint64) (root thor.Bytes32, err error) {
 // database before using the trie.
 func (e *ExtendedTrie) CommitTo(db DatabaseWriter, seq uint64) (root thor.Bytes32, err error) {
 	t := &e.trie
+	// ext trie always stores the root node even not changed. so here have to
+	// resolve it (since ext trie lazily resolve the root node when initializing).
+	if root, ok := t.root.(*hashNode); ok {
+		rootnode, err := t.resolveHash(root, nil)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+		t.root = rootnode
+	}
 	hash, cached, err := e.hashRoot(db, seq)
 	if err != nil {
 		return thor.Bytes32{}, err
