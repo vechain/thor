@@ -31,7 +31,7 @@ require (
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
 	github.com/pkg/errors v0.8.0
 	github.com/pmezard/go-difflib v1.0.0
-	github.com/qianbin/directcache v0.9.1
+	github.com/qianbin/directcache v0.9.6
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
