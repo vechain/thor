@@ -261,13 +261,6 @@ func (t *Trie) Update(key, val, meta []byte) error {
 
 // Stage processes trie updates and calculates the new root hash.
 func (t *Trie) Stage(newCommitNum, newDistinctNum uint32) (root thor.Bytes32, commit func() error) {
-	// the ext trie is lazy to load the root node.
-	// here force to load the root node to prevent missing root node
-	// when commit a non-modified trie.
-	if _, _, err := t.ext.Get(nil); err != nil {
-		return t.ext.Hash(), func() error { return err }
-	}
-
 	var (
 		thisPath []byte
 		bulk     = t.back.Store.Bulk()
