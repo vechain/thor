@@ -10,12 +10,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/runtime"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Flow the flow of packing a new block.
@@ -193,7 +193,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32) (*bl
 			return nil, nil, nil, err
 		}
 
-		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(privateKey, alpha)
+		_, proof, err := vrf.Prove(privateKey, alpha)
 		if err != nil {
 			return nil, nil, nil, err
 		}

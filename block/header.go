@@ -16,9 +16,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 // Header contains almost all information about a block, except block body.
@@ -227,7 +227,7 @@ func (h *Header) Beta() (beta []byte, err error) {
 		return
 	}
 
-	return ecvrf.Secp256k1Sha256Tai.Verify(pub, h.body.Extension.Alpha, ComplexSignature(h.body.Signature).Proof())
+	return vrf.Verify(pub, h.body.Extension.Alpha, ComplexSignature(h.body.Signature).Proof())
 }
 
 // EncodeRLP implements rlp.Encoder
