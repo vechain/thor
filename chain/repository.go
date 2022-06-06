@@ -22,6 +22,7 @@ import (
 const (
 	dataStoreName    = "chain.data"
 	propStoreName    = "chain.props"
+	headStoreName    = "chain.heads"
 	txIndexStoreName = "chain.txi"
 )
 
@@ -37,6 +38,7 @@ var (
 type Repository struct {
 	db        *muxdb.MuxDB
 	data      kv.Store
+	head      kv.Store
 	props     kv.Store
 	txIndexer kv.Store
 
@@ -66,6 +68,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 	repo := &Repository{
 		db:        db,
 		data:      db.NewStore(dataStoreName),
+		head:      db.NewStore(headStoreName),
 		props:     db.NewStore(propStoreName),
 		txIndexer: db.NewStore(txIndexStoreName),
 		genesis:   genesis,
@@ -185,6 +188,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 		bulk        = r.db.NewStore("").Bulk()
 		indexPutter = kv.Bucket(txIndexStoreName).NewPutter(bulk)
 		dataPutter  = kv.Bucket(dataStoreName).NewPutter(bulk)
+		headPutter  = kv.Bucket(headStoreName).NewPutter(bulk)
 	)
 
 	if len(txs) > 0 {
@@ -227,6 +231,10 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 			r.caches.receipts.Add(key, receipt)
 		}
 	}
+	if err := indexChainHead(headPutter, header); err != nil {
+		return nil, err
+	}
+
 	if err := saveBlockSummary(dataPutter, &summary); err != nil {
 		return nil, err
 	}
@@ -278,6 +286,31 @@ func (r *Repository) ScanConflicts(blockNum uint32) (uint32, error) {
 		}
 	}
 	return count, iter.Error()
+}
+
+// ScanHeads returns all head blockIDs from the given blockNum(included) in descending order.
+func (r *Repository) ScanHeads(from uint32) ([]thor.Bytes32, error) {
+	var start [4]byte
+	binary.BigEndian.PutUint32(start[:], from)
+
+	iter := r.head.Iterate(kv.Range{Start: start[:]})
+	defer iter.Release()
+
+	heads := make([]thor.Bytes32, 0, 16)
+	if iter.Last() {
+		for {
+			heads = append(heads, thor.BytesToBytes32(iter.Key()))
+			if !iter.Prev() {
+				break
+			}
+		}
+	}
+
+	if iter.Error() != nil {
+		return nil, iter.Error()
+	}
+
+	return heads, nil
 }
 
 // GetMaxBlockNum returns the max committed block number.
