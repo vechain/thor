@@ -323,13 +323,8 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return err
 		}
 
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.Process(newBlock.Header()); err != nil {
-				return errors.Wrap(err, "process block in bft engine")
-			}
-		}
-
 		var becomeNewBest bool
+		// let bft engine decide the best block after fork FINALITY
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY && oldBest.Header.Number() >= n.forkConfig.FINALITY {
 			becomeNewBest, err = n.bft.Select(newBlock.Header())
 			if err != nil {
@@ -359,8 +354,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
 			return errors.Wrap(err, "add block")
 		}
+
+		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
+			if err := n.bft.CommitBlock(newBlock.Header(), false); err != nil {
 				return errors.Wrap(err, "bft commits")
 			}
 		}
