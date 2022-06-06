@@ -20,23 +20,19 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-const storeName = "bft.engine"
+const dataStoreName = "bft.engine"
 
-var (
-	votedKey     = []byte("bft-voted")
-	finalizedKey = []byte("bft-finalized")
-)
-
-type GetBlockHeader func(id thor.Bytes32) (*block.Header, error)
+var finalizedKey = []byte("finalized")
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
 type BFTEngine struct {
 	repo       *chain.Repository
-	store      kv.Store
+	data       kv.Store
+	voted      voted
+	master     thor.Address
 	stater     *state.Stater
 	forkConfig thor.ForkConfig
-	voted      map[thor.Bytes32]uint32
 	finalized  atomic.Value
 	caches     struct {
 		state   *lru.Cache
@@ -47,10 +43,11 @@ type BFTEngine struct {
 }
 
 // NewEngine creates a new bft engine.
-func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig) (*BFTEngine, error) {
+func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.ForkConfig, master thor.Address) (*BFTEngine, error) {
 	engine := BFTEngine{
 		repo:       repo,
-		store:      mainDB.NewStore(storeName),
+		data:       mainDB.NewStore(dataStoreName),
+		master:     master,
 		stater:     state.NewStater(mainDB),
 		forkConfig: forkConfig,
 	}
@@ -60,14 +57,8 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	engine.caches.mbp, _ = lru.New(8)
 	engine.caches.voteset = cache.NewPrioCache(16)
 
-	voted, err := loadVoted(engine.store)
-	if err != nil {
-		return nil, err
-	}
-	engine.voted = voted
-
-	if val, err := engine.store.Get(finalizedKey); err != nil {
-		if !engine.store.IsNotFound(err) {
+	if val, err := engine.data.Get(finalizedKey); err != nil {
+		if !engine.data.IsNotFound(err) {
 			return nil, err
 		}
 		engine.finalized.Store(engine.repo.GenesisBlock().Header().ID())
@@ -99,29 +90,15 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
 	return nil
 }
 
-// Process process new block in bft engine.
-func (engine *BFTEngine) Process(h *block.Header) error {
-	_, err := engine.getState(h.ID(), func(id thor.Bytes32) (*block.Header, error) {
-		// header was not added to repo at this moment
-		if id == h.ID() {
-			return h, nil
-		}
-		return engine.repo.GetBlockHeader(id)
-	})
-
-	return err
-}
-
 // Select selects between the new block and the current best, return true if new one is better.
-func (engine *BFTEngine) Select(h *block.Header) (bool, error) {
-	best := engine.repo.BestBlockSummary().Header
-
-	newSt, err := engine.getState(h.ID(), engine.repo.GetBlockHeader)
+func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
+	newSt, err := engine.computeState(header)
 	if err != nil {
 		return false, err
 	}
 
-	bestSt, err := engine.getState(best.ID(), engine.repo.GetBlockHeader)
+	best := engine.repo.BestBlockSummary().Header
+	bestSt, err := engine.computeState(best)
 	if err != nil {
 		return false, err
 	}
@@ -130,67 +107,72 @@ func (engine *BFTEngine) Select(h *block.Header) (bool, error) {
 		return newSt.Quality > bestSt.Quality, nil
 	}
 
-	return h.BetterThan(best), nil
+	return header.BetterThan(best), nil
 }
 
 // CommitBlock commits bft state to storage.
-func (engine *BFTEngine) CommitBlock(blockID thor.Bytes32) error {
-	state, err := engine.getState(blockID, engine.repo.GetBlockHeader)
+func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error {
+	state, err := engine.computeState(header)
 	if err != nil {
 		return nil
 	}
 
-	blockNum := block.Number(blockID)
-
+	blockNum := header.Number()
 	// save quality if needed
 	if getStorePoint(blockNum) == blockNum {
-		if err := saveQuality(engine.store, blockID, state.Quality); err != nil {
+		if err := saveQuality(engine.data, header.ID(), state.Quality); err != nil {
 			return err
 		}
-		engine.caches.quality.Add(blockID, state.Quality)
+		engine.caches.quality.Add(header.ID(), state.Quality)
 	}
 
 	// update finalized if new block commits this round
-	if state.CommitAt != nil && blockID == *state.CommitAt && state.Quality > 1 {
-		id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), blockID)
+	if state.CommitAt != nil && header.ID() == *state.CommitAt && state.Quality > 1 {
+		id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ID())
 		if err != nil {
 			return err
 		}
 
-		if err := engine.store.Put(finalizedKey, id[:]); err != nil {
+		if err := engine.data.Put(finalizedKey, id[:]); err != nil {
 			return err
 		}
 		engine.finalized.Store(id)
 	}
 
-	return nil
-}
-
-// MarkVoted marks the voted checkpoint.
-func (engine *BFTEngine) MarkVoted(blockID thor.Bytes32) error {
-	checkpoint, err := engine.repo.NewChain(blockID).GetBlockID(getCheckpoint(block.Number(blockID)))
-	if err != nil {
-		return err
+	// mark voted if packing
+	if isPacking {
+		checkpoint, err := engine.repo.NewChain(header.ID()).GetBlockID(getCheckPoint(blockNum))
+		if err != nil {
+			return err
+		}
+		engine.voted.Vote(checkpoint, state.Quality)
 	}
 
-	st, err := engine.getState(blockID, engine.repo.GetBlockHeader)
-	if err != nil {
-		return err
-	}
-
-	engine.voted[checkpoint] = st.Quality
 	return nil
 }
 
 // GetVote computes the vote for a given parent block ID.
-func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
-	st, err := engine.getState(parentID, engine.repo.GetBlockHeader)
+// Packer only.
+func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (v block.Vote, err error) {
+	// laze init voted
+	if engine.voted == nil {
+		if engine.voted, err = newVoted(engine); err != nil {
+			return
+		}
+	}
+
+	sum, err := engine.repo.GetBlockSummary(parentID)
 	if err != nil {
-		return block.WIT, err
+		return
+	}
+
+	st, err := engine.computeState(sum.Header)
+	if err != nil {
+		return
 	}
 
 	if st.Quality == 0 {
-		return block.WIT, nil
+		return
 	}
 
 	finalized := engine.Finalized()
@@ -199,8 +181,8 @@ func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
 	var recentJC thor.Bytes32
 	theQuality := st.Quality
 	if st.Justified {
-		// if justied in this round, use this round's checkpoint
-		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckpoint(block.Number(parentID)))
+		// if justified in this round, use this round's checkpoint
+		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckPoint(block.Number(parentID)))
 		if err != nil {
 			return block.WIT, err
 		}
@@ -213,28 +195,19 @@ func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
 		recentJC = checkpoint
 	}
 
-	ids := make([]thor.Bytes32, 0, len(engine.voted))
-	for k := range engine.voted {
-		ids = append(ids, k)
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		return block.Number(ids[i]) > block.Number(ids[j])
-	})
 	// see https://github.com/vechain/VIPs/blob/master/vips/VIP-220.md
-	for _, blockID := range ids {
-		if block.Number(blockID) < block.Number(finalized) {
-			break
+	votes := engine.voted.Votes(engine.Finalized())
+	for _, v := range votes {
+		x, y := recentJC, v.checkpoint
+		if block.Number(v.checkpoint) > block.Number(recentJC) {
+			x, y = v.checkpoint, recentJC
 		}
 
-		a, b := recentJC, blockID
-		if block.Number(blockID) > block.Number(recentJC) {
-			a, b = blockID, recentJC
-		}
-
-		votedQuality := engine.voted[blockID]
-		if includes, err := engine.repo.NewChain(a).HasBlock(b); err != nil {
+		// comparing packer's vote with the most recent JC, if packer voted
+		// a conflict checkpoint at (recentJC.Quality or -1) vote WIT
+		if includes, err := engine.repo.NewChain(x).HasBlock(y); err != nil {
 			return block.WIT, err
-		} else if !includes && votedQuality >= theQuality-1 {
+		} else if !includes && v.quality >= theQuality-1 {
 			return block.WIT, nil
 		}
 	}
@@ -242,31 +215,13 @@ func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (block.Vote, error) {
 	return block.COM, nil
 }
 
-// Close closes bft engine.
-func (engine *BFTEngine) Close() {
-	if len(engine.voted) > 0 {
-		toSave := make(map[thor.Bytes32]uint32)
-		finalized := engine.Finalized()
-
-		for k, v := range engine.voted {
-			if block.Number(k) >= block.Number(finalized) {
-				toSave[k] = v
-			}
-		}
-
-		if len(toSave) > 0 {
-			saveVoted(engine.store, toSave)
-		}
-	}
-}
-
-// getState get the bft state regarding the given block id.
-func (engine *BFTEngine) getState(blockID thor.Bytes32, getHeader GetBlockHeader) (*bftState, error) {
-	if cached, ok := engine.caches.state.Get(blockID); ok {
+// computeState computes the bft state regarding the given block header.
+func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
+	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
 	}
 
-	if block.Number(blockID) == 0 || block.Number(blockID) < engine.forkConfig.FINALITY {
+	if header.Number() == 0 || header.Number() < engine.forkConfig.FINALITY {
 		return &bftState{}, nil
 	}
 
@@ -275,15 +230,11 @@ func (engine *BFTEngine) getState(blockID thor.Bytes32, getHeader GetBlockHeader
 		end uint32
 	)
 
-	header, err := getHeader(blockID)
-	if err != nil {
-		return nil, err
-	}
-
-	if entry := engine.caches.voteset.Remove(header.ParentID()); getCheckpoint(header.Number()) != header.Number() && entry != nil {
+	if entry := engine.caches.voteset.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
 		vs = interface{}(entry.Entry.Value).(*voteSet)
-		end = block.Number(header.ParentID())
+		end = header.Number() - 1
 	} else {
+		// create a new vote set if cache missed or new block is checkpoint
 		var err error
 		vs, err = newVoteSet(engine, header.ParentID())
 		if err != nil {
@@ -309,10 +260,11 @@ func (engine *BFTEngine) getState(blockID thor.Bytes32, getHeader GetBlockHeader
 			break
 		}
 
-		h, err = getHeader(h.ParentID())
+		sum, err := engine.repo.GetBlockSummary(h.ParentID())
 		if err != nil {
 			return nil, err
 		}
+		h = sum.Header
 	}
 
 	st := vs.getState()
@@ -333,7 +285,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 
 	searchStart := block.Number(finalized)
 	if searchStart == 0 {
-		searchStart = getCheckpoint(engine.forkConfig.FINALITY)
+		searchStart = getCheckPoint(engine.forkConfig.FINALITY)
 	}
 
 	c := engine.repo.NewChain(parentID)
@@ -406,14 +358,18 @@ func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error)
 		}
 	}()
 
-	return loadQuality(engine.store, id)
+	return loadQuality(engine.data, id)
 }
 
-func getCheckpoint(blockNum uint32) uint32 {
+func getCheckPoint(blockNum uint32) uint32 {
 	return blockNum / thor.CheckpointInterval * thor.CheckpointInterval
+}
+
+func isCheckPoint(blockNum uint32) bool {
+	return getCheckPoint(blockNum) == blockNum
 }
 
 // save quality at the end of round
 func getStorePoint(blockNum uint32) uint32 {
-	return getCheckpoint(blockNum) + thor.CheckpointInterval - 1
+	return getCheckPoint(blockNum) + thor.CheckpointInterval - 1
 }

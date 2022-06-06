@@ -22,6 +22,7 @@ import (
 
 type TestBFT struct {
 	engine *BFTEngine
+	db     *muxdb.MuxDB
 	repo   *chain.Repository
 	stater *state.Stater
 	fc     thor.ForkConfig
@@ -92,22 +93,50 @@ func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
 		return nil, err
 	}
 
-	engine, err := NewEngine(repo, db, forkCfg)
+	engine, err := NewEngine(repo, db, forkCfg, devAccounts[len(devAccounts)-1].Address)
+	if err != nil {
+		return nil, err
+	}
+
+	// touch get vote func to init voted
+	_, err = engine.GetVote(repo.NewBestChain().GenesisID())
 	if err != nil {
 		return nil, err
 	}
 
 	return &TestBFT{
 		engine: engine,
+		db:     db,
 		repo:   repo,
 		stater: state.NewStater(db),
 		fc:     forkCfg,
 	}, nil
 }
 
-func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, vote block.Vote, conflicts uint32) (*chain.BlockSummary, error) {
+func (test *TestBFT) reCreateEngine() error {
+	engine, err := NewEngine(test.repo, test.db, test.engine.forkConfig, devAccounts[len(devAccounts)-1].Address)
+	if err != nil {
+		return err
+	}
+
+	// touch get vote func to init voted
+	_, err = engine.GetVote(test.repo.NewBestChain().GenesisID())
+	if err != nil {
+		return err
+	}
+
+	test.engine = engine
+	return nil
+}
+
+func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, vote block.Vote) (*chain.BlockSummary, error) {
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc)
 	flow, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
+	if err != nil {
+		return nil, err
+	}
+
+	conflicts, err := test.repo.ScanConflicts(parentSummary.Header.Number() + 1)
 	if err != nil {
 		return nil, err
 	}
@@ -122,16 +151,11 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	err = test.engine.Process(b.Header())
-	if err != nil {
-		return nil, err
-	}
-
 	if err = test.repo.AddBlock(b, nil, conflicts); err != nil {
 		return nil, err
 	}
 
-	if err = test.engine.CommitBlock(b.Header().ID()); err != nil {
+	if err = test.engine.CommitBlock(b.Header(), false); err != nil {
 		return nil, err
 	}
 
@@ -140,11 +164,13 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 
 func (test *TestBFT) fastForward(cnt int) error {
 	parent := test.repo.BestBlockSummary()
+
+	devCnt := len(devAccounts) - 1
 	for i := 1; i <= cnt; i++ {
-		priv := devAccounts[(int(parent.Header.Number())+1)%len(devAccounts)]
+		acc := devAccounts[(int(parent.Header.Number())+1)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, priv, block.COM, 0)
+		parent, err = test.newBlock(parent, acc, block.COM)
 		if err != nil {
 			return err
 		}
@@ -155,11 +181,13 @@ func (test *TestBFT) fastForward(cnt int) error {
 
 func (test *TestBFT) fastForwardWithMinority(cnt int) error {
 	parent := test.repo.BestBlockSummary()
+
+	devCnt := len(devAccounts) - 1
 	for i := 1; i <= cnt; i++ {
-		priv := devAccounts[(int(parent.Header.Number())+1)%(len(devAccounts)/3)]
+		acc := devAccounts[(int(parent.Header.Number())+1)%(devCnt/3)]
 
 		var err error
-		parent, err = test.newBlock(parent, priv, block.COM, 0)
+		parent, err = test.newBlock(parent, acc, block.COM)
 		if err != nil {
 			return err
 		}
@@ -170,17 +198,43 @@ func (test *TestBFT) fastForwardWithMinority(cnt int) error {
 
 func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
 	parent := test.repo.BestBlockSummary()
+	devCnt := len(devAccounts) - 1
 	for i := 1; i <= cnt; i++ {
 		// make a offset to pick a different master
-		priv := devAccounts[(int(parent.Header.Number())+1+4)%(len(devAccounts))]
+		acc := devAccounts[(int(parent.Header.Number())+1+4)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, priv, block.COM, 1)
+		parent, err = test.newBlock(parent, acc, block.COM)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return test.repo.NewChain(parent.Header.ID()), nil
+}
+
+func (test *TestBFT) pack(parentID thor.Bytes32, v block.Vote, best bool) (*chain.BlockSummary, error) {
+	acc := devAccounts[len(devAccounts)-1]
+	parent, err := test.repo.GetBlockSummary(parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	blk, err := test.newBlock(parent, acc, v)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := test.engine.CommitBlock(blk.Header, true); err != nil {
+		return nil, err
+	}
+
+	if best {
+		if err := test.repo.SetBestBlockID(blk.Header.ID()); err != nil {
+			return nil, err
+		}
+	}
+
+	return test.repo.GetBlockSummary(blk.Header.ID())
 }
 
 func TestNewEngine(t *testing.T) {
@@ -193,7 +247,7 @@ func TestNewEngine(t *testing.T) {
 	assert.Equal(t, genID, testBFT.engine.Finalized())
 }
 
-func TestProcessBlock(t *testing.T) {
+func TestNewBlock(t *testing.T) {
 	testBFT, err := newTestBft(defaultFC)
 	if err != nil {
 		t.Fatal(err)
@@ -210,18 +264,16 @@ func TestProcessBlock(t *testing.T) {
 		PrivateKey: priv,
 	}
 
-	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, block.COM, 0)
+	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, block.COM)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = testBFT.engine.Process(summary.Header)
-	assert.Nil(t, err)
 
 	newBest, err := testBFT.engine.Select(summary.Header)
 	assert.Nil(t, err)
 	assert.True(t, newBest)
 
-	assert.Nil(t, testBFT.engine.CommitBlock(summary.Header.ID()))
+	assert.Nil(t, testBFT.engine.CommitBlock(summary.Header, false))
 }
 
 func TestNeverReachJustified(t *testing.T) {
@@ -235,7 +287,7 @@ func TestNeverReachJustified(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	st, err := testBFT.engine.getState(testBFT.repo.BestBlockSummary().Header.ID(), testBFT.repo.GetBlockHeader)
+	st, err := testBFT.engine.computeState(testBFT.repo.BestBlockSummary().Header)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +301,7 @@ func TestNeverReachJustified(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		st, err := testBFT.engine.getState(testBFT.repo.BestBlockSummary().Header.ID(), testBFT.repo.GetBlockHeader)
+		st, err := testBFT.engine.computeState(testBFT.repo.BestBlockSummary().Header)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -258,6 +310,39 @@ func TestNeverReachJustified(t *testing.T) {
 		assert.Equal(t, uint32(0), st.Quality)
 		assert.Equal(t, genesisID, testBFT.engine.Finalized())
 	}
+}
+
+func TestReCreate(t *testing.T) {
+	testBFT, err := newTestBft(defaultFC)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	genesisID := testBFT.repo.GenesisBlock().Header().ID()
+	if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval - 2); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, genesisID, testBFT.engine.Finalized())
+
+	if err := testBFT.fastForwardWithMinority(thor.CheckpointInterval*2 - 1); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, genesisID, testBFT.engine.Finalized())
+
+	if err := testBFT.reCreateEngine(); err != nil {
+		t.Fatal(err)
+	}
+
+	votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+	assert.Equal(t, 2, len(votes))
 }
 
 func TestFinalized(t *testing.T) {
@@ -272,12 +357,12 @@ func TestFinalized(t *testing.T) {
 
 	blockNum := uint32(MaxBlockProposers*2/3 + 1)
 
-	blkID, err := testBFT.repo.NewBestChain().GetBlockID(blockNum)
+	sum, err := testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	st, err := testBFT.engine.getState(blkID, testBFT.repo.GetBlockHeader)
+	st, err := testBFT.engine.computeState(sum.Header)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,16 +370,16 @@ func TestFinalized(t *testing.T) {
 	// should be justify and commit at (MaxBlockProposers*2/3) + 1
 	assert.Equal(t, uint32(1), st.Quality)
 	assert.True(t, st.Justified)
-	assert.Equal(t, blkID, *st.CommitAt)
+	assert.Equal(t, sum.Header.ID(), *st.CommitAt)
 
 	blockNum = uint32(thor.CheckpointInterval*2 + MaxBlockProposers*2/3)
 
-	blkID, err = testBFT.repo.NewBestChain().GetBlockID(blockNum)
+	sum, err = testBFT.repo.NewBestChain().GetBlockSummary(blockNum)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	st, err = testBFT.engine.getState(blkID, testBFT.repo.GetBlockHeader)
+	st, err = testBFT.engine.computeState(sum.Header)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +387,7 @@ func TestFinalized(t *testing.T) {
 	// should be justify and commit at (bft round start) + (MaxBlockProposers*2/3) + 1
 	assert.Equal(t, uint32(3), st.Quality)
 	assert.True(t, st.Justified)
-	assert.Equal(t, blkID, *st.CommitAt)
+	assert.Equal(t, sum.Header.ID(), *st.CommitAt)
 
 	// chain stops the end of third bft round,should commit the second checkpoint
 	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
@@ -399,40 +484,36 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if err = testBFT.fastForward(thor.CheckpointInterval*3 - 2); err != nil {
+				if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
 					t.Fatal(err)
 				}
 
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
 				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
+				branch, err := testBFT.buildBranch(1)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if _, err := testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
+					t.Fatal(err)
+				}
+
 				if err := testBFT.fastForward(1); err != nil {
 					t.Fatal(err)
 				}
 
-				branch, err := testBFT.buildBranch(2)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if err := testBFT.engine.MarkVoted(branch.HeadID()); err != nil {
-					t.Fatal(err)
-				}
-
-				if err := testBFT.fastForward(3); err != nil {
-					t.Fatal(err)
-				}
-
-				trunkCP, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 3)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := testBFT.engine.MarkVoted(trunkCP); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
 					t.Fatal(err)
 				}
 
 				// should be 2 checkpoints in voted
-				assert.Equal(t, 2, len(testBFT.engine.voted))
+				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, 2, len(votes))
 
 				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
@@ -455,31 +536,48 @@ func TestGetVote(t *testing.T) {
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
 				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
-				branch, err := testBFT.buildBranch(2)
+				branch, err := testBFT.buildBranch(1)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				if err := testBFT.engine.MarkVoted(branch.HeadID()); err != nil {
+				if _, err = testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := testBFT.fastForward(8); err != nil {
+				if err := testBFT.fastForward(7); err != nil {
 					t.Fatal(err)
 				}
 
-				trunkCP, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 3)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := testBFT.engine.MarkVoted(trunkCP); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
 					t.Fatal(err)
 				}
 
 				// should be 2 checkpoints in voted
-				assert.Equal(t, 2, len(testBFT.engine.voted))
+				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, 2, len(votes))
 
 				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				assert.Equal(t, block.WIT, v)
+
+				err = testBFT.reCreateEngine()
+				assert.Nil(t, err)
+
+				//should be 2 checkpoints in voted
+				votes = testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, 2, len(votes))
+
+				v, err = testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -500,29 +598,29 @@ func TestGetVote(t *testing.T) {
 				genesisID := testBFT.repo.GenesisBlock().Header().ID()
 				assert.NotEqual(t, genesisID, testBFT.engine.Finalized())
 
-				branch, err := testBFT.buildBranch(8)
+				branch, err := testBFT.buildBranch(7)
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				if err := testBFT.engine.MarkVoted(branch.HeadID()); err != nil {
+				if _, err = testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := testBFT.fastForward(8); err != nil {
+				if err := testBFT.fastForward(7); err != nil {
 					t.Fatal(err)
 				}
 
-				trunkCP, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 3)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := testBFT.engine.MarkVoted(trunkCP); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
 					t.Fatal(err)
 				}
 
 				// should be 2 checkpoints in voted
-				assert.Equal(t, 2, len(testBFT.engine.voted))
+				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.Equal(t, 2, len(votes))
 
 				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {

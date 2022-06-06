@@ -150,12 +150,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}
-
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err = n.bft.Process(newBlock.Header()); err != nil {
-				return errors.Wrap(err, "process block in bft engine")
-			}
-		}
 		execElapsed := mclock.Now() - startTime
 
 		// write logs
@@ -175,8 +169,9 @@ func (n *Node) pack(flow *packer.Flow) error {
 			return errors.Wrap(err, "add block")
 		}
 
+		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.CommitBlock(newBlock.Header().ID()); err != nil {
+			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
 				return errors.Wrap(err, "bft commits")
 			}
 		}
@@ -187,12 +182,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 			if err := n.logWorker.Sync(); err != nil {
 				log.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
-			}
-		}
-
-		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
-			if err := n.bft.MarkVoted(newBlock.Header().ID()); err != nil {
-				return errors.Wrap(err, "mark voted")
 			}
 		}
 

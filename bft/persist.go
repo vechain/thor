@@ -6,7 +6,6 @@ package bft
 
 import (
 	"encoding/binary"
-	"encoding/json"
 
 	"github.com/vechain/thor/kv"
 	"github.com/vechain/thor/thor"
@@ -26,32 +25,4 @@ func loadQuality(getter kv.Getter, id thor.Bytes32) (uint32, error) {
 	}
 
 	return binary.BigEndian.Uint32(b), nil
-}
-
-func saveVoted(putter kv.Putter, voted map[thor.Bytes32]uint32) error {
-	b, err := json.Marshal(voted)
-	if err != nil {
-		return nil
-	}
-
-	return putter.Put(votedKey, b)
-}
-
-func loadVoted(getter kv.Getter) (map[thor.Bytes32]uint32, error) {
-	voted := make(map[thor.Bytes32]uint32)
-
-	b, err := getter.Get(votedKey)
-	if err != nil {
-		if getter.IsNotFound(err) {
-			return voted, nil
-		}
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &voted)
-	if err != nil {
-		return nil, err
-	}
-
-	return voted, nil
 }
