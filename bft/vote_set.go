@@ -22,7 +22,7 @@ type voteSet struct {
 	checkpoint    uint32
 	threshold     uint64
 
-	votes    map[thor.Address]bool
+	votes    map[thor.Address]block.Vote
 	comVotes uint64
 	commitAt *thor.Bytes32
 }
@@ -31,7 +31,7 @@ func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
 	var parentQuality uint32 // quality of last round
 
 	blockNum := block.Number(parentID) + 1
-	checkpoint := getCheckpoint(blockNum)
+	checkpoint := getCheckPoint(blockNum)
 	absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval
 
 	var lastOfParentRound uint32
@@ -61,7 +61,7 @@ func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
 	}
 
 	return &voteSet{
-		votes:         make(map[thor.Address]bool),
+		votes:         make(map[thor.Address]block.Vote),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		threshold:     threshold,
@@ -78,14 +78,13 @@ func (vs *voteSet) addVote(signer thor.Address, vote block.Vote, blockID thor.By
 		return
 	}
 
-	isCom := vote == block.COM
-	if votedCom, ok := vs.votes[signer]; !ok {
-		vs.votes[signer] = isCom
-		if isCom {
+	if prev, ok := vs.votes[signer]; !ok {
+		vs.votes[signer] = vote
+		if vote == block.COM {
 			vs.comVotes++
 		}
-	} else if !votedCom && isCom {
-		vs.votes[signer] = true
+	} else if prev == block.WIT && vote == block.COM {
+		vs.votes[signer] = vote
 		vs.comVotes++
 	}
 
