@@ -63,6 +63,14 @@ func saveBlockSummary(w kv.Putter, summary *BlockSummary) error {
 	return saveRLP(w, summary.Header.ID().Bytes(), summary)
 }
 
+func indexChainHead(w kv.Putter, header *block.Header) error {
+	if err := w.Delete(header.ParentID().Bytes()); err != nil {
+		return err
+	}
+
+	return w.Put(header.ID().Bytes(), nil)
+}
+
 func loadBlockSummary(r kv.Getter, id thor.Bytes32) (*BlockSummary, error) {
 	var summary BlockSummary
 	if err := loadRLP(r, id[:], &summary); err != nil {
