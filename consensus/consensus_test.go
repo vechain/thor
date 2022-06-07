@@ -14,7 +14,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -24,6 +23,7 @@ import (
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/vrf"
 )
 
 func txBuilder(tag byte) *tx.Builder {
@@ -164,7 +164,7 @@ func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKe
 			}
 			alpha = beta
 		}
-		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(pk, alpha)
+		_, proof, err := vrf.Prove(pk, alpha)
 		if err != nil {
 			return nil, err
 		}

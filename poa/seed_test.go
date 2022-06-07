@@ -12,13 +12,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/go-ecvrf"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/vrf"
 )
 
 func TestSeeder_Generate(t *testing.T) {
@@ -131,7 +131,7 @@ func TestSeeder_Generate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, proof, err := ecvrf.Secp256k1Sha256Tai.Prove(priv, parentBeta)
+		_, proof, err := vrf.Prove(priv, parentBeta)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -9,6 +9,7 @@ require (
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.0
 	github.com/deckarep/golang-set v1.7.1 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/elastic/gosigar v0.10.5
 	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/ethereum/go-ethereum v1.8.14
