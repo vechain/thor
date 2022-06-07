@@ -297,13 +297,9 @@ func (r *Repository) ScanHeads(from uint32) ([]thor.Bytes32, error) {
 	defer iter.Release()
 
 	heads := make([]thor.Bytes32, 0, 16)
-	if iter.Last() {
-		for {
-			heads = append(heads, thor.BytesToBytes32(iter.Key()))
-			if !iter.Prev() {
-				break
-			}
-		}
+
+	for ok := iter.Last(); ok; ok = iter.Prev() {
+		heads = append(heads, thor.BytesToBytes32(iter.Key()))
 	}
 
 	if iter.Error() != nil {
@@ -333,16 +329,6 @@ func (r *Repository) GetBlockSummary(id thor.Bytes32) (summary *BlockSummary, er
 		return
 	}
 	return cached.(*BlockSummary), nil
-}
-
-// GetBlockHeader get block header by block id.
-func (r *Repository) GetBlockHeader(id thor.Bytes32) (*block.Header, error) {
-	sum, err := r.GetBlock(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return sum.Header(), nil
 }
 
 func (r *Repository) getTransaction(key txKey) (*tx.Transaction, error) {
