@@ -29,16 +29,16 @@ var finalizedKey = []byte("finalized")
 type BFTEngine struct {
 	repo       *chain.Repository
 	data       kv.Store
-	voted      voted
-	master     thor.Address
 	stater     *state.Stater
 	forkConfig thor.ForkConfig
+	master     thor.Address
+	casts      casts
 	finalized  atomic.Value
 	caches     struct {
-		state   *lru.Cache
-		quality *lru.Cache
-		mbp     *lru.Cache
-		voteset *cache.PrioCache
+		state     *lru.Cache
+		quality   *lru.Cache
+		mbp       *lru.Cache
+		justifier *cache.PrioCache
 	}
 }
 
@@ -47,15 +47,15 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	engine := BFTEngine{
 		repo:       repo,
 		data:       mainDB.NewStore(dataStoreName),
-		master:     master,
 		stater:     state.NewStater(mainDB),
 		forkConfig: forkConfig,
+		master:     master,
 	}
 
 	engine.caches.state, _ = lru.New(1024)
 	engine.caches.quality, _ = lru.New(1024)
 	engine.caches.mbp, _ = lru.New(8)
-	engine.caches.voteset = cache.NewPrioCache(16)
+	engine.caches.justifier = cache.NewPrioCache(16)
 
 	if val, err := engine.data.Get(finalizedKey); err != nil {
 		if !engine.data.IsNotFound(err) {
@@ -144,7 +144,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 		if err != nil {
 			return err
 		}
-		engine.voted.Vote(checkpoint, state.Quality)
+		engine.casts.Mark(checkpoint, state.Quality)
 	}
 
 	return nil
@@ -153,9 +153,9 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 // GetVote computes the vote for a given parent block ID.
 // Packer only.
 func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (v block.Vote, err error) {
-	// laze init voted
-	if engine.voted == nil {
-		if engine.voted, err = newVoted(engine); err != nil {
+	// laze init casts
+	if engine.casts == nil {
+		if engine.casts, err = newCasts(engine); err != nil {
 			return
 		}
 	}
@@ -195,18 +195,17 @@ func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (v block.Vote, err error
 	}
 
 	// see https://github.com/vechain/VIPs/blob/master/vips/VIP-220.md
-	votes := engine.voted.Votes(engine.Finalized())
-	for _, v := range votes {
-		x, y := recentJC, v.checkpoint
-		if block.Number(v.checkpoint) > block.Number(recentJC) {
-			x, y = v.checkpoint, recentJC
+	for _, cast := range engine.casts.Slice(engine.Finalized()) {
+		x, y := recentJC, cast.checkpoint
+		if block.Number(cast.checkpoint) > block.Number(recentJC) {
+			x, y = cast.checkpoint, recentJC
 		}
 
 		// comparing packer's vote with the most recent JC, if packer voted
 		// a conflict checkpoint at (recentJC.Quality or -1) vote WIT
 		if includes, err := engine.repo.NewChain(x).HasBlock(y); err != nil {
 			return block.WIT, err
-		} else if !includes && v.quality >= theQuality-1 {
+		} else if !includes && cast.quality >= theQuality-1 {
 			return block.WIT, nil
 		}
 	}
@@ -225,26 +224,26 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	}
 
 	var (
-		vs  *voteSet
+		js  *justifier
 		end uint32
 	)
 
-	if entry := engine.caches.voteset.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		vs = interface{}(entry.Entry.Value).(*voteSet)
+	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
+		js = interface{}(entry.Entry.Value).(*justifier)
 		end = header.Number() - 1
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
-		vs, err = newVoteSet(engine, header.ParentID())
+		js, err = newJustifier(engine, header.ParentID())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create vote set")
 		}
-		end = vs.checkpoint
+		end = js.checkpoint
 	}
 
 	h := header
 	for {
-		if vs.isCommitted() || h.Vote() == nil {
+		if js.isCommitted() || h.Vote() == nil {
 			break
 		}
 
@@ -253,7 +252,7 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 			return nil, err
 		}
 
-		vs.addVote(signer, *h.Vote(), h.ID())
+		js.AddBlock(h.ID(), signer, *h.Vote())
 
 		if h.Number() <= end {
 			break
@@ -266,10 +265,10 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 		h = sum.Header
 	}
 
-	st := vs.getState()
+	st := js.Summarize()
 
 	engine.caches.state.Add(header.ID(), st)
-	engine.caches.voteset.Set(header.ID(), vs, float64(header.Number()))
+	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
 	return st, nil
 }
 

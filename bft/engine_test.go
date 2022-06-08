@@ -341,7 +341,7 @@ func TestReCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+	votes := testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 	assert.Equal(t, 2, len(votes))
 }
 
@@ -511,7 +511,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				// should be 2 checkpoints in voted
-				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				votes := testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -556,7 +556,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				// should be 2 checkpoints in voted
-				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				votes := testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -573,7 +573,7 @@ func TestGetVote(t *testing.T) {
 				assert.Nil(t, err)
 
 				//should be 2 checkpoints in voted
-				votes = testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				votes = testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -618,7 +618,7 @@ func TestGetVote(t *testing.T) {
 				}
 
 				// should be 2 checkpoints in voted
-				votes := testBFT.engine.voted.Votes(testBFT.engine.Finalized())
+				votes := testBFT.engine.casts.Slice(testBFT.engine.Finalized())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -641,19 +641,19 @@ func TestGetVote(t *testing.T) {
 	}
 }
 
-func TestVoteSet(t *testing.T) {
+func TestJustifier(t *testing.T) {
 	tests := []struct {
 		name     string
 		testFunc func(*testing.T)
 	}{
 		{
-			"newVoteSet", func(t *testing.T) {
+			"newJustifier", func(t *testing.T) {
 				fc := defaultFC
 				testBft, err := newTestBft(fc)
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -669,7 +669,7 @@ func TestVoteSet(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -687,16 +687,16 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval * 2)
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				assert.Equal(t, uint32(thor.CheckpointInterval*2), vs.checkpoint)
 				assert.Equal(t, uint64(MaxBlockProposers*2/3), vs.threshold)
-				assert.Equal(t, uint32(2), vs.getState().Quality)
-				assert.False(t, vs.getState().Justified)
-				assert.Nil(t, vs.getState().CommitAt)
+				assert.Equal(t, uint32(2), vs.Summarize().Quality)
+				assert.False(t, vs.Summarize().Justified)
+				assert.Nil(t, vs.Summarize().CommitAt)
 			},
 		}, {
 			"add votes: commits", func(t *testing.T) {
@@ -708,7 +708,7 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -716,17 +716,17 @@ func TestVoteSet(t *testing.T) {
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.addVote(RandomAddress(), block.COM, blkID)
+					vs.AddBlock(blkID, RandomAddress(), block.COM)
 				}
 
-				st := vs.getState()
+				st := vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.Equal(t, *st.CommitAt, blkID)
 				assert.True(t, st.Justified)
 
 				// add vote after commits，commit/justify stays the same
-				vs.addVote(RandomAddress(), block.COM, RandomBytes32())
-				st = vs.getState()
+				vs.AddBlock(RandomBytes32(), RandomAddress(), block.COM)
+				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.Equal(t, *st.CommitAt, blkID)
 				assert.True(t, st.Justified)
@@ -741,7 +741,7 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -749,10 +749,10 @@ func TestVoteSet(t *testing.T) {
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.addVote(RandomAddress(), block.WIT, blkID)
+					vs.AddBlock(blkID, RandomAddress(), block.WIT)
 				}
 
-				st := vs.getState()
+				st := vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
 				assert.Nil(t, st.CommitAt)
@@ -767,7 +767,7 @@ func TestVoteSet(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newVoteSet(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -776,25 +776,25 @@ func TestVoteSet(t *testing.T) {
 				// vote <threshold> times COM
 				for i := 0; i < MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.addVote(RandomAddress(), block.COM, blkID)
+					vs.AddBlock(blkID, RandomAddress(), block.COM)
 				}
 
 				master := RandomAddress()
 				// master votes WIT
 				blkID = RandomBytes32()
-				vs.addVote(master, block.WIT, blkID)
+				vs.AddBlock(blkID, master, block.WIT)
 
 				// justifies but not committed
-				st := vs.getState()
+				st := vs.Summarize()
 				assert.True(t, st.Justified)
 				assert.Nil(t, st.CommitAt)
 
 				blkID = RandomBytes32()
 				// master votes COM
-				vs.addVote(master, block.COM, blkID)
+				vs.AddBlock(blkID, master, block.COM)
 
 				// should be committed
-				st = vs.getState()
+				st = vs.Summarize()
 				assert.Equal(t, *st.CommitAt, blkID)
 			},
 		},
