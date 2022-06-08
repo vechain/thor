@@ -418,8 +418,9 @@ func TestAccepts(t *testing.T) {
 	}
 
 	// new block in trunk should accept
-	err = testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
+	ok, err := testBFT.engine.Accepts(testBFT.engine.repo.BestBlockSummary().Header.ID())
 	assert.Nil(t, err)
+	assert.Equal(t, ok, true)
 
 	branchID, err := branch.GetBlockID(thor.CheckpointInterval)
 	if err != nil {
@@ -427,8 +428,9 @@ func TestAccepts(t *testing.T) {
 	}
 
 	// blocks in trunk should be rejected
-	err = testBFT.engine.Accepts(branchID)
-	assert.Equal(t, errConflictWithFinalized, err)
+	ok, err = testBFT.engine.Accepts(branchID)
+	assert.Nil(t, err)
+	assert.Equal(t, ok, false)
 }
 
 func TestGetVote(t *testing.T) {

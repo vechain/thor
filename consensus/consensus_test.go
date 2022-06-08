@@ -102,7 +102,7 @@ func newTestConsensus() (*testConsensus, error) {
 
 	con := New(repo, stater, forkConfig)
 
-	if _, _, err := con.Process(b1, flow.When(), 0); err != nil {
+	if _, _, err := con.Process(parentSum, b1, flow.When(), 0); err != nil {
 		return nil, err
 	}
 
@@ -131,7 +131,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	if _, _, err := con.Process(b2, flow2.When(), 0); err != nil {
+	if _, _, err := con.Process(b1sum, b2, flow2.When(), 0); err != nil {
 		return nil, err
 	}
 
@@ -206,7 +206,12 @@ func (tc *testConsensus) builder(header *block.Header) *block.Builder {
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
-	_, _, err := tc.con.Process(blk, tc.time, 0)
+	parentSum, err := tc.con.repo.GetBlockSummary(blk.Header().ParentID())
+	if err != nil {
+		return err
+	}
+
+	_, _, err = tc.con.Process(parentSum, blk, tc.time, 0)
 	return err
 }
 
@@ -401,17 +406,6 @@ func TestVerifyBlock(t *testing.T) {
 		name     string
 		testFunc func(*testing.T)
 	}{
-		{
-			"ParentMissing", func(t *testing.T) {
-				builder := tc.builder(tc.original.Header())
-				blk, err := tc.sign(builder.ParentID(tc.original.Header().ID()))
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = tc.consent(blk)
-				assert.Equal(t, err, errParentMissing)
-			},
-		},
 		{
 			"TxDepBroken", func(t *testing.T) {
 				txID := txSign(txBuilder(tc.tag)).ID()

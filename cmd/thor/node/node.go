@@ -42,6 +42,8 @@ var (
 	// error when the block larger than known max block number + 1
 	errBlockTemporaryUnprocessable = errors.New("block temporary unprocessable")
 	errKnownBlock                  = errors.New("block already in the chain")
+	errParentMissing               = errors.New("parent block is missing")
+	errBFTRejected                 = errors.New("block rejected by BFT engine")
 )
 
 type Node struct {
@@ -183,7 +185,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
-					((consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
+					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
 					log.Debug("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
@@ -308,18 +310,27 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 				return errKnownBlock
 			}
 		}
+		parentSummary, err := n.repo.GetBlockSummary(newBlock.Header().ParentID())
+		if err != nil {
+			if !n.repo.IsNotFound(err) {
+				return err
+			}
+			return errParentMissing
+		}
+
 		var (
 			startTime = mclock.Now()
 			oldBest   = n.repo.BestBlockSummary()
 		)
 
-		err := n.bft.Accepts(newBlock.Header().ParentID())
-		if err != nil {
-			return err
+		if ok, err := n.bft.Accepts(newBlock.Header().ParentID()); err != nil {
+			return errors.Wrap(err, "bft accepts")
+		} else if !ok {
+			return errBFTRejected
 		}
 
 		// process the new block
-		stage, receipts, err := n.cons.Process(newBlock, uint64(time.Now().Unix()), conflicts)
+		stage, receipts, err := n.cons.Process(parentSummary, newBlock, uint64(time.Now().Unix()), conflicts)
 		if err != nil {
 			return err
 		}
@@ -390,11 +401,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return nil
 	}); err != nil {
 		switch {
-		case err == errKnownBlock:
-		case bft.IsConflictWithFinalized(err):
+		case err == errKnownBlock || err == errBFTRejected:
 			stats.UpdateIgnored(1)
 			return false, nil
-		case consensus.IsFutureBlock(err) || consensus.IsParentMissing(err) || err == errBlockTemporaryUnprocessable:
+		case consensus.IsFutureBlock(err) || err == errParentMissing || err == errBlockTemporaryUnprocessable:
 			stats.UpdateQueued(1)
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
