@@ -9,15 +9,15 @@ import (
 	"github.com/vechain/thor/thor"
 )
 
-// bftState is the state summary of a bft round for a given block.
+// bftState is the summary of a bft round for a given head.
 type bftState struct {
 	Quality   uint32 // accumulated justified block count
 	Justified bool
 	CommitAt  *thor.Bytes32 // block reaches committed in this round
 }
 
-// voteSet tracks vote in a bft round.
-type voteSet struct {
+// justifier tracks all block vote in one bft round and justify the round.
+type justifier struct {
 	parentQuality uint32
 	checkpoint    uint32
 	threshold     uint64
@@ -27,7 +27,7 @@ type voteSet struct {
 	commitAt *thor.Bytes32
 }
 
-func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
+func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) {
 	var parentQuality uint32 // quality of last round
 
 	blockNum := block.Number(parentID) + 1
@@ -60,7 +60,7 @@ func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
 		}
 	}
 
-	return &voteSet{
+	return &justifier{
 		votes:         make(map[thor.Address]block.Vote),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
@@ -68,35 +68,36 @@ func newVoteSet(engine *BFTEngine, parentID thor.Bytes32) (*voteSet, error) {
 	}, nil
 }
 
-func (vs *voteSet) isCommitted() bool {
-	return vs.commitAt != nil
+func (js *justifier) isCommitted() bool {
+	return js.commitAt != nil
 }
 
-// addVote adds a new vote to the set.
-func (vs *voteSet) addVote(signer thor.Address, vote block.Vote, blockID thor.Bytes32) {
-	if vs.isCommitted() {
+// AddBlock adds a new block to the set.
+func (js *justifier) AddBlock(blockID thor.Bytes32, signer thor.Address, vote block.Vote) {
+	if js.isCommitted() {
 		return
 	}
 
-	if prev, ok := vs.votes[signer]; !ok {
-		vs.votes[signer] = vote
+	if prev, ok := js.votes[signer]; !ok {
+		js.votes[signer] = vote
 		if vote == block.COM {
-			vs.comVotes++
+			js.comVotes++
 		}
 	} else if prev == block.WIT && vote == block.COM {
-		vs.votes[signer] = vote
-		vs.comVotes++
+		js.votes[signer] = vote
+		js.comVotes++
 	}
 
-	if vs.commitAt == nil && vs.comVotes > vs.threshold {
-		vs.commitAt = &blockID
+	if js.commitAt == nil && js.comVotes > js.threshold {
+		js.commitAt = &blockID
 	}
 }
 
-func (vs *voteSet) getState() *bftState {
+// Summarize summarizes the state of vote set.
+func (js *justifier) Summarize() *bftState {
 	justified := false
-	quality := vs.parentQuality
-	if len(vs.votes) > int(vs.threshold) {
+	quality := js.parentQuality
+	if len(js.votes) > int(js.threshold) {
 		justified = true
 		quality = quality + 1
 	}
@@ -104,6 +105,6 @@ func (vs *voteSet) getState() *bftState {
 	return &bftState{
 		Quality:   quality,
 		Justified: justified,
-		CommitAt:  vs.commitAt,
+		CommitAt:  js.commitAt,
 	}
 }

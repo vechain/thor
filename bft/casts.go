@@ -5,18 +5,18 @@
 package bft
 
 import (
+	"bytes"
+	"sort"
+
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
 
-type voted map[thor.Bytes32]uint32
-type votes []struct {
-	checkpoint thor.Bytes32
-	quality    uint32
-}
+// casts stores the master's overall casts, maintaining the map of quality to checkpoint.
+type casts map[thor.Bytes32]uint32
 
-func newVoted(engine *BFTEngine) (voted, error) {
-	v := make(voted)
+func newCasts(engine *BFTEngine) (casts, error) {
+	c := make(casts)
 
 	finalized := engine.Finalized()
 	heads, err := engine.repo.ScanHeads(block.Number(finalized))
@@ -48,8 +48,8 @@ func newVoted(engine *BFTEngine) (voted, error) {
 				}
 
 				checkpoint := sum.Header.ID()
-				if quality, ok := v[checkpoint]; !ok || quality < st.Quality {
-					v[checkpoint] = st.Quality
+				if quality, ok := c[checkpoint]; !ok || quality < st.Quality {
+					c[checkpoint] = st.Quality
 				}
 			}
 
@@ -60,13 +60,19 @@ func newVoted(engine *BFTEngine) (voted, error) {
 		}
 	}
 
-	return v, nil
+	return c, nil
 }
 
-func (v voted) Votes(finalized thor.Bytes32) votes {
-	list := make(votes, 0, len(v))
+func (ca casts) Slice(finalized thor.Bytes32) []struct {
+	checkpoint thor.Bytes32
+	quality    uint32
+} {
+	list := make([]struct {
+		checkpoint thor.Bytes32
+		quality    uint32
+	}, 0, len(ca))
 
-	for checkpoint, quality := range v {
+	for checkpoint, quality := range ca {
 		if block.Number(checkpoint) >= block.Number(finalized) {
 			list = append(list, struct {
 				checkpoint thor.Bytes32
@@ -74,9 +80,14 @@ func (v voted) Votes(finalized thor.Bytes32) votes {
 			}{checkpoint: checkpoint, quality: quality})
 		}
 	}
+	sort.Slice(list, func(i, j int) bool {
+		return bytes.Compare(list[i].checkpoint.Bytes(), list[j].checkpoint.Bytes()) > 0
+	})
+
 	return list
 }
 
-func (v voted) Vote(checkpoint thor.Bytes32, quality uint32) {
-	v[checkpoint] = quality
+// Mark marks the master's cast.
+func (ca casts) Mark(checkpoint thor.Bytes32, quality uint32) {
+	ca[checkpoint] = quality
 }
