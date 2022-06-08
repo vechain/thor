@@ -75,19 +75,18 @@ func (engine *BFTEngine) Finalized() thor.Bytes32 {
 }
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
-func (engine *BFTEngine) Accepts(parentID thor.Bytes32) error {
+func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 	finalized := engine.Finalized()
-	if block.Number(finalized) == 0 {
-		return nil
+
+	if block.Number(finalized) != 0 {
+		if included, err := engine.repo.NewChain(parentID).HasBlock(finalized); err != nil {
+			return false, err
+		} else if !included {
+			return false, nil
+		}
 	}
 
-	if included, err := engine.repo.NewChain(parentID).HasBlock(finalized); err != nil {
-		return err
-	} else if !included {
-		return errConflictWithFinalized
-	}
-
-	return nil
+	return true, nil
 }
 
 // Select selects between the new block and the current best, return true if new one is better.

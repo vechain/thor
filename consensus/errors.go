@@ -9,10 +9,7 @@ import (
 	"errors"
 )
 
-var (
-	errFutureBlock   = errors.New("block in the future")
-	errParentMissing = errors.New("parent block is missing")
-)
+var errFutureBlock = errors.New("block in the future")
 
 type consensusError string
 
@@ -24,11 +21,6 @@ func (err consensusError) Error() string {
 // processed later.
 func IsFutureBlock(err error) bool {
 	return err == errFutureBlock
-}
-
-// IsParentMissing ...
-func IsParentMissing(err error) bool {
-	return err == errParentMissing
 }
 
 // IsCritical returns if the error is consensus related.

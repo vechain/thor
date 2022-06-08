@@ -5,17 +5,9 @@
 package bft
 
 import (
-	"errors"
-
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/thor"
 )
-
-var errConflictWithFinalized = errors.New("block conflict with finalized")
-
-func IsConflictWithFinalized(err error) bool {
-	return err == errConflictWithFinalized
-}
 
 type voted map[thor.Bytes32]uint32
 type votes []struct {
