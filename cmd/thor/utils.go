@@ -270,7 +270,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          30, // 5min
 		TrieLeafBankSlotCapacity:   256,
-		TrieDedupedPartitionFactor: math.MaxUint32,
+		TrieDedupedPartitionFactor: 3_000_000, // about 1 year
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
 		OpenFilesCacheCapacity:     fdCache,
 		ReadCacheMB:                256, // rely on os page cache other than huge db read cache.
