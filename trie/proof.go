@@ -76,11 +76,14 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			if fromLevel > 0 {
 				fromLevel--
 			} else {
-				enc := frlp.EncodeToBytes(n, false)
+				hasher.enc.Reset()
+				n.encode(&hasher.enc, hasher.nonCrypto)
+				hasher.tmp.Reset()
+				hasher.enc.ToWriter(&hasher.tmp)
 				if ok {
-					proofDb.Put(hash.Hash[:], enc)
+					proofDb.Put(hash.Hash[:], hasher.tmp)
 				} else {
-					proofDb.Put(thor.Blake2b(enc).Bytes(), enc)
+					proofDb.Put(thor.Blake2b(hasher.tmp).Bytes(), hasher.tmp)
 				}
 			}
 		}

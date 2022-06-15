@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/lowrlp"
 	"github.com/vechain/thor/thor"
 )
 
@@ -36,6 +37,8 @@ type node interface {
 	fstring(string) string
 	cache() (*hashNode, bool, uint16)
 	seqNum() uint64
+	encode(e *lowrlp.Encoder, nonCrypto bool)
+	encodeTrailing(*lowrlp.Encoder)
 }
 
 type (
