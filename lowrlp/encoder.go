@@ -9,7 +9,6 @@ package lowrlp
 
 import (
 	"io"
-	"sync"
 )
 
 // Encoder is the low-level rlp encoder.
@@ -20,26 +19,11 @@ type Encoder struct {
 	sizebuf [9]byte    // auxiliary buffer for uint encoding
 }
 
-var pool = sync.Pool{
-	New: func() interface{} { return &Encoder{} },
-}
-
-func NewEncoder() *Encoder {
-	w := pool.Get().(*Encoder)
-	w.Reset()
-	return w
-}
-
 // Reset reset the encoder state.
 func (w *Encoder) Reset() {
 	w.lhsize = 0
 	w.str = w.str[:0]
 	w.lheads = w.lheads[:0]
-}
-
-// Release puts back the inner state into pool.
-func (w *Encoder) Release() {
-	pool.Put(w)
 }
 
 // EncodeString encodes the string value.
