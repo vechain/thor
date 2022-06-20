@@ -41,19 +41,18 @@ func newCasts(engine *BFTEngine) (casts, error) {
 				if err != nil {
 					return nil, err
 				}
-				// jump to previous round
-				sum, err = chain.GetBlockSummary(getCheckPoint(header.Number()))
+
+				checkpoint, err := chain.GetBlockID(getCheckPoint(header.Number()))
 				if err != nil {
 					return nil, err
 				}
-
-				checkpoint := sum.Header.ID()
 				if quality, ok := c[checkpoint]; !ok || quality < st.Quality {
 					c[checkpoint] = st.Quality
 				}
+				break
 			}
 
-			if sum.Header.Number() == block.Number(finalized) {
+			if sum.Header.Number() <= block.Number(finalized) {
 				break
 			}
 			cur = sum.Header.ParentID()
