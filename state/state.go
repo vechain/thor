@@ -462,13 +462,12 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 			c.storage[key.key] = v.(rlp.RawValue)
 			if len(c.meta.StorageID) == 0 {
 				// generate storage id for the new storage trie.
-				enc := lowrlp.NewEncoder()
+				var enc lowrlp.Encoder
 				enc.EncodeUint(uint64(newBlockNum))
 				enc.EncodeUint(uint64(newBlockConflicts))
 				enc.EncodeUint(uint64(storageTrieCreationCount))
 				storageTrieCreationCount++
 				c.meta.StorageID = enc.ToBytes()
-				enc.Release()
 			}
 		case storageBarrierKey:
 			if c, jerr = getChanged(thor.Address(key)); jerr != nil {

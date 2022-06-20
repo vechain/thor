@@ -183,12 +183,13 @@ func (it *nodeIterator) Node(handler func(blob []byte) error) error {
 
 	collapsed, _, _ := h.hashChildren(st.node, nil, it.path)
 
-	h.tmp.Reset()
-	_ = frlp.Encode(&h.tmp, collapsed, it.nonCrypto)
-
+	h.enc.Reset()
+	collapsed.encode(&h.enc, h.nonCrypto)
 	if it.extended {
-		_ = frlp.EncodeTrailing(&h.tmp, collapsed)
+		collapsed.encodeTrailing(&h.enc)
 	}
+	h.tmp.Reset()
+	h.enc.ToWriter(&h.tmp)
 	return handler(h.tmp)
 }
 
@@ -239,8 +240,9 @@ func (it *nodeIterator) LeafProof() [][]byte {
 				node, _, _ := hasher.hashChildren(item.node, nil, nil)
 				hashed, _ := hasher.store(node, nil, nil, false)
 				if _, ok := hashed.(*hashNode); ok || i == 0 {
-					enc := frlp.EncodeToBytes(node, false)
-					proofs = append(proofs, enc)
+					hasher.enc.Reset()
+					node.encode(&hasher.enc, hasher.nonCrypto)
+					proofs = append(proofs, hasher.enc.ToBytes())
 				}
 			}
 			return proofs

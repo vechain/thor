@@ -20,10 +20,12 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/vechain/thor/lowrlp"
 	"github.com/vechain/thor/thor"
 )
 
 type hasher struct {
+	enc      lowrlp.Encoder
 	tmp      sliceBuffer
 	cacheGen uint16
 	cacheTTL uint16
@@ -188,10 +190,10 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 		return n, nil
 	}
 	// Generate the RLP encoding of the node
+	h.enc.Reset()
+	n.encode(&h.enc, h.nonCrypto)
 	h.tmp.Reset()
-	if err := frlp.Encode(&h.tmp, n, h.nonCrypto); err != nil {
-		panic("encode error: " + err.Error())
-	}
+	h.enc.ToWriter(&h.tmp)
 
 	if h.nonCrypto {
 		// fullnode and shortnode with non-value child are forced
@@ -225,9 +227,9 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte, force bool) (node
 	if db != nil {
 		// extended
 		if h.extended {
-			if err := frlp.EncodeTrailing(&h.tmp, n); err != nil {
-				return nil, err
-			}
+			h.enc.Reset()
+			n.encodeTrailing(&h.enc)
+			h.enc.ToWriter(&h.tmp)
 			hash.seq = h.seq
 		}
 

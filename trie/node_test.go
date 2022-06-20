@@ -75,14 +75,17 @@ func BenchmarkEncodeFullNode(b *testing.B) {
 }
 
 func BenchmarkFastEncodeFullNode(b *testing.B) {
-	var buf sliceBuffer
 	f := &fullNode{}
 	for i := 0; i < len(f.Children); i++ {
 		f.Children[i] = &hashNode{Hash: thor.BytesToBytes32(randBytes(32))}
 	}
 
+	h := newHasher(0, 0)
+
 	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		frlp.Encode(&buf, f, false)
+		h.enc.Reset()
+		f.encode(&h.enc, false)
+		h.tmp.Reset()
+		h.enc.ToWriter(&h.tmp)
 	}
 }
