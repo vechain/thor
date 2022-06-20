@@ -6,7 +6,6 @@
 package thor
 
 import (
-	"bytes"
 	"hash"
 	"io"
 	"sync"
@@ -35,17 +34,25 @@ func Blake2b(data ...[]byte) Bytes32 {
 }
 
 // Blake2bFn computes blake2b-256 checksum for the provided writer.
-func Blake2bFn(fn func(w io.Writer)) (s Bytes32) {
-	w := hashBufferPool.Get().(*bytes.Buffer)
+func Blake2bFn(fn func(w io.Writer)) (h Bytes32) {
+	w := hstatePool.Get().(*hstate)
 	fn(w)
-	s = blake2b.Sum256(w.Bytes())
+	w.Sum(w.b32[:0])
+	h = w.b32 // to avoid 1 alloc
 	w.Reset()
-	hashBufferPool.Put(w)
+	hstatePool.Put(w)
 	return
 }
 
-var hashBufferPool = sync.Pool{
+type hstate struct {
+	hash.Hash
+	b32 Bytes32
+}
+
+var hstatePool = sync.Pool{
 	New: func() interface{} {
-		return bytes.NewBuffer(nil)
+		return &hstate{
+			Hash: NewBlake2b(),
+		}
 	},
 }
