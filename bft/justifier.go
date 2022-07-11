@@ -13,7 +13,7 @@ import (
 type bftState struct {
 	Quality   uint32 // accumulated justified block count
 	Justified bool
-	CommitAt  *thor.Bytes32 // block reaches committed in this round
+	Committed bool
 }
 
 // justifier tracks all block vote in one bft round and justify the round.
@@ -24,22 +24,19 @@ type justifier struct {
 
 	votes    map[thor.Address]block.Vote
 	comVotes uint64
-	commitAt *thor.Bytes32
 }
 
 func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) {
-	var parentQuality uint32 // quality of last round
-
 	blockNum := block.Number(parentID) + 1
-	checkpoint := getCheckPoint(blockNum)
-	absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval
 
 	var lastOfParentRound uint32
+	checkpoint := getCheckPoint(blockNum)
 	if checkpoint > 0 {
 		lastOfParentRound = checkpoint - 1
 	} else {
 		lastOfParentRound = 0
 	}
+
 	sum, err := engine.repo.NewChain(parentID).GetBlockSummary(lastOfParentRound)
 	if err != nil {
 		return nil, err
@@ -50,7 +47,8 @@ func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) 
 	}
 	threshold := mbp * 2 / 3
 
-	if absRound == 0 {
+	var parentQuality uint32 // quality of last round
+	if absRound := blockNum/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
 		parentQuality = 0
 	} else {
 		var err error
@@ -68,43 +66,36 @@ func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) 
 	}, nil
 }
 
-func (js *justifier) isCommitted() bool {
-	return js.commitAt != nil
-}
-
 // AddBlock adds a new block to the set.
 func (js *justifier) AddBlock(blockID thor.Bytes32, signer thor.Address, vote block.Vote) {
-	if js.isCommitted() {
-		return
-	}
-
 	if prev, ok := js.votes[signer]; !ok {
 		js.votes[signer] = vote
 		if vote == block.COM {
 			js.comVotes++
 		}
-	} else if prev == block.WIT && vote == block.COM {
-		js.votes[signer] = vote
-		js.comVotes++
-	}
-
-	if js.commitAt == nil && js.comVotes > js.threshold {
-		js.commitAt = &blockID
+	} else if prev != vote {
+		// if one votes both WIT and COM in one round, count as WIT
+		js.votes[signer] = block.WIT
+		if prev == block.COM {
+			js.comVotes--
+		}
 	}
 }
 
 // Summarize summarizes the state of vote set.
 func (js *justifier) Summarize() *bftState {
-	justified := false
-	quality := js.parentQuality
-	if len(js.votes) > int(js.threshold) {
-		justified = true
-		quality = quality + 1
+	justified := len(js.votes) > int(js.threshold)
+
+	var quality uint32
+	if justified {
+		quality = js.parentQuality + 1
+	} else {
+		quality = js.parentQuality
 	}
 
 	return &bftState{
 		Quality:   quality,
 		Justified: justified,
-		CommitAt:  js.commitAt,
+		Committed: js.comVotes > js.threshold,
 	}
 }
