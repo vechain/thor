@@ -52,8 +52,8 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 		master:     master,
 	}
 
-	engine.caches.state, _ = lru.New(1024)
-	engine.caches.quality, _ = lru.New(1024)
+	engine.caches.state, _ = lru.New(256)
+	engine.caches.quality, _ = lru.New(16)
 	engine.caches.mbp, _ = lru.New(8)
 	engine.caches.justifier = cache.NewPrioCache(16)
 
@@ -79,11 +79,7 @@ func (engine *BFTEngine) Accepts(parentID thor.Bytes32) (bool, error) {
 	finalized := engine.Finalized()
 
 	if block.Number(finalized) != 0 {
-		if included, err := engine.repo.NewChain(parentID).HasBlock(finalized); err != nil {
-			return false, err
-		} else if !included {
-			return false, nil
-		}
+		return engine.repo.NewChain(parentID).HasBlock(finalized)
 	}
 
 	return true, nil
@@ -111,36 +107,39 @@ func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
 
 // CommitBlock commits bft state to storage.
 func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error {
-	state, err := engine.computeState(header)
-	if err != nil {
-		return nil
-	}
-
-	blockNum := header.Number()
-	// save quality if needed
-	if getStorePoint(blockNum) == blockNum {
-		if err := saveQuality(engine.data, header.ID(), state.Quality); err != nil {
-			return err
-		}
-		engine.caches.quality.Add(header.ID(), state.Quality)
-	}
-
-	// update finalized if new block commits this round
-	if state.CommitAt != nil && header.ID() == *state.CommitAt && state.Quality > 1 {
-		id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ID())
+	// save quality and finalized at the end of each round
+	if getStorePoint(header.Number()) == header.Number() {
+		state, err := engine.computeState(header)
 		if err != nil {
 			return err
 		}
 
-		if err := engine.data.Put(finalizedKey, id[:]); err != nil {
+		if err := saveQuality(engine.data, header.ID(), state.Quality); err != nil {
 			return err
 		}
-		engine.finalized.Store(id)
+		engine.caches.quality.Add(header.ID(), state.Quality)
+
+		if state.Committed && state.Quality > 1 {
+			id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ParentID())
+			if err != nil {
+				return err
+			}
+
+			if err := engine.data.Put(finalizedKey, id[:]); err != nil {
+				return err
+			}
+			engine.finalized.Store(id)
+		}
 	}
 
 	// mark voted if packing
 	if isPacking {
-		checkpoint, err := engine.repo.NewChain(header.ID()).GetBlockID(getCheckPoint(blockNum))
+		state, err := engine.computeState(header)
+		if err != nil {
+			return err
+		}
+
+		checkpoint, err := engine.repo.NewChain(header.ID()).GetBlockID(getCheckPoint(header.Number()))
 		if err != nil {
 			return err
 		}
@@ -230,7 +229,7 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 
 	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
 		js = interface{}(entry.Entry.Value).(*justifier)
-		end = header.Number() - 1
+		end = header.Number()
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
@@ -243,15 +242,11 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 
 	h := header
 	for {
-		if js.isCommitted() || h.Vote() == nil {
+		if h.Vote() == nil {
 			break
 		}
 
-		signer, err := h.Signer()
-		if err != nil {
-			return nil, err
-		}
-
+		signer, _ := h.Signer()
 		js.AddBlock(h.ID(), signer, *h.Vote())
 
 		if h.Number() <= end {
@@ -266,7 +261,6 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	}
 
 	st := js.Summarize()
-
 	engine.caches.state.Add(header.ID(), st)
 	engine.caches.justifier.Set(header.ID(), js, float64(header.Number()))
 	return st, nil
