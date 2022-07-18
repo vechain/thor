@@ -116,7 +116,7 @@ func (t *Trie) newDatabase() trie.Database {
 		trie.DatabaseReader
 		trie.DatabaseWriter
 	}{
-		kv.GetToFunc(func(_ []byte, dst []byte) (blob []byte, err error) {
+		databaseGetToFunc(func(_ []byte, dst []byte) (blob []byte, err error) {
 			// get from cache
 			if blob = t.back.Cache.GetNodeBlob(t.name, thisSeq, thisPath, t.noFillCache, dst); len(blob) > 0 {
 				return
@@ -155,14 +155,23 @@ func (t *Trie) newDatabase() trie.Database {
 
 			// get from hist space first
 			keyBuf = t.makeHistNodeKey(keyBuf[:0], thisSeq, thisPath)
-			if blob, err = snapshot.GetTo(keyBuf, dst); err == nil || !snapshot.IsNotFound(err) {
-				// found or error
-				return
+			if val, err := snapshot.Get(keyBuf); err == nil {
+				// found
+				return append(dst, val...), nil
+			} else if !snapshot.IsNotFound(err) {
+				// error
+				if !snapshot.IsNotFound(err) {
+					return nil, err
+				}
 			}
 
 			// then from deduped space
 			keyBuf = t.makeDedupedNodeKey(keyBuf[:0], thisSeq, thisPath)
-			return snapshot.GetTo(keyBuf, dst)
+			if val, err := snapshot.Get(keyBuf); err == nil {
+				return append(dst, val...), nil
+			} else {
+				return nil, err
+			}
 		}),
 		databaseKeyEncodeFunc(func(hash []byte, seq uint64, path []byte) []byte {
 			thisHash = hash
@@ -450,10 +459,15 @@ func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommi
 // individual functions of trie database interface.
 type (
 	databaseKeyEncodeFunc func(hash []byte, seq uint64, path []byte) []byte
+	databaseGetToFunc     func(key, dst []byte) ([]byte, error)
 )
 
 func (f databaseKeyEncodeFunc) Encode(hash []byte, seq uint64, path []byte) []byte {
 	return f(hash, seq, path)
+}
+
+func (f databaseGetToFunc) GetTo(key, dst []byte) ([]byte, error) {
+	return f(key, dst)
 }
 
 // leafAvailable is a special error type to short circuit trie get method.
