@@ -204,9 +204,9 @@ func (h *Header) Alpha() []byte {
 	return h.body.Extension.Alpha
 }
 
-// Vote returns the vote in the header.
-func (h *Header) Vote() *Vote {
-	return h.body.Extension.Vote
+// COM returns whether the packer votes COM.
+func (h *Header) COM() bool {
+	return h.body.Extension.COM
 }
 
 // Beta verifies the VRF proof in header's signature and returns the beta.
@@ -274,10 +274,10 @@ func (h *Header) String() string {
 	StateRoot:      %v
 	ReceiptsRoot:   %v
 	Alpha:          0x%x
-	Vote:           %v
+	COM:            %v
 	Signature:      0x%x`, h.ID(), h.Number(), h.body.ParentID, h.body.Timestamp, signerStr,
 		h.body.Beneficiary, h.body.GasLimit, h.body.GasUsed, h.body.TotalScore,
-		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.Vote, h.body.Signature)
+		h.body.TxsRootFeatures.Root, h.body.TxsRootFeatures.Features, h.body.StateRoot, h.body.ReceiptsRoot, h.body.Extension.Alpha, h.body.Extension.COM, h.body.Signature)
 }
 
 // BetterThan return if this block is better than other one.

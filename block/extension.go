@@ -14,14 +14,14 @@ import (
 
 type extension struct {
 	Alpha []byte
-	Vote  *Vote
+	COM   bool
 }
 
 type _extension extension
 
 // EncodeRLP implements rlp.Encoder.
 func (ex *extension) EncodeRLP(w io.Writer) error {
-	if ex.Vote != nil {
+	if ex.COM {
 		return rlp.Encode(w, (*_extension)(ex))
 	}
 
@@ -43,38 +43,47 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		if err == rlp.EOL {
 			*ex = extension{
 				nil,
-				nil,
+				false,
 			}
 			return nil
 		}
 	}
 
-	var alpha []byte
-	if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
-		return err
-	}
+	if len(raws) > 2 {
+		return errors.New("rlp: too much elements in extension")
+	} else {
+		var alpha []byte
+		if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
+			return err
+		}
 
-	// only alpha, make sure it's trimmed
-	if len(raws) == 1 {
-		if len(alpha) == 0 {
+		// only alpha, make sure it's trimmed
+		if len(raws) == 1 {
+			if len(alpha) == 0 {
+				return errors.New("rlp: extension must be trimmed")
+			}
+
+			*ex = extension{
+				Alpha: alpha,
+				COM:   false,
+			}
+			return nil
+		}
+
+		var com bool
+		if err := rlp.DecodeBytes(raws[1], &com); err != nil {
+			return err
+		}
+
+		// COM must be trimmed if not set
+		if !com {
 			return errors.New("rlp: extension must be trimmed")
 		}
 
 		*ex = extension{
 			Alpha: alpha,
-			Vote:  nil,
+			COM:   com,
 		}
 		return nil
 	}
-
-	var vote Vote
-	if err := rlp.DecodeBytes(raws[1], &vote); err != nil {
-		return err
-	}
-
-	*ex = extension{
-		Alpha: alpha,
-		Vote:  &vote,
-	}
-	return nil
 }
