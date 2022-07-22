@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/packer"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
@@ -136,17 +135,17 @@ func (n *Node) pack(flow *packer.Flow) error {
 			}
 		}
 
-		var vote block.Vote
+		var shouldVote bool
 		if flow.Number() >= n.forkConfig.FINALITY {
 			var err error
-			vote, err = n.bft.GetVote(flow.ParentHeader().ID())
+			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
 			if err != nil {
 				return errors.Wrap(err, "get vote")
 			}
 		}
 
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, vote)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
 			return errors.Wrap(err, "failed to pack block")
 		}

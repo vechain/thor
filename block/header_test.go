@@ -218,8 +218,6 @@ type v2 struct {
 
 // type extension struct{Alpha []byte; Vote *Vote}
 func TestExtensionV2(t *testing.T) {
-	com := COM
-
 	tests := []struct {
 		name string
 		test func(*testing.T)
@@ -250,7 +248,7 @@ func TestExtensionV2(t *testing.T) {
 				bytes, err := rlp.EncodeToBytes(&v2{
 					Extension: extension{
 						Alpha: thor.Bytes32{}.Bytes(),
-						Vote:  &com,
+						COM:   true,
 					},
 				})
 				assert.Nil(t, err)
@@ -268,7 +266,7 @@ func TestExtensionV2(t *testing.T) {
 				assert.Nil(t, err)
 
 				assert.Equal(t, thor.Bytes32{}.Bytes(), dst.Extension.Alpha)
-				assert.Equal(t, com, *dst.Extension.Vote)
+				assert.True(t, dst.Extension.COM)
 			},
 		},
 		{
@@ -290,6 +288,8 @@ func TestExtensionV2(t *testing.T) {
 				var dst v2
 				err = rlp.DecodeBytes(bytes, &dst)
 				assert.EqualError(t, err, "rlp: extension must be trimmed")
+
+				assert.False(t, dst.Extension.COM)
 			},
 		},
 	}

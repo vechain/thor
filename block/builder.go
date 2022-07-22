@@ -82,9 +82,9 @@ func (b *Builder) Alpha(alpha []byte) *Builder {
 	return b
 }
 
-// Vote set the vote.
-func (b *Builder) Vote(v Vote) *Builder {
-	b.headerBody.Extension.Vote = &v
+// COM enables COM.
+func (b *Builder) COM() *Builder {
+	b.headerBody.Extension.COM = true
 	return b
 }
 
