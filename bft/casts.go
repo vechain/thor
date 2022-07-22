@@ -15,13 +15,13 @@ import (
 // casts stores the master's overall casts, maintaining the map of quality to checkpoint.
 type casts map[thor.Bytes32]uint32
 
-func newCasts(engine *BFTEngine) (casts, error) {
+func (engine *BFTEngine) newCasts() error {
 	c := make(casts)
 
 	finalized := engine.Finalized()
 	heads, err := engine.repo.ScanHeads(block.Number(finalized))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for _, head := range heads {
@@ -31,7 +31,7 @@ func newCasts(engine *BFTEngine) (casts, error) {
 		for {
 			sum, err := engine.repo.GetBlockSummary(cur)
 			if err != nil {
-				return nil, err
+				return err
 			}
 
 			header := sum.Header
@@ -39,12 +39,12 @@ func newCasts(engine *BFTEngine) (casts, error) {
 			if signer == engine.master {
 				st, err := engine.computeState(header)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				checkpoint, err := chain.GetBlockID(getCheckPoint(header.Number()))
 				if err != nil {
-					return nil, err
+					return err
 				}
 				if quality, ok := c[checkpoint]; !ok || quality < st.Quality {
 					c[checkpoint] = st.Quality
@@ -59,9 +59,11 @@ func newCasts(engine *BFTEngine) (casts, error) {
 		}
 	}
 
-	return c, nil
+	engine.casts = c
+	return nil
 }
 
+// Slice dumps the casts that is after finalized into slice.
 func (ca casts) Slice(finalized thor.Bytes32) []struct {
 	checkpoint thor.Bytes32
 	quality    uint32
