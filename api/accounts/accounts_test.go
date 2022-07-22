@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	ABI "github.com/vechain/thor/abi"
 	"github.com/vechain/thor/api/accounts"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
@@ -226,11 +225,14 @@ func buildTxWithClauses(t *testing.T, chaiTag byte, clauses ...*tx.Clause) *tx.T
 func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transaction, t *testing.T) {
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	flow, err := packer.Schedule(repo.BestBlockSummary(), uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = flow.Adopt(transaction)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, block.WIT)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

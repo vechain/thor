@@ -37,7 +37,6 @@ type BFTEngine struct {
 	caches     struct {
 		state     *lru.Cache
 		quality   *lru.Cache
-		mbp       *lru.Cache
 		justifier *cache.PrioCache
 	}
 }
@@ -54,7 +53,6 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 
 	engine.caches.state, _ = lru.New(256)
 	engine.caches.quality, _ = lru.New(16)
-	engine.caches.mbp, _ = lru.New(8)
 	engine.caches.justifier = cache.NewPrioCache(16)
 
 	if val, err := engine.data.Get(finalizedKey); err != nil {
@@ -149,67 +147,73 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 	return nil
 }
 
-// GetVote computes the vote for a given parent block ID.
+// ShouldVote decides if vote COM for a given parent block ID.
 // Packer only.
-func (engine *BFTEngine) GetVote(parentID thor.Bytes32) (v block.Vote, err error) {
+func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	// laze init casts
 	if engine.casts == nil {
-		if engine.casts, err = newCasts(engine); err != nil {
-			return
+		if err := engine.newCasts(); err != nil {
+			return false, err
 		}
 	}
 
 	sum, err := engine.repo.GetBlockSummary(parentID)
 	if err != nil {
-		return
+		return false, err
 	}
 
 	st, err := engine.computeState(sum.Header)
 	if err != nil {
-		return
+		return false, err
 	}
 
 	if st.Quality == 0 {
-		return
+		return false, nil
 	}
 
 	finalized := engine.Finalized()
 
+	headQuality := st.Quality
 	// most recent justified checkpoint
 	var recentJC thor.Bytes32
-	theQuality := st.Quality
 	if st.Justified {
 		// if justified in this round, use this round's checkpoint
 		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckPoint(block.Number(parentID)))
 		if err != nil {
-			return block.WIT, err
+			return false, err
 		}
 		recentJC = checkpoint
 	} else {
-		checkpoint, err := engine.findCheckpointByQuality(theQuality, finalized, parentID)
+		checkpoint, err := engine.findCheckpointByQuality(headQuality, finalized, parentID)
 		if err != nil {
-			return block.WIT, err
+			return false, err
 		}
 		recentJC = checkpoint
 	}
 
 	// see https://github.com/vechain/VIPs/blob/master/vips/VIP-220.md
 	for _, cast := range engine.casts.Slice(engine.Finalized()) {
-		x, y := recentJC, cast.checkpoint
-		if block.Number(cast.checkpoint) > block.Number(recentJC) {
-			x, y = cast.checkpoint, recentJC
-		}
+		if cast.quality >= headQuality-1 {
+			x, y := recentJC, cast.checkpoint
+			if block.Number(cast.checkpoint) > block.Number(recentJC) {
+				x, y = cast.checkpoint, recentJC
+			}
+			// checks if the voted checkpoint belongs to the head chain
+			includes, err := engine.repo.NewChain(x).HasBlock(y)
+			if err != nil {
+				return false, err
+			}
 
-		// comparing packer's vote with the most recent JC, if packer voted
-		// a conflict checkpoint at (recentJC.Quality or -1) vote WIT
-		if includes, err := engine.repo.NewChain(x).HasBlock(y); err != nil {
-			return block.WIT, err
-		} else if !includes && cast.quality >= theQuality-1 {
-			return block.WIT, nil
+			// if one votes a checkpoint was within [headQuality-1, +∞) and conflict with head
+			// should not vote COM
+			if !includes {
+				return false, nil
+			}
+
 		}
 	}
 
-	return block.COM, nil
+	return true, nil
 }
 
 // computeState computes the bft state regarding the given block header.
@@ -233,7 +237,7 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint
 		var err error
-		js, err = newJustifier(engine, header.ParentID())
+		js, err = engine.newJustifier(header.ParentID())
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create vote set")
 		}
@@ -242,12 +246,12 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 
 	h := header
 	for {
-		if h.Vote() == nil {
+		if h.Number() < engine.forkConfig.FINALITY {
 			break
 		}
 
 		signer, _ := h.Signer()
-		js.AddBlock(h.ID(), signer, *h.Vote())
+		js.AddBlock(h.ID(), signer, h.COM())
 
 		if h.Number() <= end {
 			break
@@ -315,28 +319,18 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 	return c.GetBlockID(searchStart + uint32(num)*thor.CheckpointInterval)
 }
 
-func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (mbp uint64, err error) {
-	if cached, ok := engine.caches.mbp.Get(sum.Header.ID()); ok {
-		return cached.(uint64), nil
-	}
-
-	defer func() {
-		if err == nil {
-			engine.caches.mbp.Add(sum.Header.ID(), mbp)
-		}
-	}()
-
+func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
 	state := engine.stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
 	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
 	if err != nil {
-		return
+		return 0, err
 	}
-	mbp = params.Uint64()
+	mbp := params.Uint64()
 	if mbp == 0 || mbp > thor.InitialMaxBlockProposers {
 		mbp = thor.InitialMaxBlockProposers
 	}
 
-	return
+	return mbp, nil
 }
 
 func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error) {

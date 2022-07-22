@@ -14,7 +14,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/consensus"
@@ -97,7 +96,7 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, block.WIT)
+		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
 		_, _, err = consensus.New(repo, stater, thor.NoFork).Process(best, blk, uint64(time.Now().Unix()*2), 0)
@@ -159,7 +158,7 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, block.WIT)
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, false)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 

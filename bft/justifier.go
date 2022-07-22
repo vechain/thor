@@ -22,11 +22,11 @@ type justifier struct {
 	checkpoint    uint32
 	threshold     uint64
 
-	votes    map[thor.Address]block.Vote
+	votes    map[thor.Address]bool
 	comVotes uint64
 }
 
-func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) {
+func (engine *BFTEngine) newJustifier(parentID thor.Bytes32) (*justifier, error) {
 	blockNum := block.Number(parentID) + 1
 
 	var lastOfParentRound uint32
@@ -59,7 +59,7 @@ func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) 
 	}
 
 	return &justifier{
-		votes:         make(map[thor.Address]block.Vote),
+		votes:         make(map[thor.Address]bool),
 		parentQuality: parentQuality,
 		checkpoint:    checkpoint,
 		threshold:     threshold,
@@ -67,16 +67,16 @@ func newJustifier(engine *BFTEngine, parentID thor.Bytes32) (*justifier, error) 
 }
 
 // AddBlock adds a new block to the set.
-func (js *justifier) AddBlock(blockID thor.Bytes32, signer thor.Address, vote block.Vote) {
+func (js *justifier) AddBlock(blockID thor.Bytes32, signer thor.Address, isCOM bool) {
 	if prev, ok := js.votes[signer]; !ok {
-		js.votes[signer] = vote
-		if vote == block.COM {
+		js.votes[signer] = isCOM
+		if isCOM {
 			js.comVotes++
 		}
-	} else if prev != vote {
-		// if one votes both WIT and COM in one round, count as WIT
-		js.votes[signer] = block.WIT
-		if prev == block.COM {
+	} else if prev != isCOM {
+		// if one votes both COM and non-COM in one round, count as non-COM
+		js.votes[signer] = false
+		if prev {
 			js.comVotes--
 		}
 	}

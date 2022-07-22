@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
@@ -99,7 +98,7 @@ func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
 	}
 
 	// touch get vote func to init voted
-	_, err = engine.GetVote(repo.NewBestChain().GenesisID())
+	_, err = engine.ShouldVote(repo.NewBestChain().GenesisID())
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +119,7 @@ func (test *TestBFT) reCreateEngine() error {
 	}
 
 	// touch get vote func to init voted
-	_, err = engine.GetVote(test.repo.NewBestChain().GenesisID())
+	_, err = engine.ShouldVote(test.repo.NewBestChain().GenesisID())
 	if err != nil {
 		return err
 	}
@@ -129,7 +128,7 @@ func (test *TestBFT) reCreateEngine() error {
 	return nil
 }
 
-func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, vote block.Vote) (*chain.BlockSummary, error) {
+func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.DevAccount, shouldVote bool) (*chain.BlockSummary, error) {
 	packer := packer.New(test.repo, test.stater, master.Address, &thor.Address{}, test.fc)
 	flow, err := packer.Mock(parentSummary, parentSummary.Header.Timestamp()+thor.BlockInterval, parentSummary.Header.GasLimit())
 	if err != nil {
@@ -141,8 +140,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	v := vote
-	b, stg, _, err := flow.Pack(master.PrivateKey, conflicts, v)
+	b, stg, _, err := flow.Pack(master.PrivateKey, conflicts, shouldVote)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +168,7 @@ func (test *TestBFT) fastForward(cnt int) error {
 		acc := devAccounts[(int(parent.Header.Number())+1)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, block.COM)
+		parent, err = test.newBlock(parent, acc, true)
 		if err != nil {
 			return err
 		}
@@ -187,7 +185,7 @@ func (test *TestBFT) fastForwardWithMinority(cnt int) error {
 		acc := devAccounts[(int(parent.Header.Number())+1)%(devCnt/3)]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, block.COM)
+		parent, err = test.newBlock(parent, acc, true)
 		if err != nil {
 			return err
 		}
@@ -204,7 +202,7 @@ func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
 		acc := devAccounts[(int(parent.Header.Number())+1+4)%devCnt]
 
 		var err error
-		parent, err = test.newBlock(parent, acc, block.COM)
+		parent, err = test.newBlock(parent, acc, true)
 		if err != nil {
 			return nil, err
 		}
@@ -212,14 +210,14 @@ func (test *TestBFT) buildBranch(cnt int) (*chain.Chain, error) {
 	return test.repo.NewChain(parent.Header.ID()), nil
 }
 
-func (test *TestBFT) pack(parentID thor.Bytes32, v block.Vote, best bool) (*chain.BlockSummary, error) {
+func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, best bool) (*chain.BlockSummary, error) {
 	acc := devAccounts[len(devAccounts)-1]
 	parent, err := test.repo.GetBlockSummary(parentID)
 	if err != nil {
 		return nil, err
 	}
 
-	blk, err := test.newBlock(parent, acc, v)
+	blk, err := test.newBlock(parent, acc, shouldVote)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +262,7 @@ func TestNewBlock(t *testing.T) {
 		PrivateKey: priv,
 	}
 
-	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, block.COM)
+	summary, err := testBFT.newBlock(testBFT.repo.BestBlockSummary(), master, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +321,7 @@ func TestReCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), true, true); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, genesisID, testBFT.engine.Finalized())
@@ -332,7 +330,7 @@ func TestReCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+	if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), true, true); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, genesisID, testBFT.engine.Finalized())
@@ -445,11 +443,11 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				assert.Equal(t, block.WIT, v)
+				assert.Equal(t, false, v)
 			},
 		}, {
 			"never justified, vote WIT", func(t *testing.T) {
@@ -459,11 +457,11 @@ func TestGetVote(t *testing.T) {
 				}
 
 				testBFT.fastForwardWithMinority(thor.CheckpointInterval * 3)
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				assert.Equal(t, block.WIT, v)
+				assert.Equal(t, false, v)
 			},
 		}, {
 			"never voted other checkpoint, vote COM", func(t *testing.T) {
@@ -473,11 +471,11 @@ func TestGetVote(t *testing.T) {
 				}
 
 				testBFT.fastForward(thor.CheckpointInterval * 3)
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				assert.Equal(t, block.COM, v)
+				assert.Equal(t, true, v)
 			},
 		}, {
 			"voted other checkpoint but not conflict with recent justified, vote COM", func(t *testing.T) {
@@ -498,7 +496,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err := testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
+				if _, err := testBFT.pack(branch.HeadID(), true, false); err != nil {
 					t.Fatal(err)
 				}
 
@@ -506,7 +504,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), true, true); err != nil {
 					t.Fatal(err)
 				}
 
@@ -517,12 +515,12 @@ func TestGetVote(t *testing.T) {
 				}
 				assert.Equal(t, 2, len(votes))
 
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, block.COM, v)
+				assert.Equal(t, true, v)
 			},
 		}, {
 			"voted another non-justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
@@ -543,7 +541,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err = testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
+				if _, err = testBFT.pack(branch.HeadID(), true, false); err != nil {
 					t.Fatal(err)
 				}
 
@@ -551,7 +549,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), true, true); err != nil {
 					t.Fatal(err)
 				}
 
@@ -562,12 +560,12 @@ func TestGetVote(t *testing.T) {
 				}
 				assert.Equal(t, 2, len(votes))
 
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, block.WIT, v)
+				assert.Equal(t, false, v)
 
 				err = testBFT.reCreateEngine()
 				assert.Nil(t, err)
@@ -579,12 +577,12 @@ func TestGetVote(t *testing.T) {
 				}
 				assert.Equal(t, 2, len(votes))
 
-				v, err = testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err = testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, block.WIT, v)
+				assert.Equal(t, false, v)
 			},
 		}, {
 			"voted another justified checkpoint,conflict with most recent justified checkpoint, vote WIT", func(t *testing.T) {
@@ -605,7 +603,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err = testBFT.pack(branch.HeadID(), block.COM, false); err != nil {
+				if _, err = testBFT.pack(branch.HeadID(), true, false); err != nil {
 					t.Fatal(err)
 				}
 
@@ -613,7 +611,7 @@ func TestGetVote(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), block.COM, true); err != nil {
+				if _, err := testBFT.pack(testBFT.repo.BestBlockSummary().Header.ID(), true, true); err != nil {
 					t.Fatal(err)
 				}
 
@@ -624,12 +622,12 @@ func TestGetVote(t *testing.T) {
 				}
 				assert.Equal(t, 2, len(votes))
 
-				v, err := testBFT.engine.GetVote(testBFT.repo.BestBlockSummary().Header.ID())
+				v, err := testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
-				assert.Equal(t, block.WIT, v)
+				assert.Equal(t, false, v)
 			},
 		},
 	}
@@ -653,7 +651,7 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -669,7 +667,7 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -687,7 +685,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval * 2)
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -708,7 +706,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -716,7 +714,7 @@ func TestJustifier(t *testing.T) {
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), block.COM)
+					vs.AddBlock(blkID, RandomAddress(), true)
 				}
 
 				st := vs.Summarize()
@@ -725,7 +723,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(RandomBytes32(), RandomAddress(), block.COM)
+				vs.AddBlock(RandomBytes32(), RandomAddress(), true)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -741,7 +739,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -749,7 +747,7 @@ func TestJustifier(t *testing.T) {
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), block.WIT)
+					vs.AddBlock(blkID, RandomAddress(), false)
 				}
 
 				st := vs.Summarize()
@@ -767,7 +765,7 @@ func TestJustifier(t *testing.T) {
 				}
 
 				testBft.fastForward(thor.CheckpointInterval*2 - 1)
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -776,13 +774,13 @@ func TestJustifier(t *testing.T) {
 				// vote <threshold> times COM
 				for i := 0; i < MaxBlockProposers*2/3; i++ {
 					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), block.COM)
+					vs.AddBlock(blkID, RandomAddress(), true)
 				}
 
 				master := RandomAddress()
 				// master votes WIT
 				blkID = RandomBytes32()
-				vs.AddBlock(blkID, master, block.WIT)
+				vs.AddBlock(blkID, master, false)
 
 				// justifies but not committed
 				st := vs.Summarize()
@@ -791,7 +789,7 @@ func TestJustifier(t *testing.T) {
 
 				blkID = RandomBytes32()
 				// master votes COM
-				vs.AddBlock(blkID, master, block.COM)
+				vs.AddBlock(blkID, master, true)
 
 				// should not be committed
 				st = vs.Summarize()
@@ -799,7 +797,7 @@ func TestJustifier(t *testing.T) {
 
 				// another master votes WIT
 				blkID = RandomBytes32()
-				vs.AddBlock(blkID, RandomAddress(), block.COM)
+				vs.AddBlock(blkID, RandomAddress(), true)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -810,46 +808,46 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs, err := newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err := testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
 
 				master := RandomAddress()
-				vs.AddBlock(RandomBytes32(), master, block.COM)
-				assert.Equal(t, block.COM, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, true)
+				assert.Equal(t, true, vs.votes[master])
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.WIT)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, false)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.COM)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, true)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.WIT)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, false)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs, err = newJustifier(testBft.engine, testBft.repo.BestBlockSummary().Header.ID())
+				vs, err = testBft.engine.newJustifier(testBft.repo.BestBlockSummary().Header.ID())
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(RandomBytes32(), master, block.WIT)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, false)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.COM)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, true)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.COM)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, true)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, block.WIT)
-				assert.Equal(t, block.WIT, vs.votes[master])
+				vs.AddBlock(RandomBytes32(), master, false)
+				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
 		},
