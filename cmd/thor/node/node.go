@@ -19,7 +19,6 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/cache"
 	"github.com/vechain/thor/chain"
@@ -225,7 +224,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	log.Debug("enter tx stash loop")
 	defer log.Debug("leave tx stash loop")
 
-	db, err := leveldb.OpenFile(n.txStashPath, &opt.Options{NoFullFSync: true})
+	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
 		log.Error("create tx stash", "err", err)
 		return

@@ -19,12 +19,6 @@ func (m mem) Get(k []byte) ([]byte, error) {
 	}
 	return nil, errors.New("not found")
 }
-func (m mem) GetTo(k, dst []byte) ([]byte, error) {
-	if v, ok := m[string(k)]; ok {
-		return append(dst, v...), nil
-	}
-	return nil, errors.New("not found")
-}
 
 func (m mem) Has(k []byte) (bool, error) {
 	_, ok := m[string(k)]

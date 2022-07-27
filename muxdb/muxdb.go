@@ -77,7 +77,7 @@ func Open(path string, options *Options) (*MuxDB, error) {
 		WriteBuffer:            options.WriteBufferMB * opt.MiB,
 		Filter:                 filter.NewBloomFilter(10),
 		BlockSize:              1024 * 32, // balance performance of point reads and compression ratio.
-		NoFullFSync:            true,
+		CompactionTableSize:    4 * opt.MiB,
 	}
 
 	if options.TrieWillCleanHistory {
