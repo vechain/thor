@@ -46,13 +46,13 @@ import (
 
 type callFrame struct {
 	Type    string                `json:"type"`
-	From    thor.Address          `json:"from"`
-	To      thor.Address          `json:"to,omitempty"`
+	From    string                `json:"from"`
+	To      string                `json:"to,omitempty"`
 	Value   *math.HexOrDecimal256 `json:"value,omitempty"`
 	Gas     math.HexOrDecimal64   `json:"gas"`
-	GasUsed math.HexOrDecimal64   `json:"gasUsed"`
-	Input   hexutil.Bytes         `json:"input"`
-	Output  hexutil.Bytes         `json:"output,omitempty"`
+	GasUsed string                `json:"gasUsed"`
+	Input   string                `json:"input"`
+	Output  string                `json:"output,omitempty"`
 	Error   string                `json:"error,omitempty"`
 	Calls   []callFrame           `json:"calls,omitempty"`
 }
@@ -85,6 +85,11 @@ type traceTest struct {
 }
 
 type prestate map[common.Address]account
+
+type returnData struct {
+	Output string
+	Error  string
+}
 
 func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMessage {
 	db := muxdb.NewMem()
@@ -179,6 +184,16 @@ func TestTracers(t *testing.T) {
 
 			RunTracerTest(t, &testData, "")
 			RunTracerTest(t, &testData, "4byteTracer")
+
+			result = RunTracerTest(t, &testData, "returnDataTracer")
+			var rData returnData
+			if err := json.Unmarshal(result, &rData); err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, returnData{
+				Output: testData.Calls.Output,
+				Error:  testData.Calls.Error,
+			}, rData)
 		})
 
 	}
