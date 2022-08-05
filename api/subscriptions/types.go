@@ -29,6 +29,7 @@ type BlockMessage struct {
 	TxsFeatures  uint32         `json:"txsFeatures"`
 	StateRoot    thor.Bytes32   `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32   `json:"receiptsRoot"`
+	COM          bool           `json:"com"`
 	Signer       thor.Address   `json:"signer"`
 	Transactions []thor.Bytes32 `json:"transactions"`
 	Obsolete     bool           `json:"obsolete"`
@@ -61,6 +62,7 @@ func convertBlock(b *chain.ExtendedBlock) (*BlockMessage, error) {
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
 		TxsFeatures:  uint32(header.TxsFeatures()),
+		COM:          header.COM(),
 		Transactions: txIds,
 		Obsolete:     b.Obsolete,
 	}, nil

@@ -31,6 +31,7 @@ type JSONBlockSummary struct {
 	TxsFeatures  uint32       `json:"txsFeatures"`
 	StateRoot    thor.Bytes32 `json:"stateRoot"`
 	ReceiptsRoot thor.Bytes32 `json:"receiptsRoot"`
+	COM          bool         `json:"com"`
 	Signer       thor.Address `json:"signer"`
 	IsTrunk      bool         `json:"isTrunk"`
 	IsFinalized  bool         `json:"isFinalized"`
@@ -112,6 +113,7 @@ func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalize
 		ReceiptsRoot: header.ReceiptsRoot(),
 		TxsRoot:      header.TxsRoot(),
 		TxsFeatures:  uint32(header.TxsFeatures()),
+		COM:          header.COM(),
 		IsTrunk:      isTrunk,
 		IsFinalized:  isFinalized,
 	}
