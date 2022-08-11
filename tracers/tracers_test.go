@@ -82,6 +82,7 @@ type traceTest struct {
 	Clause  clause                     `json:"clause"`
 	Context context                    `json:"context"`
 	Calls   callFrame                  `json:"calls,omitempty"`
+	Config  json.RawMessage            `json:"config"`
 }
 
 type prestate map[common.Address]account
@@ -113,13 +114,14 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 
 	var tr tracers.Tracer
 	if len(tracerName) > 0 {
-		tr, err = tracers.New(tracerName, nil)
+		tr, err = tracers.New(tracerName, nil, data.Config)
 		assert.Nil(t, err)
 	} else {
-		tr = logger.NewStructLogger(&logger.Config{
+		cfg, _ := json.Marshal(logger.Config{
 			EnableMemory:     true,
 			EnableReturnData: true,
 		})
+		tr, _ = logger.NewStructLogger(cfg)
 	}
 
 	rt.SetVMConfig(vm.Config{
@@ -140,7 +142,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 }
 
 func TestNewTracer(t *testing.T) {
-	_, err := tracers.New("callTracer", nil)
+	_, err := tracers.New("callTracer", nil, nil)
 	assert.Nil(t, err)
 }
 

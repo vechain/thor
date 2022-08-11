@@ -1,14 +1,16 @@
 package debug
 
 import (
+	"encoding/json"
+
 	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers/logger"
 )
 
 type TracerOption struct {
-	Name   string         `json:"name"`
-	Target string         `json:"target"`
-	Config *logger.Config `json:"config"`
+	Name   string `json:"name"`
+	Target string `json:"target"`
+	// Config specific to given tracer.
+	Config json.RawMessage `json:"config"`
 }
 
 type StorageRangeOption struct {
