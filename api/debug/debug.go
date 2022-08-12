@@ -123,13 +123,17 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	}
 	var tracer tracers.Tracer
 	if opt.Name == "" {
-		tracer = logger.NewStructLogger(opt.Config)
+		tr, err := logger.NewStructLogger(opt.Config)
+		if err != nil {
+			return err
+		}
+		tracer = tr
 	} else {
 		name := opt.Name
 		if !strings.HasSuffix(name, "Tracer") {
 			name += "Tracer"
 		}
-		tr, err := tracers.New(name, nil)
+		tr, err := tracers.New(name, nil, opt.Config)
 		if err != nil {
 			return err
 		}

@@ -117,14 +117,19 @@ type StructLogger struct {
 }
 
 // NewStructLogger returns a new logger
-func NewStructLogger(cfg *Config) *StructLogger {
+func NewStructLogger(cfg json.RawMessage) (*StructLogger, error) {
+	var config Config
+	if cfg != nil {
+		if err := json.Unmarshal(cfg, &config); err != nil {
+			return nil, err
+		}
+	}
+
 	logger := &StructLogger{
 		storage: make(map[common.Address]Storage),
+		cfg:     config,
 	}
-	if cfg != nil {
-		logger.cfg = *cfg
-	}
-	return logger
+	return logger, nil
 }
 
 // Reset clears the data held by the logger.

@@ -50,10 +50,10 @@ type prestateTracer struct {
 	contractCreationCount uint32
 }
 
-func newPrestateTracer(ctx *tracers.Context) tracers.Tracer {
+func newPrestateTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
 	// First callframe contains tx context info
 	// and is populated on start and end.
-	return &prestateTracer{prestate: prestate{}}
+	return &prestateTracer{prestate: prestate{}}, nil
 }
 
 // CaptureStart implements the EVMLogger interface to initialize the tracing operation.
