@@ -19,7 +19,7 @@ import (
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
-const gasLimitSoftLimit uint64 = 21000000
+const gasLimitSoftLimit uint64 = 30_000_000
 
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
