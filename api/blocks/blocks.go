@@ -53,7 +53,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	isFinalized := false
+	var isFinalized bool
 	if isTrunk {
 		finalized := b.bft.Finalized()
 		if block.Number(finalized) >= summary.Header.Number() {

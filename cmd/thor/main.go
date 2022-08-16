@@ -189,7 +189,6 @@ func defaultAction(ctx *cli.Context) error {
 	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
 	if err != nil {
 		return errors.Wrap(err, "init bft engine")
-
 	}
 
 	apiHandler, apiCloser := api.New(
