@@ -66,8 +66,8 @@ var forkConfigs = map[Bytes32]ForkConfig{
 		ETH_CONST: 3192500,
 		BLOCKLIST: math.MaxUint32,
 		ETH_IST:   9146700,
-		VIP214:    10606800, // ~ Fri Nov 05 2021 08:00:00 GMT
-		FINALITY:  math.MaxUint32,
+		VIP214:    10606800,
+		FINALITY:  13086360, // ~ Fri, 19 Aug 2022 08:00:00 GMT
 	},
 }
 
