@@ -151,6 +151,12 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 		}
 	}
 
+	if header.Number() < c.forkConfig.FINALITY {
+		if header.COM() {
+			return consensusError("invalid block: COM should not set before fork FINALITY")
+		}
+	}
+
 	return nil
 }
 

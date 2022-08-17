@@ -6,6 +6,7 @@
 package consensus
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/golang-lru/simplelru"
@@ -45,17 +46,8 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 }
 
 // Process process a block.
-func (c *Consensus) Process(blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
+func (c *Consensus) Process(parentSummary *chain.BlockSummary, blk *block.Block, nowTimestamp uint64, blockConflicts uint32) (*state.Stage, tx.Receipts, error) {
 	header := blk.Header()
-
-	parentSummary, err := c.repo.GetBlockSummary(header.ParentID())
-	if err != nil {
-		if !c.repo.IsNotFound(err) {
-			return nil, nil, err
-		}
-		return nil, nil, errParentMissing
-	}
-
 	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
 
 	var features tx.Features
@@ -85,7 +77,7 @@ func (c *Consensus) NewRuntimeForReplay(header *block.Header, skipPoA bool) (*ru
 		if !c.repo.IsNotFound(err) {
 			return nil, err
 		}
-		return nil, errParentMissing
+		return nil, errors.New("parent block is missing")
 	}
 	state := c.stater.NewState(parentSummary.Header.StateRoot(), parentSummary.Header.Number(), parentSummary.Conflicts, parentSummary.SteadyNum)
 	if !skipPoA {

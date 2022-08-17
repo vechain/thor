@@ -15,6 +15,7 @@ import (
 	"github.com/vechain/thor/genesis"
 	"github.com/vechain/thor/muxdb"
 	"github.com/vechain/thor/state"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 )
 
@@ -145,4 +146,70 @@ func TestSteadyBlockID(t *testing.T) {
 
 	repo = reopenRepo(db, b0)
 	assert.Equal(t, b3.Header().ID(), repo.SteadyBlockID())
+}
+
+func TestScanHeads(t *testing.T) {
+	_, repo := newTestRepo()
+
+	heads, err := repo.ScanHeads(0)
+	assert.Nil(t, err)
+
+	assert.Equal(t, []thor.Bytes32{repo.GenesisBlock().Header().ID()}, heads)
+
+	b1 := newBlock(repo.GenesisBlock(), 10)
+	err = repo.AddBlock(b1, nil, 0)
+	assert.Nil(t, err)
+	heads, err = repo.ScanHeads(0)
+	assert.Nil(t, err)
+	assert.Equal(t, []thor.Bytes32{b1.Header().ID()}, heads)
+
+	b2 := newBlock(b1, 20)
+	err = repo.AddBlock(b2, nil, 0)
+	assert.Nil(t, err)
+	heads, err = repo.ScanHeads(0)
+	assert.Nil(t, err)
+	assert.Equal(t, []thor.Bytes32{b2.Header().ID()}, heads)
+
+	heads, err = repo.ScanHeads(10)
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(heads))
+
+	b2x := newBlock(b1, 20)
+	err = repo.AddBlock(b2x, nil, 0)
+	assert.Nil(t, err)
+	heads, err = repo.ScanHeads(0)
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(heads))
+	if heads[0] == b2.Header().ID() {
+		assert.Equal(t, []thor.Bytes32{b2.Header().ID(), b2x.Header().ID()}, heads)
+	} else {
+		assert.Equal(t, []thor.Bytes32{b2x.Header().ID(), b2.Header().ID()}, heads)
+	}
+
+	b3 := newBlock(b2, 30)
+	err = repo.AddBlock(b3, nil, 0)
+	assert.Nil(t, err)
+	heads, err = repo.ScanHeads(0)
+	assert.Nil(t, err)
+	assert.Equal(t, []thor.Bytes32{b3.Header().ID(), b2x.Header().ID()}, heads)
+
+	heads, err = repo.ScanHeads(2)
+	assert.Nil(t, err)
+	assert.Equal(t, []thor.Bytes32{b3.Header().ID(), b2x.Header().ID()}, heads)
+
+	heads, err = repo.ScanHeads(3)
+	assert.Nil(t, err)
+	assert.Equal(t, []thor.Bytes32{b3.Header().ID()}, heads)
+
+	b3x := newBlock(b2, 30)
+	err = repo.AddBlock(b3x, nil, 0)
+	assert.Nil(t, err)
+	heads, err = repo.ScanHeads(0)
+	assert.Nil(t, err)
+	assert.Equal(t, 3, len(heads))
+	if heads[0] == b3.Header().ID() {
+		assert.Equal(t, []thor.Bytes32{b3.Header().ID(), b3x.Header().ID(), b2x.Header().ID()}, heads)
+	} else {
+		assert.Equal(t, []thor.Bytes32{b3x.Header().ID(), b3.Header().ID(), b2x.Header().ID()}, heads)
+	}
 }

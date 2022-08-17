@@ -115,7 +115,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.ParentHeader().Number()+1, func(conflicts uint32) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.skipLogs && !n.logDBFailed
@@ -135,10 +135,19 @@ func (n *Node) pack(flow *packer.Flow) error {
 			}
 		}
 
+		var shouldVote bool
+		if flow.Number() >= n.forkConfig.FINALITY {
+			var err error
+			shouldVote, err = n.bft.ShouldVote(flow.ParentHeader().ID())
+			if err != nil {
+				return errors.Wrap(err, "get vote")
+			}
+		}
+
 		// pack the new block
-		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts)
+		newBlock, stage, receipts, err := flow.Pack(n.master.PrivateKey, conflicts, shouldVote)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "failed to pack block")
 		}
 		execElapsed := mclock.Now() - startTime
 
@@ -157,6 +166,13 @@ func (n *Node) pack(flow *packer.Flow) error {
 		// add the new block into repository
 		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
 			return errors.Wrap(err, "add block")
+		}
+
+		// commit block in bft engine
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
+			if err := n.bft.CommitBlock(newBlock.Header(), true); err != nil {
+				return errors.Wrap(err, "bft commits")
+			}
 		}
 		realElapsed := mclock.Now() - startTime
 

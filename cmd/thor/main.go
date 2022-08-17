@@ -20,6 +20,7 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api"
+	"github.com/vechain/thor/bft"
 	"github.com/vechain/thor/cmd/thor/node"
 	"github.com/vechain/thor/cmd/thor/optimizer"
 	"github.com/vechain/thor/cmd/thor/solo"
@@ -184,11 +185,18 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	bftEngine, err := bft.NewEngine(repo, mainDB, forkConfig, master.Address())
+	if err != nil {
+		return errors.Wrap(err, "init bft engine")
+	}
+
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
+		bftEngine,
 		p2pcom.comm,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
@@ -217,6 +225,7 @@ func defaultAction(ctx *cli.Context) error {
 	return node.New(
 		master,
 		repo,
+		bftEngine,
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
@@ -279,12 +288,14 @@ func soloAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
+	bftEngine := solo.NewBFTEngine(repo)
 	apiHandler, apiCloser := api.New(
 		repo,
 		state.NewStater(mainDB),
 		txPool,
 		logDB,
-		solo.Communicator{},
+		bftEngine,
+		&solo.Communicator{},
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),

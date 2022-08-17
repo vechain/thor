@@ -156,7 +156,7 @@ func initTransactionServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
+	b, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -96,10 +96,11 @@ func TestP(t *testing.T) {
 			flow.Adopt(tx)
 		}
 
-		blk, stage, receipts, err := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0)
+		blk, stage, receipts, _ := flow.Pack(genesis.DevAccounts()[0].PrivateKey, 0, false)
 		root, _ := stage.Commit()
 		assert.Equal(t, root, blk.Header().StateRoot())
-		fmt.Println(consensus.New(repo, stater, thor.NoFork).Process(blk, uint64(time.Now().Unix()*2), 0))
+		_, _, err = consensus.New(repo, stater, thor.NoFork).Process(best, blk, uint64(time.Now().Unix()*2), 0)
+		assert.Nil(t, err)
 
 		if err := repo.AddBlock(blk, receipts, 0); err != nil {
 			t.Fatal(err)
@@ -157,11 +158,11 @@ func TestForkVIP191(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0)
+	blk, stage, receipts, _ := flow.Pack(a1.PrivateKey, 0, false)
 	root, _ := stage.Commit()
 	assert.Equal(t, root, blk.Header().StateRoot())
 
-	_, _, err = consensus.New(repo, stater, fc).Process(blk, uint64(time.Now().Unix()*2), 0)
+	_, _, err = consensus.New(repo, stater, fc).Process(best, blk, uint64(time.Now().Unix()*2), 0)
 	if err != nil {
 		t.Fatal(err)
 	}

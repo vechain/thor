@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 1.4.0
+  version: 2.0.0
 
 servers:
   - url: '/'
@@ -268,7 +268,7 @@ paths:
         - Blocks
       summary: Retrieve block
       description: |
-        by ID or number, or 'best' for latest block. If `expanded` query option is true, all transactions along with
+        by ID or number, or 'best' for latest block or 'finalized' for finalized block. If `expanded` query option is true, all transactions along with
         their receipts will be embedded under `transactions` field instead of ids.
       responses:
         '200':
@@ -280,6 +280,7 @@ paths:
                   - allOf:
                     - $ref: '#/components/schemas/Block'
                     - $ref: '#/components/schemas/IsTrunk'
+                    - $ref: '#/components/schemas/IsFinalized'
                     properties:
                       transactions:
                         description: transaction IDs                          
@@ -290,6 +291,7 @@ paths:
                   - allOf:
                     - $ref: '#/components/schemas/Block'
                     - $ref: '#/components/schemas/IsTrunk'
+                    - $ref: '#/components/schemas/IsFinalized'
                     properties:
                       transactions:
                         description: embedded transactions along with their receipts
@@ -316,6 +318,7 @@ paths:
                 receiptsRoot: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
                 signer: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
                 isTrunk: true
+                isFinalized: false
                 transactions:
                   - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
@@ -755,6 +758,9 @@ components:
           format: bytes32
           description: root hash of transaction receipts
           example: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+        com:
+          type: boolean
+          description: whether the block signer voted COM(Commit) in BFT
         signer:
           type: string
           format: bytes20
@@ -1296,6 +1302,12 @@ components:
         isTrunk:
           type: boolean
           description: whether the block is on the trunk
+    
+    IsFinalized:
+      properties:
+        isFinalized:
+          type: boolean
+          description: whether the block is finalized
 
   parameters:
     AddressInPath:
@@ -1327,7 +1339,7 @@ components:
       name: revision
       in: path
       description: |
-        block ID or number, or 'best' stands for latest block
+        block ID or number, or 'best' stands for latest block, or 'finalized' stands for finalized block
       required: true
       schema:
         type: string

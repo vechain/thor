@@ -50,6 +50,11 @@ func (f *Flow) ParentHeader() *block.Header {
 	return f.parentHeader
 }
 
+// Number returns new block number.
+func (f *Flow) Number() uint32 {
+	return f.runtime.Context().Number
+}
+
 // When the target time to do packing.
 func (f *Flow) When() uint64 {
 	return f.runtime.Context().Time
@@ -79,7 +84,7 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 // it will be adopted by the new block.
 func (f *Flow) Adopt(tx *tx.Transaction) error {
 	origin, _ := tx.Origin()
-	if f.runtime.Context().Number >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
+	if f.Number() >= f.packer.forkConfig.BLOCKLIST && thor.IsOriginBlocked(origin) {
 		return badTxError{"tx origin blocked"}
 	}
 
@@ -90,9 +95,9 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	switch {
 	case tx.ChainTag() != f.packer.repo.ChainTag():
 		return badTxError{"chain tag mismatch"}
-	case f.runtime.Context().Number < tx.BlockRef().Number():
+	case f.Number() < tx.BlockRef().Number():
 		return errTxNotAdoptableNow
-	case tx.IsExpired(f.runtime.Context().Number):
+	case tx.IsExpired(f.Number()):
 		return badTxError{"expired"}
 	case f.gasUsed+tx.Gas() > f.runtime.Context().GasLimit:
 		// has enough space to adopt minimum tx
@@ -139,12 +144,12 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 }
 
 // Pack build and sign the new block.
-func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32) (*block.Block, *state.Stage, tx.Receipts, error) {
+func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shouldVote bool) (*block.Block, *state.Stage, tx.Receipts, error) {
 	if f.packer.nodeMaster != thor.Address(crypto.PubkeyToAddress(privateKey.PublicKey)) {
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	stage, err := f.runtime.State().Stage(f.runtime.Context().Number, newBlockConflicts)
+	stage, err := f.runtime.State().Stage(f.Number(), newBlockConflicts)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -165,7 +170,11 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32) (*bl
 		builder.Transaction(tx)
 	}
 
-	if f.runtime.Context().Number < f.packer.forkConfig.VIP214 {
+	if f.Number() >= f.packer.forkConfig.FINALITY && shouldVote {
+		builder.COM()
+	}
+
+	if f.Number() < f.packer.forkConfig.VIP214 {
 		newBlock := builder.Build()
 
 		sig, err := crypto.Sign(newBlock.Header().SigningHash().Bytes(), privateKey)

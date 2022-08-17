@@ -13,17 +13,20 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/api/utils"
+	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
 )
 
 type Blocks struct {
 	repo *chain.Repository
+	bft  BFTEngine
 }
 
-func New(repo *chain.Repository) *Blocks {
+func New(repo *chain.Repository, bft BFTEngine) *Blocks {
 	return &Blocks{
 		repo,
+		bft,
 	}
 }
 
@@ -44,12 +47,21 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		}
 		return err
 	}
+
 	isTrunk, err := b.isTrunk(summary.Header.ID(), summary.Header.Number())
 	if err != nil {
 		return err
 	}
 
-	jSummary := buildJSONBlockSummary(summary, isTrunk)
+	var isFinalized bool
+	if isTrunk {
+		finalized := b.bft.Finalized()
+		if block.Number(finalized) >= summary.Header.Number() {
+			isFinalized = true
+		}
+	}
+
+	jSummary := buildJSONBlockSummary(summary, isTrunk, isFinalized)
 	if expanded == "true" {
 		txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
 		if err != nil {
@@ -75,6 +87,9 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 func (b *Blocks) parseRevision(revision string) (interface{}, error) {
 	if revision == "" || revision == "best" {
 		return nil, nil
+	}
+	if revision == "finalized" {
+		return revision, nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)
@@ -103,6 +118,8 @@ func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, e
 		if err != nil {
 			return
 		}
+	case string:
+		id = b.bft.Finalized()
 	default:
 		id = b.repo.BestBlockSummary().Header.ID()
 	}
@@ -120,5 +137,4 @@ func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/{revision}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
-
 }

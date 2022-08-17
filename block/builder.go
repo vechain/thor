@@ -82,6 +82,12 @@ func (b *Builder) Alpha(alpha []byte) *Builder {
 	return b
 }
 
+// COM enables COM.
+func (b *Builder) COM() *Builder {
+	b.headerBody.Extension.COM = true
+	return b
+}
+
 // Build build a block object.
 func (b *Builder) Build() *Block {
 	header := Header{body: b.headerBody}
