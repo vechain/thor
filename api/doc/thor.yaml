@@ -316,6 +316,7 @@ paths:
                 txsFeatures: 0
                 stateRoot: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
                 receiptsRoot: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+                com: true
                 signer: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
                 isTrunk: true
                 isFinalized: false
