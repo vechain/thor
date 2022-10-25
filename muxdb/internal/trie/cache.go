@@ -72,14 +72,12 @@ func (c *Cache) AddNodeBlob(name string, seq sequence, path []byte, blob []byte,
 
 	if isCommitting {
 		// committing cache key: name + path + distinctNum
-		v := bufferPool.Get().(*buffer)
-		defer bufferPool.Put(v)
 
 		// concat commit number with blob as cache value
-		v.buf = appendUint32(v.buf[:0], cNum)
-		v.buf = append(v.buf, blob...)
-
-		_ = c.committedNodes.Set(k.buf, v.buf)
+		_ = c.committedNodes.AdvSet(k.buf, 4+len(blob), func(val []byte) {
+			binary.BigEndian.PutUint32(val, cNum)
+			copy(val[4:], blob)
+		})
 	} else {
 		// querying cache key: name + path + distinctNum + commitNum
 		k.buf = appendUint32(k.buf, cNum)
