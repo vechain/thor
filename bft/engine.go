@@ -157,23 +157,25 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 		}
 	}
 
+	// do not vote COM at the first round
+	if absRound := (block.Number(parentID)+1)/thor.CheckpointInterval - engine.forkConfig.FINALITY/thor.CheckpointInterval; absRound == 0 {
+		return false, nil
+	}
+
 	sum, err := engine.repo.GetBlockSummary(parentID)
 	if err != nil {
 		return false, err
 	}
-
 	st, err := engine.computeState(sum.Header)
 	if err != nil {
 		return false, err
 	}
-
 	if st.Quality == 0 {
 		return false, nil
 	}
 
-	finalized := engine.Finalized()
-
 	headQuality := st.Quality
+	finalized := engine.Finalized()
 	// most recent justified checkpoint
 	var recentJC thor.Bytes32
 	if st.Justified {
@@ -192,7 +194,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	}
 
 	// see https://github.com/vechain/VIPs/blob/master/vips/VIP-220.md
-	for _, cast := range engine.casts.Slice(engine.Finalized()) {
+	for _, cast := range engine.casts.Slice(finalized) {
 		if cast.quality >= headQuality-1 {
 			x, y := recentJC, cast.checkpoint
 			if block.Number(cast.checkpoint) > block.Number(recentJC) {
