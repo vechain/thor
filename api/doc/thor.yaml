@@ -1198,14 +1198,9 @@ components:
           type: string
           enum:
             - 4byte
-            - bigram
             - call
-            - evmdis
             - noop
-            - opcount
             - prestate
-            - trigram
-            - unigram
           description: |
             name of tracer. Empty name stands for default struct logger tracer.
           example: ""
