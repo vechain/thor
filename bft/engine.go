@@ -346,7 +346,12 @@ func (engine *BFTEngine) getQuality(id thor.Bytes32) (quality uint32, err error)
 		}
 	}()
 
-	return loadQuality(engine.data, id)
+	quality, err = loadQuality(engine.data, id)
+	// no quality saved yet
+	if engine.data.IsNotFound(err) {
+		return 0, nil
+	}
+	return
 }
 
 func getCheckPoint(blockNum uint32) uint32 {
