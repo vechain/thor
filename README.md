@@ -4,7 +4,7 @@ A general purpose blockchain highly compatible with Ethereum's ecosystem.
 
 This is the first implementation written in golang.
 
-[![Go](https://img.shields.io/badge/golang-%3E%3D1.16-orange.svg)](https://golang.org)
+[![Go](https://img.shields.io/badge/golang-%3E%3D1.17-orange.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
 [![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
 [![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
@@ -30,7 +30,7 @@ This is the first implementation written in golang.
 
 ### Requirements
 
-Thor requires `Go` 1.16+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install).
+Thor requires `Go` 1.17+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install).
 
 ### Getting the source
 
