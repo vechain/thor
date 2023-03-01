@@ -5,6 +5,8 @@
 
 package kv
 
+import "context"
+
 // Getter defines methods to read kv.
 type Getter interface {
 	Get(key []byte) ([]byte, error)
@@ -57,4 +59,6 @@ type Store interface {
 	Snapshot() Snapshot
 	Bulk() Bulk
 	Iterate(r Range) Iterator
+
+	DeleteRange(ctx context.Context, r Range) error
 }

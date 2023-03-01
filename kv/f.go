@@ -5,6 +5,8 @@
 
 package kv
 
+import "context"
+
 // defines individual functions.
 
 type (
@@ -26,23 +28,25 @@ type (
 	ValueFunc           func() []byte
 	ReleaseFunc         func()
 	ErrorFunc           func() error
+	DeleteRangeFunc     func(ctx context.Context, r Range) error
 )
 
-func (f GetFunc) Get(key []byte) ([]byte, error)   { return f(key) }
-func (f HasFunc) Has(key []byte) (bool, error)     { return f(key) }
-func (f IsNotFoundFunc) IsNotFound(err error) bool { return f(err) }
-func (f PutFunc) Put(key, val []byte) error        { return f(key, val) }
-func (f DeleteFunc) Delete(key []byte) error       { return f(key) }
-func (f SnapshotFunc) Snapshot() Snapshot          { return f() }
-func (f BulkFunc) Bulk() Bulk                      { return f() }
-func (f IterateFunc) Iterate(r Range) Iterator     { return f(r) }
-func (f EnableAutoFlushFunc) EnableAutoFlush()     { f() }
-func (f WriteFunc) Write() error                   { return f() }
-func (f FirstFunc) First() bool                    { return f() }
-func (f LastFunc) Last() bool                      { return f() }
-func (f NextFunc) Next() bool                      { return f() }
-func (f PrevFunc) Prev() bool                      { return f() }
-func (f KeyFunc) Key() []byte                      { return f() }
-func (f ValueFunc) Value() []byte                  { return f() }
-func (f ReleaseFunc) Release()                     { f() }
-func (f ErrorFunc) Error() error                   { return f() }
+func (f GetFunc) Get(key []byte) ([]byte, error)                         { return f(key) }
+func (f HasFunc) Has(key []byte) (bool, error)                           { return f(key) }
+func (f IsNotFoundFunc) IsNotFound(err error) bool                       { return f(err) }
+func (f PutFunc) Put(key, val []byte) error                              { return f(key, val) }
+func (f DeleteFunc) Delete(key []byte) error                             { return f(key) }
+func (f SnapshotFunc) Snapshot() Snapshot                                { return f() }
+func (f BulkFunc) Bulk() Bulk                                            { return f() }
+func (f IterateFunc) Iterate(r Range) Iterator                           { return f(r) }
+func (f EnableAutoFlushFunc) EnableAutoFlush()                           { f() }
+func (f WriteFunc) Write() error                                         { return f() }
+func (f FirstFunc) First() bool                                          { return f() }
+func (f LastFunc) Last() bool                                            { return f() }
+func (f NextFunc) Next() bool                                            { return f() }
+func (f PrevFunc) Prev() bool                                            { return f() }
+func (f KeyFunc) Key() []byte                                            { return f() }
+func (f ValueFunc) Value() []byte                                        { return f() }
+func (f ReleaseFunc) Release()                                           { f() }
+func (f ErrorFunc) Error() error                                         { return f() }
+func (f DeleteRangeFunc) DeleteRange(ctx context.Context, r Range) error { return f(ctx, r) }
