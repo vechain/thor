@@ -276,7 +276,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		},
 		c.forkConfig)
 
-	findTx := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
+	findDep := func(txID thor.Bytes32) (found bool, reverted bool, err error) {
 		if reverted, ok := processedTxs[txID]; ok {
 			return true, reverted, nil
 		}
@@ -291,9 +291,16 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		return true, meta.Reverted, nil
 	}
 
+	hasTx := func(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
+		if _, ok := processedTxs[txid]; ok {
+			return true, nil
+		}
+		return chain.HasTransaction(txid, txBlockRef)
+	}
+
 	for _, tx := range txs {
 		// check if tx existed
-		if found, _, err := findTx(tx.ID()); err != nil {
+		if found, err := hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
 			return nil, nil, err
 		} else if found {
 			return nil, nil, consensusError("tx already exists")
@@ -301,7 +308,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 
 		// check depended tx
 		if dep := tx.DependsOn(); dep != nil {
-			found, reverted, err := findTx(*dep)
+			found, reverted, err := findDep(*dep)
 			if err != nil {
 				return nil, nil, err
 			}

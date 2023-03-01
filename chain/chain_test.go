@@ -58,6 +58,10 @@ func TestChain(t *testing.T) {
 	_, err = c.GetTransactionMeta(thor.Bytes32{})
 	assert.True(t, c.IsNotFound(err))
 
+	assert.Equal(t, M(true, nil), M(c.HasTransaction(tx1.ID(), tx1.BlockRef().Number())))
+	assert.Equal(t, M(false, nil), M(c.HasTransaction(tx1.ID(), block.Number(c.HeadID()))))
+	assert.Equal(t, M(false, nil), M(c.HasTransaction(thor.Bytes32{}, 0)))
+
 	assert.Equal(t, M(true, nil), M(c.HasBlock(b1.Header().ID())))
 	assert.Equal(t, M(false, nil), M(c.HasBlock(b3x.Header().ID())))
 
