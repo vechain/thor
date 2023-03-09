@@ -7,6 +7,7 @@ package chain
 
 import (
 	"encoding/binary"
+	"math"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -141,6 +142,42 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 		return nil, err
 	}
 	return nil, errNotFound
+}
+
+// HasTransaction checks if a tx exists on the chain.
+// It's usually much faster than GetTransactionMeta.
+func (c *Chain) HasTransaction(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
+	headNum := block.Number(c.headID)
+	// tx block ref too new.
+	if txBlockRef > headNum {
+		return false, nil
+	}
+	// tx block ref too old, fallback to retrieve tx meta.
+	if headNum-txBlockRef > 100 {
+		if _, err := c.GetTransactionMeta(txid); err != nil {
+			if c.IsNotFound(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return true, nil
+	}
+
+	// iterate block summaries from head block to ref block,
+	// to match tx id.
+	for nextID := c.headID; block.Number(nextID) >= txBlockRef && block.Number(nextID) != math.MaxUint32; {
+		s, err := c.repo.GetBlockSummary(nextID)
+		if err != nil {
+			return false, err
+		}
+		for _, _txid := range s.Txs {
+			if _txid == txid {
+				return true, nil
+			}
+		}
+		nextID = s.Header.ParentID()
+	}
+	return false, nil
 }
 
 // GetBlockHeader returns block header by given block number.

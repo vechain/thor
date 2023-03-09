@@ -65,7 +65,7 @@ func (f *Flow) TotalScore() uint64 {
 	return f.runtime.Context().TotalScore
 }
 
-func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) {
+func (f *Flow) findDep(txID thor.Bytes32) (found bool, reverted bool, err error) {
 	if reverted, ok := f.processedTxs[txID]; ok {
 		return true, reverted, nil
 	}
@@ -77,6 +77,13 @@ func (f *Flow) findTx(txID thor.Bytes32) (found bool, reverted bool, err error) 
 		return false, false, err
 	}
 	return true, txMeta.Reverted, nil
+}
+
+func (f *Flow) hasTx(txid thor.Bytes32, txBlockRef uint32) (bool, error) {
+	if _, has := f.processedTxs[txid]; has {
+		return true, nil
+	}
+	return f.runtime.Chain().HasTransaction(txid, txBlockRef)
 }
 
 // Adopt try to execute the given transaction.
@@ -109,7 +116,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 	}
 
 	// check if tx already there
-	if found, _, err := f.findTx(tx.ID()); err != nil {
+	if found, err := f.hasTx(tx.ID(), tx.BlockRef().Number()); err != nil {
 		return err
 	} else if found {
 		return errKnownTx
@@ -117,7 +124,7 @@ func (f *Flow) Adopt(tx *tx.Transaction) error {
 
 	if dependsOn := tx.DependsOn(); dependsOn != nil {
 		// check if deps exists
-		found, reverted, err := f.findTx(*dependsOn)
+		found, reverted, err := f.findDep(*dependsOn)
 		if err != nil {
 			return err
 		}
