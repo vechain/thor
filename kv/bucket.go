@@ -6,6 +6,7 @@
 package kv
 
 import (
+	"context"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -70,6 +71,7 @@ func (b Bucket) NewStore(src Store) Store {
 		SnapshotFunc
 		BulkFunc
 		IterateFunc
+		DeleteRangeFunc
 	}{
 		b.NewGetter(src),
 		b.NewPutter(src),
@@ -96,22 +98,7 @@ func (b Bucket) NewStore(src Store) Store {
 			}
 		},
 		func(r Range) Iterator {
-			{
-				buf := bufPool.Get().(*buf)
-				defer bufPool.Put(buf)
-				buf.k = append(append(buf.k[:0], b...), r.Start...)
-				r.Start = buf.k
-			}
-
-			if len(r.Limit) == 0 {
-				r.Limit = util.BytesPrefix([]byte(b)).Limit
-			} else {
-				buf := bufPool.Get().(*buf)
-				defer bufPool.Put(buf)
-				buf.k = append(append(buf.k[:0], b...), r.Limit...)
-				r.Limit = buf.k
-			}
-			iter := src.Iterate(r)
+			iter := src.Iterate(b.newRange(r))
 			return &struct {
 				FirstFunc
 				LastFunc
@@ -133,7 +120,20 @@ func (b Bucket) NewStore(src Store) Store {
 				iter.Error,
 			}
 		},
+		func(ctx context.Context, r Range) error {
+			return src.DeleteRange(ctx, b.newRange(r))
+		},
 	}
+}
+
+func (b Bucket) newRange(r Range) Range {
+	r.Start = append(append([]byte(nil), b...), r.Start...)
+	if len(r.Limit) == 0 {
+		r.Limit = util.BytesPrefix([]byte(b)).Limit
+	} else {
+		r.Limit = append(append([]byte(nil), b...), r.Limit...)
+	}
+	return r
 }
 
 type buf struct {

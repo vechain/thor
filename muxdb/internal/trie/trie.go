@@ -7,7 +7,6 @@ package trie
 
 import (
 	"context"
-	"encoding/binary"
 
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
@@ -421,39 +420,17 @@ func (t *Trie) DumpNodes(ctx context.Context, baseCommitNum uint32, handleLeaf f
 
 // CleanHistory cleans history nodes within [startCommitNum, limitCommitNum).
 func CleanHistory(ctx context.Context, back *Backend, startCommitNum, limitCommitNum uint32) error {
-	if limitCommitNum == 0 {
-		return nil
+	startPtn := startCommitNum / back.HistPtnFactor
+	limitPtn := limitCommitNum / back.HistPtnFactor
+	// preserve ptn 0 to make genesis state always visitable
+	if startPtn == 0 {
+		startPtn = 1
 	}
-	var (
-		checkContext = newContextChecker(ctx, 5000)
-		iter         = back.Store.Iterate(kv.Range{
-			Start: appendUint32([]byte{back.HistSpace}, startCommitNum/back.HistPtnFactor),
-			Limit: appendUint32([]byte{back.HistSpace}, (limitCommitNum-1)/back.HistPtnFactor+1),
-		})
-		bulk = back.Store.Bulk()
-	)
-	defer iter.Release()
-	bulk.EnableAutoFlush()
 
-	for iter.Next() {
-		if err := checkContext(); err != nil {
-			return err
-		}
-		key := iter.Key()
-		// TODO: better way to extract commit number
-		ptn := binary.BigEndian.Uint32(key[1:])
-		mod := binary.BigEndian.Uint32(key[len(key)-8:])
-		nodeCommitNum := ptn*back.HistPtnFactor + mod
-		if nodeCommitNum >= startCommitNum && nodeCommitNum < limitCommitNum {
-			if err := bulk.Delete(key); err != nil {
-				return err
-			}
-		}
-	}
-	if err := iter.Error(); err != nil {
-		return err
-	}
-	return bulk.Write()
+	return back.Store.DeleteRange(ctx, kv.Range{
+		Start: appendUint32([]byte{back.HistSpace}, startPtn),
+		Limit: appendUint32([]byte{back.HistSpace}, limitPtn),
+	})
 }
 
 // individual functions of trie database interface.

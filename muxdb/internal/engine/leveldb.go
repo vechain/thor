@@ -6,6 +6,7 @@
 package engine
 
 import (
+	"context"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -151,4 +152,34 @@ func (ldb *levelEngine) Bulk() kv.Bulk {
 
 func (ldb *levelEngine) Iterate(r kv.Range) kv.Iterator {
 	return ldb.db.NewIterator((*util.Range)(&r), &scanOpt)
+}
+
+func (ldb *levelEngine) DeleteRange(ctx context.Context, r kv.Range) error {
+	iter := ldb.Iterate(r)
+	defer iter.Release()
+
+	cnt := 0
+
+	bulk := ldb.Bulk()
+	bulk.EnableAutoFlush()
+
+	for iter.Next() {
+		cnt++
+		// check context every 1000 times.
+		if cnt%1000 == 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+		}
+		if err := bulk.Delete(iter.Key()); err != nil {
+			return err
+		}
+	}
+
+	if err := iter.Error(); err != nil {
+		return err
+	}
+	return bulk.Write()
 }
