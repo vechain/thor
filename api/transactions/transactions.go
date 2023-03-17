@@ -226,18 +226,18 @@ func (t *Transactions) getAllTxIDsFromTxpool() ([]string, error) {
 
 func (t *Transactions) handleGetAllTxIDsFromTxPool(w http.ResponseWriter, req *http.Request) error {
     raw := req.URL.Query().Get("raw")
-    detailed := req.URL.Query().Get("detailed")
+    expanded := req.URL.Query().Get("expanded")
 
     if raw != "" && raw != "false" && raw != "true" {
         return utils.BadRequest(errors.New("raw should be boolean"))
     }
 
-    if detailed != "" && detailed != "false" && detailed != "true" {
-        return utils.BadRequest(errors.New("detailed should be boolean"))
+    if expanded != "" && expanded != "false" && expanded != "true" {
+        return utils.BadRequest(errors.New("expanded should be boolean"))
     }
 
     rawBool := raw == "true"
-    detailedBool := detailed == "true"
+    expandedBool := expanded == "true"
 
     txs := t.pool.Executables()
     if rawBool {
@@ -250,7 +250,7 @@ func (t *Transactions) handleGetAllTxIDsFromTxPool(w http.ResponseWriter, req *h
             rawTxs = append(rawTxs, RawTx{hexutil.Encode(raw)})
         }
         return utils.WriteJSON(w, rawTxs)
-    } else if detailedBool {
+    } else if expandedBool {
         detailedTxs := make([]*Transaction, 0, len(txs))
         for _, tx := range txs {
             detailedTxs = append(detailedTxs, convertTransaction(tx, nil))
@@ -269,7 +269,7 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	sub.Path("/pending").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetAllTxIDsFromTxPool))
 	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
-    	sub.Path("/txpool/txids").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetAllTxIDsFromTxPool))
 }

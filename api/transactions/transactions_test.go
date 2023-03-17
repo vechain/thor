@@ -41,6 +41,7 @@ func TestTransaction(t *testing.T) {
 	getTx(t)
 	getTxReceipt(t)
 	senTx(t)
+	getTxPending(t)
 }
 
 func getTx(t *testing.T) {
@@ -71,6 +72,45 @@ func getTxReceipt(t *testing.T) {
 	}
 	assert.Equal(t, uint64(receipt.GasUsed), transaction.Gas(), "gas should be equal")
 }
+
+func getTxPending(t *testing.T) {
+	var blockRef = tx.NewBlockRef(0)
+	var chainTag = repo.ChainTag()
+	var expiration = uint32(10)
+	var gas = uint64(21000)
+
+	tx := new(tx.Builder).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Expiration(expiration).
+		Gas(gas).
+		Build()
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx = tx.WithSignature(sig)
+	rlpTx, err := rlp.EncodeToBytes(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resAdded := httpPost(t, ts.URL+"/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
+	var txObj map[string]string
+	if err = json.Unmarshal(resAdded, &txObj); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	res := httpGet(t, ts.URL+"/transactions/pending")
+	var poolIds []string
+	if err := json.Unmarshal(res, &poolIds); err != nil {
+		t.Fatal(err)
+	}
+	assert.Contains(t, poolIds, txObj["id"], "should contain new transaction id")
+}
+
 
 func senTx(t *testing.T) {
 	var blockRef = tx.NewBlockRef(0)
@@ -204,3 +244,4 @@ func httpGet(t *testing.T, url string) []byte {
 	}
 	return r
 }
+
