@@ -104,12 +104,10 @@ func getTxPending(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	res := httpGet(t, ts.URL+"/transactions/pending")
-	t.Logf("Res: %s\n", res)
 	var poolIds []string
 	if err := json.Unmarshal(res, &poolIds); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%s\n", poolIds[0])
 	assert.Contains(t, poolIds, txObj["id"], "should contain new transaction id")
 }
 
