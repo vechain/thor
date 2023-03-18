@@ -94,3 +94,50 @@ func TestBlock(t *testing.T) {
 	assert.Equal(t, block.Header().ID(), bx.Header().ID())
 	assert.Equal(t, block.Header().TxsFeatures(), bx.Header().TxsFeatures())
 }
+
+
+func FuzzBlock(f *testing.F) {
+
+	tx1 := new(tx.Builder).Clause(tx.NewClause(&thor.Address{})).Clause(tx.NewClause(&thor.Address{})).Build()
+	tx2 := new(tx.Builder).Clause(tx.NewClause(nil)).Build()
+
+	privKey := string("dce1443bd2ef0c2631adc1c67e5c93f13dc23a41c18b536effbbdcbcdb96fb65")
+
+	now := uint64(time.Now().UnixNano())
+
+	var (
+		gasUsed     uint64       = 1000
+		gasLimit    uint64       = 14000
+		totalScore  uint64       = 101
+		emptyRoot   thor.Bytes32 = thor.BytesToBytes32([]byte("0"))
+		beneficiary thor.Address = thor.BytesToAddress([]byte("abc"))
+	)
+
+	block := new(Builder).
+		GasUsed(gasUsed).
+		Transaction(tx1).
+		Transaction(tx2).
+		GasLimit(gasLimit).
+		TotalScore(totalScore).
+		StateRoot(emptyRoot).
+		ReceiptsRoot(emptyRoot).
+		Timestamp(now).
+		ParentID(emptyRoot).
+		Beneficiary(beneficiary).
+		Build()
+
+	key, _ := crypto.HexToECDSA(privKey)
+	sig, _ := crypto.Sign(block.Header().SigningHash().Bytes(), key)
+
+	block = block.WithSignature(sig)
+
+	data, _ := rlp.EncodeToBytes(block)
+
+	f.Add(data)
+
+
+	f.Fuzz(func(t *testing.T, orig []byte) {
+			decodeBlock := Block{}
+			rlp.DecodeBytes(orig, &decodeBlock)
+	})
+}

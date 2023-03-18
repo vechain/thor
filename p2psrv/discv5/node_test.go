@@ -303,3 +303,23 @@ func (NodeID) Generate(rand *rand.Rand, size int) reflect.Value {
 	}
 	return reflect.ValueOf(id)
 }
+
+
+func FuzzParseNode(f *testing.F) {
+
+	rawurl0 := "http://foobar"
+	rawurl1 := "enode://01010101@123.124.125.126:3"
+	rawurl2 := "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3"
+	rawurl3 := "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@[2001:db8:3c4d:15::abcd:ef12]:52150"
+	rawurl4 := "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@127.0.0.1:52150?discport=22334"
+
+	f.Add(rawurl0)
+	f.Add(rawurl1)
+	f.Add(rawurl2)
+	f.Add(rawurl3)
+	f.Add(rawurl4)
+
+	f.Fuzz(func(t *testing.T, orig string) {
+		ParseNode(orig)
+	})
+}

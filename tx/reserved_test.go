@@ -50,3 +50,23 @@ func TestReservedDecoding(t *testing.T) {
 	err = rlp.DecodeBytes([]byte{0xc2, 0x1, 0x80}, &r)
 	assert.EqualError(t, err, "invalid reserved fields: not trimmed")
 }
+
+func FuzzReserved(f *testing.F) {
+
+	input0 := []byte{0xc0}
+	input1 := []byte{0xc1, 0x08}
+	input2 := []byte{0xc2, 0x08, 0x07}
+	input3 := []byte{0xc1, 0x80}
+	input4 := []byte{0xc2, 0x1, 0x80}
+
+	f.Add(input0)
+	f.Add(input1)
+	f.Add(input2)
+	f.Add(input3)
+	f.Add(input4)
+
+	f.Fuzz(func(t *testing.T, orig []byte) {
+		var r reserved
+		_ = rlp.DecodeBytes(orig, &r)
+	})
+}

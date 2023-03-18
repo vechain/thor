@@ -107,3 +107,37 @@ func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
 	op = STOP
 	bench.Run(op.String(), bencher)
 }
+
+
+func FuzzBitmap(f *testing.F) {
+
+	testcases0 := []byte{0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1), 0x00, byte(PUSH1)}
+	testcases1 := []byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), 0x01, 0x01, 0x01, 0x01, 0x01}
+	testcases2 := []byte{0x01, 0x01, 0x01, 0x01, 0x01, byte(PUSH2), byte(PUSH2), byte(PUSH2), 0x01, 0x01, 0x01}
+	testcases3 := []byte{0x01, byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	testcases4 := []byte{byte(PUSH1), 0x01, 0x01, 0x01}
+	testcases5 := []byte{byte(PUSH1), byte(PUSH1), byte(PUSH1), byte(PUSH1)}
+	testcases6 := []byte{byte(PUSH16), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	testcases7 := []byte{byte(PUSH3), 0x01, 0x01, 0x01, byte(PUSH1), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	testcases8 := []byte{byte(PUSH32)}
+	testcases9 := []byte{byte(PUSH8), 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}
+	testcasesA := []byte{byte(PUSH8), 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, byte(PUSH1), 0x01}
+	testcasesB := []byte{byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), byte(PUSH8), 0x01, 0x01, 0x01}
+
+	f.Add(testcases0)
+	f.Add(testcases1)
+	f.Add(testcases2)
+	f.Add(testcases3)
+	f.Add(testcases4)
+	f.Add(testcases5)
+	f.Add(testcases6)
+	f.Add(testcases7)
+	f.Add(testcases8)
+	f.Add(testcases9)
+	f.Add(testcasesA)
+	f.Add(testcasesB)
+
+    f.Fuzz(func(t *testing.T, orig []byte) {
+		codeBitmap(orig)
+    })
+}

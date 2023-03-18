@@ -47,3 +47,12 @@ $(CURDIR)/bin/disco
 test:| go_version_check
 	@go test -cover $(PACKAGES)
 
+fuzz:| go_version_check
+	@go test -fuzz=FuzzBitmap -fuzztime=1800s github.com/vechain/thor/vm/
+	@go test -fuzz=FuzzContract -fuzztime=1800s github.com/vechain/thor/vm/
+	@go test -fuzz=FuzzReserved -fuzztime=1800s github.com/vechain/thor/tx/
+	@go test -fuzz=FuzzTransaction -fuzztime=1800s github.com/vechain/thor/tx/
+	@go test -fuzz=FuzzParseNode -fuzztime=1800s github.com/vechain/thor/p2psrv/discv5/
+	@go test -fuzz=FuzzPacket -fuzztime=1800s github.com/vechain/thor/p2psrv/discv5/
+	@go test -fuzz=FuzzBlock -fuzztime=1800s github.com/vechain/thor/block/
+	@go test -fuzz=FuzzHeader -fuzztime=1800s github.com/vechain/thor/block/
