@@ -49,8 +49,8 @@ func (ex *extension) DecodeRLP(s *rlp.Stream) error {
 		}
 	}
 
-	if len(raws) > 2 {
-		return errors.New("rlp: too much elements in extension")
+	if len(raws) == 0 || len(raws) > 2 {
+		return errors.New("rlp: unexpected extension")
 	} else {
 		var alpha []byte
 		if err := rlp.DecodeBytes(raws[0], &alpha); err != nil {
