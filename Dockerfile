@@ -10,8 +10,11 @@ RUN make all
 FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates
-COPY --from=builder /go/thor/bin/thor /usr/local/bin/
-COPY --from=builder /go/thor/bin/disco /usr/local/bin/
+RUN adduser -D -s /bin/ash thor
+USER thor
+ENV PATH="$PATH:/home/thor"
+COPY --from=builder /go/thor/bin/thor /home/thor
+COPY --from=builder /go/thor/bin/disco /home/thor
 
 EXPOSE 8669 11235 11235/udp 55555/udp
 ENTRYPOINT ["thor"]
