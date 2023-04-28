@@ -141,12 +141,14 @@ Docker is one quick way for running a vechain node:
 
 ```shell
 docker run -d\
-  -v {path-to-your-data-directory}/.org.vechain.thor:/root/.org.vechain.thor\
+  -v {path-to-your-data-directory}/.org.vechain.thor:/home/thor/.org.vechain.thor\
   -p 127.0.0.1:8669:8669 -p 11235:11235 -p 11235:11235/udp\
   --name thor-node vechain/thor --network test
 ```
 
 Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
+
+*Started from release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) the default user has changed from root to thor*
 
 ## Explorers
 
