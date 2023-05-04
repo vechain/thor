@@ -15,7 +15,6 @@ This is the first implementation written in golang.
 * [Installation](#installation)
   * [Requirements](#requirements)
   * [Getting the source](#getting-the-source)
-  * [Dependency management](#dependency-management)
   * [Building](#building)
 * [Running Thor](#running-thor)
   * [Sub-commands](#sub-commands)
