@@ -15,7 +15,6 @@ This is the first implementation written in golang.
 * [Installation](#installation)
   * [Requirements](#requirements)
   * [Getting the source](#getting-the-source)
-  * [Dependency management](#dependency-management)
   * [Building](#building)
 * [Running Thor](#running-thor)
   * [Sub-commands](#sub-commands)
@@ -148,7 +147,7 @@ docker run -d\
 
 Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
 
-*Started from release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) the default user has changed from root to thor*
+Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0) to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
 
 ## Explorers
 
