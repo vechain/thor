@@ -6,7 +6,7 @@ This is the first implementation written in golang.
 
 [![Go](https://img.shields.io/badge/golang-%3E%3D1.17-orange.svg)](https://golang.org)
 [![Go Report Card](https://goreportcard.com/badge/github.com/vechain/thor)](https://goreportcard.com/report/github.com/vechain/thor)
-[![Travis](https://travis-ci.org/vechain/thor.svg?branch=master)](https://travis-ci.org/vechain/thor)
+![GitHub Action Status](https://github.com/vechain/thor/actions/workflows/test.yaml/badge.svg)
 [![License](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](https://github.com/vechain/thor/blob/master/LICENSE)
 &nbsp;&nbsp; [![TG](https://img.shields.io/badge/chat-on%20telegram-blue)](https://t.me/VeChainDevCommunity)
 
