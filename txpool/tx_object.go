@@ -47,6 +47,10 @@ func (o *txObject) Origin() thor.Address {
 	return o.resolved.Origin
 }
 
+func (o *txObject) Delegator() *thor.Address {
+	return o.resolved.Delegator
+}
+
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
 	switch {
 	case o.Gas() > headBlock.GasLimit():

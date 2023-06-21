@@ -50,6 +50,29 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 	return signTx(tx, from)
 }
 
+func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef, expiration uint32, dependsOn *thor.Bytes32, from genesis.DevAccount, delegator genesis.DevAccount) *tx.Transaction {
+	builder := new(tx.Builder).ChainTag(chainTag)
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	var features tx.Features
+	features.SetDelegated(true)
+
+	tx := builder.BlockRef(blockRef).
+		Expiration(expiration).
+		Nonce(rand.Uint64()).
+		DependsOn(dependsOn).
+		Features(features).
+		Gas(gas).Build()
+
+	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), from.PrivateKey)
+	dSig, _ := crypto.Sign(tx.DelegatorSigningHash(from.Address).Bytes(), delegator.PrivateKey)
+
+	sig = append(sig, dSig...)
+	return tx.WithSignature(sig)
+}
+
 func TestSort(t *testing.T) {
 	objs := []*txObject{
 		{overallGasPrice: big.NewInt(10)},

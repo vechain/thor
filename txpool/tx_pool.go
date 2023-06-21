@@ -204,7 +204,7 @@ func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
 
-func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmitted bool) error {
+func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmitted bool) error {
 	if p.all.ContainsHash(newTx.Hash()) {
 		// tx already in the pool
 		return nil
@@ -249,7 +249,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonexecutable bool, localSubmi
 			return txRejectedError{err.Error()}
 		}
 
-		if rejectNonexecutable && !executable {
+		if rejectNonExecutable && !executable {
 			return txRejectedError{"tx is not executable"}
 		}
 
@@ -366,7 +366,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 	}()
 
-	// recreate state everytime to avoid high RAM usage when the pool at hight water-mark.
+	// recreate state every time to avoid high RAM usage when the pool at hight water-mark.
 	newState := func() *state.State {
 		return p.stater.NewState(headSummary.Header.StateRoot(), headSummary.Header.Number(), headSummary.Conflicts, headSummary.SteadyNum)
 	}
@@ -447,7 +447,7 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 		}
 	}
 
-	// Concate executables.
+	// Concatenate executables.
 	executableObjs = append(executableObjs, localExecutableObjs...)
 	// Sort will be faster (part of it already sorted).
 	sortTxObjsByOverallGasPriceDesc(executableObjs)

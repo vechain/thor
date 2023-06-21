@@ -49,6 +49,13 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 		return errors.New("account quota exceeded")
 	}
 
+	if d := txObj.Delegator(); d != nil {
+		if m.quota[*d] >= limitPerAccount {
+			return errors.New("delegator quota exceeded")
+		}
+		m.quota[*d]++
+	}
+
 	m.quota[txObj.Origin()]++
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
@@ -71,6 +78,15 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 		} else {
 			delete(m.quota, txObj.Origin())
 		}
+
+		if d := txObj.Delegator(); d != nil {
+			if m.quota[*d] > 1 {
+				m.quota[*d]--
+			} else {
+				delete(m.quota, *d)
+			}
+		}
+
 		delete(m.mapByHash, txHash)
 		delete(m.mapByID, txObj.ID())
 		return true
@@ -108,8 +124,10 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 			continue
 		}
 		// skip account limit check
-
 		m.quota[txObj.Origin()]++
+		if d := txObj.Delegator(); d != nil {
+			m.quota[*d]++
+		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj
 	}
