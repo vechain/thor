@@ -219,3 +219,7 @@ type Beat2Message struct {
 	K           uint8        `json:"k"`
 	Obsolete    bool         `json:"obsolete"`
 }
+
+type PendingTxIDMessage struct {
+	ID thor.Bytes32 `json:"id"`
+}
