@@ -5,18 +5,20 @@
 
 package doc
 
-//go:generate go-bindata -nometadata -ignore=.DS_Store -pkg doc -o bindata.go swagger-ui/... thor.yaml
-
 import (
-	yaml "gopkg.in/yaml.v2"
+	"embed"
+
+	"gopkg.in/yaml.v2"
 )
 
-//Version open api version
+//go:embed swagger-ui thor.yaml
+var FS embed.FS
+var version string
+
+// Version open api version
 func Version() string {
 	return version
 }
-
-var version string
 
 type openAPIInfo struct {
 	Info struct {
@@ -25,8 +27,13 @@ type openAPIInfo struct {
 }
 
 func init() {
+	content, err := FS.ReadFile("thor.yaml")
+	if err != nil {
+		panic(err)
+	}
+
 	var oai openAPIInfo
-	if err := yaml.Unmarshal(MustAsset("thor.yaml"), &oai); err != nil {
+	if err := yaml.Unmarshal(content, &oai); err != nil {
 		panic(err)
 	}
 	version = oai.Info.Version
