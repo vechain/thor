@@ -10,7 +10,6 @@ import (
 	"net/http/pprof"
 	"strings"
 
-	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/api/accounts"
@@ -29,7 +28,7 @@ import (
 	"github.com/vechain/thor/txpool"
 )
 
-//New return api router
+// New return api router
 func New(
 	repo *chain.Repository,
 	stater *state.Stater,
@@ -54,11 +53,8 @@ func New(
 
 	// to serve api doc and swagger-ui
 	router.PathPrefix("/doc").Handler(
-		http.StripPrefix("/doc/", http.FileServer(
-			&assetfs.AssetFS{
-				Asset:     doc.Asset,
-				AssetDir:  doc.AssetDir,
-				AssetInfo: doc.AssetInfo})))
+		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
+	)
 
 	// redirect swagger-ui
 	router.Path("/").HandlerFunc(
