@@ -199,7 +199,7 @@ func (p *TxPool) Close() {
 	log.Debug("closed")
 }
 
-//SubscribeTxEvent receivers will receive a tx
+// SubscribeTxEvent receivers will receive a tx
 func (p *TxPool) SubscribeTxEvent(ch chan *TxEvent) event.Subscription {
 	return p.scope.Track(p.txFeed.Subscribe(ch))
 }
@@ -323,7 +323,7 @@ func (p *TxPool) Executables() tx.Transactions {
 }
 
 // Fill fills txs into pool.
-func (p *TxPool) Fill(txs tx.Transactions, localSubmitted bool) {
+func (p *TxPool) Fill(txs tx.Transactions) {
 	txObjs := make([]*txObject, 0, len(txs))
 	for _, tx := range txs {
 		origin, _ := tx.Origin()
@@ -331,7 +331,7 @@ func (p *TxPool) Fill(txs tx.Transactions, localSubmitted bool) {
 			continue
 		}
 		// here we ignore errors
-		if txObj, err := resolveTx(tx, localSubmitted); err == nil {
+		if txObj, err := resolveTx(tx, false); err == nil {
 			txObjs = append(txObjs, txObj)
 		}
 	}
@@ -464,8 +464,8 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 	}
 
 	p.goes.Go(func() {
+		executable := true
 		for _, tx := range toBroadcast {
-			executable := true
 			p.txFeed.Send(&TxEvent{tx, &executable})
 		}
 	})
