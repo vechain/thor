@@ -69,8 +69,7 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 
 // content types
 const (
-	JSONContentType        = "application/json; charset=utf-8"
-	OctetStreamContentType = "application/octet-stream"
+	JSONContentType = "application/json; charset=utf-8"
 )
 
 // ParseJSON parse a JSON object using strict mode.

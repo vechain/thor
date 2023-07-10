@@ -18,12 +18,17 @@ import (
 	"github.com/vechain/thor/block"
 	"github.com/vechain/thor/chain"
 	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/txpool"
 )
+
+const txQueueSize = 20
 
 type Subscriptions struct {
 	backtraceLimit uint32
 	repo           *chain.Repository
 	upgrader       *websocket.Upgrader
+	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
 }
@@ -43,8 +48,8 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32) *Subscriptions {
-	return &Subscriptions{
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
+	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,
 		upgrader: &websocket.Upgrader{
@@ -62,8 +67,17 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32)
 				return false
 			},
 		},
-		done: make(chan struct{}),
+		pendingTx: newPendingTx(txpool),
+		done:      make(chan struct{}),
 	}
+
+	sub.wg.Add(1)
+	go func() {
+		defer sub.wg.Done()
+
+		sub.pendingTx.DispatchLoop(sub.done)
+	}()
+	return sub
 }
 
 func (s *Subscriptions) handleBlockReader(w http.ResponseWriter, req *http.Request) (*blockReader, error) {
@@ -188,33 +202,63 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
 
-	conn, err := s.upgrader.Upgrade(w, req, nil)
+	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
 
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Debug("close websocket", "err", err)
-		}
-	}()
-
-	var closeMsg []byte
-	if err := s.pipe(conn, reader); err != nil {
-		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
-	} else {
-		closeMsg = websocket.FormatCloseMessage(websocket.CloseGoingAway, "")
-	}
-
-	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		log.Debug("write close message", "err", err)
-	}
+	err = s.pipe(conn, reader, closed)
+	s.closeConn(conn, err)
 	return nil
 }
 
-func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
+func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *http.Request) error {
+	s.wg.Add(1)
+	defer s.wg.Done()
+
+	conn, closed, err := s.setupConn(w, req)
+	// since the conn is hijacked here, no error should be returned in lines below
+	if err != nil {
+		log.Debug("upgrade to websocket", "err", err)
+		return nil
+	}
+	defer s.closeConn(conn, err)
+
+	pingTicker := time.NewTicker(pingPeriod)
+	defer pingTicker.Stop()
+
+	txCh := make(chan *tx.Transaction, txQueueSize)
+	s.pendingTx.Subscribe(txCh)
+	defer func() {
+		s.pendingTx.Unsubscribe(txCh)
+		close(txCh)
+	}()
+
+	for {
+		select {
+		case tx := <-txCh:
+			err = conn.WriteJSON(&PendingTxIDMessage{ID: tx.ID()})
+			if err != nil {
+				return nil
+			}
+		case <-s.done:
+			return nil
+		case <-closed:
+			return nil
+		case <-pingTicker.C:
+			conn.WriteMessage(websocket.PingMessage, nil)
+		}
+	}
+}
+
+func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, error) {
+	conn, err := s.upgrader.Upgrade(w, req, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	closed := make(chan struct{})
 	// start read loop to handle close event
 	s.wg.Add(1)
@@ -233,6 +277,28 @@ func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader) error {
 			}
 		}
 	}()
+
+	return conn, closed, nil
+}
+
+func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
+	var closeMsg []byte
+	if err != nil {
+		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
+	} else {
+		closeMsg = websocket.FormatCloseMessage(websocket.CloseGoingAway, "")
+	}
+
+	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
+		log.Debug("write close message", "err", err)
+	}
+
+	if err := conn.Close(); err != nil {
+		log.Debug("close websocket", "err", err)
+	}
+}
+
+func (s *Subscriptions) pipe(conn *websocket.Conn, reader msgReader, closed chan struct{}) error {
 	ticker := s.repo.NewTicker()
 	pingTicker := time.NewTicker(pingPeriod)
 	defer pingTicker.Stop()
@@ -316,4 +382,5 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/{subject}").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
+	sub.Path("/txpool/pending").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
 }
