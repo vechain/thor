@@ -65,20 +65,23 @@ func (p *pendingTx) DispatchLoop(done <-chan struct{}) {
 			}
 			p.knownTx.Add(txEv.Tx.ID(), now)
 
-			p.mu.RLock()
-			func() {
-				for lsn := range p.listeners {
-					select {
-					case lsn <- txEv.Tx:
-					case <-done:
-						return
-					default: // broadcast in a non-blocking manner, so there's no guarantee that all subscriber receives it
-					}
-				}
-			}()
-			p.mu.RUnlock()
+			p.dispatch(txEv.Tx, done)
 		case <-done:
 			return
+		}
+	}
+}
+
+func (p *pendingTx) dispatch(tx *tx.Transaction, done <-chan struct{}) {
+	p.mu.RLock()
+	defer p.mu.Unlock()
+
+	for lsn := range p.listeners {
+		select {
+		case lsn <- tx:
+		case <-done:
+			return
+		default: // broadcast in a non-blocking manner, so there's no guarantee that all subscriber receives it
 		}
 	}
 }
