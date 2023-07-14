@@ -6,7 +6,10 @@ package subscriptions
 
 import (
 	"sync"
+	"time"
 
+	"github.com/hashicorp/golang-lru/simplelru"
+	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tx"
 	"github.com/vechain/thor/txpool"
 )
@@ -45,26 +48,38 @@ func (p *pendingTx) DispatchLoop(done <-chan struct{}) {
 	sub := p.txPool.SubscribeTxEvent(txCh)
 	defer sub.Unsubscribe()
 
+	knownTx, _ := simplelru.NewLRU(2000, nil)
+
 	for {
 		select {
 		case txEv := <-txCh:
 			if txEv.Executable == nil || !*txEv.Executable {
 				continue
 			}
-			p.mu.RLock()
-			func() {
-				for lsn := range p.listeners {
-					select {
-					case lsn <- txEv.Tx:
-					case <-done:
-						return
-					default: // broadcast in a non-blocking manner, so there's no guarantee that all subscriber receives it
-					}
-				}
-			}()
-			p.mu.RUnlock()
+			now := time.Now().Unix()
+			// ignored if seen within half block interval
+			if seen, ok := knownTx.Get(txEv.Tx.ID()); ok && now-seen.(int64) <= int64(thor.BlockInterval/2) {
+				continue
+			}
+			knownTx.Add(txEv.Tx.ID(), now)
+
+			p.dispatch(txEv.Tx, done)
 		case <-done:
 			return
+		}
+	}
+}
+
+func (p *pendingTx) dispatch(tx *tx.Transaction, done <-chan struct{}) {
+	p.mu.RLock()
+	defer p.mu.Unlock()
+
+	for lsn := range p.listeners {
+		select {
+		case lsn <- tx:
+		case <-done:
+			return
+		default: // broadcast in a non-blocking manner, so there's no guarantee that all subscriber receives it
 		}
 	}
 }
