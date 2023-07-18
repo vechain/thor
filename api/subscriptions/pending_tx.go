@@ -17,7 +17,7 @@ import (
 type pendingTx struct {
 	txPool    *txpool.TxPool
 	listeners map[chan *tx.Transaction]struct{}
-	mu        sync.RWMutex
+	mu        sync.Mutex
 }
 
 func newPendingTx(txPool *txpool.TxPool) *pendingTx {
@@ -71,7 +71,7 @@ func (p *pendingTx) DispatchLoop(done <-chan struct{}) {
 }
 
 func (p *pendingTx) dispatch(tx *tx.Transaction, done <-chan struct{}) {
-	p.mu.RLock()
+	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for lsn := range p.listeners {
