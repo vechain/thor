@@ -45,7 +45,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	}
 }
 
-func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
+func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
 	block, err := d.repo.GetBlock(blockID)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
@@ -100,9 +100,9 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 	return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("early reverted"))
 }
 
-// trace an existed transaction
-func (d *Debug) traceTransaction(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
-	rt, txExec, txID, err := d.handleTxEnv(ctx, blockID, txIndex, clauseIndex)
+// trace an existed clause
+func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
+	rt, txExec, txID, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (d *Debug) traceTransaction(ctx context.Context, tracer tracers.Tracer, blo
 	return tracer.GetResult()
 }
 
-func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
+func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
 	var opt *TracerOption
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -153,7 +153,7 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return err
 	}
-	res, err := d.traceTransaction(req.Context(), tracer, blockID, txIndex, clauseIndex)
+	res, err := d.traceClause(req.Context(), tracer, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,7 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 }
 
 func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64, keyStart []byte, maxResult int) (*StorageRangeResult, error) {
-	rt, _, _, err := d.handleTxEnv(ctx, blockID, txIndex, clauseIndex)
+	rt, _, _, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceTransaction))
+	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
 	sub.Path("/storage-range").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
 
 }
