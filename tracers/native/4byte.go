@@ -48,7 +48,7 @@ func init() {
 type fourByteTracer struct {
 	noopTracer
 	ids               map[string]int   // ids aggregates the 4byte ids found
-	interrupt         atomic.Bool      // Atomic flag to signal execution interruption
+	interrupt         atomic.Value     // Atomic flag to signal execution interruption
 	reason            error            // Textual reason for the interruption
 	activePrecompiles []common.Address // Updated on CaptureStart based on given rules
 }
@@ -93,7 +93,7 @@ func (t *fourByteTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 // CaptureEnter is called when EVM enters a new scope (via call, create or selfdestruct).
 func (t *fourByteTracer) CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 	// Skip if tracing was interrupted
-	if t.interrupt.Load() {
+	if stop := t.interrupt.Load(); stop != nil && stop.(bool) {
 		return
 	}
 	if len(input) < 4 {

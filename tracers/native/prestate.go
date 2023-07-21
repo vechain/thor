@@ -64,8 +64,8 @@ type prestateTracer struct {
 	create                bool
 	to                    common.Address
 	config                prestateTracerConfig
-	interrupt             atomic.Bool // Atomic flag to signal execution interruption
-	reason                error       // Textual reason for the interruption
+	interrupt             atomic.Value // Atomic flag to signal execution interruption
+	reason                error        // Textual reason for the interruption
 	contractCreationCount uint32
 	created               map[common.Address]bool
 	deleted               map[common.Address]bool
@@ -194,7 +194,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		return
 	}
 	// Skip if tracing was interrupted
-	if t.interrupt.Load() {
+	if stop := t.interrupt.Load(); stop != nil && stop.(bool) {
 		return
 	}
 	stackData := stack.Data()

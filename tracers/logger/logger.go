@@ -113,8 +113,8 @@ type StructLogger struct {
 	err     error
 	usedGas uint64
 
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	interrupt atomic.Value // Atomic flag to signal execution interruption
+	reason    error        // Textual reason for the interruption
 }
 
 // NewStructLogger returns a new logger
@@ -151,7 +151,7 @@ func (l *StructLogger) CaptureStart(env *vm.EVM, from common.Address, to common.
 // CaptureState also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, rData []byte, depth int, err error) {
 	// If tracing was interrupted, set the error and stop
-	if l.interrupt.Load() {
+	if stop := l.interrupt.Load(); stop != nil && stop.(bool) {
 		return
 	}
 	// check if already accumulated the specified number of logs

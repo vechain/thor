@@ -93,8 +93,8 @@ type callTracer struct {
 	noopTracer
 	callstack []callFrame
 	config    callTracerConfig
-	interrupt atomic.Bool // Atomic flag to signal execution interruption
-	reason    error       // Textual reason for the interruption
+	interrupt atomic.Value // Atomic flag to signal execution interruption
+	reason    error        // Textual reason for the interruption
 }
 
 type callTracerConfig struct {
@@ -157,7 +157,7 @@ func (t *callTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, mem
 		return
 	}
 	// Skip if tracing was interrupted
-	if t.interrupt.Load() {
+	if stop := t.interrupt.Load(); stop != nil && stop.(bool) {
 		return
 	}
 	switch op {
@@ -192,7 +192,7 @@ func (t *callTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 		return
 	}
 	// Skip if tracing was interrupted
-	if t.interrupt.Load() {
+	if stop := t.interrupt.Load(); stop != nil && stop.(bool) {
 		return
 	}
 
