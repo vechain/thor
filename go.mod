@@ -7,7 +7,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/elastic/gosigar v0.10.5
-	github.com/elazarl/go-bindata-assetfs v1.0.0
 	github.com/ethereum/go-ethereum v1.8.14
 	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.6.0
