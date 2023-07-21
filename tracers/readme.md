@@ -15,3 +15,15 @@ introduce native tracers, forked from https://github.com/ethereum/go-ethereum/tr
 + remove CaptureTxStart CaptureTxEnd from Logger interface
 + update contract create function in `prestate`
 + remove js tracers
+
+2023-07-12
+
+forked from https://github.com/ethereum/go-ethereum/tree/80b7bfe70de59356a547c5a5e1c64f0a69e3873e (v1.12.1-dev)
+
++ add OnlyTopCall option to call tracers
++ add WithLogs option to call tracers
++ add DiffMode option to prestate tracers
++ remove nonce from prestate
++ add energy to prestate
++ use gencodec for native tracers, omit serval empty fields
++ removed "time" from all tracer outputs

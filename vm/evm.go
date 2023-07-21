@@ -19,7 +19,6 @@ package vm
 import (
 	"math/big"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -168,11 +167,10 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if evm.vmConfig.Debug {
 		// Capture the tracer start/end events in debug mode
 		if evm.depth == 0 {
-			start := time.Now()
 			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
 
 			defer func() { // Lazy evaluation of the parameters
-				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, err)
 			}()
 		} else {
 			// Handle tracer events for entering and exiting a call frame
@@ -385,11 +383,10 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	if evm.vmConfig.Debug {
 		// Capture the tracer start/end events in debug mode
 		if evm.depth == 0 {
-			start := time.Now()
 			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), contractAddr, true, code, gas, value)
 
 			defer func() { // Lazy evaluation of the parameters
-				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, time.Since(start), err)
+				evm.vmConfig.Tracer.CaptureEnd(ret, gas-leftOverGas, err)
 			}()
 		} else {
 			// Handle tracer events for entering and exiting a call frame

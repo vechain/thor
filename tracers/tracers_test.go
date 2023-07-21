@@ -65,8 +65,8 @@ type clause struct {
 
 type account struct {
 	Balance *math.HexOrDecimal256        `json:"balance"`
+	Energy  *math.HexOrDecimal256        `json:"energy"`
 	Code    hexutil.Bytes                `json:"code"`
-	Nonce   uint64                       `json:"nonce"`
 	Storage map[common.Hash]thor.Bytes32 `json:"storage"`
 }
 
@@ -114,7 +114,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 
 	var tr tracers.Tracer
 	if len(tracerName) > 0 {
-		tr, err = tracers.New(tracerName, nil, data.Config)
+		tr, err = tracers.DefaultDirectory.New(tracerName, data.Config)
 		assert.Nil(t, err)
 	} else {
 		cfg, _ := json.Marshal(logger.Config{
@@ -124,6 +124,10 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 		tr, _ = logger.NewStructLogger(cfg)
 	}
 
+	tr.SetContext(&tracers.Context{
+		BlockTime: rt.Context().Time,
+		State:     rt.State(),
+	})
 	rt.SetVMConfig(vm.Config{
 		Debug:  true,
 		Tracer: tr,
@@ -142,7 +146,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 }
 
 func TestNewTracer(t *testing.T) {
-	_, err := tracers.New("callTracer", nil, nil)
+	_, err := tracers.DefaultDirectory.New("callTracer", nil)
 	assert.Nil(t, err)
 }
 

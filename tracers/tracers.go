@@ -20,7 +20,9 @@ package tracers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
+	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
 )
@@ -28,45 +30,97 @@ import (
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
-	BlockID thor.Bytes32 // Hash of the block the tx is contained within (zero if dangling tx or call)
-	TxIndex int          // Index of the transaction within a block (zero if dangling tx or call)
-	TxID    thor.Bytes32 // Hash of the transaction being traced (zero if dangling call)
+	BlockID     thor.Bytes32 // Hash of the block the tx is contained within (zero if dangling tx or call)
+	BlockTime   uint64       // Timestamp of the block the tx is contained within
+	TxIndex     int          // Index of the transaction within a block (zero if dangling tx or call)
+	TxID        thor.Bytes32 // ID of the transaction being traced (zero if dangling call)
+	ClauseIndex int          // Index of the clause within a transaction (zero if dangling call)
+	State       *state.State
 }
 
 // Tracer interface extends vm.EVMLogger and additionally
 // allows collecting the tracing result.
 type Tracer interface {
 	vm.Logger
+	SetContext(*Context)
 	GetResult() (json.RawMessage, error)
 	// Stop terminates execution of the tracer at the first opportune moment.
 	Stop(err error)
 }
 
-type lookupFunc func(string, *Context, json.RawMessage) (Tracer, error)
+type ctorFn func(json.RawMessage) (Tracer, error)
+type jsCtorFn func(string, json.RawMessage) (Tracer, error)
 
-var (
-	lookups []lookupFunc
-)
+type elem struct {
+	ctor ctorFn
+	isJS bool
+}
 
-// RegisterLookup registers a method as a lookup for tracers, meaning that
-// users can invoke a named tracer through that lookup. If 'wildcard' is true,
-// then the lookup will be placed last. This is typically meant for interpreted
-// engines (js) which can evaluate dynamic user-supplied code.
-func RegisterLookup(wildcard bool, lookup lookupFunc) {
-	if wildcard {
-		lookups = append(lookups, lookup)
-	} else {
-		lookups = append([]lookupFunc{lookup}, lookups...)
-	}
+// DefaultDirectory is the collection of tracers bundled by default.
+var DefaultDirectory = directory{elems: make(map[string]elem)}
+
+// directory provides functionality to lookup a tracer by name
+// and a function to instantiate it. It falls back to a JS code evaluator
+// if no tracer of the given name exists.
+type directory struct {
+	elems  map[string]elem
+	jsEval jsCtorFn
+}
+
+// Register registers a method as a lookup for tracers, meaning that
+// users can invoke a named tracer through that lookup.
+func (d *directory) Register(name string, f ctorFn, isJS bool) {
+	d.elems[name] = elem{ctor: f, isJS: isJS}
+}
+
+// RegisterJSEval registers a tracer that is able to parse
+// dynamic user-provided JS code.
+func (d *directory) RegisterJSEval(f jsCtorFn) {
+	d.jsEval = f
 }
 
 // New returns a new instance of a tracer, by iterating through the
-// registered lookups.
-func New(code string, ctx *Context, cfg json.RawMessage) (Tracer, error) {
-	for _, lookup := range lookups {
-		if tracer, err := lookup(code, ctx, cfg); err == nil {
-			return tracer, nil
-		}
+// registered lookups. Name is either name of an existing tracer
+// or an arbitrary JS code.
+func (d *directory) New(name string, cfg json.RawMessage) (Tracer, error) {
+	if elem, ok := d.elems[name]; ok {
+		return elem.ctor(cfg)
 	}
-	return nil, errors.New("tracer not found")
+	// Assume JS code
+	return d.jsEval(name, cfg)
+}
+
+// IsJS will return true if the given tracer will evaluate
+// JS code. Because code evaluation has high overhead, this
+// info will be used in determining fast and slow code paths.
+func (d *directory) IsJS(name string) bool {
+	if elem, ok := d.elems[name]; ok {
+		return elem.isJS
+	}
+	// JS eval will execute JS code
+	return true
+}
+
+const (
+	memoryPadLimit = 1024 * 1024
+)
+
+// GetMemoryCopyPadded returns offset + size as a new slice.
+// It zero-pads the slice if it extends beyond memory bounds.
+func GetMemoryCopyPadded(m *vm.Memory, offset, size int64) ([]byte, error) {
+	if offset < 0 || size < 0 {
+		return nil, errors.New("offset or size must not be negative")
+	}
+	if int(offset+size) < m.Len() { // slice fully inside memory
+		return m.GetCopy(offset, size), nil
+	}
+	paddingNeeded := int(offset+size) - m.Len()
+	if paddingNeeded > memoryPadLimit {
+		return nil, fmt.Errorf("reached limit for padding memory slice: %d", paddingNeeded)
+	}
+	cpy := make([]byte, size)
+	if overlap := int64(m.Len()) - offset; overlap > 0 {
+		copy(cpy, m.GetPtr(offset, overlap))
+	}
+	return cpy, nil
 }
