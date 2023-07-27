@@ -75,7 +75,7 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig).
+	debug.New(repo, stater, forkConfig, callGasLimit).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
