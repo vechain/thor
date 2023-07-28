@@ -55,6 +55,10 @@ var (
 		Value: 1000,
 		Usage: "limit the distance between 'position' and best block for subscriptions APIs",
 	}
+	apiAllowCustomTracerFlag = cli.BoolFlag{
+		Name:  "api-allow-custom-tracer",
+		Usage: "allow custom JS tracer to be used tracer API",
+	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Value: int(log15.LvlInfo),
