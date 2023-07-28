@@ -93,10 +93,10 @@ func init() {
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules Rules) []common.Address {
 	switch {
-	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
-	default:
+	case rules.IsIstanbul:
 		return PrecompiledAddressesIstanbul
+	default:
+		return PrecompiledAddressesByzantium
 	}
 }
 

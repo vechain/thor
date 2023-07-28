@@ -41,6 +41,7 @@ func New(
 	callGasLimit uint64,
 	pprofOn bool,
 	skipLogs bool,
+	allowCustomTracer bool,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
 
@@ -75,7 +76,7 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")

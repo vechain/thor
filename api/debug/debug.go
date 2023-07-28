@@ -36,18 +36,20 @@ import (
 var devNetGenesisID = genesis.NewDevnet().ID()
 
 type Debug struct {
-	repo         *chain.Repository
-	stater       *state.Stater
-	forkConfig   thor.ForkConfig
-	callGasLimit uint64
+	repo              *chain.Repository
+	stater            *state.Stater
+	forkConfig        thor.ForkConfig
+	callGasLimit      uint64
+	allowCustomTracer bool
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool) *Debug {
 	return &Debug{
 		repo,
 		stater,
 		forkConfig,
 		callGaslimit,
+		allowCustomTracer,
 	}
 }
 
@@ -138,17 +140,13 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 	if opt.Name == "" {
 		tr, err := logger.NewStructLogger(opt.Config)
 		if err != nil {
-			return err
+			return utils.Forbidden(err)
 		}
 		tracer = tr
 	} else {
-		name := opt.Name
-		if !strings.HasSuffix(name, "Tracer") {
-			name += "Tracer"
-		}
-		tr, err := tracers.DefaultDirectory.New(name, opt.Config)
+		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
 		if err != nil {
-			return err
+			return utils.Forbidden(err)
 		}
 		tracer = tr
 	}
@@ -178,17 +176,13 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if opt.Name == "" {
 		tr, err := logger.NewStructLogger(opt.Config)
 		if err != nil {
-			return err
+			return utils.Forbidden(err)
 		}
 		tracer = tr
 	} else {
-		name := opt.Name
-		if !strings.HasSuffix(name, "Tracer") {
-			name += "Tracer"
-		}
-		tr, err := tracers.DefaultDirectory.New(name, opt.Config)
+		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
 		if err != nil {
-			return err
+			return utils.Forbidden(err)
 		}
 		tracer = tr
 	}

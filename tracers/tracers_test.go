@@ -114,7 +114,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 
 	var tr tracers.Tracer
 	if len(tracerName) > 0 {
-		tr, err = tracers.DefaultDirectory.New(tracerName, data.Config)
+		tr, err = tracers.DefaultDirectory.New(tracerName, data.Config, false)
 		assert.Nil(t, err)
 	} else {
 		cfg, _ := json.Marshal(logger.Config{
@@ -146,7 +146,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 }
 
 func TestNewTracer(t *testing.T) {
-	_, err := tracers.DefaultDirectory.New("callTracer", nil)
+	_, err := tracers.DefaultDirectory.New("callTracer", nil, false)
 	assert.Nil(t, err)
 }
 
