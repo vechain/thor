@@ -74,7 +74,7 @@ type Output struct {
 
 type TransactionExecutor struct {
 	HasNextClause func() bool
-	NextClause    func() (gasUsed uint64, output *Output, err error)
+	PrepareNext   func() (exec func() (gasUsed uint64, output *Output, err error), interrupt func())
 	Finalize      func() (*tx.Receipt, error)
 }
 
@@ -367,7 +367,8 @@ func (rt *Runtime) ExecuteTransaction(tx *tx.Transaction) (receipt *tx.Receipt, 
 		return nil, err
 	}
 	for executor.HasNextClause() {
-		if _, _, err := executor.NextClause(); err != nil {
+		exec, _ := executor.PrepareNext()
+		if _, _, err := exec(); err != nil {
 			return nil, err
 		}
 	}
@@ -406,34 +407,39 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 
 	return &TransactionExecutor{
 		HasNextClause: hasNext,
-		NextClause: func() (gasUsed uint64, output *Output, err error) {
+		PrepareNext: func() (exec func() (uint64, *Output, error), interrupt func()) {
 			nextClauseIndex := uint32(len(txOutputs))
-			exec, _ := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
-			output, _, err = exec()
-			if err != nil {
-				return 0, nil, err
-			}
-			gasUsed = leftOverGas - output.LeftOverGas
-			leftOverGas = output.LeftOverGas
+			execFunc, interrupt := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
 
-			// Apply refund counter, capped to half of the used gas.
-			refund := gasUsed / 2
-			if refund > output.RefundGas {
-				refund = output.RefundGas
-			}
+			exec = func() (gasUsed uint64, output *Output, err error) {
+				output, _, err = execFunc()
+				if err != nil {
+					return 0, nil, err
+				}
+				gasUsed = leftOverGas - output.LeftOverGas
+				leftOverGas = output.LeftOverGas
 
-			// won't overflow
-			leftOverGas += refund
+				// Apply refund counter, capped to half of the used gas.
+				refund := gasUsed / 2
+				if refund > output.RefundGas {
+					refund = output.RefundGas
+				}
 
-			if output.VMErr != nil {
-				// vm exception here
-				// revert all executed clauses
-				rt.state.RevertTo(checkpoint)
-				reverted = true
-				txOutputs = nil
+				// won't overflow
+				leftOverGas += refund
+
+				if output.VMErr != nil {
+					// vm exception here
+					// revert all executed clauses
+					rt.state.RevertTo(checkpoint)
+					reverted = true
+					txOutputs = nil
+					return
+				}
+				txOutputs = append(txOutputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
 				return
 			}
-			txOutputs = append(txOutputs, &Tx.Output{Events: output.Events, Transfers: output.Transfers})
+
 			return
 		},
 		Finalize: func() (*Tx.Receipt, error) {
