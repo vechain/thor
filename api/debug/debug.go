@@ -45,20 +45,21 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	}
 }
 
-func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (*runtime.Runtime, *runtime.TransactionExecutor, error) {
+func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
 	block, err := d.repo.GetBlock(blockID)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
-			return nil, nil, utils.Forbidden(errors.New("block not found"))
+			return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("block not found"))
 		}
-		return nil, nil, err
+		return nil, nil, thor.Bytes32{}, err
 	}
 	txs := block.Transactions()
 	if txIndex >= uint64(len(txs)) {
-		return nil, nil, utils.Forbidden(errors.New("tx index out of range"))
+		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("tx index out of range"))
 	}
+	txID := txs[txIndex].ID()
 	if clauseIndex >= uint64(len(txs[txIndex].Clauses())) {
-		return nil, nil, utils.Forbidden(errors.New("clause index out of range"))
+		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("clause index out of range"))
 	}
 	skipPoA := d.repo.GenesisBlock().Header().ID() == devNetGenesisID
 	rt, err := consensus.New(
@@ -67,7 +68,7 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 		d.forkConfig,
 	).NewRuntimeForReplay(block.Header(), skipPoA)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, thor.Bytes32{}, err
 	}
 	for i, tx := range txs {
 		if uint64(i) > txIndex {
@@ -75,36 +76,45 @@ func (d *Debug) handleTxEnv(ctx context.Context, blockID thor.Bytes32, txIndex u
 		}
 		txExec, err := rt.PrepareTransaction(tx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, thor.Bytes32{}, err
 		}
 		clauseCounter := uint64(0)
 		for txExec.HasNextClause() {
 			if txIndex == uint64(i) && clauseIndex == clauseCounter {
-				return rt, txExec, nil
+				return rt, txExec, txID, nil
 			}
 			if _, _, err := txExec.NextClause(); err != nil {
-				return nil, nil, err
+				return nil, nil, thor.Bytes32{}, err
 			}
 			clauseCounter++
 		}
 		if _, err := txExec.Finalize(); err != nil {
-			return nil, nil, err
+			return nil, nil, thor.Bytes32{}, err
 		}
 		select {
 		case <-ctx.Done():
-			return nil, nil, ctx.Err()
+			return nil, nil, thor.Bytes32{}, ctx.Err()
 		default:
 		}
 	}
-	return nil, nil, utils.Forbidden(errors.New("early reverted"))
+	return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("early reverted"))
 }
 
-//trace an existed transaction
-func (d *Debug) traceTransaction(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
-	rt, txExec, err := d.handleTxEnv(ctx, blockID, txIndex, clauseIndex)
+// trace an existed clause
+func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
+	rt, txExec, txID, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
 	}
+
+	tracer.SetContext(&tracers.Context{
+		BlockID:     blockID,
+		BlockTime:   rt.Context().Time,
+		TxID:        txID,
+		TxIndex:     int(txIndex),
+		ClauseIndex: int(clauseIndex),
+		State:       rt.State(),
+	})
 	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
 	_, _, err = txExec.NextClause()
 	if err != nil {
@@ -113,7 +123,7 @@ func (d *Debug) traceTransaction(ctx context.Context, tracer tracers.Tracer, blo
 	return tracer.GetResult()
 }
 
-func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request) error {
+func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) error {
 	var opt *TracerOption
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
@@ -133,7 +143,7 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 		if !strings.HasSuffix(name, "Tracer") {
 			name += "Tracer"
 		}
-		tr, err := tracers.New(name, nil, opt.Config)
+		tr, err := tracers.DefaultDirectory.New(name, opt.Config)
 		if err != nil {
 			return err
 		}
@@ -143,7 +153,7 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return err
 	}
-	res, err := d.traceTransaction(req.Context(), tracer, blockID, txIndex, clauseIndex)
+	res, err := d.traceClause(req.Context(), tracer, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return err
 	}
@@ -151,7 +161,7 @@ func (d *Debug) handleTraceTransaction(w http.ResponseWriter, req *http.Request)
 }
 
 func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64, keyStart []byte, maxResult int) (*StorageRangeResult, error) {
-	rt, _, err := d.handleTxEnv(ctx, blockID, txIndex, clauseIndex)
+	rt, _, _, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +260,7 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceTransaction))
+	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
 	sub.Path("/storage-range").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
 
 }

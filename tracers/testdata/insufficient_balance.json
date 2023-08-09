@@ -13,15 +13,11 @@
     "state": {
         "0x9e9732322b301b489f2d8bd28443cf2599024a92": {
             "balance": "0x7f0e22963fbc9d737000",
-            "nonce": 0,
-            "code": "0x",
-            "storage": {}
+            "energy":"0x0"
         },
         "0xa7df76f0b8e0d191c5f27563720d1edcd76876db": {
             "balance": "0x853a9ea7faea000",
-            "nonce": 0,
-            "code": "0x",
-            "storage": {}
+            "energy":"0x0"
         }
     },
     "calls": {

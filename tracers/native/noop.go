@@ -19,7 +19,6 @@ package native
 import (
 	"encoding/json"
 	"math/big"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/vechain/thor/tracers"
@@ -27,7 +26,7 @@ import (
 )
 
 func init() {
-	register("noopTracer", newNoopTracer)
+	tracers.DefaultDirectory.Register("noopTracer", newNoopTracer, false)
 }
 
 // noopTracer is a go implementation of the Tracer interface which
@@ -35,7 +34,7 @@ func init() {
 type noopTracer struct{}
 
 // newNoopTracer returns a new noop tracer.
-func newNoopTracer(ctx *tracers.Context, _ json.RawMessage) (tracers.Tracer, error) {
+func newNoopTracer(_ json.RawMessage) (tracers.Tracer, error) {
 	return &noopTracer{}, nil
 }
 
@@ -44,7 +43,7 @@ func (t *noopTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 }
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
-func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) {
+func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -62,6 +61,10 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 // CaptureExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
+}
+
+// SetContext set the tracer context
+func (t *noopTracer) SetContext(ctx *tracers.Context) {
 }
 
 // GetResult returns an empty json object.
