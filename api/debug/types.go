@@ -3,14 +3,29 @@ package debug
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/vechain/thor/thor"
 )
 
-type TracerOption struct {
-	Name   string `json:"name"`
-	Target string `json:"target"`
-	// Config specific to given tracer.
-	Config json.RawMessage `json:"config"`
+type TraceClauseOption struct {
+	Name   string          `json:"name"`
+	Target string          `json:"target"`
+	Config json.RawMessage `json:"config"` // Config specific to given tracer.
+}
+
+type TraceCallOption struct {
+	To         *thor.Address         `json:"to"`
+	Value      *math.HexOrDecimal256 `json:"value"`
+	Data       string                `json:"data"`
+	Gas        uint64                `json:"gas"`
+	GasPrice   *math.HexOrDecimal256 `json:"gasPrice"`
+	ProvedWork *math.HexOrDecimal256 `json:"provedWork"`
+	Caller     *thor.Address         `json:"caller"`
+	GasPayer   *thor.Address         `json:"gasPayer"`
+	Expiration uint32                `json:"expiration"`
+	BlockRef   string                `json:"blockRef"`
+	Name       string                `json:"name"`   // Tracer
+	Config     json.RawMessage       `json:"config"` // Config specific to given tracer.
 }
 
 type StorageRangeOption struct {
