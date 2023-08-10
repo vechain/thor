@@ -19,9 +19,9 @@ package tracers
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/vechain/thor/state"
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/vm"
@@ -82,12 +82,25 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
-func (d *directory) New(name string, cfg json.RawMessage) (Tracer, error) {
+func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tracer, error) {
 	if elem, ok := d.elems[name]; ok {
 		return elem.ctor(cfg)
 	}
-	// Assume JS code
-	return d.jsEval(name, cfg)
+	// backward compatible, allow users emit "Tracer" suffix
+	if elem, ok := d.elems[name+"Tracer"]; ok {
+		return elem.ctor(cfg)
+	}
+
+	if allowCustom {
+		// Assume JS code
+		tracer, err := d.jsEval(name, cfg)
+		if err != nil {
+			return nil, errors.Wrap(err, "create custom tracer")
+		}
+		return tracer, nil
+	} else {
+		return nil, errors.New("unsupported tracer")
+	}
 }
 
 // IsJS will return true if the given tracer will evaluate

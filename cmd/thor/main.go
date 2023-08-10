@@ -33,6 +33,7 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 
 	// Force-load the tracer engines to trigger registration
+	_ "github.com/vechain/thor/tracers/js"
 	_ "github.com/vechain/thor/tracers/native"
 )
 
@@ -75,6 +76,7 @@ func main() {
 			apiTimeoutFlag,
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
+			apiAllowCustomTracerFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -98,6 +100,7 @@ func main() {
 					apiTimeoutFlag,
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
+					apiAllowCustomTracerFlag,
 					onDemandFlag,
 					persistFlag,
 					gasLimitFlag,
@@ -203,6 +206,7 @@ func defaultAction(ctx *cli.Context) error {
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
+		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -301,6 +305,7 @@ func soloAction(ctx *cli.Context) error {
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
+		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
