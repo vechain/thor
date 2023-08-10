@@ -124,7 +124,7 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID 
 		ClauseIndex: int(clauseIndex),
 		State:       rt.State(),
 	})
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
+	rt.SetVMConfig(vm.Config{Tracer: tracer})
 	errCh := make(chan error, 1)
 	exec, interrupt := txExec.PrepareNext()
 	go func() {
@@ -237,7 +237,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *c
 		BlockTime: summary.Header.Timestamp(),
 		State:     state,
 	})
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
+	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
 	errCh := make(chan error, 1)
 	exec, interrupt := rt.PrepareClause(clause, 0, gas, txCtx)

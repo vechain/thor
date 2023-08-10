@@ -128,10 +128,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 		BlockTime: rt.Context().Time,
 		State:     rt.State(),
 	})
-	rt.SetVMConfig(vm.Config{
-		Debug:  true,
-		Tracer: tr,
-	})
+	rt.SetVMConfig(vm.Config{Tracer: tr})
 
 	clause := tx.NewClause(data.Clause.To).WithValue((*big.Int)(data.Calls.Value)).WithData(data.Clause.Data)
 	exec, _ := rt.PrepareClause(clause, data.Context.ClauseIndex, uint64(data.Calls.Gas), &xenv.TransactionContext{
