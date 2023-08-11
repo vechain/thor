@@ -547,7 +547,7 @@ paths:
                     - $ref: '#/components/schemas/Beat2'
                     - $ref: '#/components/schemas/Obsolete'
 
-  /subscritpions/txpool/pending:
+  /subscritpions/txpool:
     get:
       tags:
         - Subscriptions
