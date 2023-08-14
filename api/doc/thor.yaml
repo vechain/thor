@@ -8,7 +8,7 @@ info:
   license:
     name: LGPL 3.0
     url: 'https://www.gnu.org/licenses/lgpl-3.0.en.html'
-  version: 2.0.0
+  version: 2.0.5
 
 servers:
   - url: '/'
@@ -89,7 +89,9 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/BatchCallData'
+              allOf:
+                - $ref: '#/components/schemas/BatchCallData'
+                - $ref: '#/components/schemas/ExtendedCallData'
       responses:
         '200':
           description: OK
@@ -545,6 +547,21 @@ paths:
                     - $ref: '#/components/schemas/Beat2'
                     - $ref: '#/components/schemas/Obsolete'
 
+  /subscritpions/txpool:
+    get:
+      tags:
+        - Subscriptions
+      summary: (Websocket) Subscribe to new transactions
+      description: |
+        which is in pending state.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TXID'
+
   /debug/tracers:
     post:
       tags:
@@ -557,8 +574,35 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TracerOption'      
+              allOf:
+                - $ref: '#/components/schemas/ClauseTracerOption'
+                - $ref: '#/components/schemas/TracerOption'     
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
 
+  /debug/tracers/call:
+    post: 
+      tags:
+        - Debug
+      summary: Create a tracer
+      description:
+        for evaluating a method call
+      parameters:
+        - $ref: '#/components/parameters/HeadInQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/TracerOption'
+                - $ref: '#/components/schemas/CallData'
+                - $ref: '#/components/schemas/ExtendedCallData'
       responses:
         '200':
           description: OK
@@ -939,6 +983,30 @@ components:
       example:
         value: '0xde0b6b3a7640000'
         data: '0x5665436861696e2054686f72'
+        gas: 50000
+        gasPrice: '1000000000000000'
+        caller: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+  
+    ExtendedCallData:
+      properties:
+        provedWork:
+          type: string
+          description: tx proved work(for extension contract)
+        gasPayer:
+          type: string
+          description: gas payer(for extension contract)
+        expiration:
+          type: integer
+          format: uint32
+          description: tx expiration(for extension contract)
+        blockRef:
+          type: string
+          description: block reference(for extension contract)
+      example:
+        provedWork: '1000'
+        gasPayer: '0xd3ae78222beadb038203be21ed5ce7c9b1bff602'
+        expiration: 1000
+        blockRef: '0x00000000851caf3c'
 
     CallResult:
       properties:
@@ -982,19 +1050,7 @@ components:
         caller:
           type: string
           description: caller address (msg.sender)
-        provedWork:
-          type: string
-          description: tx proved work(for extension contract)
-        gasPayer:
-          type: string
-          description: gas payer(for extension contract)
-        expiration:
-          type: integer
-          format: uint32
-          description: tx expiration(for extension contract)
-        blockRef:
-          type: string
-          description: block reference(for extension contract)
+
       example:
         clauses:
           - to: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
@@ -1003,10 +1059,6 @@ components:
         gas: 50000
         gasPrice: '1000000000000000'
         caller: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-        provedWork: '1000'
-        gasPayer: '0xd3ae78222beadb038203be21ed5ce7c9b1bff602'
-        expiration: 1000
-        blockRef: '0x00000000851caf3c'
         
     BatchCallResult:
       type: array
@@ -1191,19 +1243,9 @@ components:
           type: boolean
           description: |
             indicates whether the block containing this data become branch block
-
-    TracerOption:
+    
+    ClauseTracerOption:
       properties:
-        name:
-          type: string
-          enum:
-            - 4byte
-            - call
-            - noop
-            - prestate
-          description: |
-            name of tracer. Empty name stands for default struct logger tracer.
-          example: ""
         target:
           type: string
           description: |
@@ -1211,6 +1253,29 @@ components:
             Currently, only clause is supported. Format:
             `blockID/(txIndex|txId)/clauseIndex`
           example: '0x000dabb4d6f0a80ad7ad7cd0e07a1f20b546db0730d869d5ccb0dd2a16e7595b/0/0'
+
+    TracerOption:
+      properties:
+        name:
+          type: string
+          enum:
+            - ""
+            - 4byte
+            - call
+            - noop
+            - prestate
+            - unigram
+            - bigram
+            - trigram
+            - evmdis
+            - opcount
+          description: |
+            name of tracer. Empty name stands for default struct logger tracer.
+          example: ""
+        config:
+          type: object
+          description: |
+            configuration of tracer. It is tracer specific.
 
     StorageRangeOption:
       properties:

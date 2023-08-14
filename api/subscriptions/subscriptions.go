@@ -382,5 +382,5 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/{subject}").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
-	sub.Path("/txpool/pending").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
+	sub.Path("/txpool").Methods("Get").HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
 }
