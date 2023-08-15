@@ -71,9 +71,12 @@ func runTrace(tracer tracers.Tracer, ctx vm.Context, chaincfg *vm.ChainConfig, c
 		contract.Code = contractCode
 	}
 
+	tracer.CaptureClauseStart(startGas)
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{})
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
+	// Rest gas assumes no refund
+	tracer.CaptureClauseEnd(contract.Gas)
 	if err != nil {
 		return nil, err
 	}

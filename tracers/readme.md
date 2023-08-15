@@ -18,7 +18,7 @@ introduce native tracers, forked from https://github.com/ethereum/go-ethereum/tr
 
 2023-07-12
 
-forked from https://github.com/ethereum/go-ethereum/tree/80b7bfe70de59356a547c5a5e1c64f0a69e3873e (v1.12.1-dev)
+forked from https://github.com/ethereum/go-ethereum/tree/bed84606583893fdb698cc1b5058cc47b4dbd837 (v1.12.2)
 
 + add OnlyTopCall option to call tracers
 + add WithLogs option to call tracers

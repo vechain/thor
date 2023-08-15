@@ -63,6 +63,14 @@ func (t *noopTracer) CaptureEnter(typ vm.OpCode, from common.Address, to common.
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
 
+// CaptureClauseStart implements the Tracer interface and is invoked at the beginning of
+// clause processing.
+func (*noopTracer) CaptureClauseStart(gasLimit uint64) {}
+
+// CaptureClauseEnd implements the Tracer interface and is invoked at the end of
+// clause processing.
+func (*noopTracer) CaptureClauseEnd(restGas uint64) {}
+
 // SetContext set the tracer context
 func (t *noopTracer) SetContext(ctx *tracers.Context) {
 }

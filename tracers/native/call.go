@@ -93,6 +93,7 @@ type callTracer struct {
 	noopTracer
 	callstack []callFrame
 	config    callTracerConfig
+	gasLimit  uint64
 	interrupt atomic.Value // Atomic flag to signal execution interruption
 	reason    error        // Textual reason for the interruption
 }
@@ -124,7 +125,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 		From:  from,
 		To:    &toCopy,
 		Input: common.CopyBytes(input),
-		Gas:   gas,
+		Gas:   t.gasLimit,
 		Value: value,
 	}
 	if create {
@@ -134,12 +135,7 @@ func (t *callTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Ad
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.callstack[0].GasUsed = gasUsed
 	t.callstack[0].processOutput(output, err)
-	if t.config.WithLog {
-		// Logs are not emitted when the call fails
-		clearFailedLogs(&t.callstack[0], false)
-	}
 }
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
@@ -226,6 +222,18 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 	call.GasUsed = gasUsed
 	call.processOutput(output, err)
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
+}
+
+func (t *callTracer) CaptureClauseStart(gasLimit uint64) {
+	t.gasLimit = gasLimit
+}
+
+func (t *callTracer) CaptureClauseEnd(restGas uint64) {
+	t.callstack[0].GasUsed = t.gasLimit - restGas
+	if t.config.WithLog {
+		// Logs are not emitted when the call fails
+		clearFailedLogs(&t.callstack[0], false)
+	}
 }
 
 // GetResult returns the json-encoded nested list of call traces, and any

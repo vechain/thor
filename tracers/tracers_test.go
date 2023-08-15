@@ -135,8 +135,19 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 		Origin: data.Context.TxOrigin,
 		ID:     data.Context.TxID,
 	})
-	_, _, err = exec()
+	tr.CaptureClauseStart(uint64(data.Calls.Gas))
+	output, _, err := exec()
 	assert.Nil(t, err)
+
+	leftOverGas := output.LeftOverGas
+	gasUsed := uint64(data.Calls.Gas) - leftOverGas
+	refund := gasUsed / 2
+	if refund > output.RefundGas {
+		refund = output.RefundGas
+	}
+	leftOverGas += refund
+
+	tr.CaptureClauseEnd(leftOverGas)
 	result, err := tr.GetResult()
 	assert.Nil(t, err)
 	return result

@@ -412,6 +412,13 @@ func (rt *Runtime) PrepareTransaction(tx *tx.Transaction) (*TransactionExecutor,
 			execFunc, interrupt := rt.PrepareClause(resolvedTx.Clauses[nextClauseIndex], nextClauseIndex, leftOverGas, txCtx)
 
 			exec = func() (gasUsed uint64, output *Output, err error) {
+				if rt.vmConfig.Tracer != nil {
+					rt.vmConfig.Tracer.CaptureClauseStart(leftOverGas)
+					defer func() {
+						rt.vmConfig.Tracer.CaptureClauseEnd(leftOverGas)
+					}()
+				}
+
 				output, _, err = execFunc()
 				if err != nil {
 					return 0, nil, err
