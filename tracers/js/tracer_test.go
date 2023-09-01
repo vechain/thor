@@ -60,7 +60,7 @@ func testCtx() vm.Context {
 
 func runTrace(tracer tracers.Tracer, ctx vm.Context, chaincfg *vm.ChainConfig, contractCode []byte) (json.RawMessage, error) {
 	var (
-		env = vm.NewEVM(ctx, &dummyStatedb{}, chaincfg, vm.Config{Debug: true, Tracer: tracer})
+		env = vm.NewEVM(ctx, &dummyStatedb{}, chaincfg, vm.Config{Tracer: tracer})
 
 		startGas uint64 = 10000
 		value           = big.NewInt(0)
@@ -71,9 +71,12 @@ func runTrace(tracer tracers.Tracer, ctx vm.Context, chaincfg *vm.ChainConfig, c
 		contract.Code = contractCode
 	}
 
+	tracer.CaptureClauseStart(startGas)
 	tracer.CaptureStart(env, contract.Caller(), contract.Address(), false, []byte{}, startGas, value)
 	ret, err := env.Interpreter().Run(contract, []byte{})
 	tracer.CaptureEnd(ret, startGas-contract.Gas, err)
+	// Rest gas assumes no refund
+	tracer.CaptureClauseEnd(contract.Gas)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +181,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	env := vm.NewEVM(vm.Context{
 		BlockNumber: big.NewInt(1),
 		GasPrice:    big.NewInt(1),
-	}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Debug: true, Tracer: tracer})
+	}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Tracer: tracer})
 	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
 	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0)
 	tracer.CaptureState(0, 0, 0, 0, nil, nil, contract, nil, 0, nil)

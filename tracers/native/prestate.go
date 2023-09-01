@@ -51,7 +51,6 @@ func (a *account) exists() bool {
 
 type accountMarshaling struct {
 	Balance *hexutil.Big
-	Energy  *hexutil.Big
 	Code    hexutil.Bytes
 }
 
@@ -63,6 +62,7 @@ type prestateTracer struct {
 	post                  state
 	create                bool
 	to                    common.Address
+	gasLimit              uint64 // Amount of gas bought for the whole tx
 	config                prestateTracerConfig
 	interrupt             atomic.Value // Atomic flag to signal execution interruption
 	reason                error        // Textual reason for the interruption
@@ -99,9 +99,8 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 	t.lookupAccount(from)
 	t.lookupAccount(to)
-	// t.lookupAccount(env.Context.Coinbase)
+	t.lookupAccount(env.Context.Coinbase)
 	// tracer hooks run before value transfer, no need to touch balance
-
 	if create {
 		t.contractCreationCount++
 		if t.config.DiffMode {
@@ -112,15 +111,25 @@ func (t *prestateTracer) CaptureStart(env *vm.EVM, from common.Address, to commo
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *prestateTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	if !t.config.DiffMode {
-		if t.create {
-			// Keep existing account prior to contract creation at that address
-			if s := t.pre[t.to]; s != nil && !s.exists() {
-				// Exclude newly created contract.
-				delete(t.pre, t.to)
-			}
-		}
+	if t.config.DiffMode {
+		return
+	}
 
+	if t.create {
+		// Keep existing account prior to contract creation at that address
+		if s := t.pre[t.to]; s != nil && !s.exists() {
+			// Exclude newly created contract.
+			delete(t.pre, t.to)
+		}
+	}
+}
+
+func (t *prestateTracer) CaptureClauseStart(gasLimit uint64) {
+	t.gasLimit = gasLimit
+}
+
+func (t *prestateTracer) CaptureClauseEnd(restGas uint64) {
+	if !t.config.DiffMode {
 		return
 	}
 
@@ -231,9 +240,6 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		t.lookupAccount(addr)
 		t.created[addr] = true
 	}
-}
-
-func (t *prestateTracer) CaptureTxEnd(restGas uint64) {
 }
 
 // SetContext set the tracer context

@@ -54,7 +54,7 @@ func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger, _ = NewStructLogger(nil)
-		env       = vm.NewEVM(vm.Context{}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Debug: true, Tracer: logger})
+		env       = vm.NewEVM(vm.Context{}, &dummyStatedb{}, &vm.ChainConfig{ChainConfig: *params.TestChainConfig}, vm.Config{Tracer: logger})
 
 		contract = vm.NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 100000)
 	)

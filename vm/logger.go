@@ -12,6 +12,9 @@ import (
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Logger interface {
+	// Clause level
+	CaptureClauseStart(gasLimit uint64)
+	CaptureClauseEnd(restGas uint64)
 	// Top call frame
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureEnd(output []byte, gasUsed uint64, err error)

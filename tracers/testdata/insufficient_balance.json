@@ -1,9 +1,12 @@
 {
     "context": {
-        "blockNumber": 42653,
+        "blockID": "0x0000a69d775ef9333cabee3313b7396a887c671c80e6e4206b3abca80c7f0cf0",
+        "blockTime": 1530440930,
+        "beneficiary": "0xb4094c25f86d628fdd571afc4077f0d0196afb48",
         "txOrigin": "0xa7df76f0b8e0d191c5f27563720d1edcd76876db",
         "clauseIndex": 0,
-        "txID": "0x8cbb5bbc3c4f7850eb75e884933ab41f1e35e398c5b423bf347c3365bd39bf84"
+        "txID": "0x8cbb5bbc3c4f7850eb75e884933ab41f1e35e398c5b423bf347c3365bd39bf84",
+        "gas": "0x0"
     },
     "clause": {
         "to": "0x9e9732322b301b489f2d8bd28443cf2599024a92",
@@ -13,21 +16,25 @@
     "state": {
         "0x9e9732322b301b489f2d8bd28443cf2599024a92": {
             "balance": "0x7f0e22963fbc9d737000",
-            "energy":"0x0"
+            "energy": "0x1c30cfc5a47fd8440"
         },
         "0xa7df76f0b8e0d191c5f27563720d1edcd76876db": {
             "balance": "0x853a9ea7faea000",
-            "energy":"0x0"
+            "energy": "0x1232c8bba6493792a50"
+        },
+        "0xb4094c25f86d628fdd571afc4077f0d0196afb48": {
+            "balance": "0x14adf4b7320334b9000000",
+            "energy": "0xd4637703240c1250b82"
         }
     },
     "calls": {
-        "type": "CALL",
         "from": "0xa7df76f0b8e0d191c5f27563720d1edcd76876db",
-        "to": "0x9e9732322b301b489f2d8bd28443cf2599024a92",
-        "value": "0x9b6e64a8ec60000",
         "gas": "0x0",
         "gasUsed": "0x0",
+        "to": "0x9e9732322b301b489f2d8bd28443cf2599024a92",
         "input": "0x",
-        "error": "insufficient balance for transfer"
+        "error": "insufficient balance for transfer",
+        "value": "0x9b6e64a8ec60000",
+        "type": "CALL"
     }
 }

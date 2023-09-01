@@ -26,8 +26,6 @@ import (
 
 // Config are the configuration options for the Interpreter
 type Config struct {
-	// Debug enabled debugging Interpreter options
-	Debug bool
 	// Tracer is the op code logger
 	Tracer Logger
 	// NoRecursion disabled Interpreter call, callcode,
@@ -146,7 +144,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 
 	contract.Input = input
 
-	if in.cfg.Debug {
+	if in.cfg.Tracer != nil {
 		defer func() {
 			if err != nil {
 				if !logged {
@@ -162,7 +160,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 	// the execution of one of the operations or until the done flag is set by the
 	// parent context.
 	for atomic.LoadInt32(&in.evm.abort) == 0 {
-		if in.cfg.Debug {
+		if in.cfg.Tracer != nil {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
@@ -204,7 +202,7 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		}
 
 		// Do tracing before memory expansion
-		if in.cfg.Debug {
+		if in.cfg.Tracer != nil {
 			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, mem, stack, contract, in.returnData, in.evm.depth, err)
 			logged = true
 		}

@@ -91,7 +91,8 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 			if txIndex == uint64(i) && clauseIndex == clauseCounter {
 				return rt, txExec, txID, nil
 			}
-			if _, _, err := txExec.NextClause(); err != nil {
+			exec, _ := txExec.PrepareNext()
+			if _, _, err := exec(); err != nil {
 				return nil, nil, thor.Bytes32{}, err
 			}
 			clauseCounter++
@@ -123,10 +124,24 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID 
 		ClauseIndex: int(clauseIndex),
 		State:       rt.State(),
 	})
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
-	_, _, err = txExec.NextClause()
-	if err != nil {
+	rt.SetVMConfig(vm.Config{Tracer: tracer})
+	errCh := make(chan error, 1)
+	exec, interrupt := txExec.PrepareNext()
+	go func() {
+		_, _, err := exec()
+		errCh <- err
+	}()
+
+	select {
+	case <-ctx.Done():
+		err := ctx.Err()
+		tracer.Stop(err)
+		interrupt()
 		return nil, err
+	case err := <-errCh:
+		if err != nil {
+			return nil, err
+		}
 	}
 	return tracer.GetResult()
 }
@@ -222,7 +237,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *c
 		BlockTime: summary.Header.Timestamp(),
 		State:     state,
 	})
-	rt.SetVMConfig(vm.Config{Debug: true, Tracer: tracer})
+	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
 	errCh := make(chan error, 1)
 	exec, interrupt := rt.PrepareClause(clause, 0, gas, txCtx)
@@ -232,8 +247,10 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *c
 	}()
 	select {
 	case <-ctx.Done():
+		err := ctx.Err()
+		tracer.Stop(err)
 		interrupt()
-		return nil, ctx.Err()
+		return nil, err
 	case err := <-errCh:
 		if err != nil {
 			return nil, err

@@ -34,12 +34,12 @@ import (
 	"github.com/vechain/thor/vm"
 )
 
-// var assetTracers = make(map[string]string)
+var assetTracers = make(map[string]string)
 
 // init retrieves the JavaScript transaction tracers included in go-ethereum.
 func init() {
 	var err error
-	assetTracers, err := jsassets.Load()
+	assetTracers, err = jsassets.Load()
 	if err != nil {
 		panic(err)
 	}
@@ -202,10 +202,21 @@ func newJsTracer(code string, cfg json.RawMessage) (tracers.Tracer, error) {
 	return t, nil
 }
 
+// CaptureClauseStart implements the Tracer interface and is invoked at the beginning of
+// clause processing.
+func (t *jsTracer) CaptureClauseStart(gasLimit uint64) {
+	t.gasLimit = gasLimit
+}
+
+// CaptureClauseEnd implements the Tracer interface and is invoked at the end of
+// clause processing.
+func (t *jsTracer) CaptureClauseEnd(restGas uint64) {
+	t.ctx["gasUsed"] = t.vm.ToValue(t.gasLimit - restGas)
+}
+
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
 func (t *jsTracer) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 	t.env = env
-	t.gasLimit = gas
 	db := &dbObj{db: env.StateDB, vm: t.vm, toBig: t.toBig, toBuf: t.toBuf, fromBuf: t.fromBuf}
 	t.dbValue = db.setupObject()
 	if create {
@@ -269,7 +280,6 @@ func (t *jsTracer) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, memor
 
 // CaptureEnd is called after the call finishes to finalize the tracing.
 func (t *jsTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
-	t.ctx["gasUsed"] = t.vm.ToValue(gasUsed)
 	t.ctx["output"] = t.vm.ToValue(output)
 	if err != nil {
 		t.ctx["error"] = t.vm.ToValue(err.Error())

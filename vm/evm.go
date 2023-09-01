@@ -164,7 +164,7 @@ func (evm *EVM) Depth() int {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		// Capture the tracer start/end events in debug mode
 		if evm.depth == 0 {
 			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
@@ -257,7 +257,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	}
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		evm.vmConfig.Tracer.CaptureEnter(CALLCODE, caller.Address(), addr, input, gas, value)
 		defer func() {
 			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
@@ -299,7 +299,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	}
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		evm.vmConfig.Tracer.CaptureEnter(DELEGATECALL, caller.Address(), addr, input, gas, nil)
 		defer func() {
 			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
@@ -346,7 +346,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	// Invoke tracer hooks that signal entering/exiting a call frame
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		evm.vmConfig.Tracer.CaptureEnter(STATICCALL, caller.Address(), addr, input, gas, nil)
 		defer func() {
 			evm.vmConfig.Tracer.CaptureExit(ret, gas-leftOverGas, err)
@@ -380,7 +380,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	contractAddr = evm.NewContractAddress(evm, evm.contractCreationCount)
 
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		// Capture the tracer start/end events in debug mode
 		if evm.depth == 0 {
 			evm.vmConfig.Tracer.CaptureStart(evm, caller.Address(), contractAddr, true, code, gas, value)
@@ -410,7 +410,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	contractAddr = CreateAddress2(caller.Address(), salt.Bytes32(), crypto.Keccak256Hash(code).Bytes())
 
 	// Capture the tracer start/end events in debug mode
-	if evm.vmConfig.Debug {
+	if evm.vmConfig.Tracer != nil {
 		// Handle tracer events for entering and exiting a call frame
 		evm.vmConfig.Tracer.CaptureEnter(CREATE2, caller.Address(), contractAddr, code, gas, endowment)
 		defer func() {
