@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/vechain/thor/p2psrv/discv5"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 )
 
 func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5.Node, error) {
