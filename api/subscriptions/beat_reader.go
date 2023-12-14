@@ -9,9 +9,9 @@ import (
 	"bytes"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/thor/bloom"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thor/bloom"
 )
 
 type beatReader struct {

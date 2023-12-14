@@ -10,7 +10,7 @@ package bloom
 import (
 	"encoding/binary"
 
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func distribute(hash uint32, k uint8, nBits uint32, cb func(index int, bit byte) bool) bool {

@@ -27,10 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	jsassets "github.com/vechain/thor/tracers/js/internal/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	jsassets "github.com/vechain/thor/v2/tracers/js/internal/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 var assetTracers = make(map[string]string)

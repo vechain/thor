@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/vechain/thor/blake2b"
+	"github.com/vechain/thor/v2/blake2b"
 	"golang.org/x/crypto/sha3"
 )
 

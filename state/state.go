@@ -11,10 +11,10 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/lowrlp"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/stackedmap"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/lowrlp"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/stackedmap"
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (

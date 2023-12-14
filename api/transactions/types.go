@@ -11,9 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 // Clause for json marshal
@@ -23,10 +23,10 @@ type Clause struct {
 	Data  string               `json:"data"`
 }
 
-//Clauses array of clauses.
+// Clauses array of clauses.
 type Clauses []Clause
 
-//ConvertClause convert a raw clause into a json format clause
+// ConvertClause convert a raw clause into a json format clause
 func convertClause(c *tx.Clause) Clause {
 	return Clause{
 		c.To(),
@@ -45,7 +45,7 @@ func (c *Clause) String() string {
 		c.Data)
 }
 
-//Transaction transaction
+// Transaction transaction
 type Transaction struct {
 	ID           thor.Bytes32        `json:"id"`
 	ChainTag     byte                `json:"chainTag"`
@@ -83,7 +83,7 @@ type rawTransaction struct {
 	Meta *TxMeta `json:"meta"`
 }
 
-//convertTransaction convert a raw transaction into a json format transaction
+// convertTransaction convert a raw transaction into a json format transaction
 func convertTransaction(tx *tx.Transaction, header *block.Header) *Transaction {
 	//tx origin
 	origin, _ := tx.Origin()
@@ -133,7 +133,7 @@ type ReceiptMeta struct {
 	TxOrigin       thor.Address `json:"txOrigin"`
 }
 
-//Receipt for json marshal
+// Receipt for json marshal
 type Receipt struct {
 	GasUsed  uint64                `json:"gasUsed"`
 	GasPayer thor.Address          `json:"gasPayer"`
@@ -165,7 +165,7 @@ type Transfer struct {
 	Amount    *math.HexOrDecimal256 `json:"amount"`
 }
 
-//ConvertReceipt convert a raw clause into a jason format clause
+// ConvertReceipt convert a raw clause into a jason format clause
 func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transaction) (*Receipt, error) {
 	reward := math.HexOrDecimal256(*txReceipt.Reward)
 	paid := math.HexOrDecimal256(*txReceipt.Paid)

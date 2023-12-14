@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/cache"
+	"github.com/vechain/thor/v2/cache"
 )
 
 func TestRandCacheAddRemove(t *testing.T) {
