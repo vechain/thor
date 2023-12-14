@@ -296,7 +296,7 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 		suffix = "-full"
 	}
 
-	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v3", gene.ID().Bytes()[24:])+suffix)
+	instanceDir := filepath.Join(dataDir, fmt.Sprintf("instance-%x-v4", gene.ID().Bytes()[24:])+suffix)
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		return "", errors.Wrapf(err, "create instance dir [%v]", instanceDir)
 	}
