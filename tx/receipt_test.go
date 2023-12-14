@@ -7,10 +7,25 @@ package tx_test
 
 import (
 	"fmt"
+	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/thor"
 	. "github.com/vechain/thor/tx"
 )
+
+func getMockReceipt() Receipt {
+	receipt := Receipt{
+		GasUsed:  1000,
+		GasPayer: thor.Address{},
+		Paid:     big.NewInt(100),
+		Reward:   big.NewInt(50),
+		Reverted: false,
+		Outputs:  []*Output{},
+	}
+	return receipt
+}
 
 func TestReceipt(t *testing.T) {
 	var rs Receipts
@@ -18,4 +33,31 @@ func TestReceipt(t *testing.T) {
 
 	var txs Transactions
 	fmt.Println(txs.RootHash())
+}
+
+func TestReceiptStructure(t *testing.T) {
+
+	receipt := getMockReceipt()
+
+	assert.Equal(t, uint64(1000), receipt.GasUsed)
+	assert.Equal(t, thor.Address{}, receipt.GasPayer)
+	assert.Equal(t, big.NewInt(100), receipt.Paid)
+	assert.Equal(t, big.NewInt(50), receipt.Reward)
+	assert.Equal(t, false, receipt.Reverted)
+	assert.Equal(t, []*Output{}, receipt.Outputs)
+
+}
+
+func TestEmptyRootHash(t *testing.T) {
+
+	receipt1 := getMockReceipt()
+	receipt2 := getMockReceipt()
+
+	receipts := Receipts{
+		&receipt1,
+		&receipt2,
+	}
+
+	rootHash := receipts.RootHash()
+	assert.NotEqual(t, thor.Bytes32{}, rootHash, "Root hash should not be empty")
 }
