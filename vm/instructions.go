@@ -19,14 +19,12 @@ package vm
 import (
 	"errors"
 	"fmt"
-	"hash"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"golang.org/x/crypto/sha3"
+	"github.com/vechain/thor/thor"
 )
 
 var (
@@ -34,27 +32,6 @@ var (
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
-
-// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
-// Read to get a variable amount of data from the hash state. Read is faster than Sum
-// because it doesn't copy the internal state, but also modifies the internal state.
-type keccakState interface {
-	hash.Hash
-	Read([]byte) (int, error)
-}
-
-type keccak256 struct {
-	state keccakState
-	hash  common.Hash
-}
-
-var keccak256Pool = sync.Pool{
-	New: func() interface{} {
-		return &keccak256{
-			state: sha3.NewLegacyKeccak256().(keccakState),
-		}
-	},
-}
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.popptr(), stack.peek()
@@ -268,17 +245,12 @@ func opSha3(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	offset, size := stack.popptr(), stack.peek()
 	data := memory.GetPtr(int64(offset.Uint64()), int64(size.Uint64()))
 
-	hasher := keccak256Pool.Get().(*keccak256)
-
-	hasher.state.Reset()
-	hasher.state.Write(data)
-	hasher.state.Read(hasher.hash[:])
+	hash := thor.Keccak256(data)
 
 	if evm.vmConfig.EnablePreimageRecording {
-		evm.StateDB.AddPreimage(hasher.hash, common.CopyBytes(data))
+		evm.StateDB.AddPreimage(common.Hash(hash), common.CopyBytes(data))
 	}
-	size.SetBytes(hasher.hash[:])
-	keccak256Pool.Put(hasher)
+	size.SetBytes(hash[:])
 	return nil, nil
 }
 

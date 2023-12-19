@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -108,5 +107,5 @@ func CreateContractAddress(txID Bytes32, clauseIndex uint32, creationCount uint3
 	var b4_1, b4_2 [4]byte
 	binary.BigEndian.PutUint32(b4_1[:], clauseIndex)
 	binary.BigEndian.PutUint32(b4_2[:], creationCount)
-	return BytesToAddress(crypto.Keccak256(txID[:], b4_1[:], b4_2[:]))
+	return BytesToAddress(Keccak256(txID[:], b4_1[:], b4_2[:]).Bytes())
 }
