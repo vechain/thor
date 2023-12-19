@@ -73,7 +73,6 @@ contract Energy is _Token {
         }
         emit Transfer(_from, _to, _amount);
     }
-
 }
 
 contract EnergyNative {
