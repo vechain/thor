@@ -6,6 +6,7 @@
 package state
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -17,9 +18,7 @@ import (
 
 func TestStage(t *testing.T) {
 	db := muxdb.NewMem()
-
 	state := New(db, thor.Bytes32{}, 0, 0, 0)
-
 	addr := thor.BytesToAddress([]byte("acc1"))
 
 	balance := big.NewInt(10)
@@ -55,4 +54,44 @@ func TestStage(t *testing.T) {
 	for k, v := range storage {
 		assert.Equal(t, M(v, nil), M(state.GetStorage(addr, k)))
 	}
+}
+
+func TestStageCommitError(t *testing.T) {
+	db := muxdb.NewMem()
+	state := New(db, thor.Bytes32{}, 0, 0, 0)
+
+	// Set up the state with an account, balance, code, and storage.
+	addr := thor.BytesToAddress([]byte("acc1"))
+	balance := big.NewInt(10)
+	code := []byte{1, 2, 3}
+	storage := map[thor.Bytes32]thor.Bytes32{
+		thor.BytesToBytes32([]byte("s1")): thor.BytesToBytes32([]byte("v1")),
+		thor.BytesToBytes32([]byte("s2")): thor.BytesToBytes32([]byte("v2")),
+		thor.BytesToBytes32([]byte("s3")): thor.BytesToBytes32([]byte("v3")),
+	}
+
+	state.SetBalance(addr, balance)
+	state.SetCode(addr, code)
+	for k, v := range storage {
+		state.SetStorage(addr, k, v)
+	}
+
+	// Prepare the stage with the current state.
+	stage, err := state.Stage(1, 0)
+	assert.Nil(t, err, "Stage should not return an error")
+
+	// Mock a commit function to simulate an error.
+	commitFuncWithError := func() error {
+		return errors.New("commit error")
+	}
+
+	// Include the error-producing commit function in the stage's commits.
+	stage.commits = append(stage.commits, commitFuncWithError)
+
+	// Attempt to commit changes.
+	_, err = stage.Commit()
+
+	// Assert that an error is returned.
+	assert.NotNil(t, err, "Commit should return an error")
+	assert.EqualError(t, err, "state: commit error", "The error message should match the mock error")
 }
