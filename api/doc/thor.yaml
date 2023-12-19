@@ -15,7 +15,7 @@ servers:
   - url: https://mainnet.vechain.org
     description: Current Node
 tags:
-  - name: Accounts & Contracts
+  - name: Accounts
     description: |
       Provides access to on-chain account and contract information.  This includes details about account balances, contract states, and related functionalities.
   - name: Transactions
