@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/muxdb"
@@ -39,7 +38,7 @@ func TestStateReadWrite(t *testing.T) {
 
 	state.SetCode(addr, []byte("code"))
 	assert.Equal(t, M([]byte("code"), nil), M(state.GetCode(addr)))
-	assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash([]byte("code"))), nil), M(state.GetCodeHash(addr)))
+	assert.Equal(t, M(thor.Keccak256([]byte("code")), nil), M(state.GetCodeHash(addr)))
 
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetStorage(addr, storageKey)))
 	state.SetStorage(addr, storageKey, thor.BytesToBytes32([]byte("storageValue")))
@@ -85,7 +84,7 @@ func TestStateRevert(t *testing.T) {
 		v := values[len(values)-i-1]
 		assert.Equal(t, M(v.balance, nil), M(state.GetBalance(addr)))
 		assert.Equal(t, M(v.code, nil), M(state.GetCode(addr)))
-		assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash(v.code)), nil), M(state.GetCodeHash(addr)))
+		assert.Equal(t, M(thor.Keccak256(v.code), nil), M(state.GetCodeHash(addr)))
 		assert.Equal(t, M(v.storage, nil), M(state.GetStorage(addr, storageKey)))
 		state.RevertTo(chk)
 		chk--

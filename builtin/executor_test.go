@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/builtin"
 	"github.com/vechain/thor/chain"
@@ -195,7 +194,7 @@ func TestExecutorProposal(t *testing.T) {
 	proposalID := func() thor.Bytes32 {
 		var b8 [8]byte
 		binary.BigEndian.PutUint64(b8[:], test.rt.Context().Time)
-		return thor.Bytes32(crypto.Keccak256Hash(b8[:], approver[:]))
+		return thor.Keccak256(b8[:], approver[:])
 	}()
 	test.Case("propose", target, data).
 		Caller(approver).

@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/vechain/thor/thor"
 	"github.com/vechain/thor/tracers"
@@ -431,7 +430,7 @@ func (t *jsTracer) setBuiltinFunctions() {
 			return nil
 		}
 		code = common.CopyBytes(code)
-		b := vm.CreateAddress2(addr, common.HexToHash(salt), crypto.Keccak256Hash(code).Bytes()).Bytes()
+		b := vm.CreateAddress2(addr, common.HexToHash(salt), thor.Keccak256(code).Bytes()).Bytes()
 		res, err := t.toBuf(jsvm, b)
 		if err != nil {
 			jsvm.Interrupt(err)

@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/muxdb"
@@ -44,7 +43,7 @@ func TestCachedObject(t *testing.T) {
 	code := make([]byte, 100)
 	rand.Read(code)
 
-	codeHash := crypto.Keccak256(code)
+	codeHash := thor.Keccak256(code).Bytes()
 	db.NewStore(codeStoreName).Put(codeHash, code)
 
 	account := Account{
