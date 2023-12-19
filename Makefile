@@ -47,3 +47,7 @@ $(CURDIR)/bin/disco
 test:| go_version_check
 	@go test -cover $(PACKAGES)
 
+test-coverage:| go_version_check
+	@go test -cover $(PACKAGES) -coverprofile=test.cov
+	@go tool cover -html=test.cov
+

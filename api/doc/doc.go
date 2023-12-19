@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//go:embed swagger-ui thor.yaml
+//go:embed thor.yaml api-docs
 var FS embed.FS
 var version string
 

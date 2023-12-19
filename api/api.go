@@ -60,7 +60,7 @@ func New(
 	// redirect swagger-ui
 	router.Path("/").HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
-			http.Redirect(w, req, "doc/swagger-ui/", http.StatusTemporaryRedirect)
+			http.Redirect(w, req, "doc/api-docs/", http.StatusTemporaryRedirect)
 		})
 
 	accounts.New(repo, stater, callGasLimit, forkConfig).

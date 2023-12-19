@@ -23,6 +23,8 @@ package.json
 /node_modules/
 
 /.vscode/
+.idea
 /vendor/
+test.cov
 
 .fake_gopath_suffix
