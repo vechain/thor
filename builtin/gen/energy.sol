@@ -74,9 +74,6 @@ contract Energy is _Token {
         emit Transfer(_from, _to, _amount);
     }
 
-    function(uint8, address, uint256) internal pure returns(uint256) {
-        return 0;
-    }
 }
 
 contract EnergyNative {
