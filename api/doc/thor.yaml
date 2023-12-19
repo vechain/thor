@@ -12,7 +12,7 @@ info:
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
   version: 2.1.0
 servers:
-  - url: /
+  - url: https://mainnet.vechain.org
     description: Current Node
 tags:
   - name: Accounts
@@ -78,7 +78,7 @@ paths:
           - Read contract state.
           - Simulate the execution of a transaction. This can be useful to determine if your transaction may revert before submitting it.
           - Inspect the outputs of a transaction before executing it.
-          - Estimate the gas consumption of a transaction.
+          - Estimate the gas consumption of a transaction. <b>Note:</b> The `caller` field should be provided for higher accuracy.
 
         The fields `gasPayer`, `provedWork`, `blockRef` and `expiration` are for built-in contract purposes only. For example, no error is returned if the transaction is technically expired. For more information about built-in contracts, please refer to the vechain documentation.
 
@@ -170,7 +170,7 @@ paths:
       description: |
         This endpoint allows you to retrieve a transaction identified by its ID. If the `pending` parameter is set to true, the response may include a pending transaction with a null `meta` field. Use this option when you want to retrieve pending transactions, providing flexibility in accessing real-time transaction data.
         
-      
+        
         If no transaction is found, the response will be be a `200` with a `null` body.
 
       responses:
@@ -279,8 +279,8 @@ paths:
           content:
             text/plain:
               schema:
-                  type: string
-                  example: 'Insufficient energy'
+                type: string
+                example: 'Insufficient energy'
 
   /blocks/{revision}:
     get:
@@ -648,7 +648,7 @@ paths:
         - Debug
       summary: Trace a transaction clause
       description:
-        This endpoint allows you to create a tracer for a specific clause. Tracers are instrumental in monitoring and analyzing the execution flow within the EVM. 
+        This endpoint allows you to create a tracer for a specific clause. Tracers are instrumental in monitoring and analyzing the execution flow within the EVM.
         
         You can customize the tracer using various options to tailor it to your specific debugging needs.
       requestBody:
@@ -843,36 +843,36 @@ components:
 
     GetTxResponse:
       oneOf:
-          - allOf:
-              - $ref: '#/components/schemas/Tx'
-            properties:
-              meta:
-                required: false
-                $ref: '#/components/schemas/TxMeta'
-          - allOf:
-              - $ref: '#/components/schemas/RawTx'
-            properties:
-              meta:
-                required: false
-                $ref: '#/components/schemas/TxMeta'
-            description: raw transaction
+        - allOf:
+            - $ref: '#/components/schemas/Tx'
+          properties:
+            meta:
+              required: false
+              $ref: '#/components/schemas/TxMeta'
+        - allOf:
+            - $ref: '#/components/schemas/RawTx'
+          properties:
+            meta:
+              required: false
+              $ref: '#/components/schemas/TxMeta'
+          description: raw transaction
       example:
-          id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
-          chainTag: 1
-          blockRef: '0x00000001511fc0be'
-          expiration: 30
-          clauses: [ ]
-          gasPriceCoef: 128
-          gas: 21000
-          origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
-          delegator: null
-          nonce: '0xd92966da424d9939'
-          dependsOn: null
-          size: 180
-          meta:
-            blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
-            blockNumber: 1
-            blockTimestamp: 1523156271
+        id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+        chainTag: 1
+        blockRef: '0x00000001511fc0be'
+        expiration: 30
+        clauses: [ ]
+        gasPriceCoef: 128
+        gas: 21000
+        origin: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed'
+        delegator: null
+        nonce: '0xd92966da424d9939'
+        dependsOn: null
+        size: 180
+        meta:
+          blockID: '0x00000001c458949985a6d86b7139690b8811dd3b4647c02d4f41cdefb7d32327'
+          blockNumber: 1
+          blockTimestamp: 1523156271
 
     GetTxReceiptResponse:
       allOf:
@@ -939,7 +939,9 @@ components:
             $ref: '#/components/schemas/EventCriteria'
         order:
           description: |
-            Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
+            <b>Optional:</b> Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
+            
+            Default value: `asc`
           type: string
           enum:
             - asc
@@ -966,7 +968,7 @@ components:
             $ref: '#/components/schemas/TransferCriteria'
         order:
           description: |
-            Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
+            <b>Optional:</b> Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
           type: string
           enum:
             - asc
@@ -1148,7 +1150,8 @@ components:
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
         txOrigin:
           type: string
-          description: The account from which the transaction was sent.
+          description: |
+            The account from which the transaction was sent.
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
       example:
         blockID: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
@@ -1270,12 +1273,12 @@ components:
         to:
           type: string
           description: |
-            The recipient of the clause. Null indicates contract deployment.
+            <b>Nullable:</b> The recipient of the clause. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
         value:
           type: string
           description: |
-            The hexadecimal representation of the token to be transferred.
+            The hexadecimal representation of the amount (wei) of VET to be transferred.
           example: '0x47ff1f90327aa0f8e'
         data:
           type: string
@@ -1453,21 +1456,26 @@ components:
           description: |
             The input data for the contract call.
           example: '0xa9059cbb0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5000000000000'
+        to:
+          type: string
+          description: |
+              <b>Nullable:</b> The recipient of the call. Null indicates contract deployment.
+          example: '0x0000000000000000000000000000456e65726779'
         gas:
           type: integer
           format: uint64
           description: |
-            The maximum allowed gas for execution.
+            <b>Optional:</b> The maximum allowed gas for execution.
           example: 21000
         gasPrice:
           type: string
           description: |
-            The absolute gas price.
+            <b>Optional:</b> The absolute gas price.
           example: '1000000000000000'
         caller:
           type: string
           description: |
-            The caller's address (msg.sender).
+            <b>Optional:</b> The caller's address (msg.sender).
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
     ExtendedCallData:
@@ -1475,23 +1483,23 @@ components:
         provedWork:
           type: string
           description: |
-            The transaction's proved work (for extension contract).
+            <b>Optional:</b> The transaction's proved work (for extension contract).
           example: "1000"
         gasPayer:
           type: string
           description: |
-            The address of the gas payer (for extension contract).
+            <b>Optional:</b> The address of the gas payer (for extension contract).
           example: "0xd3ae78222beadb038203be21ed5ce7c9b1bff602"
         expiration:
           type: integer
           format: uint32
           description: |
-            The transaction expiration (for extension contract).
+            <b>Optional:</b> The transaction expiration (for extension contract).
           example: 1000
         blockRef:
           type: string
           description: |
-            The block reference (for extension contract).
+            <b>Optional:</b> The block reference (for extension contract).
           example: "0x00000000851caf3c"
 
     CallResult:
@@ -1542,17 +1550,17 @@ components:
           type: integer
           format: uint64
           description: |
-            The maximum allowed gas for the execution of the batch call.
+            <b>Optional:</b> The maximum allowed gas for the execution of the batch call.
           example: 50000
         gasPrice:
           type: string
           description: |
-            The absolute gas price for the batch call.
+            <b>Optional:</b> The absolute gas price for the batch call.
           example: 1000000000000000
         caller:
           type: string
           description: |
-            The caller's address (msg.sender) for the batch call.
+            <b>Optional:</b> The caller's address (msg.sender) for the batch call.
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
       example:
@@ -1575,15 +1583,22 @@ components:
           type: integer
           example: 0
           description: |
-            The offset in the matched record set. Use this parameter for pagination.
+            <b>Optional:</b> The offset in the matched record set. Use this parameter for pagination.
+            
+            Default's to 0.
         limit:
           type: integer
           example: 100
           description: |
-            The limit of records to be included in the output. Use this parameter for pagination.
+            <b>Optional:</b> The limit of records to be included in the output. Use this parameter for pagination.
+            
+            Default's to all results.
       description: |
-        Include these parameters to receive filtered results in a paged format. 
-        For example:
+        <b>Optional:</b> Include these parameters to receive filtered results in a paged format. 
+        
+        <b>Note: </b> If omitted, a timeout may occur if there is a large amount of data to query. If there is a small amount of data you can omit to receive all results in a single response.
+        
+        Example:
         ```json
         {
           "options": {
@@ -1593,8 +1608,6 @@ components:
         }
         ```
         In this example, the page offset is 0, and the page size is 10.
-        Pass options as `null` if you do not require demand paging.
-
 
     FilterRange:
       properties:
@@ -1605,22 +1618,26 @@ components:
             - time
           example: block
           description: |
-            Specifies the unit of measurement for the `from` and `to` values. 
+            <b>Optional:</b> Specifies the unit of measurement for the `from` and `to` values. 
             Use `block` for block numbers or `time` for block timestamps. Default is `block`.
         from:
           type: integer
           format: uint64
           description: |
-            Defines the starting block number or timestamp for the specified range.
+            <b>Optional:</b> Defines the starting block number or timestamp for the specified range.
           example: 17240365
         to:
           type: integer
           format: uint64
           example: 17289864
           description: |
-            Specifies the ending block number or timestamp for the specified range.
+            <b>Optional:</b> Specifies the ending block number or timestamp for the specified range.
       description: |
-        Defines the range for filtering. For example:
+        <b>Optional:</b> Defines the range for filtering. Setting values to null indicates the entire range.
+        
+        <b>Note: </b> If omitted or set to null, a timeout may occur if there is a large amount of data to query.
+
+        Example:
         ```json
         {
           "range": {
@@ -1631,8 +1648,6 @@ components:
         }
         ```
         This refers to the range from block 10 to block 1000.
-        Setting values to `null` indicates the entire range.
-
 
     EventCriteria:
       properties:
@@ -1640,18 +1655,18 @@ components:
           type: string
           example: '0x0000000000000000000000000000456E65726779'
           description: |
-            The address of the contract that emits the event.
+            <b>Optional:</b> The address of the contract that emits the event.
         topic0:
           type: string
           example: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
           description: |
-            The keccak256 hash representing the event signature. 
+            <b>Optional:</b> The keccak256 hash representing the event signature. 
             For example, the signature for the `Transfer` event is `keccak256("Transfer(address,address,uint256)")`.
         topic1:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
           description: |
-            Filters events based on the 1st parameter in the event. 
+            <b>Optional:</b> Filters events based on the 1st parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1660,7 +1675,7 @@ components:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
           description: |
-            Filters events based on the 2nd parameter in the event. 
+            <b>Optional:</b> Filters events based on the 2nd parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1669,7 +1684,7 @@ components:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
           description: |
-            Filters events based on the 3rd parameter in the event. 
+            <b>Optional:</b> Filters events based on the 3rd parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1678,7 +1693,7 @@ components:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
           description: |
-            Filters events based on the 4th parameter in the event. 
+            <b>Optional:</b> Filters events based on the 4th parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1705,17 +1720,17 @@ components:
       properties:
         txOrigin:
           description: |
-            The address from which the transaction was sent.
+            <b>Optional: </b> The address from which the transaction was sent.
           type: string
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
         sender:
           description: |
-            The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
+            <b>Optional: </b> The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
           type: string
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
         recipient:
           description: |
-              The address that received the VET.
+            <b>Optional: </b> The address that received the VET.
           type: string
           example: '0x45429a2255e7248e57fce99e7239aed3f84b7a53'
 
@@ -1801,12 +1816,12 @@ components:
             - evmdis
             - opcount
           description: |
-            The name of the tracer. An empty name stands for the default struct logger tracer.
+            <b>Optional:</b> The name of the tracer. An empty name stands for the default struct logger tracer.
           example: "prestate"
         config:
           type: object
           description: |
-            The configuration of the tracer. It is specific to the `name`
+            <b>Optional:</b> The configuration of the tracer. It is specific to the `name`
           example: {}
       example:
         name: "prestate"
@@ -1817,13 +1832,17 @@ components:
         address:
           type: string
           description: |
-            address of account
+            <b>Optional:</b> The address of the contract/ account to be traced.
           example: '0xd8ccdd85abdbf68dfec95f06c973e87b1b5a9997'
         keyStart:
           type: string
+          description: |
+            <b>Optional:</b> The start key of the storage range. Default is `0x0000000000000000000000000000000000000000000000000000000000000000`
           example: '0x0000000000000000000000000000000000000000000000000000000000000000'
         maxResult:
           type: number
+          description: |
+            <b>Optional:</b> The maximum number of results to be returned. Default is 1000.
           example: 10
         target:
           type: string
@@ -2079,25 +2098,25 @@ components:
       name: txOrigin
       in: query
       schema:
-          type: string
+        type: string
       description: |
-          The address from which the transaction was sent.
+        The address from which the transaction was sent.
       example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
     TransferSenderInQuery:
       name: sender
       in: query
       schema:
-          type: string
+        type: string
       description: |
-          The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
+        The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
       example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
     TransferRecipientInQuery:
       name: recipient
       in: query
       schema:
-          type: string
+        type: string
       description: |
-          The address that received the VET.
+        The address that received the VET.
       example: '0x45429a2255e7248e57fce99e7239aed3f84b7a53'
