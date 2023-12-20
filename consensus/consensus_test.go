@@ -225,9 +225,7 @@ func TestNewConsensus(t *testing.T) {
 	consensus := New(mockRepo, mockStater, mockForkConfig)
 
 	// Assert that the consensus instance is not nil
-	if consensus == nil {
-		t.Errorf("Failed to create new consensus instance")
-	}
+	assert.NotNil(t, consensus, "Failed to create new consensus instance")
 }
 
 func TestNewRuntimeForReplay(t *testing.T) {
