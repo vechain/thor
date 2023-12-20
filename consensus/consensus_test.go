@@ -237,7 +237,6 @@ func TestNewRuntimeForReplay(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.NotNil(t, runtime)
-
 }
 
 func TestNewRuntimeForReplayWithError(t *testing.T) {
