@@ -47,3 +47,6 @@ $(CURDIR)/bin/disco
 test:| go_version_check
 	@go test -cover $(PACKAGES)
 
+test-coverage:| go_version_check
+	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
+
