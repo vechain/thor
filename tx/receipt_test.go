@@ -11,8 +11,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/thor"
-	. "github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/thor"
+	. "github.com/vechain/thor/v2/tx"
 )
 
 func getMockReceipt() Receipt {

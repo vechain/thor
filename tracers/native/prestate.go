@@ -24,9 +24,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go

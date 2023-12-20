@@ -8,13 +8,13 @@ package subscriptions
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
-//BlockMessage block piped by websocket
+// BlockMessage block piped by websocket
 type BlockMessage struct {
 	Number       uint32         `json:"number"`
 	ID           thor.Bytes32   `json:"id"`
@@ -77,7 +77,7 @@ type LogMeta struct {
 	ClauseIndex    uint32       `json:"clauseIndex"`
 }
 
-//TransferMessage transfer piped by websocket
+// TransferMessage transfer piped by websocket
 type TransferMessage struct {
 	Sender    thor.Address          `json:"sender"`
 	Recipient thor.Address          `json:"recipient"`
@@ -108,7 +108,7 @@ func convertTransfer(header *block.Header, tx *tx.Transaction, clauseIndex uint3
 	}, nil
 }
 
-//EventMessage event piped by websocket
+// EventMessage event piped by websocket
 type EventMessage struct {
 	Address  thor.Address   `json:"address"`
 	Topics   []thor.Bytes32 `json:"topics"`

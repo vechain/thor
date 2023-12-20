@@ -21,8 +21,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 func init() {

@@ -10,10 +10,10 @@ import (
 	"math"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type LogMeta struct {
@@ -41,7 +41,7 @@ type FilteredEvent struct {
 	Meta    LogMeta         `json:"meta"`
 }
 
-//convert a logdb.Event into a json format Event
+// convert a logdb.Event into a json format Event
 func convertEvent(event *logdb.Event) *FilteredEvent {
 	fe := FilteredEvent{
 		Address: event.Address,

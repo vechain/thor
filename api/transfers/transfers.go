@@ -11,10 +11,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/events"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/v2/api/events"
+	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/logdb"
 )
 
 type Transfers struct {
@@ -29,7 +29,7 @@ func New(repo *chain.Repository, db *logdb.LogDB) *Transfers {
 	}
 }
 
-//Filter query logs with option
+// Filter query logs with option
 func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*FilteredTransfer, error) {
 	rng, err := events.ConvertRange(t.repo.NewBestChain(), filter.Range)
 	if err != nil {

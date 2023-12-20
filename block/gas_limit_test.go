@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestGasLimit_IsValid(t *testing.T) {
