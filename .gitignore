@@ -25,6 +25,5 @@ package.json
 /.vscode/
 .idea
 /vendor/
-test.cov
 
 .fake_gopath_suffix

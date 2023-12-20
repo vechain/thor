@@ -12,7 +12,7 @@ info:
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
   version: 2.1.0
 servers:
-  - url: https://mainnet.vechain.org
+  - url: /
     description: Current Node
 tags:
   - name: Accounts
