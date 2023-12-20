@@ -349,10 +349,8 @@ func TestValidateBlockHeader(t *testing.T) {
 					),
 				)
 				assert.Equal(t, expected, err)
-				isCriticalError := IsCritical(err)
-				assert.True(t, isCriticalError)
-				stringError := err.Error()
-				assert.Equal(t, stringError, "block gas limit invalid: parent 10000000, current 20000000")
+				assert.True(t, IsCritical(err))
+				assert.Equal(t, err.Error(), "block gas limit invalid: parent 10000000, current 20000000")
 
 			},
 		},
