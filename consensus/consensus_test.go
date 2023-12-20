@@ -330,8 +330,7 @@ func TestValidateBlockHeader(t *testing.T) {
 				err = tc.consent(blk)
 				expected := errFutureBlock
 				assert.Equal(t, expected, err)
-				IsFutureBlockError := IsFutureBlock(expected)
-				assert.True(t, IsFutureBlockError)
+				assert.True(t, IsFutureBlock(expected))
 			},
 		},
 		{
