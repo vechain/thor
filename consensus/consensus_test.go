@@ -229,7 +229,6 @@ func TestNewConsensus(t *testing.T) {
 }
 
 func TestNewRuntimeForReplay(t *testing.T) {
-
 	consensus, err := newTestConsensus()
 	b1 := consensus.parent
 
