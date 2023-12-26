@@ -1,6 +1,21 @@
 # Contributing to VechainThor
 
-Welcome to VechainThor! We appreciate your interest in contributing. By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+Welcome to VechainThor! We appreciate your interest in contributing. By participating in this project, you agree to
+abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## VeChain Improvement Proposals (VIPs)
+
+[Vechain Improvement Proposals (VIPs)](https://github.com/vechain/VIPs) documents protocol improvements to the
+VechainThor blockchain. A successful VIP represents a consensus among the Vechain community and developers, and is a
+standard for VechainThor implementations. The framework is designed to establish a systematic and organized approach for
+introducing new features into the VechainThor protocol. We encourage community members and developers to actively
+participate in shaping the future of Vechain by proposing and discussing innovative ideas.
+
+### Before You Propose
+
+Before submitting a new VIP, it's crucial to ensure that your idea hasn't already been proposed or implemented. Please
+take the time to check the existing proposals on our GitHub repository to avoid duplication and to better understand the
+current development landscape.
 
 ## How to Contribute
 
@@ -14,11 +29,13 @@ Welcome to VechainThor! We appreciate your interest in contributing. By particip
     ```bash
     git checkout -b feature/your-feature-name
     ```
-4. For a smooth review process, please ensure your branch is up-to-date with the `master` branch of the `vechain/thor` repository, and run the tests before committing your changes:
+4. For a smooth review process, please ensure your branch is up-to-date with the `master` branch of the `vechain/thor`
+   repository, and run the tests before committing your changes:
     ```bash
     make test
     ```
-   - **Note:**: Please refer to the [README](README.md) for information on how to start the node and interact with the API.
+    - **Note:**: Please refer to the [README](README.md) for information on how to start the node and interact with the
+      API.
 5. Make your changes and commit them with a clear and concise commit message.
 6. Push your changes to your forked repository:
     ```bash
@@ -26,9 +43,9 @@ Welcome to VechainThor! We appreciate your interest in contributing. By particip
     ```
 7. Create a pull request to the `master` branch of the `vechain/thor` repository.
 8. Ensure your PR description clearly explains your changes and the problem it solves.
-   - Explain the major changes you are submitting for review. Often it is useful to open a second tab in your browser where you can look through the diff yourself to remind yourself of all the changes you have made.
+    - Explain the major changes you are submitting for review. Often it is useful to open a second tab in your browser
+      where you can look through the diff yourself to remind yourself of all the changes you have made.
 9. Wait for feedback and be ready to address any requested changes.
-
 
 ## Code Style and Guidelines
 
@@ -38,4 +55,5 @@ Welcome to VechainThor! We appreciate your interest in contributing. By particip
 
 ### Code Guidelines
 
-- We follow the [Effective Go](https://golang.org/doc/effective_go) guidelines. Please make sure your code is idiomatic and follows the guidelines.
+- We follow the [Effective Go](https://golang.org/doc/effective_go) guidelines. Please make sure your code is idiomatic
+  and follows the guidelines.
