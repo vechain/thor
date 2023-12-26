@@ -17,31 +17,31 @@ servers:
 tags:
   - name: Accounts
     description: |
-      Provides access to on-chain account and contract information.  This includes details about account balances, contract states, and related functionalities.
+      Provides access to on-chain account information. This includes details about account balances, contract states, and related functionalities.
   - name: Transactions
     description: |
-      Manages blockchain transactions, enabling the creation, retrieval, and verification  of transactions on the blockchain.
+      Manages blockchain transactions, enabling the creation, retrieval, and verification of transactions on the blockchain.
   - name: Blocks
     description: |
-      Retrieves information about on-chain blocks
+      Retrieves information about on-chain blocks.
   - name: Logs
     description: |
-      Query on-chain logs stemming from transaction outputs.  This feature empowers users to delve into the intricacies of transaction history,  providing a comprehensive view of on-chain activities.
+      Query on-chain logs stemming from transaction outputs. This feature empowers users to delve into the intricacies of transaction history, providing a comprehensive view of on-chain activities.
   - name: Node
     description: |
-      Provides information about the node's status
+      Provides information about the node's status.
   - name: Subscriptions
     description: |
-      Facilitates WebSocket-based interactions with the blockchain, allowing users to subscribe  to real-time events, updates, or notifications related to specific blockchain activities.
+      Facilitates WebSocket-based interactions with the blockchain, allowing users to subscribe to real-time events, updates, or notifications related to specific blockchain activities.
   - name: Debug
     description: |
-      Offers a set of debugging utilities
+      Offers a set of debugging utilities.
 
 paths:
   /accounts/{address}:
     get:
       parameters:
-        - $ref: '#/components/parameters/GetAccountAddressInPath'
+        - $ref: '#/components/parameters/GetAddressInPath'
         - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
@@ -71,7 +71,7 @@ paths:
         - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Accounts
-      summary: Inspect state & outputs
+      summary: Inspect clauses
       description: |
         This endpoint can be used for various purposes:
         
@@ -79,8 +79,8 @@ paths:
           - Simulate the execution of a transaction. This can be useful to determine if your transaction may revert before submitting it.
           - Inspect the outputs of a transaction before executing it.
           - Estimate the gas consumption of a transaction. <b>Note:</b> The `caller` field should be provided for higher accuracy.
-
-        The fields `gasPayer`, `provedWork`, `blockRef` and `expiration` are for built-in contract purposes only. For example, no error is returned if the transaction is technically expired. For more information about built-in contracts, please refer to the vechain documentation.
+        
+        The fields `gasPayer`, `provedWork`, `blockRef` and `expiration` are for exposing themselves in EVM. Transaction meta features won't be reflected in the result, for example, no error is returned if the transaction is technically expired. For more information about built-in contracts, please refer to the vechain documentation.
 
         To access historical details, you can specify a `revision` as a query parameter.
       requestBody:
@@ -106,7 +106,7 @@ paths:
 
   /accounts/{address}/code:
     parameters:
-      - $ref: '#/components/parameters/GetCodeAddressInPath'
+      - $ref: '#/components/parameters/GetAddressInPath'
       - $ref: '#/components/parameters/RevisionInQuery'
     get:
       tags:
@@ -137,7 +137,7 @@ paths:
     get:
       tags:
         - Accounts
-      summary: Retrieve the value of a storage position
+      summary: Retrieve the value for a storage position
       description: |
         This endpoint allows you to retrieve the value stored at a specific storage position (`{key}`) of a Vechain smart contract associated with the provided address (`{address}`). The response will contain information about the stored value for the given key.
         
@@ -169,7 +169,6 @@ paths:
       summary: Retrieve a transaction by ID
       description: |
         This endpoint allows you to retrieve a transaction identified by its ID. If the `pending` parameter is set to true, the response may include a pending transaction with a null `meta` field. Use this option when you want to retrieve pending transactions, providing flexibility in accessing real-time transaction data.
-        
         
         If no transaction is found, the response will be be a `200` with a `null` body.
 
@@ -226,7 +225,7 @@ paths:
         ```typescript
         import { Transaction, secp256k1 } from 'thor-devkit'
 
-        const clauses =  [{
+        const clauses = [{
             to: '0x7567d83b7b8d80addcb281a71d54fc7b3364ffed',
             value: 10000,
             data: '0x'
@@ -1131,7 +1130,7 @@ components:
         blockID:
           type: string
           description: The block identifier in which the transaction was included.
-          pattern: '^0x[0-9a-fA-F]{64}$'
+          pattern: '^0x[0-9a-f]{64}$'
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         blockNumber:
           type: integer
@@ -1146,7 +1145,7 @@ components:
         txID:
           type: string
           description: The transaction identifier.
-          pattern: '^0x[0-9a-fA-F]{64}$'
+          pattern: '^0x[0-9a-f]{64}$'
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
         txOrigin:
           type: string
@@ -1226,7 +1225,7 @@ components:
         beneficiary:
           type: string
           format: bytes32
-          description: The address assigned by the block generator to receive reward (in VTHO)
+          description: The address assigned by the block proposer to receive the reward (in VTHO)
           example: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
         gasUsed:
           type: integer
@@ -1292,15 +1291,15 @@ components:
           type: string
           description: The transaction identifier.
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
-          pattern: '^0x[0-9a-fA-F]{64}$'
+          pattern: '^0x[0-9a-f]{64}$'
         origin:
           type: string
           description: The address of the origin account.
-          pattern: '^0x[0-9a-fA-F]{40}$'
+          pattern: '^0x[0-9a-f]{40}$'
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
         delegator:
           type: string
-          pattern: '^0x[0-9a-fA-F]{40}$'
+          pattern: '^0x[0-9a-f]{40}$'
           description: The address of the sponsor / delegator account.
           example: null
         size:
@@ -1384,17 +1383,17 @@ components:
         sender:
           type: string
           description: |
-            The address sent the tokens.
+            The address that sent the VET.
           example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
         recipient:
           type: string
           description: |
-            The address that received tokens.
+            The address that received the VET.
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
         amount:
           type: string
           description: |
-            The amount of tokens transferred.
+            The amount of VET transferred.
           example: '0x47fdb3c3f456c0000'
 
     Receipt:
@@ -1603,7 +1602,7 @@ components:
         {
           "options": {
             "offset": 0,
-            "limit": 10   
+            "limit": 10
           }
         }
         ```
@@ -1878,18 +1877,7 @@ components:
           example: false
 
   parameters:
-    GetAccountAddressInPath:
-      name: address
-      in: path
-      description: The address of the account/ contract
-      required: true
-      schema:
-        type: string
-        format: hex
-        pattern: '^(0x)?[0-9a-fA-F]{40}$'
-      example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
-
-    GetCodeAddressInPath:
+    GetAddressInPath:
       name: address
       in: path
       description: The address of the account/ contract
