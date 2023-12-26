@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="01a2ca23-de45-452f-b89e-cd38b1dbe6fa" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/thorest.png" beforeDir="false" afterPath="$PROJECT_DIR$/thorest.png" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="GitToolBoxStore">
+    <option name="recentBranches">
+      <RecentBranches>
+        <option name="branchesForRepo">
+          <list>
+            <RecentBranchesForRepo>
+              <option name="branches">
+                <list>
+                  <RecentBranch>
+                    <option name="branchName" value="contributing-md-file" />
+                    <option name="lastUsedInstant" value="1703591606" />
+                  </RecentBranch>
+                  <RecentBranch>
+                    <option name="branchName" value="api-doc-refactor" />
+                    <option name="lastUsedInstant" value="1703590598" />
+                  </RecentBranch>
+                  <RecentBranch>
+                    <option name="branchName" value="integration-tests-2" />
+                    <option name="lastUsedInstant" value="1703590597" />
+                  </RecentBranch>
+                </list>
+              </option>
+              <option name="repositoryRootUrl" value="file://$PROJECT_DIR$" />
+            </RecentBranchesForRepo>
+          </list>
+        </option>
+      </RecentBranches>
+    </option>
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "git-widget-placeholder": "contributing-md-file",
+    "last_opened_file_path": "/Users/darren/workspace/vechain/thor"
+  }
+}]]></component>
+  <component name="QodanaHighlightedReportService">
+    <option name="openInIdeCloudReportPersistedInfo">
+      <OpenInIdeCloudReportPersistedInfo>
+        <option name="projectId" value="3yod2" />
+        <option name="projectName" value="thor" />
+        <option name="reportId" value="VgrM7" />
+      </OpenInIdeCloudReportPersistedInfo>
+    </option>
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="LAST_COMMIT_MESSAGE" value="" />
+  </component>
+</project>
