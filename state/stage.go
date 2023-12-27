@@ -5,7 +5,7 @@
 
 package state
 
-import "github.com/vechain/thor/thor"
+import "github.com/vechain/thor/v2/thor"
 
 // Stage abstracts changes on the main accounts trie.
 type Stage struct {

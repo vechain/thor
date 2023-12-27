@@ -10,12 +10,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/lowrlp"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/stackedmap"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/lowrlp"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/stackedmap"
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (
@@ -315,7 +314,7 @@ func (s *State) SetCode(addr thor.Address, code []byte) error {
 	var codeHash []byte
 	if len(code) > 0 {
 		s.sm.Put(codeKey(addr), code)
-		codeHash = crypto.Keccak256(code)
+		codeHash = thor.Keccak256(code).Bytes()
 		codeCache.Add(string(codeHash), code)
 	} else {
 		s.sm.Put(codeKey(addr), []byte(nil))
@@ -450,7 +449,7 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 		case codeKey:
 			code := v.([]byte)
 			if len(code) > 0 {
-				codes[thor.Bytes32(crypto.Keccak256Hash(code))] = code
+				codes[thor.Keccak256(code)] = code
 			}
 		case storageKey:
 			if c, jerr = getChanged(key.addr); jerr != nil {

@@ -11,9 +11,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/abi"
-	"github.com/vechain/thor/builtin/gen"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/abi"
+	"github.com/vechain/thor/v2/builtin/gen"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestABI(t *testing.T) {

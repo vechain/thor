@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/metric"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/metric"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (

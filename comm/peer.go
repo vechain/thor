@@ -15,8 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/p2psrv/rpc"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/p2psrv/rpc"
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (

@@ -8,19 +8,19 @@ package accounts
 import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/vechain/thor/api/transactions"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/api/transactions"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/thor"
 )
 
-//Account for marshal account
+// Account for marshal account
 type Account struct {
 	Balance math.HexOrDecimal256 `json:"balance"`
 	Energy  math.HexOrDecimal256 `json:"energy"`
 	HasCode bool                 `json:"hasCode"`
 }
 
-//CallData represents contract-call body
+// CallData represents contract-call body
 type CallData struct {
 	Value    *math.HexOrDecimal256 `json:"value"`
 	Data     string                `json:"data"`
@@ -89,10 +89,10 @@ type Clause struct {
 	Data  string                `json:"data"`
 }
 
-//Clauses array of clauses.
+// Clauses array of clauses.
 type Clauses []Clause
 
-//BatchCallData executes a batch of codes
+// BatchCallData executes a batch of codes
 type BatchCallData struct {
 	Clauses    Clauses               `json:"clauses"`
 	Gas        uint64                `json:"gas"`

@@ -20,7 +20,7 @@ import (
 	"math/bits"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {
@@ -77,7 +77,7 @@ func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
 	bench.SetBytes(analysisCodeSize)
 	bench.ResetTimer()
 	for i := 0; i < bench.N; i++ {
-		crypto.Keccak256Hash(code)
+		thor.Keccak256(code)
 	}
 	bench.StopTimer()
 }

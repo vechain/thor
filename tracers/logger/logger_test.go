@@ -24,7 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/vm"
 )
 
 type dummyContractRef struct {

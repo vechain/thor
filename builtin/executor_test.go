@@ -12,16 +12,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/runtime"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/xenv"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/runtime"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/xenv"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -195,7 +194,7 @@ func TestExecutorProposal(t *testing.T) {
 	proposalID := func() thor.Bytes32 {
 		var b8 [8]byte
 		binary.BigEndian.PutUint64(b8[:], test.rt.Context().Time)
-		return thor.Bytes32(crypto.Keccak256Hash(b8[:], approver[:]))
+		return thor.Keccak256(b8[:], approver[:])
 	}()
 	test.Case("propose", target, data).
 		Caller(approver).
