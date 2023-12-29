@@ -167,14 +167,14 @@ Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed th
 
 Once `thor` has started, the online *OpenAPI* doc can be accessed in your browser. e.g. [http://localhost:8669/](http://localhost:8669) by default.
 
-[![Thorest](./thorest.png)](http://localhost:8669/)
+[![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)
 
 ## Acknowledgement
 
 A special shout out to following projects:
 
 * [Ethereum](https://github.com/ethereum)
-* [Stoplight Elements](https://github.com/stoplightio/elements)
+* [Swagger](https://github.com/swagger-api)
 
 ## Contributing
 
