@@ -52,12 +52,12 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api doc and swagger-ui
+	// to serve api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
 
-	// redirect swagger-ui
+	// redirect api-docs
 	router.Path("/").HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
 			http.Redirect(w, req, "doc/api-docs/", http.StatusTemporaryRedirect)

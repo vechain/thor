@@ -170,7 +170,7 @@ Once `thor` has started, the online *OpenAPI* doc can be accessed in your browse
 A special shout out to following projects:
 
 * [Ethereum](https://github.com/ethereum)
-* [Swagger](https://github.com/swagger-api)
+* [Stoplight Elements](https://github.com/stoplightio/elements)
 
 ## Contributing
 
