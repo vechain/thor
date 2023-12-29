@@ -232,7 +232,7 @@ paths:
         }]
 
         let body: Transaction.Body = {
-            chainTag: 0x9a,
+            chainTag: '0x4a',
             blockRef: '0x0000000000000000',
             expiration: 32,
             clauses: clauses,
@@ -566,7 +566,7 @@ paths:
         - Subscriptions
       summary: (Websocket) Subscribe to new transactions
       description: |
-        Establish a websocket connection to receive real-time updates on transactions that are pending inclusion in a block.
+        Establish a websocket connection to receive real-time updates on transactions that are pending inclusion in a future block.
         
         Example:
         
