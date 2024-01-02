@@ -17,13 +17,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/inconshreveable/log15"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/co"
-	"github.com/vechain/thor/comm/proto"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/txpool"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 var log = log15.New("pkg", "comm")

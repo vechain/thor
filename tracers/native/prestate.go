@@ -24,10 +24,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 //go:generate go run github.com/fjl/gencodec -type account -field-override accountMarshaling -out gen_account_json.go
@@ -234,7 +233,7 @@ func (t *prestateTracer) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64,
 		if err != nil {
 			return
 		}
-		inithash := crypto.Keccak256(init)
+		inithash := thor.Keccak256(init).Bytes()
 		salt := stackData[stackLen-4]
 		addr := vm.CreateAddress2(contract.Address(), salt.Bytes32(), inithash)
 		t.lookupAccount(addr)

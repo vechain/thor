@@ -13,17 +13,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 func newChainRepo(db *muxdb.MuxDB) *chain.Repository {
 	gene := genesis.NewDevnet()
+	b0, _, _, _ := gene.Build(state.NewStater(db))
+	repo, _ := chain.NewRepository(db, b0)
+	return repo
+}
+
+func newChainRepoCustomTimestamp(db *muxdb.MuxDB, timestamp uint64) *chain.Repository {
+	gene := genesis.NewDevnetCustomTimestamp(timestamp)
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
 	return repo
@@ -129,6 +136,41 @@ func TestExecutable(t *testing.T) {
 			assert.Equal(t, tt.expectedErr, err.Error())
 		} else {
 			assert.Nil(t, err)
+			assert.Equal(t, tt.expected, exe)
+		}
+	}
+}
+
+func TestExecutableWithError(t *testing.T) {
+	acc := genesis.DevAccounts()[0]
+
+	db := muxdb.NewMem()
+	repo := newChainRepo(db)
+	b0 := repo.GenesisBlock()
+	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
+	repo.AddBlock(b1, nil, 0)
+	st := state.New(db, repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+
+	tests := []struct {
+		tx          *tx.Transaction
+		expected    bool
+		expectedErr string
+	}{
+		{newTx(0, nil, 21000, tx.BlockRef{0}, 100, nil, tx.Features(0), acc), false, ""},
+	}
+
+	for _, tt := range tests {
+		txObj, err := resolveTx(tt.tx, false)
+		assert.Nil(t, err)
+
+		// pass custom headID
+		chain := repo.NewChain(thor.Bytes32{0})
+
+		exe, err := txObj.Executable(chain, st, b1.Header())
+		if tt.expectedErr != "" {
+			assert.Equal(t, tt.expectedErr, err.Error())
+		} else {
+			assert.Equal(t, err.Error(), "leveldb: not found")
 			assert.Equal(t, tt.expected, exe)
 		}
 	}

@@ -14,16 +14,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/builtin"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/genesis"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/packer"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
-	"github.com/vechain/thor/vrf"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vrf"
 )
 
 func txBuilder(tag byte) *tx.Builder {
@@ -215,6 +215,48 @@ func (tc *testConsensus) consent(blk *block.Block) error {
 	return err
 }
 
+func TestNewConsensus(t *testing.T) {
+	// Mock dependencies
+	mockRepo := &chain.Repository{}
+	mockStater := &state.Stater{}
+	mockForkConfig := thor.ForkConfig{}
+
+	// Create a new consensus instance
+	consensus := New(mockRepo, mockStater, mockForkConfig)
+
+	// Assert that the consensus instance is not nil
+	assert.NotNil(t, consensus, "Failed to create new consensus instance")
+}
+
+func TestNewRuntimeForReplay(t *testing.T) {
+	consensus, err := newTestConsensus()
+	b1 := consensus.parent
+
+	// Test for success scenario
+	runtime, err := consensus.con.NewRuntimeForReplay(b1.Header(), false)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, runtime)
+}
+
+func TestNewRuntimeForReplayWithError(t *testing.T) {
+	consensus, _ := newTestConsensus()
+
+	// give invalid parent ID
+	builder := consensus.builder(&block.Header{})
+
+	b1, err := consensus.sign(builder.Timestamp(consensus.parent.Header().Timestamp()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test for success scenario
+	runtime, err := consensus.con.NewRuntimeForReplay(b1.Header(), false)
+
+	assert.NotNil(t, err)
+	assert.Nil(t, runtime)
+}
+
 func TestValidateBlockHeader(t *testing.T) {
 	tc, err := newTestConsensus()
 	if err != nil {
@@ -288,6 +330,7 @@ func TestValidateBlockHeader(t *testing.T) {
 				err = tc.consent(blk)
 				expected := errFutureBlock
 				assert.Equal(t, expected, err)
+				assert.True(t, IsFutureBlock(expected))
 			},
 		},
 		{
@@ -306,6 +349,8 @@ func TestValidateBlockHeader(t *testing.T) {
 					),
 				)
 				assert.Equal(t, expected, err)
+				assert.True(t, IsCritical(err))
+				assert.Equal(t, err.Error(), "block gas limit invalid: parent 10000000, current 20000000")
 
 			},
 		},

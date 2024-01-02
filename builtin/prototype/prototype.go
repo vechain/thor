@@ -9,8 +9,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/state"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type Prototype struct {

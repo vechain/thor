@@ -9,10 +9,10 @@ import (
 	"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/block"
-	"github.com/vechain/thor/kv"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
 
 const (

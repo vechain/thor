@@ -10,7 +10,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/vechain/thor/blake2b"
+	"github.com/vechain/thor/v2/blake2b"
+	"golang.org/x/crypto/sha3"
 )
 
 // NewBlake2b return blake2b-256 hash.
@@ -35,24 +36,59 @@ func Blake2b(data ...[]byte) Bytes32 {
 
 // Blake2bFn computes blake2b-256 checksum for the provided writer.
 func Blake2bFn(fn func(w io.Writer)) (h Bytes32) {
-	w := hstatePool.Get().(*hstate)
+	w := blake2bStatePool.Get().(*blake2bState)
 	fn(w)
 	w.Sum(w.b32[:0])
 	h = w.b32 // to avoid 1 alloc
 	w.Reset()
-	hstatePool.Put(w)
+	blake2bStatePool.Put(w)
 	return
 }
 
-type hstate struct {
+type blake2bState struct {
 	hash.Hash
 	b32 Bytes32
 }
 
-var hstatePool = sync.Pool{
+var blake2bStatePool = sync.Pool{
 	New: func() interface{} {
-		return &hstate{
+		return &blake2bState{
 			Hash: NewBlake2b(),
 		}
 	},
+}
+
+// keccakState wraps sha3.state. In addition to the usual hash methods, it also supports
+// Read to get a variable amount of data from the hash state. Read is faster than Sum
+// because it doesn't copy the internal state, but also modifies the internal state.
+type keccakState interface {
+	hash.Hash
+	Read([]byte) (int, error)
+}
+
+type keccak256 struct {
+	state keccakState
+	b32   Bytes32
+}
+
+var keccak256Pool = sync.Pool{
+	New: func() interface{} {
+		return &keccak256{
+			state: sha3.NewLegacyKeccak256().(keccakState),
+		}
+	},
+}
+
+func Keccak256(data ...[]byte) (h Bytes32) {
+	hasher := keccak256Pool.Get().(*keccak256)
+
+	for _, b := range data {
+		hasher.state.Write(b)
+	}
+	hasher.state.Read(hasher.b32[:])
+	h = hasher.b32
+
+	hasher.state.Reset()
+	keccak256Pool.Put(hasher)
+	return
 }

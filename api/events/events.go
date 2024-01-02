@@ -11,9 +11,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/logdb"
+	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/logdb"
 )
 
 type Events struct {
@@ -28,7 +28,7 @@ func New(repo *chain.Repository, db *logdb.LogDB) *Events {
 	}
 }
 
-//Filter query events with option
+// Filter query events with option
 func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
 	chain := e.repo.NewBestChain()
 	filter, err := convertEventFilter(chain, ef)

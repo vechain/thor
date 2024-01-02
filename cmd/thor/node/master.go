@@ -9,7 +9,7 @@ import (
 	"crypto/ecdsa"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type Master struct {

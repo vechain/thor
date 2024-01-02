@@ -13,9 +13,165 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/tx"
+	"github.com/vechain/thor/v2/metric"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
 )
+
+func GetMockTx() tx.Transaction {
+	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
+	trx := new(tx.Builder).ChainTag(1).
+		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
+		Expiration(32).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		GasPriceCoef(128).
+		Gas(21000).
+		DependsOn(nil).
+		Nonce(12345678).Build()
+
+	return *trx
+}
+
+func TestIsExpired(t *testing.T) {
+	tx := GetMockTx()
+	res := tx.IsExpired(10)
+	assert.Equal(t, res, false)
+}
+
+func TestHash(t *testing.T) {
+	tx := GetMockTx()
+	res := tx.Hash()
+	assert.Equal(t, res, thor.Bytes32(thor.Bytes32{0x4b, 0xff, 0x70, 0x1, 0xfe, 0xc4, 0x2, 0x84, 0xd9, 0x3b, 0x4c, 0x45, 0x61, 0x7d, 0xc7, 0x41, 0xb9, 0xa8, 0x8e, 0xd5, 0x9d, 0xf, 0x1, 0xa3, 0x76, 0x39, 0x4c, 0x7b, 0xfe, 0xa6, 0xed, 0x24}))
+
+}
+
+func TestDependsOn(t *testing.T) {
+	tx := GetMockTx()
+	res := tx.DependsOn()
+	var expected *thor.Bytes32 = nil
+	assert.Equal(t, expected, res)
+}
+
+func TestTestFeatures(t *testing.T) {
+	txx := GetMockTx()
+	supportedFeatures := tx.Features(1)
+	res := txx.TestFeatures(supportedFeatures)
+	assert.Equal(t, res, nil)
+
+}
+
+func TestToString(t *testing.T) {
+	tx := GetMockTx() // Ensure this mock transaction has all the necessary fields populated
+
+	// Construct the expected string representation of the transaction
+	// This should match the format used in the String() method of the Transaction struct
+	// and should reflect the actual state of the mock transaction
+	expectedString := "\n\tTx(0x0000000000000000000000000000000000000000000000000000000000000000, 87 B)\n\tOrigin:         N/A\n\tClauses:        [\n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t10000\n\t\t Data:\t0x000000606060) \n\t\t(To:\t0x7567d83b7b8d80addcb281a71d54fc7b3364ffed\n\t\t Value:\t20000\n\t\t Data:\t0x000000606060)]\n\tGasPriceCoef:   128\n\tGas:            21000\n\tChainTag:       1\n\tBlockRef:       0-aabbccdd\n\tExpiration:     32\n\tDependsOn:      nil\n\tNonce:          12345678\n\tUnprovedWork:   0\n\tDelegator:      N/A\n\tSignature:      0x\n"
+
+	res := tx.String()
+
+	// Use assert.Equal to compare the actual result with the expected string
+	assert.Equal(t, expectedString, res)
+}
+
+func TestTxSize(t *testing.T) {
+
+	tx := GetMockTx()
+
+	size := tx.Size()
+	assert.Equal(t, size, metric.StorageSize(87))
+}
+
+func TestProvedWork(t *testing.T) {
+	// Mock the transaction
+	tx := GetMockTx()
+
+	// Define a head block number
+	headBlockNum := uint32(20)
+
+	// Mock getBlockID function
+	getBlockID := func(num uint32) (thor.Bytes32, error) {
+		return thor.Bytes32{}, nil
+	}
+
+	// Call ProvedWork
+	provedWork, err := tx.ProvedWork(headBlockNum, getBlockID)
+
+	// Check for errors
+	assert.NoError(t, err)
+
+	expectedProvedWork := big.NewInt(0)
+	assert.Equal(t, expectedProvedWork, provedWork)
+}
+
+func TestChainTag(t *testing.T) {
+	tx := GetMockTx()
+	res := tx.ChainTag()
+	assert.Equal(t, res, uint8(0x1))
+}
+
+func TestNonce(t *testing.T) {
+	tx := GetMockTx()
+	res := tx.Nonce()
+	assert.Equal(t, res, uint64(0xbc614e))
+}
+
+func TestOverallGasPrice(t *testing.T) {
+	// Mock or create a Transaction with necessary fields initialized
+	tx := GetMockTx()
+
+	// Define test cases
+	testCases := []struct {
+		name           string
+		baseGasPrice   *big.Int
+		provedWork     *big.Int
+		expectedOutput *big.Int
+	}{
+		{
+			name:           "Case 1: No proved work",
+			baseGasPrice:   big.NewInt(1000),
+			provedWork:     big.NewInt(0),
+			expectedOutput: big.NewInt(1501),
+		},
+		{
+			name:           "Case 1: Negative proved work",
+			baseGasPrice:   big.NewInt(1000),
+			provedWork:     big.NewInt(-100),
+			expectedOutput: big.NewInt(1501),
+		},
+	}
+
+	// Run test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call OverallGasPrice
+			result := tx.OverallGasPrice(tc.baseGasPrice, tc.provedWork)
+
+			// Check the value of the result
+			if result.Cmp(tc.expectedOutput) != 0 {
+				t.Errorf("%s: expected %v, got %v", tc.name, tc.expectedOutput, result)
+			}
+		})
+	}
+}
+
+func TestEvaluateWork(t *testing.T) {
+	origin := thor.BytesToAddress([]byte("origin"))
+	tx := GetMockTx()
+
+	// Returns a function
+	evaluate := tx.EvaluateWork(origin)
+
+	// Test with a range of nonce values
+	for nonce := uint64(0); nonce < 10; nonce++ {
+		work := evaluate(nonce)
+
+		// Basic Assertions
+		assert.NotNil(t, work)
+		assert.True(t, work.Cmp(big.NewInt(0)) > 0, "Work should be positive")
+	}
+}
 
 func TestTx(t *testing.T) {
 	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")

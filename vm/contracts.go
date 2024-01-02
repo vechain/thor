@@ -28,8 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 
-	"github.com/vechain/thor/blake2b"
-	"github.com/vechain/thor/vm/bn256"
+	"github.com/vechain/thor/v2/blake2b"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/vm/bn256"
 )
 
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
@@ -139,7 +140,7 @@ func (c *ecrecover) Run(input []byte) ([]byte, error) {
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
+	return common.LeftPadBytes(thor.Keccak256(pubKey[1:]).Bytes()[12:], 32), nil
 }
 
 // safe_ecrecover prevent touching the input buffer.
@@ -177,7 +178,7 @@ func (c *safe_ecrecover) Run(input []byte) ([]byte, error) {
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
+	return common.LeftPadBytes(thor.Keccak256(pubKey[1:]).Bytes()[12:], 32), nil
 }
 
 // SHA256 implemented as a native contract.

@@ -16,10 +16,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/vechain/thor/kv"
-	"github.com/vechain/thor/muxdb/internal/engine"
-	"github.com/vechain/thor/muxdb/internal/trie"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/muxdb/internal/engine"
+	"github.com/vechain/thor/v2/muxdb/internal/trie"
+	"github.com/vechain/thor/v2/thor"
 )
 
 const (

@@ -12,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/api/utils"
-	"github.com/vechain/thor/chain"
-	"github.com/vechain/thor/thor"
-	"github.com/vechain/thor/txpool"
+	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 type Transactions struct {
@@ -91,7 +91,7 @@ func (t *Transactions) getTransactionByID(txID thor.Bytes32, head thor.Bytes32, 
 	return convertTransaction(tx, summary.Header), nil
 }
 
-//GetTransactionReceiptByID get tx's receipt
+// GetTransactionReceiptByID get tx's receipt
 func (t *Transactions) getTransactionReceiptByID(txID thor.Bytes32, head thor.Bytes32) (*Receipt, error) {
 	chain := t.repo.NewChain(head)
 	tx, meta, err := chain.GetTransaction(txID)
