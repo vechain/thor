@@ -57,8 +57,7 @@ func DevAccounts() []DevAccount {
 }
 
 // NewDevnet create genesis for solo mode.
-func NewDevnet() *Genesis {
-	launchTime := uint64(1526400000) // 'Wed May 16 2018 00:00:00 GMT+0800 (CST)'
+func NewDevnet(launchTime uint64) *Genesis {
 
 	executor := DevAccounts()[0].Address
 	soloBlockSigner := DevAccounts()[0]

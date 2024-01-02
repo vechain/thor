@@ -176,7 +176,7 @@ func getStorage(t *testing.T) {
 func initAccountServer(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 
 	b, _, _, err := gene.Build(stater)
 	if err != nil {

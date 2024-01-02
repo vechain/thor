@@ -25,7 +25,7 @@ func M(args ...interface{}) []interface{} {
 
 func newTestRepo() (*muxdb.MuxDB, *Repository) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(uint64(1526400000))
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, err := NewRepository(db, b0)
@@ -60,7 +60,7 @@ func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Blo
 
 func TestRepository(t *testing.T) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(uint64(1526400000))
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo1, err := NewRepository(db, b0)

@@ -492,7 +492,7 @@ func TestPrototypeNative(t *testing.T) {
 	)
 
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
@@ -766,7 +766,7 @@ func TestPrototypeNativeWithLongerBlockNumber(t *testing.T) {
 	rand.Read(sig[:])
 
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
@@ -836,7 +836,7 @@ func TestPrototypeNativeWithBlockNumber(t *testing.T) {
 	rand.Read(sig[:])
 
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	st := state.New(db, genesisBlock.Header().StateRoot(), 0, 0, 0)
 	repo, _ := chain.NewRepository(db, genesisBlock)
@@ -899,7 +899,7 @@ func newBlock(parent *block.Block, score uint64, timestamp uint64, privateKey *e
 func TestExtensionNative(t *testing.T) {
 	db := muxdb.NewMem()
 	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 	genesisBlock, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, genesisBlock)
 	st.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes())

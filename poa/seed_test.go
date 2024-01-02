@@ -24,7 +24,7 @@ import (
 func TestSeeder_Generate(t *testing.T) {
 	mockEpochInterval(10)
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(uint64(1526400000))
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, err := chain.NewRepository(db, b0)

@@ -9,6 +9,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
@@ -40,6 +43,177 @@ func newPool(limit int, limitPerAccount int) *TxPool {
 		MaxLifetime:     time.Hour,
 	})
 }
+
+func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64) *TxPool {
+	db := muxdb.NewMem()
+	gene := genesis.NewDevnet(timestamp)
+	b0, _, _, _ := gene.Build(state.NewStater(db))
+	repo, _ := chain.NewRepository(db, b0)
+	return New(repo, state.NewStater(db), Options{
+		Limit:                  limit,
+		LimitPerAccount:        limitPerAccount,
+		MaxLifetime:            time.Hour,
+		BlocklistCacheFilePath: BlocklistCacheFilePath,
+		BlocklistFetchURL:      BlocklistFetchURL,
+	})
+}
+
+func newHttpServer() *httptest.Server {
+	// Example data to be served by the mock server
+	data := "0x25Df024637d4e56c1aE9563987Bf3e92C9f534c0\n0x25Df024637d4e56c1aE9563987Bf3e92C9f534c1"
+
+	// Create a mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// You can check headers, methods, etc. here
+		if r.Header.Get("if-none-match") == "some-etag" {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		fmt.Fprint(w, data)
+	}))
+	return server
+}
+
+func TestNewCloseWithServer(t *testing.T) {
+
+	server := newHttpServer()
+	defer server.Close()
+
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", server.URL, uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 15)
+	for i := 0; i < 15; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[i%len(genesis.DevAccounts())])
+		txs = append(txs, tx)
+	}
+
+	// Call the Fill method
+	pool.Fill(txs)
+
+	// Add a delay of 2 seconds
+	time.Sleep(2 * time.Second)
+}
+
+func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 15)
+	for i := 0; i < 12; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+		txs = append(txs, tx)
+	}
+
+	// Call the Fill method
+	pool.Fill(txs)
+
+	err := pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), genesis.DevAccounts()[0]))
+	assert.Equal(t, err.Error(), "tx rejected: pool is full")
+
+	// Add a delay of 2 seconds
+	time.Sleep(2 * time.Second)
+}
+
+func TestAddWithFullErrorSyncedChain(t *testing.T) {
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()))
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 15)
+	for i := 0; i < 12; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+		txs = append(txs, tx)
+	}
+
+	// Call the Fill method
+	pool.Fill(txs)
+
+	err := pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), genesis.DevAccounts()[0]))
+	assert.Equal(t, err.Error(), "tx rejected: pool is full")
+
+	// Add a delay of 2 seconds
+	time.Sleep(2 * time.Second)
+}
+
+func TestNewCloseWithError(t *testing.T) {
+
+	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, " ", " ", uint64(time.Now().Unix())+10000)
+	defer pool.Close()
+
+	// Add a delay of 2 seconds
+	time.Sleep(2 * time.Second)
+}
+
+func TestDump(t *testing.T) {
+	// Create a new transaction pool with specified limits
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	// Create and add transactions to the pool
+	txsToAdd := make(tx.Transactions, 0, 5)
+	for i := 0; i < 5; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[i%len(genesis.DevAccounts())])
+		txsToAdd = append(txsToAdd, tx)
+		assert.Nil(t, pool.Add(tx))
+	}
+
+	// Use the Dump method to retrieve all transactions in the pool
+	dumpedTxs := pool.Dump()
+
+	// Check if the dumped transactions match the ones added
+	assert.Equal(t, len(txsToAdd), len(dumpedTxs), "Number of dumped transactions should match the number added")
+
+	// Further checks can be done to ensure that each transaction in `dumpedTxs` is also in `txsToAdd`
+	for _, dumpedTx := range dumpedTxs {
+		found := false
+		for _, addedTx := range txsToAdd {
+			if dumpedTx.ID() == addedTx.ID() {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Dumped transaction should match one of the added transactions")
+	}
+}
+
+func TestRemove(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	// Create and add a transaction to the pool
+	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	assert.Nil(t, pool.Add(tx), "Adding transaction should not produce error")
+
+	// Ensure the transaction is in the pool
+	assert.NotNil(t, pool.Get(tx.ID()), "Transaction should exist in the pool before removal")
+
+	// Remove the transaction from the pool
+	removed := pool.Remove(tx.Hash(), tx.ID())
+	assert.True(t, removed, "Transaction should be successfully removed")
+
+	// Check that the transaction is no longer in the pool
+	assert.Nil(t, pool.Get(tx.ID()), "Transaction should not exist in the pool after removal")
+}
+
+func TestRemoveWithError(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	// Create and add a transaction to the pool
+	tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
+	// assert.Nil(t, pool.Add(tx), "Adding transaction should not produce error")
+
+	// Ensure the transaction is in the pool
+	assert.Nil(t, pool.Get(tx.ID()), "Transaction should exist in the pool before removal")
+
+	// Remove the transaction from the pool
+	removed := pool.Remove(tx.Hash(), tx.ID())
+	assert.False(t, removed, "Transaction should not be successfully removed as it doesn't exist")
+}
+
 func TestNewClose(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
@@ -123,6 +297,31 @@ func TestWashTxs(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(txs))
 	assert.Equal(t, 1, removedCount)
+}
+
+func TestFillPool(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	// Create a slice of transactions to be added to the pool.
+	txs := make(Tx.Transactions, 0, 5)
+	for i := 0; i < 5; i++ {
+		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[i%len(genesis.DevAccounts())])
+		txs = append(txs, tx)
+	}
+
+	// Call the Fill method
+	pool.Fill(txs)
+
+	// Check if the transactions are correctly added.
+	// This might require accessing internal state of TxPool or using provided methods.
+	for _, tx := range txs {
+		assert.NotNil(t, pool.Get(tx.ID()), "Transaction should exist in the pool")
+	}
+
+	// Further checks can be made based on the behavior of your TxPool implementation.
+	// For example, checking if the pool size has increased by the expected amount.
+	assert.Equal(t, len(txs), pool.all.Len(), "Number of transactions in the pool should match the number added")
 }
 
 func TestAdd(t *testing.T) {

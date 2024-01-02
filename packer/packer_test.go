@@ -67,7 +67,7 @@ func (ti *txIterator) OnProcessed(txID thor.Bytes32, err error) {
 func TestP(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(uint64(1526400000))
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)
@@ -183,7 +183,7 @@ func TestForkVIP191(t *testing.T) {
 func TestBlocklist(t *testing.T) {
 	db := muxdb.NewMem()
 
-	g := genesis.NewDevnet()
+	g := genesis.NewDevnet(uint64(1526400000))
 	b0, _, _, _ := g.Build(state.NewStater(db))
 
 	repo, _ := chain.NewRepository(db, b0)

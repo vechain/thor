@@ -245,7 +245,7 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
-	gene := genesis.NewDevnet()
+	gene := genesis.NewDevnet(uint64(1526400000))
 	// Solo forks from the start
 	forkConfig := thor.ForkConfig{}
 
