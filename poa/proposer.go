@@ -6,7 +6,7 @@
 package poa
 
 import (
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // Proposer address with status.

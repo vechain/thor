@@ -24,8 +24,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/lowrlp"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/lowrlp"
+	"github.com/vechain/thor/v2/thor"
 )
 
 var NonCryptoNodeHash = thor.BytesToBytes32(bytes.Repeat([]byte{0xff}, 32))

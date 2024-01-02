@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
-	"github.com/vechain/thor/tracers"
-	"github.com/vechain/thor/vm"
+	"github.com/vechain/thor/v2/tracers"
+	"github.com/vechain/thor/v2/vm"
 )
 
 // Storage represents a contract's storage.

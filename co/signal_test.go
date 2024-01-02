@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/co"
+	"github.com/vechain/thor/v2/co"
 )
 
 func TestSignal_SignalBeforeWait(t *testing.T) {

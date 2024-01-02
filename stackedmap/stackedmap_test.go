@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/stackedmap"
+	"github.com/vechain/thor/v2/stackedmap"
 )
 
 func M(a ...interface{}) []interface{} {

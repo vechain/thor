@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/thor"
 )
 
-//Event represents tx.Event that can be stored in db.
+// Event represents tx.Event that can be stored in db.
 type Event struct {
 	BlockNumber uint32
 	Index       uint32
@@ -26,7 +26,7 @@ type Event struct {
 	Data        []byte
 }
 
-//Transfer represents tx.Transfer that can be stored in db.
+// Transfer represents tx.Transfer that can be stored in db.
 type Transfer struct {
 	BlockNumber uint32
 	Index       uint32
@@ -77,7 +77,7 @@ func (c *EventCriteria) toWhereCondition() (cond string, args []interface{}) {
 	return
 }
 
-//EventFilter filter
+// EventFilter filter
 type EventFilter struct {
 	CriteriaSet []*EventCriteria
 	Range       *Range

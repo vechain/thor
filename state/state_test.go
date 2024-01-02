@@ -9,11 +9,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/muxdb"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func TestStateReadWrite(t *testing.T) {
@@ -39,7 +38,7 @@ func TestStateReadWrite(t *testing.T) {
 
 	state.SetCode(addr, []byte("code"))
 	assert.Equal(t, M([]byte("code"), nil), M(state.GetCode(addr)))
-	assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash([]byte("code"))), nil), M(state.GetCodeHash(addr)))
+	assert.Equal(t, M(thor.Keccak256([]byte("code")), nil), M(state.GetCodeHash(addr)))
 
 	assert.Equal(t, M(thor.Bytes32{}, nil), M(state.GetStorage(addr, storageKey)))
 	state.SetStorage(addr, storageKey, thor.BytesToBytes32([]byte("storageValue")))
@@ -85,7 +84,7 @@ func TestStateRevert(t *testing.T) {
 		v := values[len(values)-i-1]
 		assert.Equal(t, M(v.balance, nil), M(state.GetBalance(addr)))
 		assert.Equal(t, M(v.code, nil), M(state.GetCode(addr)))
-		assert.Equal(t, M(thor.Bytes32(crypto.Keccak256Hash(v.code)), nil), M(state.GetCodeHash(addr)))
+		assert.Equal(t, M(thor.Keccak256(v.code), nil), M(state.GetCodeHash(addr)))
 		assert.Equal(t, M(v.storage, nil), M(state.GetStorage(addr, storageKey)))
 		state.RevertTo(chk)
 		chk--
@@ -118,6 +117,63 @@ func TestEnergy(t *testing.T) {
 	x.Div(x, big.NewInt(1e18))
 
 	assert.Equal(t, x, bal1)
+}
+
+func TestEncodeDecodeStorage(t *testing.T) {
+	db := muxdb.NewMem()
+	state := New(db, thor.Bytes32{}, 0, 0, 0)
+
+	// Create an account and key
+	addr := thor.BytesToAddress([]byte("account1"))
+	key := thor.BytesToBytes32([]byte("key"))
+
+	// Original value to be encoded and then decoded
+	originalValue := []byte("value")
+
+	// Encoding function
+	encodingFunc := func() ([]byte, error) {
+		return rlp.EncodeToBytes(originalValue)
+	}
+
+	// Encode and store the value
+	err := state.EncodeStorage(addr, key, encodingFunc)
+	assert.Nil(t, err, "EncodeStorage should not return an error")
+
+	// Function to decode the storage value
+	var decodedValue []byte
+	decodeFunc := func(b []byte) error {
+		var err error
+		err = rlp.DecodeBytes(b, &decodedValue)
+		return err
+	}
+
+	// Decode the stored value
+	err = state.DecodeStorage(addr, key, decodeFunc)
+	assert.Nil(t, err, "DecodeStorage should not return an error")
+
+	// Verify that the decoded value matches the original value
+	assert.Equal(t, originalValue, decodedValue, "decoded value should match the original value")
+}
+
+func TestBuildStorageTrie(t *testing.T) {
+	db := muxdb.NewMem()
+	state := New(db, thor.Bytes32{}, 0, 0, 0)
+
+	// Create an account and set storage values
+	addr := thor.BytesToAddress([]byte("account1"))
+	key1 := thor.BytesToBytes32([]byte("key1"))
+	value1 := thor.BytesToBytes32([]byte("value1"))
+	key2 := thor.BytesToBytes32([]byte("key2"))
+	value2 := thor.BytesToBytes32([]byte("value2"))
+
+	state.SetRawStorage(addr, key1, value1[:])
+	state.SetRawStorage(addr, key2, value2[:])
+
+	assert.Equal(t, M(rlp.RawValue(value1[:]), nil), M(state.GetRawStorage(addr, key1)))
+
+	// Build the storage trie
+	_, err := state.BuildStorageTrie(addr)
+	assert.Nil(t, err, "error should be nil")
 }
 
 func TestStorage(t *testing.T) {

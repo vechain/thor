@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type twoOperandTest struct {
@@ -468,7 +468,7 @@ func TestCreate2Addreses(t *testing.T) {
 		origin := common.BytesToAddress(common.FromHex(tt.origin))
 		salt := common.BytesToHash(common.FromHex(tt.salt))
 		code := common.FromHex(tt.code)
-		codeHash := crypto.Keccak256(code)
+		codeHash := thor.Keccak256(code).Bytes()
 		// THOR: Cannot use crypto.CreateAddress2 function.
 		// v1.8.14 -> v1.8.27 depedency issue. See patch.go file.
 		address := CreateAddress2(origin, salt, codeHash)

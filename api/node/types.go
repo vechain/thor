@@ -6,8 +6,8 @@
 package node
 
 import (
-	"github.com/vechain/thor/comm"
-	"github.com/vechain/thor/thor"
+	"github.com/vechain/thor/v2/comm"
+	"github.com/vechain/thor/v2/thor"
 )
 
 type Network interface {

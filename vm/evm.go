@@ -21,14 +21,14 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	"github.com/vechain/thor/v2/thor"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
-var emptyCodeHash = crypto.Keccak256Hash(nil)
+var emptyCodeHash = common.Hash(thor.Keccak256(nil))
 
 type (
 	CanTransferFunc func(StateDB, common.Address, *big.Int) bool
@@ -407,7 +407,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *big.Int, salt *uint256.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	// Cannot use crypto.CreateAddress2 function.
 	// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
-	contractAddr = CreateAddress2(caller.Address(), salt.Bytes32(), crypto.Keccak256Hash(code).Bytes())
+	contractAddr = CreateAddress2(caller.Address(), salt.Bytes32(), thor.Keccak256(code).Bytes())
 
 	// Capture the tracer start/end events in debug mode
 	if evm.vmConfig.Tracer != nil {
@@ -461,7 +461,7 @@ func (evm *EVM) create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// EVM. The contract is a scoped environment for this execution context
 	// only.
 	contract := NewContract(caller, AccountRef(contractAddr), value, gas)
-	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
+	contract.SetCallCode(&contractAddr, common.Hash(thor.Keccak256(code)), code)
 
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		return nil, contractAddr, gas, nil
