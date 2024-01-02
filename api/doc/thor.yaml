@@ -80,7 +80,7 @@ paths:
           - Inspect the outputs of a transaction before executing it.
           - Estimate the gas consumption of a transaction. <b>Note:</b> The `caller` field should be provided for higher accuracy.
         
-        The fields `gasPayer`, `provedWork`, `blockRef` and `expiration` are for exposing themselves in EVM. Transaction meta features won't be reflected in the result, for example, no error is returned if the transaction is technically expired. For more information about built-in contracts, please refer to the vechain documentation.
+        The fields `gasPayer`, `provedWork`, `blockRef` and `expiration` are for exposing themselves in EVM. Transaction meta features won't be reflected in the result, for example, no error is returned if the transaction is technically expired. For more information, please refer to the vechain documentation.
 
         To access historical details, you can specify a `revision` as a query parameter.
       requestBody:
