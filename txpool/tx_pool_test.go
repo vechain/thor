@@ -46,7 +46,17 @@ func newPool(limit int, limitPerAccount int) *TxPool {
 
 func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64) *TxPool {
 	db := muxdb.NewMem()
-	gene := genesis.NewDevnet(timestamp)
+	gene := new(genesis.Builder).
+		GasLimit(thor.InitialGasLimit).
+		Timestamp(timestamp).
+		State(func(state *state.State) error {
+			bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+			for _, acc := range genesis.DevAccounts() {
+				state.SetBalance(acc.Address, bal)
+				state.SetEnergy(acc.Address, bal, timestamp)
+			}
+			return nil
+		})
 	b0, _, _, _ := gene.Build(state.NewStater(db))
 	repo, _ := chain.NewRepository(db, b0)
 	return New(repo, state.NewStater(db), Options{
