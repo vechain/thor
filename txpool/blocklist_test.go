@@ -46,7 +46,6 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadWithError(t *testing.T) {
-
 	dummyData := "0x25Df024637d4\n0x25Df024637d4e56c1aE956"
 	testFilePath := SetupTempFile(t, dummyData)
 
