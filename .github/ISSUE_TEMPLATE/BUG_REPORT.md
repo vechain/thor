@@ -53,20 +53,6 @@ body:
   validations:
   required: false
 - type: dropdown
-  id: browsers
-  attributes:
-  label: "Browsers"
-  description: What browsers are you seeing the problem on ?
-  multiple: true
-  options:
-  - Firefox
-  - Chrome
-  - Safari
-  - Microsoft Edge
-  - Opera
-  validations:
-  required: false
-- type: dropdown
   id: os
   attributes:
   label: "OS"

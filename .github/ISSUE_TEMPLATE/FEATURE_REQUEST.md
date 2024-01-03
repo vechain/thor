@@ -1,5 +1,5 @@
 name: "💡 Feature Request"
-description: Create a new ticket for a new feature request
+description: Create a new ticket for a new feature request. Please refer to the [VeChain Improvement Proposals (VIP)](https://github.com/vechain/VIPs) process for more information on feature requests.
 title: "💡 [REQUEST] - <title>"
 labels: [
 "question"

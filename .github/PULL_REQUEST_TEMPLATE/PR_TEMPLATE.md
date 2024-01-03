@@ -21,10 +21,9 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] Test B
 
 **Test Configuration**:
-* Firmware version:
+* Go Version:
 * Hardware:
-* Toolchain:
-* SDK:
+* Docker Version:
 
 # Checklist:
 
@@ -37,3 +36,4 @@ Please describe the tests that you ran to verify your changes. Provide instructi
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] New and existing E2E tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] I have not added any vulnerable dependencies to my code
