@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  base-authority-node:
+    image: ${THOR_IMAGE:-vechain/thor:latest}
+    entrypoint: "/node/config/start.sh"
+    volumes:
+      - type: bind
+        source: ./config
+        target: /node/config
+      - type: bind
+        source: ./keys
+        target: /node/keys
+    healthcheck:
+      test: ["CMD", "/node/config/health_check.sh"]
+      interval: 1s
+      timeout: 5s
+      retries: 120

@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+
+  thor-disco:
+    image: ${THOR_IMAGE:-vechain/thor:latest}
+    container_name: thor-disco
+    entrypoint: "disco --keyhex=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36"
+
+  authority-node-1:
+    extends:
+      file: docker-compose-base.yaml
+      service: base-authority-node
+    container_name: authority-node-1
+    environment:
+      MASTER_KEY_ADDRESS: "435933c8064b4ae76be665428e0307ef2ccfbd68"
+    ports:
+      - "8669:8669"
+
+  authority-node-2:
+    extends:
+      file: docker-compose-base.yaml
+      service: base-authority-node
+    container_name: authority-node-2
+    environment:
+      MASTER_KEY_ADDRESS: "f370940abdbd2583bc80bfc19d19bc216c88ccf0"
+    ports:
+      - "8679:8669"
+
+  authority-node-3:
+    extends:
+      file: docker-compose-base.yaml
+      service: base-authority-node
+    container_name: authority-node-3
+    environment:
+      MASTER_KEY_ADDRESS: "0f872421dc479f3c11edd89512731814d0598db5"
+    ports:
+      - "8689:8669"
