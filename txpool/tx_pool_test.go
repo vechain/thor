@@ -85,7 +85,6 @@ func newHttpServer() *httptest.Server {
 }
 
 func TestNewCloseWithServer(t *testing.T) {
-
 	server := newHttpServer()
 	defer server.Close()
 
