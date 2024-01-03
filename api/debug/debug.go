@@ -33,7 +33,7 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
-var devNetGenesisID = genesis.NewDevnet(uint64(1526400000)).ID()
+var devNetGenesisID = genesis.NewDevnet().ID()
 
 type Debug struct {
 	repo              *chain.Repository

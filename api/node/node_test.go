@@ -38,7 +38,7 @@ func TestNode(t *testing.T) {
 func initCommServer(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
-	gene := genesis.NewDevnet(uint64(1526400000))
+	gene := genesis.NewDevnet()
 
 	b, _, _, err := gene.Build(stater)
 	if err != nil {
