@@ -73,7 +73,7 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 	return tx.WithSignature(sig)
 }
 
-func TestExecutableWithError(t *testing.T) {
+func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.State) {
 	acc := genesis.DevAccounts()[0]
 
 	db := muxdb.NewMem()
@@ -82,6 +82,12 @@ func TestExecutableWithError(t *testing.T) {
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
 	repo.AddBlock(b1, nil, 0)
 	st := state.New(db, repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+
+	return acc, repo, b1, st
+}
+
+func TestExecutableWithError(t *testing.T) {
+	acc, repo, b1, st := SetupTest()
 
 	tests := []struct {
 		tx          *tx.Transaction
@@ -134,14 +140,7 @@ func TestResolve(t *testing.T) {
 }
 
 func TestExecutable(t *testing.T) {
-	acc := genesis.DevAccounts()[0]
-
-	db := muxdb.NewMem()
-	repo := newChainRepo(db)
-	b0 := repo.GenesisBlock()
-	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil, 0)
-	st := state.New(db, repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+	acc, repo, b1, st := SetupTest()
 
 	tests := []struct {
 		tx          *tx.Transaction

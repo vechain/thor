@@ -106,10 +106,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	time.Sleep(2 * time.Second)
 }
 
-func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
-	defer pool.Close()
-
+func FillPoolWithTxs(pool *TxPool, t *testing.T) {
 	// Create a slice of transactions to be added to the pool.
 	txs := make(Tx.Transactions, 0, 15)
 	for i := 0; i < 12; i++ {
@@ -127,25 +124,19 @@ func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	time.Sleep(2 * time.Second)
 }
 
+func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
+	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	defer pool.Close()
+
+	FillPoolWithTxs(pool, t)
+
+}
+
 func TestAddWithFullErrorSyncedChain(t *testing.T) {
 	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()))
 	defer pool.Close()
 
-	// Create a slice of transactions to be added to the pool.
-	txs := make(Tx.Transactions, 0, 15)
-	for i := 0; i < 12; i++ {
-		tx := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), genesis.DevAccounts()[0])
-		txs = append(txs, tx)
-	}
-
-	// Call the Fill method
-	pool.Fill(txs)
-
-	err := pool.Add(newTx(pool.repo.ChainTag(), nil, 21000, tx.NewBlockRef(10), 100, nil, Tx.Features(0), genesis.DevAccounts()[0]))
-	assert.Equal(t, err.Error(), "tx rejected: pool is full")
-
-	// Add a delay of 2 seconds
-	time.Sleep(2 * time.Second)
+	FillPoolWithTxs(pool, t)
 }
 
 func TestNewCloseWithError(t *testing.T) {
