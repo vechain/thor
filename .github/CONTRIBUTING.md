@@ -1,7 +1,7 @@
 # Contributing to VechainThor
 
 Welcome to VechainThor! We appreciate your interest in contributing. By participating in this project, you agree to
-abide by our [Code of Conduct](../CODE_OF_CONDUCT.md).
+abide by our [Code of Conduct](https://github.com/vechain/thor/blob/master/CODE_OF_CONDUCT.md).
 
 ## VeChain Improvement Proposals (VIPs)
 
@@ -34,7 +34,7 @@ current development landscape.
     ```bash
     make test
     ```
-    - **Note:**: Please refer to the [README](../README.md) for information on how to start the node and interact with the
+    - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on how to start the node and interact with the
       API.
 5. Make your changes and commit them with a clear and concise commit message.
 6. Push your changes to your forked repository:
