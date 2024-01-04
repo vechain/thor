@@ -49,4 +49,4 @@ test:| go_version_check
 
 test-coverage:| go_version_check
 	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
-
+	@go tool cover -html=coverage.out
