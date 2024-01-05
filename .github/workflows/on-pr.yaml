@@ -15,6 +15,7 @@ jobs:
   debug-qodana-secret:
     permissions:
       contents: read
+    environment: pull-requests
     runs-on: ubuntu-latest
     steps:
       - name: Debug Token
