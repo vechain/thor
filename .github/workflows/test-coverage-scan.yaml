@@ -30,6 +30,8 @@ jobs:
           cp coverage.out .qodana/code-coverage/coverage.out
 
       - name: Debug Token
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
         run: |
           TOKEN_LENGTH=$(echo -n $QODANA_TOKEN | wc -c)
           echo "Length of Qodana Token: $TOKEN_LENGTH"
