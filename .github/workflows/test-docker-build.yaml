@@ -4,13 +4,11 @@ on:
   workflow_call:
 
 jobs:
-  push_to_registries:
+  test_docker_build:
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
-
-    environment: docker-publish
 
     steps:
       - uses: actions/checkout@v3
