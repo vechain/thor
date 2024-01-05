@@ -13,6 +13,8 @@ concurrency:
 jobs:
 
   debug-qodana-secret:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Debug Token
