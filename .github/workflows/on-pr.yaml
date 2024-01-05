@@ -17,7 +17,7 @@ jobs:
     secrets: inherit
 
   code-coverage-scan:
-    uses: ./.github/workflows/code-coverage-scan.yaml
+    uses: ./.github/workflows/test-coverage-scan.yaml
     secrets: inherit
 
   test-docker-build:
