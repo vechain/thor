@@ -29,10 +29,15 @@ jobs:
           mkdir -p .qodana/code-coverage
           cp coverage.out .qodana/code-coverage/coverage.out
 
+      - name: Debug Token
+        run: |
+          TOKEN_LENGTH=$(echo -n $QODANA_TOKEN | wc -c)
+          echo "Length of Qodana Token: $TOKEN_LENGTH"
+
       - name: Qodana Scan
         uses: JetBrains/qodana-action@v2023.3
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
         with:
           pr-mode: ${{ github.event_name == 'pull_request' }}
-          upload-result: true
+          fetch-depth: 0
