@@ -178,7 +178,7 @@ A special shout out to following projects:
 
 ## Contributing
 
-- Please refer to [CONTRIBUTING.md](./CONTRIBUTING.md) on how to contribute to this project.
+- Please refer to [CONTRIBUTING.md](https://github.com/vechain/thor/blob/master/.github/CONTRIBUTING.md) on how to contribute to this project.
 
 ## License
 
