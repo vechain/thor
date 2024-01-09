@@ -141,9 +141,9 @@ FROM (%v) e
 	}
 
 	if filter.Order == DESC {
-		subQuery += " ORDER BY seq DESC "
+		subQuery += " ORDER BY seq DESC"
 	} else {
-		subQuery += " ORDER BY seq ASC "
+		subQuery += " ORDER BY seq ASC"
 	}
 
 	if filter.Options != nil {
@@ -206,9 +206,9 @@ FROM (%v) t
 	}
 
 	if filter.Order == DESC {
-		subQuery += " ORDER BY seq DESC "
+		subQuery += " ORDER BY seq DESC"
 	} else {
-		subQuery += " ORDER BY seq ASC "
+		subQuery += " ORDER BY seq ASC"
 	}
 
 	if filter.Options != nil {
