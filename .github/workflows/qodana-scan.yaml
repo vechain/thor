@@ -1,0 +1,36 @@
+name: Qodana Scan
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test_coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21.x
+
+      - name: Make all
+        run: make all
+
+      - name: Make Coverage
+        run: make test-coverage
+
+      - name: Setup Qodana
+        run: |
+          mkdir -p .qodana/code-coverage
+          cp coverage.out .qodana/code-coverage/coverage.out
+
+      - name: Qodana Scan
+        uses: JetBrains/qodana-action@v2023.3
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+        with:
+          pr-mode: ${{ github.event_name == 'pull_request' }}
