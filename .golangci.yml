@@ -1,0 +1,19 @@
+# Please refer to the official golangci-lint config documentation for more details:
+# https://golangci-lint.run/usage/configuration/
+# https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
+
+linters:
+  enable-all: true
+
+linters-settings:
+  gci:
+    sections:
+      - standard
+      - default
+
+run:
+  timeout: 10m
+  tests: false
+
+issues:
+  max-issues-per-linter: 1000

@@ -1,0 +1,30 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: false
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54
+          args: --timeout=30m
+          only-new-issues: ${{ github.event_name == 'pull_request' }}
+          skip-cache: true
+          skip-pkg-cache: true
+          skip-build-cache: true
