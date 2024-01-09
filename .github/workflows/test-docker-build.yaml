@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  dockr_build:
+  docker_build:
     runs-on: ubuntu-latest
     name: Test Build
 
