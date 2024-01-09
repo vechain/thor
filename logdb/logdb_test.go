@@ -165,6 +165,8 @@ func TestEvents(t *testing.T) {
 			{"query all events desc", &logdb.EventFilter{Order: logdb.DESC}, allEvents.Reverse()},
 			{"query all events limit offset", &logdb.EventFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allEvents[1:11]},
 			{"query all events range", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 })},
+			{"query events with range and desc", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse()},
+			{"query events with limit with desc", &logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allEvents.Reverse()[0:10]},
 			{"query all events with criteria", &logdb.EventFilter{CriteriaSet: []*logdb.EventCriteria{{Address: &allEvents[1].Address}}}, allEvents.Filter(func(ev *logdb.Event) bool {
 				return ev.Address == allEvents[1].Address
 			})},
@@ -193,6 +195,8 @@ func TestEvents(t *testing.T) {
 			{"query all transfers desc", &logdb.TransferFilter{Order: logdb.DESC}, allTransfers.Reverse()},
 			{"query all transfers limit offset", &logdb.TransferFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allTransfers[1:11]},
 			{"query all transfers range", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 })},
+			{"query transfers with range and desc", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse()},
+			{"query transfers with limit with desc", &logdb.TransferFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allTransfers.Reverse()[0:10]},
 			{"query all transfers with criteria", &logdb.TransferFilter{CriteriaSet: []*logdb.TransferCriteria{{Sender: &allTransfers[1].Sender}}}, allTransfers.Filter(func(tr *logdb.Transfer) bool {
 				return tr.Sender == allTransfers[1].Sender
 			})},

@@ -140,6 +140,12 @@ FROM (%v) e
 		subQuery += ")"
 	}
 
+	if filter.Order == DESC {
+		subQuery += " ORDER BY seq DESC "
+	} else {
+		subQuery += " ORDER BY seq ASC "
+	}
+
 	if filter.Options != nil {
 		subQuery += " LIMIT ?, ?"
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
@@ -197,6 +203,12 @@ FROM (%v) t
 			args = append(args, cargs...)
 		}
 		subQuery += ")"
+	}
+
+	if filter.Order == DESC {
+		subQuery += " ORDER BY seq DESC "
+	} else {
+		subQuery += " ORDER BY seq ASC "
 	}
 
 	if filter.Options != nil {
