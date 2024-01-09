@@ -39,6 +39,12 @@ func TestHexCompact(t *testing.T) {
 		if c := hexToCompact(test.hex); !bytes.Equal(c, test.compact) {
 			t.Errorf("hexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
 		}
+		if c := appendHexToCompact(nil, test.hex); !bytes.Equal(c, test.compact) {
+			t.Errorf("appendHexToCompact(%x) -> %x, want %x", test.hex, c, test.compact)
+		}
+		if l := compactLen(test.hex); l != len(test.compact) {
+			t.Errorf("compactLen(%x) -> %v, want %v", test.hex, l, len(test.compact))
+		}
 		if h := compactToHex(test.compact); !bytes.Equal(h, test.hex) {
 			t.Errorf("compactToHex(%x) -> %x, want %x", test.compact, h, test.hex)
 		}
@@ -79,6 +85,14 @@ func BenchmarkHexToCompact(b *testing.B) {
 	testBytes := []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}
 	for i := 0; i < b.N; i++ {
 		hexToCompact(testBytes)
+	}
+}
+
+func BenchmarkAppendHexToCompact(b *testing.B) {
+	testBytes := []byte{0, 15, 1, 12, 11, 8, 16 /*term*/}
+	var buf []byte
+	for i := 0; i < b.N; i++ {
+		buf = appendHexToCompact(buf[:0], testBytes)
 	}
 }
 
