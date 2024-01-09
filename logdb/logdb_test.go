@@ -211,7 +211,7 @@ func TestEvents(t *testing.T) {
 	}
 }
 
-func TestLogDB_NewestBlockID(t *testing.T) {
+func TestNewestBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
 		t.Fatal(err)
