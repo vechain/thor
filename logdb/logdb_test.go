@@ -210,3 +210,73 @@ func TestEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestLogDB_NewestBlockID(t *testing.T) {
+	db, err := logdb.NewMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	b := new(block.Builder).Build()
+	expectedNewestId := b.Header().ID()
+
+	var allEvents eventLogs
+	var allTransfers transferLogs
+
+	for i := 0; i < 100; i++ {
+
+		b = new(block.Builder).
+			ParentID(b.Header().ID()).
+			Transaction(newTx()).
+			Transaction(newTx()).
+			Build()
+		receipts := tx.Receipts{newReceipt(), newReceipt()}
+
+		for j := 0; j < len(receipts); j++ {
+			tx := b.Transactions()[j]
+			receipt := receipts[j]
+			origin, _ := tx.Origin()
+			allEvents = append(allEvents, &logdb.Event{
+				BlockNumber: b.Header().Number(),
+				Index:       uint32(j),
+				BlockID:     b.Header().ID(),
+				BlockTime:   b.Header().Timestamp(),
+				TxID:        tx.ID(),
+				TxOrigin:    origin,
+				ClauseIndex: 0,
+				Address:     receipt.Outputs[0].Events[0].Address,
+				Topics:      [5]*thor.Bytes32{&receipt.Outputs[0].Events[0].Topics[0]},
+				Data:        receipt.Outputs[0].Events[0].Data,
+			})
+
+			allTransfers = append(allTransfers, &logdb.Transfer{
+				BlockNumber: b.Header().Number(),
+				Index:       uint32(j),
+				BlockID:     b.Header().ID(),
+				BlockTime:   b.Header().Timestamp(),
+				TxID:        tx.ID(),
+				TxOrigin:    origin,
+				ClauseIndex: 0,
+				Sender:      receipt.Outputs[0].Transfers[0].Sender,
+				Recipient:   receipt.Outputs[0].Transfers[0].Recipient,
+				Amount:      receipt.Outputs[0].Transfers[0].Amount,
+			})
+		}
+
+		w := db.NewWriter()
+		if err := w.Write(b, receipts); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := w.Commit(); err != nil {
+			t.Fatal(err)
+		}
+
+		expectedNewestId = b.Header().ID()
+	}
+
+	newestBlockID, err := db.NewestBlockID()
+	assert.Nil(t, err)
+	assert.Equal(t, expectedNewestId.Bytes(), newestBlockID.Bytes())
+}
