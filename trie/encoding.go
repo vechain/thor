@@ -51,6 +51,35 @@ func hexToCompact(hex []byte) []byte {
 	return buf
 }
 
+func compactLen(hex []byte) int {
+	hexLen := len(hex)
+	if hasTerm(hex) {
+		hexLen--
+	}
+	return hexLen/2 + 1
+}
+
+func appendHexToCompact(buf, hex []byte) []byte {
+	terminator := byte(0)
+	if hasTerm(hex) {
+		terminator = 1
+		hex = hex[:len(hex)-1]
+	}
+
+	b0 := terminator << 5 // the flag byte
+	if len(hex)&1 == 1 {
+		b0 |= 1 << 4 // odd flag
+		b0 |= hex[0] // first nibble is contained in the first byte
+		hex = hex[1:]
+	}
+	buf = append(buf, b0)
+
+	for bi, ni := 0, 0; ni < len(hex); bi, ni = bi+1, ni+2 {
+		buf = append(buf, hex[ni]<<4|hex[ni+1])
+	}
+	return buf
+}
+
 func compactToHex(compact []byte) []byte {
 	if len(compact) == 0 {
 		return compact
