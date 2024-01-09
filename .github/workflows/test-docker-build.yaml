@@ -29,5 +29,3 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           provenance: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
