@@ -18,10 +18,7 @@ package trie
 
 import (
 	"bytes"
-	"container/heap"
 	"errors"
-
-	"github.com/vechain/thor/v2/thor"
 )
 
 // Iterator is a key-value trie iterator that traverses a Trie.
@@ -60,12 +57,6 @@ func (it *Iterator) Next() bool {
 	return false
 }
 
-// Prove generates the Merkle proof for the leaf node the iterator is currently
-// positioned on.
-func (it *Iterator) Prove() [][]byte {
-	return it.nodeIt.LeafProof()
-}
-
 // Leaf presents the leaf node.
 type Leaf struct {
 	Value []byte
@@ -81,18 +72,9 @@ type NodeIterator interface {
 	// Error returns the error status of the iterator.
 	Error() error
 
-	// Hash returns the hash of the current node.
-	Hash() thor.Bytes32
-
-	// Node calls the handler with the blob of the current node if any.
-	Node(handler func(blob []byte) error) error
-
-	// SeqNum returns the sequence number of the current node.
-	SeqNum() uint64
-
-	// Parent returns the hash of the parent of the current node. The hash may be the one
-	// grandparent if the immediate parent is an internal node with no hash.
-	Parent() thor.Bytes32
+	// Blob returns the encoded blob and version num of the current node.
+	// If the current node is not stored as standalone node, the returned blob has zero length.
+	Blob() ([]byte, Version, error)
 
 	// Path returns the hex-encoded path to the current node.
 	// Callers must not retain references to the return value after calling Next.
@@ -106,31 +88,23 @@ type NodeIterator interface {
 	// positioned at a leaf. Callers must not retain references to the value after
 	// calling Next.
 	LeafKey() []byte
-
-	// LeafProof returns the Merkle proof of the leaf. The method panics if the
-	// iterator is not positioned at a leaf. Callers must not retain references
-	// to the value after calling Next.
-	LeafProof() [][]byte
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
 // trie, which can be resumed at a later invocation.
 type nodeIteratorState struct {
-	hash    thor.Bytes32 // Hash of the node being iterated (nil if not standalone)
-	node    node         // Trie node being iterated
-	parent  thor.Bytes32 // Hash of the first full ancestor node (nil if current is the root)
-	index   int          // Child to be processed next
-	pathlen int          // Length of the path to this node
+	node    node   // Trie node being iterated
+	index   int    // Child to be processed next
+	pathlen int    // Length of the path to this node
+	blob    []byte // Encoded blob of the node
 }
 
 type nodeIterator struct {
-	trie      *Trie                 // Trie being iterated
-	stack     []*nodeIteratorState  // Hierarchy of trie nodes persisting the iteration state
-	path      []byte                // Path to the current node
-	err       error                 // Failure set in case of an internal error in the iterator
-	filter    func(seq uint64) bool // The filter to filter iterated nodes.
-	extended  bool                  // If the trie is extended.
-	nonCrypto bool                  // If the trie is non-crypto.
+	trie   *Trie                // Trie being iterated
+	stack  []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
+	path   []byte               // Path to the current node
+	err    error                // Failure set in case of an internal error in the iterator
+	minVer Version              // Skips nodes whose version lower than minVer
 }
 
 // errIteratorEnd is stored in nodeIterator.err when iteration is done.
@@ -146,73 +120,43 @@ func (e seekError) Error() string {
 	return "seek error: " + e.err.Error()
 }
 
-func newNodeIterator(trie *Trie, start []byte, filter func(seq uint64) bool, extended, nonCrypto bool) NodeIterator {
-	if trie.Hash() == emptyState {
-		return new(nodeIterator)
-	}
+func newNodeIterator(trie *Trie, start []byte, min Version) NodeIterator {
 	it := &nodeIterator{
-		trie:      trie,
-		filter:    filter,
-		extended:  extended,
-		nonCrypto: nonCrypto,
+		trie:   trie,
+		minVer: min,
 	}
 	it.err = it.seek(start)
 	return it
 }
 
-func (it *nodeIterator) Hash() thor.Bytes32 {
+func (it *nodeIterator) Blob() (blob []byte, ver Version, err error) {
 	if len(it.stack) == 0 {
-		return thor.Bytes32{}
-	}
-	return it.stack[len(it.stack)-1].hash
-}
-
-func (it *nodeIterator) Node(handler func(blob []byte) error) error {
-	if len(it.stack) == 0 {
-		return nil
+		return nil, Version{}, nil
 	}
 	st := it.stack[len(it.stack)-1]
-	if st.hash.IsZero() {
-		return nil
+	ref, _, dirty := st.node.cache()
+	// dirty node has no blob
+	if dirty {
+		return
 	}
 
-	h := newHasher(0, 0)
-	h.extended = it.extended
-	h.nonCrypto = it.nonCrypto
-	defer returnHasherToPool(h)
-
-	collapsed, _, _ := h.hashChildren(st.node, nil, it.path)
-
-	h.enc.Reset()
-	collapsed.encode(&h.enc, h.nonCrypto)
-	if it.extended {
-		collapsed.encodeTrailing(&h.enc)
+	if len(st.blob) > 0 {
+		blob, ver = st.blob, ref.ver
+		return
 	}
-	h.tmp.Reset()
-	h.enc.ToWriter(&h.tmp)
-	return handler(h.tmp)
-}
 
-func (it *nodeIterator) SeqNum() uint64 {
-	for i := len(it.stack) - 1; i >= 0; i-- {
-		if st := it.stack[i]; !st.hash.IsZero() {
-			return st.node.seqNum()
-		}
+	// load from db
+	if blob, err = it.trie.db.Get(it.path, ref.ver); err != nil {
+		return
 	}
-	return 0
-}
-
-func (it *nodeIterator) Parent() thor.Bytes32 {
-	if len(it.stack) == 0 {
-		return thor.Bytes32{}
-	}
-	return it.stack[len(it.stack)-1].parent
+	st.blob, ver = blob, ref.ver
+	return
 }
 
 func (it *nodeIterator) Leaf() *Leaf {
 	if len(it.stack) > 0 {
-		if node, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
-			return &Leaf{node.Value, node.meta}
+		if vn, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
+			return &Leaf{Value: vn.val, Meta: vn.meta}
 		}
 	}
 	return nil
@@ -222,30 +166,6 @@ func (it *nodeIterator) LeafKey() []byte {
 	if len(it.stack) > 0 {
 		if _, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
 			return hexToKeybytes(it.path)
-		}
-	}
-	panic("not at leaf")
-}
-
-func (it *nodeIterator) LeafProof() [][]byte {
-	if len(it.stack) > 0 {
-		if _, ok := it.stack[len(it.stack)-1].node.(*valueNode); ok {
-			hasher := newHasher(0, 0)
-			defer returnHasherToPool(hasher)
-
-			proofs := make([][]byte, 0, len(it.stack))
-
-			for i, item := range it.stack[:len(it.stack)-1] {
-				// Gather nodes that end up as hash nodes (or the root)
-				node, _, _ := hasher.hashChildren(item.node, nil, nil)
-				hashed, _ := hasher.store(node, nil, nil, false)
-				if _, ok := hashed.(*hashNode); ok || i == 0 {
-					hasher.enc.Reset()
-					node.encode(&hasher.enc, hasher.nonCrypto)
-					proofs = append(proofs, hasher.enc.ToBytes())
-				}
-			}
-			return proofs
 		}
 	}
 	panic("not at leaf")
@@ -309,19 +229,21 @@ func (it *nodeIterator) seek(prefix []byte) error {
 // peek creates the next state of the iterator.
 func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, error) {
 	if len(it.stack) == 0 {
-		if n := it.trie.root; n != nil {
-			if !it.filter(n.seqNum()) {
+		n := it.trie.root
+		if n == nil {
+			return nil, nil, nil, errIteratorEnd
+		}
+		if ref, _, dirty := n.cache(); !dirty {
+			if ref.ver.Compare(it.minVer) < 0 {
 				return nil, nil, nil, errIteratorEnd
 			}
 		}
 		// Initialize the iterator if we've just started.
-		root := it.trie.Hash()
 		state := &nodeIteratorState{node: it.trie.root, index: -1}
-		if root != emptyRoot {
-			state.hash = root
+		if err := state.resolve(it.trie, nil); err != nil {
+			return nil, nil, nil, err
 		}
-		err := state.resolve(it.trie, nil)
-		return state, nil, nil, err
+		return state, nil, nil, nil
 	}
 	if !descend {
 		// If we're skipping children, pop the current node first
@@ -331,11 +253,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	// Continue iteration to the next child
 	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
-		ancestor := parent.hash
-		if (ancestor == thor.Bytes32{}) {
-			ancestor = parent.parent
-		}
-		state, path, ok := it.nextChild(parent, ancestor)
+		state, path, ok := it.nextChild(parent)
 		if ok {
 			if err := state.resolve(it.trie, path); err != nil {
 				return parent, &parent.index, path, err
@@ -349,41 +267,35 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 }
 
 func (st *nodeIteratorState) resolve(tr *Trie, path []byte) error {
-	if hash, ok := st.node.(*hashNode); ok {
-		resolved, err := tr.resolveHash(hash, path)
+	if ref, ok := st.node.(*refNode); ok {
+		blob, err := tr.db.Get(path, ref.ver)
 		if err != nil {
-			return err
+			return &MissingNodeError{Ref: *ref, Path: path, Err: err}
 		}
-		st.node = resolved
-		st.hash = hash.Hash
+		st.blob = blob
+		st.node = mustDecodeNode(ref, blob, 0)
 	}
 	return nil
 }
 
-func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes32) (*nodeIteratorState, []byte, bool) {
+func (it *nodeIterator) nextChild(parent *nodeIteratorState) (*nodeIteratorState, []byte, bool) {
 	switch node := parent.node.(type) {
 	case *fullNode:
 		// Full node, move to the first non-nil child.
-		for i := parent.index + 1; i < len(node.Children); i++ {
-			child := node.Children[i]
-			if child != nil {
-				hash, _, _ := child.cache()
-				if _, ok := child.(*hashNode); ok || hash != nil {
-					if !it.filter(child.seqNum()) {
+		for i := parent.index + 1; i < len(node.children); i++ {
+			if child := node.children[i]; child != nil {
+				if ref, _, dirty := child.cache(); !dirty {
+					if ref.ver.Compare(it.minVer) < 0 {
 						continue
 					}
 				}
 
 				state := &nodeIteratorState{
 					node:    child,
-					parent:  ancestor,
 					index:   -1,
 					pathlen: len(it.path),
 				}
 
-				if hash != nil {
-					state.hash = hash.Hash
-				}
 				parent.index = i - 1
 				return state, append(it.path, byte(i)), true
 			}
@@ -391,25 +303,18 @@ func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor thor.Bytes
 	case *shortNode:
 		// Short node, return the pointer singleton child
 		if parent.index < 0 {
-			hash, _, _ := node.Val.cache()
-
-			if _, ok := node.Val.(*hashNode); ok || hash != nil {
-				if !it.filter(node.Val.seqNum()) {
+			if ref, _, dirty := node.child.cache(); !dirty {
+				if ref.ver.Compare(it.minVer) < 0 {
 					break
 				}
 			}
 
 			state := &nodeIteratorState{
-				node:    node.Val,
-				parent:  ancestor,
+				node:    node.child,
 				index:   -1,
 				pathlen: len(it.path),
 			}
-
-			if hash != nil {
-				state.hash = hash.Hash
-			}
-			return state, append(it.path, node.Key...), true
+			return state, append(it.path, node.key...), true
 		}
 	}
 	return parent, it.path, false
@@ -427,238 +332,4 @@ func (it *nodeIterator) pop() {
 	parent := it.stack[len(it.stack)-1]
 	it.path = it.path[:parent.pathlen]
 	it.stack = it.stack[:len(it.stack)-1]
-}
-
-func compareNodes(a, b NodeIterator) int {
-	if cmp := bytes.Compare(a.Path(), b.Path()); cmp != 0 {
-		return cmp
-	}
-
-	aLeaf := a.Leaf()
-	bLeaf := b.Leaf()
-
-	if aLeaf != nil && bLeaf == nil {
-		return -1
-	} else if bLeaf != nil && aLeaf == nil {
-		return 1
-	}
-	if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
-		return cmp
-	}
-	if aLeaf != nil && bLeaf != nil {
-		return bytes.Compare(aLeaf.Value, bLeaf.Value)
-	}
-	return 0
-}
-
-type differenceIterator struct {
-	a, b  NodeIterator // Nodes returned are those in b - a.
-	eof   bool         // Indicates a has run out of elements
-	count int          // Number of nodes scanned on either trie
-}
-
-// NewDifferenceIterator constructs a NodeIterator that iterates over elements in b that
-// are not in a. Returns the iterator, and a pointer to an integer recording the number
-// of nodes seen.
-func NewDifferenceIterator(a, b NodeIterator) (NodeIterator, *int) {
-	a.Next(true)
-	it := &differenceIterator{
-		a: a,
-		b: b,
-	}
-	return it, &it.count
-}
-
-func (it *differenceIterator) Hash() thor.Bytes32 {
-	return it.b.Hash()
-}
-
-func (it *differenceIterator) Node(handler func(blob []byte) error) error {
-	return it.b.Node(handler)
-}
-
-func (it *differenceIterator) SeqNum() uint64 {
-	return it.b.SeqNum()
-}
-
-func (it *differenceIterator) Parent() thor.Bytes32 {
-	return it.b.Parent()
-}
-
-func (it *differenceIterator) Leaf() *Leaf {
-	return it.b.Leaf()
-}
-
-func (it *differenceIterator) LeafKey() []byte {
-	return it.b.LeafKey()
-}
-
-func (it *differenceIterator) LeafProof() [][]byte {
-	return it.b.LeafProof()
-}
-
-func (it *differenceIterator) Path() []byte {
-	return it.b.Path()
-}
-
-func (it *differenceIterator) Next(bool) bool {
-	// Invariants:
-	// - We always advance at least one element in b.
-	// - At the start of this function, a's path is lexically greater than b's.
-	if !it.b.Next(true) {
-		return false
-	}
-	it.count++
-
-	if it.eof {
-		// a has reached eof, so we just return all elements from b
-		return true
-	}
-
-	for {
-		switch compareNodes(it.a, it.b) {
-		case -1:
-			// b jumped past a; advance a
-			if !it.a.Next(true) {
-				it.eof = true
-				return true
-			}
-			it.count++
-		case 1:
-			// b is before a
-			return true
-		case 0:
-			// a and b are identical; skip this whole subtree if the nodes have hashes
-			hasHash := it.a.Hash() == thor.Bytes32{}
-			if !it.b.Next(hasHash) {
-				return false
-			}
-			it.count++
-			if !it.a.Next(hasHash) {
-				it.eof = true
-				return true
-			}
-			it.count++
-		}
-	}
-}
-
-func (it *differenceIterator) Error() error {
-	if err := it.a.Error(); err != nil {
-		return err
-	}
-	return it.b.Error()
-}
-
-type nodeIteratorHeap []NodeIterator
-
-func (h nodeIteratorHeap) Len() int            { return len(h) }
-func (h nodeIteratorHeap) Less(i, j int) bool  { return compareNodes(h[i], h[j]) < 0 }
-func (h nodeIteratorHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
-func (h *nodeIteratorHeap) Push(x interface{}) { *h = append(*h, x.(NodeIterator)) }
-func (h *nodeIteratorHeap) Pop() interface{} {
-	n := len(*h)
-	x := (*h)[n-1]
-	*h = (*h)[0 : n-1]
-	return x
-}
-
-type unionIterator struct {
-	items *nodeIteratorHeap // Nodes returned are the union of the ones in these iterators
-	count int               // Number of nodes scanned across all tries
-}
-
-// NewUnionIterator constructs a NodeIterator that iterates over elements in the union
-// of the provided NodeIterators. Returns the iterator, and a pointer to an integer
-// recording the number of nodes visited.
-func NewUnionIterator(iters []NodeIterator) (NodeIterator, *int) {
-	h := make(nodeIteratorHeap, len(iters))
-	copy(h, iters)
-	heap.Init(&h)
-
-	ui := &unionIterator{items: &h}
-	return ui, &ui.count
-}
-
-func (it *unionIterator) Hash() thor.Bytes32 {
-	return (*it.items)[0].Hash()
-}
-
-func (it *unionIterator) Node(handler func(blob []byte) error) error {
-	return (*it.items)[0].Node(handler)
-}
-
-func (it *unionIterator) SeqNum() uint64 {
-	return (*it.items)[0].SeqNum()
-}
-
-func (it *unionIterator) Parent() thor.Bytes32 {
-	return (*it.items)[0].Parent()
-}
-
-func (it *unionIterator) Leaf() *Leaf {
-	return (*it.items)[0].Leaf()
-}
-
-func (it *unionIterator) LeafKey() []byte {
-	return (*it.items)[0].LeafKey()
-}
-
-func (it *unionIterator) LeafProof() [][]byte {
-	return (*it.items)[0].LeafProof()
-}
-
-func (it *unionIterator) Path() []byte {
-	return (*it.items)[0].Path()
-}
-
-// Next returns the next node in the union of tries being iterated over.
-//
-// It does this by maintaining a heap of iterators, sorted by the iteration
-// order of their next elements, with one entry for each source trie. Each
-// time Next() is called, it takes the least element from the heap to return,
-// advancing any other iterators that also point to that same element. These
-// iterators are called with descend=false, since we know that any nodes under
-// these nodes will also be duplicates, found in the currently selected iterator.
-// Whenever an iterator is advanced, it is pushed back into the heap if it still
-// has elements remaining.
-//
-// In the case that descend=false - eg, we're asked to ignore all subnodes of the
-// current node - we also advance any iterators in the heap that have the current
-// path as a prefix.
-func (it *unionIterator) Next(descend bool) bool {
-	if len(*it.items) == 0 {
-		return false
-	}
-
-	// Get the next key from the union
-	least := heap.Pop(it.items).(NodeIterator)
-
-	// Skip over other nodes as long as they're identical, or, if we're not descending, as
-	// long as they have the same prefix as the current node.
-	for len(*it.items) > 0 && ((!descend && bytes.HasPrefix((*it.items)[0].Path(), least.Path())) || compareNodes(least, (*it.items)[0]) == 0) {
-		skipped := heap.Pop(it.items).(NodeIterator)
-		// Skip the whole subtree if the nodes have hashes; otherwise just skip this node
-		if skipped.Next(skipped.Hash() == thor.Bytes32{}) {
-			it.count++
-			// If there are more elements, push the iterator back on the heap
-			heap.Push(it.items, skipped)
-		}
-	}
-
-	if least.Next(descend) {
-		it.count++
-		heap.Push(it.items, least)
-	}
-
-	return len(*it.items) > 0
-}
-
-func (it *unionIterator) Error() error {
-	for i := 0; i < len(*it.items); i++ {
-		if err := (*it.items)[i].Error(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
