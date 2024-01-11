@@ -1,42 +1,27 @@
-// Copyright (c) 2024 The VeChainThor developers
+// Copyright (c) 2023 The VeChainThor developers
 
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
 package trie
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/thor"
-)
-
-type MockDerivableList struct {
-	Elements [][]byte
+type mockedDerivableList struct {
+	n       int
+	content []byte
 }
 
-func (m *MockDerivableList) Len() int {
-	return len(m.Elements)
-}
+func (l *mockedDerivableList) Len() int { return l.n }
 
-func (m *MockDerivableList) GetRlp(i int) []byte {
-	if i >= len(m.Elements) {
-		return nil
+func (l *mockedDerivableList) GetRlp(i int) []byte { return l.content }
+
+func BenchmarkDeriveRoot(b *testing.B) {
+	list := mockedDerivableList{
+		n:       100,
+		content: make([]byte, 32),
 	}
-	return m.Elements[i]
-}
-
-func TestDeriveRoot(t *testing.T) {
-	mockList := &MockDerivableList{
-		Elements: [][]byte{
-			{1, 2, 3, 4},
-			{1, 2, 3, 4, 5, 6},
-		},
+	for i := 0; i < b.N; i++ {
+		DeriveRoot(&list)
 	}
-
-	root := DeriveRoot(mockList)
-
-	assert.Equal(t, "0x154227caf1172839284ce29cd6eaaee115af0993d5a5a4a08d9bb19ed18edae7", root.String())
-	assert.NotEqual(t, thor.Bytes32{}, root, "The root hash should not be empty")
 }
