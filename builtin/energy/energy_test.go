@@ -35,11 +35,83 @@ func TestEnergy(t *testing.T) {
 		{M(eng.Get(acc)), M(big.NewInt(10), nil)},
 		{M(eng.Sub(acc, big.NewInt(5))), M(true, nil)},
 		{M(eng.Sub(acc, big.NewInt(6))), M(false, nil)},
+		{eng.Add(acc, big.NewInt(0)), nil},
+		{M(eng.Sub(acc, big.NewInt(0))), M(true, nil)},
 	}
 
 	for _, tt := range tests {
 		assert.Equal(t, tt.expected, tt.ret)
 	}
+}
+
+func TestInitialSupply(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+
+	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
+
+	supply, err := eng.getInitialSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, supply, initialSupply{Token: big.NewInt(123), Energy: big.NewInt(456), BlockTime: 0x0})
+}
+
+func TestInitialSupplyError(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	eng := New(thor.BytesToAddress([]byte("a1")), st, 0)
+
+	eng.SetInitialSupply(big.NewInt(0), big.NewInt(0))
+
+	supply, err := eng.getInitialSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, supply, initialSupply{Token: big.NewInt(0), Energy: big.NewInt(0), BlockTime: 0x0})
+}
+
+func TestTotalSupply(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+
+	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
+
+	totalSupply, err := eng.TotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, totalSupply, big.NewInt(456))
+}
+
+func TestTokenTotalSupply(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+
+	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
+
+	totalTokenSupply, err := eng.TokenTotalSupply()
+
+	assert.Nil(t, err)
+	assert.Equal(t, totalTokenSupply, big.NewInt(123))
+}
+
+func TestTotalBurned(t *testing.T) {
+	db := muxdb.NewMem()
+	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
+
+	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
+
+	totalBurned, err := eng.TotalBurned()
+
+	assert.Nil(t, err)
+	assert.Equal(t, totalBurned, big.NewInt(0))
 }
 
 func TestEnergyGrowth(t *testing.T) {
