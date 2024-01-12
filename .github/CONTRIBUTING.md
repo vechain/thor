@@ -34,7 +34,8 @@ current development landscape.
     ```bash
     make test
     ```
-    - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on how to start the node and interact with the
+    - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on
+      how to start the node and interact with the
       API.
 5. Make your changes and commit them with a clear and concise commit message.
 6. Push your changes to your forked repository:
@@ -57,3 +58,49 @@ current development landscape.
 
 - We follow the [Effective Go](https://golang.org/doc/effective_go) guidelines. Please make sure your code is idiomatic
   and follows the guidelines.
+
+## Testing
+
+### Unit Tests
+
+```bash
+make test
+```
+
+### Unit Tests with Coverage
+
+```bash
+make test-coverage
+```
+
+### E2E Tests
+
+Our E2E tests are written in TypeScript, utilizing hardhat contract solidity development tools. Before running the E2E
+tests, ensure you have the following prerequisites installed:
+
+- [Docker](https://docs.docker.com/get-docker/)
+- [Node.js](https://nodejs.org/en/download/)
+- [Yarn](https://classic.yarnpkg.com/en/docs/install/)
+- [Git](https://git-scm.com/downloads)
+
+
+The E2E tests are located in the tests/thor-e2e-tests directory as a submodule. If you haven't initialized the submodule yet, run:
+
+```bash
+git submodule update --init --recursive
+```
+
+To run the E2E tests, build the Docker image first:
+
+```bash
+docker build -t vechain/thor-e2e .
+export THOR_IMAGE=vechain/thor-e2e
+```
+
+Then, you can run the tests:
+
+```bash
+cd tests/thor-e2e-tests
+yarn install
+yarn test
+```
