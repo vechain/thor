@@ -56,6 +56,34 @@ func newReceipt() *tx.Receipt {
 	}
 }
 
+func newEventOnlyReceipt() *tx.Receipt {
+	return &tx.Receipt{
+		Outputs: []*tx.Output{
+			{
+				Events: tx.Events{{
+					Address: randAddress(),
+					Topics:  []thor.Bytes32{randBytes32()},
+					Data:    randBytes32().Bytes(),
+				}},
+			},
+		},
+	}
+}
+
+func newTransferOnlyReceipt() *tx.Receipt {
+	return &tx.Receipt{
+		Outputs: []*tx.Output{
+			{
+				Transfers: tx.Transfers{{
+					Sender:    randAddress(),
+					Recipient: randAddress(),
+					Amount:    new(big.Int).SetBytes(randAddress().Bytes()),
+				}},
+			},
+		},
+	}
+}
+
 type eventLogs []*logdb.Event
 
 func (logs eventLogs) Filter(f func(ev *logdb.Event) bool) (ret eventLogs) {
@@ -161,10 +189,13 @@ func TestEvents(t *testing.T) {
 			want eventLogs
 		}{
 			{"query all events", &logdb.EventFilter{}, allEvents},
+			{"query all events with nil option", nil, allEvents},
 			{"query all events asc", &logdb.EventFilter{Order: logdb.ASC}, allEvents},
 			{"query all events desc", &logdb.EventFilter{Order: logdb.DESC}, allEvents.Reverse()},
 			{"query all events limit offset", &logdb.EventFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allEvents[1:11]},
 			{"query all events range", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 })},
+			{"query events with range and desc", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse()},
+			{"query events with limit with desc", &logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allEvents.Reverse()[0:10]},
 			{"query all events with criteria", &logdb.EventFilter{CriteriaSet: []*logdb.EventCriteria{{Address: &allEvents[1].Address}}}, allEvents.Filter(func(ev *logdb.Event) bool {
 				return ev.Address == allEvents[1].Address
 			})},
@@ -189,10 +220,13 @@ func TestEvents(t *testing.T) {
 			want transferLogs
 		}{
 			{"query all transfers", &logdb.TransferFilter{}, allTransfers},
+			{"query all transfers with nil option", nil, allTransfers},
 			{"query all transfers asc", &logdb.TransferFilter{Order: logdb.ASC}, allTransfers},
 			{"query all transfers desc", &logdb.TransferFilter{Order: logdb.DESC}, allTransfers.Reverse()},
 			{"query all transfers limit offset", &logdb.TransferFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allTransfers[1:11]},
 			{"query all transfers range", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 })},
+			{"query transfers with range and desc", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse()},
+			{"query transfers with limit with desc", &logdb.TransferFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allTransfers.Reverse()[0:10]},
 			{"query all transfers with criteria", &logdb.TransferFilter{CriteriaSet: []*logdb.TransferCriteria{{Sender: &allTransfers[1].Sender}}}, allTransfers.Filter(func(tr *logdb.Transfer) bool {
 				return tr.Sender == allTransfers[1].Sender
 			})},
@@ -209,4 +243,190 @@ func TestEvents(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestLogDB_NewestBlockID(t *testing.T) {
+	db, err := logdb.NewMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	b := new(block.Builder).Build()
+
+	b = new(block.Builder).
+		ParentID(b.Header().ID()).
+		Transaction(newTx()).
+		Build()
+	receipts := tx.Receipts{newReceipt()}
+
+	w := db.NewWriter()
+	if err := w.Write(b, receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		prepare func() (thor.Bytes32, error)
+	}{
+		{
+			"newest block id",
+			func() (thor.Bytes32, error) {
+				return b.Header().ID(), nil
+			},
+		}, {
+			"add empty block, best should remain unchanged",
+			func() (thor.Bytes32, error) {
+				wanted := b.Header().ID()
+				b = new(block.Builder).ParentID(b.Header().ID()).Build()
+				receipts = tx.Receipts{}
+
+				w := db.NewWriter()
+				if err := w.Write(b, receipts); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				if err := w.Commit(); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				return wanted, nil
+			},
+		},
+		{
+			"add both event and transfer, best should change",
+			func() (thor.Bytes32, error) {
+				b = new(block.Builder).
+					ParentID(b.Header().ID()).
+					Transaction(newTx()).
+					Build()
+				receipts := tx.Receipts{newReceipt()}
+
+				w := db.NewWriter()
+				if err := w.Write(b, receipts); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				if err := w.Commit(); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				return b.Header().ID(), nil
+			},
+		},
+		{
+			"add event only, best should change",
+			func() (thor.Bytes32, error) {
+				b = new(block.Builder).
+					ParentID(b.Header().ID()).
+					Transaction(newTx()).
+					Build()
+				receipts := tx.Receipts{newEventOnlyReceipt()}
+
+				w := db.NewWriter()
+				if err := w.Write(b, receipts); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				if err := w.Commit(); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				return b.Header().ID(), nil
+			},
+		},
+		{
+			"add transfer only, best should change",
+			func() (thor.Bytes32, error) {
+				b = new(block.Builder).
+					ParentID(b.Header().ID()).
+					Transaction(newTx()).
+					Build()
+				receipts := tx.Receipts{newTransferOnlyReceipt()}
+
+				w := db.NewWriter()
+				if err := w.Write(b, receipts); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				if err := w.Commit(); err != nil {
+					return thor.Bytes32{}, nil
+				}
+				return b.Header().ID(), nil
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want, err := tt.prepare()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := db.NewestBlockID()
+			if err != nil {
+				t.Fatal(err)
+			}
+			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestLogDB_HasBlockID(t *testing.T) {
+	db, err := logdb.NewMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	b0 := new(block.Builder).Build()
+
+	b := new(block.Builder).
+		ParentID(b0.Header().ID()).
+		Transaction(newTx()).
+		Build()
+	b1 := b.Header().ID()
+	receipts := tx.Receipts{newReceipt()}
+
+	w := db.NewWriter()
+	_ = w.Write(b, receipts)
+
+	b = new(block.Builder).
+		ParentID(b1).
+		Build()
+	b2 := b.Header().ID()
+	receipts = tx.Receipts{}
+	_ = w.Write(b, receipts)
+
+	b = new(block.Builder).
+		ParentID(b2).
+		Transaction(newTx()).
+		Build()
+	b3 := b.Header().ID()
+	receipts = tx.Receipts{newEventOnlyReceipt()}
+	_ = w.Write(b, receipts)
+
+	if err := w.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	has, err := db.HasBlockID(b0.Header().ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.False(t, has)
+
+	has, err = db.HasBlockID(b1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.True(t, has)
+
+	has, err = db.HasBlockID(b2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.False(t, has)
+
+	has, err = db.HasBlockID(b3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.True(t, has)
+
 }
