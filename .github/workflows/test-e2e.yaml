@@ -72,10 +72,6 @@ jobs:
           yarn install
           yarn test:report
 
-      - name: Debug
-        run: |
-            ls -la ./tests/thor-e2e-tests
-
       - name: Publish Results
         uses: dorny/test-reporter@v1
         id: test-reporter
