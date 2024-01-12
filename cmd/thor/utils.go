@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
@@ -34,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
-	tty "github.com/mattn/go-tty"
+	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
@@ -49,7 +48,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 func initLogger(ctx *cli.Context) {
@@ -146,7 +145,7 @@ func handleXGenesisID(h http.Handler, genesisID thor.Bytes32) http.Handler {
 		}
 		w.Header().Set(headerKey, expectedID)
 		if actualID != "" && actualID != expectedID {
-			io.Copy(ioutil.Discard, r.Body)
+			io.Copy(io.Discard, r.Body)
 			http.Error(w, "genesis id mismatch", http.StatusForbidden)
 			return
 		}
@@ -445,7 +444,7 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
-	if data, err := ioutil.ReadFile(peersCachePath); err != nil {
+	if data, err := os.ReadFile(peersCachePath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warn("failed to load peers cache", "err", err)
 		}
@@ -500,7 +499,7 @@ func (p *p2pComm) Stop() {
 		log.Warn("failed to encode cached peers", "err", err)
 		return
 	}
-	if err := ioutil.WriteFile(p.peersCachePath, data, 0600); err != nil {
+	if err := os.WriteFile(p.peersCachePath, data, 0600); err != nil {
 		log.Warn("failed to write peers cache", "err", err)
 	}
 }

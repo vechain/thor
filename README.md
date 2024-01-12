@@ -40,6 +40,8 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
+To see a list of all available commands, run `make help`
+
 ### Building
 
 To build the main app `thor`, just run
@@ -209,3 +211,5 @@ A special shout out to following projects:
 Vechain Thor is licensed under the
 [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included
 in *LICENSE* file in repository.
+
+
