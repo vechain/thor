@@ -74,8 +74,7 @@ jobs:
 
       - name: Debug
         run: |
-            pwd
-            ls -la
+            ls -la ./tests/thor-e2e-tests
 
       - name: Publish Results
         uses: dorny/test-reporter@v1
@@ -89,7 +88,7 @@ jobs:
           fail-on-error: 'true'
           reporter: 'mocha-json'
           path: |
-            ./results.json
+            ./tests/thor-e2e-tests/results.json
 
       - name: Echo Report URL
         run: |
