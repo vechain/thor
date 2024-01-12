@@ -72,6 +72,11 @@ jobs:
           yarn install
           yarn test:report
 
+      - name: Debug
+        run: |
+            pwd
+            ls -la
+
       - name: Publish Results
         uses: dorny/test-reporter@v1
         id: test-reporter
