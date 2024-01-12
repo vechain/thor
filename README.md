@@ -40,6 +40,8 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
+To see a list of all available commands, run `make help`
+
 ### Building
 
 To build the main app `thor`, just run

@@ -61,4 +61,4 @@ current development landscape.
 ### Code Linting
 
 - We employ `golangci-lint` for code linting in our development process. It ensures that code adheres to established standards, and any changes that do not pass the linting checks will trigger an error during the Continuous Integration (CI) process.
-- You can run it locally by installing the `golangci-lint` binary and running `golangci-lint run` in the root directory of the repository.
+- You can run it locally by installing the `golangci-lint` binary and running `make lint` in the root directory of the repository.

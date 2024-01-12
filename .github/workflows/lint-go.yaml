@@ -23,9 +23,8 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: v1.54
-          # use the default if on main branch, otherwise use the pull request config
-          args: --timeout=30m --config=${{ github.event_name == 'pull_request' && '.golangci.pull-request.yml' || '.golangci.yml' }}
-          only-new-issues: ${{ github.event_name == 'pull_request' }}
+          args: --timeout=30m
+          only-new-issues: true
           skip-cache: true
           skip-pkg-cache: true
           skip-build-cache: true
