@@ -84,7 +84,7 @@ jobs:
           fail-on-error: 'true'
           reporter: 'mocha-json'
           path: |
-            ./tests/thor-e2e-results/results.json
+            ./results.json
 
       - name: Echo Report URL
         run: |
