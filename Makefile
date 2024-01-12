@@ -55,10 +55,10 @@ test-coverage:| go_version_check #@ Run the tests with coverage
 	@go tool cover -html=coverage.out
 
 lint_command_check:
-	@command -v golangci-lint || (echo "golangci-lint not found, please install it from https://golangci-lint.run/usage/install/")
+	@command -v golangci-lint || (echo "golangci-lint not found, please install it from https://golangci-lint.run/usage/install/" && exit 1)
 
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint' on new code changes
-	@golangci-lint run --new
+	@golangci-lint run --new --config .golangci.pull-request.yml
 
 lint-all: | go_version_check lint_command_check #@ Run 'golangci-lint' on the entire codebase
-	@golangci-lint run
+	@golangci-lint run --config .golangci.yml
