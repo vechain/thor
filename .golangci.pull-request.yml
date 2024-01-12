@@ -3,9 +3,7 @@
 # https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
 
 linters:
-  disable:
-    - unused
-    - errcheck
+  enable-all: true
 
 run:
   timeout: 10m
