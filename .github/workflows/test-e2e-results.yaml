@@ -1,0 +1,28 @@
+name: 'E2E Test Report'
+
+on:
+  workflow_run:
+    workflows: ['E2E Tests']
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/test-reporter@v1
+        id: test-reporter
+        with:
+          artifact: test-results
+          name: JEST Tests
+          path: '*.xml'
+          reporter: jest-junit
+
+      - name: Echo Report URL
+        run: |
+          echo ${{steps.test-reporter.outputs.url_html}}

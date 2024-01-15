@@ -64,25 +64,16 @@ jobs:
         run: |
           docker load --input /tmp/vechain-thor.tar
           docker image ls -a
+
       - name: Run Tests
         working-directory: ./tests/thor-e2e-tests
         run: |
           export THOR_IMAGE=vechain/thor:${{ github.sha }}
           yarn install
           yarn test
-      - name: Publish Results
-        uses: dorny/test-reporter@v1
-        id: test-reporter
+
+      - uses: actions/upload-artifact@v3
         if: success() || failure()
         with:
-          name: E2E Test Results
-          only-summary: 'false'
-          list-suites: 'all'
-          list-tests: 'failed'
-          fail-on-error: 'true'
-          reporter: "jest-junit"
-          path: |
-            ./tests/thor-e2e-tests/junit.xml
-      - name: Echo Report URL
-        run: |
-          echo ${{steps.test-reporter.outputs.url_html}}
+          name: e2e-test-results
+          path: ./tests/thor-e2e-tests/junit.xml
