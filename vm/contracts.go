@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	// nolint:staticcheck
 	"golang.org/x/crypto/ripemd160"
 
 	"github.com/vechain/thor/v2/blake2b"

@@ -199,10 +199,8 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 	r = newR
 
 	r2.Square(&minusQ2.y)
-	//nolint: staticcheck
 	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
 	mulLine(ret, a, b, c)
-	//nolint: staticcheck
 	r = newR
 
 	return ret
