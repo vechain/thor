@@ -19,7 +19,7 @@ jobs:
         id: test-reporter
         with:
           artifact: test-results
-          name: JEST Tests
+          name: E2E Test Report
           path: '*.xml'
           reporter: jest-junit
 
