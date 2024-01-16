@@ -40,6 +40,8 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
+To see a list of all available commands, run `make help`
+
 ### Building
 
 To build the main app `thor`, just run
@@ -149,9 +151,33 @@ docker run -d\
   --name thor-node vechain/thor --network test
 ```
 
-Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without the flag.
+_Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without the flag._
 
 Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0) to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
+
+
+### Docker Compose
+
+A `docker-compose.yml` file is provided for convenience. It will create a container with the same configuration as the command above.
+
+```yaml
+version: '3.8.'
+
+services:
+  thor-node:
+    image: vechain/thor
+    container_name: thor-node
+    command: --network test --api-addr 0.0.0.0:8669
+    volumes:
+      - thor-data:/home/thor
+    ports:
+      - "8669:8669"
+      - "11235:11235"
+      - "11235:11235/udp"
+
+volumes:
+  thor-data:
+```
 
 ## Explorers
 

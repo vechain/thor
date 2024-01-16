@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -22,7 +21,7 @@ func fetchRemoteBootstrapNodes(ctx context.Context, remoteURL string) ([]*discv5
 		return nil, err
 	}
 	defer resp.Body.Close()
-	defer io.Copy(ioutil.Discard, resp.Body)
+	defer io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http fetch failed: statusCode=%d", resp.StatusCode)

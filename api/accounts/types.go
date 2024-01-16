@@ -59,9 +59,7 @@ func convertCallResultWithInputGas(vo *runtime.Output, inputGas uint64) *CallRes
 			Data:    hexutil.Encode(txEvent.Data),
 		}
 		event.Topics = make([]thor.Bytes32, len(txEvent.Topics))
-		for k, topic := range txEvent.Topics {
-			event.Topics[k] = topic
-		}
+		copy(event.Topics, txEvent.Topics)
 		events[j] = event
 	}
 	for j, txTransfer := range vo.Transfers {
