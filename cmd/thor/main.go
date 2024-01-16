@@ -8,7 +8,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,7 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
-	isatty "github.com/mattn/go-isatty"
+	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
@@ -30,7 +30,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
@@ -355,7 +355,7 @@ func masterKeyAction(ctx *cli.Context) error {
 		if isatty.IsTerminal(os.Stdin.Fd()) {
 			fmt.Println("Input JSON keystore (end with ^d):")
 		}
-		keyjson, err := ioutil.ReadAll(os.Stdin)
+		keyjson, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return err
 		}
