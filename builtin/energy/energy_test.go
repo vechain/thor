@@ -50,10 +50,14 @@ func TestInitialSupply(t *testing.T) {
 
 	eng := New(thor.BytesToAddress([]byte("eng")), st, 0)
 
+	// get initial supply before set should return 0
+	supply, err := eng.getInitialSupply()
+	assert.Nil(t, err)
+	assert.Equal(t, supply, initialSupply{Token: big.NewInt(0), Energy: big.NewInt(0), BlockTime: 0x0})
+
 	eng.SetInitialSupply(big.NewInt(123), big.NewInt(456))
 
-	supply, err := eng.getInitialSupply()
-
+	supply, err = eng.getInitialSupply()
 	assert.Nil(t, err)
 	assert.Equal(t, supply, initialSupply{Token: big.NewInt(123), Energy: big.NewInt(456), BlockTime: 0x0})
 }
