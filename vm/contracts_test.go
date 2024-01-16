@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.
@@ -316,4 +318,129 @@ func loadJsonFail(name string) ([]precompiledFailureTest, error) {
 	var testcases []precompiledFailureTest
 	err = json.Unmarshal(data, &testcases)
 	return testcases, err
+}
+
+func TestAsDelegate(t *testing.T) {
+	// Mock addresses
+	parentCallerAddress := common.HexToAddress("0x01")
+	objectAddress := common.HexToAddress("0x03")
+
+	// Create a parent contract to act as the caller
+	parentContract := NewContract(AccountRef(parentCallerAddress), AccountRef(parentCallerAddress), big.NewInt(2000), 5000)
+
+	// Create a child contract, which will be turned into a delegate
+	childContract := NewContract(parentContract, AccountRef(objectAddress), big.NewInt(2000), 5000)
+
+	// Call AsDelegate on the child contract
+	delegatedContract := childContract.AsDelegate()
+
+	// Perform your test assertions
+	assert.True(t, delegatedContract.DelegateCall, "Contract should be in delegate call mode")
+	assert.Equal(t, parentContract.CallerAddress, delegatedContract.CallerAddress, "Caller address should match parent contract caller address")
+	assert.Equal(t, parentContract.value, delegatedContract.value, "Value should match parent contract value")
+}
+
+func TestValidJumpdest(t *testing.T) {
+	// Example bytecode: PUSH1 0x02 JUMPDEST STOP
+	code := []byte{0x60, 0x02, 0x5b, 0x00}
+
+	contract := &Contract{
+		Code: code,
+	}
+
+	// Test a valid jump destination (position of JUMPDEST opcode)
+	validDest := uint256.NewInt(2)
+	assert.True(t, contract.validJumpdest(validDest), "Expected valid jump destination")
+
+	// Test an invalid jump destination (within PUSH1 data)
+	invalidDest := uint256.NewInt(1)
+	assert.False(t, contract.validJumpdest(invalidDest), "Expected invalid jump destination due to being within PUSH data")
+
+	// Test an invalid jump destination (non-existent opcode)
+	nonExistentDest := uint256.NewInt(100)
+	assert.False(t, contract.validJumpdest(nonExistentDest), "Expected invalid jump destination due to non-existent opcode")
+
+	// Test a non-JUMPDEST opcode (STOP opcode)
+	nonJumpdestOpcode := uint256.NewInt(3)
+	assert.False(t, contract.validJumpdest(nonJumpdestOpcode), "Expected invalid jump destination due to non-JUMPDEST opcode")
+
+	// Test edge cases
+	// Destination right at the start of the code
+	startOfCode := uint256.NewInt(0)
+	assert.False(t, contract.validJumpdest(startOfCode), "Expected invalid jump destination at the start of the code")
+
+	// Destination right at the end of the code
+	endOfCode := uint256.NewInt(uint64(len(code) - 1))
+	assert.False(t, contract.validJumpdest(endOfCode), "Expected invalid jump destination at the end of the code")
+}
+
+func TestIsCode(t *testing.T) {
+	// Example bytecode: PUSH1 0x02 JUMPDEST STOP
+	code := []byte{0x60, 0x02, 0x5b, 0x00}
+
+	contract := &Contract{
+		Code: code,
+	}
+
+	// Test when analysis is not set
+	assert.False(t, contract.isCode(1), "Position 1 should not be valid code")
+	assert.True(t, contract.isCode(2), "Position 2 should be valid code")
+
+	// Test that analysis is now set after calling isCode
+	assert.NotNil(t, contract.analysis, "Analysis should be set after calling isCode")
+}
+
+func setupContract() *Contract {
+	return &Contract{
+		CallerAddress: common.HexToAddress("0x01"),
+		value:         big.NewInt(1000),
+		Code:          []byte{0x60, 0x02, 0x5b, 0x00}, // Example bytecode
+		CodeHash:      common.HexToHash("somehash"),
+		CodeAddr:      new(common.Address),
+	}
+}
+
+func TestGetOp(t *testing.T) {
+	contract := setupContract()
+	assert.Equal(t, OpCode(0x60), contract.GetOp(0), "Expected OpCode at position 0 to match")
+	assert.Equal(t, OpCode(0x5b), contract.GetOp(2), "Expected OpCode at position 2 to match")
+}
+
+func TestGetByte(t *testing.T) {
+	contract := setupContract()
+	assert.Equal(t, byte(0x60), contract.GetByte(0), "Expected byte at position 0 to match")
+	assert.Equal(t, byte(0x00), contract.GetByte(3), "Expected byte at position 3 to match")
+	assert.Equal(t, byte(0x00), contract.GetByte(10), "Expected byte at out of bounds position to be 0")
+}
+
+func TestCaller(t *testing.T) {
+	contract := setupContract()
+	assert.Equal(t, common.HexToAddress("0x01"), contract.Caller(), "Expected caller address to match")
+}
+
+func TestValue(t *testing.T) {
+	contract := setupContract()
+	assert.Equal(t, big.NewInt(1000), contract.Value(), "Expected value to match")
+}
+
+func TestSetCode(t *testing.T) {
+	contract := setupContract()
+	newCode := []byte{0x01, 0x02}
+	newHash := common.HexToHash("newhash")
+	contract.SetCode(newHash, newCode)
+
+	assert.Equal(t, newCode, contract.Code, "Expected code to be updated")
+	assert.Equal(t, newHash, contract.CodeHash, "Expected code hash to be updated")
+}
+
+func TestSetCallCode(t *testing.T) {
+	contract := setupContract()
+	newCode := []byte{0x03, 0x04}
+	newHash := common.HexToHash("newerhash")
+	newAddr := common.HexToAddress("0x02")
+	contract.SetCallCode(&newAddr, newHash, newCode)
+
+	assert.Equal(t, newCode, contract.Code, "Expected code to be updated")
+	assert.Equal(t, newHash, contract.CodeHash, "Expected codehash to be updated")
+	assert.Equal(t, &newAddr, contract.CodeAddr, "Expected code address to be updated")
 }
