@@ -37,10 +37,11 @@ const (
 
 // note attributes (higher 5 bits of node tag)
 const (
-	attrHasHash  = byte(1 << iota) // indicates a ref node has the hash field
-	attrHasMajor                   // indicates a ref node has the ver.Major field
-	attrHasMinor                   // indicates a ref node has the ver.Minor field
-	attrHasMeta                    // indicates a value node has the meta field
+	attrHasHash    = byte(1 << iota) // indicates a ref node has the hash field
+	attrHasMajor                     // indicates a ref node has the ver.Major field
+	attrHasMinor                     // indicates a ref node has the ver.Minor field
+	attrHasMeta                      // indicates a value node has the meta field
+	attrHasManyRef                   // indicates a full node contains many ref nodes
 )
 
 type node interface {
@@ -144,7 +145,7 @@ func decodeNode(ref *refNode, buf []byte, cacheGen uint16) (node, []byte, error)
 		}
 		return n, rest, nil
 	case kindRef:
-		n, rest, err := decodeRef(buf, attrs)
+		n, rest, err := decodeRef(&refNode{}, buf, attrs)
 		if err != nil {
 			return nil, nil, wrapError(err, "ref")
 		}
@@ -162,8 +163,9 @@ func decodeNode(ref *refNode, buf []byte, cacheGen uint16) (node, []byte, error)
 
 func decodeFull(ref *refNode, buf []byte, cacheGen uint16, attrs byte) (*fullNode, []byte, error) {
 	var (
-		n   = fullNode{flags: nodeFlag{gen: cacheGen}}
-		err error
+		n    = fullNode{flags: nodeFlag{gen: cacheGen}}
+		err  error
+		refs []refNode // prealloced ref nodes
 	)
 	if ref != nil {
 		n.flags.ref = *ref
@@ -171,9 +173,27 @@ func decodeFull(ref *refNode, buf []byte, cacheGen uint16, attrs byte) (*fullNod
 		n.flags.dirty = true
 	}
 
+	// prealloc an array of refNode, to reduce alloc count
+	if (attrs & attrHasManyRef) != 0 {
+		refs = make([]refNode, 16)
+	}
+
 	for i := range n.children {
-		if n.children[i], buf, err = decodeNode(nil, buf, cacheGen); err != nil {
-			return nil, nil, wrapError(err, fmt.Sprintf("[%d]", i))
+		if tag := buf[0]; tag&0x7 == kindRef {
+			var ref *refNode
+			if len(refs) > 0 {
+				ref = &refs[0]
+				refs = refs[1:]
+			} else {
+				ref = &refNode{}
+			}
+			if n.children[i], buf, err = decodeRef(ref, buf[1:], tag>>3); err != nil {
+				return nil, nil, wrapError(err, fmt.Sprintf("[%d]", i))
+			}
+		} else {
+			if n.children[i], buf, err = decodeNode(nil, buf, cacheGen); err != nil {
+				return nil, nil, wrapError(err, fmt.Sprintf("[%d]", i))
+			}
 		}
 	}
 	return &n, buf, nil
@@ -223,11 +243,9 @@ func decodeValue(buf []byte, attrs byte) (*valueNode, []byte, error) {
 	return &n, buf, nil
 }
 
-func decodeRef(buf []byte, attrs byte) (*refNode, []byte, error) {
-	var (
-		n   refNode
-		err error
-	)
+func decodeRef(n *refNode, buf []byte, attrs byte) (*refNode, []byte, error) {
+	var err error
+
 	// decode hash
 	if (attrs & attrHasHash) != 0 {
 		if n.hash, buf, err = vp.SplitString(buf); err != nil {
@@ -246,7 +264,7 @@ func decodeRef(buf []byte, attrs byte) (*refNode, []byte, error) {
 			return nil, nil, err
 		}
 	}
-	return &n, buf, nil
+	return n, buf, nil
 }
 
 // wraps a decoding error with information about the path to the
@@ -272,20 +290,31 @@ func (err *decodeError) Error() string {
 }
 
 func (n *fullNode) encode(buf []byte, skipHash bool) []byte {
+	var (
+		tagPos   = len(buf)
+		nRefNode = 0
+	)
 	// encode tag
 	buf = append(buf, kindFull)
 
 	// encode children
 	for _, cn := range n.children {
-		if cn != nil {
+		switch cn := cn.(type) {
+		case *refNode:
+			buf = cn.encode(buf, skipHash)
+			nRefNode++
+		case nil:
+			buf = append(buf, kindEmpty)
+		default:
 			if ref, _, dirty := cn.cache(); dirty {
 				buf = cn.encode(buf, skipHash)
 			} else {
 				buf = ref.encode(buf, skipHash)
 			}
-		} else {
-			buf = append(buf, kindEmpty)
 		}
+	}
+	if nRefNode > 4 {
+		buf[tagPos] |= (attrHasManyRef << 3)
 	}
 	return buf
 }
@@ -358,14 +387,17 @@ func (n *fullNode) encodeConsensus(buf []byte) []byte {
 	offset := len(buf)
 
 	for _, cn := range n.children {
-		if cn != nil {
+		switch cn := cn.(type) {
+		case *refNode:
+			buf = cn.encodeConsensus(buf)
+		case nil:
+			buf = drlp.AppendString(buf, nil)
+		default:
 			if ref, _, _ := cn.cache(); ref.hash != nil {
 				buf = drlp.AppendString(buf, ref.hash)
 			} else {
 				buf = cn.encodeConsensus(buf)
 			}
-		} else {
-			buf = drlp.AppendString(buf, nil)
 		}
 	}
 	return drlp.EndList(buf, offset)
