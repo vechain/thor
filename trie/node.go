@@ -217,8 +217,14 @@ func decodeShort(ref *refNode, buf []byte, cacheGen uint16, attrs byte) (*shortN
 	}
 	n.key = compactToHex(compactKey)
 
-	// decode child node
-	if n.child, buf, err = decodeNode(nil, buf, cacheGen); err != nil {
+	if hasTerm(n.key) {
+		// decode value
+		n.child, buf, err = decodeValue(buf, attrs)
+	} else {
+		// decode child node
+		n.child, buf, err = decodeNode(nil, buf, cacheGen)
+	}
+	if err != nil {
 		return nil, nil, err
 	}
 	return &n, buf, nil
@@ -320,6 +326,10 @@ func (n *fullNode) encode(buf []byte, skipHash bool) []byte {
 }
 
 func (n *shortNode) encode(buf []byte, skipHash bool) []byte {
+	var (
+		attrs  byte
+		tagPos = len(buf)
+	)
 	// encode tag
 	buf = append(buf, kindShort)
 
@@ -327,11 +337,23 @@ func (n *shortNode) encode(buf []byte, skipHash bool) []byte {
 	buf = vp.AppendUint32(buf, uint32(compactLen(n.key)))
 	buf = appendHexToCompact(buf, n.key)
 
-	// encode child node
-	if ref, _, dirty := n.child.cache(); dirty {
-		buf = n.child.encode(buf, skipHash)
+	if hasTerm(n.key) {
+		vn := n.child.(*valueNode)
+		// encode value
+		buf = vp.AppendString(buf, vn.val)
+		// encode meta
+		if len(vn.meta) > 0 {
+			attrs |= attrHasMeta
+			buf = vp.AppendString(buf, vn.meta)
+		}
+		buf[tagPos] |= (attrs << 3)
 	} else {
-		buf = ref.encode(buf, skipHash)
+		// encode child node
+		if ref, _, dirty := n.child.cache(); dirty {
+			buf = n.child.encode(buf, skipHash)
+		} else {
+			buf = ref.encode(buf, skipHash)
+		}
 	}
 	return buf
 }
