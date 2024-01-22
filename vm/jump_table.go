@@ -17,8 +17,6 @@
 package vm
 
 import (
-	"errors"
-
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -28,8 +26,6 @@ type (
 	stackValidationFunc func(*Stack) error
 	memorySizeFunc      func(*Stack) (size uint64, overflow bool)
 )
-
-var errGasUintOverflow = errors.New("gas uint64 overflow")
 
 type operation struct {
 	// execute is the operation function
