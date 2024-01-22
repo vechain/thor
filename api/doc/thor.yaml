@@ -1054,7 +1054,7 @@ components:
             type: string
             example:
               - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
-    # TODO
+
     SubscriptionEventResponse:
       allOf:
         - $ref: '#/components/schemas/Event'
