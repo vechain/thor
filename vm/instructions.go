@@ -18,7 +18,6 @@ package vm
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -328,14 +327,14 @@ func opReturnDataCopy(_ *uint64, evm *EVM, _ *Contract, memory *Memory, stack *S
 	)
 	offset64, overflow := dataOffset.Uint64WithOverflow()
 	if overflow {
-		return nil, errReturnDataOutOfBounds
+		return nil, ErrReturnDataOutOfBounds
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
 	var end = dataOffset
 	end.Add(dataOffset, length)
 	end64, overflow := end.Uint64WithOverflow()
 	if overflow || uint64(len(evm.interpreter.returnData)) < end64 {
-		return nil, errReturnDataOutOfBounds
+		return nil, ErrReturnDataOutOfBounds
 	}
 	memory.Set(memOffset.Uint64(), length.Uint64(), evm.interpreter.returnData[offset64:end64])
 	return nil, nil
@@ -531,8 +530,7 @@ func opSstore(_ *uint64, evm *EVM, contract *Contract, _ *Memory, stack *Stack) 
 func opJump(pc *uint64, _ *EVM, contract *Contract, _ *Memory, stack *Stack) ([]byte, error) {
 	pos := stack.popptr()
 	if !contract.validJumpdest(pos) {
-		nop := contract.GetOp(pos.Uint64())
-		return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+		return nil, ErrInvalidJump
 	}
 	*pc = pos.Uint64()
 	return nil, nil
@@ -542,8 +540,7 @@ func opJumpi(pc *uint64, _ *EVM, contract *Contract, _ *Memory, stack *Stack) ([
 	pos, cond := stack.popptr(), stack.popptr()
 	if !cond.IsZero() {
 		if !contract.validJumpdest(pos) {
-			nop := contract.GetOp(pos.Uint64())
-			return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+			return nil, ErrInvalidJump
 		}
 		*pc = pos.Uint64()
 	} else {
