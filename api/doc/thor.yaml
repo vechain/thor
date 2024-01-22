@@ -743,14 +743,20 @@ components:
           type: string
           description: VET balance in wei, presented as a hexadecimal string.
           example: '0x47ff1f90327aa0f8e'
+          required: true
+          nullable: false
         energy:
           type: string
           description: Energy (VTHO) in wei, presented as a hexadecimal string.
           example: '0xcf624158d591398'
+          required: true
+          nullable: false
         hasCode:
           type: boolean
           description: Indicates whether the account is a contract (true) or not (false).
           example: false
+          required: true
+          nullable: false
       example:
         balance: '0x47ff1f90327aa0f8e'
         energy: '0xcf624158d591398'
@@ -828,6 +834,9 @@ components:
           type: string
           description: Contract bytecode, presented as a hexadecimal string.
           example: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
       example:
         code: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
 
@@ -837,6 +846,9 @@ components:
           type: string
           description: The value stored at the given storage position.
           example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
       example:
         value: '0x0000000000000000000000000000000000000000000000000000000000000001'
 
@@ -890,6 +902,9 @@ components:
             transactions:
               description: An array of transaction IDs
               type: array
+              required: true
+              nullable: false
+              minItems: 0
               items:
                 type: string
                 example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
@@ -901,6 +916,9 @@ components:
             transactions:
               description: All included transactions, expanded, to include their receipts
               type: array
+              required: true
+              nullable: false
+              minItems: 0
               items:
                 allOf:
                   - $ref: '#/components/schemas/Tx'
@@ -929,25 +947,41 @@ components:
     EventLogFilterRequest:
       properties:
         range:
-          $ref: '#/components/schemas/FilterRange'
+          items:
+            allOf:
+              - $ref: '#/components/schemas/FilterRange'
+          required: false
+          nullable: true
         options:
-          $ref: '#/components/schemas/FilterOptions'
+          items:
+            allOf:
+              - $ref: '#/components/schemas/FilterOptions'
+          required: false
+          nullable: true
         criteriaSet:
           type: array
+          required: false
+          nullable: true
+          minItems: 0
           items:
             $ref: '#/components/schemas/EventCriteria'
         order:
           description: |
-            <b>Optional:</b> Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
+            Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
             
             Default value: `asc`
           type: string
+          required: false
+          nullable: true
           enum:
             - asc
             - desc
 
     EventLogsResponse:
       type: array
+      minItems: 0
+      nullable: false
+      required: true
       items:
         allOf:
           - $ref: '#/components/schemas/Event'
@@ -958,23 +992,39 @@ components:
     TransferLogFilterRequest:
       properties:
         range:
-          $ref: '#/components/schemas/FilterRange'
+          items:
+            allOf:
+              - $ref: '#/components/schemas/FilterRange'
+          required: false
+          nullable: true
         options:
-          $ref: '#/components/schemas/FilterOptions'
+          items:
+            allOf:
+              - $ref: '#/components/schemas/FilterOptions'
+          required: false
+          nullable: true
         criteriaSet:
           type: array
+          nullable: true
+          required: false
+          minItems: 0
           items:
             $ref: '#/components/schemas/TransferCriteria'
         order:
           description: |
-            <b>Optional:</b> Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
+            Specifies the order of the results. Use `asc` for ascending order, and `desc` for descending order.
           type: string
+          required: false
+          nullable: true
           enum:
             - asc
             - desc
 
     TransferLogsResponse:
       type: array
+      minItems: 0
+      nullable: false
+      required: true
       items:
         allOf:
           - $ref: '#/components/schemas/Transfer'
@@ -983,6 +1033,9 @@ components:
             $ref: '#/components/schemas/LogMeta'
 
     GetPeersResponse:
+      minItems: 0
+      nullable: false
+      required: true
       items:
         $ref: '#/components/schemas/PeerStats'
 
@@ -994,18 +1047,24 @@ components:
         transactions:
           description: "An array of transaction IDs associated with the block."
           type: array
+          minItems: 0
+          nullable: false
+          required: true
           items:
             type: string
             example:
               - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
-
+    # TODO
     SubscriptionEventResponse:
       allOf:
         - $ref: '#/components/schemas/Event'
         - $ref: '#/components/schemas/Obsolete'
       properties:
         meta:
-          $ref: '#/components/schemas/LogMeta'
+          allOf:
+            - $ref: '#/components/schemas/LogMeta'
+          required: true
+          nullable: false
 
     SubscriptionTransferResponse:
       allOf:
@@ -1013,7 +1072,10 @@ components:
         - $ref: '#/components/schemas/Obsolete'
       properties:
         meta:
-          $ref: '#/components/schemas/LogMeta'
+          allOf:
+            - $ref: '#/components/schemas/LogMeta'
+          required: true
+          nullable: false
 
     SubscriptionBeat2Response:
       allOf:
@@ -1025,6 +1087,8 @@ components:
           description: |
             The gas limit of the block
           example: 12000000
+          nullable: false
+          required: true
 
     SubscriptionBeatResponse:
       allOf:
@@ -1036,30 +1100,42 @@ components:
           description: |
             The block number (height)
           example: 325324
+          required: true
+          nullable: false
         id:
           type: string
-          format: bytes32
+          format: hex
           description: |
             The block identifier
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
         parentID:
           type: string
-          format: bytes32
+          format: hex
           description: |
             The parent block identifier
           example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
         timestamp:
           type: integer
           format: uint64
           description: |
             The UNIX timestamp of the block
           example: 1533267900
+          required: true
+          nullable: false
         txsFeatures:
           type: integer
           format: uint32
           description: |
             The supported transaction features bitset
           example: 0
+          required: true
+          nullable: false
         bloom:
           type: string
           format: hex
@@ -1069,12 +1145,17 @@ components:
             The bloom filter is used to efficiently check whether an element is a member of a set,
             providing a summary of affected addresses related to new blocks.
           example: '0x0424c1ff47029280'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
         k:
           type: integer
           format: uint32
           description: |
             The number of hash functions for bloom filter
           example: 13
+          nullable: false
+          required: true
 
     PostDebugTracerRequest:
       allOf:
@@ -1107,18 +1188,26 @@ components:
       properties:
         blockID:
           type: string
-          description: The block identifier (bytes32) in which the transaction was included.
+          description: The block identifier in which the transaction was included.
+          format: hex
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
         blockNumber:
           type: integer
           format: uint32
           description: The block number (height) of the block in which the transaction was included.
           example: 325324
+          required: true
+          nullable: false
         blockTimestamp:
           type: integer
           format: uint64
           description: The UNIX timestamp of the block in which the transaction was included.
           example: 1533267900
+          required: true
+          nullable: false
       example:
         blockID: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         blockNumber: 325324
@@ -1132,26 +1221,38 @@ components:
           description: The block identifier in which the transaction was included.
           pattern: '^0x[0-9a-f]{64}$'
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          required: true
+          nullable: false
         blockNumber:
           type: integer
           format: uint32
           description: The block number (height) of the block in which the transaction was included.
           example: 325324
+          required: true
+          nullable: false
         blockTimestamp:
           type: integer
           format: uint64
           description: The UNIX timestamp of the block in which the transaction was included.
           example: 1533267900
+          required: true
+          nullable: false
         txID:
           type: string
+          format: hex
           description: The transaction identifier.
           pattern: '^0x[0-9a-f]{64}$'
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+          required: true
+          nullable: false
         txOrigin:
           type: string
           description: |
             The account from which the transaction was sent.
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{40}$'
       example:
         blockID: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
         blockNumber: 325324
@@ -1164,31 +1265,48 @@ components:
       properties:
         blockID:
           type: string
+          format: hex
           description: The block identifier in which the log was included.
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
         blockNumber:
           type: integer
           format: uint32
           description: The block number (height) of the block in which the log was included.
           example: 325324
+          required: true
+          nullable: false
         blockTimestamp:
           type: integer
           format: uint64
           description: The UNIX timestamp of the block in which the log was included.
           example: 1533267900
+          required: true
+          nullable: false
         txID:
           type: string
+          format: hex
           description: The transaction identifier, from which the log was generated.
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{64}$'
         txOrigin:
           type: string
           description: The account from which the transaction was sent.
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{40}$'
         clauseIndex:
           type: integer
           format: uint32
           description: The index of the clause in the transaction, from which the log was generated.
           example: 0
+          required: true
+          nullable: false
 
     Block:
       properties:
@@ -1197,75 +1315,112 @@ components:
           format: uint32
           description: The block number (height).
           example: 325324
+          nullable: false
+          required: true
         id:
           type: string
-          format: bytes32
+          format: hex
           description: The block identifier.
           example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{64}$'
         size:
           type: integer
           format: uint32
           description: The RLP encoded block size in bytes
           example: 373
+          nullable: false
+          required: true
         parentID:
           type: string
-          format: bytes32
+          format: hex
           description: The parent block identifier.
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{64}$'
           example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
         timestamp:
           type: integer
           format: uint64
           description: The UNIX timestamp of the block.
           example: 1533267900
+          nullable: false
+          required: true
         gasLimit:
           type: integer
           format: uint64
           description: The maximum amount of gas that all transactions inside the block are allowed to consume
           example: 11253579
+          nullable: false
+          required: true
         beneficiary:
           type: string
-          format: bytes32
+          format: hex
           description: The address assigned by the block proposer to receive the reward (in VTHO)
           example: '0xb4094c25f86d628fdd571afc4077f0d0196afb48'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         gasUsed:
           type: integer
           format: uint64
           description: The actual amount of gas used within the block
           example: 21000
+          nullable: false
+          required: true
         totalScore:
           type: integer
           format: uint64
           description: The accumulated witness number of the chain branch headed by the block
           example: 1029988
+          nullable: false
+          required: true
         txsRoot:
           type: string
-          format: bytes32
+          format: hex
           description: The root hash of transactions in the block
           example: '0x89dfd9fcd10c9e53d68592cf8b540b280b72d381b868523223992f3e09a806bb'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{64}$'
         txsFeatures:
           type: integer
           format: uint32
           description: The supported transaction features bitset
           example: 0
+          nullable: false
+          required: true
         stateRoot:
           type: string
-          format: bytes32
+          format: hex
           description: The root hash for the global state after applying changes in this block
           example: '0x86bcc6d214bc9d8d0dedba1012a63c8317d19ce97f60c8a2ef5c59bbd40d4261'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{64}$'
         receiptsRoot:
           type: string
-          format: bytes32
+          format: hex
           description: The hash of the transaction receipts trie
           example: '0x15787e2533c470e8a688e6cd17a1ee12d8457778d5f82d2c109e2d6226d8e54e'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{64}$'
         com:
           type: boolean
           description: Whether the block signer voted COM(Commit) in BFT
           example: true
+          nullable: false
+          required: true
         signer:
           type: string
-          format: bytes20
+          format: hex
           description: The address of the block signer
           example: '0xab7b27fc9e7d29f9f2e5bd361747a5515d0cc2d1'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
 
     Clause:
       properties:
@@ -1274,16 +1429,25 @@ components:
           description: |
             <b>Nullable:</b> The recipient of the clause. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
+          nullable: true
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         value:
           type: string
           description: |
             The hexadecimal representation of the amount (wei) of VET to be transferred.
           example: '0x47ff1f90327aa0f8e'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
         data:
           type: string
           description: |
             The input data for the clause (in bytes).
           example: '0xa9059cbb0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5000000000000'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]*$'
 
     Tx:
       properties:
@@ -1292,37 +1456,55 @@ components:
           description: The transaction identifier.
           example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
           pattern: '^0x[0-9a-f]{64}$'
+          required: true
+          nullable: false
         origin:
           type: string
           description: The address of the origin account.
           pattern: '^0x[0-9a-f]{40}$'
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          required: true
+          nullable: false
         delegator:
           type: string
           pattern: '^0x[0-9a-f]{40}$'
           description: The address of the sponsor / delegator account.
           example: null
+          required: true
+          nullable: true
         size:
           type: integer
           format: uint32
           description: Byte size of the transaction that is RLP encoded.
           example: 130
+          required: true
+          nullable: false
         chainTag:
           type: integer
           format: uint8
           description: The last byte of the genesis block ID.
           example: 39
+          required: true
+          nullable: false
         blockRef:
           type: string
           description: The first 8 bytes of a referenced block ID.
           example: '0x0004f6cb730dbd90'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-f]{16}$'
         expiration:
           type: integer
           format: uint32
           description: The expiration of the transaction, represented as the number of blocks after the `blockRef`
           example: 720
+          required: true
+          nullable: false
         clauses:
           type: array
+          minItems: 0
+          description: |
+            An array of clauses that are executed by the transaction.
           items:
             $ref: '#/components/schemas/Clause'
         gasPriceCoef:
@@ -1330,29 +1512,38 @@ components:
           format: uint8
           description: The coefficient used to calculate the final gas price of the transaction.
           example: 0
+          required: true
+          nullable: false
         gas:
           type: integer
           format: uint64
           description: The max amount of gas that can be used by the transaction.
           example: 21000
+          required: true
+          nullable: false
         dependsOn:
           type: string
-          format: bytes32
-          description: <b>Optional</b>:The transaction ID that this transaction depends on.
+          format: hex
+          description: The transaction ID that this transaction depends on.
           example: null
+          required: true
+          nullable: true
         nonce:
           type: string
           example: '0x29c257e36ea6e72a'
           description: |
             The transaction `nonce` is a 64-bit unsigned integer that is determined by the transaction sender.
-
-
+                    required: true
+          nullable: false
+          required: true
 
     RawTx:
       properties:
         raw:
           type: string
           description: The raw RLP encoded transaction.
+          required: true
+          nullable: false
           example: '0xf901854a880104c9cf34b0f5701ef8e7f8e594058d4c951aa24ca012cef3408b259ac1c69d1258890254beb02d1dcc0000b8c469ff936b00000000000000000000000000000000000000000000000000000000ee6c7f95000000000000000000000000167f6cc1e67a615b51b5a2deaba6b9feca7069df000000000000000000000000000000000000000000000000000000000000136a00000000000000000000000000000000000000000000000254beb02d1dcc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080830469978084cb6b32c5c101b88272da83429a49a354f566dd8c85ba288a7c86d1d3161c0aad6a276a7c9f8e69c14df3d76f0d3442a4f4a2a13d016c32c45e82d5010f27386eeb384dee3d8390c0006adead8b8ce8823c583e1ac15facef8f1cc665a707ade82b3c956a53a2b24e0c03d80504bc4b276b5d067b72636d8e88d2ffc65528f868df2cadc716962978a000'
 
     Event:
@@ -1362,12 +1553,19 @@ components:
           description: |
             The address of the contract that produces the event (bytes20).
           example: '0x0000000000000000000000000000456e65726779'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         topics:
           type: array
+          minItems: 1
+          nullable: false
+          required: true
           description: |
             Topics are indexed parameters to an event. The first topic is always the event signature.
           items:
             type: string
+            pattern: '^0x[0-9a-f]{64}$'
             description: |
           example:
             - '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
@@ -1377,6 +1575,9 @@ components:
           description: |
             The data associated with the event.
           example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
 
     Transfer:
       properties:
@@ -1385,16 +1586,25 @@ components:
           description: |
             The address that sent the VET.
           example: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         recipient:
           type: string
           description: |
             The address that received the VET.
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         amount:
           type: string
           description: |
             The amount of VET transferred.
           example: '0x47fdb3c3f456c0000'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
 
     Receipt:
       properties:
@@ -1404,26 +1614,40 @@ components:
           description: |
             The amount of gas used by the transaction.
           example: 21000
+          nullable: false
+          required: true
         gasPayer:
           type: string
           description: |
             The address of the account that paid the gas fee.
           example: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]{40}$'
         paid:
           type: string
           description: The amount of energy (VTHO) in wei, used to pay for the gas.
           example: '0x1236efcbcbb340000'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
         reward:
           type: string
           description: The amount of energy (VTHO) in wei, paid to the block signer as a reward.
           example: '0x576e189f04f60000'
+          nullable: false
+          required: true
+          pattern: '^0x[0-9a-f]*$'
         reverted:
           type: boolean
           description: |
             Indicates whether the transaction was reverted (true means reverted).
           example: false
+          nullable: false
+          required: true
         outputs:
           type: array
+          minItems: 0
           description: |
             An array of outputs produced by the transaction.
           items:
@@ -1434,12 +1658,21 @@ components:
                   The address of the deployed contract, if the corresponding clause is a
                   contract deployment clause.
                 example: '0x0000000000000000000000000000456e65726779'
+                nullable: false
+                required: true
+                pattern: '^0x[0-9a-f]{40}$'
               events:
                 type: array
+                minItems: 0
+                nullable: false
+                required: true
                 items:
                   $ref: '#/components/schemas/Event'
               transfers:
                 type: array
+                minItems: 0
+                nullable: false
+                required: true
                 items:
                   $ref: '#/components/schemas/Transfer'
 
@@ -1450,56 +1683,78 @@ components:
           description: |
             The amount of token to be transferred.
           example: '0x47ff1f90327aa0f8e'
+          nullable: false
+          required: true
         data:
           type: string
           description: |
             The input data for the contract call.
           example: '0xa9059cbb0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5000000000000'
+          nullable: false
+          required: true
         to:
           type: string
           description: |
               <b>Nullable:</b> The recipient of the call. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-f]{40}$'
         gas:
           type: integer
           format: uint64
           description: |
-            <b>Optional:</b> The maximum allowed gas for execution.
+            The maximum allowed gas for execution.
           example: 21000
+          nullable: true
+          required: false
         gasPrice:
           type: string
           description: |
-            <b>Optional:</b> The absolute gas price.
+            The absolute gas price.
           example: '1000000000000000'
+          nullable: true
+          required: false
         caller:
           type: string
           description: |
-            <b>Optional:</b> The caller's address (msg.sender).
+            The caller's address (msg.sender).
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-f]{40}$'
 
     ExtendedCallData:
       properties:
         provedWork:
           type: string
           description: |
-            <b>Optional:</b> The transaction's proved work (for extension contract).
+            The transaction's proved work (for extension contract).
           example: "1000"
+          required: false
+          nullable: true
         gasPayer:
           type: string
           description: |
-            <b>Optional:</b> The address of the gas payer (for extension contract).
+            The address of the gas payer (for extension contract).
           example: "0xd3ae78222beadb038203be21ed5ce7c9b1bff602"
+          required: false
+          nullable: true
         expiration:
           type: integer
           format: uint32
           description: |
-            <b>Optional:</b> The transaction expiration (for extension contract).
+            The transaction expiration (for extension contract).
           example: 1000
+          required: false
+          nullable: true
         blockRef:
           type: string
           description: |
-            <b>Optional:</b> The block reference (for extension contract).
+            The block reference (for extension contract).
           example: "0x00000000851caf3c"
+          required: false
+          nullable: true
 
     CallResult:
       properties:
@@ -1508,34 +1763,48 @@ components:
           description: |
             The output data produced by the contract execution.
           example: '0x0000000000000000000000000000000000000000000000000000000000000001'
+          required: true
+          nullable: false
         events:
           type: array
           items:
             $ref: '#/components/schemas/Event'
           description: |
             An array of events generated during contract execution.
+          required: true
+          nullable: false
+          minItems: 0
         transfers:
           type: array
           items:
             $ref: '#/components/schemas/Transfer'
           description: |
             An array of transfers that occurred during contract execution.
+          required: true
+          nullable: false
+          minItems: 0
         gasUsed:
           type: integer
           format: uint64
           description: |
             The amount of gas used during execution.
           example: 21000
+          required: true
+          nullable: false
         reverted:
           type: boolean
           description: |
             Indicates whether the transaction was reverted (true means reverted).
           example: false
+          required: true
+          nullable: false
         vmError:
           type: string
           description: |
             The virtual machine error message if the execution encountered an error.
           example: 'insufficient balance for transfer'
+          required: true
+          nullable: false
 
     BatchCallData:
       properties:
@@ -1545,23 +1814,30 @@ components:
             $ref: '#/components/schemas/Clause'
           description: |
             An array of clauses to be executed.
+          required: false
+          nullable: true
         gas:
           type: integer
           format: uint64
           description: |
-            <b>Optional:</b> The maximum allowed gas for the execution of the batch call.
+            The maximum allowed gas for the execution of the batch call.
           example: 50000
+          required: false
+          nullable: true
         gasPrice:
           type: string
           description: |
-            <b>Optional:</b> The absolute gas price for the batch call.
+            The absolute gas price for the batch call.
           example: 1000000000000000
+          required: false
+          nullable: true
         caller:
           type: string
           description: |
-            <b>Optional:</b> The caller's address (msg.sender) for the batch call.
+            The caller's address (msg.sender) for the batch call.
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
-
+          required: false
+          nullable: true
       example:
         clauses:
           - to: '0x5034aa590125b64023a0262112b98d72e3c8e40e'
@@ -1573,6 +1849,8 @@ components:
 
     BatchCallResult:
       type: array
+      minItems: 0
+      nullable: false
       items:
         $ref: '#/components/schemas/CallResult'
 
@@ -1581,19 +1859,24 @@ components:
         offset:
           type: integer
           example: 0
+          nullable: true
+          required: false
           description: |
-            <b>Optional:</b> The offset in the matched record set. Use this parameter for pagination.
+            The offset in the matched record set. Use this parameter for pagination.
             
             Default's to 0.
+
         limit:
           type: integer
           example: 100
+          nullable: true
+          required: false
           description: |
-            <b>Optional:</b> The limit of records to be included in the output. Use this parameter for pagination.
+            The limit of records to be included in the output. Use this parameter for pagination.
             
             Default's to all results.
       description: |
-        <b>Optional:</b> Include these parameters to receive filtered results in a paged format. 
+        Include these parameters to receive filtered results in a paged format. 
         
         <b>Note: </b> If omitted, a timeout may occur if there is a large amount of data to query. If there is a small amount of data you can omit to receive all results in a single response.
         
@@ -1616,23 +1899,29 @@ components:
             - block
             - time
           example: block
+          nullable: true
+          required: false
           description: |
-            <b>Optional:</b> Specifies the unit of measurement for the `from` and `to` values. 
+            Specifies the unit of measurement for the `from` and `to` values. 
             Use `block` for block numbers or `time` for block timestamps. Default is `block`.
         from:
           type: integer
           format: uint64
           description: |
-            <b>Optional:</b> Defines the starting block number or timestamp for the specified range.
+            Defines the starting block number or timestamp for the specified range.
           example: 17240365
+          nullable: true
+          required: false
         to:
           type: integer
           format: uint64
           example: 17289864
+          nullable: true
+          required: false
           description: |
-            <b>Optional:</b> Specifies the ending block number or timestamp for the specified range.
+            Specifies the ending block number or timestamp for the specified range.
       description: |
-        <b>Optional:</b> Defines the range for filtering. Setting values to null indicates the entire range.
+        Defines the range for filtering. Setting values to null indicates the entire range.
         
         <b>Note: </b> If omitted or set to null, a timeout may occur if there is a large amount of data to query.
 
@@ -1653,19 +1942,28 @@ components:
         address:
           type: string
           example: '0x0000000000000000000000000000456E65726779'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{40}$'
           description: |
-            <b>Optional:</b> The address of the contract that emits the event.
+            The address of the contract that emits the event.
         topic0:
           type: string
           example: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
           description: |
-            <b>Optional:</b> The keccak256 hash representing the event signature. 
+            The keccak256 hash representing the event signature. 
             For example, the signature for the `Transfer` event is `keccak256("Transfer(address,address,uint256)")`.
         topic1:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
           description: |
-            <b>Optional:</b> Filters events based on the 1st parameter in the event. 
+            Filters events based on the 1st parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1673,8 +1971,11 @@ components:
         topic2:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
           description: |
-            <b>Optional:</b> Filters events based on the 2nd parameter in the event. 
+            Filters events based on the 2nd parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1682,8 +1983,11 @@ components:
         topic3:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
           description: |
-            <b>Optional:</b> Filters events based on the 3rd parameter in the event. 
+            Filters events based on the 3rd parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1691,8 +1995,11 @@ components:
         topic4:
           type: string
           example: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
           description: |
-            <b>Optional:</b> Filters events based on the 4th parameter in the event. 
+            Filters events based on the 4th parameter in the event. 
             
             <b>Note</b>: The parameter must be padded to 32 bytes.
             
@@ -1719,19 +2026,28 @@ components:
       properties:
         txOrigin:
           description: |
-            <b>Optional: </b> The address from which the transaction was sent.
+            The address from which the transaction was sent.
           type: string
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{40}$'
         sender:
           description: |
-            <b>Optional: </b> The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
+            The address that sent the VET. In most cases this is the same as `txOrigin`, but it may be different if the VET was sent by a contract.
           type: string
           example: '0x6d95e6dca01d109882fe1726a2fb9865fa41e7aa'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{40}$'
         recipient:
           description: |
-            <b>Optional: </b> The address that received the VET.
+            The address that received the VET.
           type: string
           example: '0x45429a2255e7248e57fce99e7239aed3f84b7a53'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{40}$'
 
     PeerStats:
       type: object
@@ -1740,30 +2056,45 @@ components:
           type: string
           description: The identifier and version of the connected peer's software.
           example: 'thor/v1.0.0-6680b98-dev/linux/go1.10.3'
+          nullable: false
+          required: true
         bestBlockID:
           type: string
           description: The identifier of the best block known to the connected peer.
           example: '0x000087b3a4d4cdf1cc52d56b9704f4c18f020e1b48dbbf4a23d1ee4f1fa5ff94'
+          nullable: false
+          required: true
         totalScore:
           type: integer
           description: The total score of the connected peer.
           example: 68497
+          nullable: false
+          required: true
         peerID:
           type: string
           description: The unique identifier of the connected peer on the network.
           example: '50e122a505ee55b84331068acfd857e37ad58f463a0fab9aaff2c1e4b2e2d22ae71dc14fdaf6eead74bd3f60594644aa35c588f9ca6be3341e2ce18ddc413321'
+          nullable: false
+          required: true
         netAddr:
           type: string
           description: The network address (IP:Port) of the connected peer.
           example: '128.1.39.120:11235'
+          nullable: false
+          required: true
+          pattern: '^(?:[0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}$'
         inbound:
           type: boolean
           description: Indicates whether the connection is inbound (true) or outbound (false).
           example: false
+          nullable: false
+          required: true
         duration:
           type: integer
           description: The duration of the connection with the peer.
           example: 28
+          nullable: false
+          required: true
 
     TXID:
       properties:
@@ -1773,6 +2104,9 @@ components:
             The transaction identifier.
                 example:
           example: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
+          pattern: '^0x[0-9a-f]{64}$'
+          required: true
+          nullable: false
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
 
@@ -1782,6 +2116,9 @@ components:
           type: boolean
           description: |
             Indicates whether the block containing this data has become obsolete (true) or not (false).
+          example: false
+          required: true
+          nullable: false
       example:
         obsolete: false
 
@@ -1796,6 +2133,9 @@ components:
             `blockID/(txIndex|txId)/clauseIndex`
 
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-fA-F]{64}/[0-9]+/[0-9]+$'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
@@ -1815,13 +2155,17 @@ components:
             - evmdis
             - opcount
           description: |
-            <b>Optional:</b> The name of the tracer. An empty name stands for the default struct logger tracer.
+            The name of the tracer. An empty name stands for the default struct logger tracer.
           example: "prestate"
+          required: false
+          nullable: true
         config:
           type: object
           description: |
-            <b>Optional:</b> The configuration of the tracer. It is specific to the `name`
+            The configuration of the tracer. It is specific to the `name`
           example: {}
+          required: false
+          nullable: true
       example:
         name: "prestate"
         config: {}
@@ -1831,21 +2175,32 @@ components:
         address:
           type: string
           description: |
-            <b>Optional:</b> The address of the contract/ account to be traced.
+            The address of the contract/ account to be traced.
           example: '0xd8ccdd85abdbf68dfec95f06c973e87b1b5a9997'
+          nullable: false
+          required: false
+          pattern: '^0x[0-9a-fA-F]{40}$'
         keyStart:
           type: string
           description: |
-            <b>Optional:</b> The start key of the storage range. Default is `0x0000000000000000000000000000000000000000000000000000000000000000`
+            The start key of the storage range. Default is `0x0000000000000000000000000000000000000000000000000000000000000000`
           example: '0x0000000000000000000000000000000000000000000000000000000000000000'
+          nullable: true
+          required: false
+          pattern: '^0x[0-9a-fA-F]{64}$'
         maxResult:
           type: number
           description: |
-            <b>Optional:</b> The maximum number of results to be returned. Default is 1000.
+            The maximum number of results to be returned. Default is 1000.
           example: 10
+          nullable: true
+          required: false
         target:
           type: string
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
+          required: true
+          nullable: false
+          pattern: '^0x[0-9a-fA-F]{64}/[0-9]+/[0-9]+$'
 
     StorageRange:
       properties:
@@ -1853,8 +2208,14 @@ components:
           type: string
           example:
             null
+          nullable: true
+          required: true
         storage:
           type: object
+          nullable: false
+          required: true
+          description: |
+            The data is non-nullable, but an empty object is returned if no data is found.
           example:
             '0x33e423980c9b37d048bd5fadbd4a2aeb95146922045405accc2f468d0ef96988':
               key:
@@ -1868,6 +2229,8 @@ components:
           type: boolean
           description: Whether the block is trunk (true) or not (false)
           example: true
+          required: true
+          nullable: false
 
     IsFinalized:
       properties:
@@ -1875,6 +2238,8 @@ components:
           type: boolean
           description: Whether the block has been finalized (true) or not (false)
           example: false
+          required: true
+          nullable: false
 
   parameters:
     GetAddressInPath:

@@ -7,6 +7,8 @@ on:
 jobs:
   stale:
     runs-on: ubuntu-latest
+    # only run this action on `vechain/thor` repository
+    if: github.repository == 'vechain/thor'
 
     permissions:
       contents: write
