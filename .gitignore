@@ -28,3 +28,5 @@ package.json
 
 .fake_gopath_suffix
 coverage.out
+
+.idea

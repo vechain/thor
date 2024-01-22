@@ -227,3 +227,46 @@ func TestBlocklist(t *testing.T) {
 		t.Fatal("adopt tx from non-blocked origin should not return error")
 	}
 }
+
+func TestMock(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	g := genesis.NewDevnet()
+
+	b0, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b0)
+
+	a0 := genesis.DevAccounts()[0]
+
+	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork)
+
+	best := repo.BestBlockSummary()
+
+	// Create a packing flow mock with header gas limit
+	_, err := p.Mock(best, uint64(time.Now().Unix()), b0.Header().GasLimit())
+	if err != nil {
+		t.Fatal("Failure to create a packing flow mock")
+	}
+
+	// Create a packing flow mock with 0 gas limit
+	_, err = p.Mock(best, uint64(time.Now().Unix()), 0)
+	if err != nil {
+		t.Fatal("Failure to create a packing flow mock")
+	}
+}
+
+func TestSetGasLimit(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	b0, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b0)
+
+	a0 := genesis.DevAccounts()[0]
+
+	p := packer.New(repo, stater, a0.Address, &a0.Address, thor.NoFork)
+
+	// This is just for code coverage purposes. There is no getter function for targetGasLimit to test the function.
+	p.SetTargetGasLimit(0xFFFF)
+}
