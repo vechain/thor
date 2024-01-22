@@ -1427,7 +1427,7 @@ components:
         to:
           type: string
           description: |
-            <b>Nullable:</b> The recipient of the clause. Null indicates contract deployment.
+            The recipient of the clause. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
           nullable: true
           required: true
@@ -1695,7 +1695,7 @@ components:
         to:
           type: string
           description: |
-              <b>Nullable:</b> The recipient of the call. Null indicates contract deployment.
+              The recipient of the call. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
           nullable: true
           required: false
