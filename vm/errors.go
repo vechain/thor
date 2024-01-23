@@ -30,4 +30,5 @@ var (
 	ErrReturnDataOutOfBounds    = errors.New("return data out of bounds")
 	ErrMaxCodeSizeExceeded      = errors.New("max code size exceeded")
 	ErrGasUintOverflow          = errors.New("gas uint64 overflow")
+	ErrInvalidCode              = errors.New("invalid code: must not begin with 0xef")
 )
