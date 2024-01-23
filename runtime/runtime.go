@@ -60,6 +60,7 @@ var baseChainConfig = vm.ChainConfig{
 		Clique:              nil,
 	},
 	IstanbulBlock: nil,
+	ShanghaiBlock: nil,
 }
 
 // Output output of clause execution.
@@ -98,6 +99,7 @@ func New(
 	currentChainConfig := baseChainConfig
 	currentChainConfig.ConstantinopleBlock = big.NewInt(int64(forkConfig.ETH_CONST))
 	currentChainConfig.IstanbulBlock = big.NewInt(int64(forkConfig.ETH_IST))
+	currentChainConfig.ShanghaiBlock = big.NewInt(int64(forkConfig.ETH_SH))
 	if chain != nil {
 		// use genesis id as chain id
 		currentChainConfig.ChainID = new(big.Int).SetBytes(chain.GenesisID().Bytes())
