@@ -310,6 +310,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 		BlockNumber: new(big.Int).SetUint64(uint64(rt.ctx.Number)),
 		Time:        new(big.Int).SetUint64(rt.ctx.Time),
 		Difficulty:  &big.Int{},
+		BaseFee:     &big.Int{},
 	}, stateDB, &rt.chainConfig, rt.vmConfig)
 }
 
