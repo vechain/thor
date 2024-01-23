@@ -807,6 +807,19 @@ func opSelfBalance(pc *uint64, evm *EVM, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
+// opBaseFee implements BASEFEE opcode
+func opBaseFee(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
+	stack.push(baseFee)
+	return nil, nil
+}
+
+// opPush0 implements the PUSH0 opcode
+func opPush0(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(new(uint256.Int))
+	return nil, nil
+}
+
 // following functions are used by the instruction jump  table
 
 // make log instruction function

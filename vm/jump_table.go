@@ -54,11 +54,31 @@ var (
 	byzantiumInstructionSet      = NewByzantiumInstructionSet()
 	constantinopleInstructionSet = NewConstantinopleInstructionSet()
 	istanbulInstructionSet       = NewIstanbulInstructionSet()
+	shanghaiInstructionSet       = NewShanghaiInstructionSet()
 )
 
-type JumpTable *[256]*operation
+type JumpTable [256]*operation
 
-func NewIstanbulInstructionSet() JumpTable {
+// NewIstanbulInstructionSet returns the frontier, homestead
+// byzantium, constantinople , istanbul and shanghai instructions.
+func NewShanghaiInstructionSet() *JumpTable {
+	instructionSet := NewIstanbulInstructionSet()
+	instructionSet[BASEFEE] = &operation{
+		execute:       opBaseFee,
+		gasCost:       constGasFunc(GasFastStep),
+		validateStack: makeStackFunc(0, 1),
+	}
+	instructionSet[PUSH0] = &operation{
+		execute:       opPush0,
+		gasCost:       constGasFunc(GasFastStep),
+		validateStack: makeStackFunc(0, 1),
+	}
+	return instructionSet
+}
+
+// NewIstanbulInstructionSet returns the frontier, homestead
+// byzantium, constantinople and istanbul instructions.
+func NewIstanbulInstructionSet() *JumpTable {
 	instructionSet := NewConstantinopleInstructionSet()
 	// ChainID opcode
 	instructionSet[CHAINID] = &operation{
@@ -78,8 +98,8 @@ func NewIstanbulInstructionSet() JumpTable {
 }
 
 // NewConstantinopleInstructionSet returns the frontier, homestead
-// byzantium and contantinople instructions.
-func NewConstantinopleInstructionSet() JumpTable {
+// byzantium and constantinople instructions.
+func NewConstantinopleInstructionSet() *JumpTable {
 	// instructions that can be executed during the byzantium phase.
 	instructionSet := NewByzantiumInstructionSet()
 	instructionSet[SHL] = &operation{
@@ -115,7 +135,7 @@ func NewConstantinopleInstructionSet() JumpTable {
 
 // NewByzantiumInstructionSet returns the frontier, homestead and
 // byzantium instructions.
-func NewByzantiumInstructionSet() JumpTable {
+func NewByzantiumInstructionSet() *JumpTable {
 	// instructions that can be executed during the homestead phase.
 	instructionSet := NewHomesteadInstructionSet()
 	instructionSet[STATICCALL] = &operation{
@@ -149,7 +169,7 @@ func NewByzantiumInstructionSet() JumpTable {
 
 // NewHomesteadInstructionSet returns the frontier and homestead
 // instructions that can be executed during the homestead phase.
-func NewHomesteadInstructionSet() JumpTable {
+func NewHomesteadInstructionSet() *JumpTable {
 	instructionSet := NewFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = &operation{
 		execute:       opDelegateCall,
@@ -163,8 +183,8 @@ func NewHomesteadInstructionSet() JumpTable {
 
 // NewFrontierInstructionSet returns the frontier instructions
 // that can be executed during the frontier phase.
-func NewFrontierInstructionSet() JumpTable {
-	return &[256]*operation{
+func NewFrontierInstructionSet() *JumpTable {
+	instructionSet := JumpTable{
 		STOP: {
 			execute:       opStop,
 			gasCost:       constGasFunc(0),
@@ -843,4 +863,5 @@ func NewFrontierInstructionSet() JumpTable {
 			writes:        true,
 		},
 	}
+	return &instructionSet
 }

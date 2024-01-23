@@ -36,7 +36,7 @@ type Config struct {
 	// JumpTable contains the EVM instruction table. This
 	// may be left uninitialised and will be set to the default
 	// table.
-	JumpTable JumpTable
+	JumpTable *JumpTable
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
