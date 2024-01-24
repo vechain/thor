@@ -13,12 +13,15 @@ export GO111MODULE=on
 
 .PHONY: thor disco all clean test
 
-thor:| go_version_check
+help:
+	@egrep -h '\s#@\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?#@ "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
+
+thor:| go_version_check #@ Build the `thor` executable
 	@echo "building $@..."
 	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(THOR_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/thor
 	@echo "done. executable created at 'bin/$@'"
 
-disco:| go_version_check
+disco:| go_version_check #@ Build the `disco` executable
 	@echo "building $@..."
 	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/disco
 	@echo "done. executable created at 'bin/$@'"
@@ -37,16 +40,25 @@ go_version_check:
 		fi \
 	fi
 
-all: thor disco
+all: thor disco #@ Build the `thor` and `disco` executables
 
-clean:
+clean: #@ Clean the build artifacts
 	-rm -rf \
 $(CURDIR)/bin/thor \
-$(CURDIR)/bin/disco 
+$(CURDIR)/bin/disco
 
-test:| go_version_check
+test:| go_version_check #@ Run the tests
 	@go test -cover $(PACKAGES)
 
-test-coverage:| go_version_check
+test-coverage:| go_version_check #@ Run the tests with coverage
 	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
 	@go tool cover -html=coverage.out
+
+lint_command_check:
+	@command -v golangci-lint || (echo "golangci-lint not found, please install it from https://golangci-lint.run/usage/install/" && exit 1)
+
+lint: | go_version_check lint_command_check #@ Run 'golangci-lint' on new code changes
+	@golangci-lint run --new --config .golangci.pull-request.yml
+
+lint-all: | go_version_check lint_command_check #@ Run 'golangci-lint' on the entire codebase
+	@golangci-lint run --config .golangci.yml
