@@ -859,11 +859,16 @@ components:
     GetTxResponse:
       type: object
       oneOf:
-        - $ref: '#/components/schemas/Tx'
-        - $ref: '#/components/schemas/RawTx'
-      properties:
-        meta:
-          $ref: '#/components/schemas/TxMeta'
+        - allOf:
+            - $ref: '#/components/schemas/Tx'
+            - properties:
+                meta:
+                    $ref: '#/components/schemas/TxMeta'
+        - allOf:
+            - $ref: '#/components/schemas/RawTx'
+            - properties:
+                meta:
+                    $ref: '#/components/schemas/TxMeta'
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
@@ -886,9 +891,9 @@ components:
       type: object
       allOf:
         - $ref: '#/components/schemas/Receipt'
-      properties:
-        meta:
-          $ref: '#/components/schemas/ReceiptMeta'
+        - properties:
+            meta:
+              $ref: '#/components/schemas/ReceiptMeta'
 
     GetBlockResponse:
       type: object
@@ -896,28 +901,28 @@ components:
         - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/IsTrunk'
         - $ref: '#/components/schemas/IsFinalized'
-      oneOf:
-        - properties:
-            transactions:
-              description: An array of transaction IDs
-              type: array
-              required: true
-              nullable: false
-              minItems: 0
-              items:
-                type: string
-                example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
-        - properties:
-            transactions:
-              description: All included transactions, expanded, to include their receipts
-              type: array
-              required: true
-              nullable: false
-              minItems: 0
-              items:
-                allOf:
-                  - $ref: '#/components/schemas/Tx'
-                  - $ref: '#/components/schemas/Receipt'
+        - oneOf:
+            - properties:
+                transactions:
+                  description: An array of transaction IDs
+                  type: array
+                  required: true
+                  nullable: false
+                  minItems: 0
+                  items:
+                    type: string
+                    example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+            - properties:
+                transactions:
+                  description: All included transactions, expanded, to include their receipts
+                  type: array
+                  required: true
+                  nullable: false
+                  minItems: 0
+                  items:
+                    allOf:
+                      - $ref: '#/components/schemas/Tx'
+                      - $ref: '#/components/schemas/Receipt'
       example:
         number: 325324
         id: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
@@ -973,9 +978,9 @@ components:
       items:
         allOf:
           - $ref: '#/components/schemas/Event'
-        properties:
-          meta:
-            $ref: '#/components/schemas/LogMeta'
+          - properties:
+              meta:
+                $ref: '#/components/schemas/LogMeta'
 
     TransferLogFilterRequest:
       type: object
@@ -1009,9 +1014,9 @@ components:
       items:
         allOf:
           - $ref: '#/components/schemas/Transfer'
-        properties:
-          meta:
-            $ref: '#/components/schemas/LogMeta'
+          - properties:
+              meta:
+                $ref: '#/components/schemas/LogMeta'
 
     GetPeersResponse:
       type: array
@@ -1026,123 +1031,117 @@ components:
       allOf:
         - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/Obsolete'
-      properties:
-        transactions:
-          description: "An array of transaction IDs associated with the block."
-          type: array
-          minItems: 0
-          nullable: false
-          required: true
-          items:
-            type: string
-            example:
-              - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
+        - properties:
+            transactions:
+              description: "An array of transaction IDs associated with the block."
+              type: array
+              minItems: 0
+              nullable: false
+              required: true
+              items:
+                type: string
+                example:
+                  - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
     SubscriptionEventResponse:
       type: object
       allOf:
         - $ref: '#/components/schemas/Event'
         - $ref: '#/components/schemas/Obsolete'
-      properties:
-        meta:
-          allOf:
-            - $ref: '#/components/schemas/LogMeta'
-          required: true
-          nullable: false
+        - properties:
+            meta:
+              $ref: '#/components/schemas/LogMeta'
 
     SubscriptionTransferResponse:
       type: object
       allOf:
         - $ref: '#/components/schemas/Transfer'
         - $ref: '#/components/schemas/Obsolete'
-      properties:
-        meta:
-          allOf:
-            - $ref: '#/components/schemas/LogMeta'
-          required: true
-          nullable: false
+        - properties:
+            meta:
+              $ref: '#/components/schemas/LogMeta'
 
     SubscriptionBeat2Response:
       type: object
       allOf:
         - $ref: '#/components/schemas/SubscriptionBeatResponse'
-      properties:
-        gasLimit:
-          type: integer
-          format: uint64
-          description: |
-            The gas limit of the block
-          example: 12000000
-          nullable: false
-          required: true
+        - properties:
+            gasLimit:
+              type: integer
+              format: uint64
+              description: |
+                The gas limit of the block
+              example: 12000000
+              nullable: false
+              required: true
 
     SubscriptionBeatResponse:
       type: object
       allOf:
         - $ref: '#/components/schemas/Obsolete'
-      properties:
-        number:
-          type: integer
-          format: uint32
-          description: |
-            The block number (height)
-          example: 325324
-          required: true
-          nullable: false
-        id:
-          type: string
-          format: hex
-          description: |
-            The block identifier
-          example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
-          required: true
-          nullable: false
-          pattern: '^0x[0-9a-f]{64}$'
-        parentID:
-          type: string
-          format: hex
-          description: |
-            The parent block identifier
-          example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
-          required: true
-          nullable: false
-          pattern: '^0x[0-9a-f]{64}$'
-        timestamp:
-          type: integer
-          format: uint64
-          description: |
-            The UNIX timestamp of the block
-          example: 1533267900
-          required: true
-          nullable: false
-        txsFeatures:
-          type: integer
-          format: uint32
-          description: |
-            The supported transaction features bitset
-          example: 0
-          required: true
-          nullable: false
-        bloom:
-          type: string
-          format: hex
-          description: |
-            A hexadecimal representation of the bloom filter composed with affected addresses & topics.
+        - properties:
+            number:
+              type: integer
+              format: uint32
+              description: |
+                The block number (height)
+              example: 325324
+              required: true
+              nullable: false
+            id:
+              type: string
+              format: hex
+              description: |
+                The block identifier
+              example: '0x0004f6cc88bb4626a92907718e82f255b8fa511453a78e8797eb8cea3393b215'
+              required: true
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+            parentID:
+              type: string
+              format: hex
+              description: |
+                The parent block identifier
+              example: '0x0004f6cb730dbd90fed09d165bfdf33cc0eed47ec068938f6ee7b7c12a4ea98d'
+              required: true
+              nullable: false
+              pattern: '^0x[0-9a-f]{64}$'
+            timestamp:
+              type: integer
+              format: uint64
+              description: |
+                The UNIX timestamp of the block
+              example: 1533267900
+              required: true
+              nullable: false
+            txsFeatures:
+              type: integer
+              format: uint32
+              description: |
+                The supported transaction features bitset
+              example: 0
+              required: true
+              nullable: false
+            bloom:
+              type: string
+              format: hex
+              description: |
+                A hexadecimal representation of the bloom filter composed with affected addresses & topics.
 
-            The bloom filter is used to efficiently check whether an element is a member of a set,
-            providing a summary of affected addresses related to new blocks.
-          example: '0x0424c1ff47029280'
-          nullable: false
-          required: true
-          pattern: '^0x[0-9a-f]*$'
-        k:
-          type: integer
-          format: uint32
-          description: |
-            The number of hash functions for bloom filter
-          example: 13
-          nullable: false
-          required: true
+                The bloom filter is used to efficiently check whether an element is a member of a set,
+                providing a summary of affected addresses related to new blocks.
+              example: '0x0424c1ff47029280'
+              nullable: false
+              required: true
+              pattern: '^0x[0-9a-f]*$'
+            k:
+              type: integer
+              format: uint32
+              description: |
+                The number of hash functions for bloom filter
+              example: 13
+              nullable: false
+              required: true
 
     PostDebugTracerRequest:
       type: object
