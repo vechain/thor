@@ -738,6 +738,7 @@ paths:
 components:
   schemas:
     GetAccountResponse:
+      type: object
       properties:
         balance:
           type: string
@@ -763,6 +764,7 @@ components:
         hasCode: false
 
     ExecuteCodesRequest:
+      type: object
       allOf:
         - $ref: '#/components/schemas/ExtendedCallData'
         - $ref: '#/components/schemas/BatchCallData'
@@ -829,6 +831,7 @@ components:
           vmError: ""
 
     GetAccountCodeResponse:
+      type: object
       properties:
         code:
           type: string
@@ -841,6 +844,7 @@ components:
         code: '0x6060604052600080fd00a165627a7a72305820c23d3ae2dc86ad130561a2829d87c7cb8435365492bd1548eb7e7fc0f3632be90029'
 
     GetStorageResponse:
+      type: object
       properties:
         value:
           type: string
@@ -879,6 +883,7 @@ components:
           blockTimestamp: 1523156271
 
     GetTxReceiptResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Receipt'
       properties:
@@ -886,6 +891,7 @@ components:
           $ref: '#/components/schemas/ReceiptMeta'
 
     GetBlockResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/IsTrunk'
@@ -934,6 +940,7 @@ components:
           - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
     EventLogFilterRequest:
+      type: object
       properties:
         range:
           $ref: '#/components/schemas/FilterRange'
@@ -971,6 +978,7 @@ components:
             $ref: '#/components/schemas/LogMeta'
 
     TransferLogFilterRequest:
+      type: object
       properties:
         range:
           $ref: '#/components/schemas/FilterRange'
@@ -1006,6 +1014,7 @@ components:
             $ref: '#/components/schemas/LogMeta'
 
     GetPeersResponse:
+      type: array
       minItems: 0
       nullable: false
       required: true
@@ -1013,6 +1022,7 @@ components:
         $ref: '#/components/schemas/PeerStats'
 
     SubscriptionBlockResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Block'
         - $ref: '#/components/schemas/Obsolete'
@@ -1029,6 +1039,7 @@ components:
               - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
     SubscriptionEventResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Event'
         - $ref: '#/components/schemas/Obsolete'
@@ -1040,6 +1051,7 @@ components:
           nullable: false
 
     SubscriptionTransferResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Transfer'
         - $ref: '#/components/schemas/Obsolete'
@@ -1051,6 +1063,7 @@ components:
           nullable: false
 
     SubscriptionBeat2Response:
+      type: object
       allOf:
         - $ref: '#/components/schemas/SubscriptionBeatResponse'
       properties:
@@ -1064,6 +1077,7 @@ components:
           required: true
 
     SubscriptionBeatResponse:
+      type: object
       allOf:
         - $ref: '#/components/schemas/Obsolete'
       properties:
@@ -1131,6 +1145,7 @@ components:
           required: true
 
     PostDebugTracerRequest:
+      type: object
       allOf:
         - $ref: '#/components/schemas/TracerOption'
         - $ref: '#/components/schemas/ClauseTracerOption'
@@ -1140,6 +1155,7 @@ components:
         config: {}
 
     PostDebugTracerCallRequest:
+      type: object
       allOf:
         - $ref: '#/components/schemas/TracerOption'
         - $ref: '#/components/schemas/CallData'
@@ -1157,6 +1173,7 @@ components:
         blockRef: "0x00000000851caf3c"
 
     TxMeta:
+      type: object
       description: Transaction metadata such as block number, block timestamp, etc.
       properties:
         blockID:
@@ -1187,6 +1204,7 @@ components:
         blockTimestamp: 1533267900
 
     ReceiptMeta:
+      type: object
       description: The transaction receipt metadata such as block number, block timestamp, etc.
       properties:
         blockID:
@@ -1234,6 +1252,7 @@ components:
         txOrigin: '0xdb4027477b2a8fe4c83c6dafe7f86678bb1b8a8d'
 
     LogMeta:
+      type: object
       description: The event or transfer log metadata such as block number, block timestamp, etc.
       properties:
         blockID:
@@ -1282,6 +1301,7 @@ components:
           nullable: false
 
     Block:
+      type: object
       properties:
         number:
           type: integer
@@ -1396,6 +1416,7 @@ components:
           pattern: '^0x[0-9a-f]{40}$'
 
     Clause:
+      type: object
       properties:
         to:
           type: string
@@ -1423,6 +1444,7 @@ components:
           pattern: '^0x[0-9a-f]*$'
 
     Tx:
+      type: object
       properties:
         id:
           type: string
@@ -1511,6 +1533,7 @@ components:
           required: true
 
     RawTx:
+      type: object
       properties:
         raw:
           type: string
@@ -1520,6 +1543,7 @@ components:
           example: '0xf901854a880104c9cf34b0f5701ef8e7f8e594058d4c951aa24ca012cef3408b259ac1c69d1258890254beb02d1dcc0000b8c469ff936b00000000000000000000000000000000000000000000000000000000ee6c7f95000000000000000000000000167f6cc1e67a615b51b5a2deaba6b9feca7069df000000000000000000000000000000000000000000000000000000000000136a00000000000000000000000000000000000000000000000254beb02d1dcc00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080830469978084cb6b32c5c101b88272da83429a49a354f566dd8c85ba288a7c86d1d3161c0aad6a276a7c9f8e69c14df3d76f0d3442a4f4a2a13d016c32c45e82d5010f27386eeb384dee3d8390c0006adead8b8ce8823c583e1ac15facef8f1cc665a707ade82b3c956a53a2b24e0c03d80504bc4b276b5d067b72636d8e88d2ffc65528f868df2cadc716962978a000'
 
     Event:
+      type: object
       properties:
         address:
           type: string
@@ -1553,6 +1577,7 @@ components:
           pattern: '^0x[0-9a-f]*$'
 
     Transfer:
+      type: object
       properties:
         sender:
           type: string
@@ -1580,6 +1605,7 @@ components:
           pattern: '^0x[0-9a-f]*$'
 
     Receipt:
+      type: object
       properties:
         gasUsed:
           type: integer
@@ -1650,6 +1676,7 @@ components:
                   $ref: '#/components/schemas/Transfer'
 
     CallData:
+      type: object
       properties:
         value:
           type: string
@@ -1698,6 +1725,7 @@ components:
           pattern: '^0x[0-9a-f]{40}$'
 
     ExtendedCallData:
+      type: object
       properties:
         provedWork:
           type: string
@@ -1730,6 +1758,7 @@ components:
           nullable: true
 
     CallResult:
+      type: object
       properties:
         data:
           type: string
@@ -1780,6 +1809,7 @@ components:
           nullable: false
 
     BatchCallData:
+      type: object
       properties:
         clauses:
           type: array
@@ -1830,6 +1860,7 @@ components:
     FilterOptions:
       nullable: true
       required: false
+      type: object
       properties:
         offset:
           type: integer
@@ -1869,6 +1900,7 @@ components:
     FilterRange:
       nullable: true
       required: false
+      type: object
       properties:
         unit:
           type: string
@@ -1915,6 +1947,7 @@ components:
         This refers to the range from block 10 to block 1000.
 
     EventCriteria:
+      type: object
       properties:
         address:
           type: string
@@ -2000,6 +2033,7 @@ components:
         topic1: '0x0000000000000000000000006d95e6dca01d109882fe1726a2fb9865fa41e7aa'
 
     TransferCriteria:
+      type: object
       properties:
         txOrigin:
           description: |
@@ -2074,6 +2108,7 @@ components:
           required: true
 
     TXID:
+      type: object
       properties:
         id:
           type: string
@@ -2088,6 +2123,7 @@ components:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
 
     Obsolete:
+      type: object
       properties:
         obsolete:
           type: boolean
@@ -2100,6 +2136,7 @@ components:
         obsolete: false
 
     ClauseTracerOption:
+      type: object
       properties:
         target:
           type: string
@@ -2117,6 +2154,7 @@ components:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
     TracerOption:
+      type: object
       properties:
         name:
           type: string
@@ -2148,6 +2186,7 @@ components:
         config: {}
 
     StorageRangeOption:
+      type: object
       properties:
         address:
           type: string
@@ -2180,6 +2219,7 @@ components:
           pattern: '^0x[0-9a-fA-F]{64}/[0-9]+/[0-9]+$'
 
     StorageRange:
+      type: object
       properties:
         nextKey:
           type: string
@@ -2201,6 +2241,7 @@ components:
                 '0x00000000000000000000000000000000000000000000000000000000000000c8'
 
     IsTrunk:
+      type: object
       properties:
         isTrunk:
           type: boolean
@@ -2210,6 +2251,7 @@ components:
           nullable: false
 
     IsFinalized:
+      type: object
       properties:
         isFinalized:
           type: boolean
