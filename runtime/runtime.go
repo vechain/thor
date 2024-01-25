@@ -106,7 +106,13 @@ func New(
 	}
 
 	// alloc precompiled contracts
-	if forkConfig.ETH_IST == ctx.Number {
+	if forkConfig.ETH_SH == ctx.Number {
+		for addr := range vm.PrecompiledContractsShanghai {
+			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
+				panic(err)
+			}
+		}
+	} else if forkConfig.ETH_IST == ctx.Number {
 		for addr := range vm.PrecompiledContractsIstanbul {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
 				panic(err)
