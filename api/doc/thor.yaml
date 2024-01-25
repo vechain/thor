@@ -853,20 +853,13 @@ components:
         value: '0x0000000000000000000000000000000000000000000000000000000000000001'
 
     GetTxResponse:
+      type: object
       oneOf:
-        - allOf:
-            - $ref: '#/components/schemas/Tx'
-          properties:
-            meta:
-              required: false
-              $ref: '#/components/schemas/TxMeta'
-        - allOf:
-            - $ref: '#/components/schemas/RawTx'
-          properties:
-            meta:
-              required: false
-              $ref: '#/components/schemas/TxMeta'
-          description: raw transaction
+        - $ref: '#/components/schemas/Tx'
+        - $ref: '#/components/schemas/RawTx'
+      properties:
+        meta:
+          $ref: '#/components/schemas/TxMeta'
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
         chainTag: 1
@@ -893,12 +886,12 @@ components:
           $ref: '#/components/schemas/ReceiptMeta'
 
     GetBlockResponse:
+      allOf:
+        - $ref: '#/components/schemas/Block'
+        - $ref: '#/components/schemas/IsTrunk'
+        - $ref: '#/components/schemas/IsFinalized'
       oneOf:
-        - allOf:
-            - $ref: '#/components/schemas/Block'
-            - $ref: '#/components/schemas/IsTrunk'
-            - $ref: '#/components/schemas/IsFinalized'
-          properties:
+        - properties:
             transactions:
               description: An array of transaction IDs
               type: array
@@ -908,11 +901,7 @@ components:
               items:
                 type: string
                 example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
-        - allOf:
-            - $ref: '#/components/schemas/Block'
-            - $ref: '#/components/schemas/IsTrunk'
-            - $ref: '#/components/schemas/IsFinalized'
-          properties:
+        - properties:
             transactions:
               description: All included transactions, expanded, to include their receipts
               type: array
@@ -947,17 +936,9 @@ components:
     EventLogFilterRequest:
       properties:
         range:
-          items:
-            allOf:
-              - $ref: '#/components/schemas/FilterRange'
-          required: false
-          nullable: true
+          $ref: '#/components/schemas/FilterRange'
         options:
-          items:
-            allOf:
-              - $ref: '#/components/schemas/FilterOptions'
-          required: false
-          nullable: true
+          $ref: '#/components/schemas/FilterOptions'
         criteriaSet:
           type: array
           required: false
@@ -992,17 +973,9 @@ components:
     TransferLogFilterRequest:
       properties:
         range:
-          items:
-            allOf:
-              - $ref: '#/components/schemas/FilterRange'
-          required: false
-          nullable: true
+          $ref: '#/components/schemas/FilterRange'
         options:
-          items:
-            allOf:
-              - $ref: '#/components/schemas/FilterOptions'
-          required: false
-          nullable: true
+          $ref: '#/components/schemas/FilterOptions'
         criteriaSet:
           type: array
           nullable: true
@@ -1855,6 +1828,8 @@ components:
         $ref: '#/components/schemas/CallResult'
 
     FilterOptions:
+      nullable: true
+      required: false
       properties:
         offset:
           type: integer
@@ -1892,6 +1867,8 @@ components:
         In this example, the page offset is 0, and the page size is 10.
 
     FilterRange:
+      nullable: true
+      required: false
       properties:
         unit:
           type: string
