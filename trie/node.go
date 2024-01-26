@@ -45,6 +45,7 @@ const (
 )
 
 type node interface {
+	Version() Version
 	fstring(string) string
 	cache() (ref refNode, gen uint16, dirty bool)
 	encodeConsensus(buf []byte) []byte // encode the node for computing MPT root
@@ -70,6 +71,11 @@ type (
 		meta []byte // metadata of the value
 	}
 )
+
+func (n *fullNode) Version() Version  { return n.flags.ref.ver }
+func (n *shortNode) Version() Version { return n.flags.ref.ver }
+func (n *refNode) Version() Version   { return n.ver }
+func (n *valueNode) Version() Version { return Version{} }
 
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
 func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
