@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -29,18 +30,18 @@ func TestChain(t *testing.T) {
 	_, repo := newTestRepo()
 
 	b1 := newBlock(repo.GenesisBlock(), 10, tx1)
-	tx1Meta := &chain.TxMeta{BlockID: b1.Header().ID(), Index: 0, Reverted: false}
+	tx1Meta := &chain.TxMeta{BlockNum: 1, Index: 0, Reverted: false}
 	tx1Receipt := &tx.Receipt{}
-	repo.AddBlock(b1, tx.Receipts{tx1Receipt}, 0)
+	repo.AddBlock(b1, tx.Receipts{tx1Receipt}, 0, false)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil, 0)
+	repo.AddBlock(b2, nil, 0, false)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil, 0)
+	repo.AddBlock(b3, nil, 0, false)
 
 	b3x := newBlock(b2, 30)
-	repo.AddBlock(b3x, nil, 1)
+	repo.AddBlock(b3x, nil, 1, false)
 
 	c := repo.NewChain(b3.Header().ID())
 
@@ -53,8 +54,20 @@ func TestChain(t *testing.T) {
 	assert.True(t, c.IsNotFound(err))
 
 	assert.Equal(t, M(tx1Meta, nil), M(c.GetTransactionMeta(tx1.ID())))
-	assert.Equal(t, M(tx1, tx1Meta, nil), M(c.GetTransaction(tx1.ID())))
-	assert.Equal(t, M(tx1Receipt, nil), M(c.GetTransactionReceipt(tx1.ID())))
+	{
+		tx, meta, err := c.GetTransaction(tx1.ID())
+		assert.Nil(t, err)
+		assert.Equal(t, tx1Meta, meta)
+		assert.Equal(t, tx1.ID(), tx.ID())
+	}
+	{
+		r, err := c.GetTransactionReceipt(tx1.ID())
+		assert.Nil(t, err)
+		got, _ := rlp.EncodeToBytes(r)
+		want, _ := rlp.EncodeToBytes(tx1Receipt)
+		assert.Equal(t, want, got)
+	}
+
 	_, err = c.GetTransactionMeta(thor.Bytes32{})
 	assert.True(t, c.IsNotFound(err))
 
