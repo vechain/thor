@@ -12,13 +12,16 @@ import (
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/trie"
 )
 
-const (
-	txInfix      = byte(0)
-	receiptInfix = byte(1)
-)
+// appendTxKey composes the key to access tx or receipt.
+func appendTxKey(buf []byte, blockNum, blockConflicts uint32, index uint64, flag byte) []byte {
+	buf = binary.BigEndian.AppendUint32(buf, blockNum)
+	buf = binary.AppendUvarint(buf, uint64(blockConflicts))
+	buf = append(buf, flag)
+	return binary.AppendUvarint(buf, index)
+}
 
 // BlockSummary presents block summary.
 type BlockSummary struct {
@@ -26,21 +29,30 @@ type BlockSummary struct {
 	Txs       []thor.Bytes32
 	Size      uint64
 	Conflicts uint32
-	SteadyNum uint32
 }
 
-// the key for tx/receipt.
-// it consists of: ( block id | infix | index )
-type txKey [32 + 1 + 8]byte
-
-func makeTxKey(blockID thor.Bytes32, infix byte) (k txKey) {
-	copy(k[:], blockID[:])
-	k[32] = infix
-	return
+// Root returns state root for accessing state trie.
+func (s *BlockSummary) Root() trie.Root {
+	h := s.Header
+	return trie.Root{
+		Hash: h.StateRoot(),
+		Ver: trie.Version{
+			Major: h.Number(),
+			Minor: s.Conflicts,
+		},
+	}
 }
 
-func (k *txKey) SetIndex(i uint64) {
-	binary.BigEndian.PutUint64(k[33:], i)
+// IndexRoot returns index root for accessing index trie.
+func (s *BlockSummary) IndexRoot() trie.Root {
+	return trie.Root{
+		// index trie skips hash, so here just provide a non-zero hash
+		Hash: thor.BytesToBytes32([]byte{1}),
+		Ver: trie.Version{
+			Major: s.Header.Number(),
+			Minor: s.Conflicts,
+		},
+	}
 }
 
 func saveRLP(w kv.Putter, key []byte, val interface{}) error {
@@ -77,28 +89,4 @@ func loadBlockSummary(r kv.Getter, id thor.Bytes32) (*BlockSummary, error) {
 		return nil, err
 	}
 	return &summary, nil
-}
-
-func saveTransaction(w kv.Putter, key txKey, tx *tx.Transaction) error {
-	return saveRLP(w, key[:], tx)
-}
-
-func loadTransaction(r kv.Getter, key txKey) (*tx.Transaction, error) {
-	var tx tx.Transaction
-	if err := loadRLP(r, key[:], &tx); err != nil {
-		return nil, err
-	}
-	return &tx, nil
-}
-
-func saveReceipt(w kv.Putter, key txKey, receipt *tx.Receipt) error {
-	return saveRLP(w, key[:], receipt)
-}
-
-func loadReceipt(r kv.Getter, key txKey) (*tx.Receipt, error) {
-	var receipt tx.Receipt
-	if err := loadRLP(r, key[:], &receipt); err != nil {
-		return nil, err
-	}
-	return &receipt, nil
 }

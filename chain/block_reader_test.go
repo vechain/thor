@@ -18,18 +18,16 @@ func TestBlockReader(t *testing.T) {
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil, 0)
+	repo.AddBlock(b1, nil, 0, false)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil, 0)
+	repo.AddBlock(b2, nil, 0, false)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil, 0)
+	repo.AddBlock(b3, nil, 0, false)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil, 0)
-
-	repo.SetBestBlockID(b4.Header().ID())
+	repo.AddBlock(b4, nil, 0, true)
 
 	br := repo.NewBlockReader(b2.Header().ID())
 
@@ -57,21 +55,19 @@ func TestBlockReaderFork(t *testing.T) {
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil, 0)
+	repo.AddBlock(b1, nil, 0, false)
 
 	b2 := newBlock(b1, 20)
-	repo.AddBlock(b2, nil, 0)
+	repo.AddBlock(b2, nil, 0, false)
 
 	b2x := newBlock(b1, 20)
-	repo.AddBlock(b2x, nil, 1)
+	repo.AddBlock(b2x, nil, 1, false)
 
 	b3 := newBlock(b2, 30)
-	repo.AddBlock(b3, nil, 0)
+	repo.AddBlock(b3, nil, 0, false)
 
 	b4 := newBlock(b3, 40)
-	repo.AddBlock(b4, nil, 0)
-
-	repo.SetBestBlockID(b4.Header().ID())
+	repo.AddBlock(b4, nil, 0, true)
 
 	br := repo.NewBlockReader(b2x.Header().ID())
 
