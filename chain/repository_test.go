@@ -12,9 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -25,22 +23,15 @@ func M(args ...interface{}) []interface{} {
 
 func newTestRepo() (*muxdb.MuxDB, *chain.Repository) {
 	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
-	b0, _, _, _ := g.Build(state.NewStater(db))
+	b0 := new(block.Builder).
+		ParentID(thor.Bytes32{0xff, 0xff, 0xff, 0xff}).
+		Build()
 
 	repo, err := chain.NewRepository(db, b0)
 	if err != nil {
 		panic(err)
 	}
 	return db, repo
-}
-
-func reopenRepo(db *muxdb.MuxDB, b0 *block.Block) *chain.Repository {
-	repo, err := chain.NewRepository(db, b0)
-	if err != nil {
-		panic(err)
-	}
-	return repo
 }
 
 func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Block {
@@ -59,9 +50,8 @@ func newBlock(parent *block.Block, ts uint64, txs ...*tx.Transaction) *block.Blo
 }
 
 func TestRepository(t *testing.T) {
-	db := muxdb.NewMem()
-	g := genesis.NewDevnet()
-	b0, _, _, _ := g.Build(state.NewStater(db))
+	db, repo1 := newTestRepo()
+	b0 := repo1.GenesisBlock()
 
 	repo1, err := chain.NewRepository(db, b0)
 	if err != nil {
@@ -75,7 +65,7 @@ func TestRepository(t *testing.T) {
 	receipt1 := &tx.Receipt{}
 
 	b1 := newBlock(repo1.GenesisBlock(), 10, tx1)
-	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}, 0))
+	assert.Nil(t, repo1.AddBlock(b1, tx.Receipts{receipt1}, 0, false))
 
 	// best block not set, so still 0
 	assert.Equal(t, uint32(0), repo1.BestBlockSummary().Header.Number())
@@ -104,47 +94,15 @@ func TestConflicts(t *testing.T) {
 	b0 := repo.GenesisBlock()
 
 	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil, 0)
+	repo.AddBlock(b1, nil, 0, false)
 
 	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
 	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.ScanConflicts(1)))
 
 	b1x := newBlock(b0, 20)
-	repo.AddBlock(b1x, nil, 1)
+	repo.AddBlock(b1x, nil, 1, false)
 	assert.Equal(t, []interface{}{uint32(1), nil}, M(repo.GetMaxBlockNum()))
 	assert.Equal(t, []interface{}{uint32(2), nil}, M(repo.ScanConflicts(1)))
-}
-
-func TestSteadyBlockID(t *testing.T) {
-	db, repo := newTestRepo()
-	b0 := repo.GenesisBlock()
-
-	assert.Equal(t, b0.Header().ID(), repo.SteadyBlockID())
-
-	b1 := newBlock(b0, 10)
-	repo.AddBlock(b1, nil, 0)
-
-	assert.Nil(t, repo.SetSteadyBlockID(b1.Header().ID()))
-	assert.Equal(t, b1.Header().ID(), repo.SteadyBlockID())
-
-	b2 := newBlock(b1, 10)
-	repo.AddBlock(b2, nil, 0)
-
-	assert.Nil(t, repo.SetSteadyBlockID(b2.Header().ID()))
-	assert.Equal(t, b2.Header().ID(), repo.SteadyBlockID())
-
-	b2x := newBlock(b1, 10)
-	repo.AddBlock(b2x, nil, 1)
-	assert.Error(t, repo.SetSteadyBlockID(b2x.Header().ID()))
-	assert.Equal(t, b2.Header().ID(), repo.SteadyBlockID())
-
-	b3 := newBlock(b2, 10)
-	repo.AddBlock(b3, nil, 0)
-	assert.Nil(t, repo.SetSteadyBlockID(b3.Header().ID()))
-	assert.Equal(t, b3.Header().ID(), repo.SteadyBlockID())
-
-	repo = reopenRepo(db, b0)
-	assert.Equal(t, b3.Header().ID(), repo.SteadyBlockID())
 }
 
 func TestScanHeads(t *testing.T) {
@@ -156,14 +114,14 @@ func TestScanHeads(t *testing.T) {
 	assert.Equal(t, []thor.Bytes32{repo.GenesisBlock().Header().ID()}, heads)
 
 	b1 := newBlock(repo.GenesisBlock(), 10)
-	err = repo.AddBlock(b1, nil, 0)
+	err = repo.AddBlock(b1, nil, 0, false)
 	assert.Nil(t, err)
 	heads, err = repo.ScanHeads(0)
 	assert.Nil(t, err)
 	assert.Equal(t, []thor.Bytes32{b1.Header().ID()}, heads)
 
 	b2 := newBlock(b1, 20)
-	err = repo.AddBlock(b2, nil, 0)
+	err = repo.AddBlock(b2, nil, 0, false)
 	assert.Nil(t, err)
 	heads, err = repo.ScanHeads(0)
 	assert.Nil(t, err)
@@ -174,7 +132,7 @@ func TestScanHeads(t *testing.T) {
 	assert.Equal(t, 0, len(heads))
 
 	b2x := newBlock(b1, 20)
-	err = repo.AddBlock(b2x, nil, 0)
+	err = repo.AddBlock(b2x, nil, 0, false)
 	assert.Nil(t, err)
 	heads, err = repo.ScanHeads(0)
 	assert.Nil(t, err)
@@ -186,7 +144,7 @@ func TestScanHeads(t *testing.T) {
 	}
 
 	b3 := newBlock(b2, 30)
-	err = repo.AddBlock(b3, nil, 0)
+	err = repo.AddBlock(b3, nil, 0, false)
 	assert.Nil(t, err)
 	heads, err = repo.ScanHeads(0)
 	assert.Nil(t, err)
@@ -201,7 +159,7 @@ func TestScanHeads(t *testing.T) {
 	assert.Equal(t, []thor.Bytes32{b3.Header().ID()}, heads)
 
 	b3x := newBlock(b2, 30)
-	err = repo.AddBlock(b3x, nil, 0)
+	err = repo.AddBlock(b3x, nil, 0, false)
 	assert.Nil(t, err)
 	heads, err = repo.ScanHeads(0)
 	assert.Nil(t, err)
