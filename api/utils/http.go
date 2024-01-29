@@ -28,6 +28,14 @@ func HTTPError(cause error, status int) error {
 	}
 }
 
+// NotFound convenience method to create http not found error.
+func NotFound(cause error) error {
+	return &httpError{
+		cause:  cause,
+		status: http.StatusNotFound,
+	}
+}
+
 // BadRequest convenience method to create http bad request error.
 func BadRequest(cause error) error {
 	return &httpError{
