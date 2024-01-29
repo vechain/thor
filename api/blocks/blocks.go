@@ -43,7 +43,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 	summary, err := b.getBlockSummary(revision)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
-			return utils.WriteJSON(w, nil)
+			return utils.HTTPError(errors.WithMessage(errors.New("Not Found"), "Block"), 404)
 		}
 		return err
 	}

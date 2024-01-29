@@ -49,6 +49,9 @@ func TestBlock(t *testing.T) {
 	res, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 
+	res, statusCode = httpGet(t, ts.URL+"/blocks/"+"0x00fe588ccb338a0980cbead20783f8c6746b9d21261a93873b235c4f5662b67f")
+	assert.Equal(t, http.StatusNotFound, statusCode)
+
 	res, statusCode = httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
