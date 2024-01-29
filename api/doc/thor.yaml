@@ -713,7 +713,7 @@ paths:
         - Debug
       summary: Retrieve storage range
       description: |
-        The endpoint retrieves storage entries related for a particular transaction clause and contract address. This 
+        The endpoint retrieves storage entries related to a particular transaction clause and contract address. This 
         could be useful for inspecting or analyzing storage changes.
       requestBody:
         required: true
