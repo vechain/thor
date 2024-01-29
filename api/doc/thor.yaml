@@ -713,7 +713,8 @@ paths:
         - Debug
       summary: Retrieve storage range
       description: |
-        of the account with given address
+        The endpoint retrieves storage entries related for a particular transaction clause and contract address. This 
+        could be useful for inspecting or analyzing storage changes.
       requestBody:
         required: true
         content:
@@ -2148,7 +2149,7 @@ components:
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
           required: true
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}/[0-9]+/[0-9]+$'
+          pattern: '(0x)?[0-9a-fA-F]{64}\/(0x)?([0-9]+|[0-9a-fA-F]+|[a-fA-F]+)\/[0-9]+$'
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
 
@@ -2213,9 +2214,14 @@ components:
         target:
           type: string
           example: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
+          description: |
+            The unified path of the transaction clause.
+            
+            Format:
+            `blockID/(txIndex|txId)/clauseIndex`
           required: true
           nullable: false
-          pattern: '^0x[0-9a-fA-F]{64}/[0-9]+/[0-9]+$'
+          pattern: '(0x)?[0-9a-fA-F]{64}\/(0x)?([0-9]+|[0-9a-fA-F]+|[a-fA-F]+)\/[0-9]+$'
 
     StorageRange:
       type: object
