@@ -11,6 +11,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// FS embeds the Open API specs and documentation.
+//
 //go:embed thor.yaml api-docs
 var FS embed.FS
 var version string
