@@ -35,8 +35,8 @@ func New(
 	stater *state.Stater,
 	nodeMaster thor.Address,
 	beneficiary *thor.Address,
-	forkConfig thor.ForkConfig) *Packer {
-
+	forkConfig thor.ForkConfig,
+) *Packer {
 	return &Packer{
 		repo,
 		stater,

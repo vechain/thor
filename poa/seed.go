@@ -15,6 +15,8 @@ var epochInterval uint32 = thor.SeederInterval
 
 // mockEpochInterval mocks the epoch interval。
 // TEST ONLY
+//
+//nolint:unused
 func mockEpochInterval(interval uint32) {
 	epochInterval = interval
 }

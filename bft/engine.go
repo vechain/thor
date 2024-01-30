@@ -211,7 +211,6 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 			if !includes {
 				return false, nil
 			}
-
 		}
 	}
 
@@ -234,7 +233,7 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	)
 
 	if entry := engine.caches.justifier.Remove(header.ParentID()); !isCheckPoint(header.Number()) && entry != nil {
-		js = interface{}(entry.Entry.Value).(*justifier)
+		js = (entry.Entry.Value).(*justifier)
 		end = header.Number()
 	} else {
 		// create a new vote set if cache missed or new block is checkpoint

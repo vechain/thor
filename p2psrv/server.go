@@ -202,7 +202,6 @@ func (s *Server) listenDiscV5() (err error) {
 	}
 	for _, node := range s.opts.KnownNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
-
 	}
 
 	if err := network.SetFallbackNodes(s.bootstrapNodes); err != nil {

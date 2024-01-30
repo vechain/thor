@@ -67,7 +67,6 @@ func NewDevnet() *Genesis {
 		GasLimit(thor.InitialGasLimit).
 		Timestamp(launchTime).
 		State(func(state *state.State) error {
-
 			// setup builtin contracts
 			if err := state.SetCode(builtin.Authority.Address, builtin.Authority.RuntimeBytecodes()); err != nil {
 				return err

@@ -24,7 +24,7 @@ jobs:
         with:
           version: v1.54
           # use the default if on main branch, otherwise use the pull request config
-          args: --timeout=30m --config=${{ github.event_name == 'pull_request' && '.golangci.pull-request.yml' || '.golangci.yml' }}
+          args: --timeout=30m --config=.golangci.yml
           only-new-issues: true
           skip-cache: true
           skip-pkg-cache: true

@@ -144,7 +144,6 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter, path []byte) (no
 		cached.Key = common.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(*valueNode); !ok {
-
 			collapsed.Val, cached.Val, err = h.hash(n.Val, db, append(path, n.Key...), false)
 			if err != nil {
 				return original, original, err

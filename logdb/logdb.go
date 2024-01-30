@@ -95,7 +95,6 @@ func (db *LogDB) Path() string {
 }
 
 func (db *LogDB) FilterEvents(ctx context.Context, filter *EventFilter) ([]*Event, error) {
-
 	const query = `SELECT e.seq, r0.data, e.blockTime, r1.data, r2.data, e.clauseIndex, r3.data, r4.data, r5.data, r6.data, r7.data, r8.data, e.data
 FROM (%v) e
 	LEFT JOIN ref r0 ON e.blockID = r0.id
@@ -166,7 +165,6 @@ FROM (%v) e
 }
 
 func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
-
 	const query = `SELECT t.seq, r0.data, t.blockTime, r1.data, r2.data, t.clauseIndex, r3.data, r4.data, t.amount
 FROM (%v) t 
 	LEFT JOIN ref r0 ON t.blockID = r0.id
@@ -467,7 +465,6 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 			tx := txs[i]
 			txID = tx.ID()
 			txOrigin, _ = tx.Origin()
-
 		}
 		if err := w.exec(
 			"INSERT OR IGNORE INTO ref(data) VALUES(?),(?)",
