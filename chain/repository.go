@@ -103,7 +103,7 @@ func NewRepository(db *muxdb.MuxDB, genesis *block.Block) (*Repository, error) {
 		}
 
 		if summary, err := repo.GetBlockSummary(bestID); err != nil {
-			return nil, errors.Wrap(err, "get best block")
+			return nil, errors.Wrap(err, "get latest block")
 		} else {
 			repo.bestSummary.Store(summary)
 		}

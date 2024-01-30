@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
@@ -354,7 +355,7 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 }
 
 func (d *Debug) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
+	if revision == "" || revision == blocks.BEST_BLOCK_NAME {
 		return d.repo.BestBlockSummary(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {

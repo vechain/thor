@@ -105,7 +105,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 					break
 				}
 				// if more than 3 peers connected, we are assumed to be the best
-				log.Debug("synchronization done, best assumed")
+				log.Debug("synchronization done, latest assumed")
 			} else {
 				if err := download(ctx, c.repo, peer, best.Number(), handler); err != nil {
 					peer.logger.Debug("synchronization failed", "err", err)

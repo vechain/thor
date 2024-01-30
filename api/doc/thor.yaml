@@ -270,7 +270,7 @@ paths:
         - Blocks
       summary: Retrieve block
       description: |
-        by ID or number, or 'best' for latest block or 'finalized' for finalized block. If `expanded` query option is true, all transactions along with
+        by ID or number, or 'latest' for latest block or 'finalized' for finalized block. If `expanded` query option is true, all transactions along with
         their receipts will be embedded under `transactions` field instead of ids.
       responses:
         '200':
@@ -1392,7 +1392,7 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: can be block number or ID. best block is assumed if omitted.
+      description: can be block number or ID. latest block is assumed if omitted.
       schema:
         type: string
 
@@ -1400,16 +1400,16 @@ components:
       name: revision
       in: path
       description: |
-        block ID or number, or 'best' stands for latest block, or 'finalized' stands for finalized block
+        block ID or number, or 'latest' stands for latest block, or 'finalized' stands for finalized block
       required: true
       schema:
         type: string
-      example: best
+      example: latest
 
     HeadInQuery:
       name: head
       in: query
-      description: ID of head block. best block is assumed if omitted
+      description: ID of head block. latest block is assumed if omitted
       schema:
         type: string
 
@@ -1457,7 +1457,7 @@ components:
       name: pos
       in: query
       description: |
-        a saved block ID for resuming the subscription. best block ID is assumed if omitted.
+        a saved block ID for resuming the subscription. latest block ID is assumed if omitted.
       schema:
         type: string
 

@@ -278,7 +278,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 				return b.Header().ID(), nil
 			},
 		}, {
-			"add empty block, best should remain unchanged",
+			"add empty block, latest should remain unchanged",
 			func() (thor.Bytes32, error) {
 				wanted := b.Header().ID()
 				b = new(block.Builder).ParentID(b.Header().ID()).Build()
@@ -295,7 +295,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 			},
 		},
 		{
-			"add both event and transfer, best should change",
+			"add both event and transfer, latest should change",
 			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).

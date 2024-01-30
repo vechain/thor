@@ -64,7 +64,7 @@ func TestBlock(t *testing.T) {
 	checkBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
 
-	res, statusCode = httpGet(t, ts.URL+"/blocks/best")
+	res, statusCode = httpGet(t, ts.URL+"/blocks/latest")
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}

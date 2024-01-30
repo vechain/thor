@@ -97,7 +97,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				if (best.Number() == flow.ParentHeader().Number() && s1 != s2) ||
 					best.TotalScore() > flow.TotalScore() {
-					log.Debug("re-schedule packer due to new best block")
+					log.Debug("re-schedule packer due to new latest block")
 					goto RE_SCHEDULE
 				}
 			}

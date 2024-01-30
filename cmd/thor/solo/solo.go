@@ -165,7 +165,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	realElapsed := mclock.Now() - startTime
 
 	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
+		return errors.WithMessage(err, "set latest block")
 	}
 
 	if !s.skipLogs {

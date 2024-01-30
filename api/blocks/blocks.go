@@ -23,6 +23,8 @@ type Blocks struct {
 	bft  BFTEngine
 }
 
+const BEST_BLOCK_NAME = "latest"
+
 func New(repo *chain.Repository, bft BFTEngine) *Blocks {
 	return &Blocks{
 		repo,
@@ -85,7 +87,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 }
 
 func (b *Blocks) parseRevision(revision string) (interface{}, error) {
-	if revision == "" || revision == "best" {
+	if revision == "" || revision == BEST_BLOCK_NAME {
 		return nil, nil
 	}
 	if revision == "finalized" {

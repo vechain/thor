@@ -538,12 +538,12 @@ func printStartupMessage1(
 	bestBlock := repo.BestBlockSummary()
 
 	fmt.Printf(`Starting %v
-    Network      [ %v %v ]
-    Best block   [ %v #%v @%v ]
-    Forks        [ %v ]
-    Master       [ %v ]
-    Beneficiary  [ %v ]
-    Instance dir [ %v ]
+    Network        [ %v %v ]
+    Latest block   [ %v #%v @%v ]
+    Forks          [ %v ]
+    Master         [ %v ]
+    Beneficiary    [ %v ]
+    Instance dir   [ %v ]
 `,
 		common.MakeName("Thor", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -592,11 +592,11 @@ func printSoloStartupMessage(
 	bestBlock := repo.BestBlockSummary()
 
 	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
+    Network       [ %v %v ]    
+    Latest block  [ %v #%v @%v ]
+    Forks         [ %v ]
+    Data dir      [ %v ]
+    API portal    [ %v ]
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
 └──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
