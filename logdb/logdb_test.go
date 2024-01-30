@@ -133,7 +133,6 @@ func TestEvents(t *testing.T) {
 	var allTransfers transferLogs
 
 	for i := 0; i < 100; i++ {
-
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
 			Transaction(newTx()).
@@ -428,5 +427,4 @@ func TestLogDB_HasBlockID(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.True(t, has)
-
 }

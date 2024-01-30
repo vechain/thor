@@ -90,7 +90,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, err := p.Schedule(parentSum, uint64(parent.Header().Timestamp()+100*thor.BlockInterval))
+	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func newTestConsensus() (*testConsensus, error) {
 	proposer2 := genesis.DevAccounts()[1]
 	p2 := packer.New(repo, stater, proposer2.Address, &proposer2.Address, forkConfig)
 	b1sum, _ := repo.GetBlockSummary(b1.Header().ID())
-	flow2, err := p2.Schedule(b1sum, uint64(b1.Header().Timestamp()+100*thor.BlockInterval))
+	flow2, err := p2.Schedule(b1sum, b1.Header().Timestamp()+100*thor.BlockInterval)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,7 @@ func TestNewConsensus(t *testing.T) {
 }
 
 func TestNewRuntimeForReplay(t *testing.T) {
-	consensus, err := newTestConsensus()
+	consensus, _ := newTestConsensus()
 	b1 := consensus.parent
 
 	// Test for success scenario
@@ -351,7 +351,6 @@ func TestValidateBlockHeader(t *testing.T) {
 				assert.Equal(t, expected, err)
 				assert.True(t, IsCritical(err))
 				assert.Equal(t, err.Error(), "block gas limit invalid: parent 10000000, current 20000000")
-
 			},
 		},
 		{

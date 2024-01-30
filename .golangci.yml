@@ -1,6 +1,12 @@
 # Please refer to the official golangci-lint config documentation for more details:
 # https://golangci-lint.run/usage/configuration/
 # https://github.com/golangci/golangci-lint/blob/master/.golangci.reference.yml
+run:
+  timeout: 10m
+  tests: true
+  # default is true. Enables skipping of directories:
+  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
+  skip-dirs-use-default: true
 
 linters:
   disable-all: true
@@ -28,9 +34,9 @@ linters:
     # - makezero # false positives
     # - nilerr # several intentional
 
-run:
-  timeout: 10m
-  tests: false
+linters-settings:
+  gofmt:
+    simplify: true
 
 issues:
   max-issues-per-linter: 1000

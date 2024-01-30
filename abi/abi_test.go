@@ -81,6 +81,5 @@ func TestABI(t *testing.T) {
 		assert.Nil(t, err)
 
 		assert.Equal(t, value, d)
-
 	}
 }

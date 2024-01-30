@@ -72,7 +72,6 @@ func (tr *testResolvedTransaction) currentState() *state.State {
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
-
 	txBuild := func() *tx.Builder {
 		return txBuilder(tr.repo.ChainTag())
 	}
@@ -98,7 +97,6 @@ func (tr *testResolvedTransaction) TestResolveTransaction() {
 }
 
 func (tr *testResolvedTransaction) TestCommonTo() {
-
 	txBuild := func() *tx.Builder {
 		return txBuilder(tr.repo.ChainTag())
 	}

@@ -16,7 +16,6 @@ func M(a ...interface{}) []interface{} {
 	return a
 }
 func TestStackedMap(t *testing.T) {
-
 	assert := assert.New(t)
 	src := make(map[string]string)
 	src["foo"] = "bar"

@@ -7,7 +7,7 @@ package blocks
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -28,11 +28,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-const (
-	testAddress = "56e81f171bcc55a6ff8345e692c0f86e5b48e01a"
-	testPrivHex = "efa321f290811731036e5eccd373114e5186d9fe419081f5a607231279d5ef01"
-)
-
 var blk *block.Block
 var ts *httptest.Server
 
@@ -43,13 +38,13 @@ func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 	//invalid block id
-	res, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
+	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 	//invalid block number
-	res, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
+	_, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 
-	res, statusCode = httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
+	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
 	rb := new(JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
@@ -70,7 +65,6 @@ func TestBlock(t *testing.T) {
 	}
 	checkBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
-
 }
 
 func initBlockServer(t *testing.T) {
@@ -145,7 +139,6 @@ func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
 	}
-
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {
@@ -153,7 +146,7 @@ func httpGet(t *testing.T, url string) ([]byte, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)

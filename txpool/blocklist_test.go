@@ -78,7 +78,7 @@ func TestSave(t *testing.T) {
 		t.Errorf("Load failed: %s", err)
 	}
 
-	fileContents, err := os.ReadFile(testFilePath)
+	fileContents, _ := os.ReadFile(testFilePath)
 	str := string(fileContents)
 	assert.True(t, strings.Contains(str, "0x25df024637d4e56c1ae9563987bf3e92c9f534c0"))
 	assert.True(t, strings.Contains(str, "0x25df024637d4e56c1ae9563987bf3e92c9f534c1"))
@@ -158,7 +158,6 @@ func TestFetch(t *testing.T) {
 					t.Errorf("Fetch() missing address %s", addr)
 				}
 			}
-
 		})
 	}
 }

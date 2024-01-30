@@ -200,5 +200,4 @@ func TestSeeder_Generate(t *testing.T) {
 			}
 		})
 	}
-
 }

@@ -111,7 +111,6 @@ func TestTxObjMap(t *testing.T) {
 
 	assert.Equal(t, []*txObject{txObj3}, m.ToTxObjects())
 	assert.Equal(t, tx.Transactions{tx3}, m.ToTxs())
-
 }
 
 func TestLimitByDelegator(t *testing.T) {
