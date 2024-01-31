@@ -354,7 +354,7 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 }
 
 func (d *Debug) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
+	if revision == "" || revision == "best" || revision == "latest" {
 		return d.repo.BestBlockSummary(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {

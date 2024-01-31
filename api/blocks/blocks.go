@@ -85,7 +85,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 }
 
 func (b *Blocks) parseRevision(revision string) (interface{}, error) {
-	if revision == "" || revision == "best" {
+	if revision == "" || revision == "best" || revision == "latest" {
 		return nil, nil
 	}
 	if revision == "finalized" {
