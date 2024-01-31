@@ -2300,10 +2300,9 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: Specify either a block number or ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
-        pattern: '^(0x)?([0-9a-fA-F]{64}|[0-9]+)$'
 
     RevisionInPath:
       name: revision
