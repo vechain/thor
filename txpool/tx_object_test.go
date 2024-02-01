@@ -136,7 +136,6 @@ func TestResolve(t *testing.T) {
 	assert.Equal(t, tx, txObj.Transaction)
 
 	assert.Equal(t, acc.Address, txObj.Origin())
-
 }
 
 func TestExecutable(t *testing.T) {

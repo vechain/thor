@@ -36,7 +36,6 @@ func TestReceipt(t *testing.T) {
 }
 
 func TestReceiptStructure(t *testing.T) {
-
 	receipt := getMockReceipt()
 
 	assert.Equal(t, uint64(1000), receipt.GasUsed)
@@ -45,11 +44,9 @@ func TestReceiptStructure(t *testing.T) {
 	assert.Equal(t, big.NewInt(50), receipt.Reward)
 	assert.Equal(t, false, receipt.Reverted)
 	assert.Equal(t, []*Output{}, receipt.Outputs)
-
 }
 
 func TestEmptyRootHash(t *testing.T) {
-
 	receipt1 := getMockReceipt()
 	receipt2 := getMockReceipt()
 

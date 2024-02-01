@@ -173,8 +173,8 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic(err)
 			}
 
-			stateDB.SubBalance(common.Address(sender), amount)
-			stateDB.AddBalance(common.Address(recipient), amount)
+			stateDB.SubBalance(sender, amount)
+			stateDB.AddBalance(recipient, amount)
 
 			stateDB.AddTransfer(&tx.Transfer{
 				Sender:    thor.Address(sender),
@@ -242,7 +242,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 			}
 
 			stateDB.AddLog(&types.Log{
-				Address: common.Address(contractAddr),
+				Address: contractAddr,
 				Topics:  []common.Hash{common.Hash(prototypeSetMasterEvent.ID())},
 				Data:    data,
 			})

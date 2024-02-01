@@ -42,8 +42,7 @@ func TestIsExpired(t *testing.T) {
 func TestHash(t *testing.T) {
 	tx := GetMockTx()
 	res := tx.Hash()
-	assert.Equal(t, res, thor.Bytes32(thor.Bytes32{0x4b, 0xff, 0x70, 0x1, 0xfe, 0xc4, 0x2, 0x84, 0xd9, 0x3b, 0x4c, 0x45, 0x61, 0x7d, 0xc7, 0x41, 0xb9, 0xa8, 0x8e, 0xd5, 0x9d, 0xf, 0x1, 0xa3, 0x76, 0x39, 0x4c, 0x7b, 0xfe, 0xa6, 0xed, 0x24}))
-
+	assert.Equal(t, res, thor.Bytes32{0x4b, 0xff, 0x70, 0x1, 0xfe, 0xc4, 0x2, 0x84, 0xd9, 0x3b, 0x4c, 0x45, 0x61, 0x7d, 0xc7, 0x41, 0xb9, 0xa8, 0x8e, 0xd5, 0x9d, 0xf, 0x1, 0xa3, 0x76, 0x39, 0x4c, 0x7b, 0xfe, 0xa6, 0xed, 0x24})
 }
 
 func TestDependsOn(t *testing.T) {
@@ -58,7 +57,6 @@ func TestTestFeatures(t *testing.T) {
 	supportedFeatures := tx.Features(1)
 	res := txx.TestFeatures(supportedFeatures)
 	assert.Equal(t, res, nil)
-
 }
 
 func TestToString(t *testing.T) {
@@ -76,7 +74,6 @@ func TestToString(t *testing.T) {
 }
 
 func TestTxSize(t *testing.T) {
-
 	tx := GetMockTx()
 
 	size := tx.Size()
@@ -210,7 +207,6 @@ func TestTx(t *testing.T) {
 	assert.Equal(t, "f8970184aabbccdd20f840df947567d83b7b8d80addcb281a71d54fc7b3364ffed82271086000000606060df947567d83b7b8d80addcb281a71d54fc7b3364ffed824e208600000060606081808252088083bc614ec0b841f76f3c91a834165872aa9464fc55b03a13f46ea8d3b858e528fcceaf371ad6884193c3f313ff8effbb57fe4d1adc13dceb933bedbf9dbb528d2936203d5511df00",
 		func() string { d, _ := rlp.EncodeToBytes(trx); return hex.EncodeToString(d) }(),
 	)
-
 }
 
 func TestDelegatedTx(t *testing.T) {

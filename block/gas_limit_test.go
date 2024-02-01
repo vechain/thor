@@ -15,7 +15,6 @@ import (
 )
 
 func TestGasLimit_IsValid(t *testing.T) {
-
 	tests := []struct {
 		gl       uint64
 		parentGL uint64
@@ -35,7 +34,6 @@ func TestGasLimit_IsValid(t *testing.T) {
 }
 
 func TestGasLimit_Adjust(t *testing.T) {
-
 	tests := []struct {
 		gl    uint64
 		delta int64

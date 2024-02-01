@@ -44,7 +44,6 @@ func New(
 	allowCustomTracer bool,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
-
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
 		origins[i] = strings.ToLower(strings.TrimSpace(o))

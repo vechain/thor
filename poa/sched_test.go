@@ -34,7 +34,6 @@ var (
 )
 
 func TestSchedule(t *testing.T) {
-
 	_, err := poa.NewSchedulerV1(thor.BytesToAddress([]byte("px")), proposers, 1, parentTime)
 	assert.NotNil(t, err)
 

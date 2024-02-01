@@ -36,8 +36,8 @@ func NewSchedulerV1(
 	addr thor.Address,
 	proposers []Proposer,
 	parentBlockNumber uint32,
-	parentBlockTime uint64) (*SchedulerV1, error) {
-
+	parentBlockTime uint64,
+) (*SchedulerV1, error) {
 	actives := make([]Proposer, 0, len(proposers))
 	listed := false
 	var proposer Proposer
@@ -108,7 +108,6 @@ func (s *SchedulerV1) IsTheTime(newBlockTime uint64) bool {
 
 // Updates returns proposers whose status are changed, and the score when new block time is assumed to be newBlockTime.
 func (s *SchedulerV1) Updates(newBlockTime uint64) (updates []Proposer, score uint64) {
-
 	toDeactivate := make(map[thor.Address]Proposer)
 
 	t := newBlockTime - thor.BlockInterval

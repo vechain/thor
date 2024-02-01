@@ -11,7 +11,6 @@ import (
 )
 
 func (c *Communicator) txsLoop() {
-
 	txEvCh := make(chan *txpool.TxEvent, 10)
 	sub := c.txPool.SubscribeTxEvent(txEvCh)
 	defer sub.Unsubscribe()

@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -184,7 +184,7 @@ func benchmarkPrecompiled(addr string, test precompiledTest, bench *testing.B) {
 			return
 		}
 		if common.Bytes2Hex(res) != test.Expected {
-			bench.Error(fmt.Sprintf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res)))
+			bench.Errorf("Expected %v, got %v", test.Expected, common.Bytes2Hex(res))
 			return
 		}
 	})
@@ -278,16 +278,6 @@ func testJson(name, addr string, t *testing.T) {
 	}
 }
 
-func testJsonFail(name, addr string, t *testing.T) {
-	tests, err := loadJsonFail(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, test := range tests {
-		testPrecompiledFailure(addr, test, t)
-	}
-}
-
 func benchJson(name, addr string, b *testing.B) {
 	tests, err := loadJson(name)
 	if err != nil {
@@ -299,21 +289,11 @@ func benchJson(name, addr string, b *testing.B) {
 }
 
 func loadJson(name string) ([]precompiledTest, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
+	data, err := os.ReadFile(fmt.Sprintf("testdata/precompiles/%v.json", name))
 	if err != nil {
 		return nil, err
 	}
 	var testcases []precompiledTest
-	err = json.Unmarshal(data, &testcases)
-	return testcases, err
-}
-
-func loadJsonFail(name string) ([]precompiledFailureTest, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/fail-%v.json", name))
-	if err != nil {
-		return nil, err
-	}
-	var testcases []precompiledFailureTest
 	err = json.Unmarshal(data, &testcases)
 	return testcases, err
 }

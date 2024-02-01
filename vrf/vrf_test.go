@@ -9,7 +9,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"os"
 	"reflect"
 	"testing"
@@ -34,7 +34,7 @@ func readCases(fileName string) ([]Case, error) {
 	}
 	defer jsonFile.Close()
 
-	byteValue, err2 := ioutil.ReadAll(jsonFile)
+	byteValue, err2 := io.ReadAll(jsonFile)
 	if err2 != nil {
 		return nil, err2
 	}
@@ -190,7 +190,6 @@ func Test_Secp256K1Sha256Tai_vrf_Verify_bad_message(t *testing.T) {
 			return
 		}
 	})
-
 }
 
 func BenchmarkVRF(b *testing.B) {

@@ -112,7 +112,7 @@ func TestPack(t *testing.T) {
 	proposer := genesis.DevAccounts()[0]
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
-	flow, _ := p.Schedule(parentSum, uint64(parent.Header().Timestamp()+100*thor.BlockInterval))
+	flow, _ := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
 
 	flow.Pack(proposer.PrivateKey, 0, false)
 

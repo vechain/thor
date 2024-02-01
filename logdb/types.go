@@ -88,7 +88,7 @@ type EventFilter struct {
 type TransferCriteria struct {
 	TxOrigin  *thor.Address //who send transaction
 	Sender    *thor.Address //who transferred tokens
-	Recipient *thor.Address //who recieved tokens
+	Recipient *thor.Address //who received tokens
 }
 
 func (c *TransferCriteria) toWhereCondition() (cond string, args []interface{}) {

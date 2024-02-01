@@ -188,7 +188,7 @@ func (t *Transaction) Gas() uint64 {
 	return t.body.Gas
 }
 
-// Clauses returns caluses in tx.
+// Clauses returns clauses in tx.
 func (t *Transaction) Clauses() []*Clause {
 	return append([]*Clause(nil), t.body.Clauses...)
 }

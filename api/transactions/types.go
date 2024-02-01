@@ -207,7 +207,6 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 			event.Topics = make([]thor.Bytes32, len(txEvent.Topics))
 			copy(event.Topics, txEvent.Topics)
 			otp.Events[j] = event
-
 		}
 		for j, txTransfer := range output.Transfers {
 			transfer := &Transfer{

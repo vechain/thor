@@ -8,7 +8,7 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -32,16 +32,16 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-var sol = `	pragma solidity ^0.4.18;
-			contract Test {
-    			uint8 value;
-    			function add(uint8 a,uint8 b) public pure returns(uint8) {
-        			return a+b;
-    			}
-    			function set(uint8 v) public {
-        			value = v;
-    			}
-			}`
+// pragma solidity ^0.4.18;
+// contract Test {
+// 	uint8 value;
+// 	function add(uint8 a,uint8 b) public pure returns(uint8) {
+// 		return a+b;
+// 	}
+// 	function set(uint8 v) public {
+// 		value = v;
+// 	}
+// }
 
 var abiJSON = `[
 	{
@@ -111,32 +111,31 @@ func TestAccount(t *testing.T) {
 }
 
 func getAccount(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr)
+	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+invalidNumberRevision)
+	_, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String())
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String())
 	var acc accounts.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
-
 }
 
 func getCode(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/code")
+	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/code")
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+invalidNumberRevision)
+	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code")
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code")
 	var code map[string]string
 	if err := json.Unmarshal(res, &code); err != nil {
 		t.Fatal(err)
@@ -150,17 +149,17 @@ func getCode(t *testing.T) {
 }
 
 func getStorage(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
+	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+invalidBytes32)
+	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+invalidBytes32)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad storage key")
 
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+invalidNumberRevision)
+	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String())
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String())
 	var value map[string]string
 	if err := json.Unmarshal(res, &value); err != nil {
 		t.Fatal(err)
@@ -190,9 +189,9 @@ func initAccountServer(t *testing.T) {
 	packTx(repo, stater, transaction, t)
 
 	method := "set"
-	abi, err := ABI.New([]byte(abiJSON))
+	abi, _ := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
-	input, err := m.EncodeInput(uint8(storageValue))
+	input, err := m.EncodeInput(storageValue)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +251,7 @@ func deployContractWithCall(t *testing.T) {
 		Gas:  10000000,
 		Data: "abc",
 	}
-	res, statusCode := httpPost(t, ts.URL+"/accounts", badBody)
+	_, statusCode := httpPost(t, ts.URL+"/accounts", badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
 	reqBody := &accounts.CallData{
@@ -260,33 +259,32 @@ func deployContractWithCall(t *testing.T) {
 		Data: hexutil.Encode(bytecode),
 	}
 
-	res, statusCode = httpPost(t, ts.URL+"/accounts?revision="+invalidNumberRevision, reqBody)
+	_, statusCode = httpPost(t, ts.URL+"/accounts?revision="+invalidNumberRevision, reqBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode = httpPost(t, ts.URL+"/accounts", reqBody)
+	res, _ := httpPost(t, ts.URL+"/accounts", reqBody)
 	var output *accounts.CallResult
 	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
 	assert.False(t, output.Reverted)
-
 }
 
 func callContract(t *testing.T) {
-	res, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
+	_, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
 	badBody := &accounts.CallData{
 		Data: "input",
 	}
-	res, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), badBody)
+	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid input data")
 
 	a := uint8(1)
 	b := uint8(2)
 	method := "add"
-	abi, err := ABI.New([]byte(abiJSON))
+	abi, _ := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
 	input, err := m.EncodeInput(a, b)
 	if err != nil {
@@ -295,7 +293,7 @@ func callContract(t *testing.T) {
 	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
-	res, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
+	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
 	var output *accounts.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
@@ -327,13 +325,13 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
-	res, statusCode := httpPost(t, ts.URL+"/accounts/*", badBody)
+	_, statusCode := httpPost(t, ts.URL+"/accounts/*", badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
 	a := uint8(1)
 	b := uint8(2)
 	method := "add"
-	abi, err := ABI.New([]byte(abiJSON))
+	abi, _ := ABI.New([]byte(abiJSON))
 	m, _ := abi.MethodByName(method)
 	input, err := m.EncodeInput(a, b)
 	if err != nil {
@@ -353,10 +351,10 @@ func batchCall(t *testing.T) {
 			}},
 	}
 
-	res, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
 
-	res, statusCode = httpPost(t, ts.URL+"/accounts/*", reqBody)
+	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
 	var results accounts.BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
@@ -399,7 +397,7 @@ func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -412,7 +410,7 @@ func httpGet(t *testing.T, url string) ([]byte, int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)

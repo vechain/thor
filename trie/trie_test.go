@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -52,7 +51,7 @@ func TestEmptyTrie(t *testing.T) {
 	var trie Trie
 	res := trie.Hash()
 	exp := emptyRoot
-	if res != thor.Bytes32(exp) {
+	if res != exp {
 		t.Errorf("expected %x got %x", exp, res)
 	}
 }
@@ -312,16 +311,6 @@ func TestLargeValue(t *testing.T) {
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
 	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
-}
-
-type countingDB struct {
-	Database
-	gets map[string]int
-}
-
-func (db *countingDB) Get(key []byte) ([]byte, error) {
-	db.gets[string(key)]++
-	return db.Database.Get(key)
 }
 
 // TestCacheUnload checks that decoded nodes are unloaded after a
@@ -587,7 +576,7 @@ func BenchmarkHash(b *testing.B) {
 }
 
 func tempDB() (string, Database) {
-	dir, err := ioutil.TempDir("", "trie-bench")
+	dir, err := os.MkdirTemp("", "trie-bench")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}

@@ -17,7 +17,6 @@ import (
 )
 
 func generateCandidateList(candidateCount int) []*authority.Candidate {
-
 	candidateList := make([]*authority.Candidate, 0, candidateCount)
 	for i := 0; i < candidateCount; i++ {
 		var nodeMaster, endorsor thor.Address
@@ -39,7 +38,6 @@ func generateCandidateList(candidateCount int) []*authority.Candidate {
 }
 
 func TestNewCandidates(t *testing.T) {
-
 	candidateList := generateCandidateList(5)
 
 	// Call NewCandidates with the mock data
@@ -124,7 +122,6 @@ func TestPick(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-
 	candidateList := generateCandidateList(5)
 
 	// Call NewCandidates with the mock data
