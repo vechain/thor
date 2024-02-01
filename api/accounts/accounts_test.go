@@ -126,6 +126,13 @@ func getAccount(t *testing.T) {
 	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 
+	res, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision=latest")
+	if err := json.Unmarshal(res, &acc); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
+	assert.Equal(t, http.StatusOK, statusCode, "OK")
+
 }
 
 func getCode(t *testing.T) {

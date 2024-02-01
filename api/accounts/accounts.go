@@ -312,7 +312,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 }
 
 func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
+	if revision == "" || revision == "best" || revision == "latest" {
 		return a.repo.BestBlockSummary(), nil
 	}
 	if len(revision) == 66 || len(revision) == 64 {
