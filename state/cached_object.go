@@ -10,6 +10,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 var codeCache, _ = lru.NewARC(512)
@@ -43,16 +44,21 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 
 	trie := co.db.NewTrie(
 		StorageTrieName(co.meta.StorageID),
-		thor.BytesToBytes32(co.data.StorageRoot),
-		co.meta.StorageCommitNum,
-		co.meta.StorageDistinctNum)
+		trie.Root{
+			Hash: thor.BytesToBytes32(co.data.StorageRoot),
+			Ver: trie.Version{
+				Major: co.meta.StorageMajorVer,
+				Minor: co.meta.StorageMinorVer,
+			},
+		},
+	)
 
 	co.cache.storageTrie = trie
 	return trie
 }
 
 // GetStorage returns storage value for given key.
-func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
+func (co *cachedObject) GetStorage(key thor.Bytes32) (rlp.RawValue, error) {
 	cache := &co.cache
 	// retrieve from storage cache
 	if cache.storage != nil {
@@ -70,7 +76,7 @@ func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp
 	}
 
 	// load from trie
-	v, err := loadStorage(trie, key, steadyBlockNum)
+	v, err := loadStorage(trie, key)
 	if err != nil {
 		return nil, err
 	}
