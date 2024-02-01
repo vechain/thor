@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestStater(t *testing.T) {
@@ -17,12 +17,10 @@ func TestStater(t *testing.T) {
 	stater := NewStater(db)
 
 	// Example State
-	root := thor.Bytes32{}
-	blockNum := uint32(1)
-	blockConflicts := uint32(0)
-	steadyBlockNum := uint32(1)
+	var root trie.Root
+	root.Ver.Major = 1
 
-	state := stater.NewState(root, blockNum, blockConflicts, steadyBlockNum)
+	state := stater.NewState(root)
 
 	if state == nil {
 		t.Errorf("NewState returned nil")
