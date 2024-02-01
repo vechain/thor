@@ -1,4 +1,4 @@
-package vm_test
+package vm
 
 import (
 	"encoding/json"
@@ -8,69 +8,54 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/tracers"
-	"github.com/vechain/thor/v2/vm"
 )
 
-func GetNewInterpreter(jumpTable vm.JumpTable) *vm.Interpreter {
-	statedb := vm.NoopStateDB{}
+func GetNewInterpreter(jumpTable JumpTable) *Interpreter {
+	statedb := NoopStateDB{}
 
-	tracer, err := tracers.DefaultDirectory.New("noopTracer", json.RawMessage(`{}`), false)
+	tracer, err := DefaultDirectory.New("noopTracer", json.RawMessage(`{}`), false)
 	if err != nil {
 		panic("failed to create noopTracer: " + err.Error())
 	}
 
-	evmLogger, ok := tracer.(vm.Logger)
+	evmLogger, ok := tracer.(Logger)
 	if !ok {
 		panic("noopTracer does not implement vm.Logger")
 	}
 
-	evmConfig := vm.Config{
+	evmConfig := Config{
 		Tracer:    evmLogger,
 		JumpTable: jumpTable,
 	}
 
-	evm := vm.NewEVM(vm.Context{
+	evm := NewEVM(Context{
 		BlockNumber:        big.NewInt(1),
 		GasPrice:           big.NewInt(1),
-		CanTransfer:        vm.NoopCanTransfer,
-		Transfer:           vm.NoopTransfer,
+		CanTransfer:        NoopCanTransfer,
+		Transfer:           NoopTransfer,
 		NewContractAddress: newContractAddress,
 	},
 		statedb,
-		&vm.ChainConfig{ChainConfig: *params.TestChainConfig}, evmConfig)
+		&ChainConfig{ChainConfig: *params.TestChainConfig}, evmConfig)
 
-	interpreter := vm.NewInterpreter(evm, evmConfig)
+	interpreter := NewInterpreter(evm, evmConfig)
 
 	return interpreter
 }
 
-func GetNewContractFromBytecode(byteCode []byte) *vm.Contract {
-	caller := vm.AccountRef(common.BytesToAddress([]byte{1}))
-	object := vm.AccountRef(common.BytesToAddress([]byte{2}))
+func GetNewContractFromBytecode(byteCode []byte) *Contract {
+	caller := AccountRef(common.BytesToAddress([]byte{1}))
+	object := AccountRef(common.BytesToAddress([]byte{2}))
 
 	value := big.NewInt(0)        // Value being sent to the contract
 	var gasLimit uint64 = 3000000 // Gas limit
 
-	contract := vm.NewContract(caller, object, value, gasLimit)
+	contract := NewContract(caller, object, value, gasLimit)
 
 	contract.SetCode(common.BytesToHash([]byte{0x1}), byteCode)
 
 	return contract
 }
-
-type account struct{}
-
-func (account) SubBalance(amount *big.Int)                          {}
-func (account) AddBalance(amount *big.Int)                          {}
-func (account) SetAddress(common.Address)                           {}
-func (account) Value() *big.Int                                     { return nil }
-func (account) SetBalance(*big.Int)                                 {}
-func (account) SetNonce(uint64)                                     {}
-func (account) Balance() *big.Int                                   { return nil }
-func (account) Address() common.Address                             { return common.Address{} }
-func (account) SetCode(common.Hash, []byte)                         {}
-func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func TestNewInterpreter(t *testing.T) {
 
@@ -87,7 +72,10 @@ func TestInterpreter_Run(t *testing.T) {
 
 	contract := GetNewContractFromBytecode(byteCode)
 
-	interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+	ret, err := interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+
+	assert.Nil(t, ret)
+	assert.Nil(t, err)
 }
 
 func TestInterpreterInvalidStack_Run(t *testing.T) {
