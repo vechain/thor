@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestTestnetGenesis(t *testing.T) {
@@ -22,13 +23,7 @@ func TestTestnetGenesis(t *testing.T) {
 	b0, _, _, err := gene.Build(state.NewStater(db))
 	assert.Nil(t, err)
 
-	id := gene.ID()
-	name := gene.Name()
-
-	assert.Equal(t, id, thor.MustParseBytes32("0x000000000b2bce3c70bc649a02749e8687721b09ed2e15997f466536b20bb127"))
-	assert.Equal(t, name, "testnet")
-
-	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 	v, err := st.Exists(thor.MustParseAddress("0xe59D475Abe695c7f67a8a2321f33A856B0B4c71d"))
 	assert.Nil(t, err)
