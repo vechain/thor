@@ -1557,7 +1557,7 @@ components:
           pattern: '^0x[0-9a-f]{40}$'
         topics:
           type: array
-          minItems: 1
+          minItems: 0
           nullable: false
           required: true
           description: |
