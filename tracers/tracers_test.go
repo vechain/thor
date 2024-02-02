@@ -37,6 +37,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/tracers/logger"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
@@ -119,7 +120,7 @@ func RunTracerTest(t *testing.T, data *traceTest, tracerName string) json.RawMes
 	}
 
 	repo, _ := chain.NewRepository(db, gene)
-	st := state.New(db, gene.Header().StateRoot(), 0, 0, 0)
+	st := state.New(db, trie.Root{Hash: gene.Header().StateRoot()})
 	chain := repo.NewChain(gene.Header().ID())
 
 	for addr, account := range data.State {
@@ -368,7 +369,7 @@ func TestInternals(t *testing.T) {
 			}
 
 			repo, _ := chain.NewRepository(db, gene)
-			st := state.New(db, gene.Header().StateRoot(), 0, 0, 0)
+			st := state.New(db, trie.Root{Hash: gene.Header().StateRoot()})
 			chain := repo.NewChain(gene.Header().ID())
 
 			st.SetCode(to, tc.code)
