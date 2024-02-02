@@ -134,7 +134,7 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.repo.AddBlock(b, nil, conflicts); err != nil {
+	if err = test.repo.AddBlock(b, nil, conflicts, false); err != nil {
 		return nil, err
 	}
 
