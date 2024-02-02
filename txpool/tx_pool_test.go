@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	Tx "github.com/vechain/thor/v2/tx"
 )
@@ -215,8 +216,8 @@ func TestSubscribeNewTx(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
 
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
-	stage, _ := st.Stage(1, 0)
+	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
+	stage, _ := st.Stage(trie.Version{Major: 1})
 	root1, _ := stage.Commit()
 
 	var sig [65]byte
@@ -229,7 +230,7 @@ func TestSubscribeNewTx(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	if err := pool.repo.AddBlock(b1, nil, 0); err != nil {
+	if err := pool.repo.AddBlock(b1, nil, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	pool.repo.SetBestBlockID(b1.Header().ID())
@@ -261,8 +262,8 @@ func TestWashTxs(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, Tx.Transactions{tx1}, txs)
 
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
-	stage, _ := st.Stage(1, 0)
+	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
+	stage, _ := st.Stage(trie.Version{Major: 1})
 	root1, _ := stage.Commit()
 	b1 := new(block.Builder).
 		ParentID(pool.repo.GenesisBlock().Header().ID()).
@@ -271,7 +272,7 @@ func TestWashTxs(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(root1).
 		Build()
-	pool.repo.AddBlock(b1, nil, 0)
+	pool.repo.AddBlock(b1, nil, 0, false)
 
 	txs, _, err = pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
@@ -324,8 +325,8 @@ func TestFillPool(t *testing.T) {
 func TestAdd(t *testing.T) {
 	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
 	defer pool.Close()
-	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
-	stage, _ := st.Stage(1, 0)
+	st := pool.stater.NewState(trie.Root{Hash: pool.repo.GenesisBlock().Header().StateRoot()})
+	stage, _ := st.Stage(trie.Version{Major: 1})
 	root1, _ := stage.Commit()
 
 	var sig [65]byte
@@ -337,7 +338,7 @@ func TestAdd(t *testing.T) {
 		GasLimit(10000000).
 		StateRoot(root1).
 		Build().WithSignature(sig[:])
-	pool.repo.AddBlock(b1, nil, 0)
+	pool.repo.AddBlock(b1, nil, 0, false)
 	pool.repo.SetBestBlockID(b1.Header().ID())
 	acc := devAccounts[0]
 
