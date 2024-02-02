@@ -72,7 +72,7 @@ func newTestResolvedTransaction(t *testing.T) (*testResolvedTransaction, error) 
 
 func (tr *testResolvedTransaction) currentState() *state.State {
 	h := tr.repo.BestBlockSummary()
-	return tr.stater.NewState(h.Header.StateRoot(), h.Header.Number(), 0, h.SteadyNum)
+	return tr.stater.NewState(h.Root())
 }
 
 func (tr *testResolvedTransaction) TestResolveTransaction() {
