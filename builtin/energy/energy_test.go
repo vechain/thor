@@ -13,6 +13,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func M(a ...interface{}) []interface{} {
@@ -21,7 +22,7 @@ func M(a ...interface{}) []interface{} {
 
 func TestEnergy(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(db, trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
@@ -120,7 +121,7 @@ func TestTotalBurned(t *testing.T) {
 
 func TestEnergyGrowth(t *testing.T) {
 	db := muxdb.NewMem()
-	st := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	st := state.New(db, trie.Root{})
 
 	acc := thor.BytesToAddress([]byte("a1"))
 
