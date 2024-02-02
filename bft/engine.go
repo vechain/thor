@@ -321,7 +321,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 }
 
 func (engine *BFTEngine) getMaxBlockProposers(sum *chain.BlockSummary) (uint64, error) {
-	state := engine.stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
+	state := engine.stater.NewState(sum.Root())
 	params, err := builtin.Params.Native(state).Get(thor.KeyMaxBlockProposers)
 	if err != nil {
 		return 0, err

@@ -16,6 +16,7 @@ import (
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -341,7 +342,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		}
 	}
 
-	stage, err := state.Stage(header.Number(), blockConflicts)
+	stage, err := state.Stage(trie.Version{Major: header.Number(), Minor: blockConflicts})
 	if err != nil {
 		return nil, nil, err
 	}

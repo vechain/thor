@@ -50,7 +50,7 @@ func New(
 
 // Schedule schedule a packing flow to pack new block upon given parent and clock time.
 func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow *Flow, err error) {
-	state := p.stater.NewState(parent.Header.StateRoot(), parent.Header.Number(), parent.Conflicts, parent.SteadyNum)
+	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {
@@ -141,7 +141,7 @@ func (p *Packer) Schedule(parent *chain.BlockSummary, nowTimestamp uint64) (flow
 // It will skip the PoA verification and scheduling, and the block produced by
 // the returned flow is not in consensus.
 func (p *Packer) Mock(parent *chain.BlockSummary, targetTime uint64, gasLimit uint64) (*Flow, error) {
-	state := p.stater.NewState(parent.Header.StateRoot(), parent.Header.Number(), parent.Conflicts, parent.SteadyNum)
+	state := p.stater.NewState(parent.Root())
 
 	var features tx.Features
 	if parent.Header.Number()+1 >= p.forkConfig.VIP191 {

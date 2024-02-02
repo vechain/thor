@@ -14,6 +14,7 @@ import (
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/vrf"
 )
@@ -156,7 +157,7 @@ func (f *Flow) Pack(privateKey *ecdsa.PrivateKey, newBlockConflicts uint32, shou
 		return nil, nil, nil, errors.New("private key mismatch")
 	}
 
-	stage, err := f.runtime.State().Stage(f.Number(), newBlockConflicts)
+	stage, err := f.runtime.State().Stage(trie.Version{Major: f.Number(), Minor: newBlockConflicts})
 	if err != nil {
 		return nil, nil, nil, err
 	}
