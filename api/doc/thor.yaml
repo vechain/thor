@@ -1528,7 +1528,7 @@ components:
           example: '0x29c257e36ea6e72a'
           description: |
             The transaction `nonce` is a 64-bit unsigned integer that is determined by the transaction sender.
-                    required: true
+          required: true
           nullable: false
           required: true
 
