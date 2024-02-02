@@ -217,7 +217,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 
 func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
 	header := summary.Header
-	state := d.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
+	state := d.stater.NewState(summary.Root())
 	signer, _ := header.Signer()
 	rt := runtime.New(
 		d.repo.NewChain(header.ID()),
