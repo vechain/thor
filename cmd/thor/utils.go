@@ -312,9 +312,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:        cacheMB,
-		TrieRootCacheCapacity:      256,
 		TrieCachedNodeTTL:          30, // 5min
-		TrieLeafBankSlotCapacity:   256,
 		TrieDedupedPartitionFactor: math.MaxUint32,
 		TrieWillCleanHistory:       !ctx.Bool(disablePrunerFlag.Name),
 		OpenFilesCacheCapacity:     fdCache,
@@ -331,7 +329,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 1000
+		opts.TrieHistPartitionFactor = 100
 	} else {
 		opts.TrieHistPartitionFactor = 500000
 	}
