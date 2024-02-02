@@ -314,7 +314,7 @@ func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transa
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddBlock(b, receipts, 0); err != nil {
+	if err := repo.AddBlock(b, receipts, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(b.Header().ID()); err != nil {

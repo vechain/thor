@@ -200,7 +200,7 @@ func initBlockServer(t *testing.T) {
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddBlock(block, receipts, 0); err != nil {
+	if err := repo.AddBlock(block, receipts, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(block.Header().ID()); err != nil {
