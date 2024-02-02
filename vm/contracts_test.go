@@ -300,16 +300,6 @@ func loadJson(name string) ([]precompiledTest, error) {
 	return testcases, err
 }
 
-func loadJsonFail(name string) ([]precompiledFailureTest, error) {
-	data, err := ioutil.ReadFile(fmt.Sprintf("testdata/precompiles/fail-%v.json", name))
-	if err != nil {
-		return nil, err
-	}
-	var testcases []precompiledFailureTest
-	err = json.Unmarshal(data, &testcases)
-	return testcases, err
-}
-
 func TestAsDelegate(t *testing.T) {
 	// Mock addresses
 	parentCallerAddress := common.HexToAddress("0x01")
