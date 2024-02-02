@@ -1531,7 +1531,6 @@ components:
             The transaction `nonce` is a 64-bit unsigned integer that is determined by the transaction sender.
           required: true
           nullable: false
-          required: true
 
     RawTx:
       type: object
