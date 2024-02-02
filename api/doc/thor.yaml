@@ -1520,6 +1520,7 @@ components:
           type: string
           format: hex
           description: The transaction ID that this transaction depends on.
+          pattern: '^0x[0-9a-f]{64}$'
           example: null
           required: true
           nullable: true
