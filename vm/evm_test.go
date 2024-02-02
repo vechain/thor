@@ -102,13 +102,7 @@ func (t *noopTracer) GetResult() (json.RawMessage, error) {
 func (t *noopTracer) Stop(err error) {
 }
 
-// Test Code
-// func newContractAddress(evm *EVM, counter uint32) common.Address {
-// 	return common.HexToAddress("0x012345657ABC")
-// }
-
 func setupEvmTestContract(codeAddr *common.Address) (*EVM, *Contract) {
-
 	statedb := NoopStateDB{}
 
 	tracer, err := DefaultDirectory.New("noopTracer", json.RawMessage(`{}`), false)

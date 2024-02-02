@@ -13,7 +13,6 @@ func TestNewMemory(t *testing.T) {
 	mem.Set(1, 0, []byte{})
 
 	mem.Print()
-
 }
 
 func TestSet(t *testing.T) {

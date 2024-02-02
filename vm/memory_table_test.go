@@ -209,7 +209,6 @@ func TestMemoryCallOverflow(t *testing.T) {
 	_, overflow := memoryCall(stack)
 
 	assert.True(t, overflow)
-
 }
 
 // Test for memoryDelegateCall function

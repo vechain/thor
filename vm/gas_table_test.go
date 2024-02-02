@@ -117,11 +117,9 @@ func TestGasFunctions(t *testing.T) {
 		}
 		assert.Equal(t, result, test.expected, "Mismatch in gas calculation for function %v", runtime.FuncForPC(reflect.ValueOf(test.function).Pointer()).Name())
 	}
-
 }
 
 func TestGasCall(t *testing.T) {
-
 	evm, stack := GetFunctionArguments()
 	gas, _ := gasCall(params.GasTable{}, evm, &Contract{}, stack, &Memory{}, 0)
 
@@ -129,7 +127,6 @@ func TestGasCall(t *testing.T) {
 }
 
 func TestGasCallCode(t *testing.T) {
-
 	evm, stack := GetFunctionArguments()
 	gas, _ := gasCallCode(params.GasTable{}, evm, &Contract{}, stack, &Memory{}, 0)
 
@@ -137,7 +134,6 @@ func TestGasCallCode(t *testing.T) {
 }
 
 func TestGasLog(t *testing.T) {
-
 	evm, stack := GetFunctionArguments()
 	gasFunc := makeGasLog(0)
 

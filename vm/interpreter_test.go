@@ -58,13 +58,11 @@ func GetNewContractFromBytecode(byteCode []byte) *Contract {
 }
 
 func TestNewInterpreter(t *testing.T) {
-
 	interpreter := GetNewInterpreter(nil)
 	assert.NotNil(t, interpreter)
 }
 
 func TestInterpreter_Run(t *testing.T) {
-
 	interpreter := GetNewInterpreter(nil)
 
 	// Some valid byteCode
@@ -79,7 +77,6 @@ func TestInterpreter_Run(t *testing.T) {
 }
 
 func TestInterpreterInvalidStack_Run(t *testing.T) {
-
 	interpreter := GetNewInterpreter(nil)
 
 	// Some valid byteCode
@@ -91,7 +88,6 @@ func TestInterpreterInvalidStack_Run(t *testing.T) {
 }
 
 func TestInterpreterInvalidOpcode_Run(t *testing.T) {
-
 	interpreter := GetNewInterpreter(nil)
 
 	// Some invalid byteCode
@@ -100,5 +96,4 @@ func TestInterpreterInvalidOpcode_Run(t *testing.T) {
 	contract := GetNewContractFromBytecode(byteCode)
 
 	interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
-
 }
