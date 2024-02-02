@@ -122,7 +122,7 @@ func newTestConsensus() (*testConsensus, error) {
 		return nil, err
 	}
 
-	if err := repo.AddBlock(b1, receipts, 0); err != nil {
+	if err := repo.AddBlock(b1, receipts, 0, false); err != nil {
 		return nil, err
 	}
 
