@@ -14,13 +14,14 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
 
 func TestNativeCallReturnGas(t *testing.T) {
 	db := muxdb.NewMem()
-	state := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	state := state.New(db, trie.Root{})
 	state.SetCode(builtin.Measure.Address, builtin.Measure.RuntimeBytecodes())
 
 	inner, _ := builtin.Measure.ABI.MethodByName("inner")
