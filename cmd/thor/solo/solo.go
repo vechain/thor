@@ -158,16 +158,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		return errors.WithMessage(err, "commit state")
 	}
 
-	// ignore fork when solo
-	if err := s.repo.AddBlock(b, receipts, 0); err != nil {
-		return errors.WithMessage(err, "commit block")
-	}
-	realElapsed := mclock.Now() - startTime
-
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
-	}
-
 	if !s.skipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
@@ -178,6 +168,12 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 			return errors.WithMessage(err, "commit logs")
 		}
 	}
+
+	// ignore fork when solo
+	if err := s.repo.AddBlock(b, receipts, 0, true); err != nil {
+		return errors.WithMessage(err, "commit block")
+	}
+	realElapsed := mclock.Now() - startTime
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
