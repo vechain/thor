@@ -94,7 +94,7 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			state := env.State().Checkout(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
+			state := env.State().Checkout(summary.Root())
 
 			env.UseGas(thor.GetBalanceGas)
 			val, err := state.GetBalance(thor.Address(args.Self))
@@ -136,7 +136,7 @@ func init() {
 			}
 
 			env.UseGas(thor.SloadGas)
-			state := env.State().Checkout(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
+			state := env.State().Checkout(summary.Root())
 
 			env.UseGas(thor.GetBalanceGas)
 			val, err := state.GetEnergy(thor.Address(args.Self), summary.Header.Timestamp())

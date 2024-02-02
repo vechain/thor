@@ -19,6 +19,7 @@ import (
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/xenv"
 )
@@ -73,7 +74,7 @@ func initExectorTest() *ctest {
 	})
 
 	repo, _ := chain.NewRepository(db, b0)
-	st := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	st := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	chain := repo.NewChain(b0.Header().ID())
 
 	rt := runtime.New(chain, st, &xenv.BlockContext{Time: uint64(time.Now().Unix())}, thor.NoFork)
