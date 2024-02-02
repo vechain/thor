@@ -464,13 +464,12 @@ func TestCreate2Addreses(t *testing.T) {
 			expected: "0xE33C0C7F7df4809055C3ebA6c09CFe4BaF1BD9e0",
 		},
 	} {
-
 		origin := common.BytesToAddress(common.FromHex(tt.origin))
 		salt := common.BytesToHash(common.FromHex(tt.salt))
 		code := common.FromHex(tt.code)
 		codeHash := thor.Keccak256(code).Bytes()
 		// THOR: Cannot use crypto.CreateAddress2 function.
-		// v1.8.14 -> v1.8.27 depedency issue. See patch.go file.
+		// v1.8.14 -> v1.8.27 dependency issue. See patch.go file.
 		address := CreateAddress2(origin, salt, codeHash)
 		/*
 			stack          := newstack()
@@ -485,6 +484,5 @@ func TestCreate2Addreses(t *testing.T) {
 		if !bytes.Equal(expected.Bytes(), address.Bytes()) {
 			t.Errorf("test %d: expected %s, got %s", i, expected.String(), address.String())
 		}
-
 	}
 }

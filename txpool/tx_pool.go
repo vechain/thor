@@ -115,7 +115,6 @@ func (p *TxPool) housekeeping() {
 			if headBlockChanged ||
 				poolLen > p.options.Limit ||
 				(poolLen < 200 && atomic.LoadUint32(&p.addedAfterWash) > 0) {
-
 				atomic.StoreUint32(&p.addedAfterWash, 0)
 
 				startTime := mclock.Now()

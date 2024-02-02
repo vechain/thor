@@ -25,7 +25,6 @@ import (
 // memoryGasCosts calculates the quadratic gas for memory expansion. It does so
 // only for the memory region that is expanded, not the total memory.
 func memoryGasCost(mem *Memory, newMemSize uint64) (uint64, error) {
-
 	if newMemSize == 0 {
 		return 0, nil
 	}

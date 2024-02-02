@@ -236,7 +236,6 @@ func TestCallTracers(t *testing.T) {
 			}
 			assert.Equal(t, prestate(testData.State), pre)
 		})
-
 	}
 }
 
@@ -266,7 +265,6 @@ func TestPreStateTracers(t *testing.T) {
 			}
 			assert.Equal(t, testData.diffState, got)
 		})
-
 	}
 }
 
@@ -392,7 +390,7 @@ func TestInternals(t *testing.T) {
 			rt.SetVMConfig(vm.Config{Tracer: tr})
 
 			gas := uint64(80000)
-			clause := tx.NewClause(&to).WithValue((*big.Int)(big.NewInt(0)))
+			clause := tx.NewClause(&to).WithValue(big.NewInt(0))
 			// to remain the same with testcases from ethereum, here deduct intrinsic gas since ethereum captures gas including intrinsic and we don't
 			// we are capturing at clause level
 			exec, _ := rt.PrepareClause(clause, 0, gas-21000, &xenv.TransactionContext{

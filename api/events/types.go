@@ -112,21 +112,19 @@ func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFi
 		Order:   filter.Order,
 	}
 	if len(filter.CriteriaSet) > 0 {
-		criterias := make([]*logdb.EventCriteria, len(filter.CriteriaSet))
-		for i, criteria := range filter.CriteriaSet {
+		f.CriteriaSet = make([]*logdb.EventCriteria, len(filter.CriteriaSet))
+		for i, criterion := range filter.CriteriaSet {
 			var topics [5]*thor.Bytes32
-			topics[0] = criteria.Topic0
-			topics[1] = criteria.Topic1
-			topics[2] = criteria.Topic2
-			topics[3] = criteria.Topic3
-			topics[4] = criteria.Topic4
-			criteria := &logdb.EventCriteria{
-				Address: criteria.Address,
+			topics[0] = criterion.Topic0
+			topics[1] = criterion.Topic1
+			topics[2] = criterion.Topic2
+			topics[3] = criterion.Topic3
+			topics[4] = criterion.Topic4
+			f.CriteriaSet[i] = &logdb.EventCriteria{
+				Address: criterion.Address,
 				Topics:  topics,
 			}
-			criterias[i] = criteria
 		}
-		f.CriteriaSet = criterias
 	}
 	return f, nil
 }

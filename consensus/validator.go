@@ -62,7 +62,6 @@ func (c *Consensus) validate(
 
 	// if no event emitted from Authority contract, it's believed that the candidates list not changed
 	if !hasAuthorityEvent {
-
 		// if no endorsor related transfer, or no event emitted from Params contract, the proposers list
 		// can be reused
 		hasEndorsorEvent := func() bool {
@@ -120,7 +119,7 @@ func (c *Consensus) validateBlockHeader(header *block.Header, parent *block.Head
 
 	if header.Number() < c.forkConfig.VIP214 {
 		if len(header.Alpha()) > 0 {
-			return consensusError("invlid block, alpha should be empty before VIP214")
+			return consensusError("invalid block, alpha should be empty before VIP214")
 		}
 		if len(signature) != 65 {
 			return consensusError(fmt.Sprintf("block signature length invalid: want 65 have %v", len(signature)))

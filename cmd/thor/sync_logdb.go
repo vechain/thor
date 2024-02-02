@@ -272,8 +272,8 @@ func verifyLogDBPerBlock(
 	block *block.Block,
 	receipts tx.Receipts,
 	eventLogs []*logdb.Event,
-	transferLogs []*logdb.Transfer) error {
-
+	transferLogs []*logdb.Transfer,
+) error {
 	convertTopics := func(topics []thor.Bytes32) (r [5]*thor.Bytes32) {
 		for i, t := range topics {
 			t := t

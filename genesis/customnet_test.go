@@ -58,7 +58,6 @@ func CustomNetWithParams(t *testing.T, executor genesis.Executor, baseGasPrice g
 }
 
 func TestNewCustomNet(t *testing.T) {
-
 	customGenesis := CustomNetWithParams(t, genesis.Executor{}, genesis.HexOrDecimal256{}, genesis.HexOrDecimal256{}, genesis.HexOrDecimal256{})
 
 	genesisBlock, err := genesis.NewCustomNet(&customGenesis)

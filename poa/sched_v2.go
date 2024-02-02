@@ -33,7 +33,6 @@ func NewSchedulerV2(
 	parentBlockNumber uint32,
 	parentBlockTime uint64,
 	seed []byte) (*SchedulerV2, error) {
-
 	var (
 		listed   = false
 		proposer Proposer

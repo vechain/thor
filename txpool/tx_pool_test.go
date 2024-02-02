@@ -129,7 +129,6 @@ func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
 	defer pool.Close()
 
 	FillPoolWithTxs(pool, t)
-
 }
 
 func TestAddWithFullErrorSyncedChain(t *testing.T) {
@@ -140,7 +139,6 @@ func TestAddWithFullErrorSyncedChain(t *testing.T) {
 }
 
 func TestNewCloseWithError(t *testing.T) {
-
 	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, " ", " ", uint64(time.Now().Unix())+10000)
 	defer pool.Close()
 

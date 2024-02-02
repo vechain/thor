@@ -54,7 +54,7 @@ func (co *cachedObject) getOrCreateStorageTrie() *muxdb.Trie {
 // GetStorage returns storage value for given key.
 func (co *cachedObject) GetStorage(key thor.Bytes32, steadyBlockNum uint32) (rlp.RawValue, error) {
 	cache := &co.cache
-	// retrive from storage cache
+	// retrieve from storage cache
 	if cache.storage != nil {
 		if v, ok := cache.storage[key]; ok {
 			return v, nil

@@ -1,7 +1,9 @@
 package logdb
 
-import "testing"
-import "math"
+import (
+	"math"
+	"testing"
+)
 
 func TestSequence(t *testing.T) {
 	type args struct {

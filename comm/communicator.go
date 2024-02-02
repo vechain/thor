@@ -251,7 +251,6 @@ func (c *Communicator) BroadcastBlock(blk *block.Block) {
 		peer := peer
 		peer.MarkBlock(blk.Header().ID())
 		c.goes.Go(func() {
-
 			if err := proto.NotifyNewBlockID(c.ctx, peer, blk.Header().ID()); err != nil {
 				peer.logger.Debug("failed to broadcast new block id", "err", err)
 			}

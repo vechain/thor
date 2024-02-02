@@ -6,7 +6,7 @@ package node_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,7 +60,7 @@ func httpGet(t *testing.T, url string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)

@@ -464,7 +464,7 @@ func (s *State) Stage(newBlockNum, newBlockConflicts uint32) (*Stage, error) {
 				var enc lowrlp.Encoder
 				enc.EncodeUint(uint64(newBlockNum))
 				enc.EncodeUint(uint64(newBlockConflicts))
-				enc.EncodeUint(uint64(storageTrieCreationCount))
+				enc.EncodeUint(storageTrieCreationCount)
 				storageTrieCreationCount++
 				c.meta.StorageID = enc.ToBytes()
 			}

@@ -96,7 +96,6 @@ func TestStateRevert(t *testing.T) {
 	assert.Equal(t, state.NewCheckpoint(), 1)
 	state.RevertTo(0)
 	assert.Equal(t, state.NewCheckpoint(), 0)
-
 }
 
 func TestEnergy(t *testing.T) {
@@ -142,9 +141,7 @@ func TestEncodeDecodeStorage(t *testing.T) {
 	// Function to decode the storage value
 	var decodedValue []byte
 	decodeFunc := func(b []byte) error {
-		var err error
-		err = rlp.DecodeBytes(b, &decodedValue)
-		return err
+		return rlp.DecodeBytes(b, &decodedValue)
 	}
 
 	// Decode the stored value

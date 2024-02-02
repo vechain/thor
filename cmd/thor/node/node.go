@@ -79,7 +79,6 @@ func New(
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Node {
-
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
 		cons:           consensus.New(repo, stater, forkConfig),

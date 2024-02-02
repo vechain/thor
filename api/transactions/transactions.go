@@ -175,7 +175,6 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 		return err
 	}
 	return utils.WriteJSON(w, tx)
-
 }
 
 func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {

@@ -44,7 +44,6 @@ func TestBlockReader(t *testing.T) {
 			break
 		}
 		blks = append(blks, r...)
-
 	}
 
 	assert.Equal(t, []*chain.ExtendedBlock{

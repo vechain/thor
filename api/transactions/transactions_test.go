@@ -8,7 +8,7 @@ package transactions_test
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -69,7 +69,7 @@ func getTxReceipt(t *testing.T) {
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, uint64(receipt.GasUsed), transaction.Gas(), "gas should be equal")
+	assert.Equal(t, receipt.GasUsed, transaction.Gas(), "gas should be equal")
 }
 
 func senTx(t *testing.T) {
@@ -111,7 +111,7 @@ func httpPost(t *testing.T, url string, obj interface{}) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +172,6 @@ func initTransactionServer(t *testing.T) {
 	router := mux.NewRouter()
 	transactions.New(repo, txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})).Mount(router, "/transactions")
 	ts = httptest.NewServer(router)
-
 }
 
 func checkTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
@@ -189,7 +188,6 @@ func checkTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Tr
 		assert.Equal(t, *c.Value(), big.Int(actualTx.Clauses[i].Value))
 		assert.Equal(t, c.To(), actualTx.Clauses[i].To)
 	}
-
 }
 
 func httpGet(t *testing.T, url string) []byte {
@@ -197,7 +195,7 @@ func httpGet(t *testing.T, url string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r, err := ioutil.ReadAll(res.Body)
+	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
 		t.Fatal(err)
