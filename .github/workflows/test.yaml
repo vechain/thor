@@ -39,7 +39,7 @@ jobs:
         run: make test
       
       - name: Post To Slack
-        if: always()  && github.ref == 'refs/heads/main' && (steps.unit-test.outcome == 'failure')
+        if: always()  && github.ref == 'refs/heads/master' && (steps.unit-test.outcome == 'failure')
         uses: slackapi/slack-github-action@v1.24.0
         with:
           payload: |
