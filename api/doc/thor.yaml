@@ -911,7 +911,7 @@ components:
         The response will contain information about the block identified by the provided `revision`.
       title: GetBlockResponse
       oneOf:
-        - $ref: '#/components/schemas/CompressedBlockResponse'
+        - $ref: '#/components/schemas/RegularBlockResponse'
         - $ref: '#/components/schemas/ExpandedBlockResponse'
       example:
         number: 325324
@@ -934,8 +934,8 @@ components:
         transactions:
           - '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
-    CompressedBlockResponse:
-      title: CompressedBlockResponse
+    RegularBlockResponse:
+      title: RegularBlockResponse
       type: object
       description: |
         The response will contain information about the block identified by the provided `revision`. The `transactions` 
