@@ -1,6 +1,5 @@
 /**
  * This script is used to remove the "Try it out" button and the "Response" sections from WebSocket operations.
- * @type {MutationObserver}
  */
 const classesToRemove = [
     "response-col_description__inner",
