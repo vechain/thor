@@ -14,6 +14,6 @@ Spotlight UI from https://github.com/stoplightio/elements @v8.0.3
 - Created [window-observer.js](stoplight-ui/window-observer.js) to remove `Send API Request` functionality for subscription endpoints
 
 ```bash
-curl https://unpkg.com/@stoplight/elements@8.0.3/styles.min.css > api-docs/styles.min.css
-curl https://unpkg.com/@stoplight/elements@8.0.3/web-components.min.js > api-docs/web-components.min.js
+curl https://unpkg.com/@stoplight/elements@8.0.3/styles.min.css > stoplight-ui/styles.min.css
+curl https://unpkg.com/@stoplight/elements@8.0.3/web-components.min.js > stoplight-ui/web-components.min.js
 ```
