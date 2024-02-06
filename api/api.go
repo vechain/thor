@@ -57,10 +57,10 @@ func New(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
 
-	// redirect api-docs
+	// redirect stoplight-ui
 	router.Path("/").HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
-			http.Redirect(w, req, "doc/api-docs/", http.StatusTemporaryRedirect)
+			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
 	accounts.New(repo, stater, callGasLimit, forkConfig).

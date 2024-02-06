@@ -2440,7 +2440,7 @@ components:
       description: |
         A saved block ID for resuming the subscription. If omitted, the best block ID is assumed.
         
-        **Note**: If the provided position is too far behind the best block, a 403 error will be thrown. The allowable difference depends on the configuration of each the node.
+        **Note**: If the provided position is too far behind the best block, a 403 error will be thrown. The allowable difference depends on the configuration of each node.
         
         See the argument `api-backtrace-limit` when starting a node.
       schema:

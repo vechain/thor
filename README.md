@@ -191,7 +191,7 @@ volumes:
 
 ## API
 
-Once `thor` has started, the online *OpenAPI* doc can be accessed in your browser. e.g. [http://localhost:8669/](http://localhost:8669) by default.
+Once `thor` has started, the online *OpenAPI* documentation can be accessed in your browser. e.g. [http://localhost:8669/](http://localhost:8669) by default.
 
 [![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)
 
@@ -200,6 +200,7 @@ Once `thor` has started, the online *OpenAPI* doc can be accessed in your browse
 A special shout out to following projects:
 
 * [Ethereum](https://github.com/ethereum)
+* [Swagger](https://github.com/swagger-api)
 * [Stoplight Elements](https://github.com/stoplightio/elements)
 
 ## Contributing

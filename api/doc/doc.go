@@ -13,7 +13,7 @@ import (
 
 // FS embeds the Open API specs and documentation.
 //
-//go:embed thor.yaml api-docs swagger-ui icons
+//go:embed thor.yaml stoplight-ui swagger-ui icons
 var FS embed.FS
 var version string
 
