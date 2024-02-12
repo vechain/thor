@@ -67,10 +67,7 @@ func (p *Pruner) Stop() {
 func (p *Pruner) loop(prune bool) error {
 	log.Info("pruner started")
 
-	const (
-		period   = 50000 // the period to prune tries.
-		reserved = 70000 // must be > thor.MaxStateHistory
-	)
+	const reserved = 70000 // must be > thor.MaxStateHistory
 
 	var (
 		status     status
@@ -81,6 +78,12 @@ func (p *Pruner) loop(prune bool) error {
 	}
 
 	for {
+		period := uint32(50000)
+		if int64(p.repo.BestBlockSummary().Header.Timestamp()) > time.Now().Unix()-30*24*3600 {
+			// use smaller period when nearly synced
+			period = 10000
+		}
+
 		// select target
 		target := status.Base + period
 
