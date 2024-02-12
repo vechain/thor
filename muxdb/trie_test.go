@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
-
 	"github.com/vechain/thor/v2/muxdb/engine"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
@@ -62,19 +61,6 @@ func TestTrie(t *testing.T) {
 			Hash: tr.Hash(),
 			Ver:  trie.Version{Major: i},
 		})
-	}
-
-	for i := uint32(0); i < round; i++ {
-		tr := newTrie(name, back, trie.Root{})
-		key := thor.Blake2b(binary.BigEndian.AppendUint32(nil, i)).Bytes()
-		b, _ := tr.DefinitelyNotExist(key)
-		assert.False(t, b)
-	}
-	{
-		tr := newTrie(name, back, trie.Root{})
-		key := thor.Blake2b(binary.BigEndian.AppendUint32(nil, round+1)).Bytes()
-		b, _ := tr.DefinitelyNotExist(key)
-		assert.True(t, b)
 	}
 
 	for _i, root := range roots {
