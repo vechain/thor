@@ -145,13 +145,11 @@ func (h *hasher) store(n node, db DatabaseWriter, path []byte) (node, error) {
 			}
 		}
 
-		// short node is stored when only when it's the root node
+		// Here is the very significant improvement compared to maindb-v3. A short-node is embedded
+		// in its parent node whenever possible. Doing so can save about 30% storage space for a pruned trie.
 		//
-		// This is a very significant improvement compared to maindb-v3. Short-nodes are embedded
-		// in full-nodes whenever possible. Doing this can save huge storage space, because the
-		// 32-byte hash value of the short-node is omitted, and most short-nodes themselves are small,
-		// only slightly larger than 32 bytes.
-		if isRoot {
+		// While for a hash-skipped trie, short-nodes are always stored as standalone nodes.
+		if isRoot || h.skipHash {
 			h.buf = n.encode(h.buf[:0], h.skipHash)
 			if err := db.Put(path, h.newVer, h.buf); err != nil {
 				return nil, err
