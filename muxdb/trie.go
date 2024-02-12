@@ -12,15 +12,12 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-const leafFilterLen = 8
-
 // Trie is the managed trie.
 type Trie struct {
 	name        string
 	back        *backend
 	trie        *trie.Trie
 	noFillCache bool
-	filterKeys  []string
 }
 
 // newTrie creates a managed trie.
@@ -86,36 +83,15 @@ func (t *Trie) newDatabaseReader() trie.DatabaseReader {
 // Copy make a copy of this trie.
 func (t *Trie) Copy() *Trie {
 	cpy := *t
-	if t.filterKeys != nil {
-		cpy.filterKeys = append([]string(nil), t.filterKeys...)
-	}
 	cpy.trie = trie.FromRootNode(t.trie.RootNode(), cpy.newDatabaseReader())
 	cpy.trie.SetCacheTTL(t.back.CachedNodeTTL)
 	return &cpy
 }
 
-// DefinitelyNotExist returns true if the key definitely does not exist.
-func (t *Trie) DefinitelyNotExist(key []byte) (bool, error) {
-	if len(key) > leafFilterLen {
-		fkey := append([]byte{trieLeafFilterSpace}, t.name...)
-		fkey = append(fkey, key[:leafFilterLen]...)
-		if has, err := t.back.Store.Has(fkey); err != nil {
-			return false, err
-		} else if !has {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
-	if v, m, err := t.trie.Get(key); err != nil {
-		return nil, nil, err
-	} else {
-		return v, m, nil
-	}
+	return t.trie.Get(key)
 }
 
 // Update associates key with value in the trie. Subsequent calls to
@@ -125,9 +101,6 @@ func (t *Trie) Get(key []byte) ([]byte, []byte, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, val, meta []byte) error {
-	if len(val) > 0 && len(key) > leafFilterLen {
-		t.filterKeys = append(t.filterKeys, string(key[:leafFilterLen]))
-	}
 	return t.trie.Update(key, val, meta)
 }
 
@@ -164,15 +137,6 @@ func (t *Trie) Commit(newVer trie.Version, skipHash bool) error {
 		return err
 	}
 
-	for _, fk := range t.filterKeys {
-		keyBuf = append(keyBuf[:0], trieLeafFilterSpace)
-		keyBuf = append(keyBuf, t.name...)
-		keyBuf = append(keyBuf, fk...)
-		if err := bulk.Put(keyBuf, nil); err != nil {
-			return err
-		}
-	}
-
 	if err := bulk.Write(); err != nil {
 		return err
 	}
@@ -180,7 +144,6 @@ func (t *Trie) Commit(newVer trie.Version, skipHash bool) error {
 	if !t.noFillCache {
 		t.back.Cache.AddRootNode(t.name, t.trie.RootNode())
 	}
-	t.filterKeys = t.filterKeys[:0]
 	return nil
 }
 
