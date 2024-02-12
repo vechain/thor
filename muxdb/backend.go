@@ -33,8 +33,7 @@ func (b *backend) AppendHistNodeKey(buf []byte, name string, path []byte, ver tr
 		buf = binary.BigEndian.AppendUint32(buf, ver.Major/b.HistPtnFactor)
 	}
 	buf = append(buf, name...)                          // trie name
-	buf = binary.AppendUvarint(buf, uint64(len(path)))  // path len
-	buf = append(buf, path...)                          // path
+	buf = appendNodePath(buf, path)                     // path
 	buf = binary.BigEndian.AppendUint32(buf, ver.Major) // major ver
 	if ver.Minor != 0 {                                 // minor ver
 		buf = binary.AppendUvarint(buf, uint64(ver.Minor))
@@ -48,8 +47,8 @@ func (b *backend) AppendDedupedNodeKey(buf []byte, name string, path []byte, ver
 	if b.DedupedPtnFactor != math.MaxUint32 { // partition id
 		buf = binary.BigEndian.AppendUint32(buf, ver.Major/b.DedupedPtnFactor)
 	}
-	buf = append(buf, name...) // trie name
-	buf = append(buf, path...) // path
+	buf = append(buf, name...)      // trie name
+	buf = appendNodePath(buf, path) // path
 	return buf
 }
 
@@ -62,4 +61,20 @@ func (b *backend) DeleteHistoryNode(ctx context.Context, startMajorVer, limitMaj
 		Start: binary.BigEndian.AppendUint32([]byte{trieHistSpace}, startPtn),
 		Limit: binary.BigEndian.AppendUint32([]byte{trieHistSpace}, limitPtn),
 	})
+}
+
+// appendNodePath encodes the node path and appends to buf.
+func appendNodePath(buf, path []byte) []byte {
+	switch len(path) {
+	case 0:
+		return append(buf, 0, 0)
+	case 1:
+		return append(buf, path[0], 1)
+	case 2:
+		return append(buf, path[0], (path[1]<<4)|2)
+	default:
+		// has more
+		buf = append(buf, path[0]|0x10, (path[1]<<4)|2)
+		return appendNodePath(buf, path[2:])
+	}
 }
