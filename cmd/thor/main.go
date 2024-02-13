@@ -223,8 +223,10 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer p2pcom.Stop()
 
-	pruner := pruner.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return node.New(
 		master,
@@ -317,8 +319,10 @@ func soloAction(ctx *cli.Context) error {
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 
-	pruner := pruner.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	if !ctx.Bool(disablePrunerFlag.Name) {
+		pruner := pruner.New(mainDB, repo)
+		defer func() { log.Info("stopping pruner..."); pruner.Stop() }()
+	}
 
 	return solo.New(repo,
 		state.NewStater(mainDB),
