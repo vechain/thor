@@ -39,7 +39,7 @@ type Pruner struct {
 }
 
 // New creates and starts the pruner.
-func New(db *muxdb.MuxDB, repo *chain.Repository, prune bool) *Pruner {
+func New(db *muxdb.MuxDB, repo *chain.Repository) *Pruner {
 	ctx, cancel := context.WithCancel(context.Background())
 	o := &Pruner{
 		db:     db,
@@ -48,7 +48,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository, prune bool) *Pruner {
 		cancel: cancel,
 	}
 	o.goes.Go(func() {
-		if err := o.loop(prune); err != nil {
+		if err := o.loop(); err != nil {
 			if err != context.Canceled && errors.Cause(err) != context.Canceled {
 				log.Warn("pruner interrupted", "error", err)
 			}
@@ -64,7 +64,7 @@ func (p *Pruner) Stop() {
 }
 
 // loop is the main loop.
-func (p *Pruner) loop(prune bool) error {
+func (p *Pruner) loop() error {
 	log.Info("pruner started")
 
 	const reserved = 70000 // must be > thor.MaxStateHistory
