@@ -17,13 +17,18 @@
 package logger
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/vm"
 )
 
@@ -50,6 +55,12 @@ type dummyStatedb struct {
 func (*dummyStatedb) GetRefund() uint64                                       { return 1337 }
 func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
 func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
+
+func mockHash(input string) common.Hash {
+	hashBytes := make([]byte, len(input))
+	copy(hashBytes, input)
+	return common.BytesToHash(hashBytes)
+}
 
 func TestStoreCapture(t *testing.T) {
 	var (
@@ -104,4 +115,112 @@ func TestStructLogMarshalingOmitEmpty(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFormatLogs(t *testing.T) {
+	logs := []StructLog{
+		{Pc: 1, Op: vm.PUSH1, Gas: 100, GasCost: 2, Depth: 1, Memory: []byte("test"), Stack: []uint256.Int{*uint256.NewInt(1)}},
+	}
+
+	formattedLogs := formatLogs(logs)
+	if len(formattedLogs) != len(logs) {
+		t.Errorf("Expected %d formatted logs, got %d", len(logs), len(formattedLogs))
+	}
+}
+
+func TestCaptureStart(t *testing.T) {
+	logger, _ := NewStructLogger(nil)
+	env := &vm.EVM{}
+
+	logger.CaptureStart(env, common.Address{}, common.Address{}, false, nil, 0, nil)
+	logger.CaptureEnd(nil, 1234, fmt.Errorf("Some Error"))
+	logger.CaptureClauseEnd(10000)
+	logger.Stop(fmt.Errorf("Some Error"))
+	logger.CaptureClauseStart(1234)
+	logger.CaptureClauseEnd(1234)
+	logger.Reset()
+}
+
+func TestNewMarkdownLogger(t *testing.T) {
+	writer := &bytes.Buffer{}
+	cfg := &Config{EnableMemory: true}
+	logger := NewMarkdownLogger(cfg, writer)
+
+	if logger.cfg != cfg {
+		t.Errorf("Expected cfg to be set correctly")
+	}
+
+	env := &vm.EVM{}
+
+	logger.CaptureStart(env, common.Address{}, common.Address{}, false, nil, 0, nil)
+	logger.CaptureEnd(nil, 1234, fmt.Errorf("Some Error"))
+	logger.CaptureClauseEnd(10000)
+	logger.CaptureClauseStart(1234)
+	logger.CaptureClauseEnd(1234)
+}
+
+func TestWriteLogs(t *testing.T) {
+	writer := &bytes.Buffer{}
+
+	logs := []*types.Log{
+		{
+			Address:     common.HexToAddress("0x1"),
+			Topics:      []common.Hash{mockHash("topic1"), mockHash("topic2")},
+			Data:        []byte("data1"),
+			BlockNumber: 100,
+			TxHash:      mockHash("txhash1"),
+			TxIndex:     0,
+			BlockHash:   mockHash("blockhash1"),
+			Index:       0,
+			Removed:     false,
+		},
+		{
+			Address:     common.HexToAddress("0x2"),
+			Topics:      []common.Hash{mockHash("topic3"), mockHash("topic4")},
+			Data:        []byte("data2"),
+			BlockNumber: 101,
+			TxHash:      mockHash("txhash2"),
+			TxIndex:     1,
+			BlockHash:   mockHash("blockhash2"),
+			Index:       1,
+			Removed:     false,
+		},
+	}
+
+	WriteLogs(writer, logs)
+	assert.NotNil(t, writer)
+}
+
+func TestWriteTrace(t *testing.T) {
+	writer := &bytes.Buffer{}
+
+	logs := []StructLog{
+		{
+			Pc:            1,
+			Op:            vm.PUSH1,
+			Gas:           21000,
+			GasCost:       3,
+			Memory:        []byte("example memory"),
+			MemorySize:    len("example memory"),
+			Stack:         []uint256.Int{*uint256.NewInt(2)},
+			ReturnData:    []byte("return data"),
+			Storage:       make(map[common.Hash]common.Hash),
+			Depth:         0,
+			RefundCounter: 100,
+			Err:           nil,
+		},
+	}
+
+	WriteTrace(writer, logs)
+	assert.NotNil(t, writer)
+}
+
+func TestGetResult(t *testing.T) {
+	logger, _ := NewStructLogger(nil)
+
+	rawMessage, err := logger.GetResult()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	assert.NotNil(t, rawMessage)
 }
