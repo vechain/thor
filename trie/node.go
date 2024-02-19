@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io"
 	"strings"
@@ -256,25 +257,17 @@ func decodeValue(buf []byte, attrs byte) (*valueNode, []byte, error) {
 }
 
 func decodeRef(n *refNode, buf []byte, attrs byte) (*refNode, []byte, error) {
-	var err error
-
 	// decode hash
 	if (attrs & attrHasHash) != 0 {
-		if n.hash, buf, err = vp.SplitString(buf); err != nil {
-			return nil, nil, err
-		}
+		n.hash, buf = buf[:32], buf[32:]
 	}
 
 	// decode version
 	if (attrs & attrHasMajor) != 0 {
-		if n.ver.Major, buf, err = vp.SplitUint32(buf); err != nil {
-			return nil, nil, err
-		}
+		n.ver.Major, buf = binary.BigEndian.Uint32(buf), buf[4:]
 	}
 	if (attrs & attrHasMinor) != 0 {
-		if n.ver.Minor, buf, err = vp.SplitUint32(buf); err != nil {
-			return nil, nil, err
-		}
+		n.ver.Minor, buf = binary.BigEndian.Uint32(buf), buf[4:]
 	}
 	return n, buf, nil
 }
@@ -394,16 +387,16 @@ func (n *refNode) encode(buf []byte, skipHash bool) []byte {
 	// encode hash
 	if !skipHash {
 		attrs |= attrHasHash
-		buf = vp.AppendString(buf, n.hash)
+		buf = append(buf, n.hash...)
 	}
 	// encode version
 	if n.ver.Major != 0 {
 		attrs |= attrHasMajor
-		buf = vp.AppendUint32(buf, n.ver.Major)
+		buf = binary.BigEndian.AppendUint32(buf, n.ver.Major)
 	}
 	if n.ver.Minor != 0 {
 		attrs |= attrHasMinor
-		buf = vp.AppendUint32(buf, n.ver.Minor)
+		buf = binary.BigEndian.AppendUint32(buf, n.ver.Minor)
 	}
 	buf[tagPos] |= (attrs << 3)
 	return buf
