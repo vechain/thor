@@ -152,7 +152,7 @@ func (db *MuxDB) NewTrie(name string, root trie.Root) *Trie {
 
 // DeleteTrieHistoryNodes deletes trie history nodes within partitions of [startMajorVer, limitMajorVer).
 func (db *MuxDB) DeleteTrieHistoryNodes(ctx context.Context, startMajorVer, limitMajorVer uint32) error {
-	return db.trieBackend.DeleteHistoryNode(ctx, startMajorVer, limitMajorVer)
+	return db.trieBackend.DeleteHistoryNodes(ctx, startMajorVer, limitMajorVer)
 }
 
 // NewStore creates named kv-store.
