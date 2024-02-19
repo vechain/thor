@@ -32,10 +32,24 @@ func (b *backend) AppendHistNodeKey(buf []byte, name string, path []byte, ver tr
 	if b.HistPtnFactor != math.MaxUint32 { // partition id
 		buf = binary.BigEndian.AppendUint32(buf, ver.Major/b.HistPtnFactor)
 	}
-	buf = append(buf, name...)                          // trie name
-	buf = appendNodePath(buf, path)                     // path
-	buf = binary.BigEndian.AppendUint32(buf, ver.Major) // major ver
-	if ver.Minor != 0 {                                 // minor ver
+	buf = append(buf, name...)      // trie name
+	buf = appendNodePath(buf, path) // path
+
+	// major ver
+	mod := ver.Major % b.HistPtnFactor
+	// more compact encoding
+	switch {
+	case b.HistPtnFactor > (1 << 24):
+		buf = binary.BigEndian.AppendUint32(buf, mod)
+	case b.HistPtnFactor > (1 << 16):
+		buf = append(buf, byte(mod>>16), byte(mod>>8), byte(mod))
+	case b.HistPtnFactor > (1 << 8):
+		buf = append(buf, byte(mod>>8), byte(mod))
+	case b.HistPtnFactor > 1:
+		buf = append(buf, byte(mod))
+	}
+
+	if ver.Minor != 0 { // minor ver
 		buf = binary.AppendUvarint(buf, uint64(ver.Minor))
 	}
 	return buf
@@ -52,8 +66,8 @@ func (b *backend) AppendDedupedNodeKey(buf []byte, name string, path []byte, ver
 	return buf
 }
 
-// DeleteHistoryNode deletes trie history nodes within partitions of [startMajorVer, limitMajorVer).
-func (b *backend) DeleteHistoryNode(ctx context.Context, startMajorVer, limitMajorVer uint32) error {
+// DeleteHistoryNodes deletes trie history nodes within partitions of [startMajorVer, limitMajorVer).
+func (b *backend) DeleteHistoryNodes(ctx context.Context, startMajorVer, limitMajorVer uint32) error {
 	startPtn := startMajorVer / b.HistPtnFactor
 	limitPtn := limitMajorVer / b.HistPtnFactor
 
