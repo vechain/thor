@@ -329,9 +329,9 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
-		opts.TrieHistPartitionFactor = 100
+		opts.TrieHistPartitionFactor = 256
 	} else {
-		opts.TrieHistPartitionFactor = 500000
+		opts.TrieHistPartitionFactor = 524288
 	}
 
 	path := filepath.Join(dir, "main.db")
