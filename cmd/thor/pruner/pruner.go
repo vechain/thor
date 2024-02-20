@@ -67,8 +67,6 @@ func (p *Pruner) Stop() {
 func (p *Pruner) loop() error {
 	log.Info("pruner started")
 
-	const reserved = 70000 // must be > thor.MaxStateHistory
-
 	var (
 		status     status
 		propsStore = p.db.NewStore(propsStoreName)
@@ -78,16 +76,16 @@ func (p *Pruner) loop() error {
 	}
 
 	for {
-		period := uint32(50000)
-		if int64(p.repo.BestBlockSummary().Header.Timestamp()) > time.Now().Unix()-30*24*3600 {
+		period := uint32(65536)
+		if int64(p.repo.BestBlockSummary().Header.Timestamp()) > time.Now().Unix()-10*24*3600 {
 			// use smaller period when nearly synced
-			period = 10000
+			period = 8192
 		}
 
 		// select target
 		target := status.Base + period
 
-		targetChain, err := p.awaitUntilSteady(target + reserved)
+		targetChain, err := p.awaitUntilSteady(target + thor.MaxStateHistory)
 		if err != nil {
 			return errors.Wrap(err, "awaitUntilSteady")
 		}
