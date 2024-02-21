@@ -79,8 +79,8 @@ func SetupTest() (genesis.DevAccount, *chain.Repository, *block.Block, *state.St
 	repo := newChainRepo(db)
 	b0 := repo.GenesisBlock()
 	b1 := new(block.Builder).ParentID(b0.Header().ID()).GasLimit(10000000).TotalScore(100).Build()
-	repo.AddBlock(b1, nil, 0)
-	st := state.New(db, repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
+	repo.AddBlock(b1, nil, 0, false)
+	st := state.New(db, trie.Root{Hash: repo.GenesisBlock().Header().StateRoot()})
 
 	return acc, repo, b1, st
 }
