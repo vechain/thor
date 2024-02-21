@@ -195,7 +195,6 @@ func (p *Pruner) pruneTries(targetChain *chain.Chain, base, target uint32) error
 //
 // TODO: using finality flag
 func (p *Pruner) awaitUntilSteady(target uint32) (*chain.Chain, error) {
-
 	const windowSize = 100000
 
 	backoff := uint32(0)
