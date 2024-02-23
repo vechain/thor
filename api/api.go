@@ -51,15 +51,15 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api doc and swagger-ui
+	// to serve api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
 
-	// redirect swagger-ui
+	// redirect stoplight-ui
 	router.Path("/").HandlerFunc(
 		func(w http.ResponseWriter, req *http.Request) {
-			http.Redirect(w, req, "doc/swagger-ui/", http.StatusTemporaryRedirect)
+			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
 	accounts.New(repo, stater, callGasLimit, forkConfig).
