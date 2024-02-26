@@ -53,7 +53,7 @@ func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfi
 	}
 }
 
-func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
+func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIndex uint64, clauseIndex uint32) (*runtime.Runtime, *runtime.TransactionExecutor, thor.Bytes32, error) {
 	block, err := d.repo.GetBlock(blockID)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
@@ -66,7 +66,7 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("tx index out of range"))
 	}
 	txID := txs[txIndex].ID()
-	if clauseIndex >= uint64(len(txs[txIndex].Clauses())) {
+	if clauseIndex >= uint32(len(txs[txIndex].Clauses())) {
 		return nil, nil, thor.Bytes32{}, utils.Forbidden(errors.New("clause index out of range"))
 	}
 	skipPoA := d.repo.GenesisBlock().Header().ID() == devNetGenesisID
@@ -86,7 +86,7 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 		if err != nil {
 			return nil, nil, thor.Bytes32{}, err
 		}
-		clauseCounter := uint64(0)
+		clauseCounter := uint32(0)
 		for txExec.HasNextClause() {
 			if txIndex == uint64(i) && clauseIndex == clauseCounter {
 				return rt, txExec, txID, nil
@@ -110,7 +110,7 @@ func (d *Debug) prepareClauseEnv(ctx context.Context, blockID thor.Bytes32, txIn
 }
 
 // trace an existed clause
-func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64) (interface{}, error) {
+func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID thor.Bytes32, txIndex uint64, clauseIndex uint32) (interface{}, error) {
 	rt, txExec, txID, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -120,8 +120,8 @@ func (d *Debug) traceClause(ctx context.Context, tracer tracers.Tracer, blockID 
 		BlockID:     blockID,
 		BlockTime:   rt.Context().Time,
 		TxID:        txID,
-		TxIndex:     int(txIndex),
-		ClauseIndex: int(clauseIndex),
+		TxIndex:     txIndex,
+		ClauseIndex: clauseIndex,
 		State:       rt.State(),
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
@@ -259,7 +259,7 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *c
 	return tracer.GetResult()
 }
 
-func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, blockID thor.Bytes32, txIndex uint64, clauseIndex uint64, keyStart []byte, maxResult int) (*StorageRangeResult, error) {
+func (d *Debug) debugStorage(ctx context.Context, contractAddress thor.Address, blockID thor.Bytes32, txIndex uint64, clauseIndex uint32, keyStart []byte, maxResult int) (*StorageRangeResult, error) {
 	rt, _, _, err := d.prepareClauseEnv(ctx, blockID, txIndex, clauseIndex)
 	if err != nil {
 		return nil, err
@@ -316,7 +316,7 @@ func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) err
 	return utils.WriteJSON(w, res)
 }
 
-func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64, clauseIndex uint64, err error) {
+func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64, clauseIndex uint32, err error) {
 	parts := strings.Split(target, "/")
 	if len(parts) != 3 {
 		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.New("target:" + target + " unsupported"))
@@ -346,10 +346,13 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 		}
 		txIndex = i
 	}
-	clauseIndex, err = strconv.ParseUint(parts[2], 0, 0)
+	i, err := strconv.ParseUint(parts[2], 0, 0)
 	if err != nil {
 		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.WithMessage(err, "target[2]"))
+	} else if i > math.MaxUint32 {
+		return thor.Bytes32{}, 0, 0, utils.BadRequest(errors.New("invalid target[2]"))
 	}
+	clauseIndex = uint32(i)
 	return
 }
 

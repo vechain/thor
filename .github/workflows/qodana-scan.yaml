@@ -7,6 +7,8 @@ on:
 
 jobs:
   scan_qodana:
+    # only run this action on `vechain/thor` repository
+    if: github.repository == 'vechain/thor'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
