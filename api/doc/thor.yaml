@@ -736,6 +736,31 @@ paths:
                 type: string
                 example: 'Invalid address'
 
+  /metrics:
+    get:
+      summary: Retrieve Prometheus metrics
+      description: |
+        This endpoint allows clients to retrieve Prometheus metrics.
+      responses:
+        '200':
+          description: Prometheus metrics response
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP http_requests_total The total number of HTTP requests.
+                  # TYPE http_requests_total counter
+                  http_requests_total{method="GET",handler="/foo"} 100
+                  http_requests_total{method="POST",handler="/bar"} 200
+                  # HELP http_request_duration_seconds The duration of HTTP requests.
+                  # TYPE http_request_duration_seconds histogram
+                  http_request_duration_seconds_bucket{le="0.1"} 10
+                  http_request_duration_seconds_bucket{le="1"} 20
+                  http_request_duration_seconds_bucket{le="10"} 30
+                  http_request_duration_seconds_sum 123.45
+                  http_request_duration_seconds_count 60
+
 components:
   schemas:
     GetAccountResponse:
