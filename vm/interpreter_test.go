@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func GetNewInterpreter(jumpTable JumpTable) *Interpreter {
+func GetNewInterpreter(jumpTable *JumpTable) *Interpreter {
 	statedb := NoopStateDB{}
 
 	evmConfig := Config{
