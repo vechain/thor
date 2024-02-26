@@ -82,7 +82,7 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 // NOTE: Shanghai release does not introduce any changes in precompiled contracts.
 // We are catching up from Istanbul, so Shanghai in thor includes eip1108 and eip2565.
 var PrecompiledContractsShanghai = map[common.Address]PrecompiledContract{
-	common.BytesToAddress([]byte{1}): &safe_ecrecover{},
+	common.BytesToAddress([]byte{1}): &safeEcrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
