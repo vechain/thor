@@ -145,7 +145,7 @@ func defaultAction(ctx *cli.Context) error {
 	// enable telemetry as soon as possible
 	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
 	if enableTelemetry {
-		telemetry.InitializeOtelTelemetry()
+		telemetry.InitializePrometheusTelemetry()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -260,7 +260,7 @@ func soloAction(ctx *cli.Context) error {
 	// enable telemetry as soon as possible
 	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
 	if enableTelemetry {
-		telemetry.InitializeOtelTelemetry()
+		telemetry.InitializePrometheusTelemetry()
 	}
 
 	gene := genesis.NewDevnet()

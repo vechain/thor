@@ -11,7 +11,7 @@ import (
 )
 
 func TestOtelPromTelemetry(t *testing.T) {
-	InitializeOtelTelemetry()
+	InitializePrometheusTelemetry()
 	server := httptest.NewServer(Handler())
 
 	t.Cleanup(func() {
@@ -47,7 +47,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 	metrics, err := parser.TextToMetricFamilies(resp.Body)
 	require.NoError(t, err)
 
-	require.Equal(t, metrics["count1_total"].GetMetric()[0].GetCounter().GetValue(), float64(1))
-	require.Equal(t, metrics["count2_total"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
-	require.Equal(t, metrics["hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
+	require.Equal(t, metrics["node_telemetry_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
+	require.Equal(t, metrics["node_telemetry_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
+	require.Equal(t, metrics["node_telemetry_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
 }
