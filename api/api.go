@@ -55,7 +55,7 @@ func New(
 
 	// to serve api docs
 	if enableMetrics {
-		router.PathPrefix("/metrics").Handler(telemetry.Handler())
+		router.PathPrefix("/node/metrics").Handler(telemetry.Handler())
 	}
 
 	// to serve api doc and swagger-ui
