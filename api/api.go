@@ -24,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -43,6 +44,7 @@ func New(
 	skipLogs bool,
 	allowCustomTracer bool,
 	forkConfig thor.ForkConfig,
+	enableMetrics bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -50,6 +52,10 @@ func New(
 	}
 
 	router := mux.NewRouter()
+
+	if enableMetrics {
+		router.PathPrefix("/metrics").Handler(telemetry.Handler())
+	}
 
 	// to serve api doc and swagger-ui
 	router.PathPrefix("/doc").Handler(

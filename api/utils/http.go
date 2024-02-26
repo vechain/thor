@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/vechain/thor/v2/telemetry"
 )
 
 type httpError struct {
@@ -64,6 +67,18 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
+	}
+}
+
+// MetricsWrapHandler wraps a given handler and adds metrics to it
+func MetricsWrapHandler(endpoint string, f http.HandlerFunc) http.HandlerFunc {
+	counter := telemetry.Counter("api_" + endpoint + "_count_requests")
+	duration := telemetry.HistogramWithHTTPBuckets("api_" + endpoint + "_duration_ms")
+	return func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		f(w, r)
+		counter.Add(1)
+		duration.Observe(time.Since(now).Milliseconds())
 	}
 }
 

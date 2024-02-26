@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 	"gopkg.in/urfave/cli.v1"
@@ -86,6 +87,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			disableTelemetryFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -111,6 +113,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					disableTelemetryFlag,
 				},
 				Action: soloAction,
 			},
@@ -139,6 +142,12 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+	// enable telemetry as soon as possible
+	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
+	if enableTelemetry {
+		telemetry.InitializeOtelTelemetry()
+	}
+
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -207,7 +216,9 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
+		forkConfig,
+		enableTelemetry,
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -245,6 +256,13 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable telemetry as soon as possible
+	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
+	if enableTelemetry {
+		telemetry.InitializeOtelTelemetry()
+	}
+
 	gene := genesis.NewDevnet()
 	// Solo forks from the start
 	forkConfig := thor.ForkConfig{}
@@ -306,7 +324,9 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
+		forkConfig,
+		enableTelemetry,
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())

@@ -142,4 +142,8 @@ var (
 		Value: 16,
 		Usage: "set tx limit per account in pool",
 	}
+	disableTelemetryFlag = cli.BoolFlag{
+		Name:  "disable-telemetry",
+		Usage: "disable telemetry server",
+	}
 )

@@ -11,7 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"strconv"
-
+	
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
@@ -349,10 +349,22 @@ func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/*").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
-	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
-	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
-	sub.Path("/{address}/storage/{key}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
-	sub.Path("/{address}").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+	sub.Path("/*").
+		Methods("POST").
+		HandlerFunc(utils.MetricsWrapHandler("accounts_call_batch_code", utils.WrapHandlerFunc(a.handleCallBatchCode)))
+	sub.Path("/{address}").
+		Methods(http.MethodGet).
+		HandlerFunc(utils.MetricsWrapHandler("accounts_get_account", utils.WrapHandlerFunc(a.handleGetAccount)))
+	sub.Path("/{address}/code").
+		Methods(http.MethodGet).
+		HandlerFunc(utils.MetricsWrapHandler("accounts_get_code", utils.WrapHandlerFunc(a.handleGetCode)))
+	sub.Path("/{address}/storage/{key}").
+		Methods("GET").
+		HandlerFunc(utils.MetricsWrapHandler("accounts_get_storage", utils.WrapHandlerFunc(a.handleGetStorage)))
+	sub.Path("").
+		Methods("POST").
+		HandlerFunc(utils.MetricsWrapHandler("accounts_api_call_contract", utils.WrapHandlerFunc(a.handleCallContract)))
+	sub.Path("/{address}").
+		Methods("POST").
+		HandlerFunc(utils.MetricsWrapHandler("accounts_call_contract_address", utils.WrapHandlerFunc(a.handleCallContract)))
 }
