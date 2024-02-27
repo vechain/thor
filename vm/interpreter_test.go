@@ -84,7 +84,10 @@ func TestInterpreterInvalidStack_Run(t *testing.T) {
 
 	contract := GetNewContractFromBytecode(byteCode)
 
-	interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+	ret, err := interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+
+	assert.Nil(t, ret)
+	assert.NotNil(t, err)
 }
 
 func TestInterpreterInvalidOpcode_Run(t *testing.T) {
@@ -95,5 +98,8 @@ func TestInterpreterInvalidOpcode_Run(t *testing.T) {
 
 	contract := GetNewContractFromBytecode(byteCode)
 
-	interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+	ret, err := interpreter.Run(contract, []byte{0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f})
+
+	assert.Nil(t, ret)
+	assert.NotNil(t, err)
 }
