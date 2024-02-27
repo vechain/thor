@@ -87,7 +87,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			disableTelemetryFlag,
+			enableTelemetryFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -113,7 +113,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
-					disableTelemetryFlag,
+					enableTelemetryFlag,
 				},
 				Action: soloAction,
 			},
@@ -143,7 +143,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	initLogger(ctx)
 	// enable telemetry as soon as possible
-	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
+	enableTelemetry := ctx.Bool(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
 	}
@@ -258,7 +258,7 @@ func soloAction(ctx *cli.Context) error {
 	initLogger(ctx)
 
 	// enable telemetry as soon as possible
-	enableTelemetry := !ctx.Bool(disableTelemetryFlag.Name) // positive booleans are easier to read
+	enableTelemetry := ctx.Bool(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
 	}
