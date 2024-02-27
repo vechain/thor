@@ -88,6 +88,7 @@ func main() {
 			verifyLogsFlag,
 			disablePrunerFlag,
 			enableTelemetryFlag,
+			telemetryAddrFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -114,6 +115,7 @@ func main() {
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
 					enableTelemetryFlag,
+					telemetryAddrFlag,
 				},
 				Action: soloAction,
 			},
@@ -142,10 +144,18 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
 	// enable telemetry as soon as possible
-	enableTelemetry := ctx.Bool(enableTelemetryFlag.Name)
+	telemetryServerURL := "Disabled"
+	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
+		telemetryServer, telemetryCloser, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		if err != nil {
+			return err
+		}
+		telemetryServerURL = telemetryServer
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloser() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -227,7 +237,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, p2pcom.enode)
+	printStartupMessage2(apiURL, p2pcom.enode, telemetryServerURL)
 
 	if err := p2pcom.Start(); err != nil {
 		return err
@@ -258,9 +268,16 @@ func soloAction(ctx *cli.Context) error {
 	initLogger(ctx)
 
 	// enable telemetry as soon as possible
-	enableTelemetry := ctx.Bool(enableTelemetryFlag.Name)
+	telemetryServerURL := "Disabled"
+	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
+		telemetryServer, telemetryCloser, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		telemetryServerURL = telemetryServer
+		if err != nil {
+			return err
+		}
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloser() }()
 	}
 
 	gene := genesis.NewDevnet()
@@ -335,7 +352,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, telemetryServerURL, forkConfig)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()

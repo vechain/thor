@@ -142,8 +142,13 @@ var (
 		Value: 16,
 		Usage: "set tx limit per account in pool",
 	}
-	enableTelemetryFlag = cli.BoolFlag{
+	enableTelemetryFlag = cli.BoolTFlag{
 		Name:  "enable-telemetry",
 		Usage: "enables telemetry server",
+	}
+	telemetryAddrFlag = cli.StringFlag{
+		Name:  "telemetry-addr",
+		Value: "127.0.0.1:2112",
+		Usage: "Telemetry service listening address",
 	}
 )

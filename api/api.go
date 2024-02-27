@@ -24,7 +24,6 @@ import (
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
@@ -52,11 +51,6 @@ func New(
 	}
 
 	router := mux.NewRouter()
-
-	// to serve api docs
-	if enableMetrics {
-		router.PathPrefix("/node/metrics").Handler(telemetry.Handler())
-	}
 
 	// to serve api doc and swagger-ui
 	router.PathPrefix("/doc").Handler(

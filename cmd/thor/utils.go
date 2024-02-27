@@ -28,10 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
-	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
@@ -45,10 +46,13 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 	"gopkg.in/urfave/cli.v1"
+
+	ethlog "github.com/ethereum/go-ethereum/log"
 )
 
 func initLogger(ctx *cli.Context) {
@@ -528,6 +532,35 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	}, nil
 }
 
+func startTelemetryServer(addr, allowedOrigins string) (string, func(), error) {
+	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
+	for i, o := range origins {
+		origins[i] = strings.ToLower(strings.TrimSpace(o))
+	}
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "listen Telemetry API addr [%v]", addr)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/metrics").Handler(telemetry.Handler())
+	handler := handlers.CompressHandler(router)
+
+	// setup cors
+	handler = handlers.CORS(handlers.AllowedOrigins(origins))(handler)
+
+	srv := &http.Server{Handler: handler}
+	var goes co.Goes
+	goes.Go(func() {
+		srv.Serve(listener)
+	})
+	return "http://" + listener.Addr().String() + "/metrics", func() {
+		srv.Close()
+		goes.Wait()
+	}, nil
+}
+
 func printStartupMessage1(
 	gene *genesis.Genesis,
 	repo *chain.Repository,
@@ -562,12 +595,15 @@ func printStartupMessage1(
 func printStartupMessage2(
 	apiURL string,
 	nodeID string,
+	telemetryServerURL string,
 ) {
 	fmt.Printf(`    API portal   [ %v ]
     Node ID      [ %v ]
+    Telemetry    [ %s ]
 `,
 		apiURL,
-		nodeID)
+		nodeID,
+		telemetryServerURL)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -587,6 +623,7 @@ func printSoloStartupMessage(
 	repo *chain.Repository,
 	dataDir string,
 	apiURL string,
+	telemetryServerURL string,
 	forkConfig thor.ForkConfig,
 ) {
 	bestBlock := repo.BestBlockSummary()
@@ -597,6 +634,7 @@ func printSoloStartupMessage(
     Forks       [ %v ]
     Data dir    [ %v ]
     API portal  [ %v ]
+    Telemetry   [ %v ]
 ┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
 │  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
 └──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
@@ -606,7 +644,8 @@ func printSoloStartupMessage(
 		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
 		dataDir,
-		apiURL)
+		apiURL,
+		telemetryServerURL)
 
 	fmt.Print(info)
 }
