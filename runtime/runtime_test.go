@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/builtin"
@@ -28,6 +29,7 @@ import (
 func M(a ...interface{}) []interface{} {
 	return a
 }
+
 func TestContractSuicide(t *testing.T) {
 	db := muxdb.NewMem()
 
@@ -388,41 +390,116 @@ func TestCall(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func GetMockTx(repo *chain.Repository, t *testing.T) tx.Transaction {
+	var blockRef = tx.NewBlockRef(0)
+	var chainTag = repo.ChainTag()
+	var expiration = uint32(10)
+	var gas = uint64(210000)
+	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
+
+	tx := new(tx.Builder).
+		BlockRef(blockRef).
+		ChainTag(chainTag).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Expiration(expiration).
+		Gas(gas).
+		Build()
+	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx = tx.WithSignature(sig)
+
+	return *tx
+}
+
+func GetMockFailedTx() tx.Transaction {
+	to, _ := thor.ParseAddress("0x7567d83b7b8d80addcb281a71d54fc7b3364ffed")
+	trx := new(tx.Builder).ChainTag(1).
+		BlockRef(tx.BlockRef{0, 0, 0, 0, 0xaa, 0xbb, 0xcc, 0xdd}).
+		Expiration(32).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(10000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		Clause(tx.NewClause(&to).WithValue(big.NewInt(20000)).WithData([]byte{0, 0, 0, 0x60, 0x60, 0x60})).
+		GasPriceCoef(128).
+		Gas(21000).
+		DependsOn(nil).
+		Nonce(12345678).Build()
+
+	return *trx
+}
+
+func TestGetValues(t *testing.T) {
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+	runtimeChain := rt.Chain()
+	runtimeState := rt.State()
+	runtimeContext := rt.Context()
+
+	assert.NotNil(t, runtimeChain)
+	assert.NotNil(t, runtimeState)
+	assert.NotNil(t, runtimeContext)
+}
+
 func TestExecuteTransaction(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
 
-	// kv, _ := lvldb.NewMem()
+	db := muxdb.NewMem()
 
-	// key, _ := crypto.GenerateKey()
-	// addr1 := thor.Address(crypto.PubkeyToAddress(key.PublicKey))
-	// addr2 := thor.BytesToAddress([]byte("acc2"))
-	// balance1 := big.NewInt(1000 * 1000 * 1000)
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
 
-	// b0, err := new(genesis.Builder).
-	// 	Alloc(contracts.Energy.Address, &big.Int{}, contracts.Energy.RuntimeBytecodes()).
-	// 	Alloc(addr1, balance1, nil).
-	// 	Call(contracts.Energy.PackCharge(addr1, big.NewInt(1000000))).
-	// 	Build(state.NewCreator(kv))
+	repo, _ := chain.NewRepository(db, b0)
 
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
+	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
 
-	// tx := new(tx.Builder).
-	// 	GasPrice(big.NewInt(1)).
-	// 	Gas(1000000).
-	// 	Clause(tx.NewClause(&addr2).WithValue(big.NewInt(10))).
-	// 	Build()
+	originEnergy := new(big.Int)
+	originEnergy.SetString("9000000000000000000000000000000000000", 10)
+	state.SetEnergy(origin.Address, originEnergy, 0)
 
-	// sig, _ := crypto.Sign(tx.SigningHash().Bytes(), key)
-	// tx = tx.WithSignature(sig)
+	tx := GetMockTx(repo, t)
 
-	// state, _ := state.New(b0.Header().StateRoot(), kv)
-	// rt := runtime.New(state,
-	// 	thor.Address{}, 0, 0, 0, func(uint32) thor.Bytes32 { return thor.Bytes32{} })
-	// receipt, _, err := rt.ExecuteTransaction(tx)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// _ = receipt
-	// assert.Equal(t, state.GetBalance(addr1), new(big.Int).Sub(balance1, big.NewInt(10)))
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+	receipt, err := rt.ExecuteTransaction(&tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = receipt
+}
+
+func TestExecuteTransactionFailure(t *testing.T) {
+	origin := genesis.DevAccounts()[0]
+
+	db := muxdb.NewMem()
+
+	g := genesis.NewDevnet()
+	b0, _, _, err := g.Build(state.NewStater(db))
+	assert.Nil(t, err)
+
+	repo, _ := chain.NewRepository(db, b0)
+
+	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+
+	originEnergy := new(big.Int)
+	originEnergy.SetString("9000000000000000000000000000000000000", 10)
+	state.SetEnergy(origin.Address, originEnergy, 0)
+
+	tx := GetMockFailedTx()
+
+	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
+
+	_, err = rt.ExecuteTransaction(&tx)
+
+	assert.NotNil(t, err)
 }
