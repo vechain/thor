@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -13,18 +12,8 @@ import (
 func GetNewInterpreter(jumpTable JumpTable) *Interpreter {
 	statedb := NoopStateDB{}
 
-	tracer, err := DefaultDirectory.New("noopTracer", json.RawMessage(`{}`), false)
-	if err != nil {
-		panic("failed to create noopTracer: " + err.Error())
-	}
-
-	evmLogger, ok := tracer.(Logger)
-	if !ok {
-		panic("noopTracer does not implement vm.Logger")
-	}
-
 	evmConfig := Config{
-		Tracer:    evmLogger,
+		Tracer:    &noopTracer{},
 		JumpTable: jumpTable,
 	}
 

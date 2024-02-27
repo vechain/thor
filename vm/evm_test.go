@@ -1,131 +1,49 @@
 package vm
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
-type Tracer interface {
-	Logger
-	SetContext(*Context)
-	GetResult() (json.RawMessage, error)
-	// Stop terminates execution of the tracer at the first opportune moment.
-	Stop(err error)
-}
-
-type ctorFn func(json.RawMessage) (Tracer, error)
-type jsCtorFn func(string, json.RawMessage) (Tracer, error)
-
-type elem struct {
-	ctor ctorFn
-	isJS bool
-}
-
-var DefaultDirectory = directory{elems: make(map[string]elem)}
-
-type directory struct {
-	elems  map[string]elem
-	jsEval jsCtorFn
-}
-
-func (d *directory) Register(name string, f ctorFn, isJS bool) {
-	d.elems[name] = elem{ctor: f, isJS: isJS}
-}
-
-func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tracer, error) {
-	if elem, ok := d.elems[name]; ok {
-		return elem.ctor(cfg)
-	}
-	// backward compatible, allow users emit "Tracer" suffix
-	if elem, ok := d.elems[name+"Tracer"]; ok {
-		return elem.ctor(cfg)
-	}
-
-	if allowCustom {
-		// Assume JS code
-		tracer, err := d.jsEval(name, cfg)
-		if err != nil {
-			return nil, errors.Wrap(err, "create custom tracer")
-		}
-		return tracer, nil
-	} else {
-		return nil, errors.New("unsupported tracer")
-	}
-}
-
-func init() {
-	DefaultDirectory.Register("noopTracer", newNoopTracer, false)
-}
+var _ Logger = (*noopTracer)(nil)
 
 type noopTracer struct{}
 
-func newNoopTracer(_ json.RawMessage) (Tracer, error) {
-	return &noopTracer{}, nil
-}
-
 func (t *noopTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
-
 func (t *noopTracer) CaptureEnd(output []byte, gasUsed uint64, err error) {
 }
-
 func (t *noopTracer) CaptureState(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, rData []byte, depth int, err error) {
 }
-
 func (t *noopTracer) CaptureFault(pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) {
 }
-
 func (t *noopTracer) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
 }
-
 func (t *noopTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 }
-
 func (*noopTracer) CaptureClauseStart(gasLimit uint64) {}
-
-func (*noopTracer) CaptureClauseEnd(restGas uint64) {}
-
-func (t *noopTracer) SetContext(ctx *Context) {
-}
-
-func (t *noopTracer) GetResult() (json.RawMessage, error) {
-	return json.RawMessage(`{}`), nil
-}
-
-func (t *noopTracer) Stop(err error) {
-}
+func (*noopTracer) CaptureClauseEnd(restGas uint64)    {}
 
 func setupEvmTestContract(codeAddr *common.Address) (*EVM, *Contract) {
 	statedb := NoopStateDB{}
 
-	tracer, err := DefaultDirectory.New("noopTracer", json.RawMessage(`{}`), false)
-	if err != nil {
-		panic("failed to create noopTracer: " + err.Error())
-	}
-
-	evmLogger, ok := tracer.(Logger)
-	if !ok {
-		panic("noopTracer does not implement vm.Logger")
-	}
-
 	evmConfig := Config{
-		Tracer: evmLogger,
+		Tracer: &noopTracer{},
 	}
 
-	evm := NewEVM(Context{
-		BlockNumber:        big.NewInt(1),
-		GasPrice:           big.NewInt(1),
-		CanTransfer:        NoopCanTransfer,
-		Transfer:           NoopTransfer,
-		NewContractAddress: newContractAddress,
-	},
+	evm := NewEVM(
+		Context{
+			BlockNumber:        big.NewInt(1),
+			GasPrice:           big.NewInt(1),
+			CanTransfer:        NoopCanTransfer,
+			Transfer:           NoopTransfer,
+			NewContractAddress: newContractAddress,
+		},
 		statedb,
 		&ChainConfig{ChainConfig: *params.TestChainConfig}, evmConfig)
 
