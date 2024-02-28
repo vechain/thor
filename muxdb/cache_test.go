@@ -10,8 +10,50 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/trie"
 )
+
+type mockedRootNode struct {
+	trie.Node
+	ver trie.Version
+}
+
+func (m *mockedRootNode) Version() trie.Version { return m.ver }
+
+func TestCacheRootNode(t *testing.T) {
+	cache := newCache(0, 100)
+
+	n1 := &mockedRootNode{ver: trie.Version{Major: 1, Minor: 1}}
+	cache.AddRootNode("", n1)
+	assert.Equal(t, n1, cache.GetRootNode("", n1.ver))
+
+	// minor ver not matched
+	assert.Equal(t, nil, cache.GetRootNode("", trie.Version{Major: 1}))
+}
+
+func TestCacheNodeBlob(t *testing.T) {
+	var (
+		cache  = newCache(1, 0)
+		keyBuf []byte
+		blob   = []byte{1, 1, 1}
+		ver    = trie.Version{Major: 1, Minor: 1}
+	)
+
+	// add to committing cache
+	cache.AddNodeBlob(&keyBuf, "", nil, ver, blob, true)
+	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", nil, ver, false))
+	// minor ver not matched
+	assert.Nil(t, cache.GetNodeBlob(&keyBuf, "", nil, trie.Version{Major: 1}, false))
+
+	cache = newCache(1, 0)
+
+	// add to querying cache
+	cache.AddNodeBlob(&keyBuf, "", nil, ver, blob, false)
+	assert.Equal(t, blob, cache.GetNodeBlob(&keyBuf, "", nil, ver, false))
+	// minor ver not matched
+	assert.Nil(t, cache.GetNodeBlob(&keyBuf, "", nil, trie.Version{Major: 1}, false))
+}
 
 func Benchmark_cacheNoeBlob(b *testing.B) {
 	var (
