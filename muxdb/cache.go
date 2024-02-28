@@ -71,7 +71,7 @@ func (c *cache) AddNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
-	v = binary.AppendUvarint(v, uint64(ver.Major))
+	v = binary.AppendUvarint(v, uint64(ver.Minor))
 	// the full key
 	k := append(v, name...)
 	k = append(k, path...)
@@ -94,7 +94,7 @@ func (c *cache) GetNodeBlob(keyBuf *[]byte, name string, path []byte, ver trie.V
 	}
 	// the version part
 	v := binary.AppendUvarint((*keyBuf)[:0], uint64(ver.Major))
-	v = binary.AppendUvarint(v, uint64(ver.Major))
+	v = binary.AppendUvarint(v, uint64(ver.Minor))
 	// the full key
 	k := append(v, name...)
 	k = append(k, path...)
