@@ -11,6 +11,7 @@ MAJOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f1)
 MINOR = $(shell go version | cut -d' ' -f3 | cut -b 3- | cut -d. -f2)
 export GO111MODULE=on
 
+.DEFAULT_GOAL := thor
 .PHONY: thor disco all clean test
 
 help:
@@ -59,3 +60,6 @@ lint_command_check:
 
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@golangci-lint run --config .golangci.yml
+
+.DEFAULT:
+	@$(MAKE) help
