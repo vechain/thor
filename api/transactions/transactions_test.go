@@ -121,7 +121,7 @@ func getTxWithBadId(t *testing.T) {
 
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId, 400)
 
-	assert.Contains(t, string(res), "id:")
+	assert.Contains(t, string(res), thor.ErrInvalidLength.Error())
 }
 
 func txWithBadHeader(t *testing.T) {
@@ -132,7 +132,7 @@ func txWithBadHeader(t *testing.T) {
 
 	for _, url := range badHeaderURL {
 		res := httpGetAndCheckResponseStatus(t, url, 400)
-		assert.Contains(t, string(res), "head:")
+		assert.Contains(t, string(res), thor.ErrInvalidLength.Error())
 	}
 }
 
@@ -148,7 +148,7 @@ func checkBlockSummaryExistsInRepoForNonExistingBlock(t *testing.T) {
 	err := checkBlockSummaryExistsInRepo(repo, head)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), chain.ErrNotFound.Error())
 }
 
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
@@ -211,7 +211,7 @@ func sendTxWithBadFormat(t *testing.T) {
 
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", badRawTx, 400)
 
-	assert.Contains(t, string(res), "raw:")
+	assert.Contains(t, string(res), hexutil.ErrMissingPrefix.Error())
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {

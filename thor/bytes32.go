@@ -23,6 +23,11 @@ var (
 	_ json.Unmarshaler = (*Bytes32)(nil)
 )
 
+var (
+	ErrInvalidPrefix = errors.New("invalid prefix")
+	ErrInvalidLength = errors.New("invalid length")
+)
+
 // String implements stringer
 func (b Bytes32) String() string {
 	return "0x" + hex.EncodeToString(b[:])
@@ -70,11 +75,11 @@ func ParseBytes32(s string) (Bytes32, error) {
 	if len(s) == 32*2 {
 	} else if len(s) == 32*2+2 {
 		if strings.ToLower(s[:2]) != "0x" {
-			return Bytes32{}, errors.New("invalid prefix")
+			return Bytes32{}, ErrInvalidPrefix
 		}
 		s = s[2:]
 	} else {
-		return Bytes32{}, errors.New("invalid length")
+		return Bytes32{}, ErrInvalidLength
 	}
 
 	var b Bytes32
