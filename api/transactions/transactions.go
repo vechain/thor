@@ -239,7 +239,7 @@ func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
-	sub.Path("/{id}").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
-	sub.Path("/{id}/receipt").Methods("GET").HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
+	sub.Path("").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(t.handleSendTransaction))
+	sub.Path("/{id}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionByID))
+	sub.Path("/{id}/receipt").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(t.handleGetTransactionReceiptByID))
 }

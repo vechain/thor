@@ -67,5 +67,5 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods("POST").HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
+	sub.Path("").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
 }
