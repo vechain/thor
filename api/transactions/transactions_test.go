@@ -8,6 +8,7 @@ package transactions
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net/http"
@@ -57,14 +58,14 @@ func TestTransaction(t *testing.T) {
 }
 
 func getTx(t *testing.T) {
-	res := httpGet(t, ts.URL+"/transactions/"+transaction.ID().String())
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String(), 200)
 	var rtx *Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
 	checkMatchingTx(t, transaction, rtx)
 
-	res = httpGet(t, ts.URL+"/transactions/"+transaction.ID().String()+"?raw=true")
+	res = httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?raw=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -77,7 +78,7 @@ func getTx(t *testing.T) {
 }
 
 func getTxReceipt(t *testing.T) {
-	r := httpGet(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt")
+	r := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt", 200)
 	var receipt *Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
@@ -118,18 +119,9 @@ func sendTx(t *testing.T) {
 func getTxWithBadId(t *testing.T) {
 	txBadId := "0x123"
 
-	res, err := http.Get(ts.URL + "/transactions/" + txBadId)
-	if err != nil {
-		t.Fatal(err)
-	}
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId, 400)
 
-	assert.Equal(t, 400, res.StatusCode, "status code should be 400")
-	bytesBody, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Contains(t, string(bytesBody), "id:")
+	assert.Contains(t, string(res), "id:")
 }
 
 func txWithBadHeader(t *testing.T) {
@@ -139,30 +131,15 @@ func txWithBadHeader(t *testing.T) {
 	}
 
 	for _, url := range badHeaderURL {
-		res, err := http.Get(url)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		assert.Equal(t, 400, res.StatusCode, "status code should be 400")
-		bytesBody, err := io.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Contains(t, string(bytesBody), "head:")
+		res := httpGetAndCheckResponseStatus(t, url, 400)
+		assert.Contains(t, string(res), "head:")
 	}
 }
 
 func getReceiptWithBadId(t *testing.T) {
 	txBadId := "0x123"
 
-	res, err := http.Get(ts.URL + "/transactions/" + txBadId + "/receipt")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, 400, res.StatusCode, "status code should be 400")
+	httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId+"/receipt", 400)
 }
 
 func checkBlockSummaryExistsInRepoForNonExistingBlock(t *testing.T) {
@@ -177,18 +154,19 @@ func checkBlockSummaryExistsInRepoForNonExistingBlock(t *testing.T) {
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
 	nonExistingTxId := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	queryParams := []string{
-		"?raw=true", "?raw=true&pending=true",
+		"?raw=true",
+		"?raw=true&pending=true",
 	}
 
 	for _, queryParam := range queryParams {
-		res := httpGet(t, ts.URL+"/transactions/"+nonExistingTxId+queryParam)
+		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+nonExistingTxId+queryParam, 200)
 
 		assert.Equal(t, "null\n", string(res))
 	}
 }
 
 func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
-	res := httpGet(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true")
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -198,7 +176,7 @@ func getNonPendingRawTransactionWhenTxStillInMempool(t *testing.T) {
 }
 
 func getRawTransactionWhenTxStillInMempool(t *testing.T) {
-	res := httpGet(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true&pending=true")
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?raw=true&pending=true", 200)
 	var rawTx map[string]interface{}
 	if err := json.Unmarshal(res, &rawTx); err != nil {
 		t.Fatal(err)
@@ -213,13 +191,13 @@ func getRawTransactionWhenTxStillInMempool(t *testing.T) {
 }
 
 func getTransactionByIDTxNotFound(t *testing.T) {
-	res := httpGet(t, ts.URL+"/transactions/"+mempoolTx.ID().String())
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String(), 200)
 
 	assert.Equal(t, "null\n", string(res))
 }
 
 func getTransactionByIDPendingTxNotFound(t *testing.T) {
-	res := httpGet(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?pending=true")
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?pending=true", 200)
 	var rtx *Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
@@ -259,7 +237,6 @@ func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 	res, err := http.Post(ts.URL+"/transactions", "application/x-www-form-urlencoded", bytes.NewReader(data))
 
 	assert.NoError(t, err)
-	t.Log(res)
 	assert.Equal(t, 400, res.StatusCode, "status code should be 400")
 }
 
@@ -270,18 +247,8 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 	}
 
 	for _, badQueryParam := range badQueryParams {
-		res, err := http.Get(ts.URL + "/transactions/" + transaction.ID().String() + badQueryParam)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		assert.Equal(t, 400, res.StatusCode, "status code should be 400")
-		bytesBody, err := io.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
-		assert.Contains(t, string(bytesBody), "should be boolean")
+		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+badQueryParam, 400)
+		assert.Contains(t, string(res), "should be boolean")
 	}
 
 }
@@ -395,11 +362,12 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *Transac
 	}
 }
 
-func httpGet(t *testing.T, url string) []byte {
+func httpGetAndCheckResponseStatus(t *testing.T, url string, responseStatusCode int) []byte {
 	res, err := http.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, responseStatusCode, res.StatusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
 	r, err := io.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
