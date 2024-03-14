@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package accounts_test
+package accounts
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	ABI "github.com/vechain/thor/v2/abi"
-	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -87,6 +87,8 @@ var value = big.NewInt(10000)
 var storageKey = thor.Bytes32{}
 var storageValue = byte(1)
 
+var genesisBlock *block.Block
+
 var contractAddr thor.Address
 
 var bytecode = common.Hex2Bytes("608060405234801561001057600080fd5b50610125806100206000396000f3006080604052600436106049576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff16806324b8ba5f14604e578063bb4e3f4d14607b575b600080fd5b348015605957600080fd5b506079600480360381019080803560ff16906020019092919050505060cf565b005b348015608657600080fd5b5060b3600480360381019080803560ff169060200190929190803560ff16906020019092919050505060ec565b604051808260ff1660ff16815260200191505060405180910390f35b806000806101000a81548160ff021916908360ff16021790555050565b60008183019050929150505600a165627a7a723058201584add23e31d36c569b468097fe01033525686b59bbb263fb3ab82e9553dae50029")
@@ -103,6 +105,8 @@ func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
 	getAccount(t)
+	getAccountWithNonExisitingRevision(t)
+	getAccountWithGenesisRevision(t)
 	getCode(t)
 	getStorage(t)
 	deployContractWithCall(t)
@@ -119,12 +123,40 @@ func getAccount(t *testing.T) {
 
 	//revision is optional defaut `best`
 	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String())
-	var acc accounts.Account
+	var acc Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, math.HexOrDecimal256(*value), acc.Balance, "balance should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
+}
+
+func getAccountWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0123456789012345678901234567890123456789012345678901234567890123"
+
+	_, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+}
+
+func getAccountWithGenesisRevision(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+genesisBlock.Header().ID().String())
+	assert.Equal(t, http.StatusOK, statusCode, "bad revision")
+
+	var acc Account
+	if err := json.Unmarshal(res, &acc); err != nil {
+		t.Fatal(err)
+	}
+
+	balance, err := acc.Balance.MarshalText()
+	assert.NoError(t, err)
+	assert.Equal(t, "0x0", string(balance), "balance should be 0")
+
+	energy, err := acc.Energy.MarshalText()
+	assert.NoError(t, err)
+	assert.Equal(t, "0x0", string(energy), "energy should be 0")
+
+	assert.Equal(t, false, acc.HasCode, "hasCode should be false")
 }
 
 func getCode(t *testing.T) {
@@ -181,6 +213,7 @@ func initAccountServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	genesisBlock = b
 	repo, _ := chain.NewRepository(db, b)
 	claTransfer := tx.NewClause(&addr).WithValue(value)
 	claDeploy := tx.NewClause(nil).WithData(bytecode)
@@ -200,7 +233,7 @@ func initAccountServer(t *testing.T) {
 	packTx(repo, stater, transactionCall, t)
 
 	router := mux.NewRouter()
-	accounts.New(repo, stater, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
+	New(repo, stater, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 
@@ -247,14 +280,14 @@ func packTx(repo *chain.Repository, stater *state.Stater, transaction *tx.Transa
 }
 
 func deployContractWithCall(t *testing.T) {
-	badBody := &accounts.CallData{
+	badBody := &CallData{
 		Gas:  10000000,
 		Data: "abc",
 	}
 	_, statusCode := httpPost(t, ts.URL+"/accounts", badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
-	reqBody := &accounts.CallData{
+	reqBody := &CallData{
 		Gas:  10000000,
 		Data: hexutil.Encode(bytecode),
 	}
@@ -264,7 +297,7 @@ func deployContractWithCall(t *testing.T) {
 
 	//revision is optional defaut `best`
 	res, _ := httpPost(t, ts.URL+"/accounts", reqBody)
-	var output *accounts.CallResult
+	var output *CallResult
 	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +308,7 @@ func callContract(t *testing.T) {
 	_, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	badBody := &accounts.CallData{
+	badBody := &CallData{
 		Data: "input",
 	}
 	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), badBody)
@@ -290,11 +323,11 @@ func callContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.CallData{
+	reqBody := &CallData{
 		Data: hexutil.Encode(input),
 	}
 	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
-	var output *accounts.CallResult
+	var output *CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -312,14 +345,14 @@ func callContract(t *testing.T) {
 }
 
 func batchCall(t *testing.T) {
-	badBody := &accounts.BatchCallData{
-		Clauses: accounts.Clauses{
-			accounts.Clause{
+	badBody := &BatchCallData{
+		Clauses: Clauses{
+			Clause{
 				To:    &contractAddr,
 				Data:  "data1",
 				Value: nil,
 			},
-			accounts.Clause{
+			Clause{
 				To:    &contractAddr,
 				Data:  "data2",
 				Value: nil,
@@ -337,14 +370,14 @@ func batchCall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reqBody := &accounts.BatchCallData{
-		Clauses: accounts.Clauses{
-			accounts.Clause{
+	reqBody := &BatchCallData{
+		Clauses: Clauses{
+			Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
 			},
-			accounts.Clause{
+			Clause{
 				To:    &contractAddr,
 				Data:  hexutil.Encode(input),
 				Value: nil,
@@ -355,7 +388,7 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
 
 	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
-	var results accounts.BatchCallResults
+	var results BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
 	}
@@ -374,8 +407,8 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	big := math.HexOrDecimal256(*big.NewInt(1000))
-	fullBody := &accounts.BatchCallData{
-		Clauses:    accounts.Clauses{},
+	fullBody := &BatchCallData{
+		Clauses:    Clauses{},
 		Gas:        21000,
 		GasPrice:   &big,
 		ProvedWork: &big,
