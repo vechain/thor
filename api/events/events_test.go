@@ -3,6 +3,184 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events_test
+package events
 
-// TODO
+import (
+	"bytes"
+	"crypto/rand"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/muxdb"
+	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tx"
+)
+
+var ts *httptest.Server
+
+func TestEmptyEvents(t *testing.T) {
+	db := createDb(t)
+	initEventServer(t, db)
+	defer ts.Close()
+
+	testEventsBadRequest(t)
+	testEventWithEmptyDb(t)
+}
+
+func TestEvents(t *testing.T) {
+	db := createDb(t)
+	initEventServer(t, db)
+	defer ts.Close()
+
+	blocksToInsert := 5
+	insertBlocks(t, db, blocksToInsert)
+
+	testEventWithBlocks(t, blocksToInsert)
+}
+
+// Test functions
+func testEventsBadRequest(t *testing.T) {
+	badBody := []byte{0x00, 0x01, 0x02}
+
+	res, err := http.Post(ts.URL+"/events", "application/x-www-form-urlencoded", bytes.NewReader(badBody))
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+func testEventWithEmptyDb(t *testing.T) {
+	emptyFilter := EventFilter{
+		CriteriaSet: make([]*EventCriteria, 0),
+		Range:       nil,
+		Options:     nil,
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	var tLogs []*FilteredEvent
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Empty(t, tLogs)
+}
+
+func testEventWithBlocks(t *testing.T, expectedBlocks int) {
+	emptyFilter := EventFilter{
+		CriteriaSet: make([]*EventCriteria, 0),
+		Range:       nil,
+		Options:     nil,
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
+	var tLogs []*FilteredEvent
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, expectedBlocks, len(tLogs))
+	for _, tLog := range tLogs {
+		assert.NotEmpty(t, tLog)
+	}
+}
+
+// Init functions
+func initEventServer(t *testing.T, logDb *logdb.LogDB) {
+	router := mux.NewRouter()
+
+	muxDb := muxdb.NewMem()
+	stater := state.NewStater(muxDb)
+	gene := genesis.NewDevnet()
+
+	b, _, _, err := gene.Build(stater)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, _ := chain.NewRepository(muxDb, b)
+
+	New(repo, logDb).Mount(router, "/events")
+	ts = httptest.NewServer(router)
+}
+
+func createDb(t *testing.T) *logdb.LogDB {
+	logDb, err := logdb.NewMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return logDb
+}
+
+// Utilities functions
+func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, res.StatusCode
+}
+
+func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
+	b := new(block.Builder).Build()
+	for i := 0; i < n; i++ {
+		b = new(block.Builder).
+			ParentID(b.Header().ID()).
+			Build()
+		receipts := tx.Receipts{newReceipt()}
+
+		w := db.NewWriter()
+		if err := w.Write(b, receipts); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := w.Commit(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func randAddress() (addr thor.Address) {
+	rand.Read(addr[:])
+	return
+}
+
+func newReceipt() *tx.Receipt {
+	return &tx.Receipt{
+		Outputs: []*tx.Output{
+			{
+				Events: tx.Events{{
+					Address: randAddress(),
+					Topics:  []thor.Bytes32{randBytes32()},
+					Data:    randBytes32().Bytes(),
+				}},
+			},
+		},
+	}
+}
+
+func randBytes32() (b thor.Bytes32) {
+	rand.Read(b[:])
+	return
+}
