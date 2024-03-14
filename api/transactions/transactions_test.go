@@ -108,7 +108,7 @@ func sendTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPost(t, ts.URL+"/transactions", RawTx{Raw: hexutil.Encode(rlpTx)})
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
@@ -208,19 +208,10 @@ func getTransactionByIDPendingTxNotFound(t *testing.T) {
 
 func sendTxWithBadFormat(t *testing.T) {
 	badRawTx := RawTx{Raw: "badRawTx"}
-	rawTxJson, err := json.Marshal(badRawTx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, _ := http.Post(ts.URL+"/transactions", "application/x-www-form-urlencoded", bytes.NewReader(rawTxJson))
 
-	assert.Equal(t, 400, res.StatusCode, "status code should be 400")
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Contains(t, string(r), "raw:")
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", badRawTx, 400)
+
+	assert.Contains(t, string(res), "raw:")
 }
 
 func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
@@ -230,14 +221,10 @@ func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 		t.Fatal(err)
 	}
 	duplicatedRawTx := RawTx{Raw: hexutil.Encode(rlpTx)}
-	data, err := json.Marshal(duplicatedRawTx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(ts.URL+"/transactions", "application/x-www-form-urlencoded", bytes.NewReader(data))
 
-	assert.NoError(t, err)
-	assert.Equal(t, 400, res.StatusCode, "status code should be 400")
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", duplicatedRawTx, 400)
+
+	assert.Contains(t, string(res), "bad tx: chain tag mismatch")
 }
 
 func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
@@ -253,7 +240,7 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 
 }
 
-func httpPost(t *testing.T, url string, obj interface{}) []byte {
+func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
 	data, err := json.Marshal(obj)
 	if err != nil {
 		t.Fatal(err)
@@ -262,6 +249,7 @@ func httpPost(t *testing.T, url string, obj interface{}) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assert.Equal(t, responseStatusCode, res.StatusCode, fmt.Sprintf("status code should be %d", responseStatusCode))
 	r := parseBytesBody(t, res.Body)
 	res.Body.Close()
 	return r
