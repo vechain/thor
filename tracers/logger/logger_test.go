@@ -165,7 +165,7 @@ func TestWriteLogs(t *testing.T) {
 	logs := []*types.Log{
 		{
 			Address:     common.HexToAddress("0x1"),
-			Topics:      []common.Hash{mockHash("topic1"), mockHash("topic2")},
+			Topics:      []common.Hash{common.BytesToHash([]byte("topic1")), common.BytesToHash([]byte("topic2"))},
 			Data:        []byte("data1"),
 			BlockNumber: 100,
 			TxHash:      mockHash("txhash1"),
