@@ -56,12 +56,6 @@ func (*dummyStatedb) GetRefund() uint64                                       { 
 func (*dummyStatedb) GetState(_ common.Address, _ common.Hash) common.Hash    { return common.Hash{} }
 func (*dummyStatedb) SetState(_ common.Address, _ common.Hash, _ common.Hash) {}
 
-func mockHash(input string) common.Hash {
-	hashBytes := make([]byte, len(input))
-	copy(hashBytes, input)
-	return common.BytesToHash(hashBytes)
-}
-
 func TestStoreCapture(t *testing.T) {
 	var (
 		logger, _ = NewStructLogger(nil)
@@ -168,20 +162,20 @@ func TestWriteLogs(t *testing.T) {
 			Topics:      []common.Hash{common.BytesToHash([]byte("topic1")), common.BytesToHash([]byte("topic2"))},
 			Data:        []byte("data1"),
 			BlockNumber: 100,
-			TxHash:      mockHash("txhash1"),
+			TxHash:      common.BytesToHash([]byte("txhash1")),
 			TxIndex:     0,
-			BlockHash:   mockHash("blockhash1"),
+			BlockHash:   common.BytesToHash([]byte("blockhash1")),
 			Index:       0,
 			Removed:     false,
 		},
 		{
 			Address:     common.HexToAddress("0x2"),
-			Topics:      []common.Hash{mockHash("topic3"), mockHash("topic4")},
+			Topics:      []common.Hash{common.BytesToHash([]byte("topic3")), common.BytesToHash([]byte("topic4"))},
 			Data:        []byte("data2"),
 			BlockNumber: 101,
-			TxHash:      mockHash("txhash2"),
+			TxHash:      common.BytesToHash([]byte("txhash2")),
 			TxIndex:     1,
-			BlockHash:   mockHash("blockhash2"),
+			BlockHash:   common.BytesToHash([]byte("blockhash2")),
 			Index:       1,
 			Removed:     false,
 		},
