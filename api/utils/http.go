@@ -7,12 +7,13 @@ package utils
 
 import (
 	"encoding/json"
-	"github.com/vechain/thor/v2/telemetry"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vechain/thor/v2/telemetry"
 )
 
 type httpError struct {

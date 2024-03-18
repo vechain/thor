@@ -63,5 +63,6 @@ func TestOtelPromTelemetry(t *testing.T) {
 
 	sumCountVec := metrics["node_telemetry_countVec1"].GetMetric()[0].GetCounter().GetValue() +
 		metrics["node_telemetry_countVec1"].GetMetric()[1].GetCounter().GetValue()
+
 	require.Equal(t, sumCountVec, float64(totalCountVec))
 }
