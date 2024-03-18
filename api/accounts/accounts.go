@@ -351,20 +351,21 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/*").
 		Methods("POST").
-		HandlerFunc(utils.MetricsWrapHandler("accounts_call_batch_code", utils.WrapHandlerFunc(a.handleCallBatchCode)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_call_batch_code", a.handleCallBatchCode))
 	sub.Path("/{address}").
 		Methods(http.MethodGet).
-		HandlerFunc(utils.MetricsWrapHandler("accounts_get_account", utils.WrapHandlerFunc(a.handleGetAccount)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_get_account", a.handleGetAccount))
 	sub.Path("/{address}/code").
 		Methods(http.MethodGet).
-		HandlerFunc(utils.MetricsWrapHandler("accounts_get_code", utils.WrapHandlerFunc(a.handleGetCode)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_get_code", a.handleGetCode))
 	sub.Path("/{address}/storage/{key}").
 		Methods("GET").
-		HandlerFunc(utils.MetricsWrapHandler("accounts_get_storage", utils.WrapHandlerFunc(a.handleGetStorage)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_get_storage", a.handleGetStorage))
+	// These two methods are currently deprecated
 	sub.Path("").
 		Methods("POST").
-		HandlerFunc(utils.MetricsWrapHandler("accounts_api_call_contract", utils.WrapHandlerFunc(a.handleCallContract)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_api_call_contract", a.handleCallContract))
 	sub.Path("/{address}").
 		Methods("POST").
-		HandlerFunc(utils.MetricsWrapHandler("accounts_call_contract_address", utils.WrapHandlerFunc(a.handleCallContract)))
+		HandlerFunc(utils.MetricsWrapHandler(pathPrefix, "accounts_call_contract_address", a.handleCallContract))
 }

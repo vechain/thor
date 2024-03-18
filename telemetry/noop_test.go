@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,6 +32,12 @@ func TestNoopTelemetry(t *testing.T) {
 	for i := 0; i < rand.Intn(100)+1; i++ {
 		hist.Observe(int64(i))
 		histTotal += i
+	}
+
+	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
+	for i := 0; i < rand.Intn(100)+1; i++ {
+		color := i % 2
+		countVect.AddWithLabel(int64(i), map[string]string{"color": strconv.Itoa(color)})
 	}
 
 	// Make a request to the metrics endpoint

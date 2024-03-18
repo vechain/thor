@@ -22,14 +22,20 @@ func InitializePrometheusTelemetry() {
 }
 
 type prometheusTelemetry struct {
-	counters   sync.Map
-	histograms sync.Map
+	counters      sync.Map
+	counterVecs   sync.Map
+	histograms    sync.Map
+	histogramVecs sync.Map
+	gaugeVecs     sync.Map
 }
 
 func newPrometheusTelemetry() Telemetry {
 	return &prometheusTelemetry{
-		counters:   sync.Map{},
-		histograms: sync.Map{},
+		counters:      sync.Map{},
+		counterVecs:   sync.Map{},
+		histograms:    sync.Map{},
+		histogramVecs: sync.Map{},
+		gaugeVecs:     sync.Map{},
 	}
 }
 
@@ -41,6 +47,18 @@ func (o *prometheusTelemetry) GetOrCreateCountMeter(name string) CountMeter {
 		o.counters.Store(name, meter)
 	} else {
 		meter = mapItem.(CountMeter)
+	}
+	return meter
+}
+
+func (o *prometheusTelemetry) GetOrCreateCountVecMeter(name string, labels []string) CountVecMeter {
+	var meter CountVecMeter
+	mapItem, ok := o.counterVecs.Load(name)
+	if !ok {
+		meter = o.newCountVecMeter(name, labels)
+		o.counterVecs.Store(name, meter)
+	} else {
+		meter = mapItem.(CountVecMeter)
 	}
 	return meter
 }
@@ -61,13 +79,37 @@ func (o *prometheusTelemetry) GetOrCreateHistogramMeter(name string, buckets []i
 	return meter
 }
 
+func (o *prometheusTelemetry) GetOrCreateHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
+	var meter HistogramVecMeter
+	mapItem, ok := o.histogramVecs.Load(name)
+	if !ok {
+		meter = o.newHistogramVecMeter(name, labels, buckets)
+		o.histogramVecs.Store(name, meter)
+	} else {
+		meter = mapItem.(HistogramVecMeter)
+	}
+	return meter
+}
+
+func (o *prometheusTelemetry) GetOrCreateGaugeVecMeter(name string, labels []string) GaugeVecMeter {
+	var meter GaugeVecMeter
+	mapItem, ok := o.gaugeVecs.Load(name)
+	if !ok {
+		meter = o.newGaugeVecMeter(name, labels)
+		o.gaugeVecs.Store(name, meter)
+	} else {
+		meter = mapItem.(GaugeVecMeter)
+	}
+	return meter
+}
+
 func (o *prometheusTelemetry) newHistogramMeter(name string, buckets []int64) HistogramMeter {
 	var floatBuckets []float64
 	for _, bucket := range buckets {
 		floatBuckets = append(floatBuckets, float64(bucket))
 	}
 
-	histogram := prometheus.NewHistogram(
+	meter := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: namespace,
 			Name:      name,
@@ -75,13 +117,13 @@ func (o *prometheusTelemetry) newHistogramMeter(name string, buckets []int64) Hi
 		},
 	)
 
-	err := prometheus.Register(histogram)
+	err := prometheus.Register(meter)
 	if err != nil {
 		log.Warn("unable to register metric", "err", err)
 	}
 
 	return &promHistogramMeter{
-		histogram: histogram,
+		histogram: meter,
 	}
 }
 
@@ -93,20 +135,89 @@ func (c *promHistogramMeter) Observe(i int64) {
 	c.histogram.Observe(float64(i))
 }
 
+func (o *prometheusTelemetry) newHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
+	var floatBuckets []float64
+	for _, bucket := range buckets {
+		floatBuckets = append(floatBuckets, float64(bucket))
+	}
+
+	meter := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      name,
+			Buckets:   floatBuckets,
+		},
+		labels,
+	)
+
+	err := prometheus.Register(meter)
+	if err != nil {
+		log.Warn("unable to register metric", "err", err)
+	}
+
+	return &promHistogramVecMeter{
+		histogram: meter,
+	}
+}
+
+type promHistogramVecMeter struct {
+	histogram *prometheus.HistogramVec
+}
+
+func (c *promHistogramVecMeter) ObserveWithLabels(i int64, labels map[string]string) {
+	c.histogram.With(labels).Observe(float64(i))
+}
+
 func (o *prometheusTelemetry) newCountMeter(name string) CountMeter {
-	counter := prometheus.NewCounter(
+	meter := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      name,
 		},
 	)
 
-	err := prometheus.Register(counter)
+	err := prometheus.Register(meter)
 	if err != nil {
 		log.Warn("unable to register metric", "err", err)
 	}
 	return &promCountMeter{
-		counter: counter,
+		counter: meter,
+	}
+}
+
+func (o *prometheusTelemetry) newCountVecMeter(name string, labels []string) CountVecMeter {
+	meter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      name,
+		},
+		labels,
+	)
+
+	err := prometheus.Register(meter)
+	if err != nil {
+		log.Warn("unable to register metric", "err", err)
+	}
+	return &promCountVecMeter{
+		counter: meter,
+	}
+}
+
+func (o *prometheusTelemetry) newGaugeVecMeter(name string, labels []string) GaugeVecMeter {
+	meter := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      name,
+		},
+		labels,
+	)
+
+	err := prometheus.Register(meter)
+	if err != nil {
+		log.Warn("unable to register metric", "err", err)
+	}
+	return &promGaugeVecMeter{
+		gauge: meter,
 	}
 }
 
@@ -116,4 +227,20 @@ type promCountMeter struct {
 
 func (c *promCountMeter) Add(i int64) {
 	c.counter.Add(float64(i))
+}
+
+type promCountVecMeter struct {
+	counter *prometheus.CounterVec
+}
+
+func (c *promCountVecMeter) AddWithLabel(i int64, labels map[string]string) {
+	c.counter.With(labels).Add(float64(i))
+}
+
+type promGaugeVecMeter struct {
+	gauge *prometheus.GaugeVec
+}
+
+func (c *promGaugeVecMeter) GaugeWithLabel(i int64, labels map[string]string) {
+	c.gauge.With(labels).Add(float64(i))
 }
