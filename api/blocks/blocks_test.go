@@ -8,9 +8,12 @@ package blocks
 import (
 	"encoding/json"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,11 +31,11 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+var genesisBlock *block.Block
 var blk *block.Block
 var ts *httptest.Server
 
 var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
-var invalidNumberRevision = "4294967296"                                                  //invalid block number
 
 func TestBlock(t *testing.T) {
 	initBlockServer(t)
@@ -45,6 +48,8 @@ func TestBlock(t *testing.T) {
 	testGetExpandedBlockById(t)
 	testGetBlockByHeight(t)
 	testGetBestBlock(t)
+	testGetFinalizedBlock(t)
+	testGetBlockWithRevisionNumberTooHigh(t)
 }
 
 func testBadQueryParams(t *testing.T) {
@@ -52,7 +57,7 @@ func testBadQueryParams(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/best"+badQueryParams)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode)
-	assert.Contains(t, string(res), "should be boolean")
+	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
 }
 
 func testGetBestBlock(t *testing.T) {
@@ -73,6 +78,19 @@ func testGetBlockByHeight(t *testing.T) {
 	}
 	checkCollapsedBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetFinalizedBlock(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/finalized")
+	rb := new(JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.True(t, rb.IsFinalized)
+	assert.Equal(t, genesisBlock.Header().ID(), rb.ID)
+	assert.Equal(t, uint32(0), rb.Number)
 }
 
 func testGetBlockById(t *testing.T) {
@@ -96,6 +114,7 @@ func testGetExpandedBlockById(t *testing.T) {
 }
 
 func testInvalidBlockNumber(t *testing.T) {
+	invalidNumberRevision := "4294967296" //invalid block number
 	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
 }
@@ -103,6 +122,14 @@ func testInvalidBlockNumber(t *testing.T) {
 func testInvalidBlockId(t *testing.T) {
 	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
 	assert.Equal(t, http.StatusBadRequest, statusCode)
+}
+
+func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
+	revisionNumberTooHigh := strconv.FormatUint(math.MaxUint64, 10)
+	res, statusCode := httpGet(t, ts.URL+"/blocks/"+revisionNumberTooHigh)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(string(res)))
 }
 
 func initBlockServer(t *testing.T) {
@@ -114,6 +141,8 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	genesisBlock = b
+
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
@@ -156,7 +185,8 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	New(repo, &solo.BFTEngine{}).Mount(router, "/blocks")
+	bftEngine := solo.NewBFTEngine(repo)
+	New(repo, bftEngine).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }

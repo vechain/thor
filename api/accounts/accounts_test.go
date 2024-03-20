@@ -8,6 +8,7 @@ package accounts
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net/http"
@@ -86,7 +87,7 @@ var addr = thor.BytesToAddress([]byte("to"))
 var value = big.NewInt(10000)
 var storageKey = thor.Bytes32{}
 var storageValue = byte(1)
-
+var gasLimit uint64
 var genesisBlock *block.Block
 
 var contractAddr thor.Address
@@ -99,6 +100,7 @@ var invalidAddr = "abc"                                                         
 var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
 var invalidNumberRevision = "4294967296"                                                  //invalid block number
 
+var accounts *Accounts
 var ts *httptest.Server
 
 func TestAccount(t *testing.T) {
@@ -107,7 +109,9 @@ func TestAccount(t *testing.T) {
 	getAccount(t)
 	getAccountWithNonExisitingRevision(t)
 	getAccountWithGenesisRevision(t)
+	getInvalidCode(t)
 	getCode(t)
+	getStorageWhenError(t)
 	getStorage(t)
 	deployContractWithCall(t)
 	callContract(t)
@@ -180,6 +184,36 @@ func getCode(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
+func getInvalidCode(t *testing.T) {
+	blockSummary := &chain.BlockSummary{
+		Header:    genesisBlock.Header(),
+		Txs:       []thor.Bytes32{thor.BytesToBytes32([]byte("123"))},
+		Size:      1,
+		Conflicts: 1,
+		SteadyNum: 1,
+	}
+
+	code, err := accounts.getCode(addr, blockSummary)
+
+	assert.Error(t, err)
+	assert.Empty(t, code)
+}
+
+func getStorageWhenError(t *testing.T) {
+	blockSummary := &chain.BlockSummary{
+		Header:    genesisBlock.Header(),
+		Txs:       []thor.Bytes32{thor.BytesToBytes32([]byte("123"))},
+		Size:      1,
+		Conflicts: 1,
+		SteadyNum: 1,
+	}
+
+	storage, err := accounts.getStorage(addr, storageKey, blockSummary)
+
+	assert.Error(t, err)
+	assert.Equal(t, thor.Bytes32{}, storage)
+}
+
 func getStorage(t *testing.T) {
 	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
@@ -233,7 +267,9 @@ func initAccountServer(t *testing.T) {
 	packTx(repo, stater, transactionCall, t)
 
 	router := mux.NewRouter()
-	New(repo, stater, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
+	gasLimit = math.MaxUint32
+	accounts = New(repo, stater, gasLimit, thor.NoFork)
+	accounts.Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 
@@ -308,6 +344,13 @@ func callContract(t *testing.T) {
 	_, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
+	malFormedBody := 123
+	_, statusCode = httpPost(t, ts.URL+"/accounts", malFormedBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
+
+	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), malFormedBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
+
 	badBody := &CallData{
 		Data: "input",
 	}
@@ -345,6 +388,12 @@ func callContract(t *testing.T) {
 }
 
 func batchCall(t *testing.T) {
+	// Request body is not a valid JSON
+	malformedBody := 123
+	_, statusCode := httpPost(t, ts.URL+"/accounts/*", malformedBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed data")
+
+	// Request body is not a valid BatchCallData
 	badBody := &BatchCallData{
 		Clauses: Clauses{
 			Clause{
@@ -358,9 +407,25 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
-	_, statusCode := httpPost(t, ts.URL+"/accounts/*", badBody)
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*", badBody)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
+	// Request body has an invalid blockRef
+	badBlockRef := &BatchCallData{
+		BlockRef: "0x00",
+	}
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*", badBlockRef)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid blockRef")
+
+	// Request body has an invalid malformed revision
+	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%d", ts.URL, malformedBody), badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
+
+	// Request body has an invalid revision number
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
+
+	// Valid request
 	a := uint8(1)
 	b := uint8(2)
 	method := "add"
@@ -384,9 +449,6 @@ func batchCall(t *testing.T) {
 			}},
 	}
 
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
-	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
-
 	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
 	var results BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
@@ -406,6 +468,7 @@ func batchCall(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusOK, statusCode)
 
+	// Valid request
 	big := math.HexOrDecimal256(*big.NewInt(1000))
 	fullBody := &BatchCallData{
 		Clauses:    Clauses{},
@@ -419,6 +482,20 @@ func batchCall(t *testing.T) {
 	}
 	_, statusCode = httpPost(t, ts.URL+"/accounts/*", fullBody)
 	assert.Equal(t, http.StatusOK, statusCode)
+
+	// Request with not enough gas
+	tooMuchGasBody := &BatchCallData{
+		Clauses:    Clauses{},
+		Gas:        math.MaxUint64,
+		GasPrice:   &big,
+		ProvedWork: &big,
+		Caller:     &contractAddr,
+		GasPayer:   &contractAddr,
+		Expiration: 100,
+		BlockRef:   "0x00000000aabbccdd",
+	}
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*", tooMuchGasBody)
+	assert.Equal(t, http.StatusForbidden, statusCode)
 }
 
 func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
