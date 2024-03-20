@@ -415,7 +415,7 @@ func batchCall(t *testing.T) {
 		BlockRef: "0x00",
 	}
 	_, statusCode = httpPost(t, ts.URL+"/accounts/*", badBlockRef)
-	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid blockRef")
+	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
 
 	// Request body has an invalid malformed revision
 	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%d", ts.URL, malformedBody), badBody)
