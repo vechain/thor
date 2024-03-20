@@ -41,7 +41,6 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *chain.Chain) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(rng.From), convertedRng.From)
 	assert.Equal(t, uint32(rng.To), convertedRng.To)
-
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *chain.Chain) {

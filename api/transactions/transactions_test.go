@@ -237,7 +237,6 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+badQueryParam, 400)
 		assert.Contains(t, string(res), "should be boolean")
 	}
-
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
