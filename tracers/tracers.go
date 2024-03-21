@@ -27,6 +27,11 @@ import (
 	"github.com/vechain/thor/v2/vm"
 )
 
+var (
+	// ErrUnsupportedTracer is returned when a tracer cannot be created.
+	ErrUnsupportedTracer = errors.New("cannot create custom tracer")
+)
+
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
@@ -82,7 +87,14 @@ func (d *directory) RegisterJSEval(f jsCtorFn) {
 // New returns a new instance of a tracer, by iterating through the
 // registered lookups. Name is either name of an existing tracer
 // or an arbitrary JS code.
-func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (Tracer, error) {
+func (d *directory) New(name string, cfg json.RawMessage, allowCustom bool) (tr Tracer, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = ErrUnsupportedTracer
+			return
+		}
+	}()
+
 	if elem, ok := d.elems[name]; ok {
 		return elem.ctor(cfg)
 	}

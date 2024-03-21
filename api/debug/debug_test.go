@@ -31,8 +31,12 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/tracers/logger"
 	"github.com/vechain/thor/v2/tx"
+
+	// Force-load the tracer native engines to trigger registration
+	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
 var ts *httptest.Server
@@ -52,6 +56,7 @@ func TestDebug(t *testing.T) {
 	testTraceClauseWithBadClauseIndex(t)
 	testTraceClauseWithTxIndexOutOfBound(t)
 	testTraceClauseWithClauseIndexOutOfBound(t)
+	testTraceClauseWithCustomTracer(t)
 	testTraceClause(t)
 
 	testHandleTraceCallWithMalformedBodyRequest(t)
@@ -142,6 +147,33 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, `target[2]: strconv.ParseUint: parsing "x": invalid syntax`, strings.TrimSpace(res))
+}
+
+func testTraceClauseWithCustomTracer(t *testing.T) {
+	traceClauseOption := &TraceClauseOption{
+		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
+		Name:   "nonExistingTracer",
+	}
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	assert.Equal(t, tracers.ErrUnsupportedTracer.Error(), strings.TrimSpace(res))
+
+	traceClauseOption = &TraceClauseOption{
+		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
+		Name:   "4byteTracer",
+	}
+	expectedExecutionResult := &logger.ExecutionResult{
+		Gas:         0,
+		Failed:      false,
+		ReturnValue: "",
+		StructLogs:  nil,
+	}
+	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
+
+	var parsedExecutionRes *logger.ExecutionResult
+	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
 func testTraceClause(t *testing.T) {
