@@ -12,7 +12,7 @@ jobs:
     uses: ./.github/workflows/test.yaml
 
   publish-docker-image:
-    name: Publish Pre-Release Docker Image
+    name: Publish Docker Image
     uses: ./.github/workflows/publish-docker-image.yaml
     secrets: inherit
     needs:
