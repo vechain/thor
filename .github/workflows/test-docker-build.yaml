@@ -1,9 +1,6 @@
 name: Test Docker Buld
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master

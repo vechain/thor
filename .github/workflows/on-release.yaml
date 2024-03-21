@@ -1,0 +1,30 @@
+name: Release CI
+
+on:
+  release:
+    types:
+      - released
+
+jobs:
+
+  run-unit-tests:
+    name: Run Unit Tests
+    uses: ./.github/workflows/test.yaml
+
+  publish-docker-image:
+    name: Publish Pre-Release Docker Image
+    uses: ./.github/workflows/publish-docker-image.yaml
+    secrets: inherit
+    needs:
+      - run-unit-tests
+    permissions:
+      contents: read
+      packages: write
+    with:
+      environment: docker-publish
+      images: |
+        ${{ github.repository }}
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.event.release.tag_name }}
+        type=raw,value=latest
