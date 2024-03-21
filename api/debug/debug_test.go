@@ -65,6 +65,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithRevisionAsBlockId(t)
 	testHandleTraceCallWithRevisionAsHeight(t)
 	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
+	testHandleTraceCallWithRevisionAsNonExistingId(t)
 	testHandleTraceCallWithMalfomredRevision(t)
 	testHandleTraceCallWithInsufficientGas(t)
 	testHandleTraceCallWithBadBlockRef(t)
@@ -142,11 +143,19 @@ func testTraceClauseWithNonExistingTx(t *testing.T) {
 }
 
 func testTraceClauseWithBadClauseIndex(t *testing.T) {
+	// Clause index is not a number
 	traceClauseOption := &TraceClauseOption{
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), transaction.ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
 	assert.Equal(t, `target[2]: strconv.ParseUint: parsing "x": invalid syntax`, strings.TrimSpace(res))
+
+	// Clause index is out of range
+	traceClauseOption = &TraceClauseOption{
+		Target: fmt.Sprintf("%s/%s/%d", blk.Header().ID(), transaction.ID(), uint64(math.MaxUint64)),
+	}
+	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
+	assert.Equal(t, `invalid target[2]`, strings.TrimSpace(res))
 }
 
 func testTraceClauseWithCustomTracer(t *testing.T) {
@@ -240,12 +249,14 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 
 func testHandleTraceCall(t *testing.T) {
 	addr := randAddress()
+	provedWork := math.HexOrDecimal256(*big.NewInt(1000))
 	traceCallOption := &TraceCallOption{
 		To:         &addr,
 		Value:      &math.HexOrDecimal256{},
 		Data:       "0x00",
 		Gas:        21000,
 		GasPrice:   &math.HexOrDecimal256{},
+		ProvedWork: &provedWork,
 		Caller:     &addr,
 		GasPayer:   &addr,
 		Expiration: 10,
@@ -268,19 +279,7 @@ func testHandleTraceCall(t *testing.T) {
 }
 
 func testHandleTraceCallWithRevisionAsBlockId(t *testing.T) {
-	addr := randAddress()
 	revision := blk.Header().ID().String()
-	traceCallOption := &TraceCallOption{
-		To:         &addr,
-		Value:      &math.HexOrDecimal256{},
-		Data:       "0x00",
-		Gas:        21000,
-		GasPrice:   &math.HexOrDecimal256{},
-		Caller:     &addr,
-		GasPayer:   &addr,
-		Expiration: 10,
-		BlockRef:   "0x0000000000000000",
-	}
 	expectedExecutionResult := &logger.ExecutionResult{
 		Gas:         0,
 		Failed:      false,
@@ -288,7 +287,7 @@ func testHandleTraceCallWithRevisionAsBlockId(t *testing.T) {
 		StructLogs:  make([]logger.StructLogRes, 0),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, traceCallOption, 200)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -298,18 +297,6 @@ func testHandleTraceCallWithRevisionAsBlockId(t *testing.T) {
 }
 
 func testHandleTraceCallWithRevisionAsHeight(t *testing.T) {
-	addr := randAddress()
-	traceCallOption := &TraceCallOption{
-		To:         &addr,
-		Value:      &math.HexOrDecimal256{},
-		Data:       "0x00",
-		Gas:        21000,
-		GasPrice:   &math.HexOrDecimal256{},
-		Caller:     &addr,
-		GasPayer:   &addr,
-		Expiration: 10,
-		BlockRef:   "0x0000000000000000",
-	}
 	expectedExecutionResult := &logger.ExecutionResult{
 		Gas:         0,
 		Failed:      false,
@@ -317,7 +304,7 @@ func testHandleTraceCallWithRevisionAsHeight(t *testing.T) {
 		StructLogs:  make([]logger.StructLogRes, 0),
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=1", traceCallOption, 200)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=1", &TraceCallOption{}, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -327,41 +314,32 @@ func testHandleTraceCallWithRevisionAsHeight(t *testing.T) {
 }
 
 func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
-	addr := randAddress()
-	traceCallOption := &TraceCallOption{
-		To:         &addr,
-		Value:      &math.HexOrDecimal256{},
-		Data:       "0x00",
-		Gas:        21000,
-		GasPrice:   &math.HexOrDecimal256{},
-		Caller:     &addr,
-		GasPayer:   &addr,
-		Expiration: 10,
-		BlockRef:   "0x0000000000000000",
-	}
-
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=12345", traceCallOption, 400)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=12345", &TraceCallOption{}, 400)
 
 	assert.Equal(t, "revision: not found", strings.TrimSpace(res))
 }
 
+func testHandleTraceCallWithRevisionAsNonExistingId(t *testing.T) {
+	nonExistingRevision := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
+
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+nonExistingRevision, &TraceCallOption{}, 400)
+
+	assert.Equal(t, "revision: leveldb: not found", strings.TrimSpace(res))
+}
+
 func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
-	addr := randAddress()
-	traceCallOption := &TraceCallOption{
-		To:         &addr,
-		Value:      &math.HexOrDecimal256{},
-		Data:       "0x00",
-		Gas:        21000,
-		GasPrice:   &math.HexOrDecimal256{},
-		Caller:     &addr,
-		GasPayer:   &addr,
-		Expiration: 10,
-		BlockRef:   "0x0000000000000000",
-	}
-
+	// Revision is a malformed byte array
+	traceCallOption := &TraceCallOption{}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=012345678901234567890123456789012345678901234567890123456789012345", traceCallOption, 400)
-
 	assert.Equal(t, "revision: invalid prefix", strings.TrimSpace(res))
+
+	// Revision is a not accepted string
+	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=badRevision", traceCallOption, 400)
+	assert.Equal(t, `revision: strconv.ParseUint: parsing "badRevision": invalid syntax`, strings.TrimSpace(res))
+
+	// Revision number is out of range
+	res = httpPostAndCheckResponseStatus(t, fmt.Sprintf("%s/debug/tracers/call?revision=%d", ts.URL, uint64(math.MaxUint64)), traceCallOption, 400)
+	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(res))
 }
 
 func testHandleTraceCallWithInsufficientGas(t *testing.T) {
@@ -459,6 +437,20 @@ func initDebugServer(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 
 	addr := thor.BytesToAddress([]byte("to"))
+
+	// Adding an empty clause transaction to the block to cover the case of
+	// scanning multiple txs before getting the right one
+	noClausesTx := new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		Expiration(10).
+		Gas(21000).
+		Build()
+	sig, err := crypto.Sign(noClausesTx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noClausesTx = noClausesTx.WithSignature(sig)
+
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	cla2 := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	transaction = new(tx.Builder).
@@ -472,7 +464,7 @@ func initDebugServer(t *testing.T) {
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	sig, err = crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,6 +472,10 @@ func initDebugServer(t *testing.T) {
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = flow.Adopt(noClausesTx)
 	if err != nil {
 		t.Fatal(err)
 	}
