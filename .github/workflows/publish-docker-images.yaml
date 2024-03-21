@@ -56,9 +56,6 @@ jobs:
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v4
-        env:
-          IMAGES: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
-          TAGS: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref, github.sha) }}
         with:
           # default to ghcr.io for workflow_dispatch
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
