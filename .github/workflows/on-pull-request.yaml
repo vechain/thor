@@ -20,9 +20,6 @@ jobs:
     name: Test Docker Publish
     uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
-    needs:
-      - run-unit-tests
-      - lint
     permissions:
       contents: read
       packages: write
