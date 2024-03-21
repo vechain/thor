@@ -13,7 +13,7 @@ jobs:
 
   publish-docker-image:
     name: Publish Docker Image
-    uses: ./.github/workflows/publish-docker-image.yaml
+    uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
     needs:
       - run-unit-tests

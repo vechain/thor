@@ -18,7 +18,7 @@ jobs:
   # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
   test-docker-publish:
     name: Test Docker Publish
-    uses: ./.github/workflows/publish-docker-image.yaml
+    uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
     needs:
       - run-unit-tests
