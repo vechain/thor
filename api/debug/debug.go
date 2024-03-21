@@ -7,6 +7,7 @@ package debug
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"math/big"
 	"net/http"
@@ -151,20 +152,12 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+
 	var tracer tracers.Tracer
-	if opt.Name == "" {
-		tr, err := logger.NewStructLogger(opt.Config)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
-	} else {
-		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
+	if err := extractTracer(&extractTracerOption{Name: opt.Name, Config: opt.Config}, &tracer); err != nil {
+		return utils.Forbidden(err)
 	}
+
 	blockID, txIndex, clauseIndex, err := d.parseTarget(opt.Target)
 	if err != nil {
 		return err
@@ -188,18 +181,8 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	var tracer tracers.Tracer
-	if opt.Name == "" {
-		tr, err := logger.NewStructLogger(opt.Config)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
-	} else {
-		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
+	if err := extractTracer(&extractTracerOption{Name: opt.Name, Config: opt.Config}, &tracer); err != nil {
+		return utils.Forbidden(err)
 	}
 
 	txCtx, gas, clause, err := d.handleTraceCallOption(&opt)
@@ -213,6 +196,28 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	}
 
 	return utils.WriteJSON(w, res)
+}
+
+type extractTracerOption struct {
+	Name   string
+	Config json.RawMessage
+}
+
+func extractTracer(opt *extractTracerOption, tracer *tracers.Tracer) error {
+	if opt.Name == "" {
+		if tr, err := logger.NewStructLogger(opt.Config); err != nil {
+			return err
+		} else {
+			*tracer = tr
+		}
+	} else {
+		if tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, true); err != nil {
+			return err
+		} else {
+			*tracer = tr
+		}
+	}
+	return nil
 }
 
 func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
