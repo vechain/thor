@@ -71,11 +71,12 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithBadBlockRef(t)
 	testHandleTraceCallWithInvalidLengthBlockRef(t)
 
-	tesxtStorageRangeWithEmptyStorageRangeOption(t)
-	tesxtStorageRange(t)
+	testStorageRangeWithEmptyStorageRangeOption(t)
+	testStorageRangeWithMalformedBody(t)
+	testStorageRange(t)
 }
 
-func TestStorageRange(t *testing.T) {
+func TestStorageRangeFunc(t *testing.T) {
 	db := muxdb.NewMem()
 	state := state.New(db, thor.Bytes32{}, 0, 0, 0)
 
@@ -399,12 +400,18 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 	assert.Equal(t, "blockRef: invalid length", strings.TrimSpace(res))
 }
 
-func tesxtStorageRangeWithEmptyStorageRangeOption(t *testing.T) {
+func testStorageRangeWithEmptyStorageRangeOption(t *testing.T) {
 	opt := &StorageRangeOption{}
 	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", opt, 400)
 }
 
-func tesxtStorageRange(t *testing.T) {
+func testStorageRangeWithMalformedBody(t *testing.T) {
+	badBodyRequest := 123
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badBodyRequest, 400)
+	t.Log(string(res))
+}
+
+func testStorageRange(t *testing.T) {
 	opt := StorageRangeOption{
 		Address:   randAddress(),
 		KeyStart:  "0x00",
