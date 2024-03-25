@@ -142,4 +142,8 @@ var (
 		Value: 16,
 		Usage: "set tx limit per account in pool",
 	}
+	soloGenesisFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "path to genesis file, if not set, the default devnet genesis will be used",
+	}
 )
