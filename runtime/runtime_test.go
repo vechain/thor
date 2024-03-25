@@ -439,7 +439,7 @@ func TestGetValues(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 	rt := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.NoFork)
 
 	runtimeChain := rt.Chain()
@@ -462,7 +462,7 @@ func TestExecuteTransaction(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 	originEnergy := new(big.Int)
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
@@ -490,7 +490,7 @@ func TestExecuteTransactionFailure(t *testing.T) {
 
 	repo, _ := chain.NewRepository(db, b0)
 
-	state := state.New(db, b0.Header().StateRoot(), 0, 0, 0)
+	state := state.New(db, trie.Root{Hash: b0.Header().StateRoot()})
 
 	originEnergy := new(big.Int)
 	originEnergy.SetString("9000000000000000000000000000000000000", 10)
