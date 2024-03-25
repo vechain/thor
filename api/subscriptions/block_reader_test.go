@@ -20,10 +20,11 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 func TestBlockReader_Read(t *testing.T) {
-	repo, generatedBlocks := initChain(t)
+	repo, generatedBlocks, _ := initChain(t)
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 
@@ -57,7 +58,7 @@ func TestBlockReader_Read(t *testing.T) {
 	assert.Empty(t, res)
 }
 
-func initChain(t *testing.T) (*chain.Repository, []*block.Block) {
+func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
@@ -67,6 +68,13 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block) {
 		t.Fatal(err)
 	}
 	repo, _ := chain.NewRepository(db, b)
+
+	txPool := txpool.New(repo, stater, txpool.Options{
+		Limit:           100,
+		LimitPerAccount: 16,
+		MaxLifetime:     time.Hour,
+	})
+
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
 	tx := new(tx.Builder).
@@ -107,5 +115,5 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block) {
 	if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
 		t.Fatal(err)
 	}
-	return repo, []*block.Block{b, blk}
+	return repo, []*block.Block{b, blk}, txPool
 }

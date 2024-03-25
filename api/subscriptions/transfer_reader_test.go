@@ -13,7 +13,7 @@ import (
 )
 
 func TestTransferReader_Read(t *testing.T) {
-	repo, generatedBlocks := initChain(t)
+	repo, generatedBlocks, _ := initChain(t)
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 	filter := &TransferFilter{}

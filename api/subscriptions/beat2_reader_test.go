@@ -14,7 +14,7 @@ import (
 
 func TestBeat2Reader_Read(t *testing.T) {
 	// Arrange
-	repo, generatedBlocks := initChain(t)
+	repo, generatedBlocks, _ := initChain(t)
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 
