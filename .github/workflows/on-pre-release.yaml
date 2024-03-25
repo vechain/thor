@@ -14,7 +14,6 @@ jobs:
     name: Publish Pre-Release Docker Image
     uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
-    if: endsWith(github.event.release.tag_name, '-rc.*')
     needs:
       - run-unit-tests
     permissions:
