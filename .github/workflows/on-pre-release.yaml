@@ -6,7 +6,6 @@ on:
       - prereleased
 
 jobs:
-
   run-unit-tests:
     name: Run Unit Tests
     uses: ./.github/workflows/test.yaml
