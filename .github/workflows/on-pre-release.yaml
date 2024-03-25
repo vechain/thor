@@ -13,9 +13,9 @@ jobs:
   verify-tag:
     name: Verify Tag
     runs-on: ubuntu-latest
-    if: "!endsWith(github.event.release.tag_name, '-rc.*')"
     steps:
       - name: Verify Tag
+        if: "!endsWith(github.event.release.tag_name, '-rc.*')"
         run: |
           echo "Invalid RC tag. Please use the format vX.Y.Z-rc.N"
           exit 1
