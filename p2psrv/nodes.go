@@ -51,6 +51,7 @@ func (nm *nodeMap) Add(node *discover.Node) {
 	nm.lock.Lock()
 	defer nm.lock.Unlock()
 	nm.m[node.ID] = node
+	metricConnectedPeers.GaugeWithLabel(1, map[string]string{"status": "connected"})
 }
 
 func (nm *nodeMap) Remove(id discover.NodeID) *discover.Node {
@@ -58,6 +59,7 @@ func (nm *nodeMap) Remove(id discover.NodeID) *discover.Node {
 	defer nm.lock.Unlock()
 	if node, ok := nm.m[id]; ok {
 		delete(nm.m, id)
+		metricConnectedPeers.GaugeWithLabel(-1, map[string]string{"status": "connected"})
 		return node
 	}
 	return nil

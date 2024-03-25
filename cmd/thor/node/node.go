@@ -273,24 +273,26 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) error {
-	n.processLock.Lock()
-	defer n.processLock.Unlock()
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) func() error {
+	return func() error {
+		n.processLock.Lock()
+		defer n.processLock.Unlock()
 
-	if blockNum > n.maxBlockNum {
-		if blockNum > n.maxBlockNum+1 {
-			// the block is surely unprocessable now
-			return errBlockTemporaryUnprocessable
+		if blockNum > n.maxBlockNum {
+			if blockNum > n.maxBlockNum+1 {
+				// the block is surely unprocessable now
+				return errBlockTemporaryUnprocessable
+			}
+			n.maxBlockNum = blockNum
+			return process(0)
 		}
-		n.maxBlockNum = blockNum
-		return process(0)
-	}
 
-	conflicts, err := n.repo.ScanConflicts(blockNum)
-	if err != nil {
-		return err
+		conflicts, err := n.repo.ScanConflicts(blockNum)
+		if err != nil {
+			return err
+		}
+		return process(conflicts)
 	}
-	return process(conflicts)
 }
 
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
@@ -397,7 +399,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 		return nil
-	}); err != nil {
+	})(); err != nil {
 		switch {
 		case err == errKnownBlock || err == errBFTRejected:
 			stats.UpdateIgnored(1)

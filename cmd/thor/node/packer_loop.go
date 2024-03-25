@@ -14,12 +14,18 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/packer"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
 // gasLimitSoftLimit is the soft limit of the adaptive block gaslimit.
 const gasLimitSoftLimit uint64 = 40_000_000
+
+var (
+	metricBlockProposingDuration = telemetry.HistogramVecWithHTTPBuckets("block_proposed_duration_ms", []string{"status"})
+	metricsBlockProposingCount   = telemetry.CounterVec("block_proposed_count", []string{"status"})
+)
 
 func (n *Node) packerLoop(ctx context.Context) {
 	log.Debug("enter packer loop")
@@ -115,7 +121,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+	return evalBlockProposeMetrics(n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.skipLogs && !n.logDBFailed
@@ -203,5 +209,26 @@ func (n *Node) pack(flow *packer.Flow) error {
 			log.Debug("bandwidth updated", "gps", v)
 		}
 		return nil
-	})
+	}))
+}
+
+// evalBlockProposeMetrics captures block proposing metrics
+func evalBlockProposeMetrics(f func() error) error {
+	startTime := time.Now()
+
+	if err := f(); err != nil {
+		status := map[string]string{
+			"status": "failed",
+		}
+		metricsBlockProposingCount.AddWithLabel(1, status)
+		metricBlockProposingDuration.ObserveWithLabels(time.Since(startTime).Milliseconds(), status)
+		return err
+	}
+
+	status := map[string]string{
+		"status": "proposed",
+	}
+	metricsBlockProposingCount.AddWithLabel(1, status)
+	metricBlockProposingDuration.ObserveWithLabels(time.Since(startTime).Milliseconds(), status)
+	return nil
 }
