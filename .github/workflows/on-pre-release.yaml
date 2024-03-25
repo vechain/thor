@@ -10,12 +10,23 @@ jobs:
     name: Run Unit Tests
     uses: ./.github/workflows/test.yaml
 
+  verify-tag:
+    name: Verify Tag
+    runs-on: ubuntu-latest
+    if: "!endsWith(github.event.release.tag_name, '-rc.*')"
+    steps:
+      - name: Verify Tag
+        run: |
+          echo "Invalid RC tag. Please use the format vX.Y.Z-rc.N"
+          exit 1
+
   publish-docker-image:
     name: Publish Pre-Release Docker Image
     uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
     needs:
       - run-unit-tests
+      - verify-tag
     permissions:
       contents: read
       packages: write
