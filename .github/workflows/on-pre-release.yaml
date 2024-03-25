@@ -1,9 +1,9 @@
 name: Pre-Release CI
 
 on:
-  release:
-    types:
-      - prereleased
+  push:
+    tags:
+      - 'v*.*.*-rc.*'
 
 jobs:
   run-unit-tests:
@@ -26,4 +26,4 @@ jobs:
         ${{ github.repository }}
         ghcr.io/${{ github.repository }}
       tags: |
-        type=raw,value=${{ github.event.release.tag_name }}
+        type=raw,value=${{ github.ref_name }}
