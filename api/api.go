@@ -51,7 +51,7 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api docs
+	// to serve api doc and swagger-ui
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)

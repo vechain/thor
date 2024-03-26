@@ -28,6 +28,7 @@ import (
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 	"gopkg.in/urfave/cli.v1"
@@ -86,6 +87,8 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			telemetryEnabledFlag,
+			telemetryAddrFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -111,6 +114,8 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					telemetryEnabledFlag,
+					telemetryAddrFlag,
 				},
 				Action: soloAction,
 			},
@@ -139,6 +144,20 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable telemetry as soon as possible
+	telemetryServerURL := "Disabled"
+	enableTelemetry := ctx.BoolT(telemetryEnabledFlag.Name)
+	if enableTelemetry {
+		telemetry.InitializePrometheusTelemetry()
+		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start telemtry server - %w", err)
+		}
+		telemetryServerURL = telemetryServer
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloseFunc() }()
+	}
+
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -207,7 +226,8 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
+		forkConfig,
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -216,7 +236,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, p2pcom.enode)
+	printStartupMessage2(apiURL, p2pcom.enode, telemetryServerURL)
 
 	if err := p2pcom.Start(); err != nil {
 		return err
@@ -245,6 +265,20 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable telemetry as soon as possible
+	telemetryServerURL := "Disabled"
+	enableTelemetry := ctx.BoolT(telemetryEnabledFlag.Name)
+	if enableTelemetry {
+		telemetry.InitializePrometheusTelemetry()
+		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		telemetryServerURL = telemetryServer
+		if err != nil {
+			return fmt.Errorf("unable to start telemtry server - %w", err)
+		}
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloseFunc() }()
+	}
+
 	gene := genesis.NewDevnet()
 	// Solo forks from the start
 	forkConfig := thor.ForkConfig{}
@@ -306,7 +340,8 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		forkConfig)
+		forkConfig,
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -315,7 +350,7 @@ func soloAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, telemetryServerURL, forkConfig)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()

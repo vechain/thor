@@ -9,6 +9,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/vechain/thor/v2/telemetry"
 )
 
 type httpError struct {
@@ -49,10 +54,18 @@ func Forbidden(cause error) error {
 // otherwise http.StatusInternalServerError responded.
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-// WrapHandlerFunc convert HandlerFunc to http.HandlerFunc.
-func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
+// MetricsWrapHandlerFunc wraps a given handler and adds metrics to it
+func MetricsWrapHandlerFunc(pathPrefix, endpoint string, f HandlerFunc) http.HandlerFunc {
+	fixedPath := strings.ReplaceAll(pathPrefix, "/", "_") // ensure no unexpected slashes
+	httpReqCounter := telemetry.CounterVec(fixedPath+"_request_count", []string{"path", "code", "method"})
+	httpReqDuration := telemetry.HistogramVecWithHTTPBuckets(fixedPath+"_duration_ms", []string{"path", "code", "method"})
+
 	return func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
 		err := f(w, r)
+
+		method := r.Method
+		status := http.StatusOK
 		if err != nil {
 			if he, ok := err.(*httpError); ok {
 				if he.cause != nil {
@@ -60,10 +73,14 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 				} else {
 					w.WriteHeader(he.status)
 				}
+				status = he.status
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				status = http.StatusInternalServerError
 			}
 		}
+		httpReqCounter.AddWithLabel(1, map[string]string{"path": endpoint, "code": strconv.Itoa(status), "method": method})
+		httpReqDuration.ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"path": endpoint, "code": strconv.Itoa(status), "method": method})
 	}
 }
 
