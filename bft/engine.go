@@ -5,11 +5,9 @@
 package bft
 
 import (
-	"github.com/vechain/thor/v2/telemetry"
 	"sort"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -18,7 +16,10 @@ import (
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const dataStoreName = "bft.engine"
@@ -26,7 +27,7 @@ const dataStoreName = "bft.engine"
 var finalizedKey = []byte("finalized")
 
 var (
-	metricsBlocksCommitted = telemetry.CounterVec("block_committed_count", []string{"status"})
+	metricsBlocksCommitted = telemetry.CounterVec("block_bft_committed_count", []string{"status"})
 )
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.

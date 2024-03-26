@@ -19,6 +19,9 @@ func (n *noopTelemetry) GetOrCreateCountVecMeter(string, []string) CountVecMeter
 	return &noopMetric
 }
 
+func (n *noopTelemetry) GetOrCreateGaugeMeter(string) GaugeMeter {
+	return &noopMetric
+}
 func (n *noopTelemetry) GetOrCreateGaugeVecMeter(string, []string) GaugeVecMeter {
 	return &noopMetric
 }
@@ -28,6 +31,8 @@ func (n *noopTelemetry) GetOrCreateHandler() http.Handler { return nil }
 var noopMetric = noopMeters{}
 
 type noopMeters struct{}
+
+func (n noopMeters) Gauge(int64) {}
 
 func (n noopMeters) GaugeWithLabel(int64, map[string]string) {}
 

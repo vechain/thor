@@ -1,17 +1,21 @@
 package node
 
 import (
-	"github.com/vechain/thor/v2/telemetry"
 	"time"
+
+	"github.com/vechain/thor/v2/telemetry"
 )
 
 var (
 	metricBlockProposedDuration     = telemetry.HistogramVecWithHTTPBuckets("block_proposed_duration_ms", []string{"status"})
 	metricBlockProposedCount        = telemetry.CounterVec("block_proposed_count", []string{"status"})
-	metricBlockProposedTxs          = telemetry.CounterVec("block_received_proposed_tx_count", []string{"status"})
+	metricBlockProposedTxs          = telemetry.CounterVec("block_proposed_tx_count", []string{"status"})
 	metricBlockReceivedDuration     = telemetry.HistogramVecWithHTTPBuckets("block_received_duration_ms", []string{"status"})
 	metricBlockReceivedCount        = telemetry.CounterVec("block_received_count", []string{"status"})
 	metricBlockReceivedProcessedTxs = telemetry.CounterVec("block_received_processed_tx_count", []string{"status"})
+
+	metricChainForkCount = telemetry.Counter("chain_fork_count")
+	metricChainForkSize  = telemetry.Gauge("chain_fork_size")
 )
 
 func evalBlockReceivedMetrics(f func() error) error {

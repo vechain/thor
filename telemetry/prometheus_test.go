@@ -22,11 +22,13 @@ func TestOtelPromTelemetry(t *testing.T) {
 	// 2 ways of accessing it - useful to avoid lookups
 	count1 := Counter("count1")
 	Counter("count2")
+	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
 
 	hist := HistogramWithHTTPBuckets("hist1")
 	HistogramVec("hist2", []string{"zeroOrOne"})
 
-	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
+	gauge1 := Gauge("gauge1")
+	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
 
 	count1.Add(1)
 	randCount2 := rand.Intn(100) + 1
@@ -51,12 +53,12 @@ func TestOtelPromTelemetry(t *testing.T) {
 		totalCountVec += i
 	}
 
-	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
 	totalGaugeVec := 0
 	randGaugeVec := rand.Intn(100) + 1
 	for i := 0; i < randGaugeVec; i++ {
 		zeroOrOne := i % 2
 		gaugeVec.GaugeWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
+		gauge1.Gauge(int64(i))
 		totalGaugeVec += i
 	}
 
@@ -84,6 +86,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 		metrics["node_telemetry_countVec1"].GetMetric()[1].GetCounter().GetValue()
 	require.Equal(t, sumCountVec, float64(totalCountVec))
 
+	require.Equal(t, metrics["node_telemetry_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
 	sumGaugeVec := metrics["node_telemetry_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
 		metrics["node_telemetry_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
 	require.Equal(t, sumGaugeVec, float64(totalGaugeVec))

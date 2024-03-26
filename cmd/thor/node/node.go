@@ -489,6 +489,8 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	}
 
 	if n := len(sideIds); n >= 2 {
+		metricChainForkCount.Add(1)
+		metricChainForkSize.Gauge(int64(len(sideIds)))
 		log.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,

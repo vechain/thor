@@ -10,6 +10,7 @@ var telemetry = defaultNoopTelemetry() // defaults to a Noop implementation of t
 type Telemetry interface {
 	GetOrCreateCountMeter(name string) CountMeter
 	GetOrCreateCountVecMeter(name string, labels []string) CountVecMeter
+	GetOrCreateGaugeMeter(name string) GaugeMeter
 	GetOrCreateGaugeVecMeter(name string, labels []string) GaugeVecMeter
 	GetOrCreateHistogramMeter(name string, buckets []int64) HistogramMeter
 	GetOrCreateHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter
@@ -64,6 +65,15 @@ type CountVecMeter interface {
 
 func CounterVec(name string, labels []string) CountVecMeter {
 	return telemetry.GetOrCreateCountVecMeter(name, labels)
+}
+
+// GaugeMeter ...
+type GaugeMeter interface {
+	Gauge(int64)
+}
+
+func Gauge(name string) GaugeMeter {
+	return telemetry.GetOrCreateGaugeMeter(name)
 }
 
 // GaugeVecMeter ...
