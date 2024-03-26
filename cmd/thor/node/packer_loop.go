@@ -163,8 +163,16 @@ func (n *Node) pack(flow *packer.Flow) error {
 			return errors.Wrap(err, "commit state")
 		}
 
+		// sync the log-writing task
+		if logEnabled {
+			if err := n.logWorker.Sync(); err != nil {
+				log.Warn("failed to write logs", "err", err)
+				n.logDBFailed = true
+			}
+		}
+
 		// add the new block into repository
-		if err := n.repo.AddBlock(newBlock, receipts, conflicts); err != nil {
+		if err := n.repo.AddBlock(newBlock, receipts, conflicts, true); err != nil {
 			return errors.Wrap(err, "add block")
 		}
 
@@ -175,18 +183,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 			}
 		}
 		realElapsed := mclock.Now() - startTime
-
-		// sync the log-writing task
-		if logEnabled {
-			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
-				n.logDBFailed = true
-			}
-		}
-
-		if err := n.repo.SetBestBlockID(newBlock.Header().ID()); err != nil {
-			return err
-		}
 
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed

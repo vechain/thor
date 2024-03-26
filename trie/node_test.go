@@ -17,75 +17,97 @@
 package trie
 
 import (
+	"crypto/rand"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/thor"
 )
 
-// func TestCanUnload(t *testing.T) {
-// 	tests := []struct {
-// 		flag                 nodeFlag
-// 		cachegen, cachelimit uint16
-// 		want                 bool
-// 	}{
-// 		{
-// 			flag: nodeFlag{dirty: true, gen: 0},
-// 			want: false,
-// 		},
-// 		{
-// 			flag:     nodeFlag{dirty: false, gen: 0},
-// 			cachegen: 0, cachelimit: 0,
-// 			want: true,
-// 		},
-// 		{
-// 			flag:     nodeFlag{dirty: false, gen: 65534},
-// 			cachegen: 65535, cachelimit: 1,
-// 			want: true,
-// 		},
-// 		{
-// 			flag:     nodeFlag{dirty: false, gen: 65534},
-// 			cachegen: 0, cachelimit: 1,
-// 			want: true,
-// 		},
-// 		{
-// 			flag:     nodeFlag{dirty: false, gen: 1},
-// 			cachegen: 65535, cachelimit: 1,
-// 			want: true,
-// 		},
-// 	}
+func randBytes(n int) []byte {
+	r := make([]byte, n)
+	rand.Read(r)
+	return r
+}
 
-// 	for _, test := range tests {
-// 		if got := test.flag.canUnload(test.cachegen, test.cachelimit); got != test.want {
-// 			t.Errorf("%+v\n   got %t, want %t", test, got, test.want)
-// 		}
-// 	}
-// }
-
-func BenchmarkEncodeFullNode(b *testing.B) {
-	var buf sliceBuffer
-	f := &fullNode{}
-	for i := 0; i < len(f.Children); i++ {
-		f.Children[i] = &hashNode{Hash: thor.BytesToBytes32(randBytes(32))}
+func benchmarkEncodeFullNode(b *testing.B, consensus, skipHash bool) {
+	var (
+		f   = fullNode{}
+		buf []byte
+	)
+	for i := 0; i < 16; i++ {
+		f.children[i] = &refNode{hash: randBytes(32)}
 	}
 	for i := 0; i < b.N; i++ {
-		buf.Reset()
-		rlp.Encode(&buf, f)
+		if consensus {
+			buf = f.encodeConsensus(buf[:0])
+		} else {
+			buf = f.encode(buf[:0], skipHash)
+		}
+	}
+}
+func benchmarkEncodeShortNode(b *testing.B, consensus bool) {
+	var (
+		s = shortNode{
+			key:   []byte{0x1, 0x2, 0x10},
+			child: &valueNode{val: randBytes(32)},
+		}
+		buf []byte
+	)
+
+	for i := 0; i < b.N; i++ {
+		if consensus {
+			buf = s.encodeConsensus(buf[:0])
+		} else {
+			buf = s.encode(buf[:0], false)
+		}
 	}
 }
 
-func BenchmarkFastEncodeFullNode(b *testing.B) {
-	f := &fullNode{}
-	for i := 0; i < len(f.Children); i++ {
-		f.Children[i] = &hashNode{Hash: thor.BytesToBytes32(randBytes(32))}
+func BenchmarkEncodeFullNode(b *testing.B) {
+	benchmarkEncodeFullNode(b, false, false)
+}
+
+func BenchmarkEncodeFullNodeSkipHash(b *testing.B) {
+	benchmarkEncodeFullNode(b, false, true)
+}
+
+func BenchmarkEncodeFullNodeConsensus(b *testing.B) {
+	benchmarkEncodeFullNode(b, true, false)
+}
+
+func BenchmarkEncodeShortNode(b *testing.B) {
+	benchmarkEncodeShortNode(b, false)
+}
+
+func BenchmarkEncodeShortNodeConsensus(b *testing.B) {
+	benchmarkEncodeShortNode(b, true)
+}
+
+func benchmarkDecodeFullNode(b *testing.B, skipHash bool) {
+	f := fullNode{}
+	for i := 0; i < 16; i++ {
+		f.children[i] = &refNode{hash: randBytes(32)}
+	}
+	enc := f.encode(nil, skipHash)
+	for i := 0; i < b.N; i++ {
+		mustDecodeNode(nil, enc, 0)
+	}
+}
+
+func BenchmarkDecodeFullNode(b *testing.B) {
+	benchmarkDecodeFullNode(b, false)
+}
+
+func BenchmarkDecodeFullNodeSkipHash(b *testing.B) {
+	benchmarkDecodeFullNode(b, true)
+}
+
+func BenchmarkDecodeShortNode(b *testing.B) {
+	s := shortNode{
+		key:   []byte{0x1, 0x2, 0x10},
+		child: &valueNode{val: randBytes(32)},
 	}
 
-	h := newHasher(0, 0)
-
+	enc := s.encode(nil, false)
 	for i := 0; i < b.N; i++ {
-		h.enc.Reset()
-		f.encode(&h.enc, false)
-		h.tmp.Reset()
-		h.enc.ToWriter(&h.tmp)
+		mustDecodeNode(nil, enc, 0)
 	}
 }
