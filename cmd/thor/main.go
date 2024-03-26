@@ -87,7 +87,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			enableTelemetryFlag,
+			telemetryEnabledFlag,
 			telemetryAddrFlag,
 		},
 		Action: defaultAction,
@@ -114,7 +114,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
-					enableTelemetryFlag,
+					telemetryEnabledFlag,
 					telemetryAddrFlag,
 				},
 				Action: soloAction,
@@ -147,7 +147,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	// enable telemetry as soon as possible
 	telemetryServerURL := "Disabled"
-	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
+	enableTelemetry := ctx.BoolT(telemetryEnabledFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
 		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
@@ -268,7 +268,7 @@ func soloAction(ctx *cli.Context) error {
 
 	// enable telemetry as soon as possible
 	telemetryServerURL := "Disabled"
-	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
+	enableTelemetry := ctx.BoolT(telemetryEnabledFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
 		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
