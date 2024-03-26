@@ -1,6 +1,7 @@
 name: Lint
 
 on:
+  # Should only be used by other workflows
   workflow_call:
 
 permissions:

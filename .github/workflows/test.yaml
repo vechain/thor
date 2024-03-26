@@ -1,6 +1,7 @@
 name: Unit Tests
 
 on:
+  # Should only be used by other workflows
   workflow_call:
 
 jobs:

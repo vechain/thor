@@ -17,6 +17,7 @@ jobs:
       - name: Validate Tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step validates that the tag is a pre-release
         run: |
           prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
           if [ "$prerelease" != "true" ]; then
