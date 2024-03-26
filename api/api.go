@@ -43,7 +43,6 @@ func New(
 	skipLogs bool,
 	allowCustomTracer bool,
 	forkConfig thor.ForkConfig,
-	enableMetrics bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {

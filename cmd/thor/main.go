@@ -150,12 +150,12 @@ func defaultAction(ctx *cli.Context) error {
 	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
-		telemetryServer, telemetryCloser, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to start telemtry server - %w", err)
 		}
 		telemetryServerURL = telemetryServer
-		defer func() { log.Info("stopping Telemetry server..."); telemetryCloser() }()
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloseFunc() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -227,7 +227,6 @@ func defaultAction(ctx *cli.Context) error {
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		forkConfig,
-		enableTelemetry,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -272,12 +271,12 @@ func soloAction(ctx *cli.Context) error {
 	enableTelemetry := ctx.BoolT(enableTelemetryFlag.Name)
 	if enableTelemetry {
 		telemetry.InitializePrometheusTelemetry()
-		telemetryServer, telemetryCloser, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
+		telemetryServer, telemetryCloseFunc, err := startTelemetryServer(ctx.String(telemetryAddrFlag.Name), ctx.String(apiCorsFlag.Name))
 		telemetryServerURL = telemetryServer
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to start telemtry server - %w", err)
 		}
-		defer func() { log.Info("stopping Telemetry server..."); telemetryCloser() }()
+		defer func() { log.Info("stopping Telemetry server..."); telemetryCloseFunc() }()
 	}
 
 	gene := genesis.NewDevnet()
@@ -342,7 +341,6 @@ func soloAction(ctx *cli.Context) error {
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		forkConfig,
-		enableTelemetry,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

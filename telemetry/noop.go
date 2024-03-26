@@ -5,7 +5,7 @@ import "net/http"
 // noopTelemetry implements a no operations telemetry service
 type noopTelemetry struct{}
 
-func (n *noopTelemetry) GetOrCreateHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
+func (n *noopTelemetry) GetOrCreateHistogramVecMeter(string, []string, []int64) HistogramVecMeter {
 	return &noopTelemetry{}
 }
 
@@ -15,11 +15,11 @@ func (n *noopTelemetry) GetOrCreateHistogramMeter(string, []int64) HistogramMete
 
 func (n *noopTelemetry) GetOrCreateCountMeter(string) CountMeter { return &noopMetric }
 
-func (n *noopTelemetry) GetOrCreateCountVecMeter(_ string, _ []string) CountVecMeter {
+func (n *noopTelemetry) GetOrCreateCountVecMeter(string, []string) CountVecMeter {
 	return &noopMetric
 }
 
-func (n *noopTelemetry) GetOrCreateGaugeVecMeter(name string, labels []string) GaugeVecMeter {
+func (n *noopTelemetry) GetOrCreateGaugeVecMeter(string, []string) GaugeVecMeter {
 	return &noopMetric
 }
 
@@ -29,12 +29,12 @@ var noopMetric = noopMeters{}
 
 type noopMeters struct{}
 
-func (n noopMeters) GaugeWithLabel(i int64, m map[string]string) {}
+func (n noopMeters) GaugeWithLabel(int64, map[string]string) {}
 
-func (n noopMeters) AddWithLabel(i int64, m map[string]string) {}
+func (n noopMeters) AddWithLabel(int64, map[string]string) {}
 
 func (n noopMeters) Add(int64) {}
 
 func (n noopMeters) Observe(int64) {}
 
-func (n *noopTelemetry) ObserveWithLabels(i int64, m map[string]string) {}
+func (n *noopTelemetry) ObserveWithLabels(int64, map[string]string) {}
