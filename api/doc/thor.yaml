@@ -747,6 +747,7 @@ paths:
       summary: Retrieve Prometheus metrics
       description: |
         This endpoint allows clients to retrieve Prometheus metrics.
+        Note: Will not respond to request if the `telemetry-enabled` flag is set to false.
       responses:
         '200':
           description: Prometheus metrics response
