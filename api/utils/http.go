@@ -54,26 +54,8 @@ func Forbidden(cause error) error {
 // otherwise http.StatusInternalServerError responded.
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-// WrapHandlerFunc convert HandlerFunc to http.HandlerFunc.
-func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		err := f(w, r)
-		if err != nil {
-			if he, ok := err.(*httpError); ok {
-				if he.cause != nil {
-					http.Error(w, he.cause.Error(), he.status)
-				} else {
-					w.WriteHeader(he.status)
-				}
-			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-		}
-	}
-}
-
-// MetricsWrapHandler wraps a given handler and adds metrics to it
-func MetricsWrapHandler(pathPrefix, endpoint string, f HandlerFunc) http.HandlerFunc {
+// MetricsWrapHandlerFunc wraps a given handler and adds metrics to it
+func MetricsWrapHandlerFunc(pathPrefix, endpoint string, f HandlerFunc) http.HandlerFunc {
 	fixedPath := strings.ReplaceAll(pathPrefix, "/", "_") // ensure no unexpected slashes
 	httpReqCounter := telemetry.CounterVec(fixedPath+"_request_count", []string{"path", "code", "method"})
 	httpReqDuration := telemetry.HistogramVecWithHTTPBuckets(fixedPath+"_duration_ms", []string{"path", "code", "method"})
