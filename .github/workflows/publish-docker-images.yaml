@@ -60,7 +60,7 @@ jobs:
           # default to ghcr.io for workflow_dispatch
           images: ${{ inputs.images || format('ghcr.io/{0}', github.repository) }}
           # use the branch + sha if workflow_dispatch
-          tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref, github.sha) }}
+          tags: ${{ inputs.tags || format('type=raw,value={0}-{1}', github.ref_name, github.sha) }}
 
       - name: Push to Registry(s)
         uses: docker/build-push-action@v5
