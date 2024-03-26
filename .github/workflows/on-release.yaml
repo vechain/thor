@@ -1,0 +1,60 @@
+name: Release CI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '!v*.*.*-rc*'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Validate Tag
+        run: |
+          node -e "if (!/^v\d+\.\d+\.\d+$/.test('${{ github.ref_name }}')) { console.error('Invalid version provided');process.exit(1);}"
+
+      - name: Validate VERSION
+        run: |
+          if [ "$(cat cmd/thor/VERSION)" != "${{ github.ref_name }}" ]; then
+            echo "VERSION file does not match tag"
+            exit 1
+          fi
+
+      - name: Validate Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step validates that the tag is an official release
+        run: |
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+          if [ "$prerelease" != "false" ]; then
+            echo "Tag is not an official release"
+            exit 1
+          fi
+
+  publish-docker-image:
+    name: Publish Docker Image
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    needs:
+      - validate
+    permissions:
+      contents: read
+      packages: write
+    with:
+      environment: docker-publish
+      images: |
+        ${{ github.repository }}
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.event.release.tag_name }}
+        type=raw,value=latest

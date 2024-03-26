@@ -1,14 +1,8 @@
 name: Unit Tests
 
-on: 
-  push:
-    branches:
-      - 'master'
-      - 'master-*'
-  
-  pull_request:
-    branches:
-      - master
+on:
+  # Should only be used by other workflows
+  workflow_call:
 
 jobs:
   unit_tests:
@@ -18,9 +12,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - go-version: 1.19.x
-            os: ubuntu-latest 
+            os: ubuntu-latest
           - go-version: 1.20.x
-            os: ubuntu-latest 
+            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -33,11 +27,11 @@ jobs:
 
       - name: Make all
         run: make all
-      
+
       - name: Make Test
         id: unit-test
         run: make test
-      
+
       - name: Post To Slack
         if: always()  && github.ref == 'refs/heads/master' && (steps.unit-test.outcome == 'failure')
         uses: slackapi/slack-github-action@v1.24.0
@@ -52,7 +46,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   test_coverage:
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3

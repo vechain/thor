@@ -1,0 +1,29 @@
+name: Pull Request CI
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  run-unit-tests:
+    name: Run Unit Tests
+    uses: ./.github/workflows/test.yaml
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint-go.yaml
+
+  # This doesn't publish the image, it just tests the publishing workflow (build the image / tags / labels)
+  test-docker-publish:
+    name: Test Docker Publish
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: |
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.ref }}-${{ github.sha }}
