@@ -298,7 +298,7 @@ func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk *bool
 
-	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+	if err := evalBlockReceivedMetrics(n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if conflicts > 0 {
@@ -397,9 +397,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			log.Debug("bandwidth updated", "gps", v)
 		}
 
+		metricBlockReceivedProcessedTxs.AddWithLabel(int64(len(receipts)), map[string]string{"status": "receivedBlock"})
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 		return nil
-	})(); err != nil {
+	})); err != nil {
 		switch {
 		case err == errKnownBlock || err == errBFTRejected:
 			stats.UpdateIgnored(1)

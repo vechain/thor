@@ -5,6 +5,7 @@
 package bft
 
 import (
+	"github.com/vechain/thor/v2/telemetry"
 	"sort"
 	"sync/atomic"
 
@@ -23,6 +24,10 @@ import (
 const dataStoreName = "bft.engine"
 
 var finalizedKey = []byte("finalized")
+
+var (
+	metricsBlocksCommitted = telemetry.CounterVec("block_committed_count", []string{"status"})
+)
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
@@ -127,6 +132,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
+			metricsBlocksCommitted.AddWithLabel(1, map[string]string{"status": "finalized"})
 		}
 	}
 
@@ -142,6 +148,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 			return err
 		}
 		engine.casts.Mark(checkpoint, state.Quality)
+		metricsBlocksCommitted.AddWithLabel(1, map[string]string{"status": "proposed"})
 	}
 
 	return nil
