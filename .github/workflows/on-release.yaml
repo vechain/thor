@@ -45,7 +45,6 @@ jobs:
     uses: ./.github/workflows/publish-docker-images.yaml
     secrets: inherit
     needs:
-      - run-unit-tests
       - validate
     permissions:
       contents: read
