@@ -77,7 +77,7 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	tx := new(tx.Builder).
+	tr := new(tx.Builder).
 		ChainTag(repo.ChainTag()).
 		GasPriceCoef(1).
 		Expiration(10).
@@ -87,18 +87,18 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		BlockRef(tx.NewBlockRef(0)).
 		Build()
 
-	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	sig, err := crypto.Sign(tr.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tx = tx.WithSignature(sig)
+	tr = tr.WithSignature(sig)
 	packer := packer.New(repo, stater, genesis.DevAccounts()[0].Address, &genesis.DevAccounts()[0].Address, thor.NoFork)
 	sum, _ := repo.GetBlockSummary(b.Header().ID())
 	flow, err := packer.Schedule(sum, uint64(time.Now().Unix()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = flow.Adopt(tx)
+	err = flow.Adopt(tr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +109,7 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
+	insertMockOutputEvent(receipts)
 	if err := repo.AddBlock(blk, receipts, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -116,4 +117,27 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		t.Fatal(err)
 	}
 	return repo, []*block.Block{b, blk}, txPool
+}
+
+// This is a helper function to forcly insert an event into the output receipts
+func insertMockOutputEvent(receipts tx.Receipts) {
+	oldReceipt := receipts[0]
+	events := make(tx.Events, 0)
+	events = append(events, &tx.Event{
+		Address: thor.BytesToAddress([]byte("to")),
+		Topics:  []thor.Bytes32{thor.BytesToBytes32([]byte("topic"))},
+		Data:    []byte("data"),
+	})
+	outputs := &tx.Output{
+		Transfers: oldReceipt.Outputs[0].Transfers,
+		Events:    events,
+	}
+	receipts[0] = &tx.Receipt{
+		Reverted: oldReceipt.Reverted,
+		GasUsed:  oldReceipt.GasUsed,
+		Outputs:  []*tx.Output{outputs},
+		GasPayer: oldReceipt.GasPayer,
+		Paid:     oldReceipt.Paid,
+		Reward:   oldReceipt.Reward,
+	}
 }
