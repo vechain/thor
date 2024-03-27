@@ -51,6 +51,8 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var devNetGenesisID = genesis.NewDevnet().ID()
+
 func initLogger(ctx *cli.Context) {
 	logLevel := ctx.Int(verbosityFlag.Name)
 	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
@@ -202,30 +204,34 @@ func selectGenesis(ctx *cli.Context) (*genesis.Genesis, thor.ForkConfig, error) 
 		gene := genesis.NewMainnet()
 		return gene, thor.GetForkConfig(gene.ID()), nil
 	default:
-		file, err := os.Open(network)
-		if err != nil {
-			return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
-		}
-		defer file.Close()
-
-		decoder := json.NewDecoder(file)
-		decoder.DisallowUnknownFields()
-
-		var forkConfig = thor.NoFork
-		var gen genesis.CustomGenesis
-		gen.ForkConfig = &forkConfig
-
-		if err := decoder.Decode(&gen); err != nil {
-			return nil, thor.ForkConfig{}, errors.Wrap(err, "decode genesis file")
-		}
-
-		customGen, err := genesis.NewCustomNet(&gen)
-		if err != nil {
-			return nil, thor.ForkConfig{}, errors.Wrap(err, "build genesis")
-		}
-
-		return customGen, forkConfig, nil
+		return parseGenesisFile(network)
 	}
+}
+
+func parseGenesisFile(filePath string) (*genesis.Genesis, thor.ForkConfig, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, thor.ForkConfig{}, errors.Wrap(err, "open genesis file")
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+
+	var forkConfig = thor.NoFork
+	var gen genesis.CustomGenesis
+	gen.ForkConfig = &forkConfig
+
+	if err := decoder.Decode(&gen); err != nil {
+		return nil, thor.ForkConfig{}, errors.Wrap(err, "decode genesis file")
+	}
+
+	customGen, err := genesis.NewCustomNet(&gen)
+	if err != nil {
+		return nil, thor.ForkConfig{}, errors.Wrap(err, "build genesis")
+	}
+
+	return customGen, forkConfig, nil
 }
 
 func makeConfigDir(ctx *cli.Context) (string, error) {
@@ -597,9 +603,6 @@ func printSoloStartupMessage(
     Forks       [ %v ]
     Data dir    [ %v ]
     API portal  [ %v ]
-┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
 `,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -607,6 +610,13 @@ func printSoloStartupMessage(
 		forkConfig,
 		dataDir,
 		apiURL)
+
+	if gene.ID() == devNetGenesisID {
+		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`
+	}
 
 	fmt.Print(info)
 }
