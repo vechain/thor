@@ -84,3 +84,15 @@ type GaugeVecMeter interface {
 func GaugeVec(name string, labels []string) GaugeVecMeter {
 	return telemetry.GetOrCreateGaugeVecMeter(name, labels)
 }
+
+func LazyLoad[T any](f func() T) func() T {
+	var result T
+	var loaded bool
+	return func() T {
+		if !loaded {
+			result = f()
+			loaded = true
+		}
+		return result
+	}
+}

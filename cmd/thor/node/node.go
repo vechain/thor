@@ -397,7 +397,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			log.Debug("bandwidth updated", "gps", v)
 		}
 
-		metricBlockReceivedProcessedTxs.AddWithLabel(int64(len(receipts)), map[string]string{"status": "receivedBlock"})
+		metricBlockReceivedProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"status": "receivedBlock"})
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 		return nil
 	})); err != nil {
@@ -489,8 +489,8 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	}
 
 	if n := len(sideIds); n >= 2 {
-		metricChainForkCount.Add(1)
-		metricChainForkSize.Gauge(int64(len(sideIds)))
+		metricChainForkCount().Add(1)
+		metricChainForkSize().Gauge(int64(len(sideIds)))
 		log.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
