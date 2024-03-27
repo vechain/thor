@@ -352,3 +352,22 @@ func VerifyNodeHash(blob, expectedHash []byte) (bool, error) {
 	have := thor.Blake2b(node)
 	return bytes.Equal(expectedHash, have.Bytes()), nil
 }
+
+func createFullNode() *fullNode {
+	// Initialize a fullNode with nil children
+	var children [17]node // Replace nil with actual nodes as needed
+
+	// Create a fullNode with the dirty flag set to false and a dummy cache generation number.
+	return &fullNode{
+		Children: children,
+		flags:    nodeFlag{dirty: false, gen: 1},
+	}
+}
+
+func NewNode() Node {
+	internalNode := createFullNode() // Assuming createFullNode is an internal function
+	return Node{
+		node:     internalNode,
+		cacheGen: 1, // Example cache generation number
+	}
+}
