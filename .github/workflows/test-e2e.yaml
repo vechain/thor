@@ -63,7 +63,6 @@ jobs:
           docker image ls -a
 
       - name: Run Tests
-        working-directory: ./tests/thor-e2e-tests
         run: |
           export THOR_IMAGE=vechain/thor:${{ github.sha }}
           yarn install
