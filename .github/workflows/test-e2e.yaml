@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -25,9 +25,9 @@ jobs:
           outputs: type=docker,dest=/tmp/vechain-thor.tar
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: vechain-thor-image
+          name: vechain-thor-image-${{ github.sha }}
           path: /tmp/vechain-thor.tar
           retention-days: 7
 
@@ -47,9 +47,9 @@ jobs:
           ref: main
 
       - name: Download artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: vechain-thor-image
+          name: vechain-thor-image-${{ github.sha }}
           path: /tmp
 
       - name: Setup Node JS
