@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package utils
+package utils_test
 
 import (
 	"bytes"
@@ -15,13 +15,14 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/utils"
 )
 
 func TestWrapHandlerFunc(t *testing.T) {
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
-	wrapped := WrapHandlerFunc(handlerFunc)
+	wrapped := utils.WrapHandlerFunc(handlerFunc)
 
 	response := callWrappedFunc(&wrapped)
 
@@ -34,7 +35,7 @@ func TestWrapHandlerFuncWithGenericError(t *testing.T) {
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
 		return errors.New(genericErrorMsg)
 	}
-	wrapped := WrapHandlerFunc(handlerFunc)
+	wrapped := utils.WrapHandlerFunc(handlerFunc)
 
 	response := callWrappedFunc(&wrapped)
 
@@ -45,9 +46,9 @@ func TestWrapHandlerFuncWithGenericError(t *testing.T) {
 func TestWrapHandlerFuncWithBadRequestError(t *testing.T) {
 	badMsg := "This is a bad request"
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
-		return BadRequest(errors.New(badMsg))
+		return utils.BadRequest(errors.New(badMsg))
 	}
-	wrapped := WrapHandlerFunc(handlerFunc)
+	wrapped := utils.WrapHandlerFunc(handlerFunc)
 
 	response := callWrappedFunc(&wrapped)
 
@@ -58,9 +59,9 @@ func TestWrapHandlerFuncWithBadRequestError(t *testing.T) {
 func TestWrapHandlerFuncWithForbiddenError(t *testing.T) {
 	forbiddenMsg := "This is a forbidden request"
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
-		return Forbidden(errors.New(forbiddenMsg))
+		return utils.Forbidden(errors.New(forbiddenMsg))
 	}
-	wrapped := WrapHandlerFunc(handlerFunc)
+	wrapped := utils.WrapHandlerFunc(handlerFunc)
 
 	response := callWrappedFunc(&wrapped)
 
@@ -71,9 +72,9 @@ func TestWrapHandlerFuncWithForbiddenError(t *testing.T) {
 func TestWrapHandlerFuncWithNilCauseError(t *testing.T) {
 	errorStatus := http.StatusTeapot
 	handlerFunc := func(w http.ResponseWriter, r *http.Request) error {
-		return HTTPError(nil, errorStatus)
+		return utils.HTTPError(nil, errorStatus)
 	}
-	wrapped := WrapHandlerFunc(handlerFunc)
+	wrapped := utils.WrapHandlerFunc(handlerFunc)
 
 	response := callWrappedFunc(&wrapped)
 
@@ -101,7 +102,7 @@ func TestParseJSON(t *testing.T) {
 	jsonBody, _ := json.Marshal(body)
 	req := httptest.NewRequest("GET", "http://example.com", bytes.NewReader(jsonBody))
 
-	err := ParseJSON(req.Body, &parsedRes)
+	err := utils.ParseJSON(req.Body, &parsedRes)
 
 	assert.NoError(t, err)
 	assert.Equal(t, body, parsedRes)
@@ -111,11 +112,11 @@ func TestWriteJSON(t *testing.T) {
 	rr := httptest.NewRecorder()
 	var body mockReader
 
-	err := WriteJSON(rr, body)
+	err := utils.WriteJSON(rr, body)
 
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, JSONContentType, rr.Header().Get("Content-Type"))
+	assert.Equal(t, utils.JSONContentType, rr.Header().Get("Content-Type"))
 
 	respObj := mockReader{Id: 1, Body: "test"}
 	err = json.NewDecoder(rr.Body).Decode(&respObj)
