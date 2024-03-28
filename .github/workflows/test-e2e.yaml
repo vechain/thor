@@ -72,4 +72,4 @@ jobs:
         if: success() || failure()
         with:
           name: e2e-test-results
-          path: ./tests/thor-e2e-tests/junit.xml
+          path: ./junit.xml
