@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transfers
+package transfers_test
 
 import (
 	"bytes"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -60,7 +61,7 @@ func testTransferBadRequest(t *testing.T) {
 }
 
 func testTransferWithEmptyDb(t *testing.T) {
-	emptyFilter := TransferFilter{
+	emptyFilter := transfers.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
@@ -68,7 +69,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/transfers", emptyFilter)
-	var tLogs []*FilteredTransfer
+	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func testTransferWithEmptyDb(t *testing.T) {
 }
 
 func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
-	emptyFilter := TransferFilter{
+	emptyFilter := transfers.TransferFilter{
 		CriteriaSet: make([]*logdb.TransferCriteria, 0),
 		Range:       nil,
 		Options:     nil,
@@ -86,7 +87,7 @@ func testTransferWithBlocks(t *testing.T, expectedBlocks int) {
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/transfers", emptyFilter)
-	var tLogs []*FilteredTransfer
+	var tLogs []*transfers.FilteredTransfer
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB) {
 
 	repo, _ := chain.NewRepository(muxDb, b)
 
-	New(repo, logDb).Mount(router, "/transfers")
+	transfers.New(repo, logDb).Mount(router, "/transfers")
 	ts = httptest.NewServer(router)
 }
 

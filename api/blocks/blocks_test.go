@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package blocks
+package blocks_test
 
 import (
 	"encoding/json"
@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -62,7 +63,7 @@ func testBadQueryParams(t *testing.T) {
 
 func testGetBestBlock(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/best")
-	rb := new(JSONCollapsedBlock)
+	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +73,7 @@ func testGetBestBlock(t *testing.T) {
 
 func testGetBlockByHeight(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/1")
-	rb := new(JSONCollapsedBlock)
+	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +83,7 @@ func testGetBlockByHeight(t *testing.T) {
 
 func testGetFinalizedBlock(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/finalized")
-	rb := new(JSONCollapsedBlock)
+	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, &rb); err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func testGetFinalizedBlock(t *testing.T) {
 
 func testGetBlockById(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
-	rb := new(JSONCollapsedBlock)
+	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func testGetBlockById(t *testing.T) {
 
 func testGetExpandedBlockById(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String()+"?expanded=true")
-	rb := new(JSONExpandedBlock)
+	rb := new(blocks.JSONExpandedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
 	}
@@ -186,12 +187,12 @@ func initBlockServer(t *testing.T) {
 	}
 	router := mux.NewRouter()
 	bftEngine := solo.NewBFTEngine(repo)
-	New(repo, bftEngine).Mount(router, "/blocks")
+	blocks.New(repo, bftEngine).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }
 
-func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
+func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCollapsedBlock) {
 	header := expBl.Header()
 	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
 	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
@@ -209,7 +210,7 @@ func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedB
 	}
 }
 
-func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *JSONExpandedBlock) {
+func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpandedBlock) {
 	header := expBl.Header()
 	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
 	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")

@@ -3,13 +3,14 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package node
+package node_test
 
 import (
 	"crypto/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/node"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -17,8 +18,8 @@ import (
 func TestConvertPeersStats(t *testing.T) {
 	// Test case 1: Empty input slice
 	ss := []*comm.PeerStats{}
-	expected := []*PeerStats(nil)
-	assert.Equal(t, expected, ConvertPeersStats(ss))
+	expected := []*node.PeerStats(nil)
+	assert.Equal(t, expected, node.ConvertPeersStats(ss))
 
 	// Test case 2: Non-empty input slice
 	bestBlock1 := randomBytes32()
@@ -43,7 +44,7 @@ func TestConvertPeersStats(t *testing.T) {
 			Duration:    20,
 		},
 	}
-	expected = []*PeerStats{
+	expected = []*node.PeerStats{
 		{
 			Name:        "peer1",
 			BestBlockID: bestBlock1,
@@ -63,7 +64,7 @@ func TestConvertPeersStats(t *testing.T) {
 			Duration:    20,
 		},
 	}
-	assert.Equal(t, expected, ConvertPeersStats(ss))
+	assert.Equal(t, expected, node.ConvertPeersStats(ss))
 }
 
 func randomBytes32() thor.Bytes32 {

@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transactions
+package transactions_test
 
 import (
 	"bytes"
@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -61,7 +62,7 @@ func TestTransaction(t *testing.T) {
 
 func getTx(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String(), 200)
-	var rtx *Transaction
+	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func getTx(t *testing.T) {
 
 func getTxReceipt(t *testing.T) {
 	r := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt", 200)
-	var receipt *Receipt
+	var receipt *transactions.Receipt
 	if err := json.Unmarshal(r, &receipt); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func sendTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", transactions.RawTx{Raw: hexutil.Encode(rlpTx)}, 200)
 	var txObj map[string]string
 	if err = json.Unmarshal(res, &txObj); err != nil {
 		t.Fatal(err)
@@ -191,7 +192,7 @@ func getTransactionByIDTxNotFound(t *testing.T) {
 
 func getTransactionByIDPendingTxNotFound(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+mempoolTx.ID().String()+"?pending=true", 200)
-	var rtx *Transaction
+	var rtx *transactions.Transaction
 	if err := json.Unmarshal(res, &rtx); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +201,7 @@ func getTransactionByIDPendingTxNotFound(t *testing.T) {
 }
 
 func sendTxWithBadFormat(t *testing.T) {
-	badRawTx := RawTx{Raw: "badRawTx"}
+	badRawTx := transactions.RawTx{Raw: "badRawTx"}
 
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", badRawTx, 400)
 
@@ -213,7 +214,7 @@ func sendTxThatCannotBeAcceptedInLocalMempool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicatedRawTx := RawTx{Raw: hexutil.Encode(rlpTx)}
+	duplicatedRawTx := transactions.RawTx{Raw: hexutil.Encode(rlpTx)}
 
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/transactions", duplicatedRawTx, 400)
 
@@ -331,12 +332,12 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal("Fatalinooo", e)
 	}
 
-	New(repo, mempool).Mount(router, "/transactions")
+	transactions.New(repo, mempool).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }
 
-func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *Transaction) {
+func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transactions.Transaction) {
 	origin, err := expectedTx.Origin()
 	if err != nil {
 		t.Fatal(err)

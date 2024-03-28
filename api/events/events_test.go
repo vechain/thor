@@ -3,11 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events
+package events_test
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -27,6 +27,11 @@ import (
 )
 
 var ts *httptest.Server
+
+var (
+	addr  = thor.BytesToAddress([]byte("address"))
+	topic = thor.BytesToBytes32([]byte("topic"))
+)
 
 func TestEmptyEvents(t *testing.T) {
 	db := createDb(t)
@@ -59,15 +64,15 @@ func testEventsBadRequest(t *testing.T) {
 }
 
 func testEventWithEmptyDb(t *testing.T) {
-	emptyFilter := EventFilter{
-		CriteriaSet: make([]*EventCriteria, 0),
+	emptyFilter := events.EventFilter{
+		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
 		Order:       logdb.DESC,
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
-	var tLogs []*FilteredEvent
+	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -77,15 +82,40 @@ func testEventWithEmptyDb(t *testing.T) {
 }
 
 func testEventWithBlocks(t *testing.T, expectedBlocks int) {
-	emptyFilter := EventFilter{
-		CriteriaSet: make([]*EventCriteria, 0),
+	emptyFilter := events.EventFilter{
+		CriteriaSet: make([]*events.EventCriteria, 0),
 		Range:       nil,
 		Options:     nil,
 		Order:       logdb.DESC,
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/events", emptyFilter)
-	var tLogs []*FilteredEvent
+	var tLogs []*events.FilteredEvent
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, expectedBlocks, len(tLogs))
+	for _, tLog := range tLogs {
+		assert.NotEmpty(t, tLog)
+	}
+
+	// Test with matching filter
+	matchingFilter := events.EventFilter{
+		CriteriaSet: []*events.EventCriteria{{
+			Address: &addr,
+			TopicSet: events.TopicSet{
+				&topic,
+				&topic,
+				&topic,
+				&topic,
+				&topic,
+			},
+		}},
+	}
+
+	res, statusCode = httpPost(t, ts.URL+"/events", matchingFilter)
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +142,7 @@ func initEventServer(t *testing.T, logDb *logdb.LogDB) {
 
 	repo, _ := chain.NewRepository(muxDb, b)
 
-	New(repo, logDb).Mount(router, "/events")
+	events.New(repo, logDb).Mount(router, "/events")
 	ts = httptest.NewServer(router)
 }
 
@@ -161,26 +191,22 @@ func insertBlocks(t *testing.T, db *logdb.LogDB, n int) {
 	}
 }
 
-func randAddress() (addr thor.Address) {
-	rand.Read(addr[:])
-	return
-}
-
 func newReceipt() *tx.Receipt {
 	return &tx.Receipt{
 		Outputs: []*tx.Output{
 			{
 				Events: tx.Events{{
-					Address: randAddress(),
-					Topics:  []thor.Bytes32{randBytes32()},
-					Data:    randBytes32().Bytes(),
+					Address: addr,
+					Topics: []thor.Bytes32{
+						topic,
+						topic,
+						topic,
+						topic,
+						topic,
+					},
+					Data: []byte("0x0"),
 				}},
 			},
 		},
 	}
-}
-
-func randBytes32() (b thor.Bytes32) {
-	rand.Read(b[:])
-	return
 }

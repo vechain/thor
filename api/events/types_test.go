@@ -3,19 +3,19 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package events
+package events_test
 
 import (
 	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/events"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/thor"
 )
 
 func TestEventsTypes(t *testing.T) {
@@ -24,19 +24,17 @@ func TestEventsTypes(t *testing.T) {
 	testConvertRangeWithBlockRangeType(t, chain)
 	testConvertRangeWithTimeRangeTypeLessThenGenesis(t, chain)
 	testConvertRangeWithTimeRangeType(t, chain)
-	testMultipleConvertEventFilters(t, chain)
-	testMultipleConvertEvent(t)
 	testConvertRangeWithFromGreaterThanGenesis(t, chain)
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *chain.Chain) {
-	rng := &Range{
-		Unit: BlockRangeType,
+	rng := &events.Range{
+		Unit: events.BlockRangeType,
 		From: 1,
 		To:   2,
 	}
 
-	convertedRng, err := ConvertRange(chain, rng)
+	convertedRng, err := events.ConvertRange(chain, rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, uint32(rng.From), convertedRng.From)
@@ -44,8 +42,8 @@ func testConvertRangeWithBlockRangeType(t *testing.T, chain *chain.Chain) {
 }
 
 func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *chain.Chain) {
-	rng := &Range{
-		Unit: TimeRangeType,
+	rng := &events.Range{
+		Unit: events.TimeRangeType,
 		From: 1,
 		To:   2,
 	}
@@ -54,7 +52,7 @@ func testConvertRangeWithTimeRangeTypeLessThenGenesis(t *testing.T, chain *chain
 		To:   math.MaxUint32,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := events.ConvertRange(chain, rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEmptyRange, convRng)
@@ -65,8 +63,8 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *chain.Chain) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rng := &Range{
-		Unit: TimeRangeType,
+	rng := &events.Range{
+		Unit: events.TimeRangeType,
 		From: 1,
 		To:   genesis.Timestamp(),
 	}
@@ -75,7 +73,7 @@ func testConvertRangeWithTimeRangeType(t *testing.T, chain *chain.Chain) {
 		To:   0,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := events.ConvertRange(chain, rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedZeroRange, convRng)
@@ -86,8 +84,8 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *chain.Chain
 	if err != nil {
 		t.Fatal(err)
 	}
-	rng := &Range{
-		Unit: TimeRangeType,
+	rng := &events.Range{
+		Unit: events.TimeRangeType,
 		From: genesis.Timestamp() + 1_000,
 		To:   genesis.Timestamp() + 10_000,
 	}
@@ -96,69 +94,10 @@ func testConvertRangeWithFromGreaterThanGenesis(t *testing.T, chain *chain.Chain
 		To:   math.MaxUint32,
 	}
 
-	convRng, err := ConvertRange(chain, rng)
+	convRng, err := events.ConvertRange(chain, rng)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEmptyRange, convRng)
-}
-
-func testMultipleConvertEventFilters(t *testing.T, chain *chain.Chain) {
-	addr := thor.MustParseAddress("0x1234567890123456789012345678901234567890")
-	t0 := thor.MustParseBytes32("0x1234567890123456789012345678901234567890123456789012345678901234")
-	multipleFilters := &EventFilter{
-		CriteriaSet: []*EventCriteria{
-			{
-				Address: &addr,
-				TopicSet: TopicSet{
-					Topic0: &t0,
-					Topic1: &t0,
-					Topic2: &t0,
-					Topic3: &t0,
-					Topic4: &t0,
-				},
-			},
-		},
-		Range:   nil,
-		Options: nil,
-		Order:   logdb.DESC,
-	}
-
-	convRng, err := convertEventFilter(chain, multipleFilters)
-
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(convRng.CriteriaSet))
-	assert.Equal(t, addr, *convRng.CriteriaSet[0].Address)
-	for i := 0; i < 5; i++ {
-		assert.Equal(t, t0, *convRng.CriteriaSet[0].Topics[i])
-	}
-}
-
-func testMultipleConvertEvent(t *testing.T) {
-	var topics [5]*thor.Bytes32
-	for i := 0; i < 5; i++ {
-		var temp thor.Bytes32
-		topics[i] = &temp
-	}
-
-	event := &logdb.Event{
-		BlockNumber: 1,
-		Index:       1,
-		BlockID:     thor.MustParseBytes32("0x1234567890123456789012345678901234567890123456789012345678901234"),
-		BlockTime:   1,
-		TxID:        thor.MustParseBytes32("0x1234567890123456789012345678901234567890123456789012345678901234"),
-		TxOrigin:    thor.MustParseAddress("0x1234567890123456789012345678901234567890"),
-		ClauseIndex: 1,
-		Address:     thor.MustParseAddress("0x1234567890123456789012345678901234567890"),
-		Topics:      topics,
-		Data:        []byte{0x00, 0x01, 0x02},
-	}
-
-	filteredEvents := convertEvent(event)
-
-	assert.Equal(t, 5, len(filteredEvents.Topics))
-	for i := 0; i < 5; i++ {
-		assert.NotEmpty(t, thor.Bytes32{}, *filteredEvents.Topics[i])
-	}
 }
 
 // Init functions
