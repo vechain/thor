@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	errNotFound      = errors.New("not found")
+	ErrNotFound      = errors.New("not found")
 	bestBlockIDKey   = []byte("best-block-id")
 	steadyBlockIDKey = []byte("steady-block-id")
 )
@@ -410,7 +410,7 @@ func (r *Repository) GetBlockReceipts(id thor.Bytes32) (tx.Receipts, error) {
 
 // IsNotFound returns if the given error means not found.
 func (r *Repository) IsNotFound(err error) bool {
-	return err == errNotFound || r.db.IsNotFound(err)
+	return err == ErrNotFound || r.db.IsNotFound(err)
 }
 
 // NewTicker create a signal Waiter to receive event that the best block changed.
