@@ -1,12 +1,7 @@
 name: E2E Tests
 
 on:
-  pull_request:
-    branches:
-      - master
-  push:
-    branches:
-      - master
+  workflow_call:
 
 jobs:
   build-docker-image:
