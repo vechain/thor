@@ -34,8 +34,8 @@ func TestOtelPromTelemetry(t *testing.T) {
 	Counter("count2")
 	countVect := CounterVec("countVec1", []string{"zeroOrOne"})
 
-	hist := HistogramWithHTTPBuckets("hist1")
-	HistogramVec("hist2", []string{"zeroOrOne"})
+	hist := Histogram("hist1", nil)
+	HistogramVec("hist2", []string{"zeroOrOne"}, nil)
 
 	gauge1 := Gauge("gauge1")
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
@@ -50,7 +50,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 	for i := 0; i < rand.Intn(100)+1; i++ {
 		zeroOrOne := i % 2
 		hist.Observe(int64(i))
-		HistogramVec("hist2", []string{"zeroOrOne"}).
+		HistogramVec("hist2", []string{"zeroOrOne"}, nil).
 			ObserveWithLabels(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
 		histTotal += i
 	}
@@ -110,8 +110,8 @@ func TestLazyLoading(t *testing.T) {
 		GaugeVec("noopGauge", nil),
 		Counter("noopCounter"),
 		CounterVec("noopCounter", nil),
-		Histogram("noopHist"),
-		HistogramVec("noopHist", nil),
+		Histogram("noopHist", nil),
+		HistogramVec("noopHist", nil, nil),
 	} {
 		require.IsType(t, &noopMeters{}, a)
 	}
@@ -123,6 +123,6 @@ func TestLazyLoading(t *testing.T) {
 	require.IsType(t, &promGaugeVecMeter{}, LazyLoadGaugeVec("lazyGaugeVec", nil)())
 	require.IsType(t, &promCountMeter{}, LazyLoadCounter("lazyCounter")())
 	require.IsType(t, &promCountVecMeter{}, LazyLoadCounterVec("lazyCounterVec", nil)())
-	require.IsType(t, &promHistogramMeter{}, LazyLoadHistogram("lazyHistogram")())
-	require.IsType(t, &promHistogramVecMeter{}, LazyLoadHistogramVec("lazyHistogramVec", nil)())
+	require.IsType(t, &promHistogramMeter{}, LazyLoadHistogram("lazyHistogram", nil)())
+	require.IsType(t, &promHistogramVecMeter{}, LazyLoadHistogramVec("lazyHistogramVec", nil, nil)())
 }

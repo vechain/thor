@@ -58,7 +58,9 @@ type HandlerFunc func(http.ResponseWriter, *http.Request) error
 func MetricsWrapHandlerFunc(pathPrefix, endpoint string, f HandlerFunc) http.HandlerFunc {
 	fixedPath := strings.ReplaceAll(pathPrefix, "/", "_") // ensure no unexpected slashes
 	httpReqCounter := telemetry.CounterVec(fixedPath+"_request_count", []string{"path", "code", "method"})
-	httpReqDuration := telemetry.HistogramVecWithHTTPBuckets(fixedPath+"_duration_ms", []string{"path", "code", "method"})
+	httpReqDuration := telemetry.HistogramVec(
+		fixedPath+"_duration_ms", []string{"path", "code", "method"}, telemetry.BucketHTTPReqs,
+	)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		now := time.Now()

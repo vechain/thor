@@ -7,14 +7,14 @@ import (
 )
 
 var (
-	metricBlockProposedDuration = telemetry.LazyLoadHistogramVecWithHTTPBuckets(
-		"block_proposed_duration_ms", []string{"status"},
+	metricBlockProposedDuration = telemetry.LazyLoadHistogramVec(
+		"block_proposed_duration_ms", []string{"status"}, telemetry.Bucket10s,
 	)
 	metricBlockProposedCount = telemetry.LazyLoadCounterVec("block_proposed_count", []string{"status"})
 
 	metricBlockProposedTxs      = telemetry.LazyLoadCounterVec("block_proposed_tx_count", []string{"status"})
-	metricBlockReceivedDuration = telemetry.LazyLoadHistogramVecWithHTTPBuckets(
-		"block_received_duration_ms", []string{"status"},
+	metricBlockReceivedDuration = telemetry.LazyLoadHistogramVec(
+		"block_received_duration_ms", []string{"status"}, telemetry.Bucket10s,
 	)
 	metricBlockReceivedCount        = telemetry.LazyLoadCounterVec("block_received_count", []string{"status"})
 	metricBlockReceivedProcessedTxs = telemetry.LazyLoadCounterVec("block_received_processed_tx_count", []string{"status"})
@@ -36,7 +36,7 @@ func evalBlockReceivedMetrics(f func() error) error {
 	}
 
 	status := map[string]string{
-		"status": "proposed",
+		"status": "received",
 	}
 	metricBlockReceivedCount().AddWithLabel(1, status)
 	metricBlockReceivedDuration().ObserveWithLabels(time.Since(startTime).Milliseconds(), status)

@@ -22,17 +22,19 @@ func Handler() http.Handler {
 	return telemetry.GetOrCreateHandler()
 }
 
+var (
+	Bucket10s      = []int64{0, 500, 1000, 2000, 3000, 4000, 5000, 7500, 10_000}
+	BucketHTTPReqs = []int64{0, 150, 300, 450, 600, 900, 1200, 1500, 3000}
+)
+
 // HistogramMeter represents the type of metric that is calculated by aggregating
 // as a Histogram of all reported measurements over a time interval.
 type HistogramMeter interface {
 	Observe(int64)
 }
 
-func Histogram(name string) HistogramMeter {
-	return telemetry.GetOrCreateHistogramMeter(name, nil)
-}
-func HistogramWithHTTPBuckets(name string) HistogramMeter {
-	return telemetry.GetOrCreateHistogramMeter(name, defaultHTTPBuckets)
+func Histogram(name string, buckets []int64) HistogramMeter {
+	return telemetry.GetOrCreateHistogramMeter(name, buckets)
 }
 
 // HistogramVecMeter //todo
@@ -40,14 +42,9 @@ type HistogramVecMeter interface {
 	ObserveWithLabels(int64, map[string]string)
 }
 
-func HistogramVec(name string, labels []string) HistogramVecMeter {
-	return telemetry.GetOrCreateHistogramVecMeter(name, labels, nil)
+func HistogramVec(name string, labels []string, buckets []int64) HistogramVecMeter {
+	return telemetry.GetOrCreateHistogramVecMeter(name, labels, buckets)
 }
-func HistogramVecWithHTTPBuckets(name string, labels []string) HistogramVecMeter {
-	return telemetry.GetOrCreateHistogramVecMeter(name, labels, defaultHTTPBuckets)
-}
-
-var defaultHTTPBuckets = []int64{0, 150, 300, 450, 600, 900, 1200, 1500, 3000}
 
 // CountMeter is a cumulative metric that represents a single monotonically increasing counter
 // whose value can only increase or be reset to zero on restart.
@@ -100,19 +97,14 @@ func LazyLoad[T any](f func() T) func() T {
 	}
 }
 
-func LazyLoadHistogram(name string) func() HistogramMeter {
+func LazyLoadHistogram(name string, buckets []int64) func() HistogramMeter {
 	return LazyLoad(func() HistogramMeter {
-		return Histogram(name)
+		return Histogram(name, buckets)
 	})
 }
-func LazyLoadHistogramVec(name string, labels []string) func() HistogramVecMeter {
+func LazyLoadHistogramVec(name string, labels []string, buckets []int64) func() HistogramVecMeter {
 	return LazyLoad(func() HistogramVecMeter {
-		return HistogramVec(name, labels)
-	})
-}
-func LazyLoadHistogramVecWithHTTPBuckets(name string, labels []string) func() HistogramVecMeter {
-	return LazyLoad(func() HistogramVecMeter {
-		return HistogramVecWithHTTPBuckets(name, labels)
+		return HistogramVec(name, labels, buckets)
 	})
 }
 
