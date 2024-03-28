@@ -12,12 +12,22 @@ import (
 )
 
 func TestOtelPromTelemetry(t *testing.T) {
+	noopGauge := Gauge("noopGauge")
+	lazyLoadGauge := LazyLoadGauge("lazyGauge")
 	InitializePrometheusTelemetry()
 	server := httptest.NewServer(Handler())
 
 	t.Cleanup(func() {
 		server.Close()
 	})
+
+	if _, ok := noopGauge.(*noopMeters); !ok {
+		t.Error("noopGauge is not nooptelemetry")
+	}
+
+	if _, ok := lazyLoadGauge().(*promGaugeMeter); !ok {
+		t.Error("noopGauge is not promGaugeMeter")
+	}
 
 	// 2 ways of accessing it - useful to avoid lookups
 	count1 := Counter("count1")
@@ -90,4 +100,29 @@ func TestOtelPromTelemetry(t *testing.T) {
 	sumGaugeVec := metrics["node_telemetry_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
 		metrics["node_telemetry_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
 	require.Equal(t, sumGaugeVec, float64(totalGaugeVec))
+}
+
+func TestLazyLoading(t *testing.T) {
+	telemetry = defaultNoopTelemetry() // make sure it starts in the default state
+
+	for _, a := range []any{
+		Gauge("noopGauge"),
+		GaugeVec("noopGauge", nil),
+		Counter("noopCounter"),
+		CounterVec("noopCounter", nil),
+		Histogram("noopHist"),
+		HistogramVec("noopHist", nil),
+	} {
+		require.IsType(t, &noopMeters{}, a)
+	}
+
+	// after initialization, newly created metrics become of the prometheus type
+	InitializePrometheusTelemetry()
+
+	require.IsType(t, &promGaugeMeter{}, LazyLoadGauge("lazyGauge")())
+	require.IsType(t, &promGaugeVecMeter{}, LazyLoadGaugeVec("lazyGaugeVec", nil)())
+	require.IsType(t, &promCountMeter{}, LazyLoadCounter("lazyCounter")())
+	require.IsType(t, &promCountVecMeter{}, LazyLoadCounterVec("lazyCounterVec", nil)())
+	require.IsType(t, &promHistogramMeter{}, LazyLoadHistogram("lazyHistogram")())
+	require.IsType(t, &promHistogramVecMeter{}, LazyLoadHistogramVec("lazyHistogramVec", nil)())
 }

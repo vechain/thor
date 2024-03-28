@@ -85,6 +85,9 @@ func GaugeVec(name string, labels []string) GaugeVecMeter {
 	return telemetry.GetOrCreateGaugeVecMeter(name, labels)
 }
 
+// LazyLoad allows to defer the instantiate of the metric while allowing its definition. More clearly:
+// - it allow metrics to be defined and used package wide (using var)
+// - it avoid metrics definition to determine the singleton to use (noop vs prometheus)
 func LazyLoad[T any](f func() T) func() T {
 	var result T
 	var loaded bool
@@ -95,4 +98,44 @@ func LazyLoad[T any](f func() T) func() T {
 		}
 		return result
 	}
+}
+
+func LazyLoadHistogram(name string) func() HistogramMeter {
+	return LazyLoad(func() HistogramMeter {
+		return Histogram(name)
+	})
+}
+func LazyLoadHistogramVec(name string, labels []string) func() HistogramVecMeter {
+	return LazyLoad(func() HistogramVecMeter {
+		return HistogramVec(name, labels)
+	})
+}
+func LazyLoadHistogramVecWithHTTPBuckets(name string, labels []string) func() HistogramVecMeter {
+	return LazyLoad(func() HistogramVecMeter {
+		return HistogramVecWithHTTPBuckets(name, labels)
+	})
+}
+
+func LazyLoadCounter(name string) func() CountMeter {
+	return LazyLoad(func() CountMeter {
+		return Counter(name)
+	})
+}
+
+func LazyLoadCounterVec(name string, labels []string) func() CountVecMeter {
+	return LazyLoad(func() CountVecMeter {
+		return CounterVec(name, labels)
+	})
+}
+
+func LazyLoadGaugeVec(name string, labels []string) func() GaugeVecMeter {
+	return LazyLoad(func() GaugeVecMeter {
+		return GaugeVec(name, labels)
+	})
+}
+
+func LazyLoadGauge(name string) func() GaugeMeter {
+	return LazyLoad(func() GaugeMeter {
+		return Gauge(name)
+	})
 }

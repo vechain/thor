@@ -27,9 +27,7 @@ const dataStoreName = "bft.engine"
 var finalizedKey = []byte("finalized")
 
 var (
-	metricsBlocksCommitted = telemetry.LazyLoad(func() telemetry.CountVecMeter {
-		return telemetry.CounterVec("block_bft_committed_count", []string{"status"})
-	})
+	metricsBlocksCommitted = telemetry.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
 )
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
