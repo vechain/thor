@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,7 +47,6 @@ func TestTransaction(t *testing.T) {
 	getTxWithBadId(t)
 	getReceiptWithBadId(t)
 	txWithBadHeader(t)
-	checkBlockSummaryExistsInRepoForNonExistingBlock(t)
 	getNonExistingRawTransactionWhenTxStillInMempool(t)
 	getNonPendingRawTransactionWhenTxStillInMempool(t)
 	getRawTransactionWhenTxStillInMempool(t)
@@ -55,6 +55,8 @@ func TestTransaction(t *testing.T) {
 	sendTxWithBadFormat(t)
 	sendTxThatCannotBeAcceptedInLocalMempool(t)
 	handleGetTransactionByIDWithBadQueryParams(t)
+	handleGetTransactionByIDWithNonExistingHead(t)
+	handleGetTransactionReceiptByIDWithNonExistingHead(t)
 }
 
 func getTx(t *testing.T) {
@@ -140,15 +142,6 @@ func getReceiptWithBadId(t *testing.T) {
 	txBadId := "0x123"
 
 	httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId+"/receipt", 400)
-}
-
-func checkBlockSummaryExistsInRepoForNonExistingBlock(t *testing.T) {
-	head := thor.Bytes32{}
-
-	err := checkBlockSummaryExistsInRepo(repo, head)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), chain.ErrNotFound.Error())
 }
 
 func getNonExistingRawTransactionWhenTxStillInMempool(t *testing.T) {
@@ -237,6 +230,16 @@ func handleGetTransactionByIDWithBadQueryParams(t *testing.T) {
 		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+badQueryParam, 400)
 		assert.Contains(t, string(res), "should be boolean")
 	}
+}
+
+func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
+}
+
+func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
+	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
