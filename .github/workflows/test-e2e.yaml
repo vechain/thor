@@ -36,7 +36,7 @@ jobs:
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
-    name: Run E2E Tests
+    name: Run Tests
     steps:
 
       - name: Checkout
