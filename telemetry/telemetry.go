@@ -22,6 +22,7 @@ func Handler() http.Handler {
 	return telemetry.GetOrCreateHandler()
 }
 
+// Define standard buckets for histograms
 var (
 	Bucket10s      = []int64{0, 500, 1000, 2000, 3000, 4000, 5000, 7500, 10_000}
 	BucketHTTPReqs = []int64{0, 150, 300, 450, 600, 900, 1200, 1500, 3000}
@@ -37,7 +38,7 @@ func Histogram(name string, buckets []int64) HistogramMeter {
 	return telemetry.GetOrCreateHistogramMeter(name, buckets)
 }
 
-// HistogramVecMeter //todo
+// HistogramVecMeter same as the Histogram but with labels
 type HistogramVecMeter interface {
 	ObserveWithLabels(int64, map[string]string)
 }
@@ -82,7 +83,7 @@ func GaugeVec(name string, labels []string) GaugeVecMeter {
 	return telemetry.GetOrCreateGaugeVecMeter(name, labels)
 }
 
-// LazyLoad allows to defer the instantiate of the metric while allowing its definition. More clearly:
+// LazyLoad allows to defer the instantiation of the metric while allowing its definition. More clearly:
 // - it allow metrics to be defined and used package wide (using var)
 // - it avoid metrics definition to determine the singleton to use (noop vs prometheus)
 func LazyLoad[T any](f func() T) func() T {

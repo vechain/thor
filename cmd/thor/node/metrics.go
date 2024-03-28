@@ -7,17 +7,17 @@ import (
 )
 
 var (
+	metricBlockProposedCount    = telemetry.LazyLoadCounterVec("block_proposed_count", []string{"status"})
+	metricBlockProposedTxs      = telemetry.LazyLoadCounterVec("block_proposed_tx_count", []string{"status"})
 	metricBlockProposedDuration = telemetry.LazyLoadHistogramVec(
 		"block_proposed_duration_ms", []string{"status"}, telemetry.Bucket10s,
 	)
-	metricBlockProposedCount = telemetry.LazyLoadCounterVec("block_proposed_count", []string{"status"})
 
-	metricBlockProposedTxs      = telemetry.LazyLoadCounterVec("block_proposed_tx_count", []string{"status"})
-	metricBlockReceivedDuration = telemetry.LazyLoadHistogramVec(
-		"block_received_duration_ms", []string{"status"}, telemetry.Bucket10s,
-	)
 	metricBlockReceivedCount        = telemetry.LazyLoadCounterVec("block_received_count", []string{"status"})
 	metricBlockReceivedProcessedTxs = telemetry.LazyLoadCounterVec("block_received_processed_tx_count", []string{"status"})
+	metricBlockReceivedDuration     = telemetry.LazyLoadHistogramVec(
+		"block_received_duration_ms", []string{"status"}, telemetry.Bucket10s,
+	)
 
 	metricChainForkCount = telemetry.LazyLoadCounter("chain_fork_count")
 	metricChainForkSize  = telemetry.LazyLoadGauge("chain_fork_size")

@@ -5,9 +5,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const namespace = "node_telemetry"
