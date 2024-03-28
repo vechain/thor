@@ -42,21 +42,26 @@ func TestTransaction(t *testing.T) {
 	initTransactionServer(t)
 	defer ts.Close()
 
-	getTx(t)
-	getTxReceipt(t)
+	// Send tx
 	sendTx(t)
+	sendTxWithBadFormat(t)
+	sendTxThatCannotBeAcceptedInLocalMempool(t)
+
+	// Get tx
+	getTx(t)
 	getTxWithBadId(t)
-	getReceiptWithBadId(t)
 	txWithBadHeader(t)
 	getNonExistingRawTransactionWhenTxStillInMempool(t)
 	getNonPendingRawTransactionWhenTxStillInMempool(t)
 	getRawTransactionWhenTxStillInMempool(t)
 	getTransactionByIDTxNotFound(t)
 	getTransactionByIDPendingTxNotFound(t)
-	sendTxWithBadFormat(t)
-	sendTxThatCannotBeAcceptedInLocalMempool(t)
 	handleGetTransactionByIDWithBadQueryParams(t)
 	handleGetTransactionByIDWithNonExistingHead(t)
+
+	// Get tx receipt
+	getTxReceipt(t)
+	getReceiptWithBadId(t)
 	handleGetTransactionReceiptByIDWithNonExistingHead(t)
 }
 
