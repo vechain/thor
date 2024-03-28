@@ -139,18 +139,20 @@ func (t *Transactions) handleSendTransaction(w http.ResponseWriter, req *http.Re
 }
 
 func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http.Request) error {
-	txID, err := extractTxId(req)
+	id := mux.Vars(req)["id"]
+	txID, err := thor.ParseBytes32(id)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 
-	head, err := extractHeader(req, t)
+	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-
-	if err = checkBlockSummaryExistsInRepo(t.repo, head); err != nil {
-		return err
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
+		if t.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "head"))
+		}
 	}
 
 	raw := req.URL.Query().Get("raw")
@@ -176,36 +178,22 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	return utils.WriteJSON(w, tx)
 }
 
-func extractTxId(req *http.Request) (thor.Bytes32, error) {
+func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {
 	id := mux.Vars(req)["id"]
 	txID, err := thor.ParseBytes32(id)
-	if err != nil {
-		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "id"))
-	}
-	return txID, nil
-}
-
-func extractHeader(req *http.Request, t *Transactions) (thor.Bytes32, error) {
-	head, err := t.parseHead(req.URL.Query().Get("head"))
-	if err != nil {
-		return thor.Bytes32{}, utils.BadRequest(errors.WithMessage(err, "head"))
-	}
-	return head, nil
-}
-
-func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, req *http.Request) error {
-	txID, err := extractTxId(req)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 
-	head, err := extractHeader(req, t)
+	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
 
-	if err = checkBlockSummaryExistsInRepo(t.repo, head); err != nil {
-		return err
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
+		if t.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "head"))
+		}
 	}
 
 	receipt, err := t.getTransactionReceiptByID(txID, head)
@@ -213,16 +201,6 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 		return err
 	}
 	return utils.WriteJSON(w, receipt)
-}
-
-func checkBlockSummaryExistsInRepo(repo *chain.Repository, head thor.Bytes32) error {
-	if _, err := repo.GetBlockSummary(head); err != nil {
-		if repo.IsNotFound(err) {
-			return utils.BadRequest(errors.WithMessage(err, "head"))
-		}
-	}
-
-	return nil
 }
 
 func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
