@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -17,12 +16,19 @@ import (
 	"github.com/vechain/thor/v2/kv"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const dataStoreName = "bft.engine"
 
 var finalizedKey = []byte("finalized")
+
+var (
+	metricsBlocksCommitted = telemetry.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
+)
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
@@ -127,6 +133,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
+			metricsBlocksCommitted().AddWithLabel(1, map[string]string{"status": "finalized"})
 		}
 	}
 
@@ -142,6 +149,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 			return err
 		}
 		engine.casts.Mark(checkpoint, state.Quality)
+		metricsBlocksCommitted().AddWithLabel(1, map[string]string{"status": "proposed"})
 	}
 
 	return nil

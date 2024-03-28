@@ -115,7 +115,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		}
 	}()
 
-	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+	return evalBlockProposeMetrics(n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.skipLogs && !n.logDBFailed
@@ -191,6 +191,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
+		metricBlockProposedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"status": "proposedBlock"})
 		n.comm.BroadcastBlock(newBlock)
 		log.Info("📦 new block packed",
 			"txs", len(receipts),
@@ -203,5 +204,5 @@ func (n *Node) pack(flow *packer.Flow) error {
 			log.Debug("bandwidth updated", "gps", v)
 		}
 		return nil
-	})
+	}))
 }
