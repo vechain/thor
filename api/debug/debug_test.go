@@ -48,6 +48,7 @@ func TestDebug(t *testing.T) {
 	initDebugServer(t)
 	defer ts.Close()
 
+	// /tracers endpoint
 	testTraceClauseWithEmptyTracerTarget(t)
 	testTraceClauseWithBadBlockId(t)
 	testTraceClauseWithNonExistingBlockId(t)
@@ -59,6 +60,7 @@ func TestDebug(t *testing.T) {
 	testTraceClauseWithCustomTracer(t)
 	testTraceClause(t)
 
+	// /tracers/call endpoint
 	testHandleTraceCallWithMalformedBodyRequest(t)
 	testHandleTraceCallWithEmptyTraceCallOption(t)
 	testHandleTraceCall(t)
@@ -71,6 +73,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithBadBlockRef(t)
 	testHandleTraceCallWithInvalidLengthBlockRef(t)
 
+	// /storage/range endpoint
 	testStorageRangeWithEmptyStorageRangeOption(t)
 	testStorageRangeWithMalformedBody(t)
 	testStorageRange(t)
