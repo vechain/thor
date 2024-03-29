@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package transactions_test
+package transactions
 
 import (
 	"crypto/rand"
@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
@@ -29,7 +28,7 @@ func TestErrorWhileRetrievingTxOriginInConvertReceipt(t *testing.T) {
 		Paid:   big.NewInt(10),
 	}
 
-	convRec, err := transactions.ConvertReceipt(receipt, header, tr)
+	convRec, err := convertReceipt(receipt, header, tr)
 
 	assert.Error(t, err)
 	assert.Equal(t, err, secp256k1.ErrInvalidSignatureLen)
@@ -44,7 +43,7 @@ func TestConvertReceiptWhenTxHasNoClauseTo(t *testing.T) {
 	receipt := newReceipt()
 	expectedOutputAddress := thor.CreateContractAddress(tr.ID(), uint32(0), 0)
 
-	convRec, err := transactions.ConvertReceipt(receipt, header, tr)
+	convRec, err := convertReceipt(receipt, header, tr)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(convRec.Outputs))
@@ -59,7 +58,7 @@ func TestConvertReceipt(t *testing.T) {
 	header := b.Header()
 	receipt := newReceipt()
 
-	convRec, err := transactions.ConvertReceipt(receipt, header, tr)
+	convRec, err := convertReceipt(receipt, header, tr)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(convRec.Outputs))
