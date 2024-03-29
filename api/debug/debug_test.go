@@ -74,8 +74,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithInvalidLengthBlockRef(t)
 
 	// /storage/range endpoint
-	testStorageRangeWithEmptyStorageRangeOption(t)
-	testStorageRangeWithMalformedBody(t)
+	testStorageRangeWithError(t)
 	testStorageRange(t)
 }
 
@@ -134,7 +133,7 @@ func testTraceClauseWithBadTxId(t *testing.T) {
 		Target: fmt.Sprintf("%s/badTxId/x", blk.Header().ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
-	assert.Equal(t, `target[1]: strconv.ParseUint: parsing "badTxId": invalid syntax`, strings.TrimSpace(string(res)))
+	assert.Equal(t, `target[1]: strconv.ParseUint: parsing "badTxId": invalid syntax`, strings.TrimSpace(res))
 }
 
 func testTraceClauseWithNonExistingTx(t *testing.T) {
@@ -403,15 +402,14 @@ func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 	assert.Equal(t, "blockRef: invalid length", strings.TrimSpace(res))
 }
 
-func testStorageRangeWithEmptyStorageRangeOption(t *testing.T) {
+func testStorageRangeWithError(t *testing.T) {
+	// Error case 1: empty StorageRangeOption
 	opt := &StorageRangeOption{}
 	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", opt, 400)
-}
 
-func testStorageRangeWithMalformedBody(t *testing.T) {
+	// Error case 2: bad StorageRangeOption
 	badBodyRequest := 123
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badBodyRequest, 400)
-	t.Log(string(res))
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badBodyRequest, 400)
 }
 
 func testStorageRange(t *testing.T) {
