@@ -329,7 +329,6 @@ func (s *Server) dialLoop() {
 						log.Error("unable to remove a discovered node - this should never happen")
 					}
 				}
-
 			}()
 
 			dialCount++
