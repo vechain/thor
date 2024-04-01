@@ -27,15 +27,16 @@ var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	opts            Options
-	srv             *p2p.Server
-	discv5          *discv5.Network
-	goes            co.Goes
-	done            chan struct{}
-	bootstrapNodes  []*discv5.Node
-	knownNodes      *cache.PrioCache
-	discoveredNodes *cache.RandCache
-	dialingNodes    *nodeMap
+	opts             Options
+	srv              *p2p.Server
+	discv5           *discv5.Network
+	goes             co.Goes
+	done             chan struct{}
+	bootstrapNodes   []*discv5.Node
+	knownNodes       *cache.PrioCache
+	discoveredNodes  *cache.RandCache
+	dialingNodes     *nodeMap
+	connectOnlyNodes *nodeMap
 }
 
 // New create a p2p server.
@@ -45,6 +46,18 @@ func New(opts *Options) *Server {
 	for _, node := range opts.KnownNodes {
 		knownNodes.Set(node.ID, node, 0)
 		discoveredNodes.Set(node.ID, node)
+	}
+
+	// ConnectOnlyNodes doesn't connect to other sourced nodes
+	connectOnlyNodes := newNodeMap()
+	if len(opts.ConnectOnlyNodes) > 0 {
+		knownNodes = cache.NewPrioCache(5)
+		discoveredNodes = cache.NewRandCache(128)
+		for _, connectOnlyNode := range opts.ConnectOnlyNodes {
+			knownNodes.Set(connectOnlyNode.ID, connectOnlyNode, 0)
+			discoveredNodes.Set(connectOnlyNode.ID, connectOnlyNode)
+			connectOnlyNodes.Add(connectOnlyNode)
+		}
 	}
 
 	return &Server{
@@ -63,10 +76,11 @@ func New(opts *Options) *Server {
 				DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
 			},
 		},
-		done:            make(chan struct{}),
-		knownNodes:      knownNodes,
-		discoveredNodes: discoveredNodes,
-		dialingNodes:    newNodeMap(),
+		done:             make(chan struct{}),
+		knownNodes:       knownNodes,
+		discoveredNodes:  discoveredNodes,
+		dialingNodes:     newNodeMap(),
+		connectOnlyNodes: connectOnlyNodes,
 	}
 }
 
@@ -105,7 +119,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	if !s.opts.NoDiscovery {
+	if !s.opts.NoDiscovery && s.connectOnlyNodes.Len() == 0 {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
@@ -292,6 +306,11 @@ func (s *Server) dialLoop() {
 
 			node := entry.Value.(*discover.Node)
 			if s.dialingNodes.Contains(node.ID) {
+				continue
+			}
+
+			// if set only connect to these specific nodes
+			if s.connectOnlyNodes.Len() > 0 && !s.connectOnlyNodes.Contains(node.ID) {
 				continue
 			}
 

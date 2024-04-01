@@ -60,4 +60,8 @@ type Options struct {
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool
+
+	// ConnectOnlyNodes defines a list of nodes that nodes connects to
+	// if set the node will not discover and will connect to other nodes outside of the list
+	ConnectOnlyNodes Nodes
 }

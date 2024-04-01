@@ -86,6 +86,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			connectOnlyNodesFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
