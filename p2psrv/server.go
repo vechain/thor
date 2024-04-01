@@ -324,9 +324,12 @@ func (s *Server) dialLoop() {
 					log.Debug("failed to dial node", "err", err)
 				}
 				// successfully connected to the node
-				if removed := s.discoveredNodes.Remove(node); !removed {
-					log.Error("unable to remove a discovered node - this should never happen")
+				if !s.connectOnlyNodes.Contains(node.ID) { // don't remove connect only nodes in case they need to reconnect
+					if removed := s.discoveredNodes.Remove(node); !removed {
+						log.Error("unable to remove a discovered node - this should never happen")
+					}
 				}
+
 			}()
 
 			dialCount++
