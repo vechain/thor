@@ -8,7 +8,6 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"io"
 	"math/big"
 	"net/http"
@@ -25,6 +24,7 @@ import (
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"

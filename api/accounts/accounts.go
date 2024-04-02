@@ -8,7 +8,6 @@ package accounts
 import (
 	"context"
 	"fmt"
-	"github.com/vechain/thor/v2/api/blocks"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/runtime"
