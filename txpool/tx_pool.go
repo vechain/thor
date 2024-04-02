@@ -256,7 +256,8 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{err.Error()}
 		}
 
-		txObj.executable = executable
+		// This line is causing a race condition while reading the executable value in wash routine
+		txObj.SetExecutable(executable)
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
@@ -456,8 +457,8 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
-		if !obj.executable || obj.localSubmitted {
-			obj.executable = true
+		if !obj.IsExecutable() || obj.localSubmitted {
+			obj.SetExecutable(true)
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
 	}

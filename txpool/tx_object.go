@@ -8,6 +8,7 @@ package txpool
 import (
 	"math/big"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -20,6 +21,7 @@ import (
 )
 
 type txObject struct {
+	mu sync.Mutex
 	*tx.Transaction
 	resolved *runtime.ResolvedTransaction
 
@@ -49,6 +51,18 @@ func (o *txObject) Origin() thor.Address {
 
 func (o *txObject) Delegator() *thor.Address {
 	return o.resolved.Delegator
+}
+
+func (o *txObject) IsExecutable() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.executable
+}
+
+func (o *txObject) SetExecutable(executable bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.executable = executable
 }
 
 func (o *txObject) Executable(chain *chain.Chain, state *state.State, headBlock *block.Header) (bool, error) {
