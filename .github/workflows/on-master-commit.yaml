@@ -1,0 +1,48 @@
+name: Master branch CI
+
+on:
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  run-unit-tests:
+    name: Run Unit Tests
+    uses: ./.github/workflows/test.yaml
+
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint-go.yaml
+
+  generate-tags:
+    name: Generate Docker Tags
+    runs-on: ubuntu-latest
+    outputs:
+      tag_date: ${{ steps.tag_date.outputs.tag_date }}
+      short_sha: ${{ steps.short_sha.outputs.short_sha }}
+    steps:
+      - name: Generate Tag Date
+        id: tag_date
+        run: echo "tag_date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+      - name: Generate Short SHA
+        id: short_sha
+        run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+  publish-docker-image:
+    name: Publish Docker Image
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    needs:
+      - run-unit-tests
+      - generate-tags
+      - lint
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: |
+        ghcr.io/${{ github.repository }}
+      # eg: master-20240321-7d8e9f2
+      tags: |
+        type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
+        type=raw,value=master-latest
