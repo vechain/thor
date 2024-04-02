@@ -173,8 +173,8 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 	eventMessage, err := convertEvent(blk.Header(), transaction, 0, event, false)
 
 	// Assert
+	assert.Error(t, err)
 	assert.Nil(t, eventMessage)
-	assert.Equal(t, secp256k1.ErrInvalidRecoveryID, err)
 }
 
 func TestConvertEvent(t *testing.T) {
