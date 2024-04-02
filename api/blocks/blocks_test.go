@@ -118,7 +118,7 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	New(repo, &solo.BFTEngine{}).Mount(router, "/blocks")
+	New(repo, solo.NewBFTEngine(repo)).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }

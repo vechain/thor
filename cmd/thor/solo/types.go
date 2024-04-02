@@ -22,15 +22,15 @@ func (comm *Communicator) PeersStats() []*comm.PeerStats {
 
 // BFTEngine is a fake bft engine for solo.
 type BFTEngine struct {
-	finalized thor.Bytes32
+	repo *chain.Repository
 }
 
 func (engine *BFTEngine) Finalized() thor.Bytes32 {
-	return engine.finalized
+	return engine.repo.BestBlockSummary().Header.ID()
 }
 
 func NewBFTEngine(repo *chain.Repository) *BFTEngine {
 	return &BFTEngine{
-		finalized: repo.GenesisBlock().Header().ID(),
+		repo,
 	}
 }

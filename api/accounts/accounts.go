@@ -8,6 +8,7 @@ package accounts
 import (
 	"context"
 	"fmt"
+	"github.com/vechain/thor/v2/api/blocks"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -30,6 +31,7 @@ type Accounts struct {
 	stater       *state.Stater
 	callGasLimit uint64
 	forkConfig   thor.ForkConfig
+	bft          blocks.BFTEngine
 }
 
 func New(
@@ -37,12 +39,14 @@ func New(
 	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
+	bft blocks.BFTEngine,
 ) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
 		callGasLimit,
 		forkConfig,
+		bft,
 	}
 }
 
@@ -314,6 +318,10 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) {
 	if revision == "" || revision == "best" {
 		return a.repo.BestBlockSummary(), nil
+	}
+	if revision == "finalized" {
+		id := a.bft.Finalized()
+		return a.repo.GetBlockSummary(id)
 	}
 	if len(revision) == 66 || len(revision) == 64 {
 		blockID, err := thor.ParseBytes32(revision)

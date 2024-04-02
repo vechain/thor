@@ -8,6 +8,7 @@ package accounts_test
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"io"
 	"math/big"
 	"net/http"
@@ -200,7 +201,7 @@ func initAccountServer(t *testing.T) {
 	packTx(repo, stater, transactionCall, t)
 
 	router := mux.NewRouter()
-	accounts.New(repo, stater, math.MaxUint64, thor.NoFork).Mount(router, "/accounts")
+	accounts.New(repo, stater, math.MaxUint64, thor.NoFork, solo.NewBFTEngine(repo)).Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
 

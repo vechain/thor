@@ -62,7 +62,7 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, callGasLimit, forkConfig).
+	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
