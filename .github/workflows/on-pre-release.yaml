@@ -1,0 +1,43 @@
+name: Pre-Release CI
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-rc.*'
+
+jobs:
+
+  validate:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step validates that the tag is a pre-release
+        run: |
+          prerelease=$(gh release view ${{ github.ref_name }} --json isPrerelease | jq -r '.isPrerelease')
+          if [ "$prerelease" != "true" ]; then
+            echo "Tag is not a pre-release"
+            exit 1
+          fi
+
+  publish-docker-image:
+    name: Publish Pre-Release Docker Image
+    uses: ./.github/workflows/publish-docker-images.yaml
+    secrets: inherit
+    needs:
+      - validate
+    permissions:
+      contents: read
+      packages: write
+    with:
+      environment: docker-publish
+      images: |
+        ${{ github.repository }}
+        ghcr.io/${{ github.repository }}
+      tags: |
+        type=raw,value=${{ github.ref_name }}
