@@ -396,31 +396,32 @@ func masterKeyPath(ctx *cli.Context) (string, error) {
 
 func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 
+	var key *ecdsa.PrivateKey
+	var err error
+
 	masterKey := ctx.String(masterKeyFlag.Name)
 	if masterKey != "" {
-		key, err := crypto.HexToECDSA(masterKey)
+		key, err = crypto.HexToECDSA(masterKey)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to convert master key")
 		}
-		master := &node.Master{PrivateKey: key}
-		if master.Beneficiary, err = beneficiary(ctx); err != nil {
+	} else {
+		path, err := masterKeyPath(ctx)
+		if err != nil {
 			return nil, err
 		}
-		return master, nil
+		key, err = loadOrGeneratePrivateKey(path)
+		if err != nil {
+			return nil, errors.Wrap(err, "load or generate master key")
+		}
 	}
 
-	path, err := masterKeyPath(ctx)
-	if err != nil {
-		return nil, err
-	}
-	key, err := loadOrGeneratePrivateKey(path)
-	if err != nil {
-		return nil, errors.Wrap(err, "load or generate master key")
-	}
 	master := &node.Master{PrivateKey: key}
+
 	if master.Beneficiary, err = beneficiary(ctx); err != nil {
 		return nil, err
 	}
+
 	return master, nil
 }
 
