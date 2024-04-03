@@ -21,6 +21,10 @@ var (
 		Hidden: true,
 		Usage:  "directory for user global configurations",
 	}
+	masterKeyFlag = cli.StringFlag{
+		Name:  "master-key",
+		Usage: "optional master key for the node",
+	}
 	dataDirFlag = cli.StringFlag{
 		Name:  "data-dir",
 		Value: defaultDataDir(),
