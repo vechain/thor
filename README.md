@@ -90,6 +90,8 @@ bin/thor -h
 | Flag                        | Description                                                                                                |
 |-----------------------------|------------------------------------------------------------------------------------------------------------|
 | `--network`                 | The network to join (main\|test) or path to the genesis file                                               |
+| `--config-dir`              | Directory for configuration files                                                                          |
+| `--master-key`              | Optional hex encoded master key to use for the node. This will override the config directory master key    |
 | `--data-dir`                | Directory for blockchain databases (default: "/Users/darren/Library/Application Support/org.vechain.thor") |
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                                             |
 | `--beneficiary`             | Address for block rewards                                                                                  |
