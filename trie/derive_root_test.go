@@ -1,9 +1,10 @@
 package trie
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
-	"testing"
 )
 
 type MockDerivableList struct {
