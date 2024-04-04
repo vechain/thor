@@ -309,7 +309,7 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 // Remove removes tx from pool by its Hash.
 func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	if p.all.RemoveByHash(txHash) {
-		metricTxPoolGauge().GaugeWithLabel(-1, map[string]string{"total": "true"})
+		metricTxPoolGauge().GaugeWithLabel(-1, map[string]string{"source": "n/a", "total": "true"})
 		log.Debug("tx removed", "id", txID)
 		return true
 	}
