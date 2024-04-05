@@ -22,9 +22,10 @@ import (
 )
 
 var (
-	version   string
-	gitCommit string
-	gitTag    string
+	version       string
+	gitCommit     string
+	gitTag        string
+	copyrightYear string
 
 	flags = []cli.Flag{
 		cli.StringFlag{
@@ -126,7 +127,7 @@ func main() {
 		Version:   fmt.Sprintf("%s-%s-%s", version, gitCommit, versionMeta),
 		Name:      "Disco",
 		Usage:     "VeChain Thor bootstrap node",
-		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Copyright: fmt.Sprintf("2018-%s VeChain Foundation <https://vechain.org/>", copyrightYear),
 		Flags:     flags,
 		Action:    run,
 	}
