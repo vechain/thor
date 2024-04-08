@@ -334,7 +334,7 @@ func initTransactionServer(t *testing.T) {
 	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 	e := mempool.Add(mempoolTx)
 	if e != nil {
-		t.Fatal("Fatalinooo", e)
+		t.Fatal(e)
 	}
 
 	transactions.New(repo, mempool).Mount(router, "/transactions")
