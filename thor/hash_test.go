@@ -58,3 +58,71 @@ func BenchmarkBlake2b(b *testing.B) {
 		}
 	})
 }
+
+func TestNewBlake2b(t *testing.T) {
+	hasher := thor.NewBlake2b()
+	if hasher == nil {
+		t.Error("NewBlake2b returned nil")
+	}
+
+	testString := "VeChainThor"
+	hasher.Write([]byte(testString))
+	sum := hasher.Sum(nil)
+	if len(sum) != 32 {
+		t.Errorf("Expected BLAKE2b-256 hash length of 32, got %d", len(sum))
+	}
+}
+
+func TestBlake2b(t *testing.T) {
+	singleData := []byte("data")
+	multipleData := [][]byte{[]byte("multi"), []byte("ple"), []byte("data")}
+
+	// Single slice of data
+	singleHash := thor.Blake2b(singleData)
+	if len(singleHash) != 32 {
+		t.Errorf("Expected hash length of 32, got %d", len(singleHash))
+	}
+
+	// Multiple slices of data
+	multiHash := thor.Blake2b(multipleData...)
+	if len(multiHash) != 32 {
+		t.Errorf("Expected hash length of 32, got %d", len(multiHash))
+	}
+
+	// Check if different data results in different hashes
+	if singleHash == multiHash {
+		t.Error("Expected different hashes for different data")
+	}
+}
+
+func TestBlake2bFn(t *testing.T) {
+	hashFn := thor.Blake2bFn(func(w io.Writer) {
+		w.Write([]byte("custom writer"))
+	})
+
+	if len(hashFn) != 32 {
+		t.Errorf("Expected hash length of 32, got %d", len(hashFn))
+	}
+}
+
+func TestKeccak256(t *testing.T) {
+	singleData := []byte("data")
+	multipleData := [][]byte{[]byte("multi"), []byte("ple"), []byte("data")}
+
+	// Single slice of data
+	singleHash := thor.Keccak256(singleData)
+	if len(singleHash) != 32 {
+		t.Errorf("Expected hash length of 32, got %d", len(singleHash))
+	}
+
+	// Multiple slices of data
+	multiHash := thor.Keccak256(multipleData...)
+	if len(multiHash) != 32 {
+		t.Errorf("Expected hash length of 32, got %d", len(multiHash))
+	}
+
+	// Check if different data results in different hashes
+	if singleHash == multiHash {
+		t.Error("Expected different hashes for different data")
+	}
+}
