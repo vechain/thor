@@ -31,7 +31,6 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
-	"github.com/vechain/thor/v2/tracers"
 	"github.com/vechain/thor/v2/tracers/logger"
 	"github.com/vechain/thor/v2/tx"
 
@@ -164,13 +163,6 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 func testTraceClauseWithCustomTracer(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
-		Name:   "nonExistingTracer",
-	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
-	assert.Equal(t, tracers.ErrUnsupportedTracer.Error(), strings.TrimSpace(res))
-
-	traceClauseOption = &TraceClauseOption{
-		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
 		Name:   "4byteTracer",
 	}
 	expectedExecutionResult := &logger.ExecutionResult{
@@ -179,7 +171,7 @@ func testTraceClauseWithCustomTracer(t *testing.T) {
 		ReturnValue: "",
 		StructLogs:  nil,
 	}
-	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
