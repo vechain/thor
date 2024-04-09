@@ -323,7 +323,6 @@ func TestFillPool(t *testing.T) {
 	executables, _, _ := pool.wash(pool.repo.BestBlockSummary())
 	pool.executables.Store(executables)
 	assert.Equal(t, len(txs), len(pool.Executables()), "Number of transactions in the pool should match the number added")
-
 }
 
 func TestAdd(t *testing.T) {
@@ -484,7 +483,7 @@ func TestWash(t *testing.T) {
 				pool.add(trx, false, false)
 
 				txObj := pool.all.mapByID[trx.ID()]
-				txObj.timeAdded = txObj.timeAdded - int64(pool.options.MaxLifetime)
+				txObj.timeAdded = txObj.timeAdded - int64(pool.options.MaxLifetime)*2
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx.ID())
