@@ -129,7 +129,7 @@ func getTxWithBadId(t *testing.T) {
 
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+txBadId, 400)
 
-	assert.Contains(t, string(res), thor.ErrInvalidLength.Error())
+	assert.Contains(t, string(res), "invalid length")
 }
 
 func txWithBadHeader(t *testing.T) {
@@ -140,7 +140,7 @@ func txWithBadHeader(t *testing.T) {
 
 	for _, url := range badHeaderURL {
 		res := httpGetAndCheckResponseStatus(t, url, 400)
-		assert.Contains(t, string(res), thor.ErrInvalidLength.Error())
+		assert.Contains(t, string(res), "invalid length")
 	}
 }
 
