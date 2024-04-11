@@ -45,6 +45,7 @@ func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
 	beatReader := newBeat2Reader(repo, newBlock.Header().ID())
 	res, ok, err := beatReader.Read()
 
+	// Assert
 	assert.NoError(t, err)
 	assert.False(t, ok)
 	assert.Empty(t, res)

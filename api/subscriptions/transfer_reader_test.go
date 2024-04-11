@@ -13,15 +13,17 @@ import (
 )
 
 func TestTransferReader_Read(t *testing.T) {
+	// Arrange
 	repo, generatedBlocks, _ := initChain(t)
 	genesisBlk := generatedBlocks[0]
 	newBlock := generatedBlocks[1]
 	filter := &TransferFilter{}
 
-	// Test case 1: Successful read next blocks transfer
+	// Act
 	br := newTransferReader(repo, genesisBlk.Header().ID(), filter)
 	res, ok, err := br.Read()
 
+	// Assert
 	assert.NoError(t, err)
 	assert.True(t, ok)
 	if transferMsg, ok := res[0].(*TransferMessage); !ok {
