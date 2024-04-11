@@ -34,19 +34,31 @@ func TestBeat2Reader_Read(t *testing.T) {
 		assert.Equal(t, newBlock.Header().Timestamp(), beatMsg.Timestamp)
 		assert.Equal(t, uint32(newBlock.Header().TxsFeatures()), beatMsg.TxsFeatures)
 	}
+}
 
-	// Test case 2: There is no new block
-	beatReader = newBeat2Reader(repo, newBlock.Header().ID())
-	res, ok, err = beatReader.Read()
+func TestBeat2Reader_Read_NoNewBlocksToRead(t *testing.T) {
+	// Arrange
+	repo, generatedBlocks, _ := initChain(t)
+	newBlock := generatedBlocks[1]
+
+	// Act
+	beatReader := newBeat2Reader(repo, newBlock.Header().ID())
+	res, ok, err := beatReader.Read()
 
 	assert.NoError(t, err)
 	assert.False(t, ok)
 	assert.Empty(t, res)
+}
 
-	// Test case 3: Error when reading blocks
-	beatReader = newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
-	res, ok, err = beatReader.Read()
+func TestBeat2Reader_Read_ErrorWhenReadingBlocks(t *testing.T) {
+	// Arrange
+	repo, _, _ := initChain(t)
 
+	// Act
+	beatReader := newBeat2Reader(repo, thor.MustParseBytes32("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
+	res, ok, err := beatReader.Read()
+
+	// Assert
 	assert.Error(t, err)
 	assert.False(t, ok)
 	assert.Empty(t, res)
