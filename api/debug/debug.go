@@ -153,8 +153,8 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 
-	var tracer tracers.Tracer
-	if err := extractTracer(&extractTracerOption{Name: opt.Name, Config: opt.Config}, &tracer); err != nil {
+	tracer, err := d.createTracer(opt.Name, opt.Config)
+	if err != nil {
 		return utils.Forbidden(err)
 	}
 
@@ -180,8 +180,8 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	var tracer tracers.Tracer
-	if err := extractTracer(&extractTracerOption{Name: opt.Name, Config: opt.Config}, &tracer); err != nil {
+	tracer, err := d.createTracer(opt.Name, opt.Config)
+	if err != nil {
 		return utils.Forbidden(err)
 	}
 
@@ -203,21 +203,11 @@ type extractTracerOption struct {
 	Config json.RawMessage
 }
 
-func extractTracer(opt *extractTracerOption, tracer *tracers.Tracer) error {
-	if opt.Name == "" {
-		if tr, err := logger.NewStructLogger(opt.Config); err != nil {
-			return err
-		} else {
-			*tracer = tr
-		}
-	} else {
-		if tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, true); err != nil {
-			return err
-		} else {
-			*tracer = tr
-		}
+func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
+	if name == "" {
+		return logger.NewStructLogger(config)
 	}
-	return nil
+	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
 }
 
 func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
