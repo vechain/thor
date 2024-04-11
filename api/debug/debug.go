@@ -198,11 +198,6 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	return utils.WriteJSON(w, res)
 }
 
-type extractTracerOption struct {
-	Name   string
-	Config json.RawMessage
-}
-
 func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
 	if name == "" {
 		return logger.NewStructLogger(config)
