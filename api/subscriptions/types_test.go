@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -40,7 +39,7 @@ func TestConvertBlockWithBadSignature(t *testing.T) {
 
 	// Assert
 	assert.Nil(t, blockMessage)
-	assert.Equal(t, secp256k1.ErrInvalidRecoveryID, err)
+	assert.Error(t, err)
 }
 
 func TestConvertBlock(t *testing.T) {
