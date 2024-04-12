@@ -27,11 +27,6 @@ import (
 	"github.com/vechain/thor/v2/vm"
 )
 
-var (
-	// ErrUnsupportedTracer is returned when a tracer cannot be created.
-	ErrUnsupportedTracer = errors.New("cannot create custom tracer")
-)
-
 // Context contains some contextual infos for a transaction execution that is not
 // available from within the EVM object.
 type Context struct {
