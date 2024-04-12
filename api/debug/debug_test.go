@@ -35,6 +35,7 @@ import (
 	"github.com/vechain/thor/v2/tx"
 
 	// Force-load the tracer native engines to trigger registration
+	_ "github.com/vechain/thor/v2/tracers/js"
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
@@ -163,6 +164,13 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 func testTraceClauseWithCustomTracer(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
 		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
+		Name:   "nonExistingTracer",
+	}
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
+	assert.Contains(t, strings.TrimSpace(res), "create custom tracer: ReferenceError: nonExistingTracer is not defined")
+
+	traceClauseOption = &TraceClauseOption{
+		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
 		Name:   "4byteTracer",
 	}
 	expectedExecutionResult := &logger.ExecutionResult{
@@ -171,7 +179,7 @@ func testTraceClauseWithCustomTracer(t *testing.T) {
 		ReturnValue: "",
 		StructLogs:  nil,
 	}
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
+	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 200)
 
 	var parsedExecutionRes *logger.ExecutionResult
 	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
