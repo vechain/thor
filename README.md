@@ -110,7 +110,7 @@ bin/thor -h
 | `--disable-pruner`          | Disable state pruner to keep all history                                                                   |
 | `--help, -h`                | Show help                                                                                                  |
 | `--version, -v`             | Print the version                                                                                          |
-| `--connect-only-nodes`      | Only connect to certain nodes. Set the enode for the nodes.                                                |
+| `--allowed-peers-only`      | Only connect to certain peers. Set the enode for the nodes.                                                |
 
 ### Sub-commands
 

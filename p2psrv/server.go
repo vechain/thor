@@ -36,7 +36,7 @@ type Server struct {
 	knownNodes       *cache.PrioCache
 	discoveredNodes  *cache.RandCache
 	dialingNodes     *nodeMap
-	connectOnlyNodes *nodeMap
+	allowedOnlyNodes *nodeMap
 }
 
 // New create a p2p server.
@@ -48,15 +48,15 @@ func New(opts *Options) *Server {
 		discoveredNodes.Set(node.ID, node)
 	}
 
-	// ConnectOnlyNodes doesn't connect to other sourced nodes
-	connectOnlyNodes := newNodeMap()
-	if len(opts.ConnectOnlyNodes) > 0 {
+	// AllowedPeersOnly doesn't connect to other sourced nodes
+	allowedOnlyNodes := newNodeMap()
+	if len(opts.AllowedPeersOnly) > 0 {
 		knownNodes = cache.NewPrioCache(5)
 		discoveredNodes = cache.NewRandCache(128)
-		for _, connectOnlyNode := range opts.ConnectOnlyNodes {
+		for _, connectOnlyNode := range opts.AllowedPeersOnly {
 			knownNodes.Set(connectOnlyNode.ID, connectOnlyNode, 0)
 			discoveredNodes.Set(connectOnlyNode.ID, connectOnlyNode)
-			connectOnlyNodes.Add(connectOnlyNode)
+			allowedOnlyNodes.Add(connectOnlyNode)
 		}
 	}
 
@@ -80,7 +80,7 @@ func New(opts *Options) *Server {
 		knownNodes:       knownNodes,
 		discoveredNodes:  discoveredNodes,
 		dialingNodes:     newNodeMap(),
-		connectOnlyNodes: connectOnlyNodes,
+		allowedOnlyNodes: allowedOnlyNodes,
 	}
 }
 
@@ -119,7 +119,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 	if err := s.srv.Start(); err != nil {
 		return err
 	}
-	if !s.opts.NoDiscovery && s.connectOnlyNodes.Len() == 0 {
+	if !s.opts.NoDiscovery {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
@@ -310,7 +310,7 @@ func (s *Server) dialLoop() {
 			}
 
 			// if set only connect to these specific nodes
-			if s.connectOnlyNodes.Len() > 0 && !s.connectOnlyNodes.Contains(node.ID) {
+			if s.allowedOnlyNodes.Len() > 0 && !s.allowedOnlyNodes.Contains(node.ID) {
 				continue
 			}
 
@@ -324,7 +324,7 @@ func (s *Server) dialLoop() {
 					log.Debug("failed to dial node", "err", err)
 				}
 				// successfully connected to the node
-				if !s.connectOnlyNodes.Contains(node.ID) { // don't remove connect only nodes in case they need to reconnect
+				if !s.allowedOnlyNodes.Contains(node.ID) { // don't remove connect only nodes in case they need to reconnect
 					if removed := s.discoveredNodes.Remove(node); !removed {
 						log.Error("unable to remove a discovered node - this should never happen")
 					}

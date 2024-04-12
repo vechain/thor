@@ -39,7 +39,7 @@ func TestNewServer(t *testing.T) {
 	assert.Equal(t, ":30303", server.opts.ListenAddr)
 	assert.Equal(t, server.discoveredNodes.Len(), 1)
 	assert.Equal(t, server.knownNodes.Len(), 1)
-	assert.Equal(t, server.connectOnlyNodes.Len(), 0)
+	assert.Equal(t, server.allowedOnlyNodes.Len(), 0)
 	assert.True(t, server.discoveredNodes.Contains(node.ID))
 	assert.True(t, server.knownNodes.Contains(node.ID))
 	assert.False(t, server.opts.NoDial)
@@ -63,7 +63,7 @@ func TestNewServerConnectOnly(t *testing.T) {
 		NAT:              nil,
 		NoDial:           false,
 		KnownNodes:       Nodes{knownNode, knownNode2},
-		ConnectOnlyNodes: Nodes{connectOnlyNode},
+		AllowedPeersOnly: Nodes{connectOnlyNode},
 	}
 
 	server := New(opts)
@@ -76,8 +76,8 @@ func TestNewServerConnectOnly(t *testing.T) {
 
 	assert.Equal(t, server.discoveredNodes.Len(), 1)
 	assert.Equal(t, server.knownNodes.Len(), 1)
-	assert.Equal(t, server.connectOnlyNodes.Len(), 1)
+	assert.Equal(t, server.allowedOnlyNodes.Len(), 1)
 	assert.True(t, server.discoveredNodes.Contains(connectOnlyNode.ID))
 	assert.True(t, server.knownNodes.Contains(connectOnlyNode.ID))
-	assert.True(t, server.connectOnlyNodes.Contains(connectOnlyNode.ID))
+	assert.True(t, server.allowedOnlyNodes.Contains(connectOnlyNode.ID))
 }
