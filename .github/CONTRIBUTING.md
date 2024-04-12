@@ -34,10 +34,13 @@ current development landscape.
     ```bash
     make test
     ```
-    - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on how to start the node and interact with the
+    - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on
+      how to start the node and interact with the
       API.
 5. Make your changes and commit them with a clear and concise commit message.
-6. Push your changes to your forked repository:
+6. Push your changes to your forked repository. **Note:** All commits must be signed with a GPG key. If you haven't already set up a GPG key, please refer to the
+   GitHub documentation
+   on [Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
     ```bash
     git push origin feature/your-feature-name
     ```
@@ -60,5 +63,8 @@ current development landscape.
 
 ### Code Linting
 
-- We employ `golangci-lint` for code linting in our development process. It ensures that code adheres to established standards, and any changes that do not pass the linting checks will trigger an error during the Continuous Integration (CI) process.
-- You can run it locally by installing the `golangci-lint` binary and running `make lint` in the root directory of the repository.
+- We employ `golangci-lint` for code linting in our development process. It ensures that code adheres to established
+  standards, and any changes that do not pass the linting checks will trigger an error during the Continuous
+  Integration (CI) process.
+- You can run it locally by installing the `golangci-lint` binary and running `make lint` in the root directory of the
+  repository.
