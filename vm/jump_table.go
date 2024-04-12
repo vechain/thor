@@ -61,12 +61,12 @@ func NewShanghaiInstructionSet() *JumpTable {
 	instructionSet := NewIstanbulInstructionSet()
 	instructionSet[BASEFEE] = &operation{
 		execute:       opBaseFee,
-		gasCost:       constGasFunc(GasFastStep),
+		gasCost:       constGasFunc(GasQuickStep),
 		validateStack: makeStackFunc(0, 1),
 	}
 	instructionSet[PUSH0] = &operation{
 		execute:       opPush0,
-		gasCost:       constGasFunc(GasFastStep),
+		gasCost:       constGasFunc(GasQuickStep),
 		validateStack: makeStackFunc(0, 1),
 	}
 	return instructionSet
