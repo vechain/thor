@@ -99,7 +99,7 @@ func (c *Chain) GetBlockID(num uint32) (thor.Bytes32, error) {
 		return thor.Bytes32{}, err
 	}
 	if len(data) == 0 {
-		return thor.Bytes32{}, ErrNotFound
+		return thor.Bytes32{}, errNotFound
 	}
 	return thor.BytesToBytes32(data), nil
 }
@@ -110,7 +110,7 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 	if has, err := c.repo.txIndexer.Has(id[:]); err != nil {
 		return nil, err
 	} else if !has {
-		return nil, ErrNotFound
+		return nil, errNotFound
 	}
 
 	iter := c.repo.txIndexer.Iterate(kv.Range(*util.BytesPrefix(id[:])))
@@ -141,7 +141,7 @@ func (c *Chain) GetTransactionMeta(id thor.Bytes32) (*TxMeta, error) {
 	if err := iter.Error(); err != nil {
 		return nil, err
 	}
-	return nil, ErrNotFound
+	return nil, errNotFound
 }
 
 // HasTransaction checks if a tx exists on the chain.
@@ -326,7 +326,7 @@ func (c *Chain) FindBlockHeaderByTimestamp(ts uint64, flag int) (header *block.H
 			return
 		}
 		if flag == 0 && header.Timestamp() != ts { // exact match
-			return nil, ErrNotFound
+			return nil, errNotFound
 		}
 		return
 	}
