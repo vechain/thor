@@ -252,12 +252,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"tx is not executable"}
 		}
 
+		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
-		// This line is causing a race condition while reading the executable value in wash routine
-		txObj.SetExecutable(executable)
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})
@@ -457,8 +456,8 @@ func (p *TxPool) wash(headSummary *chain.BlockSummary) (executables tx.Transacti
 
 	for _, obj := range executableObjs {
 		executables = append(executables, obj.Transaction)
-		if !obj.IsExecutable() || obj.localSubmitted {
-			obj.SetExecutable(true)
+		if !obj.executable || obj.localSubmitted {
+			obj.executable = true
 			toBroadcast = append(toBroadcast, obj.Transaction)
 		}
 	}
