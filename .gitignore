@@ -29,3 +29,4 @@ package.json
 coverage.out
 
 .idea
+.DS_Store

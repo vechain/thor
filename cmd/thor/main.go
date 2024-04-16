@@ -248,7 +248,9 @@ func soloAction(ctx *cli.Context) error {
 	initLogger(ctx)
 	gene := genesis.NewDevnet()
 	// Solo forks from the start
-	forkConfig := thor.ForkConfig{}
+	forkConfig := thor.ForkConfig{
+		VIPXXX: 1,
+	}
 
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB

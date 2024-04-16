@@ -109,6 +109,11 @@ func New(
 				panic(err)
 			}
 		}
+	} else if forkConfig.VIPXXX == ctx.Number {
+		err := state.SetCode(thor.NodeNFTAddress, thor.NodeNFTBytes)
+		if err != nil {
+			panic(err)
+		}
 	} else if ctx.Number == 0 {
 		for addr := range vm.PrecompiledContractsByzantium {
 			if err := state.SetCode(thor.Address(addr), EmptyRuntimeBytecode); err != nil {
