@@ -35,11 +35,10 @@ current development landscape.
     make test
     ```
     - **Note:**: Please refer to the [README](https://github.com/vechain/thor/blob/master/README.md) for information on
-      how to start the node and interact with the
-      API.
+      how to start the node and interact with the API.
 5. Make your changes and commit them with a clear and concise commit message.
-6. Push your changes to your forked repository. **Note:** All commits must be signed with a GPG key. If you haven't already set up a GPG key, please refer to the
-   GitHub documentation
+6. Push your changes to your forked repository. **Note:** All commits must be signed with a GPG key. If you haven't
+   already set up a GPG key, please refer to the GitHub documentation
    on [Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/adding-a-gpg-key-to-your-github-account).
     ```bash
     git push origin feature/your-feature-name
