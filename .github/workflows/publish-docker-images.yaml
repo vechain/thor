@@ -80,3 +80,4 @@ jobs:
           image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           annotations: true
           severity: MEDIUM
+          dockerfile: ./Dockerfile
