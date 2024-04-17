@@ -71,3 +71,10 @@ jobs:
           provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Scan for vulnerabilities
+        uses: crazy-max/ghaction-container-scan@v3
+        if: ${{ github.event_name == 'pull_request' || github.ref_name == 'master' }}
+        with:
+          image: ${{ steps.meta.outputs.image }}
+          annotations: true
