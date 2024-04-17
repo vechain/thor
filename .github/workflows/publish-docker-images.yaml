@@ -76,5 +76,5 @@ jobs:
         uses: crazy-max/ghaction-container-scan@v3
         if: ${{ github.event_name == 'pull_request' || github.ref_name == 'master' }}
         with:
-          image: ${{ steps.meta.outputs.image }}
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           annotations: true
