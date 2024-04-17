@@ -22,6 +22,7 @@ require (
 	github.com/pkg/errors v0.8.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/qianbin/directcache v0.9.7
+	github.com/qianbin/drlp v0.0.0-20240102101024-e0e02518b5f9
 	github.com/stretchr/testify v1.7.2
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765

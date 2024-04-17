@@ -20,15 +20,15 @@ import (
 	"fmt"
 )
 
-// MissingNodeError is returned by the trie functions (TryGet, TryUpdate, TryDelete)
+// MissingNodeError is returned by the trie functions (Get, Update)
 // in the case where a trie node is not present in the local database. It contains
 // information necessary for retrieving the missing node.
 type MissingNodeError struct {
-	NodeHash *hashNode // hash of the missing node
-	Path     []byte    // hex-encoded path to the missing node
-	Err      error     // the actual error
+	Ref  refNode // the ref node of the missing node
+	Path []byte  // hex-encoded path to the missing node
+	Err  error   // the actual error
 }
 
 func (err *MissingNodeError) Error() string {
-	return fmt.Sprintf("missing trie node %v (#%v path %x) reason: %v", err.NodeHash.Hash, err.NodeHash.seq, err.Path, err.Err)
+	return fmt.Sprintf("missing trie node (path %x hash %x #%v) reason: %v", err.Path, err.Ref.hash, err.Ref.ver, err.Err)
 }

@@ -14,13 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 func TestCachedObject(t *testing.T) {
 	db := muxdb.NewMem()
 	addr := thor.Address{}
 
-	stgTrie := db.NewTrie(StorageTrieName([]byte("sid")), thor.Bytes32{}, 0, 0)
+	stgTrie := db.NewTrie(StorageTrieName([]byte("sid")), trie.Root{})
 	storages := []struct {
 		k thor.Bytes32
 		v rlp.RawValue
@@ -35,9 +36,9 @@ func TestCachedObject(t *testing.T) {
 		saveStorage(stgTrie, s.k, s.v)
 	}
 
-	storageRoot, commit := stgTrie.Stage(0, 0)
+	storageRoot := stgTrie.Hash()
 
-	err := commit()
+	err := stgTrie.Commit(trie.Version{}, false)
 	assert.Nil(t, err)
 
 	code := make([]byte, 100)
@@ -61,6 +62,6 @@ func TestCachedObject(t *testing.T) {
 	for _, s := range storages {
 		assert.Equal(t,
 			M(s.v, nil),
-			M(obj.GetStorage(s.k, 0)))
+			M(obj.GetStorage(s.k)))
 	}
 }

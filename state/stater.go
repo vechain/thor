@@ -7,7 +7,7 @@ package state
 
 import (
 	"github.com/vechain/thor/v2/muxdb"
-	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/trie"
 )
 
 // Stater is the state creator.
@@ -21,6 +21,6 @@ func NewStater(db *muxdb.MuxDB) *Stater {
 }
 
 // NewState create a new state object.
-func (s *Stater) NewState(root thor.Bytes32, blockNum, blockConflicts, steadyBlockNum uint32) *State {
-	return New(s.db, root, blockNum, blockConflicts, steadyBlockNum)
+func (s *Stater) NewState(root trie.Root) *State {
+	return New(s.db, root)
 }
