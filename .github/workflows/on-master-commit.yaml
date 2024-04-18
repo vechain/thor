@@ -46,3 +46,75 @@ jobs:
       tags: |
         type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
         type=raw,value=master-latest
+
+  notify-slack:
+    name: Notify Slack
+    needs:
+      - publish-docker-image
+      - generate-tags
+      - lint
+      - run-unit-tests
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        with:
+          payload: |
+            {
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":alert: Thor Build Failed"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Repository:*\n${{ github.repository }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Branch:*\nmaster"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Status:*\n${{ job.status }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit Message:*\n${{ github.event.head_commit.message }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit Author:*\n${{ github.event.head_commit.author.name }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit Date:*\n${{ github.event.head_commit.timestamp }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit URL:*\n${{ github.event.head_commit.url }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Unit Tests Status:*\n${{ needs.run-unit-tests.result }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Lint Status:*\n${{ needs.lint.result }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Docker Publish:*\n${{ needs.publish-docker-image.result }}"
+                  }
+                ]
+              }
+            }
