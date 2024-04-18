@@ -94,7 +94,7 @@ func main() {
 				Name:  "solo",
 				Usage: "client runs in solo mode for test & dev",
 				Flags: []cli.Flag{
-					soloGenesisFlag,
+					genesisFlag,
 					dataDirFlag,
 					cacheFlag,
 					apiAddrFlag,
@@ -253,12 +253,13 @@ func soloAction(ctx *cli.Context) error {
 		forkConfig thor.ForkConfig
 	)
 
-	if ctx.String(soloGenesisFlag.Name) == "" {
+	flagGenesis := ctx.String(genesisFlag.Name)
+	if flagGenesis == "" {
 		gene = genesis.NewDevnet()
 		forkConfig = thor.ForkConfig{} // Devnet forks from the start
 	} else {
 		var err error
-		gene, forkConfig, err = parseGenesisFile(ctx.String(soloGenesisFlag.Name))
+		gene, forkConfig, err = parseGenesisFile(flagGenesis)
 		if err != nil {
 			return err
 		}
