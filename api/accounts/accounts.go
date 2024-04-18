@@ -253,7 +253,9 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		gas = batchCallData.Gas
 	}
 
-	txCtx = &xenv.TransactionContext{}
+	txCtx = &xenv.TransactionContext{
+		ClauseCount: big.NewInt(int64(len(batchCallData.Clauses))),
+	}
 
 	if batchCallData.GasPrice == nil {
 		txCtx.GasPrice = new(big.Int)

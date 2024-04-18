@@ -7,6 +7,7 @@ package genesis
 
 import (
 	"math"
+	"math/big"
 
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
@@ -99,7 +100,8 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 
 	for _, call := range b.calls {
 		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
-			Origin: call.caller,
+			ClauseCount: big.NewInt(int64(len(b.calls))),
+			Origin:      call.caller,
 		})
 		out, _, err := exec()
 		if err != nil {

@@ -116,11 +116,17 @@ func New(
 			}
 		}
 	}
-
 	// VIP191
 	if forkConfig.VIP191 == ctx.Number {
 		// upgrade extension contract to V2
 		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V2.RuntimeBytecodes()); err != nil {
+			panic(err)
+		}
+	}
+
+	if forkConfig.EXTENSION_V3 == ctx.Number {
+		// upgrade extension contract to V3
+		if err := state.SetCode(builtin.Extension.Address, builtin.Extension.V3.RuntimeBytecodes()); err != nil {
 			panic(err)
 		}
 	}
@@ -227,7 +233,7 @@ func (rt *Runtime) newEVM(stateDB *statedb.StateDB, clauseIndex uint32, txCtx *x
 				panic("serious bug: native call returned gas over consumed")
 			}
 
-			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract).Call(run)
+			ret, err := xenv.New(abi, rt.chain, rt.state, rt.ctx, txCtx, evm, contract, clauseIndex).Call(run)
 			return ret, err, true
 		},
 		OnCreateContract: func(_ *vm.EVM, contractAddr, caller common.Address) {
