@@ -98,9 +98,11 @@ func (b *Builder) Build(stater *state.Stater) (blk *block.Block, events tx.Event
 		GasLimit: b.gasLimit,
 	}, b.forkConfig)
 
+	clauseCount := big.NewInt(int64(len(b.calls)))
+
 	for _, call := range b.calls {
 		exec, _ := rt.PrepareClause(call.clause, 0, math.MaxUint64, &xenv.TransactionContext{
-			ClauseCount: big.NewInt(int64(len(b.calls))),
+			ClauseCount: clauseCount,
 			Origin:      call.caller,
 		})
 		out, _, err := exec()
