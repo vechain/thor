@@ -19,11 +19,10 @@ ___
 
 ## Documentation
 
-
-- [Installation](./docs/installation.md)
-- [Usage](./docs/usage.md)
-- [Core Concepts](https://docs.vechain.org/core-concepts)
-- [API Reference](https://mainnet.vechain.org)
+- [Installation](./docs/installation.md) - How to install the `thor` binary.
+- [Usage](./docs/usage.md) - How to run thor with different configurations.
+- [Core Concepts](https://docs.vechain.org/core-concepts) - Core concepts of the VechainThor blockchain.
+- [API Reference](https://mainnet.vechain.org) - The API reference for the VechainThor blockchain.
 
 ---
 
