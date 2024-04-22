@@ -59,7 +59,7 @@ jobs:
       - generate-tags
       - lint
       - run-unit-tests
-    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success')
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Notify Slack
@@ -73,7 +73,7 @@ jobs:
               "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "commit-message": "${{ github.event.head_commit.message }}",
               "commit-url": "${{ github.event.head_commit.url }}",
-              "e2e-test-status": "Unknown",
+              "e2e-test-status": "${{ needs.run-e2e-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "branch": "${{ github.ref }}",
               "status": "${{ job.status }}",
               "repository": "${{ github.repository }}",
