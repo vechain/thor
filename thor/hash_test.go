@@ -100,6 +100,9 @@ func TestBlake2bFn(t *testing.T) {
 		w.Write([]byte("custom writer"))
 	})
 
+	// required since linter thinks hashFn is unused
+	_ = hashFn
+
 	if len(hashFn) != 32 {
 		t.Errorf("Expected hash length of 32, got %d", len(hashFn))
 	}
