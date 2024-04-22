@@ -74,7 +74,10 @@ docker run -d\
   --name thor-node vechain/thor --network test
 ```
 
-_Do not forget to add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the
+
+Notes: 
+
+- Add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the
 RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without
 the flag._
 
