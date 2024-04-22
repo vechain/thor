@@ -72,7 +72,7 @@ Running a full node does not require any additional flags. For example:
 bin/thor --network main
 ```
 
-_As of 22nd April 2024, the disk space required for an archive node is nearly **~200 GB**._
+_As of 22nd April 2024, the disk space required for an archive node is **~200 GB**._
 
 ### Running a full node without logs
 
