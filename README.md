@@ -11,9 +11,11 @@
 
 ## Getting Started
 
-VechainThor is the layer 1 blockchain, highly compatible with Ethereum's ecosystem,which powers the vechain ecosystem.
+VechainThor is the layer 1 blockchain, highly compatible† with Ethereum's ecosystem,which powers the vechain ecosystem.
 VechainThor is a public blockchain that is designed for mass adoption of blockchain technology by enterprise users of
 all sizes and is intended to serve as a foundation for a sustainable and scalable enterprise blockchain ecosystem.
+
+- † - VechainThor is currently up-to-date with the Ethereum's `Paris` hard fork, supporting Solidity version `0.8.18`.
 
 ___
 
