@@ -1,7 +1,5 @@
 ## Hosting a Node
 
-___
-
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
