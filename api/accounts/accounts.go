@@ -350,7 +350,7 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("/*").
-		Methods("POST").
+		Methods(http.MethodPost).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_call_batch_code", a.handleCallBatchCode))
 	sub.Path("/{address}").
 		Methods(http.MethodGet).
@@ -363,9 +363,9 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_get_storage", a.handleGetStorage))
 	// These two methods are currently deprecated
 	sub.Path("").
-		Methods("POST").
+		Methods(http.MethodPost).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_api_call_contract", a.handleCallContract))
 	sub.Path("/{address}").
-		Methods("POST").
+		Methods(http.MethodPost).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_call_contract_address", a.handleCallContract))
 }

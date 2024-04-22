@@ -137,6 +137,6 @@ func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {
 func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/{revision}").
-		Methods("GET").
+		Methods(http.MethodGet).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "blocks_get_block", b.handleGetBlock))
 }

@@ -252,11 +252,11 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"tx is not executable"}
 		}
 
+		txObj.executable = executable
 		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
-		txObj.executable = executable
 		p.goes.Go(func() {
 			p.txFeed.Send(&TxEvent{newTx, &executable})
 		})

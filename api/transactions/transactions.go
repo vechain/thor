@@ -144,6 +144,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
+
 	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
@@ -183,6 +184,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
+
 	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
@@ -216,12 +218,12 @@ func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
 	sub.Path("").
-		Methods("POST").
+		Methods(http.MethodPost).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "transactions_send_transaction", t.handleSendTransaction))
 	sub.Path("/{id}").
-		Methods("GET").
+		Methods(http.MethodGet).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "transactions_get_transaction_by_id", t.handleGetTransactionByID))
 	sub.Path("/{id}/receipt").
-		Methods("GET").
+		Methods(http.MethodGet).
 		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "transactions_get_transaction_by_receipt", t.handleGetTransactionReceiptByID))
 }

@@ -32,19 +32,6 @@ jobs:
         id: unit-test
         run: make test
 
-      - name: Post To Slack
-        if: always()  && github.ref == 'refs/heads/master' && (steps.unit-test.outcome == 'failure')
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          payload: |
-            {
-              "source": "GitHub",
-              "repo": "${{ github.repository}}",
-              "branch": "${{ github.head_ref || github.ref_name }}",
-              "message": "unit tests failed on ${{ matrix.os }} with go version ${{ matrix.go-version }}"
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
   test_coverage:
     runs-on: ubuntu-latest
     steps:
