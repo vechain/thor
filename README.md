@@ -38,8 +38,7 @@ To chat with other community members you can join:
 - [Telegram](https://t.me/VechainDevCommunity)
 - [Discord](https://t.me/VeChainDevCommunity)
 
-Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vecahin community channels. Users are *
-*highly encouraged** to read and adhere to them to avoid repercussions.
+Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vecahin community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
 
 ---
 
