@@ -6,6 +6,7 @@
 package subscriptions
 
 import (
+	"bytes"
 	"crypto/rand"
 	"math/big"
 	"testing"
@@ -26,12 +27,11 @@ import (
 
 func TestConvertBlockWithBadSignature(t *testing.T) {
 	// Arrange
-	var sig [65]byte
-	rand.Read(sig[:])
+	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	b := new(block.Builder).
 		Build().
-		WithSignature(sig[:])
+		WithSignature(badSig[:])
 
 	extendedBlock := &chain.ExtendedBlock{Block: b, Obsolete: false}
 
