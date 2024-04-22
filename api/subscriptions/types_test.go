@@ -7,6 +7,7 @@ package subscriptions
 
 import (
 	"crypto/rand"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 
@@ -147,7 +148,8 @@ func TestConvertTransfer(t *testing.T) {
 func TestConvertEventWithBadSignature(t *testing.T) {
 	// Arrange
 	var sig [65]byte
-	rand.Read(sig[:])
+	_, err := rand.Read(sig[:])
+	require.NoErrorf(t, err, "unable to read data - %x", sig)
 
 	// New tx
 	transaction := new(tx.Builder).
