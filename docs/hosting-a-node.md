@@ -3,12 +3,12 @@
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
-    - [Running an Authority Node](#running-an-authority-node)
-    - [Running a Public Node](#running-a-public-node)
+  - [Authority Nodes](#authority-nodes)
+  - [Public Nodes](#public-nodes)
 - [Important Considerations](#important-considerations)
-    - [Running an archive node](#running-an-archive-node)
-    - [Running a full node](#running-a-full-node)
-    - [Running a full node without logs](#running-a-full-node-without-logs)
+  - [Archive Node](#archive-node)
+  - [Full Node](#full-node)
+  - [Full Node without Logs](#full-node-without-logs)
 
 ___
 
@@ -17,7 +17,7 @@ ___
 _**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
 requirements may change as the network evolves._
 
-#### Running an Authority Node
+#### Authority Nodes
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
@@ -26,7 +26,7 @@ requirements may change as the network evolves._
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 500 GB SSD            | 1 TB fast NVMe SSD        |
 
-#### Running a Public Node
+#### Public Nodes
 
 **Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
 against DDoS attacks and intrusion detection systems (IDS).
@@ -46,7 +46,7 @@ _**Please note**: The recommendations and information below are based on the mai
 requirements may change as the network evolves._
 
 
-### Running an archive node
+### Archive Node
 
 An archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
 all transactions and blocks, including forks and variations. Running an archive node requires more resources than
@@ -60,7 +60,7 @@ bin/thor --network main --disable-pruner
 
 _As of 22nd April 2024, an archive node uses over **400 GB** of disk space._
 
-### Running a full node
+### Full Node
 
 A full node is a node that stores the entire blockchain and validates transactions and blocks. Running a full node
 requires fewer resources than running an archive node, but it still provides the same level of security and
@@ -74,7 +74,7 @@ bin/thor --network main
 
 _As of 22nd April 2024, a full node uses **~200 GB** of disk space._
 
-### Running a full node without logs
+### Full Node without Logs
 
 **Note**: Logs pertain to the transfer and smart contract events recorded on the blockchain, meticulously stored
 within an SQLite database for streamlined querying purposes. The `/logs/event` and `/logs/transfer` endpoints will be

@@ -91,7 +91,7 @@ A `docker-compose.yml` file is provided for convenience. It will create a contai
 command above.
 
 ```yaml
-version: '3.8.'
+version: '3'
 
 services:
   thor-node:
