@@ -20,7 +20,7 @@ ___
 
 ### Running from source
 
-- To install the `thor` binary, follow the instructions in the [installation](installation.md) guide.
+- To install the `thor` binary, follow the instructions in the [installation](build) guide.
 
 Connect to vechain's mainnet:
 
@@ -47,7 +47,7 @@ ___
 
 ### Running a discovery node
 
-- To install the `disco` binary, follow the instructions in the [installation](installation.md) guide.
+- To install the `disco` binary, follow the instructions in the [installation](build) guide.
 
 Start a discovery node:
 
