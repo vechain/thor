@@ -247,6 +247,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 		case v5node := <-discNodes:
 			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
+				metricDiscoveredNodes().Gauge(1)
 				s.discoveredNodes.Set(node.ID, node)
 				log.Debug("discovered node", "node", node)
 			}
@@ -300,6 +301,7 @@ func (s *Server) dialLoop() {
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
+				metricDialNewNode().Add(1)
 				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)

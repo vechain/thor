@@ -26,8 +26,8 @@ func TestNoopTelemetry(t *testing.T) {
 		Counter("count2").Add(1)
 	}
 
-	hist := Histogram("hist1")
-	histVect := HistogramVec("hist2", []string{"zeroOrOne"})
+	hist := Histogram("hist1", nil)
+	histVect := HistogramVec("hist2", []string{"zeroOrOne"}, nil)
 	for i := 0; i < rand.Intn(100)+1; i++ {
 		hist.Observe(int64(i))
 		histVect.ObserveWithLabels(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})

@@ -5,9 +5,8 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const namespace = "node_telemetry"
@@ -27,6 +26,7 @@ type prometheusTelemetry struct {
 	histograms    sync.Map
 	histogramVecs sync.Map
 	gaugeVecs     sync.Map
+	gauges        sync.Map
 }
 
 func newPrometheusTelemetry() Telemetry {
@@ -36,6 +36,7 @@ func newPrometheusTelemetry() Telemetry {
 		histograms:    sync.Map{},
 		histogramVecs: sync.Map{},
 		gaugeVecs:     sync.Map{},
+		gauges:        sync.Map{},
 	}
 }
 
@@ -87,6 +88,18 @@ func (o *prometheusTelemetry) GetOrCreateHistogramVecMeter(name string, labels [
 		o.histogramVecs.Store(name, meter)
 	} else {
 		meter = mapItem.(HistogramVecMeter)
+	}
+	return meter
+}
+
+func (o *prometheusTelemetry) GetOrCreateGaugeMeter(name string) GaugeMeter {
+	var meter GaugeMeter
+	mapItem, ok := o.gauges.Load(name)
+	if !ok {
+		meter = o.newGaugeMeter(name)
+		o.gauges.Store(name, meter)
+	} else {
+		meter = mapItem.(GaugeMeter)
 	}
 	return meter
 }
@@ -203,6 +216,23 @@ func (o *prometheusTelemetry) newCountVecMeter(name string, labels []string) Cou
 	}
 }
 
+func (o *prometheusTelemetry) newGaugeMeter(name string) GaugeMeter {
+	meter := prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      name,
+		},
+	)
+
+	err := prometheus.Register(meter)
+	if err != nil {
+		log.Warn("unable to register metric", "err", err)
+	}
+	return &promGaugeMeter{
+		gauge: meter,
+	}
+}
+
 func (o *prometheusTelemetry) newGaugeVecMeter(name string, labels []string) GaugeVecMeter {
 	meter := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -235,6 +265,14 @@ type promCountVecMeter struct {
 
 func (c *promCountVecMeter) AddWithLabel(i int64, labels map[string]string) {
 	c.counter.With(labels).Add(float64(i))
+}
+
+type promGaugeMeter struct {
+	gauge prometheus.Gauge
+}
+
+func (c *promGaugeMeter) Gauge(i int64) {
+	c.gauge.Add(float64(i))
 }
 
 type promGaugeVecMeter struct {
