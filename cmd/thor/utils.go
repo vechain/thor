@@ -433,25 +433,25 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 	}
 
 	// recreate the node from the enode string slice
-	var allowedPeersOnly p2psrv.Nodes
-	for _, allowedOnlyNodeID := range ctx.StringSlice(allowedPeersOnlyFlag.Name) {
-		parsedNode, err := discover.ParseNode(allowedOnlyNodeID)
+	var allowedPeers p2psrv.Nodes
+	for _, allowedNodeID := range ctx.StringSlice(allowedPeersFlag.Name) {
+		parsedNode, err := discover.ParseNode(allowedNodeID)
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse the connect only enode - %w", err)
 		}
-		allowedPeersOnly = append(allowedPeersOnly, parsedNode)
+		allowedPeers = append(allowedPeers, parsedNode)
 	}
 
 	opts := &p2psrv.Options{
-		Name:             common.MakeName("thor", fullVersion()),
-		PrivateKey:       key,
-		MaxPeers:         ctx.Int(maxPeersFlag.Name),
-		ListenAddr:       fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
-		BootstrapNodes:   fallbackBootstrapNodes,
-		RemoteBootstrap:  remoteBootstrapList,
-		NAT:              nat,
-		AllowedPeersOnly: allowedPeersOnly,
-		NoDiscovery:      len(ctx.StringSlice(allowedPeersOnlyFlag.Name)) > 0,
+		Name:            common.MakeName("thor", fullVersion()),
+		PrivateKey:      key,
+		MaxPeers:        ctx.Int(maxPeersFlag.Name),
+		ListenAddr:      fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		BootstrapNodes:  fallbackBootstrapNodes,
+		RemoteBootstrap: remoteBootstrapList,
+		NAT:             nat,
+		AllowedPeers:    allowedPeers,
+		NoDiscovery:     len(ctx.StringSlice(allowedPeersFlag.Name)) > 0,
 	}
 
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")

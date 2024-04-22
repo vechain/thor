@@ -87,7 +87,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			allowedPeersOnlyFlag,
+			allowedPeersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{

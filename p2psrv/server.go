@@ -48,12 +48,12 @@ func New(opts *Options) *Server {
 		discoveredNodes.Set(node.ID, node)
 	}
 
-	// AllowedPeersOnly doesn't connect to other sourced nodes
+	// AllowedPeers doesn't connect to other sourced nodes
 	allowedOnlyNodes := newNodeMap()
-	if len(opts.AllowedPeersOnly) > 0 {
+	if len(opts.AllowedPeers) > 0 {
 		knownNodes = cache.NewPrioCache(5)
 		discoveredNodes = cache.NewRandCache(128)
-		for _, connectOnlyNode := range opts.AllowedPeersOnly {
+		for _, connectOnlyNode := range opts.AllowedPeers {
 			knownNodes.Set(connectOnlyNode.ID, connectOnlyNode, 0)
 			discoveredNodes.Set(connectOnlyNode.ID, connectOnlyNode)
 			allowedOnlyNodes.Add(connectOnlyNode)
