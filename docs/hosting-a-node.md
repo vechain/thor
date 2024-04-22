@@ -12,6 +12,11 @@
 
 ___
 
+### Command Line Options
+
+Please refer to [Command Line Options](./usage.md#command-line-options) in the usage documentation to see a list of all available options.
+___
+
 ### System Requirements
 
 _**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
