@@ -3,20 +3,24 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package blocks
+package blocks_test
 
 import (
 	"encoding/json"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -28,43 +32,105 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+var genesisBlock *block.Block
 var blk *block.Block
 var ts *httptest.Server
 
 var invalidBytes32 = "0x000000000000000000000000000000000000000000000000000000000000000g" //invlaid bytes32
-var invalidNumberRevision = "4294967296"                                                  //invalid block number
 
 func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
-	//invalid block id
-	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
-	assert.Equal(t, http.StatusBadRequest, statusCode)
-	//invalid block number
-	_, statusCode = httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
-	assert.Equal(t, http.StatusBadRequest, statusCode)
 
+	testBadQueryParams(t)
+	testInvalidBlockId(t)
+	testInvalidBlockNumber(t)
+	testGetBlockById(t)
+	testGetExpandedBlockById(t)
+	testGetBlockByHeight(t)
+	testGetBestBlock(t)
+	testGetFinalizedBlock(t)
+	testGetBlockWithRevisionNumberTooHigh(t)
+}
+
+func testBadQueryParams(t *testing.T) {
+	badQueryParams := "?expanded=1"
+	res, statusCode := httpGet(t, ts.URL+"/blocks/best"+badQueryParams)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "expanded: should be boolean", strings.TrimSpace(string(res)))
+}
+
+func testGetBestBlock(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/best")
+	rb := new(blocks.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetBlockByHeight(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/1")
+	rb := new(blocks.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetFinalizedBlock(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/finalized")
+	rb := new(blocks.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &rb); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.True(t, rb.IsFinalized)
+	assert.Equal(t, genesisBlock.Header().ID(), rb.ID)
+	assert.Equal(t, uint32(0), rb.Number)
+}
+
+func testGetBlockById(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String())
-	rb := new(JSONCollapsedBlock)
+	rb := new(blocks.JSONCollapsedBlock)
 	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
 	}
-	checkBlock(t, blk, rb)
+	checkCollapsedBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
+}
 
-	res, statusCode = httpGet(t, ts.URL+"/blocks/1")
-	if err := json.Unmarshal(res, &rb); err != nil {
+func testGetExpandedBlockById(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/"+blk.Header().ID().String()+"?expanded=true")
+	rb := new(blocks.JSONExpandedBlock)
+	if err := json.Unmarshal(res, rb); err != nil {
 		t.Fatal(err)
 	}
-	checkBlock(t, blk, rb)
+	checkExpandedBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
+}
 
-	res, statusCode = httpGet(t, ts.URL+"/blocks/best")
-	if err := json.Unmarshal(res, &rb); err != nil {
-		t.Fatal(err)
-	}
-	checkBlock(t, blk, rb)
-	assert.Equal(t, http.StatusOK, statusCode)
+func testInvalidBlockNumber(t *testing.T) {
+	invalidNumberRevision := "4294967296" //invalid block number
+	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidNumberRevision)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+}
+
+func testInvalidBlockId(t *testing.T) {
+	_, statusCode := httpGet(t, ts.URL+"/blocks/"+invalidBytes32)
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+}
+
+func testGetBlockWithRevisionNumberTooHigh(t *testing.T) {
+	revisionNumberTooHigh := strconv.FormatUint(math.MaxUint64, 10)
+	res, statusCode := httpGet(t, ts.URL+"/blocks/"+revisionNumberTooHigh)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode)
+	assert.Equal(t, "revision: block number out of max uint32", strings.TrimSpace(string(res)))
 }
 
 func initBlockServer(t *testing.T) {
@@ -76,6 +142,8 @@ func initBlockServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	genesisBlock = b
+
 	repo, _ := chain.NewRepository(db, b)
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
@@ -118,12 +186,13 @@ func initBlockServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	router := mux.NewRouter()
-	New(repo, &solo.BFTEngine{}).Mount(router, "/blocks")
+	bftEngine := solo.NewBFTEngine(repo)
+	blocks.New(repo, bftEngine).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }
 
-func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
+func checkCollapsedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONCollapsedBlock) {
 	header := expBl.Header()
 	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
 	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
@@ -138,6 +207,24 @@ func checkBlock(t *testing.T, expBl *block.Block, actBl *JSONCollapsedBlock) {
 	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
 	for i, tx := range expBl.Transactions() {
 		assert.Equal(t, tx.ID(), actBl.Transactions[i], "txid should be equal")
+	}
+}
+
+func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpandedBlock) {
+	header := expBl.Header()
+	assert.Equal(t, header.Number(), actBl.Number, "Number should be equal")
+	assert.Equal(t, header.ID(), actBl.ID, "Hash should be equal")
+	assert.Equal(t, header.ParentID(), actBl.ParentID, "ParentID should be equal")
+	assert.Equal(t, header.Timestamp(), actBl.Timestamp, "Timestamp should be equal")
+	assert.Equal(t, header.TotalScore(), actBl.TotalScore, "TotalScore should be equal")
+	assert.Equal(t, header.GasLimit(), actBl.GasLimit, "GasLimit should be equal")
+	assert.Equal(t, header.GasUsed(), actBl.GasUsed, "GasUsed should be equal")
+	assert.Equal(t, header.Beneficiary(), actBl.Beneficiary, "Beneficiary should be equal")
+	assert.Equal(t, header.TxsRoot(), actBl.TxsRoot, "TxsRoot should be equal")
+	assert.Equal(t, header.StateRoot(), actBl.StateRoot, "StateRoot should be equal")
+	assert.Equal(t, header.ReceiptsRoot(), actBl.ReceiptsRoot, "ReceiptsRoot should be equal")
+	for i, tx := range expBl.Transactions() {
+		assert.Equal(t, tx.ID(), actBl.Transactions[i].ID, "txid should be equal")
 	}
 }
 
