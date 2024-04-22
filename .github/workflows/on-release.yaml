@@ -25,7 +25,10 @@ jobs:
 
       - name: Validate VERSION
         run: |
-          if [ "$(cat cmd/thor/VERSION)" != "${{ github.ref_name }}" ]; then
+          version=$(cat cmd/thor/VERSION)
+          tag="${{ github.ref_name }}"
+          tag="${tag#v}"  # Remove the "v" prefix from the tag
+          if [ "$tag" != "$version" ]; then
             echo "VERSION file does not match tag"
             exit 1
           fi
@@ -56,5 +59,5 @@ jobs:
         ${{ github.repository }}
         ghcr.io/${{ github.repository }}
       tags: |
-        type=raw,value=${{ github.event.release.tag_name }}
+        type=raw,value=${{ github.ref_name }}
         type=raw,value=latest

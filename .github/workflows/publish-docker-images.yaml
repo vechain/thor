@@ -43,7 +43,7 @@ jobs:
         # Only log in to Docker Hub if the event is a release
         if: ${{ inputs.environment == 'docker-publish' }}
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to the Container registry

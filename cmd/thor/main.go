@@ -39,10 +39,11 @@ import (
 )
 
 var (
-	version   string
-	gitCommit string
-	gitTag    string
-	log       = log15.New()
+	version       string
+	gitCommit     string
+	gitTag        string
+	copyrightYear string
+	log           = log15.New()
 
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
@@ -64,7 +65,7 @@ func main() {
 		Version:   fullVersion(),
 		Name:      "Thor",
 		Usage:     "Node of VeChain Thor Network",
-		Copyright: "2018 VeChain Foundation <https://vechain.org/>",
+		Copyright: fmt.Sprintf("2018-%s VeChain Foundation <https://vechain.org/>", copyrightYear),
 		Flags: []cli.Flag{
 			networkFlag,
 			configDirFlag,
