@@ -64,14 +64,15 @@ jobs:
         with:
           payload: |
             {
-              "unit-test-status": "${{ needs.run-unit-tests.result }}",
-              "docker-publish-status": "${{ needs.publish-docker-image.result }}",
+              "unit-test-status": "${{ needs.run-unit-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "commit-message": "${{ github.event.head_commit.message }}",
               "commit-url": "${{ github.event.head_commit.url }}",
               "e2e-test-status": "Unknown",
               "branch": "${{ github.ref }}",
-              "status": "${{ job.status }}"
+              "status": "${{ job.status }}",
               "repository": "${{ github.repository }}",
               "commit-author": "${{ github.event.head_commit.author.name }}",
-              "lint-status": "${{ needs.lint.result }}"
+              "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
             }
+
