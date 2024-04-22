@@ -58,7 +58,7 @@ To run an archive node, you need to set the `--disable-pruner` flag when startin
 bin/thor --network main --disable-pruner
 ```
 
-_As of 22nd April 2024, the disk space required for an archive node is over **400 GB**._
+_As of 22nd April 2024, an archive node uses over **400 GB** of disk space._
 
 ### Running a full node
 
@@ -72,7 +72,7 @@ Running a full node does not require any additional flags. For example:
 bin/thor --network main
 ```
 
-_As of 22nd April 2024, the disk space required for an archive node is **~200 GB**._
+_As of 22nd April 2024, a full node uses **~200 GB** of disk space._
 
 ### Running a full node without logs
 
@@ -86,4 +86,4 @@ To run a full node without logs, you need to set the `--skip-logs` flag when sta
 bin/thor --network main --skip-logs
 ```
 
-_As of 22nd April 2024, the disk space required for a full node without logs is **~100 GB**._
+_As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space._
