@@ -148,7 +148,7 @@ var (
 	}
 	telemetryAddrFlag = cli.StringFlag{
 		Name:  "telemetry-addr",
-		Value: "127.0.0.1:2112",
+		Value: "localhost:2112",
 		Usage: "Telemetry service listening address",
 	}
 )
