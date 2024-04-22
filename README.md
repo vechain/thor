@@ -39,7 +39,7 @@ The Vechain Improvement Proposals (VIPs) repository can be found [here](https://
 To chat with other community members you can join:
 
 - [Telegram](https://t.me/VechainDevCommunity)
-- [Discord](https://t.me/VeChainDevCommunity)
+- [Discord](https://discord.gg/vechain)
 
 Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vechain community channels. Users are
 **highly encouraged** to read and adhere to them to avoid repercussions.

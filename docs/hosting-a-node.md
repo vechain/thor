@@ -1,5 +1,8 @@
 ## Hosting a Node
 
+_**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
+requirements may change as the network evolves._
+
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
@@ -19,8 +22,7 @@ ___
 
 ### System Requirements
 
-_**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
-requirements may change as the network evolves._
+
 
 #### Authority Nodes
 
@@ -47,11 +49,7 @@ ___
 
 ### Important Considerations
 
-_**Please note**: The recommendations and information below are based on the main network as of 22nd April 2024. The
-requirements may change as the network evolves._
-
-
-### Archive Node
+#### Archive Node
 
 An archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
 all transactions and blocks, including forks and variations. Running an archive node requires more resources than
@@ -65,7 +63,7 @@ bin/thor --network main --disable-pruner
 
 _As of 22nd April 2024, an archive node uses over **400 GB** of disk space._
 
-### Full Node
+#### Full Node
 
 A full node is a node that stores the entire blockchain and validates transactions and blocks. Running a full node
 requires fewer resources than running an archive node, but it still provides the same level of security and
@@ -79,7 +77,7 @@ bin/thor --network main
 
 _As of 22nd April 2024, a full node uses **~200 GB** of disk space._
 
-### Full Node without Logs
+#### Full Node without Logs
 
 **Note**: Logs pertain to the transfer and smart contract events recorded on the blockchain, meticulously stored
 within an SQLite database for streamlined querying purposes. The `/logs/event` and `/logs/transfer` endpoints will be
