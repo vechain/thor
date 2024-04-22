@@ -1,14 +1,22 @@
-## Thor Usage
+## VechainThor Usage
+
+___
+
+### Table of Contents
 
 - [Running from source](#running-from-source)
+- [Running a discovery node](#running-a-discovery-node)
 - [Running with Docker](#running-with-docker)
 - [Docker Compose](#docker-compose)
 - [Sub-commands](#sub-commands)
     - [Thor Solo](#thor-solo)
     - [Master Key](#master-key)
 - [Command line options](#command-line-options)
-  - [Thor Solo Flags](#thor-solo-flags)
+    - [Thor Solo Flags](#thor-solo-flags)
+    - [Discovery Node](#discovery-node-flags)
 - [Open API Documentation](#open-api-documentation)
+
+___
 
 ### Running from source
 
@@ -35,6 +43,26 @@ bin/thor --network <custom-net-genesis.json>
 An example genesis config file can be found
 at [genesis/example.json](https://raw.githubusercontent.com/vechain/thor/master/genesis/example.json).
 
+___
+
+### Running a discovery node
+
+- To install the `disco` binary, follow the instructions in the [installation](installation.md) guide.
+
+Start a discovery node:
+
+```shell
+disco --keyhex=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36
+```
+
+Output:
+
+```shell
+Running enode://e32e5960781ce0b43d8c2952eeea4b95e286b1bb5f8c1f0c9f09983ba7141d2fdd7dfbec798aefb30dcd8c3b9b7cda8e9a94396a0192bfa54ab285c2cec515ab@[::]:55555
+```
+
+___
+
 ### Running with Docker
 
 Docker is one quick way for running a vechain node:
@@ -54,6 +82,8 @@ Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed th
 to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
 that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
 with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
+
+___
 
 ### Docker Compose
 
@@ -78,6 +108,8 @@ services:
 volumes:
   thor-data:
 ```
+
+___
 
 ### Sub-commands
 
@@ -111,6 +143,8 @@ bin/thor master-key --export > keystore.json
 # import master key from keystore
 cat keystore.json | bin/thor master-key --import
 ```
+
+___
 
 ### Command line options
 
@@ -156,8 +190,24 @@ bin/thor -h
 | `--txpool-limit`             | Transaction pool size limit                        |
 | `--txpool-limit-per-account` | Transaction pool size limit per account            |
 
+#### Discovery Node Flags
+
+| Flag            | Description                                                                             |
+|-----------------|-----------------------------------------------------------------------------------------|
+| `--addr`        | The to listen on (default: ":55555").                                                   |
+| `--keyfile`     | The path to the private key file of the discovery node.                                 |
+| `--keyhex`      | The hex-encoded private key of the discovery node.                                      |
+| `--nat`         | The port mapping mechanism (any \| none \| upnp \| pmp \| extip:<IP>) (default: "none") |
+| `--netrestrict` | Restrict network communication to the given IP networks (CIDR masks)                    |
+| `--verbosity`   | The log level for the discovery node (0-9) (default: 2).                                |
+| `--help`        | Show the help message for the discovery node.                                           |
+| `--version`     | Show the version of the discovery node.                                                 |
+
+___
+
 ### Open API Documentation
 
-Once `thor` has started, the online *OpenAPI* documentation can be accessed in your browser. e.g. [http://localhost:8669/](http://localhost:8669) by default.
+Once `thor` has started, the online *OpenAPI* documentation can be accessed in your browser.
+e.g. [http://localhost:8669/](http://localhost:8669) by default.
 
 [![Thorest](https://raw.githubusercontent.com/vechain/thor/master/thorest.png)](http://localhost:8669/)

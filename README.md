@@ -21,6 +21,7 @@ ___
 
 - [Installation](./docs/installation.md) - How to install the `thor` binary.
 - [Usage](./docs/usage.md) - How to run thor with different configurations.
+- [Hosting a Node](./docs/hosting-a-node.md) - Considerations and requirements for hosting a node.
 - [Core Concepts](https://docs.vechain.org/core-concepts) - Core concepts of the VechainThor blockchain.
 - [API Reference](https://mainnet.vechain.org) - The API reference for the VechainThor blockchain.
 
@@ -38,7 +39,8 @@ To chat with other community members you can join:
 - [Telegram](https://t.me/VechainDevCommunity)
 - [Discord](https://t.me/VeChainDevCommunity)
 
-Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vecahin community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vecahin community channels. Users are *
+*highly encouraged** to read and adhere to them to avoid repercussions.
 
 ---
 
@@ -52,7 +54,8 @@ contributing to VechainThor.
 
 ## Security
 
-If you believe you have found a security vulnerability in Thor, we encourage you to **_responsibly disclose this and NOT open a public issue_**. We will investigate all legitimate reports.
+If you believe you have found a security vulnerability in Thor, we encourage you to *
+*_responsibly disclose this and NOT open a public issue_**. We will investigate all legitimate reports.
 
 Email `support@vechain.org` to disclose any security vulnerabilities. Alternatively, you can visit
 this [link](https://support.vechain.org/support/home) to submit a ticket or find more information.
@@ -71,5 +74,6 @@ A special shout out to following projects:
 
 ## License
 
-Vechain Thor is licensed under the [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html), also included in *LICENSE* file in repository.
+Vechain Thor is licensed under the [GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.html),
+also included in *LICENSE* file in repository.
 
