@@ -7,7 +7,6 @@ package subscriptions
 
 import (
 	"bytes"
-	"crypto/rand"
 	"math/big"
 	"testing"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
@@ -147,9 +145,7 @@ func TestConvertTransfer(t *testing.T) {
 
 func TestConvertEventWithBadSignature(t *testing.T) {
 	// Arrange
-	var sig [65]byte
-	_, err := rand.Read(sig[:])
-	require.NoErrorf(t, err, "unable to read data - %x", sig)
+	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
 	transaction := new(tx.Builder).
@@ -160,7 +156,7 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		Build().
-		WithSignature(sig[:])
+		WithSignature(badSig[:])
 
 	// New block
 	blk := new(block.Builder).
