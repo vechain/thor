@@ -67,7 +67,7 @@ func New(opts *Options) *Server {
 				Name:        opts.Name,
 				PrivateKey:  opts.PrivateKey,
 				MaxPeers:    opts.MaxPeers,
-				NoDiscovery: true,
+				NoDiscovery: true,  // p2p server default discovery mechanism is not used per default ( we use our own )
 				DiscoveryV5: false, // disable discovery inside p2p.Server instance
 				ListenAddr:  opts.ListenAddr,
 				NetRestrict: opts.NetRestrict,
