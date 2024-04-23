@@ -22,9 +22,7 @@ ___
 
 ### System Requirements
 
-
-
-#### Authority Nodes
+#### Authority Master Nodes
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
