@@ -64,7 +64,6 @@ var (
 		Value: int(log15.LvlInfo),
 		Usage: "log verbosity (0-9)",
 	}
-
 	maxPeersFlag = cli.IntFlag{
 		Name:  "max-peers",
 		Usage: "maximum number of P2P network peers (P2P network disabled if set to 0)",
@@ -80,18 +79,10 @@ var (
 		Value: "any",
 		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 	}
-	onDemandFlag = cli.BoolFlag{
-		Name:  "on-demand",
-		Usage: "create new block when there is pending transaction",
-	}
-	persistFlag = cli.BoolFlag{
-		Name:  "persist",
-		Usage: "blockchain data storage option, if set data will be saved to disk",
-	}
-	gasLimitFlag = cli.IntFlag{
-		Name:  "gas-limit",
-		Value: 10000000,
-		Usage: "block gas limit(adaptive if set to 0)",
+
+	bootNodeFlag = cli.StringFlag{
+		Name:  "bootnode",
+		Usage: "comma separated list of bootnode IDs",
 	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",
@@ -105,10 +96,6 @@ var (
 		Name:  "target-gas-limit",
 		Value: 0,
 		Usage: "target block gas limit (adaptive if set to 0)",
-	}
-	bootNodeFlag = cli.StringFlag{
-		Name:  "bootnode",
-		Usage: "comma separated list of bootnode IDs",
 	}
 	pprofFlag = cli.BoolFlag{
 		Name:  "pprof",
@@ -132,6 +119,20 @@ var (
 		Name:  "disable-pruner",
 		Usage: "disable state pruner to keep all history",
 	}
+	// solo mode only flags
+	onDemandFlag = cli.BoolFlag{
+		Name:  "on-demand",
+		Usage: "create new block when there is pending transaction",
+	}
+	persistFlag = cli.BoolFlag{
+		Name:  "persist",
+		Usage: "blockchain data storage option, if set data will be saved to disk",
+	}
+	gasLimitFlag = cli.IntFlag{
+		Name:  "gas-limit",
+		Value: 10000000,
+		Usage: "block gas limit(adaptive if set to 0)",
+	}
 	txPoolLimitFlag = cli.IntFlag{
 		Name:  "txpool-limit",
 		Value: 10000,
@@ -141,6 +142,10 @@ var (
 		Name:  "txpool-limit-per-account",
 		Value: 16,
 		Usage: "set tx limit per account in pool",
+	}
+	genesisFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "path to genesis file, if not set, the default devnet genesis will be used",
 	}
 
 	allowedPeersFlag = cli.StringSliceFlag{
