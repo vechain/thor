@@ -91,6 +91,7 @@ func testGetFinalizedBlock(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode)
 	assert.True(t, finalized.IsFinalized)
 	assert.Equal(t, uint32(1), finalized.Number)
+	assert.Equal(t, blk.Header().ID(), finalized.ID)
 }
 
 func testGetBlockById(t *testing.T) {
