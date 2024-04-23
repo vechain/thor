@@ -16,7 +16,7 @@ require (
 	github.com/holiman/uint256 v1.2.0
 	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
 	github.com/mattn/go-isatty v0.0.3
-	github.com/mattn/go-sqlite3 v1.14.19
+	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
 	github.com/pkg/errors v0.8.0
@@ -25,7 +25,7 @@ require (
 	github.com/stretchr/testify v1.7.2
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765
-	golang.org/x/crypto v0.17.0
+	golang.org/x/crypto v0.21.0
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 	gopkg.in/urfave/cli.v1 v1.20.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -50,8 +50,8 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

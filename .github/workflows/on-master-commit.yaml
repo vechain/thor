@@ -14,6 +14,10 @@ jobs:
     name: Lint
     uses: ./.github/workflows/lint-go.yaml
 
+  run-e2e-tests:
+    name: E2E Tests
+    uses: ./.github/workflows/test-e2e.yaml
+
   generate-tags:
     name: Generate Docker Tags
     runs-on: ubuntu-latest
@@ -34,6 +38,7 @@ jobs:
     secrets: inherit
     needs:
       - run-unit-tests
+      - run-e2e-tests
       - generate-tags
       - lint
     permissions:
@@ -46,3 +51,33 @@ jobs:
       tags: |
         type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
         type=raw,value=master-latest
+
+  notify-slack:
+    name: Notify Slack
+    needs:
+      - publish-docker-image
+      - generate-tags
+      - lint
+      - run-unit-tests
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        with:
+          payload: |
+            {
+              "unit-test-status": "${{ needs.run-unit-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "commit-message": "${{ github.event.head_commit.message }}",
+              "commit-url": "${{ github.event.head_commit.url }}",
+              "e2e-test-status": "${{ needs.run-e2e-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
+              "branch": "${{ github.ref }}",
+              "status": "${{ job.status }}",
+              "repository": "${{ github.repository }}",
+              "commit-author": "${{ github.event.head_commit.author.name }}",
+              "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
+            }
+

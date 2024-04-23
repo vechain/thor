@@ -2,6 +2,7 @@ PACKAGE = github.com/vechain/thor
 
 GIT_COMMIT = $(shell git --no-pager log --pretty="%h" -n 1)
 GIT_TAG = $(shell git tag -l --points-at HEAD)
+COPYRIGHT_YEAR = $(shell git --no-pager log -1 --format=%ad --date=format:%Y)
 THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
 
@@ -19,12 +20,12 @@ help:
 
 thor:| go_version_check #@ Build the `thor` executable
 	@echo "building $@..."
-	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(THOR_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/thor
+	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(THOR_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG) -X main.copyrightYear=$(COPYRIGHT_YEAR)" ./cmd/thor
 	@echo "done. executable created at 'bin/$@'"
 
 disco:| go_version_check #@ Build the `disco` executable
 	@echo "building $@..."
-	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG)" ./cmd/disco
+	@go build -v -o $(CURDIR)/bin/$@ -ldflags "-X main.version=$(DISCO_VERSION) -X main.gitCommit=$(GIT_COMMIT) -X main.gitTag=$(GIT_TAG) -X main.copyrightYear=$(COPYRIGHT_YEAR)" ./cmd/disco
 	@echo "done. executable created at 'bin/$@'"
 
 dep:| go_version_check
