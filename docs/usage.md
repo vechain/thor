@@ -52,7 +52,7 @@ ___
 Start a discovery node:
 
 ```shell
-disco --keyhex=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36
+disco
 ```
 
 Output:
@@ -160,7 +160,6 @@ bin/thor -h
 | Flag                        | Description                                                                                 |
 |-----------------------------|---------------------------------------------------------------------------------------------|
 | `--network`                 | The network to join (main\|test) or path to the genesis file                                |
-| `--config-dir`              | The directory to use for common configuration files                                         |
 | `--data-dir`                | Directory for blockchain databases                                                          |
 | `--beneficiary`             | Address for block rewards                                                                   |
 | `--api-addr`                | API service listening address (default: "localhost:8669")                                   |
@@ -176,7 +175,6 @@ bin/thor -h
 | `--target-gas-limit`        | Target block gas limit (adaptive if set to 0) (default: 0)                                  |
 | `--pprof`                   | Turn on go-pprof                                                                            |
 | `--skip-logs`               | Skip writing event\|transfer logs (/logs API will be disabled)                              |
-| `--verify-logs`             | Verify the logs DB at startup                                                               |
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
@@ -187,6 +185,7 @@ bin/thor -h
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
+| `--genesis`                |  Path to genesis file, if not set, the default devnet genesis will be used |
 | `--on-demand`                | Create new block when there is pending transaction |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |

@@ -31,7 +31,7 @@ ___
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 500 GB SSD            | 1 TB fast NVMe SSD        |
+| Disk      | 500 GB NVMe SSD            | 1 TB NVMe SSD        |
 
 #### Public Nodes
 
@@ -49,13 +49,13 @@ ___
 
 ### Important Considerations
 
-#### Archive Node
+#### Full Archive Node
 
-An archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
-all transactions and blocks, including forks and variations. Running an archive node requires more resources than
+A full archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
+all transactions and blocks, including forks and variations. Running a full archive node requires more resources than
 running a regular full node, but it provides access to the complete history of the blockchain.
 
-To run an archive node, you need to set the `--disable-pruner` flag when starting the node. For example:
+To run a full archive node, you need to set the `--disable-pruner` flag when starting the node. For example:
 
 ```shell
 bin/thor --network main --disable-pruner
