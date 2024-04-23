@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vechain/thor/v2/cmd/thor/solo"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -28,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -112,6 +111,7 @@ func TestAccount(t *testing.T) {
 	getAccount(t)
 	getAccountWithNonExisitingRevision(t)
 	getAccountWithGenesisRevision(t)
+	getAccountWithFinalizedRevision(t)
 	getCode(t)
 	getStorage(t)
 	deployContractWithCall(t)
@@ -162,6 +162,18 @@ func getAccountWithGenesisRevision(t *testing.T) {
 	assert.Equal(t, "0x0", string(energy), "energy should be 0")
 
 	assert.Equal(t, false, acc.HasCode, "hasCode should be false")
+}
+
+func getAccountWithFinalizedRevision(t *testing.T) {
+	soloAddress := "0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa"
+
+	genesisAccount := httpGetAccount(t, soloAddress+"?revision="+genesisBlock.Header().ID().String())
+	finalizedAccount := httpGetAccount(t, soloAddress+"?revision=finalized")
+
+	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
+
+	assert.Greater(t, finalizedEnergy.Uint64(), genesisEnergy.Uint64(), "finalized energy should be greater than genesis energy")
 }
 
 func getCode(t *testing.T) {
@@ -497,4 +509,16 @@ func httpGet(t *testing.T, url string) ([]byte, int) {
 		t.Fatal(err)
 	}
 	return r, res.StatusCode
+}
+
+func httpGetAccount(t *testing.T, path string) *accounts.Account {
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+path)
+	var acc accounts.Account
+	if err := json.Unmarshal(res, &acc); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode, "get account failed")
+
+	return &acc
 }
