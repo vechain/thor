@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/thor"
 	"golang.org/x/crypto/sha3"
 )
@@ -96,16 +97,11 @@ func TestBlake2b(t *testing.T) {
 }
 
 func TestBlake2bFn(t *testing.T) {
-	hashFn := thor.Blake2bFn(func(w io.Writer) {
+	h := thor.Blake2bFn(func(w io.Writer) {
 		w.Write([]byte("custom writer"))
 	})
 
-	// required since linter thinks hashFn is unused
-	_ = hashFn
-
-	if len(hashFn) != 32 {
-		t.Errorf("Expected hash length of 32, got %d", len(hashFn))
-	}
+	assert.Equal(t, thor.Blake2b([]byte("custom writer")), h)
 }
 
 func TestKeccak256(t *testing.T) {
