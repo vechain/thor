@@ -24,24 +24,28 @@ ___
 
 #### Authority Master Nodes
 
+Below spec is the node configured in full node without logs.
+
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 500 GB NVMe SSD            | 1 TB NVMe SSD        |
+| Disk      | 300 GB NVMe SSD            | 500 GB NVMe SSD        |
 
 #### Public Nodes
 
 **Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
 against DDoS attacks and intrusion detection systems (IDS).
 
+Below spec is the node configured in full archive node.
+
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 8 Core                | 16 Core                   |
 | RAM       | 16 GB                 | 64 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 500 GB SSD            | 2 TB SSD                  |
+| Disk      | 600 GB SSD            | 1 TB SSD                  |
 
 ___
 

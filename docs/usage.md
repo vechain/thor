@@ -185,7 +185,7 @@ bin/thor -h
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
-| `--genesis`                |  Path to genesis file, if not set, the default devnet genesis will be used |
+| `--genesis`                  | Path to genesis file(default: builtin devnet)            |
 | `--on-demand`                | Create new block when there is pending transaction |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
