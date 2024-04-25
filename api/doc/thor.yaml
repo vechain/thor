@@ -162,7 +162,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TxIDInPath'
         - $ref: '#/components/parameters/RawTxInQuery'
-        - $ref: '#/components/parameters/RevisionInQuery'
+        - $ref: '#/components/parameters/HeadInQuery'
         - $ref: '#/components/parameters/PendingInQuery'
       tags:
         - Transactions
@@ -191,7 +191,7 @@ paths:
     get:
       parameters:
         - $ref: '#/components/parameters/TxIDInPath'
-        - $ref: '#/components/parameters/RevisionInQuery'
+        - $ref: '#/components/parameters/HeadInQuery'
       tags:
         - Transactions
       summary: Retrieve transaction receipt
@@ -2255,6 +2255,13 @@ components:
       schema:
         type: string
       example: best
+
+    HeadInQuery:
+      name: head
+      in: query
+      description:  Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      schema:
+        type: string
 
     StorageKeyInPath:
       in: path
