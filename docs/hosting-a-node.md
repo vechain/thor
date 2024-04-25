@@ -22,40 +22,42 @@ ___
 
 ### System Requirements
 
+#### Authority Master Nodes
 
-
-#### Authority Nodes
+Below spec is the node configured in full node without logs.
 
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 2 Core                | 4 Core                    |
 | RAM       | 8 GB                  | 16 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 500 GB SSD            | 1 TB fast NVMe SSD        |
+| Disk      | 300 GB NVMe SSD            | 500 GB NVMe SSD        |
 
 #### Public Nodes
 
 **Note**: For public nodes, it is essential to configure them with a robust and secure setup, including protection
 against DDoS attacks and intrusion detection systems (IDS).
 
+Below spec is the node configured in full archive node.
+
 | Resource  | Minimum Specification | Recommended Specification |
 |-----------|-----------------------|---------------------------|
 | CPU       | 8 Core                | 16 Core                   |
 | RAM       | 16 GB                 | 64 GB                     |
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
-| Disk      | 500 GB SSD            | 2 TB SSD                  |
+| Disk      | 600 GB SSD            | 1 TB SSD                  |
 
 ___
 
 ### Important Considerations
 
-#### Archive Node
+#### Full Archive Node
 
-An archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
-all transactions and blocks, including forks and variations. Running an archive node requires more resources than
+A full archive node is a full node that stores all historical data of the blockchain, containing complete historical data of
+all transactions and blocks, including forks and variations. Running a full archive node requires more resources than
 running a regular full node, but it provides access to the complete history of the blockchain.
 
-To run an archive node, you need to set the `--disable-pruner` flag when starting the node. For example:
+To run a full archive node, you need to set the `--disable-pruner` flag when starting the node. For example:
 
 ```shell
 bin/thor --network main --disable-pruner
