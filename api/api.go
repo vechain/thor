@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -62,7 +63,9 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
+	revisionHandler := utils.NewRevisionHandler(repo, bft)
+
+	accounts.New(repo, stater, callGasLimit, forkConfig, revisionHandler).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
@@ -71,11 +74,11 @@ func New(
 		transfers.New(repo, logDB).
 			Mount(router, "/logs/transfer")
 	}
-	blocks.New(repo, bft).
+	blocks.New(repo, bft, revisionHandler).
 		Mount(router, "/blocks")
-	transactions.New(repo, txPool).
+	transactions.New(repo, txPool, revisionHandler).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, revisionHandler).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")

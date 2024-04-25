@@ -162,7 +162,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/TxIDInPath'
         - $ref: '#/components/parameters/RawTxInQuery'
-        - $ref: '#/components/parameters/HeadInQuery'
+        - $ref: '#/components/parameters/RevisionInQuery'
         - $ref: '#/components/parameters/PendingInQuery'
       tags:
         - Transactions
@@ -191,7 +191,7 @@ paths:
     get:
       parameters:
         - $ref: '#/components/parameters/TxIDInPath'
-        - $ref: '#/components/parameters/HeadInQuery'
+        - $ref: '#/components/parameters/RevisionInQuery'
       tags:
         - Transactions
       summary: Retrieve transaction receipt
@@ -683,7 +683,7 @@ paths:
         
         You can customize the tracer using various options to suit your debugging requirements.
       parameters:
-        - $ref: '#/components/parameters/HeadInQuery'
+        - $ref: '#/components/parameters/RevisionInQuery'
       requestBody:
         required: true
         content:
@@ -2255,13 +2255,6 @@ components:
       schema:
         type: string
       example: best
-
-    HeadInQuery:
-      name: head
-      in: query
-      description: Explicitly define the ID of the head block. Best block is assumed if omitted.
-      schema:
-        type: string
 
     StorageKeyInPath:
       in: path

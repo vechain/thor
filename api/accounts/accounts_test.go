@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -251,7 +252,8 @@ func initAccountServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	gasLimit = math.MaxUint32
-	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, solo.NewBFTEngine(repo))
+	revisionHandler := utils.NewRevisionHandler(repo, solo.NewBFTEngine(repo))
+	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, revisionHandler)
 	acc.Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
@@ -401,8 +403,8 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
 
 	// Request body has an invalid malformed revision
-	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%d", ts.URL, malformedBody), badBody)
-	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
+	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%s", ts.URL, "0xZZZ"), badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "revision")
 
 	// Request body has an invalid revision number
 	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
