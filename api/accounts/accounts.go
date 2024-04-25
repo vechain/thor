@@ -70,6 +70,9 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	}
 	summary, err := a.revisionHandler.GetSummary(revision)
 	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	code, err := a.getCode(addr, summary)
@@ -123,7 +126,10 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	}
 	summary, err := a.revisionHandler.GetSummary(revision)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
 	}
 	acc, err := a.getAccount(addr, summary)
 	if err != nil {
@@ -147,6 +153,9 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	}
 	summary, err := a.revisionHandler.GetSummary(revision)
 	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	storage, err := a.getStorage(addr, key, summary)
@@ -167,6 +176,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	}
 	summary, err := a.revisionHandler.GetSummary(revision)
 	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	var addr *thor.Address
@@ -207,6 +219,9 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	}
 	summary, err := a.revisionHandler.GetSummary(revision)
 	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	results, err := a.batchCall(req.Context(), batchCallData, summary)

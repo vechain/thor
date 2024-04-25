@@ -156,6 +156,7 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
+		return err
 	}
 
 	raw := req.URL.Query().Get("raw")
@@ -197,6 +198,7 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
+		return err
 	}
 
 	receipt, err := t.getTransactionReceiptByID(txID, block.Header.ID())
