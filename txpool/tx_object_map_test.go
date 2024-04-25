@@ -6,7 +6,6 @@
 package txpool
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,8 +29,8 @@ func TestGetByID(t *testing.T) {
 
 	// Creating a new txObjectMap and adding transactions
 	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, 1))
-	assert.Nil(t, m.Add(txObj2, 1))
+	assert.Nil(t, m.Add(txObj1))
+	assert.Nil(t, m.Add(txObj2))
 
 	// Testing GetByID
 	retrievedTxObj1 := m.GetByID(txObj1.ID())
@@ -91,23 +90,23 @@ func TestTxObjMap(t *testing.T) {
 	m := newTxObjectMap()
 	assert.Zero(t, m.Len())
 
-	assert.Nil(t, m.Add(txObj1, 1))
-	assert.Nil(t, m.Add(txObj1, 1), "should no error if exists")
+	assert.Nil(t, m.Add(txObj1))
+	assert.Nil(t, m.Add(txObj1), "should no error if exists")
 	assert.Equal(t, 1, m.Len())
 
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj2, 1))
-	assert.Equal(t, 1, m.Len())
-
-	assert.Nil(t, m.Add(txObj3, 1))
+	assert.Nil(t, m.Add(txObj2))
 	assert.Equal(t, 2, m.Len())
 
+	assert.Nil(t, m.Add(txObj3))
+	assert.Equal(t, 3, m.Len())
+
 	assert.True(t, m.ContainsHash(tx1.Hash()))
-	assert.False(t, m.ContainsHash(tx2.Hash()))
+	assert.True(t, m.ContainsHash(tx2.Hash()))
 	assert.True(t, m.ContainsHash(tx3.Hash()))
 
 	assert.True(t, m.RemoveByHash(tx1.Hash()))
 	assert.False(t, m.ContainsHash(tx1.Hash()))
-	assert.False(t, m.RemoveByHash(tx2.Hash()))
+	assert.True(t, m.RemoveByHash(tx2.Hash()))
 
 	assert.Equal(t, []*txObject{txObj3}, m.ToTxObjects())
 	assert.Equal(t, tx.Transactions{tx3}, m.ToTxs())
@@ -126,11 +125,11 @@ func TestLimitByDelegator(t *testing.T) {
 	txObj3, _ := resolveTx(tx3, false)
 
 	m := newTxObjectMap()
-	assert.Nil(t, m.Add(txObj1, 1))
-	assert.Nil(t, m.Add(txObj3, 1))
+	assert.Nil(t, m.Add(txObj1))
+	assert.Nil(t, m.Add(txObj3))
 
 	m = newTxObjectMap()
-	assert.Nil(t, m.Add(txObj2, 1))
-	assert.Equal(t, errors.New("delegator quota exceeded"), m.Add(txObj3, 1))
-	assert.Equal(t, errors.New("account quota exceeded"), m.Add(txObj1, 1))
+	assert.Nil(t, m.Add(txObj2))
+	assert.Nil(t, m.Add(txObj2))
+	assert.Nil(t, m.Add(txObj3))
 }

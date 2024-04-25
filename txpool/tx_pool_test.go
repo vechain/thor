@@ -31,7 +31,6 @@ import (
 )
 
 const LIMIT = 10
-const LIMIT_PER_ACCOUNT = 2
 
 var devAccounts = genesis.DevAccounts()
 
@@ -39,17 +38,16 @@ func init() {
 	log15.Root().SetHandler(log15.DiscardHandler())
 }
 
-func newPool(limit int, limitPerAccount int) *TxPool {
+func newPool(limit int) *TxPool {
 	db := muxdb.NewMem()
 	repo := newChainRepo(db)
 	return New(repo, state.NewStater(db), Options{
-		Limit:           limit,
-		LimitPerAccount: limitPerAccount,
-		MaxLifetime:     time.Hour,
+		Limit:       limit,
+		MaxLifetime: time.Hour,
 	})
 }
 
-func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64) *TxPool {
+func newPoolWithParams(limit int, BlocklistCacheFilePath string, BlocklistFetchURL string, timestamp uint64) *TxPool {
 	db := muxdb.NewMem()
 	gene := new(genesis.Builder).
 		GasLimit(thor.InitialGasLimit).
@@ -66,7 +64,6 @@ func newPoolWithParams(limit int, limitPerAccount int, BlocklistCacheFilePath st
 	repo, _ := chain.NewRepository(db, b0)
 	return New(repo, state.NewStater(db), Options{
 		Limit:                  limit,
-		LimitPerAccount:        limitPerAccount,
 		MaxLifetime:            time.Hour,
 		BlocklistCacheFilePath: BlocklistCacheFilePath,
 		BlocklistFetchURL:      BlocklistFetchURL,
@@ -93,7 +90,7 @@ func TestNewCloseWithServer(t *testing.T) {
 	server := newHttpServer()
 	defer server.Close()
 
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", server.URL, uint64(time.Now().Unix()))
+	pool := newPoolWithParams(LIMIT, "./", server.URL, uint64(time.Now().Unix()))
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -125,27 +122,27 @@ func FillPoolWithTxs(pool *TxPool, t *testing.T) {
 }
 
 func TestAddWithFullErrorUnsyncedChain(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	FillPoolWithTxs(pool, t)
 }
 
 func TestAddWithFullErrorSyncedChain(t *testing.T) {
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, "./", "", uint64(time.Now().Unix()))
+	pool := newPoolWithParams(LIMIT, "./", "", uint64(time.Now().Unix()))
 	defer pool.Close()
 
 	FillPoolWithTxs(pool, t)
 }
 
 func TestNewCloseWithError(t *testing.T) {
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, " ", " ", uint64(time.Now().Unix())+10000)
+	pool := newPoolWithParams(LIMIT, " ", " ", uint64(time.Now().Unix())+10000)
 	defer pool.Close()
 }
 
 func TestDump(t *testing.T) {
 	// Create a new transaction pool with specified limits
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	// Create and add transactions to the pool
@@ -176,7 +173,7 @@ func TestDump(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	// Create and add a transaction to the pool
@@ -195,7 +192,7 @@ func TestRemove(t *testing.T) {
 }
 
 func TestRemoveWithError(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	// Create and add a transaction to the pool
@@ -211,12 +208,12 @@ func TestRemoveWithError(t *testing.T) {
 }
 
 func TestNewClose(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 }
 
 func TestSubscribeNewTx(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
@@ -250,7 +247,7 @@ func TestSubscribeNewTx(t *testing.T) {
 }
 
 func TestWashTxs(t *testing.T) {
-	pool := newPool(1, LIMIT_PER_ACCOUNT)
+	pool := newPool(1)
 	defer pool.Close()
 
 	txs, _, err := pool.wash(pool.repo.BestBlockSummary())
@@ -283,11 +280,11 @@ func TestWashTxs(t *testing.T) {
 
 	tx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[1])
 	txObj2, _ := resolveTx(tx2, false)
-	assert.Nil(t, pool.all.Add(txObj2, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj2)) // this tx will participate in the wash out.
 
 	tx3 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[2])
 	txObj3, _ := resolveTx(tx3, false)
-	assert.Nil(t, pool.all.Add(txObj3, LIMIT_PER_ACCOUNT)) // this tx will participate in the wash out.
+	assert.Nil(t, pool.all.Add(txObj3)) // this tx will participate in the wash out.
 
 	txs, removedCount, err := pool.wash(pool.repo.BestBlockSummary())
 	assert.Nil(t, err)
@@ -296,7 +293,7 @@ func TestWashTxs(t *testing.T) {
 }
 
 func TestFillPool(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	// Create a slice of transactions to be added to the pool.
@@ -326,7 +323,7 @@ func TestFillPool(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 	st := pool.stater.NewState(pool.repo.GenesisBlock().Header().StateRoot(), 0, 0, 0)
 	stage, _ := st.Stage(1, 0)
@@ -407,9 +404,8 @@ func TestBeforeVIP191Add(t *testing.T) {
 	acc := devAccounts[0]
 
 	pool := New(chain, state.NewStater(db), Options{
-		Limit:           10,
-		LimitPerAccount: 2,
-		MaxLifetime:     time.Hour,
+		Limit:       10,
+		MaxLifetime: time.Hour,
 	})
 	defer pool.Close()
 
@@ -420,24 +416,23 @@ func TestBeforeVIP191Add(t *testing.T) {
 
 func TestPoolLimit(t *testing.T) {
 	// synced
-	pool := newPoolWithParams(2, 1, "", "", uint64(time.Now().Unix()))
+	pool := newPoolWithParams(2, "", "", uint64(time.Now().Unix()))
 	defer pool.Close()
 
 	trx1 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	trx2 := newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	pool.add(trx1, false, false)
 
-	err := pool.add(trx2, false, false)
-	assert.Equal(t, "tx rejected: account quota exceeded", err.Error())
+	assert.Nil(t, pool.add(trx2, false, false))
 
 	// not synced
-	pool = newPool(2, 1)
+	pool = newPool(2)
 
 	trx1 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	trx2 = newTx(pool.repo.ChainTag(), nil, 21000, tx.BlockRef{}, 100, nil, tx.Features(0), devAccounts[0])
 	pool.add(trx1, false, false)
-	err = pool.add(trx2, false, false)
-	assert.Equal(t, "tx rejected: account quota exceeded", err.Error())
+
+	assert.Nil(t, pool.add(trx2, false, false))
 }
 
 func TestBlocked(t *testing.T) {
@@ -448,7 +443,7 @@ func TestBlocked(t *testing.T) {
 	file.WriteString(acc.Address.String())
 	file.Close()
 
-	pool := newPoolWithParams(LIMIT, LIMIT_PER_ACCOUNT, file.Name(), "", uint64(time.Now().Unix()))
+	pool := newPoolWithParams(LIMIT, file.Name(), "", uint64(time.Now().Unix()))
 	defer pool.Close()
 	<-time.After(10 * time.Millisecond)
 
@@ -460,7 +455,7 @@ func TestBlocked(t *testing.T) {
 	// added into all, will be washed out
 	txObj, err := resolveTx(trx, false)
 	assert.Nil(t, err)
-	pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+	pool.all.Add(txObj)
 
 	pool.wash(pool.repo.BestBlockSummary())
 	got := pool.Get(trx.ID())
@@ -470,7 +465,7 @@ func TestBlocked(t *testing.T) {
 }
 
 func TestWash(t *testing.T) {
-	pool := newPool(LIMIT, LIMIT_PER_ACCOUNT)
+	pool := newPool(LIMIT)
 	defer pool.Close()
 
 	tests := []struct {
@@ -504,7 +499,7 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj)
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx.ID())
@@ -513,7 +508,7 @@ func TestWash(t *testing.T) {
 		},
 		{
 			"Future tx", func(t *testing.T) {
-				pool := newPool(1, LIMIT_PER_ACCOUNT)
+				pool := newPool(1)
 				defer pool.Close()
 
 				priv, err := crypto.GenerateKey()
@@ -531,11 +526,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj)
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj)
 
 				pool.wash(pool.repo.BestBlockSummary())
 				got := pool.Get(trx3.ID())
@@ -544,7 +539,7 @@ func TestWash(t *testing.T) {
 		},
 		{
 			"Executable + Non executable beyond limit", func(t *testing.T) {
-				pool := newPool(1, LIMIT_PER_ACCOUNT)
+				pool := newPool(1)
 				defer pool.Close()
 
 				priv, err := crypto.GenerateKey()
@@ -562,11 +557,11 @@ func TestWash(t *testing.T) {
 
 				txObj, err := resolveTx(trx2, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj)
 
 				txObj, err = resolveTx(trx3, false)
 				assert.Nil(t, err)
-				pool.all.Add(txObj, LIMIT_PER_ACCOUNT)
+				pool.all.Add(txObj)
 
 				pool.wash(pool.repo.BestBlockSummary())
 				// all non executable should be washed out

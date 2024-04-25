@@ -6,7 +6,6 @@
 package txpool
 
 import (
-	"errors"
 	"sync"
 
 	"github.com/vechain/thor/v2/thor"
@@ -18,14 +17,12 @@ type txObjectMap struct {
 	lock      sync.RWMutex
 	mapByHash map[thor.Bytes32]*txObject
 	mapByID   map[thor.Bytes32]*txObject
-	quota     map[thor.Address]int
 }
 
 func newTxObjectMap() *txObjectMap {
 	return &txObjectMap{
 		mapByHash: make(map[thor.Bytes32]*txObject),
 		mapByID:   make(map[thor.Bytes32]*txObject),
-		quota:     make(map[thor.Address]int),
 	}
 }
 
@@ -36,7 +33,7 @@ func (m *txObjectMap) ContainsHash(txHash thor.Bytes32) bool {
 	return found
 }
 
-func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
+func (m *txObjectMap) Add(txObj *txObject) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -45,18 +42,6 @@ func (m *txObjectMap) Add(txObj *txObject, limitPerAccount int) error {
 		return nil
 	}
 
-	if m.quota[txObj.Origin()] >= limitPerAccount {
-		return errors.New("account quota exceeded")
-	}
-
-	if d := txObj.Delegator(); d != nil {
-		if m.quota[*d] >= limitPerAccount {
-			return errors.New("delegator quota exceeded")
-		}
-		m.quota[*d]++
-	}
-
-	m.quota[txObj.Origin()]++
 	m.mapByHash[hash] = txObj
 	m.mapByID[txObj.ID()] = txObj
 	return nil
@@ -73,20 +58,6 @@ func (m *txObjectMap) RemoveByHash(txHash thor.Bytes32) bool {
 	defer m.lock.Unlock()
 
 	if txObj, ok := m.mapByHash[txHash]; ok {
-		if m.quota[txObj.Origin()] > 1 {
-			m.quota[txObj.Origin()]--
-		} else {
-			delete(m.quota, txObj.Origin())
-		}
-
-		if d := txObj.Delegator(); d != nil {
-			if m.quota[*d] > 1 {
-				m.quota[*d]--
-			} else {
-				delete(m.quota, *d)
-			}
-		}
-
 		delete(m.mapByHash, txHash)
 		delete(m.mapByID, txObj.ID())
 		return true
@@ -122,11 +93,6 @@ func (m *txObjectMap) Fill(txObjs []*txObject) {
 	for _, txObj := range txObjs {
 		if _, found := m.mapByHash[txObj.Hash()]; found {
 			continue
-		}
-		// skip account limit check
-		m.quota[txObj.Origin()]++
-		if d := txObj.Delegator(); d != nil {
-			m.quota[*d]++
 		}
 		m.mapByHash[txObj.Hash()] = txObj
 		m.mapByID[txObj.ID()] = txObj

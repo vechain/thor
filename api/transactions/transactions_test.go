@@ -336,7 +336,7 @@ func initTransactionServer(t *testing.T) {
 	router := mux.NewRouter()
 
 	// Add a tx to the mempool to have both pending and non-pending transactions
-	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
+	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, MaxLifetime: 10 * time.Minute})
 	e := mempool.Add(mempoolTx)
 	if e != nil {
 		t.Fatal(e)

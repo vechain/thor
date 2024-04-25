@@ -45,9 +45,8 @@ var (
 	log           = log15.New()
 
 	defaultTxPoolOptions = txpool.Options{
-		Limit:           10000,
-		LimitPerAccount: 16,
-		MaxLifetime:     20 * time.Minute,
+		Limit:       10000,
+		MaxLifetime: 20 * time.Minute,
 	}
 )
 
@@ -111,7 +110,6 @@ func main() {
 					verifyLogsFlag,
 					skipLogsFlag,
 					txPoolLimitFlag,
-					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
 				},
 				Action: soloAction,
@@ -303,7 +301,6 @@ func soloAction(ctx *cli.Context) error {
 
 	txPoolOption := defaultTxPoolOptions
 	txPoolOption.Limit = ctx.Int(txPoolLimitFlag.Name)
-	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
 
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()

@@ -36,7 +36,6 @@ var (
 // Options options for tx pool.
 type Options struct {
 	Limit                  int
-	LimitPerAccount        int
 	MaxLifetime            time.Duration
 	BlocklistCacheFilePath string
 	BlocklistFetchURL      string
@@ -253,7 +252,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 		}
 
 		txObj.executable = executable
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj); err != nil {
 			return txRejectedError{err.Error()}
 		}
 
@@ -268,7 +267,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 			return txRejectedError{"pool is full"}
 		}
 
-		if err := p.all.Add(txObj, p.options.LimitPerAccount); err != nil {
+		if err := p.all.Add(txObj); err != nil {
 			return txRejectedError{err.Error()}
 		}
 		log.Debug("tx added", "id", newTx.ID())

@@ -75,9 +75,8 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 	repo, _ := chain.NewRepository(db, b)
 
 	txPool := txpool.New(repo, stater, txpool.Options{
-		Limit:           100,
-		LimitPerAccount: 16,
-		MaxLifetime:     time.Hour,
+		Limit:       100,
+		MaxLifetime: time.Hour,
 	})
 
 	addr := thor.BytesToAddress([]byte("to"))

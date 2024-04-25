@@ -46,9 +46,8 @@ func initCommServer(t *testing.T) {
 	}
 	repo, _ := chain.NewRepository(db, b)
 	comm := comm.New(repo, txpool.New(repo, stater, txpool.Options{
-		Limit:           10000,
-		LimitPerAccount: 16,
-		MaxLifetime:     10 * time.Minute,
+		Limit:       10000,
+		MaxLifetime: 10 * time.Minute,
 	}))
 	router := mux.NewRouter()
 	node.New(comm).Mount(router, "/node")

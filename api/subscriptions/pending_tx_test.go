@@ -59,9 +59,8 @@ func TestPendingTx_DispatchLoop(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b0)
 
 	txPool := txpool.New(repo, state.NewStater(db), txpool.Options{
-		Limit:           100,
-		LimitPerAccount: 16,
-		MaxLifetime:     time.Hour,
+		Limit:       100,
+		MaxLifetime: time.Hour,
 	})
 	p := newPendingTx(txPool)
 
