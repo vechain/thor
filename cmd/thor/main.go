@@ -83,11 +83,11 @@ func main() {
 			p2pPortFlag,
 			natFlag,
 			bootNodeFlag,
+			allowedPeersFlag,
 			skipLogsFlag,
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			allowedPeersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
