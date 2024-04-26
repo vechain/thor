@@ -448,7 +448,7 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 	remoteBootstrapURL := remoteBootstrapList
 
 	// restricted peer list mode - no other peers are loaded
-	if allowedPeersList := parseFlagNodes(ctx.String(allowedPeersFlag.Name)); len(allowedPeersList) > 0 {
+	if allowedPeersList := parseNodeList(ctx.String(allowedPeersFlag.Name)); len(allowedPeersList) > 0 {
 		knowNodes = allowedPeersList
 		restrictedPeerListEnabled = true
 	} else {
@@ -456,7 +456,7 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		knowNodes = fallbackBootstrapNodes
 
 		// override default bootnodes if flag is specified
-		if flagBootstrapNodes := parseFlagNodes(ctx.String(bootNodeFlag.Name)); len(flagBootstrapNodes) > 0 {
+		if flagBootstrapNodes := parseNodeList(ctx.String(bootNodeFlag.Name)); len(flagBootstrapNodes) > 0 {
 			knowNodes = flagBootstrapNodes
 			remoteBootstrapURL = ""
 		}
@@ -647,7 +647,7 @@ func printSoloStartupMessage(
 	fmt.Print(info)
 }
 
-func parseFlagNodes(flagString string) []*discover.Node {
+func parseNodeList(flagString string) []*discover.Node {
 	s := strings.TrimSpace(flagString)
 	if s == "" {
 		return nil
