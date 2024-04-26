@@ -141,7 +141,7 @@ var (
 	}
 	gasLimitFlag = cli.IntFlag{
 		Name:  "gas-limit",
-		Value: 10000000,
+		Value: 40_000_000,
 		Usage: "block gas limit(adaptive if set to 0)",
 	}
 	txPoolLimitFlag = cli.IntFlag{
