@@ -29,7 +29,7 @@ func (b *Builder) Clause(c *Clause) *Builder {
 }
 
 // GasPriceCoef set gas price coef.
-func (b *Builder) GasPriceCoef(coef uint8) *Builder {
+func (b *Builder) GasPriceCoef(coef uint64) *Builder {
 	b.body.GasPriceCoef = coef
 	return b
 }

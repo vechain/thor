@@ -52,7 +52,7 @@ type Transaction struct {
 	BlockRef     string              `json:"blockRef"`
 	Expiration   uint32              `json:"expiration"`
 	Clauses      Clauses             `json:"clauses"`
-	GasPriceCoef uint8               `json:"gasPriceCoef"`
+	GasPriceCoef uint64              `json:"gasPriceCoef"`
 	Gas          uint64              `json:"gas"`
 	Origin       thor.Address        `json:"origin"`
 	Delegator    *thor.Address       `json:"delegator"`

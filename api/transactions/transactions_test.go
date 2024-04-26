@@ -110,7 +110,9 @@ func sendTx(t *testing.T) {
 		ChainTag(chainTag).
 		Expiration(expiration).
 		Gas(gas).
+		GasPriceCoef(3000).
 		Build()
+
 	sig, err := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	if err != nil {
 		t.Fatal(err)
