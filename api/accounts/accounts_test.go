@@ -174,7 +174,7 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
 	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
 
-	assert.Equal(t, finalizedEnergy.Cmp(genesisEnergy), 1, "finalized energy should be greater than genesis energy")
+	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
 }
 
 func getCode(t *testing.T) {

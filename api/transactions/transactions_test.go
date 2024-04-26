@@ -66,12 +66,14 @@ func TestTransaction(t *testing.T) {
 	handleGetTransactionByIDWithBadQueryParams(t)
 	handleGetTransactionByIDWithNonExistingHead(t)
 	handleGetTransactionByIdWithValidRevisions(t)
+	handleGetTransactionByIdWithFinalRevision(t)
 
 	// Get tx receipt
 	getTxReceipt(t)
 	getReceiptWithBadId(t)
 	handleGetTransactionReceiptByIDWithNonExistingHead(t)
 	handleGetTransactionReceiptWithValidRevisions(t)
+	handleGetTransactionReceiptWithFinalRevision(t)
 }
 
 func getTx(t *testing.T) {
@@ -256,7 +258,6 @@ func handleGetTransactionByIdWithValidRevisions(t *testing.T) {
 	revisions := []string{
 		"1",
 		"best",
-		"finalized",
 		repo.BestBlockSummary().Header.ID().String(),
 	}
 
@@ -270,6 +271,15 @@ func handleGetTransactionByIdWithValidRevisions(t *testing.T) {
 	}
 }
 
+func handleGetTransactionByIdWithFinalRevision(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?head=finalized", 200)
+	var rtx *transactions.Transaction
+	if err := json.Unmarshal(res, &rtx); err != nil {
+		t.Fatal(err)
+	}
+	assert.Nil(t, rtx, "should be nil")
+}
+
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
@@ -279,7 +289,6 @@ func handleGetTransactionReceiptWithValidRevisions(t *testing.T) {
 	revisions := []string{
 		"1",
 		"best",
-		"finalized",
 		repo.BestBlockSummary().Header.ID().String(),
 	}
 
@@ -291,6 +300,15 @@ func handleGetTransactionReceiptWithValidRevisions(t *testing.T) {
 		}
 		assert.Equal(t, receipt.GasUsed, transaction.Gas(), "receipt gas used not equal to transaction gas")
 	}
+}
+
+func handleGetTransactionReceiptWithFinalRevision(t *testing.T) {
+	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=finalized", 200)
+	var receipt *transactions.Receipt
+	if err := json.Unmarshal(res, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	assert.Nil(t, receipt, "receipt gas used not equal to transaction gas")
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
