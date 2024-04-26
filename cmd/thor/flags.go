@@ -79,10 +79,14 @@ var (
 		Value: "any",
 		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 	}
-
 	bootNodeFlag = cli.StringFlag{
 		Name:  "bootnode",
 		Usage: "comma separated list of bootnode IDs",
+	}
+	allowedPeersFlag = cli.StringFlag{
+		Name:   "allowed-peers",
+		Hidden: true,
+		Usage:  "comma separated list of node IDs that can be connected to.",
 	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",
@@ -146,11 +150,5 @@ var (
 	genesisFlag = cli.StringFlag{
 		Name:  "genesis",
 		Usage: "path to genesis file, if not set, the default devnet genesis will be used",
-	}
-
-	allowedPeersFlag = cli.StringFlag{
-		Name:   "allowed-peers",
-		Hidden: true,
-		Usage:  "comma separated list of node IDs that can be connected to. Ex: enode://797fdd968592ca3b59a143f1aa2f152913499d4bb469f2bd5b62dfb1257707b4cb0686563fe144ee2088b1cc4f174bd72df51dbeb7ec1c5b6a8d8599c756f38b@107.150.112.22:55555",
 	}
 )

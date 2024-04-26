@@ -54,8 +54,8 @@ func New(opts *Options) *Server {
 				Name:        opts.Name,
 				PrivateKey:  opts.PrivateKey,
 				MaxPeers:    opts.MaxPeers,
-				NoDiscovery: true,  // p2p server default discovery mechanism is not used per default ( we use our own )
-				DiscoveryV5: false, // disable discovery inside p2p.Server instance
+				NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
+				DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
 				ListenAddr:  opts.ListenAddr,
 				NetRestrict: opts.NetRestrict,
 				NAT:         opts.NAT,
@@ -197,6 +197,10 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
+	for _, node := range s.opts.BootstrapNodes {
+		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+	}
+	// known nodes are also acting as bootstrap servers
 	for _, node := range s.opts.KnownNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
@@ -301,10 +305,7 @@ func (s *Server) dialLoop() {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
-				// successfully connected to the node
-				if removed := s.discoveredNodes.Remove(node); !removed {
-					log.Error("unable to remove a discovered node - this should never happen")
-				}
+				s.discoveredNodes.Remove(node.ID)
 			}()
 
 			dialCount++

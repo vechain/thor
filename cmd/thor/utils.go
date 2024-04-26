@@ -443,49 +443,56 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		return nil, errors.Wrap(err, "parse -nat flag")
 	}
 
-	var knowNodes p2psrv.Nodes
-	var restrictedPeerListEnabled bool
-	remoteBootstrapURL := remoteBootstrapList
-
-	// restricted peer list mode - no other peers are loaded
-	if allowedPeersList := parseNodeList(ctx.String(allowedPeersFlag.Name)); len(allowedPeersList) > 0 {
-		knowNodes = allowedPeersList
-		restrictedPeerListEnabled = true
-	} else {
-		// load boot nodes
-		knowNodes = fallbackBootstrapNodes
-
-		// override default bootnodes if flag is specified
-		if flagBootstrapNodes := parseNodeList(ctx.String(bootNodeFlag.Name)); len(flagBootstrapNodes) > 0 {
-			knowNodes = flagBootstrapNodes
-			remoteBootstrapURL = ""
-		}
-
-		// append cached peers
-		if storedNodes := loadStoredNodes(peersCachePath); len(storedNodes) > 0 {
-			var concattedNodes []*discover.Node
-			dedupedNodes := map[string]*discover.Node{}
-
-			for _, knowNode := range append(knowNodes, storedNodes...) {
-				dedupedNodes[knowNode.ID.String()] = knowNode
-			}
-			for _, dedupedNode := range dedupedNodes {
-				concattedNodes = append(concattedNodes, dedupedNode)
-			}
-
-			knowNodes = concattedNodes
-		}
-	}
-
 	opts := &p2psrv.Options{
 		Name:            common.MakeName("thor", fullVersion()),
 		PrivateKey:      key,
 		MaxPeers:        ctx.Int(maxPeersFlag.Name),
 		ListenAddr:      fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		BootstrapNodes:  fallbackBootstrapNodes,
+		RemoteBootstrap: remoteBootstrapList,
 		NAT:             nat,
-		RemoteBootstrap: remoteBootstrapURL,
-		NoDiscovery:     restrictedPeerListEnabled,
-		KnownNodes:      knowNodes,
+	}
+
+	// allowed peers will only allow p2psrv to connect to the designated peers
+	flagAllowedPeers := strings.TrimSpace(ctx.String(allowedPeersFlag.Name))
+	if flagAllowedPeers != "" {
+		opts.NoDiscovery = true // disable discovery if user supplied allowed peers
+		opts.KnownNodes, err = parseNodeList(flagAllowedPeers)
+		if err != nil {
+			return nil, errors.Wrap(err, "parse allowed-peers flag")
+		}
+	} else {
+		var knownNodes p2psrv.Nodes
+		if data, err := os.ReadFile(peersCachePath); err != nil {
+			if !os.IsNotExist(err) {
+				log.Warn("failed to load peers cache", "err", err)
+			}
+		} else if err := rlp.DecodeBytes(data, &knownNodes); err != nil {
+			log.Warn("failed to load peers cache", "err", err)
+		}
+
+		// boot nodes will overwrite the default bootstrap nodes and also disable remote bootstrap
+		flagBootstrapNodes := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
+		if flagBootstrapNodes != "" {
+			opts.RemoteBootstrap = "" // disable remote bootstrap if user supplied boot nodes
+			opts.BootstrapNodes, err = parseNodeList(flagBootstrapNodes)
+			if err != nil {
+				return nil, errors.Wrap(err, "parse bootnodes flag")
+			}
+
+			m := make(map[discover.NodeID]bool)
+			for _, node := range knownNodes {
+				m[node.ID] = true
+			}
+			//appending user supplied boot nodes to known nodes since they potentially could be a p2p server
+			for _, bootnode := range opts.BootstrapNodes {
+				if !m[bootnode.ID] {
+					knownNodes = append(opts.KnownNodes, bootnode)
+				}
+			}
+		}
+
+		opts.KnownNodes = knownNodes
 	}
 
 	return &p2pComm{
@@ -494,18 +501,6 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&key.PublicKey).Bytes(), ctx.Int(p2pPortFlag.Name)),
 	}, nil
-}
-
-func loadStoredNodes(peersCachePath string) []*discover.Node {
-	var storedNodes []*discover.Node
-	if data, err := os.ReadFile(peersCachePath); err != nil {
-		if !os.IsNotExist(err) {
-			log.Warn("failed to load peers cache", "err", err)
-		}
-	} else if err := rlp.DecodeBytes(data, &storedNodes); err != nil {
-		log.Warn("failed to load peers cache", "err", err)
-	}
-	return storedNodes
 }
 
 func (p *p2pComm) Start() error {
@@ -647,15 +642,18 @@ func printSoloStartupMessage(
 	fmt.Print(info)
 }
 
-func parseNodeList(flagString string) []*discover.Node {
-	s := strings.TrimSpace(flagString)
-	if s == "" {
-		return nil
-	}
-	inputs := strings.Split(s, ",")
+func parseNodeList(list string) ([]*discover.Node, error) {
+	inputs := strings.Split(list, ",")
 	var nodes []*discover.Node
 	for _, i := range inputs {
-		nodes = append(nodes, discover.MustParseNode(i))
+		node, err := discover.ParseNode(i)
+		if err != nil {
+			return nil, err
+		}
+		nodes = append(nodes, node)
 	}
-	return nodes
+	if len(nodes) == 0 {
+		return nil, errors.New("empty node list")
+	}
+	return nodes, nil
 }
