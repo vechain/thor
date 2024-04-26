@@ -2259,7 +2259,7 @@ components:
     HeadInQuery:
       name: head
       in: query
-      description:  Explicitly define the ID of the head block. Best block is assumed if omitted.
+      description: Explicitly define the ID of the head block. Best block is assumed if omitted.
       schema:
         type: string
 
