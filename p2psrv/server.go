@@ -27,16 +27,15 @@ var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	opts             Options
-	srv              *p2p.Server
-	discv5           *discv5.Network
-	goes             co.Goes
-	done             chan struct{}
-	bootstrapNodes   []*discv5.Node
-	knownNodes       *cache.PrioCache
-	discoveredNodes  *cache.RandCache
-	dialingNodes     *nodeMap
-	allowedOnlyNodes *nodeMap
+	opts            Options
+	srv             *p2p.Server
+	discv5          *discv5.Network
+	goes            co.Goes
+	done            chan struct{}
+	bootstrapNodes  []*discv5.Node
+	knownNodes      *cache.PrioCache
+	discoveredNodes *cache.RandCache
+	dialingNodes    *nodeMap
 }
 
 // New create a p2p server.
@@ -46,18 +45,6 @@ func New(opts *Options) *Server {
 	for _, node := range opts.KnownNodes {
 		knownNodes.Set(node.ID, node, 0)
 		discoveredNodes.Set(node.ID, node)
-	}
-
-	// AllowedPeers doesn't connect to other sourced nodes
-	allowedOnlyNodes := newNodeMap()
-	if len(opts.AllowedPeers) > 0 {
-		knownNodes = cache.NewPrioCache(5)
-		discoveredNodes = cache.NewRandCache(128)
-		for _, connectOnlyNode := range opts.AllowedPeers {
-			knownNodes.Set(connectOnlyNode.ID, connectOnlyNode, 0)
-			discoveredNodes.Set(connectOnlyNode.ID, connectOnlyNode)
-			allowedOnlyNodes.Add(connectOnlyNode)
-		}
 	}
 
 	return &Server{
@@ -76,11 +63,10 @@ func New(opts *Options) *Server {
 				DialRatio:   int(math.Sqrt(float64(opts.MaxPeers))),
 			},
 		},
-		done:             make(chan struct{}),
-		knownNodes:       knownNodes,
-		discoveredNodes:  discoveredNodes,
-		dialingNodes:     newNodeMap(),
-		allowedOnlyNodes: allowedOnlyNodes,
+		done:            make(chan struct{}),
+		knownNodes:      knownNodes,
+		discoveredNodes: discoveredNodes,
+		dialingNodes:    newNodeMap(),
 	}
 }
 
@@ -211,9 +197,6 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	for _, node := range s.opts.BootstrapNodes {
-		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
-	}
 	for _, node := range s.opts.KnownNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
@@ -309,11 +292,6 @@ func (s *Server) dialLoop() {
 				continue
 			}
 
-			// if set only connect to these specific nodes
-			if s.allowedOnlyNodes.Len() > 0 && !s.allowedOnlyNodes.Contains(node.ID) {
-				continue
-			}
-
 			log := log.New("node", node)
 			log.Debug("try to dial node")
 			s.dialingNodes.Add(node)
@@ -324,10 +302,8 @@ func (s *Server) dialLoop() {
 					log.Debug("failed to dial node", "err", err)
 				}
 				// successfully connected to the node
-				if !s.allowedOnlyNodes.Contains(node.ID) { // don't remove connect only nodes in case they need to reconnect
-					if removed := s.discoveredNodes.Remove(node); !removed {
-						log.Error("unable to remove a discovered node - this should never happen")
-					}
+				if removed := s.discoveredNodes.Remove(node); !removed {
+					log.Error("unable to remove a discovered node - this should never happen")
 				}
 			}()
 

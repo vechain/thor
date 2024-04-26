@@ -424,28 +424,65 @@ type p2pComm struct {
 }
 
 func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2pComm, error) {
+	// known peers will be loaded/stored from/in this file
+	peersCachePath := filepath.Join(instanceDir, "peers.cache")
+
 	configDir, err := makeConfigDir(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
 		return nil, errors.Wrap(err, "load or generate P2P key")
 	}
+
 	nat, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
 		return nil, errors.Wrap(err, "parse -nat flag")
 	}
 
-	// recreate the node from the enode string slice
-	var allowedPeers p2psrv.Nodes
-	for _, allowedNodeID := range ctx.StringSlice(allowedPeersFlag.Name) {
-		parsedNode, err := discover.ParseNode(allowedNodeID)
-		if err != nil {
-			return nil, fmt.Errorf("unable to parse the connect only enode - %w", err)
+	var knowNodes p2psrv.Nodes
+	var restrictedPeerListEnabled bool
+	remoteBootstrapURL := remoteBootstrapList
+
+	// restricted peer list mode - no other peers are loaded
+	if allowedPeersListString := ctx.StringSlice(allowedPeersFlag.Name); len(allowedPeersListString) > 0 {
+		var allowedPeers p2psrv.Nodes
+		for _, allowedNodeID := range allowedPeersListString {
+			parsedNode, err := discover.ParseNode(allowedNodeID)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse the connect only enode - %w", err)
+			}
+			allowedPeers = append(allowedPeers, parsedNode)
 		}
-		allowedPeers = append(allowedPeers, parsedNode)
+		knowNodes = allowedPeers
+		restrictedPeerListEnabled = true
+	} else {
+		// load boot nodes
+		knowNodes = fallbackBootstrapNodes
+
+		// override default bootnodes if flag is specified
+		if flagBootstrapNodes := parseBootNode(ctx); len(flagBootstrapNodes) > 0 {
+			knowNodes = flagBootstrapNodes
+			remoteBootstrapURL = ""
+		}
+
+		// append cached peers
+		if storedNodes := loadStoredNodes(peersCachePath); len(storedNodes) > 0 {
+			var concattedNodes []*discover.Node
+			dedupedNodes := map[string]*discover.Node{}
+
+			for _, knowNode := range append(knowNodes, storedNodes...) {
+				dedupedNodes[knowNode.ID.String()] = knowNode
+			}
+			for _, dedupedNode := range dedupedNodes {
+				concattedNodes = append(concattedNodes, dedupedNode)
+			}
+
+			knowNodes = concattedNodes
+		}
 	}
 
 	opts := &p2psrv.Options{
@@ -453,37 +490,10 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		PrivateKey:      key,
 		MaxPeers:        ctx.Int(maxPeersFlag.Name),
 		ListenAddr:      fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
-		BootstrapNodes:  fallbackBootstrapNodes,
-		RemoteBootstrap: remoteBootstrapList,
+		RemoteBootstrap: remoteBootstrapURL,
 		NAT:             nat,
-		AllowedPeers:    allowedPeers,
-		NoDiscovery:     len(ctx.StringSlice(allowedPeersFlag.Name)) > 0,
-	}
-
-	peersCachePath := filepath.Join(instanceDir, "peers.cache")
-
-	if data, err := os.ReadFile(peersCachePath); err != nil {
-		if !os.IsNotExist(err) {
-			log.Warn("failed to load peers cache", "err", err)
-		}
-	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
-		log.Warn("failed to load peers cache", "err", err)
-	}
-
-	flagBootstrapNodes := parseBootNode(ctx)
-	if flagBootstrapNodes != nil {
-		opts.BootstrapNodes = flagBootstrapNodes
-		opts.RemoteBootstrap = ""
-
-		m := make(map[discover.NodeID]bool)
-		for _, node := range opts.KnownNodes {
-			m[node.ID] = true
-		}
-		for _, bootnode := range flagBootstrapNodes {
-			if !m[bootnode.ID] {
-				opts.KnownNodes = append(opts.KnownNodes, bootnode)
-			}
-		}
+		NoDiscovery:     restrictedPeerListEnabled,
+		KnownNodes:      knowNodes,
 	}
 
 	return &p2pComm{
@@ -492,6 +502,18 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&key.PublicKey).Bytes(), ctx.Int(p2pPortFlag.Name)),
 	}, nil
+}
+
+func loadStoredNodes(peersCachePath string) []*discover.Node {
+	var storedNodes []*discover.Node
+	if data, err := os.ReadFile(peersCachePath); err != nil {
+		if !os.IsNotExist(err) {
+			log.Warn("failed to load peers cache", "err", err)
+		}
+	} else if err := rlp.DecodeBytes(data, &storedNodes); err != nil {
+		log.Warn("failed to load peers cache", "err", err)
+	}
+	return storedNodes
 }
 
 func (p *p2pComm) Start() error {
