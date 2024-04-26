@@ -453,10 +453,10 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		NAT:             nat,
 	}
 
-	// allowed peers will only allow p2psrv to connect to the designated peers
+	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	flagAllowedPeers := strings.TrimSpace(ctx.String(allowedPeersFlag.Name))
 	if flagAllowedPeers != "" {
-		opts.NoDiscovery = true // disable discovery if user supplied allowed peers
+		opts.NoDiscovery = true // disable discovery
 		opts.KnownNodes, err = parseNodeList(flagAllowedPeers)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse allowed-peers flag")
@@ -471,10 +471,10 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 			log.Warn("failed to load peers cache", "err", err)
 		}
 
-		// boot nodes will overwrite the default bootstrap nodes and also disable remote bootstrap
+		// boot nodes flag will overwrite the default bootstrap nodes and also disable remote bootstrap
 		flagBootstrapNodes := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
 		if flagBootstrapNodes != "" {
-			opts.RemoteBootstrap = "" // disable remote bootstrap if user supplied boot nodes
+			opts.RemoteBootstrap = "" // disable remote bootstrap
 			opts.BootstrapNodes, err = parseNodeList(flagBootstrapNodes)
 			if err != nil {
 				return nil, errors.Wrap(err, "parse bootnodes flag")

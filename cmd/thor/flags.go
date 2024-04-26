@@ -86,7 +86,7 @@ var (
 	allowedPeersFlag = cli.StringFlag{
 		Name:   "allowed-peers",
 		Hidden: true,
-		Usage:  "comma separated list of node IDs that can be connected to.",
+		Usage:  "comma separated list of node IDs that can be connected to",
 	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",

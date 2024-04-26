@@ -178,7 +178,6 @@ bin/thor -h
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
-| `--allowed-peers`           | Only connect to certain peers. Set the enode for the nodes.                                 |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
