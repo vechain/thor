@@ -448,23 +448,15 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 	remoteBootstrapURL := remoteBootstrapList
 
 	// restricted peer list mode - no other peers are loaded
-	if allowedPeersListString := ctx.StringSlice(allowedPeersFlag.Name); len(allowedPeersListString) > 0 {
-		var allowedPeers p2psrv.Nodes
-		for _, allowedNodeID := range allowedPeersListString {
-			parsedNode, err := discover.ParseNode(allowedNodeID)
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse the connect only enode - %w", err)
-			}
-			allowedPeers = append(allowedPeers, parsedNode)
-		}
-		knowNodes = allowedPeers
+	if allowedPeersList := parseFlagNodes(ctx.String(allowedPeersFlag.Name)); len(allowedPeersList) > 0 {
+		knowNodes = allowedPeersList
 		restrictedPeerListEnabled = true
 	} else {
 		// load boot nodes
 		knowNodes = fallbackBootstrapNodes
 
 		// override default bootnodes if flag is specified
-		if flagBootstrapNodes := parseBootNode(ctx); len(flagBootstrapNodes) > 0 {
+		if flagBootstrapNodes := parseFlagNodes(ctx.String(bootNodeFlag.Name)); len(flagBootstrapNodes) > 0 {
 			knowNodes = flagBootstrapNodes
 			remoteBootstrapURL = ""
 		}
@@ -655,16 +647,15 @@ func printSoloStartupMessage(
 	fmt.Print(info)
 }
 
-func parseBootNode(ctx *cli.Context) []*discover.Node {
-	s := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
+func parseFlagNodes(flagString string) []*discover.Node {
+	s := strings.TrimSpace(flagString)
 	if s == "" {
 		return nil
 	}
 	inputs := strings.Split(s, ",")
 	var nodes []*discover.Node
 	for _, i := range inputs {
-		node := discover.MustParseNode(i)
-		nodes = append(nodes, node)
+		nodes = append(nodes, discover.MustParseNode(i))
 	}
 	return nodes
 }
