@@ -15,7 +15,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 	noopGauge := Gauge("noopGauge")
 	lazyLoadGauge := LazyLoadGauge("lazyGauge")
 	InitializePrometheusTelemetry()
-	server := httptest.NewServer(Handler())
+	server := httptest.NewServer(HTTPHandler())
 
 	t.Cleanup(func() {
 		server.Close()

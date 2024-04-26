@@ -550,7 +550,7 @@ func startTelemetryServer(addr, allowedOrigins string) (string, func(), error) {
 	}
 
 	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(telemetry.Handler())
+	router.PathPrefix("/metrics").Handler(telemetry.HTTPHandler())
 	handler := handlers.CompressHandler(router)
 
 	// setup cors
@@ -603,13 +603,20 @@ func printStartupMessage2(
 	nodeID string,
 	telemetryServerURL string,
 ) {
-	fmt.Printf(`    API portal   [ %v ]
+	telemetryAnnouncement := ""
+
+	if telemetryServerURL != "Disabled" {
+		telemetryAnnouncement = fmt.Sprintf("Telemetry    [ %s ]", telemetryServerURL)
+	}
+
+	fmt.Printf(`    
+	API portal   [ %v ]
     Node ID      [ %v ]
-    Telemetry    [ %s ]
+    %s
 `,
 		apiURL,
 		nodeID,
-		telemetryServerURL)
+		telemetryAnnouncement)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -634,13 +641,19 @@ func printSoloStartupMessage(
 ) {
 	bestBlock := repo.BestBlockSummary()
 
+	telemetryAnnouncement := ""
+
+	if telemetryServerURL != "Disabled" {
+		telemetryAnnouncement = fmt.Sprintf("Telemetry   [ %s ]", telemetryServerURL)
+	}
+
 	info := fmt.Sprintf(`Starting %v
     Network     [ %v %v ]    
     Best block  [ %v #%v @%v ]
     Forks       [ %v ]
     Data dir    [ %v ]
     API portal  [ %v ]
-    Telemetry   [ %v ]
+    %s
 `,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -648,7 +661,7 @@ func printSoloStartupMessage(
 		forkConfig,
 		dataDir,
 		apiURL,
-		telemetryServerURL)
+		telemetryAnnouncement)
 
 	if gene.ID() == devNetGenesisID {
 		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐

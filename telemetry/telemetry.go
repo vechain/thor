@@ -17,8 +17,8 @@ type Telemetry interface {
 	GetOrCreateHandler() http.Handler
 }
 
-// Handler returns the http handler for retrieving metrics
-func Handler() http.Handler {
+// HTTPHandler returns the http handler for retrieving metrics
+func HTTPHandler() http.Handler {
 	return telemetry.GetOrCreateHandler()
 }
 

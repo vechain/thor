@@ -10,7 +10,7 @@ import (
 )
 
 func TestNoopTelemetry(t *testing.T) {
-	server := httptest.NewServer(Handler())
+	server := httptest.NewServer(HTTPHandler())
 
 	t.Cleanup(func() {
 		server.Close()
