@@ -49,7 +49,7 @@ type body struct {
 	BlockRef     uint64
 	Expiration   uint32
 	Clauses      []*Clause
-	GasPriceCoef uint64
+	GasPriceCoef uint16
 	Gas          uint64
 	DependsOn    *thor.Bytes32 `rlp:"nil"`
 	Nonce        uint64
@@ -179,7 +179,7 @@ func (t *Transaction) SigningHash() (hash thor.Bytes32) {
 
 // GasPriceCoef returns gas price coef.
 // gas price = bgp + bgp * gpc / 255.
-func (t *Transaction) GasPriceCoef() uint64 {
+func (t *Transaction) GasPriceCoef() uint16 {
 	return t.body.GasPriceCoef
 }
 

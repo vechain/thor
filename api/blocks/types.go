@@ -72,7 +72,7 @@ type JSONEmbeddedTx struct {
 	BlockRef     string              `json:"blockRef"`
 	Expiration   uint32              `json:"expiration"`
 	Clauses      []*JSONClause       `json:"clauses"`
-	GasPriceCoef uint64              `json:"gasPriceCoef"`
+	GasPriceCoef uint16              `json:"gasPriceCoef"`
 	Gas          uint64              `json:"gas"`
 	Origin       thor.Address        `json:"origin"`
 	Delegator    *thor.Address       `json:"delegator"`
