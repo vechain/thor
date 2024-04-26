@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -252,8 +251,7 @@ func initAccountServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	gasLimit = math.MaxUint32
-	revisionHandler := utils.NewRevisionHandler(repo, solo.NewBFTEngine(repo))
-	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, revisionHandler)
+	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, solo.NewBFTEngine(repo))
 	acc.Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }

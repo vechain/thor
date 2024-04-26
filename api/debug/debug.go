@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -42,17 +43,17 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
-	revisionHandler   *utils.RevisionHandler
+	bft               bft.Finalizer
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, revisionHandler *utils.RevisionHandler) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer) *Debug {
 	return &Debug{
 		repo,
 		stater,
 		forkConfig,
 		callGaslimit,
 		allowCustomTracer,
-		revisionHandler,
+		bft,
 	}
 }
 
@@ -180,7 +181,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := d.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, d.repo, d.bft)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}

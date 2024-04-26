@@ -24,9 +24,7 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/transactions"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
-	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -65,15 +63,11 @@ func TestTransaction(t *testing.T) {
 	getTransactionByIDPendingTxNotFound(t)
 	handleGetTransactionByIDWithBadQueryParams(t)
 	handleGetTransactionByIDWithNonExistingHead(t)
-	handleGetTransactionByIdWithValidRevisions(t)
-	handleGetTransactionByIdWithFinalRevision(t)
 
 	// Get tx receipt
 	getTxReceipt(t)
 	getReceiptWithBadId(t)
 	handleGetTransactionReceiptByIDWithNonExistingHead(t)
-	handleGetTransactionReceiptWithValidRevisions(t)
-	handleGetTransactionReceiptWithFinalRevision(t)
 }
 
 func getTx(t *testing.T) {
@@ -151,7 +145,7 @@ func txWithBadHeader(t *testing.T) {
 
 	for _, url := range badHeaderURL {
 		res := httpGetAndCheckResponseStatus(t, url, 400)
-		assert.Contains(t, string(res), "invalid syntax")
+		assert.Contains(t, string(res), "invalid length")
 	}
 }
 
@@ -254,61 +248,9 @@ func handleGetTransactionByIDWithNonExistingHead(t *testing.T) {
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
 }
 
-func handleGetTransactionByIdWithValidRevisions(t *testing.T) {
-	revisions := []string{
-		"1",
-		"best",
-		repo.BestBlockSummary().Header.ID().String(),
-	}
-
-	for _, revision := range revisions {
-		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?head="+revision, 200)
-		var rtx *transactions.Transaction
-		if err := json.Unmarshal(res, &rtx); err != nil {
-			t.Fatal(err)
-		}
-		checkMatchingTx(t, transaction, rtx)
-	}
-}
-
-func handleGetTransactionByIdWithFinalRevision(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"?head=finalized", 200)
-	var rtx *transactions.Transaction
-	if err := json.Unmarshal(res, &rtx); err != nil {
-		t.Fatal(err)
-	}
-	assert.Nil(t, rtx, "should be nil")
-}
-
 func handleGetTransactionReceiptByIDWithNonExistingHead(t *testing.T) {
 	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 400)
 	assert.Equal(t, "head: leveldb: not found", strings.TrimSpace(string(res)))
-}
-
-func handleGetTransactionReceiptWithValidRevisions(t *testing.T) {
-	revisions := []string{
-		"1",
-		"best",
-		repo.BestBlockSummary().Header.ID().String(),
-	}
-
-	for _, revision := range revisions {
-		res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head="+revision, 200)
-		var receipt *transactions.Receipt
-		if err := json.Unmarshal(res, &receipt); err != nil {
-			t.Fatal(err)
-		}
-		assert.Equal(t, receipt.GasUsed, transaction.Gas(), "receipt gas used not equal to transaction gas")
-	}
-}
-
-func handleGetTransactionReceiptWithFinalRevision(t *testing.T) {
-	res := httpGetAndCheckResponseStatus(t, ts.URL+"/transactions/"+transaction.ID().String()+"/receipt?head=finalized", 200)
-	var receipt *transactions.Receipt
-	if err := json.Unmarshal(res, &receipt); err != nil {
-		t.Fatal(err)
-	}
-	assert.Nil(t, receipt, "receipt gas used not equal to transaction gas")
 }
 
 func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, responseStatusCode int) []byte {
@@ -400,9 +342,7 @@ func initTransactionServer(t *testing.T) {
 		t.Fatal(e)
 	}
 
-	revisionHandler := utils.NewRevisionHandler(repo, solo.NewBFTEngine(repo))
-
-	transactions.New(repo, mempool, revisionHandler).Mount(router, "/transactions")
+	transactions.New(repo, mempool).Mount(router, "/transactions")
 
 	ts = httptest.NewServer(router)
 }

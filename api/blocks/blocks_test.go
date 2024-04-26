@@ -21,7 +21,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/blocks"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -188,8 +187,7 @@ func initBlockServer(t *testing.T) {
 	}
 	router := mux.NewRouter()
 	bftEngine := solo.NewBFTEngine(repo)
-	revisionHandler := utils.NewRevisionHandler(repo, bftEngine)
-	blocks.New(repo, bftEngine, revisionHandler).Mount(router, "/blocks")
+	blocks.New(repo, bftEngine).Mount(router, "/blocks")
 	ts = httptest.NewServer(router)
 	blk = block
 }

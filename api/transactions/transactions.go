@@ -19,16 +19,14 @@ import (
 )
 
 type Transactions struct {
-	repo            *chain.Repository
-	pool            *txpool.TxPool
-	revisionHandler *utils.RevisionHandler
+	repo *chain.Repository
+	pool *txpool.TxPool
 }
 
-func New(repo *chain.Repository, pool *txpool.TxPool, revisionHandler *utils.RevisionHandler) *Transactions {
+func New(repo *chain.Repository, pool *txpool.TxPool) *Transactions {
 	return &Transactions{
 		repo,
 		pool,
-		revisionHandler,
 	}
 }
 
@@ -147,16 +145,14 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 
-	head, err := utils.ParseRevision(req.URL.Query().Get("head"))
+	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-	block, err := t.revisionHandler.GetSummary(head)
-	if err != nil {
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
-		return err
 	}
 
 	raw := req.URL.Query().Get("raw")
@@ -169,13 +165,13 @@ func (t *Transactions) handleGetTransactionByID(w http.ResponseWriter, req *http
 	}
 
 	if raw == "true" {
-		tx, err := t.getRawTransaction(txID, block.Header.ID(), pending == "true")
+		tx, err := t.getRawTransaction(txID, head, pending == "true")
 		if err != nil {
 			return err
 		}
 		return utils.WriteJSON(w, tx)
 	}
-	tx, err := t.getTransactionByID(txID, block.Header.ID(), pending == "true")
+	tx, err := t.getTransactionByID(txID, head, pending == "true")
 	if err != nil {
 		return err
 	}
@@ -189,23 +185,33 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 		return utils.BadRequest(errors.WithMessage(err, "id"))
 	}
 
-	head, err := utils.ParseRevision(req.URL.Query().Get("head"))
+	head, err := t.parseHead(req.URL.Query().Get("head"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
-	block, err := t.revisionHandler.GetSummary(head)
-	if err != nil {
+
+	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
 		}
-		return err
 	}
 
-	receipt, err := t.getTransactionReceiptByID(txID, block.Header.ID())
+	receipt, err := t.getTransactionReceiptByID(txID, head)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, receipt)
+}
+
+func (t *Transactions) parseHead(head string) (thor.Bytes32, error) {
+	if head == "" {
+		return t.repo.BestBlockSummary().Header.ID(), nil
+	}
+	h, err := thor.ParseBytes32(head)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+	return h, nil
 }
 
 func (t *Transactions) Mount(root *mux.Router, pathPrefix string) {

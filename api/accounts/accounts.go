@@ -11,6 +11,8 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/vechain/thor/v2/bft"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
@@ -25,11 +27,11 @@ import (
 )
 
 type Accounts struct {
-	repo            *chain.Repository
-	stater          *state.Stater
-	callGasLimit    uint64
-	forkConfig      thor.ForkConfig
-	revisionHandler *utils.RevisionHandler
+	repo         *chain.Repository
+	stater       *state.Stater
+	callGasLimit uint64
+	forkConfig   thor.ForkConfig
+	bft          bft.Finalizer
 }
 
 func New(
@@ -37,14 +39,14 @@ func New(
 	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
-	revisionHandler *utils.RevisionHandler,
+	bft bft.Finalizer,
 ) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
 		callGasLimit,
 		forkConfig,
-		revisionHandler,
+		bft,
 	}
 }
 
@@ -68,7 +70,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := a.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -124,7 +126,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := a.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -151,7 +153,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := a.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -174,7 +176,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := a.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -217,7 +219,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := a.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))

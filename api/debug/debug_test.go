@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
@@ -500,8 +499,7 @@ func initDebugServer(t *testing.T) {
 
 	forkConfig := thor.GetForkConfig(b.Header().ID())
 	router := mux.NewRouter()
-	revisionHandler := utils.NewRevisionHandler(repo, solo.NewBFTEngine(repo))
-	debug = New(repo, stater, forkConfig, 21000, true, revisionHandler)
+	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo))
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }

@@ -10,6 +10,8 @@ import (
 	"net/http/pprof"
 	"strings"
 
+	"github.com/vechain/thor/v2/bft"
+
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/vechain/thor/v2/api/accounts"
@@ -21,7 +23,6 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
-	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -35,7 +36,7 @@ func New(
 	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
-	bft blocks.BFTEngine,
+	bft bft.Finalizer,
 	nw node.Network,
 	allowedOrigins string,
 	backtraceLimit uint32,
@@ -63,9 +64,7 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	revisionHandler := utils.NewRevisionHandler(repo, bft)
-
-	accounts.New(repo, stater, callGasLimit, forkConfig, revisionHandler).
+	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
@@ -74,11 +73,11 @@ func New(
 		transfers.New(repo, logDB).
 			Mount(router, "/logs/transfer")
 	}
-	blocks.New(repo, bft, revisionHandler).
+	blocks.New(repo, bft).
 		Mount(router, "/blocks")
-	transactions.New(repo, txPool, revisionHandler).
+	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, revisionHandler).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")

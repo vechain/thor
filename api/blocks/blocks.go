@@ -8,6 +8,8 @@ package blocks
 import (
 	"net/http"
 
+	"github.com/vechain/thor/v2/bft"
+
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
@@ -17,16 +19,14 @@ import (
 )
 
 type Blocks struct {
-	repo            *chain.Repository
-	bft             BFTEngine
-	revisionHandler *utils.RevisionHandler
+	repo *chain.Repository
+	bft  bft.Finalizer
 }
 
-func New(repo *chain.Repository, bft BFTEngine, revisionHandler *utils.RevisionHandler) *Blocks {
+func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
 	return &Blocks{
 		repo,
 		bft,
-		revisionHandler,
 	}
 }
 
@@ -40,7 +40,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
 	}
 
-	summary, err := b.revisionHandler.GetSummary(revision)
+	summary, err := utils.GetSummary(revision, b.repo, b.bft)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
 			return utils.WriteJSON(w, nil)
