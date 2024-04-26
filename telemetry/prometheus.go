@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const namespace = "node_telemetry"
+const namespace = "thor_telemetry"
 
 // InitializePrometheusTelemetry creates a new instance of the Prometheus service and
 // sets the implementation as the default telemetry services

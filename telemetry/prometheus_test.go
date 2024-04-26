@@ -84,21 +84,21 @@ func TestOtelPromTelemetry(t *testing.T) {
 	metrics, err := parser.TextToMetricFamilies(resp.Body)
 	require.NoError(t, err)
 
-	require.Equal(t, metrics["node_telemetry_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
-	require.Equal(t, metrics["node_telemetry_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
-	require.Equal(t, metrics["node_telemetry_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
+	require.Equal(t, metrics["thor_telemetry_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
+	require.Equal(t, metrics["thor_telemetry_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
+	require.Equal(t, metrics["thor_telemetry_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
 
-	sumHistVect := metrics["node_telemetry_hist2"].GetMetric()[0].GetHistogram().GetSampleSum() +
-		metrics["node_telemetry_hist2"].GetMetric()[1].GetHistogram().GetSampleSum()
+	sumHistVect := metrics["thor_telemetry_hist2"].GetMetric()[0].GetHistogram().GetSampleSum() +
+		metrics["thor_telemetry_hist2"].GetMetric()[1].GetHistogram().GetSampleSum()
 	require.Equal(t, sumHistVect, float64(histTotal))
 
-	sumCountVec := metrics["node_telemetry_countVec1"].GetMetric()[0].GetCounter().GetValue() +
-		metrics["node_telemetry_countVec1"].GetMetric()[1].GetCounter().GetValue()
+	sumCountVec := metrics["thor_telemetry_countVec1"].GetMetric()[0].GetCounter().GetValue() +
+		metrics["thor_telemetry_countVec1"].GetMetric()[1].GetCounter().GetValue()
 	require.Equal(t, sumCountVec, float64(totalCountVec))
 
-	require.Equal(t, metrics["node_telemetry_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
-	sumGaugeVec := metrics["node_telemetry_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
-		metrics["node_telemetry_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
+	require.Equal(t, metrics["thor_telemetry_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
+	sumGaugeVec := metrics["thor_telemetry_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
+		metrics["thor_telemetry_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
 	require.Equal(t, sumGaugeVec, float64(totalGaugeVec))
 }
 
