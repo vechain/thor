@@ -40,11 +40,6 @@ type Options struct {
 
 	KnownNodes Nodes
 
-	// BootstrapNodes are used to establish connectivity
-	// with the rest of the network using the V5 discovery
-	// protocol.
-	BootstrapNodes Nodes
-
 	// RemoteBootstrap is the url of remote dynamic bootstrap list.
 	RemoteBootstrap string
 
