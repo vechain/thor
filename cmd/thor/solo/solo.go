@@ -207,7 +207,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 
 // initSolo adds transactions to the first block to set the chain state
 func (s *Solo) initSolo() error {
-	gasPriceTx, err := s.makeGasPriceTransaction()
+	gasPriceTx, err := s.makeGasPriceTx()
 	if err != nil {
 		return err
 	}
@@ -219,8 +219,8 @@ func (s *Solo) initSolo() error {
 	return s.packing(tx.Transactions{gasPriceTx}, false)
 }
 
-// makeGasPriceTransaction creates a transaction to set the gas price
-func (s *Solo) makeGasPriceTransaction() (*tx.Transaction, error) {
+// makeGasPriceTx creates a transaction to set the gas price
+func (s *Solo) makeGasPriceTx() (*tx.Transaction, error) {
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
 		return nil, errors.New("set method not found")
