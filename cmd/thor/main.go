@@ -105,6 +105,7 @@ func main() {
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
 					onDemandFlag,
+					blockInterval,
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
@@ -343,6 +344,7 @@ func soloAction(ctx *cli.Context) error {
 		txPool,
 		uint64(ctx.Int(gasLimitFlag.Name)),
 		ctx.Bool(onDemandFlag.Name),
+		ctx.Uint64(blockInterval.Name),
 		skipLogs,
 		forkConfig).Run(exitSignal)
 }

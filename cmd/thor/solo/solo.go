@@ -31,14 +31,15 @@ var log = log15.New("pkg", "solo")
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo      *chain.Repository
-	txPool    *txpool.TxPool
-	packer    *packer.Packer
-	logDB     *logdb.LogDB
-	gasLimit  uint64
-	bandwidth bandwidth.Bandwidth
-	onDemand  bool
-	skipLogs  bool
+	repo          *chain.Repository
+	txPool        *txpool.TxPool
+	packer        *packer.Packer
+	logDB         *logdb.LogDB
+	gasLimit      uint64
+	bandwidth     bandwidth.Bandwidth
+	onDemand      bool
+	blockInterval uint64
+	skipLogs      bool
 }
 
 // New returns Solo instance
@@ -49,6 +50,7 @@ func New(
 	txPool *txpool.TxPool,
 	gasLimit uint64,
 	onDemand bool,
+	blockInterval uint64,
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
 ) *Solo {
@@ -61,10 +63,11 @@ func New(
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
-		logDB:    logDB,
-		gasLimit: gasLimit,
-		skipLogs: skipLogs,
-		onDemand: onDemand,
+		logDB:         logDB,
+		gasLimit:      gasLimit,
+		skipLogs:      skipLogs,
+		onDemand:      onDemand,
+		blockInterval: blockInterval,
 	}
 }
 
@@ -93,7 +96,7 @@ func (s *Solo) loop(ctx context.Context) {
 			log.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % thor.BlockInterval; left == 0 {
+			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					log.Error("failed to pack block", "err", err)
 				}
