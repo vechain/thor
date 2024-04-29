@@ -226,7 +226,7 @@ func (s *Solo) makeGasPriceTx() (*tx.Transaction, error) {
 		return nil, errors.New("set method not found")
 	}
 
-	data, err := method.EncodeInput(thor.KeyBaseGasPrice, big.NewInt(10^13))
+	data, err := method.EncodeInput(thor.KeyBaseGasPrice, big.NewInt(1e13))
 	if err != nil {
 		return nil, err
 	}
