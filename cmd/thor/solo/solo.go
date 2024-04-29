@@ -8,13 +8,17 @@ package solo
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"math/rand"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
@@ -87,6 +91,10 @@ func (s *Solo) Run(ctx context.Context) error {
 }
 
 func (s *Solo) loop(ctx context.Context) {
+	if err := s.initSolo(); err != nil {
+		log.Error("failed to add first block txs", "err", err)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -195,4 +203,54 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	log.Debug(b.String())
 
 	return nil
+}
+
+// initSolo adds transactions to the first block to set the chain state
+func (s *Solo) initSolo() error {
+	gasPriceTx, err := s.makeGasPriceTransaction()
+	if err != nil {
+		return err
+	}
+
+	if err := s.txPool.Add(gasPriceTx); err != nil {
+		return err
+	}
+
+	return s.packing(tx.Transactions{gasPriceTx}, false)
+}
+
+// makeGasPriceTransaction creates a transaction to set the gas price
+func (s *Solo) makeGasPriceTransaction() (*tx.Transaction, error) {
+	method, found := builtin.Params.ABI.MethodByName("set")
+	if !found {
+		return nil, errors.New("set method not found")
+	}
+
+	data, err := method.EncodeInput(thor.KeyBaseGasPrice, big.NewInt(10^13))
+	if err != nil {
+		return nil, err
+	}
+
+	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
+
+	return s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+}
+
+// newTx builds and signs a new transaction from the given clauses
+func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transaction, error) {
+	builder := new(tx.Builder).ChainTag(s.repo.ChainTag())
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	newTx := builder.BlockRef(tx.NewBlockRef(0)).
+		Expiration(100).
+		Nonce(rand.Uint64()).
+		DependsOn(nil).
+		Gas(1_000_000).
+		Build()
+
+	sig, err := crypto.Sign(newTx.SigningHash().Bytes(), from.PrivateKey)
+
+	return newTx.WithSignature(sig), err
 }
