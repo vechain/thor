@@ -587,6 +587,9 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 	inputs := strings.Split(list, ",")
 	var nodes []*discover.Node
 	for _, i := range inputs {
+		if i == "" {
+			continue
+		}
 		node, err := discover.ParseNode(i)
 		if err != nil {
 			return nil, err
