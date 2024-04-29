@@ -346,10 +346,8 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				// 0x48 is BASEFEE opCode
-				codeData := []byte{0x48, 0x00}
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.NoFork).
-					PrepareClause(tx.NewClause(&target).WithData(codeData), 0, math.MaxUint64, &xenv.TransactionContext{})
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.NotNil(t, out.VMErr)
@@ -362,10 +360,8 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				// 0x48 is BASEFEE opCode
-				codeData := []byte{0x48, 0x00}
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
-					PrepareClause(tx.NewClause(&target).WithData(codeData), 0, math.MaxUint64, &xenv.TransactionContext{})
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
