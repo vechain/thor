@@ -134,7 +134,7 @@ func TestEncodingBadExtension(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// backward compatiability，required to be trimmed
+	// backward compatibility，required to be trimmed
 	assert.EqualValues(t, 10, count)
 
 	var raws []rlp.RawValue

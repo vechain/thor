@@ -95,7 +95,7 @@ func MustParseBytes32(s string) Bytes32 {
 }
 
 // BytesToBytes32 converts bytes slice into Bytes32.
-// If b is larger than Bytes32 legnth, b will be cropped (from the left).
+// If b is larger than Bytes32 length, b will be cropped (from the left).
 // If b is smaller than Bytes32 length, b will be extended (from the left).
 func BytesToBytes32(b []byte) Bytes32 {
 	return Bytes32(common.BytesToHash(b))
