@@ -6,6 +6,8 @@
 package genesis_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -131,15 +133,30 @@ func TestHexOrDecimal256MarshalUnmarshal(t *testing.T) {
 
 	// Unmarshal JSON into HexOrDecimal256
 	var unmarshaledValue genesis.HexOrDecimal256
+	// using direct function
 	err := unmarshaledValue.UnmarshalJSON([]byte(originalHex))
 	assert.NoError(t, err, "Unmarshaling should not produce an error")
 
+	// using json overloading ( satisfies the json.Unmarshal interface )
+	err = json.Unmarshal([]byte(originalHex), &unmarshaledValue)
+	assert.NoError(t, err, "Unmarshaling should not produce an error")
+
 	// Marshal the value back to JSON
-	marshaledJSON, err := unmarshaledValue.MarshalJSON()
+	// using direct function
+	directMarshallJson, err := unmarshaledValue.MarshalJSON()
 	assert.NoError(t, err, "Marshaling should not produce an error")
+	fmt.Println(directMarshallJson)
+
+	marshal, err := json.Marshal(unmarshaledValue)
+	assert.NoError(t, err, "Marshaling should not produce an error")
+	fmt.Println(marshal)
+
+	marshal, err = json.Marshal(&unmarshaledValue)
+	assert.NoError(t, err, "Marshaling should not produce an error")
+	fmt.Println(marshal)
 
 	// Compare the original hex string with the marshaled JSON string
-	assert.Equal(t, "0x64", string(marshaledJSON), "Original hex and marshaled JSON should be equivalent")
+	assert.Equal(t, originalHex, string(marshal), "Original hex and marshaled JSON should be equivalent")
 }
 
 func TestHexOrDecimal256MarshalUnmarshalWithNilError(t *testing.T) {
