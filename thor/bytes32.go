@@ -20,9 +20,8 @@ import (
 type Bytes32 [32]byte
 
 var (
-	ZeroBytes32                  = make([]Bytes32, 0)
-	_           json.Marshaler   = (*Bytes32)(nil)
-	_           json.Unmarshaler = (*Bytes32)(nil)
+	_ json.Marshaler   = (*Bytes32)(nil)
+	_ json.Unmarshaler = (*Bytes32)(nil)
 )
 
 // String implements stringer
@@ -48,7 +47,7 @@ func (b Bytes32) IsZero() bool {
 // MarshalJSON implements json.Marshaler.
 func (b Bytes32) MarshalJSON() ([]byte, error) {
 	// Convert Bytes32 to a hexadecimal string.
-	// if bytes = nil then we return 0x000000 instead of nil
+	// if []byte = [00000...] then we return 0x000000 instead of nil
 	return json.Marshal(hexutil.Encode(b[:]))
 }
 
