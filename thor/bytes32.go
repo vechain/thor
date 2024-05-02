@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // Bytes32 array of 32 bytes.
@@ -48,7 +49,9 @@ func (b *Bytes32) MarshalJSON() ([]byte, error) {
 	if b == nil {
 		return json.Marshal(nil)
 	}
-	return json.Marshal(b.String())
+
+	// Convert Bytes32 to a hexadecimal string.
+	return json.Marshal(hexutil.Encode(b[:]))
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
