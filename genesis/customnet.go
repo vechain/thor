@@ -254,8 +254,9 @@ func (i *HexOrDecimal256) UnmarshalJSON(input []byte) error {
 }
 
 // MarshalJSON implements the json.Marshaler interface.
-func (i *HexOrDecimal256) MarshalJSON() ([]byte, error) {
-	text, err := (*math.HexOrDecimal256)(i).MarshalText()
+func (i HexOrDecimal256) MarshalJSON() ([]byte, error) {
+	decimal256 := math.HexOrDecimal256(i)
+	text, err := decimal256.MarshalText()
 	if err != nil {
 		return nil, err
 	}

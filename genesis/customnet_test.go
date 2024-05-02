@@ -162,11 +162,13 @@ func TestHexOrDecimal256MarshalUnmarshal(t *testing.T) {
 	assert.Equal(t, originalHex, string(directMarshallJson))
 
 	// using json overloading ( satisfies the json.Unmarshal interface )
+	// using value
 	marshalVal, err := json.Marshal(unmarshaledValue)
 	assert.NoError(t, err, "Marshaling should not produce an error")
-	assert.NotEqual(t, originalHex, string(marshalVal))
+	assert.Equal(t, originalHex, string(marshalVal))
 
 	// using json overloading ( satisfies the json.Unmarshal interface )
+	// using pointer
 	marshalPtr, err := json.Marshal(&unmarshaledValue)
 	assert.NoError(t, err, "Marshaling should not produce an error")
 	assert.Equal(t, originalHex, string(marshalPtr))

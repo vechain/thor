@@ -45,8 +45,8 @@ func (b Bytes32) IsZero() bool {
 }
 
 // MarshalJSON implements json.Marshaler.
-func (b *Bytes32) MarshalJSON() ([]byte, error) {
-	if b == nil {
+func (b Bytes32) MarshalJSON() ([]byte, error) {
+	if b == [32]byte{} {
 		return json.Marshal(nil)
 	}
 
