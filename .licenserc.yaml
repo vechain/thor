@@ -1,0 +1,17 @@
+# See: https://github.com/apache/skywalking-eyes
+# Test Locally: docker run -it --rm -v $(pwd):/github/workspace apache/skywalking-eyes header check
+header:
+  license:
+    spdx-id: GPL-3.0-or-later
+    copyright-owner: The VeChainThor developers
+    software-name: VeChainThor
+    copyright-year: '2017-2024'
+    pattern: |
+      Copyright(?: \(c\))? \b(19\d{2}|20\d{2})\b The (VeChainThor developers|go-ethereum Authors)
+    content: |
+      Copyright (c) 2024 The VeChainThor developers
+  paths:
+    - '**/*.go'
+  paths-ignore:
+    - 'builtin/gen/bindata.go'
+    - 'tracers/**/gen_*.go'
