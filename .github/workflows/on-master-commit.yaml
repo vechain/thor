@@ -84,7 +84,6 @@ jobs:
               "commit-url": "${{ github.event.head_commit.url }}",
               "e2e-test-status": "${{ needs.run-e2e-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "branch": "${{ github.ref }}",
-              "status": "Failure",
               "repository": "${{ github.repository }}",
               "commit-author": "${{ github.event.head_commit.author.name }}",
               "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
