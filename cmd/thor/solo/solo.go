@@ -92,7 +92,7 @@ func (s *Solo) Run(ctx context.Context) error {
 
 func (s *Solo) loop(ctx context.Context) {
 	if err := s.initSolo(); err != nil {
-		log.Error("failed to add first block txs", "err", err)
+		panic(err)
 	}
 
 	for {
@@ -223,7 +223,7 @@ func (s *Solo) initSolo() error {
 func (s *Solo) makeGasPriceTx() (*tx.Transaction, error) {
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
-		return nil, errors.New("set method not found")
+		return nil, errors.New("Params ABI: set method not found")
 	}
 
 	data, err := method.EncodeInput(thor.KeyBaseGasPrice, big.NewInt(1e13))
