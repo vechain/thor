@@ -62,6 +62,15 @@ func TestAuthority(t *testing.T) {
 		{M(aut.Candidates(&big.Int{}, thor.InitialMaxBlockProposers)), M(
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
+		{M(aut.AllCandidates()), M([]*Candidate{
+			//{p1, p1, thor.Bytes32{}, false},
+			{p2, p2, thor.Bytes32{}, true},
+			{p3, p3, thor.Bytes32{}, true}}, nil),
+		},
+		{M(aut.First()), M(&p2, nil)},
+		{M(aut.Next(p2)), M(&p3, nil)},
+		{M(aut.Revoke(p1)), M(false, nil)},
+		{M(aut.Revoke(p3)), M(true, nil)},
 	}
 
 	for i, tt := range tests {
