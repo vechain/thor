@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-isatty"
+	"github.com/otherview/filerotatewriter"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
@@ -78,6 +79,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiLogsEnabledFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -104,6 +106,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiLogsEnabledFlag,
 					onDemandFlag,
 					persistFlag,
 					gasLimitFlag,
@@ -175,6 +178,11 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
+	fileRotateWriter, err := openFileRotate(ctx, instanceDir)
+	if err != nil {
+		return err
+	}
+
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	if !skipLogs {
@@ -210,6 +218,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
+		api.NewRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), fileRotateWriter),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -269,6 +278,7 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
+	var fileRotateWriter filerotatewriter.FileRotateWriter
 	var err error
 
 	if ctx.Bool(persistFlag.Name) {
@@ -279,14 +289,20 @@ func soloAction(ctx *cli.Context) error {
 			return err
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
+
 		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
+
+		if fileRotateWriter, err = openFileRotate(ctx, instanceDir); err != nil {
+			return err
+		}
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()
 		logDB = openMemLogDB()
+		fileRotateWriter = openMemFileRotate(ctx)
 	}
 
 	repo, err := initChainRepository(gene, mainDB, logDB)
@@ -323,6 +339,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
+		api.NewRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), fileRotateWriter),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -330,7 +347,10 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("stopping API server..."); srvCloser() }()
+	defer func() {
+		log.Info("stopping API server...")
+		srvCloser()
+	}()
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 

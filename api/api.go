@@ -42,6 +42,7 @@ func New(
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
+	reqLogger *RequestLogger,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
@@ -91,11 +92,19 @@ func New(
 	}
 
 	handler := handlers.CompressHandler(router)
+	if reqLogger.Enabled() {
+		handler = reqLogger.Handle(handler)
+	}
+
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
-	return handler.ServeHTTP,
-		subs.Close // subscriptions handles hijacked conns, which need to be closed
+
+	closeFunc := func() {
+		subs.Close()     // subscriptions handles hijacked conns, which need to be closed
+		reqLogger.Stop() // noop if feature not enabled
+	}
+	return handler.ServeHTTP, closeFunc
 }

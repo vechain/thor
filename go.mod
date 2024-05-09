@@ -18,11 +18,12 @@ require (
 	github.com/mattn/go-isatty v0.0.3
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/mattn/go-tty v0.0.0-20180219170247-931426f7535a
+	github.com/otherview/filerotatewriter v0.0.0-20240509103702-a305c09fd53a
 	github.com/pborman/uuid v0.0.0-20170612153648-e790cca94e6c
 	github.com/pkg/errors v0.8.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/qianbin/directcache v0.9.7
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.9.0
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a
 	github.com/vechain/go-ecvrf v0.0.0-20220525125849-96fa0442e765
 	golang.org/x/crypto v0.21.0

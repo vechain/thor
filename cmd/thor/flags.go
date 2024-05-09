@@ -59,6 +59,10 @@ var (
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
+	apiLogsEnabledFlag = cli.BoolFlag{
+		Name:  "api-logs-enabled",
+		Usage: "logs inbound requests to disk",
+	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Value: int(log15.LvlInfo),

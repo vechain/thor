@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-tty"
+	"github.com/otherview/filerotatewriter"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
@@ -345,6 +346,27 @@ func suggestFDCache() int {
 		return 5120
 	}
 	return n
+}
+
+func openFileRotate(ctx *cli.Context, instanceDir string) (filerotatewriter.FileRotateWriter, error) {
+	if ctx.Bool(apiLogsEnabledFlag.Name) {
+		return filerotatewriter.New(
+			filerotatewriter.WithDir(instanceDir),
+			filerotatewriter.WithFileBaseName("request-logs"),
+			filerotatewriter.WithFileMaxSize(10*1024*1024),
+			filerotatewriter.WithMaxNumberFiles(10),
+		)
+	}
+
+	return nil, nil
+}
+
+func openMemFileRotate(ctx *cli.Context) filerotatewriter.FileRotateWriter {
+	if ctx.Bool(apiLogsEnabledFlag.Name) {
+		return filerotatewriter.StdoutWriter()
+	}
+
+	return nil
 }
 
 func openLogDB(ctx *cli.Context, dir string) (*logdb.LogDB, error) {
