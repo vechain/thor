@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package comm
 
 import (
@@ -24,7 +29,6 @@ func makePeerWithScore(score uint64) *Peer {
 }
 
 func TestWithBestScore(t *testing.T) {
-
 	peer1 := makePeerWithScore(100)
 	peer2 := makePeerWithScore(200)
 	peer3 := makePeerWithScore(150)
