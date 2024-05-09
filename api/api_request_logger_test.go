@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// MockWriter implements filerotatewriter.FileRotateWriter interface
+// MockWriter implements rotatewriter.RotateWriter interface
 type MockWriter struct {
 	Messages []string
 	lock     sync.RWMutex

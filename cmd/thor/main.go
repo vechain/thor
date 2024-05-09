@@ -17,10 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-isatty"
-	"github.com/otherview/filerotatewriter"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
+	"github.com/vechain/thor/v2/api/utils/rotatewriter"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
@@ -282,7 +282,7 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
-	var fileRotateWriter filerotatewriter.FileRotateWriter
+	var fileRotateWriter rotatewriter.RotateWriter
 	var err error
 
 	if ctx.Bool(persistFlag.Name) {

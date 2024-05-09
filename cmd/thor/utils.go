@@ -34,9 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-tty"
-	"github.com/otherview/filerotatewriter"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
+	"github.com/vechain/thor/v2/api/utils/rotatewriter"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/co"
@@ -348,24 +348,24 @@ func suggestFDCache() int {
 	return n
 }
 
-func openFileRotate(ctx *cli.Context, instanceDir string) (filerotatewriter.FileRotateWriter, error) {
+func openFileRotate(ctx *cli.Context, instanceDir string) (rotatewriter.RotateWriter, error) {
 	// Max of 10 files with 10Mb each
 	// files will be rotated after that maximum
 	if ctx.Bool(apiLogsEnabledFlag.Name) {
-		return filerotatewriter.New(
-			filerotatewriter.WithDir(instanceDir),
-			filerotatewriter.WithFileBaseName("request-logs"),
-			filerotatewriter.WithFileMaxSize(ctx.Int64(apiLogsMaxFileSizeFlag.Name)),
-			filerotatewriter.WithMaxNumberFiles(ctx.Int(apiLogsMaxFileCountFlag.Name)),
+		return rotatewriter.New(
+			rotatewriter.WithDir(instanceDir),
+			rotatewriter.WithFileBaseName("request-logs"),
+			rotatewriter.WithFileMaxSize(ctx.Int64(apiLogsMaxFileSizeFlag.Name)),
+			rotatewriter.WithMaxNumberFiles(ctx.Int(apiLogsMaxFileCountFlag.Name)),
 		)
 	}
 
 	return nil, nil
 }
 
-func openMemFileRotate(ctx *cli.Context) filerotatewriter.FileRotateWriter {
+func openMemFileRotate(ctx *cli.Context) rotatewriter.RotateWriter {
 	if ctx.Bool(apiLogsEnabledFlag.Name) {
-		return filerotatewriter.StdoutWriter()
+		return rotatewriter.StdoutWriter()
 	}
 
 	return nil

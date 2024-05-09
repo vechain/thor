@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/otherview/filerotatewriter"
+	"github.com/vechain/thor/v2/api/utils/rotatewriter"
 )
 
 // RequestLogger logs requests to an output
@@ -21,10 +21,10 @@ type RequestLogger struct {
 	enabled      bool
 	writerChan   chan entry
 	stopChan     chan bool
-	outputWriter filerotatewriter.FileRotateWriter
+	outputWriter rotatewriter.RotateWriter
 }
 
-func NewRequestLogger(enabled bool, fileRotate filerotatewriter.FileRotateWriter) *RequestLogger {
+func NewRequestLogger(enabled bool, fileRotate rotatewriter.RotateWriter) *RequestLogger {
 	return &RequestLogger{
 		enabled:      enabled,
 		outputWriter: fileRotate,
