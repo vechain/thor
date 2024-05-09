@@ -94,12 +94,9 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			log.Debug("synchronization start")
 
 			best := c.repo.BestBlockSummary().Header
-			// choose peer which has the head block with higher total score
-			peer := c.peerSet.Slice().Find(func(peer *Peer) bool {
-				_, totalScore := peer.Head()
-				return totalScore >= best.TotalScore()
-			})
-			if peer == nil {
+			peer, score := c.peerSet.WithBestScore()
+
+			if peer == nil || score < best.TotalScore() {
 				if c.peerSet.Len() < 3 {
 					log.Debug("no suitable peer to sync")
 					break

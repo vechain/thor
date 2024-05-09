@@ -193,6 +193,21 @@ func (ps *PeerSet) Slice() Peers {
 	return ret
 }
 
+// WithBestScore returns the peer with the highest total score.
+func (ps *PeerSet) WithBestScore() (*Peer, uint64) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	var best *Peer
+	for _, peer := range ps.m {
+		if best == nil || peer.head.totalScore > best.head.totalScore {
+			best = peer
+		}
+	}
+
+	return best, best.head.totalScore
+}
+
 // Len returns length of set.
 func (ps *PeerSet) Len() int {
 	ps.lock.Lock()
