@@ -9,11 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vechain/thor/v2/thor"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/thor"
 )
 
 func makePeerWithScore(score uint64) *Peer {
