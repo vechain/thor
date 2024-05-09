@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 // MockWriter implements filerotatewriter.FileRotateWriter interface
 type MockWriter struct {
 	Messages []string
+	lock     sync.RWMutex
 }
 
 func (mw *MockWriter) Start() error {
@@ -26,6 +28,9 @@ func (mw *MockWriter) Start() error {
 }
 
 func (mw *MockWriter) Write(p []byte) (int, error) {
+	mw.lock.Lock()
+	defer mw.lock.Unlock()
+
 	mw.Messages = append(mw.Messages, string(p))
 	return len(p), nil
 }
@@ -57,6 +62,8 @@ func TestRequestLogging(t *testing.T) {
 	time.Sleep(2 * time.Second) // logger is async, give some time to write to the mock struct
 
 	assert.Equal(t, recorder.Result().Status, fmt.Sprintf("%d %s", http.StatusAccepted, http.StatusText(http.StatusAccepted)))
+	mockWriter.lock.RLock()
+	defer mockWriter.lock.RUnlock()
 	assert.Greater(t, len(mockWriter.Messages), 0, "There should be at least one message logged")
 	assert.Contains(t, mockWriter.Messages[0], "\"uri\":\"/test\"", "Log entry must contain the correct URI")
 }
