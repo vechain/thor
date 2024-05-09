@@ -349,12 +349,14 @@ func suggestFDCache() int {
 }
 
 func openFileRotate(ctx *cli.Context, instanceDir string) (filerotatewriter.FileRotateWriter, error) {
+	// Max of 10 files with 10Mb each
+	// files will be rotated after that maximum
 	if ctx.Bool(apiLogsEnabledFlag.Name) {
 		return filerotatewriter.New(
 			filerotatewriter.WithDir(instanceDir),
 			filerotatewriter.WithFileBaseName("request-logs"),
-			filerotatewriter.WithFileMaxSize(10*1024*1024),
-			filerotatewriter.WithMaxNumberFiles(10),
+			filerotatewriter.WithFileMaxSize(ctx.Int64(apiLogsMaxFileSizeFlag.Name)),
+			filerotatewriter.WithMaxNumberFiles(ctx.Int(apiLogsMaxFileCountFlag.Name)),
 		)
 	}
 
