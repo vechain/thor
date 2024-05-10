@@ -106,7 +106,6 @@ func TestEVMFunction(t *testing.T) {
 				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
 				assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(200)), nil), M(ctx.state.GetBalance(origin)))
 				assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(100)), nil), M(ctx.state.GetEnergy(origin, time)))
-
 			},
 		},
 		{
@@ -229,7 +228,6 @@ func TestEVMFunction(t *testing.T) {
 
 				assert.Equal(t, thor.MustParseBytes32("ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1"), thor.Bytes32(hashes[0]))
 				assert.Equal(t, thor.MustParseBytes32("7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"), thor.Bytes32(hashes[1]))
-
 			},
 		},
 		{
@@ -254,15 +252,18 @@ func TestEVMFunction(t *testing.T) {
 			abi:        "",
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				code, _ := hex.DecodeString("60ef60005360016000f3")
+				failingCalldata := []string{"60ef60005360016000f3", "60ef60005360026000f3", "60ef60005360036000f3", "60ef60005360206000f3"}
+				for _, calldata := range failingCalldata {
+					code, _ := hex.DecodeString(calldata)
 
-				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
-					PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{})
-				out, _, err := exec()
+					exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+						PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{})
+					out, _, err := exec()
 
-				assert.Nil(t, err)
-				assert.NotNil(t, out.VMErr)
-				assert.Equal(t, out.VMErr.Error(), "invalid code: must not begin with 0xef")
+					assert.Nil(t, err)
+					assert.NotNil(t, out.VMErr)
+					assert.Equal(t, "invalid code: must not begin with 0xef", out.VMErr.Error())
+				}
 			},
 		},
 		{
@@ -299,7 +300,7 @@ func TestEVMFunction(t *testing.T) {
 
 				assert.Nil(t, err)
 				assert.NotNil(t, out.VMErr)
-				assert.Equal(t, out.VMErr.Error(), "invalid opcode 0x5f")
+				assert.Equal(t, "invalid opcode 0x5f", out.VMErr.Error())
 			},
 		},
 		{
@@ -323,54 +324,50 @@ func TestEVMFunction(t *testing.T) {
 			},
 		},
 		{
-			name:       "pre ETH_SH basefee",
-			code:       "6080604052348015600e575f80fd5b50600436106026575f3560e01c80635cf2496914602a575b5f80fd5b60306044565b604051603b91906061565b60405180910390f35b5f48905090565b5f819050919050565b605b81604b565b82525050565b5f60208201905060725f8301846054565b9291505056fea2646970667358221220cbae2729fc31c76b30a14b2a0f61fdad920cb3c0ef1f7f5166e48d836d91cc6a64736f6c63430008180033",
-			abi:        `[{"inputs":[],"name":"basefee","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
-			methodName: "basefee",
+			name:       "ETH_SH PUSH0 gas cost",
+			code:       "",
+			abi:        "",
+			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				// pragma solidity >=0.7.0 <0.9.0;
-				// contract TestBaseFee {
-				//     function basefee() public view returns (uint256) {
-				//         return block.basefee;
-				//     }
-				// }
-				methodData, err := ctx.method.EncodeInput()
-				if err != nil {
-					t.Fatal(err)
-				}
+				// 0x5f is PUSH0 opCode
+				codeData := []byte{0x5f, 0x00}
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(nil).WithData(codeData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
 
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+				assert.Equal(t, uint64(2), math.MaxUint64-out.LeftOverGas)
+			},
+		},
+		{
+			name:       "pre ETH_SH basefee",
+			code:       "4800",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.NoFork).
-					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.NotNil(t, out.VMErr)
-				assert.Equal(t, out.VMErr.Error(), "invalid opcode 0x5f")
+				assert.Equal(t, "invalid opcode 0x48", out.VMErr.Error())
 			},
 		},
 		{
 			name:       "ETH_SH basefee",
-			code:       "6080604052348015600e575f80fd5b50600436106026575f3560e01c80635cf2496914602a575b5f80fd5b60306044565b604051603b91906061565b60405180910390f35b5f48905090565b5f819050919050565b605b81604b565b82525050565b5f60208201905060725f8301846054565b9291505056fea2646970667358221220cbae2729fc31c76b30a14b2a0f61fdad920cb3c0ef1f7f5166e48d836d91cc6a64736f6c63430008180033",
-			abi:        `[{"inputs":[],"name":"basefee","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
-			methodName: "basefee",
+			code:       "4800",
+			abi:        "",
+			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
-				// pragma solidity >=0.7.0 <0.9.0;
-				// contract TestBaseFee {
-				//     function basefee() public view returns (uint256) {
-				//         return block.basefee;
-				//     }
-				// }
-				methodData, err := ctx.method.EncodeInput()
-				if err != nil {
-					t.Fatal(err)
-				}
-
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
-					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
 				assert.Nil(t, err)
 				assert.Nil(t, out.VMErr)
 
 				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(0)) == 0)
+				assert.Equal(t, uint64(2), math.MaxUint64-out.LeftOverGas)
 			},
 		},
 		{
