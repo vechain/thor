@@ -217,7 +217,7 @@ func (s *Solo) init() error {
 	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	if err != nil {
-		return errors.WithMessage(err, "get max block proposers")
+		return errors.WithMessage(err, "failed to get the current base gas price")
 	}
 	if currentBGP == baseGasPrice {
 		return nil
