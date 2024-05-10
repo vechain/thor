@@ -352,12 +352,17 @@ func openFileRotate(ctx *cli.Context, instanceDir string) (rotatewriter.RotateWr
 	// Max of 10 files with 10Mb each
 	// files will be rotated after that maximum
 	if ctx.Bool(apiLogsEnabledFlag.Name) {
-		return rotatewriter.New(
+		rotateWriter, err := rotatewriter.New(
 			rotatewriter.WithDir(instanceDir),
 			rotatewriter.WithFileBaseName("request-logs"),
 			rotatewriter.WithFileMaxSize(ctx.Int64(apiLogsMaxFileSizeFlag.Name)),
 			rotatewriter.WithMaxNumberFiles(ctx.Int(apiLogsMaxFileCountFlag.Name)),
 		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to start the writer - %w", err)
+		}
+
+		return rotateWriter, rotateWriter.Start()
 	}
 
 	return nil, nil
