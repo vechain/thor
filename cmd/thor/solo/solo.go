@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
@@ -31,11 +32,15 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "solo")
+var (
+	log          = log15.New("pkg", "solo")
+	baseGasPrice = big.NewInt(1e13)
+)
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
 	repo      *chain.Repository
+	stater    *state.Stater
 	txPool    *txpool.TxPool
 	packer    *packer.Packer
 	logDB     *logdb.LogDB
@@ -58,6 +63,7 @@ func New(
 ) *Solo {
 	return &Solo{
 		repo:   repo,
+		stater: stater,
 		txPool: txPool,
 		packer: packer.New(
 			repo,
@@ -81,6 +87,10 @@ func (s *Solo) Run(ctx context.Context) error {
 		goes.Wait()
 	}()
 
+	if err := s.init(); err != nil {
+		return err
+	}
+
 	goes.Go(func() {
 		s.loop(ctx)
 	})
@@ -91,10 +101,6 @@ func (s *Solo) Run(ctx context.Context) error {
 }
 
 func (s *Solo) loop(ctx context.Context) {
-	if err := s.initSolo(); err != nil {
-		panic(err)
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -205,35 +211,35 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	return nil
 }
 
-// initSolo adds transactions to the first block to set the chain state
-func (s *Solo) initSolo() error {
-	gasPriceTx, err := s.makeGasPriceTx()
+// The init function initializes the chain parameters.
+func (s *Solo) init() error {
+	best := s.repo.BestBlockSummary()
+	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "get max block proposers")
+	}
+	if currentBGP == baseGasPrice {
+		return nil
 	}
 
-	if err := s.txPool.Add(gasPriceTx); err != nil {
-		return err
-	}
-
-	return s.packing(tx.Transactions{gasPriceTx}, false)
-}
-
-// makeGasPriceTx creates a transaction to set the gas price
-func (s *Solo) makeGasPriceTx() (*tx.Transaction, error) {
 	method, found := builtin.Params.ABI.MethodByName("set")
 	if !found {
-		return nil, errors.New("Params ABI: set method not found")
+		return errors.New("Params ABI: set method not found")
 	}
 
-	data, err := method.EncodeInput(thor.KeyBaseGasPrice, big.NewInt(1e13))
+	data, err := method.EncodeInput(thor.KeyBaseGasPrice, baseGasPrice)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
+	baseGasePriceTx, err := s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	if err != nil {
+		return err
+	}
 
-	return s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	return s.txPool.Add(baseGasePriceTx)
 }
 
 // newTx builds and signs a new transaction from the given clauses
@@ -244,7 +250,7 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 	}
 
 	newTx := builder.BlockRef(tx.NewBlockRef(0)).
-		Expiration(100).
+		Expiration(math.MaxUint32).
 		Nonce(rand.Uint64()).
 		DependsOn(nil).
 		Gas(1_000_000).

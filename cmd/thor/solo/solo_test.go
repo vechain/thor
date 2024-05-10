@@ -4,6 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vechain/thor/v2/builtin"
+
+	"github.com/vechain/thor/v2/tx"
+
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vechain/thor/v2/chain"
@@ -24,15 +28,29 @@ func newSolo() *Solo {
 	repo, _ := chain.NewRepository(db, b)
 	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	return New(repo, stater, logDb, mempool, 0, false, false, thor.ForkConfig{})
+	return New(repo, stater, logDb, mempool, 0, true, false, thor.ForkConfig{})
 }
 
 func TestInitSolo(t *testing.T) {
 	solo := newSolo()
 
-	err := solo.initSolo()
+	// init solo -> this should add the tx to the pool
+	err := solo.init()
 	assert.Nil(t, err)
 
-	bestBlock := solo.repo.BestBlockSummary()
-	assert.Equal(t, len(bestBlock.Txs), 1)
+	// get the tx from the pool (not available from solo.txPool.Executables())
+	txChan := make(chan *txpool.TxEvent)
+	solo.txPool.SubscribeTxEvent(txChan)
+	txEvent := <-txChan
+
+	// force the tx to get mined
+	err = solo.packing(tx.Transactions{txEvent.Tx}, false)
+	assert.Nil(t, err)
+
+	// check that the base gas price is correct
+	best := solo.repo.BestBlockSummary()
+	newState := solo.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
+	assert.Nil(t, err)
+	assert.Equal(t, baseGasPrice, currentBGP)
 }
