@@ -92,7 +92,7 @@ func (l *RequestLogger) start() {
 					log.Warn("unable to marshal api request entry", "err", err)
 					continue
 				}
-				_, err = l.outputWriter.Write(marshal)
+				_, err = l.outputWriter.Write(append(marshal, []byte("\n")...))
 				if err != nil {
 					log.Warn("unable to write api request entry", "err", err)
 				}
