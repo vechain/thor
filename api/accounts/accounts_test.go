@@ -113,10 +113,14 @@ func TestAccount(t *testing.T) {
 	getAccountWithGenesisRevision(t)
 	getAccountWithFinalizedRevision(t)
 	getCode(t)
+	getCodeWithNonExisitingRevision(t)
 	getStorage(t)
+	getStorageWithNonExisitingRevision(t)
 	deployContractWithCall(t)
 	callContract(t)
+	callContractWithNonExisitingRevision(t)
 	batchCall(t)
+	batchCallWithNonExisitingRevision(t)
 }
 
 func getAccount(t *testing.T) {
@@ -137,11 +141,12 @@ func getAccount(t *testing.T) {
 }
 
 func getAccountWithNonExisitingRevision(t *testing.T) {
-	revision64Len := "0123456789012345678901234567890123456789012345678901234567890123"
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	_, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getAccountWithGenesisRevision(t *testing.T) {
@@ -197,6 +202,15 @@ func getCode(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
+func getCodeWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+revision64Len)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
+}
+
 func getStorage(t *testing.T) {
 	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
@@ -219,6 +233,15 @@ func getStorage(t *testing.T) {
 	}
 	assert.Equal(t, thor.BytesToBytes32([]byte{storageValue}), h, "storage should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
+}
+
+func getStorageWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+revision64Len)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func initAccountServer(t *testing.T) {
@@ -370,6 +393,15 @@ func callContract(t *testing.T) {
 	assert.Equal(t, a+b, ret)
 }
 
+func callContractWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision="+revision64Len, nil)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
+}
+
 func batchCall(t *testing.T) {
 	// Request body is not a valid JSON
 	malformedBody := 123
@@ -479,6 +511,15 @@ func batchCall(t *testing.T) {
 	}
 	_, statusCode = httpPost(t, ts.URL+"/accounts/*", tooMuchGasBody)
 	assert.Equal(t, http.StatusForbidden, statusCode)
+}
+
+func batchCallWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpPost(t, ts.URL+"/accounts/*?revision="+revision64Len, nil)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {

@@ -46,6 +46,7 @@ func TestBlock(t *testing.T) {
 	testInvalidBlockId(t)
 	testInvalidBlockNumber(t)
 	testGetBlockById(t)
+	testGetBlockNotFound(t)
 	testGetExpandedBlockById(t)
 	testGetBlockByHeight(t)
 	testGetBestBlock(t)
@@ -102,6 +103,13 @@ func testGetBlockById(t *testing.T) {
 	}
 	checkCollapsedBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetBlockNotFound(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a")
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, "null", strings.TrimSpace(string(res)))
 }
 
 func testGetExpandedBlockById(t *testing.T) {
