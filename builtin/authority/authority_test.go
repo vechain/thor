@@ -63,7 +63,6 @@ func TestAuthority(t *testing.T) {
 			[]*Candidate{{p2, p2, thor.Bytes32{}, true}, {p3, p3, thor.Bytes32{}, true}}, nil,
 		)},
 		{M(aut.AllCandidates()), M([]*Candidate{
-			//{p1, p1, thor.Bytes32{}, false},
 			{p2, p2, thor.Bytes32{}, true},
 			{p3, p3, thor.Bytes32{}, true}}, nil),
 		},
