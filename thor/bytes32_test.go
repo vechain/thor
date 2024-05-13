@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMarshalUnmarshall(t *testing.T) {
+func TestMarshalUnmarshal(t *testing.T) {
 	// Example hex string representing the value 100
 	originalHex := `"0x00000000000000000000000000000000000000000000000000006d6173746572"` // Note the enclosing double quotes for valid JSON string
 
@@ -43,4 +43,10 @@ func TestMarshalUnmarshall(t *testing.T) {
 	marshalPtr, err := json.Marshal(&unmarshaledValue)
 	assert.NoError(t, err, "Marshaling should not produce an error")
 	assert.Equal(t, originalHex, string(marshalPtr))
+
+	// Marshal a zero value
+	var b Bytes32
+	j, err := b.MarshalJSON()
+	assert.NoError(t, err, "Marshaling should not produce an error")
+	assert.Equal(t, `"0x0000000000000000000000000000000000000000000000000000000000000000"`, string(j))
 }
