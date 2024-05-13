@@ -424,14 +424,19 @@ type p2pComm struct {
 }
 
 func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2pComm, error) {
+	// known peers will be loaded/stored from/in this file
+	peersCachePath := filepath.Join(instanceDir, "peers.cache")
+
 	configDir, err := makeConfigDir(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
 		return nil, errors.Wrap(err, "load or generate P2P key")
 	}
+
 	nat, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
@@ -448,30 +453,46 @@ func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool,
 		NAT:             nat,
 	}
 
-	peersCachePath := filepath.Join(instanceDir, "peers.cache")
-
-	if data, err := os.ReadFile(peersCachePath); err != nil {
-		if !os.IsNotExist(err) {
+	// allowed peers flag will only allow p2psrv to connect to the designated peers
+	flagAllowedPeers := strings.TrimSpace(ctx.String(allowedPeersFlag.Name))
+	if flagAllowedPeers != "" {
+		opts.NoDiscovery = true // disable discovery
+		opts.KnownNodes, err = parseNodeList(flagAllowedPeers)
+		if err != nil {
+			return nil, errors.Wrap(err, "parse allowed-peers flag")
+		}
+	} else {
+		var knownNodes p2psrv.Nodes
+		if data, err := os.ReadFile(peersCachePath); err != nil {
+			if !os.IsNotExist(err) {
+				log.Warn("failed to load peers cache", "err", err)
+			}
+		} else if err := rlp.DecodeBytes(data, &knownNodes); err != nil {
 			log.Warn("failed to load peers cache", "err", err)
 		}
-	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
-		log.Warn("failed to load peers cache", "err", err)
-	}
 
-	flagBootstrapNodes := parseBootNode(ctx)
-	if flagBootstrapNodes != nil {
-		opts.BootstrapNodes = flagBootstrapNodes
-		opts.RemoteBootstrap = ""
+		// boot nodes flag will overwrite the default bootstrap nodes and also disable remote bootstrap
+		flagBootstrapNodes := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
+		if flagBootstrapNodes != "" {
+			opts.RemoteBootstrap = "" // disable remote bootstrap
+			opts.BootstrapNodes, err = parseNodeList(flagBootstrapNodes)
+			if err != nil {
+				return nil, errors.Wrap(err, "parse bootnodes flag")
+			}
 
-		m := make(map[discover.NodeID]bool)
-		for _, node := range opts.KnownNodes {
-			m[node.ID] = true
-		}
-		for _, bootnode := range flagBootstrapNodes {
-			if !m[bootnode.ID] {
-				opts.KnownNodes = append(opts.KnownNodes, bootnode)
+			m := make(map[discover.NodeID]bool)
+			for _, node := range knownNodes {
+				m[node.ID] = true
+			}
+			//appending user supplied boot nodes to known nodes since they potentially could be a p2p server
+			for _, bootnode := range opts.BootstrapNodes {
+				if !m[bootnode.ID] {
+					knownNodes = append(opts.KnownNodes, bootnode)
+				}
 			}
 		}
+
+		opts.KnownNodes = knownNodes
 	}
 
 	return &p2pComm{
@@ -621,16 +642,18 @@ func printSoloStartupMessage(
 	fmt.Print(info)
 }
 
-func parseBootNode(ctx *cli.Context) []*discover.Node {
-	s := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
-	if s == "" {
-		return nil
-	}
-	inputs := strings.Split(s, ",")
+func parseNodeList(list string) ([]*discover.Node, error) {
+	inputs := strings.Split(list, ",")
 	var nodes []*discover.Node
 	for _, i := range inputs {
-		node := discover.MustParseNode(i)
+		node, err := discover.ParseNode(i)
+		if err != nil {
+			return nil, err
+		}
 		nodes = append(nodes, node)
 	}
-	return nodes
+	if len(nodes) == 0 {
+		return nil, errors.New("empty node list")
+	}
+	return nodes, nil
 }

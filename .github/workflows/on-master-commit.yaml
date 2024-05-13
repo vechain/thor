@@ -9,8 +9,12 @@ jobs:
   run-unit-tests:
     name: Run Unit Tests
     uses: ./.github/workflows/test.yaml
-    secrets: 
+    secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  license-check:
+    name: License Check
+    uses: ./.github/workflows/license-check.yaml
 
   lint:
     name: Lint
@@ -43,6 +47,7 @@ jobs:
       - run-e2e-tests
       - generate-tags
       - lint
+      - license-check
     permissions:
       contents: read
       packages: write
@@ -61,7 +66,7 @@ jobs:
       - generate-tags
       - lint
       - run-unit-tests
-    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success')
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Notify Slack

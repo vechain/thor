@@ -79,10 +79,14 @@ var (
 		Value: "any",
 		Usage: "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)",
 	}
-
 	bootNodeFlag = cli.StringFlag{
 		Name:  "bootnode",
 		Usage: "comma separated list of bootnode IDs",
+	}
+	allowedPeersFlag = cli.StringFlag{
+		Name:   "allowed-peers",
+		Hidden: true,
+		Usage:  "comma separated list of node IDs that can be connected to",
 	}
 	importMasterKeyFlag = cli.BoolFlag{
 		Name:  "import",
@@ -130,7 +134,7 @@ var (
 	}
 	gasLimitFlag = cli.IntFlag{
 		Name:  "gas-limit",
-		Value: 10000000,
+		Value: 40_000_000,
 		Usage: "block gas limit(adaptive if set to 0)",
 	}
 	txPoolLimitFlag = cli.IntFlag{
