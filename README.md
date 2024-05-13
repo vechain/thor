@@ -10,39 +10,23 @@
 ---
 
 <p align="center">
-    <a href="https://golang.org" >
-        <img src="https://img.shields.io/github/go-mod/go-version/vechain/thor" />
-    </a>
-    <a href="https://github.com/vechain/thor/blob/master/LICENSE" >
-        <img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg" />
-    </a>
+    <a href="https://golang.org"><img src="https://img.shields.io/github/go-mod/go-version/vechain/thor"/></a>
+    <a href="https://github.com/vechain/thor/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg"/></a>
     <img src="https://img.shields.io/github/commits-since/vechain/thor/latest" />
-    <a href="https://hub.docker.com/r/vechain/thor" >
-        <img src="https://badgen.net/docker/pulls/vechain/thor?icon=docker&label=pulls" />
-    </a>
+    <a href="https://hub.docker.com/r/vechain/thor"><img src="https://badgen.net/docker/pulls/vechain/thor?icon=docker&label=pulls"/></a>
 </p>
 
 <p align="center">
-    <a href="https://goreportcard.com/report/github.com/vechain/thor" >
-        <img src="https://goreportcard.com/badge/github.com/vechain/thor" />
-    </a>
-    <img src="https://github.com/vechain/thor/actions/workflows/on-master-commit.yaml/badge.svg" />
-    <img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg" />
-    <a href="https://codecov.io/gh/vechain/thor" >
-        <img src="https://codecov.io/gh/vechain/thor/graph/badge.svg?token=NniVYY7IAD" />
-    </a>
+    <a href="https://goreportcard.com/report/github.com/vechain/thor" ><img src="https://goreportcard.com/badge/github.com/vechain/thor"/></a>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-master-commit.yaml/badge.svg"/>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg"/>
+    <a href="https://codecov.io/gh/vechain/thor"><img src="https://codecov.io/gh/vechain/thor/graph/badge.svg?token=NniVYY7IAD"/></a>
 <p/>
 
 <p align="center">
-    <a href="https://discord.gg/vechain" class="icon-padding">
-        <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
-    </a>
-    <a href="https://t.me/VechainDevCommunity" class="icon-padding" >
-        <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" />
-    </a>
-    <a href="https://www.reddit.com/r/Vechain" class="icon-padding" >
-        <img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white" />
-    </a>
+    <a href="https://discord.gg/vechain"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" /></a>
+    <a href="https://t.me/VechainDevCommunity"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" /></a>
+    <a href="https://www.reddit.com/r/Vechain"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white"/></a>
 </p>
 
 ---
@@ -79,15 +63,9 @@ The Vechain Improvement Proposals (VIPs) repository can be found [here](https://
 To chat with other community members you can join:
 
 <p>
-    <a href="https://discord.gg/vechain" class="icon-padding">
-        <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" />
-    </a>
-    <a href="https://t.me/VechainDevCommunity" class="icon-padding" >
-        <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" />
-    </a>
-    <a href="https://www.reddit.com/r/Vechain" class="icon-padding" >
-        <img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white" />
-    </a>
+    <a href="https://discord.gg/vechain"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" /></a>
+    <a href="https://t.me/VechainDevCommunity"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" /></a>
+    <a href="https://www.reddit.com/r/Vechain"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white"/></a>
 </p>
 
 Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vechain community channels. Users are
