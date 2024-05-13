@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package p2p
 
 import (
@@ -40,28 +45,32 @@ func New(
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
 	// default option setting
+	// no known nodes for p2p connection
+	// use the hardcoded fallbackDiscoveryNodes for discovery only
 	opts := &p2psrv.Options{
-		Name:            common.MakeName("thor", version),
-		PrivateKey:      privateKey,
-		MaxPeers:        maxPeers,
-		ListenAddr:      listenAddr,
-		KnownNodes:      fallbackBootstrapNodes,
-		RemoteBootstrap: remoteBootstrapList,
-		NAT:             nat,
+		Name:                common.MakeName("thor", version),
+		PrivateKey:          privateKey,
+		MaxPeers:            maxPeers,
+		ListenAddr:          listenAddr,
+		DiscoveryNodes:      fallbackDiscoveryNodes,
+		RemoteDiscoveryList: remoteDiscoveryNodesList,
+		NAT:                 nat,
 	}
 
 	// allowed peers flag will only allow p2psrv to connect to the designated peers
 	if len(allowedPeers) > 0 {
 		opts.NoDiscovery = true // disable discovery
+		opts.DiscoveryNodes = nil
 		opts.KnownNodes = allowedPeers
 	} else {
 		// boot nodes flag will overwrite the default bootstrap nodes and also disable remote bootstrap
 		if len(bootstrapNodes) > 0 {
-			opts.RemoteBootstrap = "" // disable remote bootstrap
-			opts.KnownNodes = bootstrapNodes
+			opts.RemoteDiscoveryList = "" // disable remote bootstrap
+			opts.DiscoveryNodes = nil
+			opts.KnownNodes = bootstrapNodes // bootstrap nodes will also allow for p2p connections
 		}
 
-		// cached peers will be appended to existing or set bootnodes
+		// cached peers will be appended to existing or flag-set bootnodes
 		if len(cachedPeers) > 0 {
 			opts.KnownNodes = dedupNodeSlice(opts.KnownNodes, cachedPeers)
 		}

@@ -197,6 +197,9 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
+	for _, node := range s.opts.DiscoveryNodes {
+		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
+	}
 	// known nodes are also acting as bootstrap servers
 	for _, node := range s.opts.KnownNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
@@ -321,7 +324,7 @@ func (s *Server) tryDial(node *discover.Node) error {
 }
 
 func (s *Server) fetchBootstrap() {
-	if s.opts.RemoteBootstrap == "" {
+	if s.opts.RemoteDiscoveryList == "" {
 		return
 	}
 
@@ -332,7 +335,7 @@ func (s *Server) fetchBootstrap() {
 	}()
 
 	f := func() error {
-		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteBootstrap)
+		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteDiscoveryList)
 		if err != nil {
 			return err
 		}

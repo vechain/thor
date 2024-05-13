@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package p2p
 
 import (
@@ -19,22 +24,24 @@ func TestNewThorP2P(t *testing.T) {
 
 	// Setup test cases
 	tests := []struct {
-		name               string
-		maxPeers           int
-		listenAddr         string
-		allowedPeers       []*discover.Node
-		cachedPeers        []*discover.Node
-		bootstrapNodes     []*discover.Node
-		expectedKnownNodes p2psrv.Nodes
+		name                   string
+		maxPeers               int
+		listenAddr             string
+		allowedPeers           []*discover.Node
+		cachedPeers            []*discover.Node
+		bootstrapNodes         []*discover.Node
+		expectedKnownNodes     p2psrv.Nodes
+		expectedDiscoveryNodes p2psrv.Nodes
 	}{
 		{
-			name:               "Basic instance with no default settings",
-			maxPeers:           datagen.RandInt(),
-			listenAddr:         datagen.RandHostPort(),
-			allowedPeers:       nil,
-			cachedPeers:        nil,
-			bootstrapNodes:     nil,
-			expectedKnownNodes: fallbackBootstrapNodes,
+			name:                   "Basic instance with no default settings",
+			maxPeers:               datagen.RandInt(),
+			listenAddr:             datagen.RandHostPort(),
+			allowedPeers:           nil,
+			cachedPeers:            nil,
+			bootstrapNodes:         nil,
+			expectedKnownNodes:     nil,
+			expectedDiscoveryNodes: fallbackDiscoveryNodes,
 		},
 		{
 			name:               "Instance with allowed peers only",
@@ -46,12 +53,13 @@ func TestNewThorP2P(t *testing.T) {
 			expectedKnownNodes: p2psrv.Nodes{{ID: discover.NodeID{1}}, {ID: discover.NodeID{2}}},
 		},
 		{
-			name:               "Cached peers append with default fallback nodes",
-			maxPeers:           datagen.RandInt(),
-			listenAddr:         datagen.RandHostPort(),
-			cachedPeers:        []*discover.Node{{ID: discover.NodeID{2}}, {ID: discover.NodeID{3}}, {ID: discover.NodeID{4}}},
-			bootstrapNodes:     nil,
-			expectedKnownNodes: append(fallbackBootstrapNodes, p2psrv.Nodes{{ID: discover.NodeID{2}}, {ID: discover.NodeID{3}}, {ID: discover.NodeID{4}}}...),
+			name:                   "Cached peers append with default fallback nodes",
+			maxPeers:               datagen.RandInt(),
+			listenAddr:             datagen.RandHostPort(),
+			cachedPeers:            []*discover.Node{{ID: discover.NodeID{2}}, {ID: discover.NodeID{3}}, {ID: discover.NodeID{4}}},
+			bootstrapNodes:         nil,
+			expectedKnownNodes:     p2psrv.Nodes{{ID: discover.NodeID{2}}, {ID: discover.NodeID{3}}, {ID: discover.NodeID{4}}},
+			expectedDiscoveryNodes: fallbackDiscoveryNodes,
 		},
 		{
 			name:               "Cached and bootstrap nodes flag are appended",
@@ -89,6 +97,7 @@ func TestNewThorP2P(t *testing.T) {
 			)
 
 			assert.Equal(t, thor.p2pSrv.Options().KnownNodes, tc.expectedKnownNodes)
+			assert.Equal(t, thor.p2pSrv.Options().DiscoveryNodes, tc.expectedDiscoveryNodes)
 			assert.NotNil(t, thor, "ThorP2P instance should not be nil")
 			assert.Equal(t, thor.p2pSrv.Options().MaxPeers, tc.maxPeers)
 			assert.Equal(t, thor.p2pSrv.Options().ListenAddr, tc.listenAddr)
