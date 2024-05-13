@@ -10,7 +10,7 @@
 ---
 
 <p align="center">
-    <a href="https://golang.org" >
+    <a href="https://golang.org" target=”_blank” >
         <img src="https://img.shields.io/github/go-mod/go-version/vechain/thor" />
     </a>
     <a href="https://github.com/vechain/thor/blob/master/LICENSE" >
