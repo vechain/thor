@@ -87,6 +87,8 @@ func (s *Solo) Run(ctx context.Context) error {
 		goes.Wait()
 	}()
 
+	log.Info("prepared to pack block")
+
 	if err := s.init(); err != nil {
 		return err
 	}
@@ -94,8 +96,6 @@ func (s *Solo) Run(ctx context.Context) error {
 	goes.Go(func() {
 		s.loop(ctx)
 	})
-
-	log.Info("prepared to pack block")
 
 	return nil
 }
@@ -239,7 +239,12 @@ func (s *Solo) init() error {
 		return err
 	}
 
-	return s.txPool.Add(baseGasePriceTx)
+	if !s.onDemand {
+		// wait for the next block interval if not on-demand
+		time.Sleep(time.Duration(10-time.Now().Unix()%10) * time.Second)
+	}
+
+	return s.packing(tx.Transactions{baseGasePriceTx}, false)
 }
 
 // newTx builds and signs a new transaction from the given clauses
