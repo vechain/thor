@@ -17,7 +17,7 @@
         <img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg" />
     </a>
     <img src="https://img.shields.io/github/commits-since/vechain/thor/latest" />
-    <a href="https://docker.com" >
+    <a href="https://hub.docker.com/r/vechain/thor" >
         <img src="https://badgen.net/docker/pulls/vechain/thor?icon=docker&label=pulls" />
     </a>
 </p>
