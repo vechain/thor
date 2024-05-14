@@ -187,6 +187,7 @@ bin/thor -h
 |------------------------------|----------------------------------------------------|
 | `--genesis`                  | Path to genesis file(default: builtin devnet)            |
 | `--on-demand`                | Create new block when there is pending transaction |
+| `--block-interval`           | Choose a block interval in seconds (default 10s) |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
