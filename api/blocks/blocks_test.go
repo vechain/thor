@@ -46,6 +46,7 @@ func TestBlock(t *testing.T) {
 	testInvalidBlockId(t)
 	testInvalidBlockNumber(t)
 	testGetBlockById(t)
+	testGetBlockNotFound(t)
 	testGetExpandedBlockById(t)
 	testGetBlockByHeight(t)
 	testGetBestBlock(t)
@@ -83,15 +84,15 @@ func testGetBlockByHeight(t *testing.T) {
 
 func testGetFinalizedBlock(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/finalized")
-	rb := new(blocks.JSONCollapsedBlock)
-	if err := json.Unmarshal(res, &rb); err != nil {
+	finalized := new(blocks.JSONCollapsedBlock)
+	if err := json.Unmarshal(res, &finalized); err != nil {
 		t.Fatal(err)
 	}
 
 	assert.Equal(t, http.StatusOK, statusCode)
-	assert.True(t, rb.IsFinalized)
-	assert.Equal(t, genesisBlock.Header().ID(), rb.ID)
-	assert.Equal(t, uint32(0), rb.Number)
+	assert.True(t, finalized.IsFinalized)
+	assert.Equal(t, uint32(0), finalized.Number)
+	assert.Equal(t, genesisBlock.Header().ID(), finalized.ID)
 }
 
 func testGetBlockById(t *testing.T) {
@@ -102,6 +103,13 @@ func testGetBlockById(t *testing.T) {
 	}
 	checkCollapsedBlock(t, blk, rb)
 	assert.Equal(t, http.StatusOK, statusCode)
+}
+
+func testGetBlockNotFound(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a")
+
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, "null", strings.TrimSpace(string(res)))
 }
 
 func testGetExpandedBlockById(t *testing.T) {
