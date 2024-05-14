@@ -6,20 +6,21 @@ requirements may change as the network evolves._
 ### Table of Contents
 
 - [System Requirements](#system-requirements)
-    - [Authority Nodes](#authority-nodes)
-    - [Public Nodes](#public-nodes)
+  - [Authority Nodes](#authority-nodes)
+  - [Public Nodes](#public-nodes)
 - [Node Types](#node-types)
-    - [Full Archive Node](#full-archive-node)
-    - [Full Node](#full-node)
-    - [Full Node without Logs](#full-node-without-logs)
+  - [Full Archive Node](#full-archive-node)
+  - [Full Node](#full-node)
+  - [Full Node without Logs](#full-node-without-logs)
 
-___
+---
 
 ### Command Line Options
 
 Please refer to [Command Line Options](./usage.md#command-line-options) in the usage documentation to see a list of all
 available options.
-___
+
+---
 
 ### System Requirements
 
@@ -48,16 +49,15 @@ Below spec is the node configured in full archive node.
 | Bandwidth | 10 Mbit               | 20 Mbit                   |
 | Disk      | 600 GB SSD            | 1 TB SSD                  |
 
-___
+---
 
 ### Node Types
 
 #### Full Archive Node
 
 A full archive node is a full node that stores all historical data of the blockchain, containing complete historical
-data of
-all transactions and blocks, including forks and variations. Running a full archive node requires more resources than
-running a regular full node, but it provides access to the complete history of the blockchain.
+data of all transactions and blocks, including forks and variations. Running a full archive node requires more resources
+than running a regular full node, but it provides access to the complete history of the blockchain.
 
 To run a full archive node, you need to set the `--disable-pruner` flag when starting the node. For example:
 
