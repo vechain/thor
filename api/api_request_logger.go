@@ -12,8 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/vechain/thor/v2/api/utils/rotatewriter"
+	log "github.com/inconshreveable/log15"
 )
 
 // RequestLogger logs requests to an output
@@ -21,13 +20,25 @@ type RequestLogger struct {
 	enabled      bool
 	writerChan   chan entry
 	stopChan     chan bool
-	outputWriter rotatewriter.RotateWriter
+	outputWriter func(msg string, ctx ...interface{})
 }
 
-func NewRequestLogger(enabled bool, fileRotate rotatewriter.RotateWriter) *RequestLogger {
+// NewThorRequestLogger applies thor business logic
+// when returning an instance of *RequestLogger
+func NewThorRequestLogger(enabledFlag bool, enableLog bool) *RequestLogger {
+	if enabledFlag {
+		return NewRequestLogger(enabledFlag, log.Info)
+	}
+	if enableLog {
+		return NewRequestLogger(enableLog, log.Debug)
+	}
+	return NewRequestLogger(false, nil)
+}
+
+func NewRequestLogger(enabled bool, logger func(msg string, ctx ...interface{})) *RequestLogger {
 	return &RequestLogger{
 		enabled:      enabled,
-		outputWriter: fileRotate,
+		outputWriter: logger,
 		writerChan:   make(chan entry, 100_000),
 		stopChan:     make(chan bool),
 	}
@@ -92,10 +103,8 @@ func (l *RequestLogger) start() {
 					log.Warn("unable to marshal api request entry", "err", err)
 					continue
 				}
-				_, err = l.outputWriter.Write(append(marshal, []byte("\n")...))
-				if err != nil {
-					log.Warn("unable to write api request entry", "err", err)
-				}
+
+				l.outputWriter("[request] " + string(marshal))
 			case <-l.stopChan:
 				close(l.stopChan)
 				return

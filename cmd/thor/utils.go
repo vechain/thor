@@ -36,7 +36,6 @@ import (
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
-	"github.com/vechain/thor/v2/api/utils/rotatewriter"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/co"
@@ -346,34 +345,6 @@ func suggestFDCache() int {
 		return 5120
 	}
 	return n
-}
-
-func openFileRotate(ctx *cli.Context, instanceDir string) (rotatewriter.RotateWriter, error) {
-	// Max of 10 files with 10Mb each
-	// files will be rotated after that maximum
-	if ctx.Bool(apiLogsEnabledFlag.Name) {
-		rotateWriter, err := rotatewriter.New(
-			rotatewriter.WithDir(instanceDir),
-			rotatewriter.WithFileBaseName("request-logs"),
-			rotatewriter.WithFileMaxSize(ctx.Int64(apiLogsMaxFileSizeFlag.Name)),
-			rotatewriter.WithMaxNumberFiles(ctx.Int(apiLogsMaxFileCountFlag.Name)),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("unable to start the writer - %w", err)
-		}
-
-		return rotateWriter, rotateWriter.Start()
-	}
-
-	return nil, nil
-}
-
-func openMemFileRotate(ctx *cli.Context) rotatewriter.RotateWriter {
-	if ctx.Bool(apiLogsEnabledFlag.Name) {
-		return rotatewriter.StdoutWriter()
-	}
-
-	return nil
 }
 
 func openLogDB(ctx *cli.Context, dir string) (*logdb.LogDB, error) {

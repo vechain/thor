@@ -27,18 +27,17 @@ func (mw *MockWriter) Start() error {
 	return nil
 }
 
-func (mw *MockWriter) Write(p []byte) (int, error) {
+func (mw *MockWriter) Write(msg string, _ ...interface{}) {
 	mw.lock.Lock()
 	defer mw.lock.Unlock()
 
-	mw.Messages = append(mw.Messages, string(p))
-	return len(p), nil
+	mw.Messages = append(mw.Messages, msg)
 }
 
 // TestRequestLoggerEnabled tests enabling of the RequestLogger
 func TestRequestLoggerEnabled(t *testing.T) {
 	mockWriter := &MockWriter{Messages: []string{}}
-	logger := NewRequestLogger(true, mockWriter)
+	logger := NewRequestLogger(true, mockWriter.Write)
 	assert.True(t, logger.Enabled(), "Logger should be enabled")
 	logger.start()
 
@@ -49,7 +48,7 @@ func TestRequestLoggerEnabled(t *testing.T) {
 // TestRequestLogging tests the logging of an HTTP request
 func TestRequestLogging(t *testing.T) {
 	mockWriter := &MockWriter{Messages: []string{}}
-	logger := NewRequestLogger(true, mockWriter)
+	logger := NewRequestLogger(true, mockWriter.Write)
 	handler := logger.Handle(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))

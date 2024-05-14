@@ -20,7 +20,6 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api"
-	"github.com/vechain/thor/v2/api/utils/rotatewriter"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/cmd/thor/node"
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
@@ -80,8 +79,6 @@ func main() {
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
 			apiLogsEnabledFlag,
-			apiLogsMaxFileCountFlag,
-			apiLogsMaxFileSizeFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -109,8 +106,6 @@ func main() {
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
 					apiLogsEnabledFlag,
-					apiLogsMaxFileCountFlag,
-					apiLogsMaxFileSizeFlag,
 					onDemandFlag,
 					persistFlag,
 					gasLimitFlag,
@@ -182,11 +177,6 @@ func defaultAction(ctx *cli.Context) error {
 		return err
 	}
 
-	fileRotateWriter, err := openFileRotate(ctx, instanceDir)
-	if err != nil {
-		return err
-	}
-
 	printStartupMessage1(gene, repo, master, instanceDir, forkConfig)
 
 	if !skipLogs {
@@ -222,7 +212,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		api.NewRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), fileRotateWriter),
+		api.NewThorRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), log15.Lvl(ctx.Int(verbosityFlag.Name)) >= log15.LvlDebug),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -282,7 +272,6 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
-	var fileRotateWriter rotatewriter.RotateWriter
 	var err error
 
 	if ctx.Bool(persistFlag.Name) {
@@ -298,15 +287,10 @@ func soloAction(ctx *cli.Context) error {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
-
-		if fileRotateWriter, err = openFileRotate(ctx, instanceDir); err != nil {
-			return err
-		}
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()
 		logDB = openMemLogDB()
-		fileRotateWriter = openMemFileRotate(ctx)
 	}
 
 	repo, err := initChainRepository(gene, mainDB, logDB)
@@ -343,7 +327,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		api.NewRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), fileRotateWriter),
+		api.NewThorRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), log15.Lvl(ctx.Int(verbosityFlag.Name)) >= log15.LvlDebug),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

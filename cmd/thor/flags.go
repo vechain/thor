@@ -61,17 +61,7 @@ var (
 	}
 	apiLogsEnabledFlag = cli.BoolFlag{
 		Name:  "api-logs-enabled",
-		Usage: "logs inbound requests to disk",
-	}
-	apiLogsMaxFileCountFlag = cli.IntFlag{
-		Name:  "api-logs-max-file-count",
-		Value: 10,
-		Usage: "max number of files with logs for inbound requests",
-	}
-	apiLogsMaxFileSizeFlag = cli.IntFlag{
-		Name:  "api-logs-max-file-size",
-		Value: 10 * 1024 * 1024,
-		Usage: "max size for files with logs for inbound requests",
+		Usage: "logs inbound requests to stdout",
 	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
