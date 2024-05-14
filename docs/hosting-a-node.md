@@ -9,7 +9,7 @@ requirements may change as the network evolves._
     - [Authority Nodes](#authority-nodes)
     - [Public Nodes](#public-nodes)
 - [Node Types](#node-types)
-    - [Archive Node](#full-archive-node)
+    - [Full Archive Node](#full-archive-node)
     - [Full Node](#full-node)
     - [Full Node without Logs](#full-node-without-logs)
 
