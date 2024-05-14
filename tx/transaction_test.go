@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/assert"
-	"github.com/vechain/thor/v2/metric"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -77,7 +76,7 @@ func TestTxSize(t *testing.T) {
 	tx := GetMockTx()
 
 	size := tx.Size()
-	assert.Equal(t, size, metric.StorageSize(87))
+	assert.Equal(t, size, thor.StorageSize(87))
 }
 
 func TestProvedWork(t *testing.T) {
