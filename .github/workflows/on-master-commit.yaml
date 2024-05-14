@@ -9,8 +9,12 @@ jobs:
   run-unit-tests:
     name: Run Unit Tests
     uses: ./.github/workflows/test.yaml
-    secrets: 
+    secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  license-check:
+    name: License Check
+    uses: ./.github/workflows/license-check.yaml
 
   lint:
     name: Lint
@@ -43,6 +47,7 @@ jobs:
       - run-e2e-tests
       - generate-tags
       - lint
+      - license-check
     permissions:
       contents: read
       packages: write
@@ -61,9 +66,16 @@ jobs:
       - generate-tags
       - lint
       - run-unit-tests
-    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success')
+      - run-e2e-tests
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success')
     runs-on: ubuntu-latest
     steps:
+      - name: Get the commit message
+        id: commit_message
+        # This is a workaround to get the first line of the commit message. Passing the entire message can cause the payload (JSON) to be invalid.
+        run: |
+          echo "commit_message=$(echo ${{ github.event.head_commit.message }} | head -n 1)" >> "$GITHUB_ENV"
+
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -73,13 +85,11 @@ jobs:
             {
               "unit-test-status": "${{ needs.run-unit-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "docker-publish-status": "${{ needs.publish-docker-image.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
-              "commit-message": "${{ github.event.head_commit.message }}",
+              "commit-message": "${{ env.commit_message }}",
               "commit-url": "${{ github.event.head_commit.url }}",
               "e2e-test-status": "${{ needs.run-e2e-tests.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}",
               "branch": "${{ github.ref }}",
-              "status": "${{ job.status }}",
               "repository": "${{ github.repository }}",
               "commit-author": "${{ github.event.head_commit.author.name }}",
               "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
             }
-
