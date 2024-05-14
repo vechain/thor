@@ -10,7 +10,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.0
+  version: 2.1.2
 servers:
   - url: /
     description: Current Node
@@ -683,7 +683,7 @@ paths:
         
         You can customize the tracer using various options to suit your debugging requirements.
       parameters:
-        - $ref: '#/components/parameters/HeadInQuery'
+        - $ref: '#/components/parameters/RevisionInQuery'
       requestBody:
         required: true
         content:
@@ -2237,7 +2237,7 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: Specify either `best`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 

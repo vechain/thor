@@ -24,6 +24,10 @@ const dataStoreName = "bft.engine"
 
 var finalizedKey = []byte("finalized")
 
+type Finalizer interface {
+	Finalized() thor.Bytes32
+}
+
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
 // Not thread-safe!
 type BFTEngine struct {

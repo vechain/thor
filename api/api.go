@@ -21,6 +21,7 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
@@ -34,7 +35,7 @@ func New(
 	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
-	bft blocks.BFTEngine,
+	bft bft.Finalizer,
 	nw node.Network,
 	allowedOrigins string,
 	backtraceLimit uint32,
@@ -62,7 +63,7 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, callGasLimit, forkConfig).
+	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
@@ -75,7 +76,7 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
