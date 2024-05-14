@@ -8,13 +8,18 @@ package solo
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"math/rand"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
@@ -27,11 +32,15 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "solo")
+var (
+	log          = log15.New("pkg", "solo")
+	baseGasPrice = big.NewInt(1e13)
+)
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
 	repo      *chain.Repository
+	stater    *state.Stater
 	txPool    *txpool.TxPool
 	packer    *packer.Packer
 	logDB     *logdb.LogDB
@@ -54,6 +63,7 @@ func New(
 ) *Solo {
 	return &Solo{
 		repo:   repo,
+		stater: stater,
 		txPool: txPool,
 		packer: packer.New(
 			repo,
@@ -77,11 +87,15 @@ func (s *Solo) Run(ctx context.Context) error {
 		goes.Wait()
 	}()
 
+	log.Info("prepared to pack block")
+
+	if err := s.init(); err != nil {
+		return err
+	}
+
 	goes.Go(func() {
 		s.loop(ctx)
 	})
-
-	log.Info("prepared to pack block")
 
 	return nil
 }
@@ -195,4 +209,59 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	log.Debug(b.String())
 
 	return nil
+}
+
+// The init function initializes the chain parameters.
+func (s *Solo) init() error {
+	best := s.repo.BestBlockSummary()
+	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
+	if err != nil {
+		return errors.WithMessage(err, "failed to get the current base gas price")
+	}
+	if currentBGP == baseGasPrice {
+		return nil
+	}
+
+	method, found := builtin.Params.ABI.MethodByName("set")
+	if !found {
+		return errors.New("Params ABI: set method not found")
+	}
+
+	data, err := method.EncodeInput(thor.KeyBaseGasPrice, baseGasPrice)
+	if err != nil {
+		return err
+	}
+
+	clause := tx.NewClause(&builtin.Params.Address).WithData(data)
+	baseGasePriceTx, err := s.newTx([]*tx.Clause{clause}, genesis.DevAccounts()[0])
+	if err != nil {
+		return err
+	}
+
+	if !s.onDemand {
+		// wait for the next block interval if not on-demand
+		time.Sleep(time.Duration(10-time.Now().Unix()%10) * time.Second)
+	}
+
+	return s.packing(tx.Transactions{baseGasePriceTx}, false)
+}
+
+// newTx builds and signs a new transaction from the given clauses
+func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transaction, error) {
+	builder := new(tx.Builder).ChainTag(s.repo.ChainTag())
+	for _, c := range clauses {
+		builder.Clause(c)
+	}
+
+	newTx := builder.BlockRef(tx.NewBlockRef(0)).
+		Expiration(math.MaxUint32).
+		Nonce(rand.Uint64()).
+		DependsOn(nil).
+		Gas(1_000_000).
+		Build()
+
+	sig, err := crypto.Sign(newTx.SigningHash().Bytes(), from.PrivateKey)
+
+	return newTx.WithSignature(sig), err
 }

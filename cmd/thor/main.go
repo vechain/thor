@@ -84,6 +84,7 @@ func main() {
 			p2pPortFlag,
 			natFlag,
 			bootNodeFlag,
+			allowedPeersFlag,
 			skipLogsFlag,
 			pprofFlag,
 			verifyLogsFlag,

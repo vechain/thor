@@ -13,10 +13,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
-type BFTEngine interface {
-	Finalized() thor.Bytes32
-}
-
 type JSONBlockSummary struct {
 	Number       uint32       `json:"number"`
 	ID           thor.Bytes32 `json:"id"`

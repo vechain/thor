@@ -23,7 +23,7 @@ ___
 
 ### System Requirements
 
-#### Authority Master Nodes
+#### Authority Nodes
 
 Below spec is the node configured in full node without logs.
 

@@ -62,5 +62,10 @@ lint_command_check:
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@golangci-lint run --config .golangci.yml
 
+license-check: #@ Check license headers
+	@FILE_COUNT=$$(find . -type f -name '*.go' | wc -l); \
+	echo "Checking license headers for all .go... $$FILE_COUNT files found"; \
+	docker run -it --rm -v $$(pwd):/github/workspace apache/skywalking-eyes header check
+
 .DEFAULT:
 	@$(MAKE) help

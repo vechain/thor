@@ -7,12 +7,11 @@ package blocks
 
 import (
 	"net/http"
-	"strconv"
 
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -20,10 +19,10 @@ import (
 
 type Blocks struct {
 	repo *chain.Repository
-	bft  BFTEngine
+	bft  bft.Finalizer
 }
 
-func New(repo *chain.Repository, bft BFTEngine) *Blocks {
+func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
 	return &Blocks{
 		repo,
 		bft,
@@ -31,7 +30,7 @@ func New(repo *chain.Repository, bft BFTEngine) *Blocks {
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
-	revision, err := b.parseRevision(mux.Vars(req)["revision"])
+	revision, err := utils.ParseRevision(mux.Vars(req)["revision"])
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
@@ -40,7 +39,7 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
 	}
 
-	summary, err := b.getBlockSummary(revision)
+	summary, err := utils.GetSummary(revision, b.repo, b.bft)
 	if err != nil {
 		if b.repo.IsNotFound(err) {
 			return utils.WriteJSON(w, nil)
@@ -82,48 +81,6 @@ func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error 
 		jSummary,
 		summary.Txs,
 	})
-}
-
-func (b *Blocks) parseRevision(revision string) (interface{}, error) {
-	if revision == "" || revision == "best" {
-		return nil, nil
-	}
-	if revision == "finalized" {
-		return revision, nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, err
-		}
-		return blockID, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, err
-	}
-	if n > math.MaxUint32 {
-		return nil, errors.New("block number out of max uint32")
-	}
-	return uint32(n), err
-}
-
-func (b *Blocks) getBlockSummary(revision interface{}) (s *chain.BlockSummary, err error) {
-	var id thor.Bytes32
-	switch revision := revision.(type) {
-	case thor.Bytes32:
-		id = revision
-	case uint32:
-		id, err = b.repo.NewBestChain().GetBlockID(revision)
-		if err != nil {
-			return
-		}
-	case string:
-		id = b.bft.Finalized()
-	default:
-		id = b.repo.BestBlockSummary().Header.ID()
-	}
-	return b.repo.GetBlockSummary(id)
 }
 
 func (b *Blocks) isTrunk(blkID thor.Bytes32, blkNum uint32) (bool, error) {

@@ -10,13 +10,13 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -30,6 +30,7 @@ type Accounts struct {
 	stater       *state.Stater
 	callGasLimit uint64
 	forkConfig   thor.ForkConfig
+	bft          bft.Finalizer
 }
 
 func New(
@@ -37,12 +38,14 @@ func New(
 	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
+	bft bft.Finalizer,
 ) *Accounts {
 	return &Accounts{
 		repo,
 		stater,
 		callGasLimit,
 		forkConfig,
+		bft,
 	}
 }
 
@@ -62,8 +65,15 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	code, err := a.getCode(addr, summary)
@@ -111,8 +121,15 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	acc, err := a.getAccount(addr, summary)
@@ -131,8 +148,15 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "key"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	storage, err := a.getStorage(addr, key, summary)
@@ -147,8 +171,15 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	summary, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 	var addr *thor.Address
@@ -183,11 +214,18 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	h, err := a.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	if err != nil {
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, h)
+	results, err := a.batchCall(req.Context(), batchCallData, summary)
 	if err != nil {
 		return err
 	}
@@ -309,41 +347,6 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		clauses[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
 	}
 	return
-}
-
-func (a *Accounts) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
-		return a.repo.BestBlockSummary(), nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		summary, err := a.repo.GetBlockSummary(blockID)
-		if err != nil {
-			if a.repo.IsNotFound(err) {
-				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-			}
-			return nil, err
-		}
-		return summary, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	if n > math.MaxUint32 {
-		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
-	}
-	summary, err := a.repo.NewBestChain().GetBlockSummary(uint32(n))
-	if err != nil {
-		if a.repo.IsNotFound(err) {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		return nil, err
-	}
-	return summary, nil
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
