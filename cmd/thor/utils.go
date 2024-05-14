@@ -574,9 +574,6 @@ func startTelemetryServer(addr, allowedOrigins string) (string, func(), error) {
 	router.PathPrefix("/metrics").Handler(telemetry.HTTPHandler())
 	handler := handlers.CompressHandler(router)
 
-	// setup cors
-	handler = handlers.CORS(handlers.AllowedOrigins(origins))(handler)
-
 	srv := &http.Server{Handler: handler}
 	var goes co.Goes
 	goes.Go(func() {
