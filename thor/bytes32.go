@@ -45,6 +45,7 @@ func (b Bytes32) IsZero() bool {
 
 // MarshalJSON implements json.Marshaler.
 func (b Bytes32) MarshalJSON() ([]byte, error) {
+	// Bytes32 are represented as a hexadecimal string.
 	return json.Marshal(b.String())
 }
 
