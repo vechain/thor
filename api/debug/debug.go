@@ -183,7 +183,10 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	}
 	summary, err := utils.GetSummary(revision, d.repo, d.bft)
 	if err != nil {
-		return utils.BadRequest(errors.WithMessage(err, "revision"))
+		if a.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
+		return err
 	}
 
 	tracer, err := d.createTracer(opt.Name, opt.Config)
