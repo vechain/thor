@@ -131,7 +131,7 @@ var (
 	blockInterval = cli.IntFlag{
 		Name:  "block-interval",
 		Value: 10,
-		Usage: "choose a custom block interval for solo mode",
+		Usage: "choose a custom block interval for solo mode (seconds)",
 	}
 	persistFlag = cli.BoolFlag{
 		Name:  "persist",

@@ -333,6 +333,12 @@ func soloAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
+	blockInterval := ctx.Int(blockInterval.Name)
+	if blockInterval == 0 {
+		blockInterval = 10
+		log.Info("block-interval cannot be zero. Setting it to default value:", "blockInterval", blockInterval)
+	}
+
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
@@ -344,7 +350,7 @@ func soloAction(ctx *cli.Context) error {
 		txPool,
 		uint64(ctx.Int(gasLimitFlag.Name)),
 		ctx.Bool(onDemandFlag.Name),
-		ctx.Uint64(blockInterval.Name),
+		uint64(blockInterval),
 		skipLogs,
 		forkConfig).Run(exitSignal)
 }
