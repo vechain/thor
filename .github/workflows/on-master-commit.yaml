@@ -7,57 +7,81 @@ on:
 
 jobs:
   run-unit-tests:
-    name: Run Unit Tests
-    uses: ./.github/workflows/test.yaml
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+#    name: Run Unit Tests
+#    uses: ./.github/workflows/test.yaml
+#    secrets:
+#      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Throw Erorr
+        run: exit 1
 
   license-check:
-    name: License Check
-    uses: ./.github/workflows/license-check.yaml
+#    name: License Check
+#    uses: ./.github/workflows/license-check.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Throw Erorr
+        run: exit 1
 
   lint:
-    name: Lint
-    uses: ./.github/workflows/lint-go.yaml
+#    name: Lint
+#    uses: ./.github/workflows/lint-go.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Throw Erorr
+        run: exit 1
 
   run-e2e-tests:
-    name: E2E Tests
-    uses: ./.github/workflows/test-e2e.yaml
+#    name: E2E Tests
+#    uses: ./.github/workflows/test-e2e.yaml
+    runs-on: ubuntu-latest
+    steps:
+      - name: Throw Erorr
+        run: exit 1
 
   generate-tags:
-    name: Generate Docker Tags
+#    name: Generate Docker Tags
+#    runs-on: ubuntu-latest
+#    outputs:
+#      tag_date: ${{ steps.tag_date.outputs.tag_date }}
+#      short_sha: ${{ steps.short_sha.outputs.short_sha }}
+#    steps:
+#      - name: Generate Tag Date
+#        id: tag_date
+#        run: echo "tag_date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
+#      - name: Generate Short SHA
+#        id: short_sha
+#        run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
     runs-on: ubuntu-latest
-    outputs:
-      tag_date: ${{ steps.tag_date.outputs.tag_date }}
-      short_sha: ${{ steps.short_sha.outputs.short_sha }}
     steps:
-      - name: Generate Tag Date
-        id: tag_date
-        run: echo "tag_date=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
-      - name: Generate Short SHA
-        id: short_sha
-        run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
+      - name: Throw Erorr
+        run: exit 1
 
   publish-docker-image:
-    name: Publish Docker Image
-    uses: ./.github/workflows/publish-docker-images.yaml
-    secrets: inherit
-    needs:
-      - run-unit-tests
-      - run-e2e-tests
-      - generate-tags
-      - lint
-      - license-check
-    permissions:
-      contents: read
-      packages: write
-    with:
-      images: |
-        ghcr.io/${{ github.repository }}
-      # eg: master-20240321-7d8e9f2
-      tags: |
-        type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
-        type=raw,value=master-latest
+#    name: Publish Docker Image
+#    uses: ./.github/workflows/publish-docker-images.yaml
+#    secrets: inherit
+#    needs:
+#      - run-unit-tests
+#      - run-e2e-tests
+#      - generate-tags
+#      - lint
+#      - license-check
+#    permissions:
+#      contents: read
+#      packages: write
+#    with:
+#      images: |
+#        ghcr.io/${{ github.repository }}
+#      # eg: master-20240321-7d8e9f2
+#      tags: |
+#        type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
+#        type=raw,value=master-latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Throw Erorr
+        run: exit 1
 
   notify-slack:
     name: Notify Slack
