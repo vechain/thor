@@ -70,11 +70,14 @@ jobs:
     if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success')
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Get the commit message
         id: commit_message
         # This is a workaround to get the first line of the commit message. Passing the entire message can cause the payload (JSON) to be invalid.
         run: |
-          echo "commit_message=$(echo ${{ github.event.head_commit.message }} | head -n 1)" >> "$GITHUB_ENV"
+          echo "commit_message=$(git show-branch --no-name HEAD)" >> "$GITHUB_ENV"
 
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
