@@ -74,7 +74,7 @@ jobs:
         id: commit_message
         # This is a workaround to get the first line of the commit message. Passing the entire message can cause the payload (JSON) to be invalid.
         run: |
-          echo "commit_message=$(echo ${{ github.event.head_commit.message }} | head -n 1)" >> "$GITHUB_ENV"
+          echo "commit_message=$(git show-branch --no-name HEAD)" >> "$GITHUB_ENV"
 
       - name: Notify Slack
         uses: slackapi/slack-github-action@v1.25.0
