@@ -27,9 +27,8 @@ const dataStoreName = "bft.engine"
 var (
 	finalizedKey = []byte("finalized")
 
-	metricsBlocksCommitted = telemetry.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
+	metricBlocksCommitted = telemetry.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
 )
-
 
 type Finalizer interface {
 	Finalized() thor.Bytes32
@@ -138,7 +137,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
-			metricsBlocksCommitted().AddWithLabel(1, map[string]string{"status": "finalized"})
+			metricBlocksCommitted().AddWithLabel(1, map[string]string{"status": "finalized"})
 		}
 	}
 
@@ -154,7 +153,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 			return err
 		}
 		engine.casts.Mark(checkpoint, state.Quality)
-		metricsBlocksCommitted().AddWithLabel(1, map[string]string{"status": "proposed"})
+		metricBlocksCommitted().AddWithLabel(1, map[string]string{"status": "proposed"})
 	}
 
 	return nil

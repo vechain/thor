@@ -72,7 +72,7 @@ func CounterVec(name string, labels []string) CountVecMeter {
 
 // GaugeMeter ...
 type GaugeMeter interface {
-	Gauge(int64)
+	Add(int64)
 }
 
 func Gauge(name string) GaugeMeter {

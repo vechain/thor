@@ -283,7 +283,7 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 // Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
-	metricTxPoolGauge().GaugeWithLabel(1, map[string]string{"source": "remote", "total": "true"})
+	metricTxPoolGauge().GaugeWithLabel(1, map[string]string{"source": "remote", "total": "true"}) // total tag allows display the cumulative for this metric
 	return p.add(newTx, false, false)
 }
 

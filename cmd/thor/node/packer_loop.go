@@ -192,6 +192,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		metricBlockProposedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"status": "proposedBlock"})
+		metricBlockProposedUsedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"status": "proposedBlock"})
 		n.comm.BroadcastBlock(newBlock)
 		log.Info("📦 new block packed",
 			"txs", len(receipts),

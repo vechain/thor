@@ -276,7 +276,7 @@ type promGaugeMeter struct {
 	gauge prometheus.Gauge
 }
 
-func (c *promGaugeMeter) Gauge(i int64) {
+func (c *promGaugeMeter) Add(i int64) {
 	c.gauge.Add(float64(i))
 }
 

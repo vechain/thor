@@ -73,7 +73,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 	for i := 0; i < randGaugeVec; i++ {
 		zeroOrOne := i % 2
 		gaugeVec.GaugeWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
-		gauge1.Gauge(int64(i))
+		gauge1.Add(int64(i))
 		totalGaugeVec += i
 	}
 

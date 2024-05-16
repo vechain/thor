@@ -37,8 +37,6 @@ type noopMeters struct{}
 
 func (n noopMeters) ObserveWithLabels(i int64, m map[string]string) {}
 
-func (n noopMeters) Gauge(int64) {}
-
 func (n noopMeters) GaugeWithLabel(int64, map[string]string) {}
 
 func (n noopMeters) AddWithLabel(int64, map[string]string) {}
