@@ -40,8 +40,8 @@ func newPrometheusTelemetry() Telemetry {
 		counterVecs:   sync.Map{},
 		histograms:    sync.Map{},
 		histogramVecs: sync.Map{},
-		gaugeVecs:     sync.Map{},
 		gauges:        sync.Map{},
+		gaugeVecs:     sync.Map{},
 	}
 }
 
