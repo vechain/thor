@@ -21,7 +21,7 @@ import (
 	"github.com/vechain/thor/v2/p2psrv"
 )
 
-type ThorP2P struct {
+type P2P struct {
 	comm           *comm.Communicator
 	p2pSrv         *p2psrv.Server
 	peersCachePath string
@@ -29,7 +29,7 @@ type ThorP2P struct {
 }
 
 func New(
-	p2pCom *comm.Communicator,
+	communicator *comm.Communicator,
 	privateKey *ecdsa.PrivateKey,
 	instanceDir string,
 	nat nat.Interface,
@@ -40,7 +40,7 @@ func New(
 	allowedPeers []*discover.Node,
 	cachedPeers []*discover.Node,
 	bootstrapNodes []*discover.Node,
-) *ThorP2P {
+) *P2P {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
@@ -76,15 +76,15 @@ func New(
 		}
 	}
 
-	return &ThorP2P{
-		comm:           p2pCom,
+	return &P2P{
+		comm:           communicator,
 		p2pSrv:         p2psrv.New(opts),
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenPort),
 	}
 }
 
-func (p *ThorP2P) Start() error {
+func (p *P2P) Start() error {
 	log.Info("starting P2P networking")
 	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
 		return errors.Wrap(err, "start P2P server")
@@ -93,7 +93,7 @@ func (p *ThorP2P) Start() error {
 	return nil
 }
 
-func (p *ThorP2P) Stop() {
+func (p *P2P) Stop() {
 	log.Info("stopping communicator...")
 	p.comm.Stop()
 
@@ -112,11 +112,11 @@ func (p *ThorP2P) Stop() {
 	}
 }
 
-func (p *ThorP2P) Communicator() *comm.Communicator {
+func (p *P2P) Communicator() *comm.Communicator {
 	return p.comm
 }
 
-func (p *ThorP2P) Enode() string {
+func (p *P2P) Enode() string {
 	return p.enode
 }
 

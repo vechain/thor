@@ -81,7 +81,7 @@ func TestNewThorP2P(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Instantiate ThorP2P
+			// Instantiate P2P
 			thor := New(
 				nil,
 				privateKey,
@@ -98,7 +98,7 @@ func TestNewThorP2P(t *testing.T) {
 
 			assert.Equal(t, thor.p2pSrv.Options().KnownNodes, tc.expectedKnownNodes)
 			assert.Equal(t, thor.p2pSrv.Options().DiscoveryNodes, tc.expectedDiscoveryNodes)
-			assert.NotNil(t, thor, "ThorP2P instance should not be nil")
+			assert.NotNil(t, thor, "P2P instance should not be nil")
 			assert.Equal(t, thor.p2pSrv.Options().MaxPeers, tc.maxPeers)
 			assert.Equal(t, thor.p2pSrv.Options().ListenAddr, tc.listenAddr)
 		})

@@ -418,7 +418,7 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	return master, nil
 }
 
-func newThorP2P(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.ThorP2P, error) {
+func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
 	// known peers will be loaded/stored from/in this file
 	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
