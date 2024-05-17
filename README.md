@@ -9,13 +9,37 @@
 
 ---
 
+<p align="center">
+    <a href="https://golang.org"><img src="https://img.shields.io/github/go-mod/go-version/vechain/thor"/></a>
+    <a href="https://github.com/vechain/thor/blob/master/LICENSE"><img src="https://img.shields.io/badge/License-LGPL%20v3-blue.svg"/></a>
+    <img src="https://img.shields.io/github/commits-since/vechain/thor/latest" />
+    <a href="https://hub.docker.com/r/vechain/thor"><img src="https://badgen.net/docker/pulls/vechain/thor?icon=docker&label=pulls"/></a>
+</p>
+
+<p align="center">
+    <a href="https://goreportcard.com/report/github.com/vechain/thor" ><img src="https://goreportcard.com/badge/github.com/vechain/thor"/></a>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-master-commit.yaml/badge.svg"/>
+    <img src="https://github.com/vechain/thor/actions/workflows/on-release.yaml/badge.svg"/>
+    <a href="https://codecov.io/gh/vechain/thor"><img src="https://codecov.io/gh/vechain/thor/graph/badge.svg?token=NniVYY7IAD"/></a>
+<p/>
+
+<p align="center">
+    <a href="https://discord.gg/vechain"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" /></a>
+    <a href="https://t.me/vechainandfriends"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" /></a>
+    <a href="https://www.reddit.com/r/Vechain"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white"/></a>
+</p>
+
+---
+
 ## Getting Started
 
 VechainThor is the layer 1 blockchain, highly compatible with EVM<sup>*</sup>, which powers the vechain ecosystem.
-VechainThor is a public blockchain that is designed for the mass adoption of blockchain technology by enterprise users of
-all sizes and is intended to serve as a foundation for a sustainable and scalable enterprise blockchain ecosystem.
+VechainThor is a public blockchain that is designed for the mass adoption of blockchain technology by enterprise users
+of all sizes and is intended to serve as a foundation for a sustainable and scalable enterprise blockchain ecosystem.
 
->VechainThor is currently up-to-date with the EVM's `paris` hard fork, set [evmVersion](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target) to `paris` if you are using solidity compiler version `0.8.20` or above.
+> VechainThor is currently up-to-date with the EVM's `paris` hard fork,
+> set [evmVersion](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target)
+> to `paris` if you are using solidity compiler version `0.8.20` or above.
 ___
 
 ## Documentation
@@ -37,8 +61,11 @@ The Vechain Improvement Proposals (VIPs) repository can be found [here](https://
 
 To chat with other community members you can join:
 
-- [Telegram](https://t.me/VechainDevCommunity)
-- [Discord](https://discord.gg/vechain)
+<p>
+    <a href="https://discord.gg/vechain"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" /></a>
+    <a href="https://t.me/vechainandfriends"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" /></a>
+    <a href="https://www.reddit.com/r/Vechain"><img src="https://img.shields.io/badge/Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white"/></a>
+</p>
 
 Do note that our [Code of Conduct](./docs/CODE_OF_CONDUCT.md) applies to all vechain community channels. Users are
 **highly encouraged** to read and adhere to them to avoid repercussions.
