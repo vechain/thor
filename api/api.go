@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -43,7 +44,7 @@ func New(
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
-	reqLogger *RequestLogger,
+	isReqLoggerEnabled bool,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
@@ -93,8 +94,8 @@ func New(
 	}
 
 	handler := handlers.CompressHandler(router)
-	if reqLogger.Enabled() {
-		handler = reqLogger.Handle(handler)
+	if isReqLoggerEnabled {
+		handler = RequestLoggerHandler(handler, log15.New("pkg", "api"))
 	}
 
 	handler = handlers.CORS(
@@ -103,9 +104,5 @@ func New(
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
 
-	closeFunc := func() {
-		subs.Close()     // subscriptions handles hijacked conns, which need to be closed
-		reqLogger.Stop() // noop if feature not enabled
-	}
-	return handler.ServeHTTP, closeFunc
+	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }

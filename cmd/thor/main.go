@@ -212,7 +212,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		api.NewThorRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), log15.Lvl(ctx.Int(verbosityFlag.Name)) >= log15.LvlDebug),
+		ctx.Bool(apiLogsEnabledFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -327,7 +327,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		api.NewThorRequestLogger(ctx.Bool(apiLogsEnabledFlag.Name), log15.Lvl(ctx.Int(verbosityFlag.Name)) >= log15.LvlDebug),
+		ctx.Bool(apiLogsEnabledFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
