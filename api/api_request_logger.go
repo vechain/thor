@@ -30,7 +30,7 @@ func RequestLoggerHandler(handler http.Handler, logger log15.Logger) http.Handle
 			r.Body = io.NopCloser(io.Reader(bytes.NewReader(bodyBytes)))
 		}
 
-		logger.Info("",
+		logger.Info("API Request",
 			"timestamp", time.Now().Unix(),
 			"URI", r.URL.String(),
 			"Method", r.Method,
