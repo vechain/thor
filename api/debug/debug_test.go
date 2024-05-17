@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -64,8 +65,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithMalformedBodyRequest(t)
 	testHandleTraceCallWithEmptyTraceCallOption(t)
 	testHandleTraceCall(t)
-	testHandleTraceCallWithRevisionAsBlockId(t)
-	testHandleTraceCallWithRevisionAsHeight(t)
+	testHandleTraceCallWithValidRevisions(t)
 	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
 	testHandleTraceCallWithRevisionAsNonExistingId(t)
 	testHandleTraceCallWithMalfomredRevision(t)
@@ -281,39 +281,30 @@ func testHandleTraceCall(t *testing.T) {
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
-func testHandleTraceCallWithRevisionAsBlockId(t *testing.T) {
-	revision := blk.Header().ID().String()
-	expectedExecutionResult := &logger.ExecutionResult{
-		Gas:         0,
-		Failed:      false,
-		ReturnValue: "",
-		StructLogs:  make([]logger.StructLogRes, 0),
+func testHandleTraceCallWithValidRevisions(t *testing.T) {
+	revisions := []string{
+		blk.Header().ID().String(),
+		"1",
+		"finalized",
+		"best",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
+	for _, revision := range revisions {
+		expectedExecutionResult := &logger.ExecutionResult{
+			Gas:         0,
+			Failed:      false,
+			ReturnValue: "",
+			StructLogs:  make([]logger.StructLogRes, 0),
+		}
 
-	var parsedExecutionRes *logger.ExecutionResult
-	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
-		t.Fatal(err)
+		res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
+
+		var parsedExecutionRes *logger.ExecutionResult
+		if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, expectedExecutionResult, parsedExecutionRes, "revision: %s", revision)
 	}
-	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
-}
-
-func testHandleTraceCallWithRevisionAsHeight(t *testing.T) {
-	expectedExecutionResult := &logger.ExecutionResult{
-		Gas:         0,
-		Failed:      false,
-		ReturnValue: "",
-		StructLogs:  make([]logger.StructLogRes, 0),
-	}
-
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=1", &TraceCallOption{}, 200)
-
-	var parsedExecutionRes *logger.ExecutionResult
-	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
 func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
@@ -508,7 +499,7 @@ func initDebugServer(t *testing.T) {
 
 	forkConfig := thor.GetForkConfig(b.Header().ID())
 	router := mux.NewRouter()
-	debug = New(repo, stater, forkConfig, 21000, true)
+	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo))
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }

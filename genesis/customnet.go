@@ -260,5 +260,5 @@ func (i HexOrDecimal256) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte("\"" + string(text) + "\""), nil
+	return json.Marshal(string(text))
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -42,15 +43,17 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
+	bft               bft.Finalizer
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer) *Debug {
 	return &Debug{
 		repo,
 		stater,
 		forkConfig,
 		callGaslimit,
 		allowCustomTracer,
+		bft,
 	}
 }
 
@@ -174,9 +177,15 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-
-	summary, err := d.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, err := utils.GetSummary(revision, d.repo, d.bft)
+	if err != nil {
+		if d.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 
@@ -344,41 +353,6 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 	}
 	clauseIndex = uint32(i)
 	return
-}
-
-func (d *Debug) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
-		return d.repo.BestBlockSummary(), nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		summary, err := d.repo.GetBlockSummary(blockID)
-		if err != nil {
-			if d.repo.IsNotFound(err) {
-				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-			}
-			return nil, err
-		}
-		return summary, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	if n > math.MaxUint32 {
-		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
-	}
-	summary, err := d.repo.NewBestChain().GetBlockSummary(uint32(n))
-	if err != nil {
-		if d.repo.IsNotFound(err) {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		return nil, err
-	}
-	return summary, nil
 }
 
 func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
