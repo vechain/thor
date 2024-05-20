@@ -6,6 +6,8 @@ info:
     RESTful API to access VechainThor Network
     
     [Project Home](https://github.com/vechain/thor)
+    
+    ⚠️ <b>Note:</b> The examples given in this specification are optimized for main net. 
 
   license:
     name: LGPL 3.0
@@ -219,6 +221,8 @@ paths:
       summary: Send a transaction
       description: |
         This endpoint allows you to send a transaction to the blockchain. The transaction must be signed and RLP encoded.
+        
+        ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for main net.  
         
         The below is a TypeScript example of how to sign and RLP encode a transaction using the `thor-devkit` library:
         
@@ -650,6 +654,8 @@ paths:
         This endpoint allows you to create a tracer for a specific clause. Tracers are instrumental in monitoring and analyzing the execution flow within the EVM.
         
         You can customize the tracer using various options to tailor it to your specific debugging needs.
+        
+        ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for main net.
       requestBody:
         required: true
         content:
@@ -715,6 +721,8 @@ paths:
       description: |
         The endpoint retrieves storage entries related to a particular clause execution and contract address. This 
         could be useful for inspecting or analyzing storage changes.
+        
+        ⚠️ <b>Note:</b> The example values provided for this endpoint are optimized for main net.
       requestBody:
         required: true
         content:
@@ -865,13 +873,13 @@ components:
             - $ref: '#/components/schemas/Tx'
             - properties:
                 meta:
-                    $ref: '#/components/schemas/TxMeta'
+                  $ref: '#/components/schemas/TxMeta'
           title: GetTxResponse
         - allOf:
             - $ref: '#/components/schemas/RawTx'
             - properties:
                 meta:
-                    $ref: '#/components/schemas/TxMeta'
+                  $ref: '#/components/schemas/TxMeta'
           title: GetRawTxResponse
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
@@ -950,25 +958,25 @@ components:
                 example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
     ExpandedBlockResponse:
-        title: ExpandedBlockResponse
-        type: object
-        description: |
-            The response will contain information about the block identified by the provided `revision`. The `transactions` 
-            field contains an array of transactions, expanded to include their receipts.
-        allOf:
-            - $ref: '#/components/schemas/Block'
-            - $ref: '#/components/schemas/IsTrunk'
-            - $ref: '#/components/schemas/IsFinalized'
-            - properties:
-                transactions:
-                  description: All included transactions, expanded, to include their receipts
-                  type: array
-                  nullable: false
-                  minItems: 0
-                  items:
-                    allOf:
-                      - $ref: '#/components/schemas/Tx'
-                      - $ref: '#/components/schemas/Receipt'
+      title: ExpandedBlockResponse
+      type: object
+      description: |
+        The response will contain information about the block identified by the provided `revision`. The `transactions` 
+        field contains an array of transactions, expanded to include their receipts.
+      allOf:
+        - $ref: '#/components/schemas/Block'
+        - $ref: '#/components/schemas/IsTrunk'
+        - $ref: '#/components/schemas/IsFinalized'
+        - properties:
+            transactions:
+              description: All included transactions, expanded, to include their receipts
+              type: array
+              nullable: false
+              minItems: 0
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/Tx'
+                  - $ref: '#/components/schemas/Receipt'
 
     EventLogFilterRequest:
       type: object
@@ -1669,7 +1677,7 @@ components:
         to:
           type: string
           description: |
-              The recipient of the call. Null indicates contract deployment.
+            The recipient of the call. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
           nullable: true
           pattern: '^0x[0-9a-f]{40}$'
