@@ -27,7 +27,7 @@ const dataStoreName = "bft.engine"
 var (
 	finalizedKey = []byte("finalized")
 
-	metricBlocksCommitted = metrics.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
+	metricBlocksCommitted = metrics.LazyLoadCounterVec("bft_committed_count", []string{"status"})
 )
 
 type Finalizer interface {
@@ -153,7 +153,6 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 			return err
 		}
 		engine.casts.Mark(checkpoint, state.Quality)
-		metricBlocksCommitted().AddWithLabel(1, map[string]string{"status": "proposed"})
 	}
 
 	return nil

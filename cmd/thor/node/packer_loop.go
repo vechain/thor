@@ -106,16 +106,21 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
+func (n *Node) pack(flow *packer.Flow) (err error) {
 	txs := n.txPool.Executables()
 	var txsToRemove []*tx.Transaction
 	defer func() {
-		for _, tx := range txsToRemove {
-			n.txPool.Remove(tx.Hash(), tx.ID())
+		if err == nil {
+			for _, tx := range txsToRemove {
+				n.txPool.Remove(tx.Hash(), tx.ID())
+			}
+			metricBlockProcessedCount().AddWithLabel(1, labelsProposed)
+		} else {
+			metricBlockProcessedCount().AddWithLabel(1, labelsProposeFailed)
 		}
 	}()
 
-	return evalBlockProposeMetrics(n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
+	return n.guardBlockProcessing(flow.Number(), func(conflicts uint32) error {
 		var (
 			startTime  = mclock.Now()
 			logEnabled = !n.skipLogs && !n.logDBFailed
@@ -191,8 +196,6 @@ func (n *Node) pack(flow *packer.Flow) error {
 		n.processFork(newBlock, oldBest.Header.ID())
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
-		metricBlockProposedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"status": "proposedBlock"})
-		metricBlockProposedUsedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"status": "proposedBlock"})
 		n.comm.BroadcastBlock(newBlock)
 		log.Info("📦 new block packed",
 			"txs", len(receipts),
@@ -204,6 +207,10 @@ func (n *Node) pack(flow *packer.Flow) error {
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			log.Debug("bandwidth updated", "gps", v)
 		}
+
+		metricBlockProcessedTxs().Add(int64(len(receipts)))
+		metricBlockProcessedGas().Add(int64(newBlock.Header().GasUsed()))
+		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
-	}))
+	})
 }

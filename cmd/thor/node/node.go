@@ -273,32 +273,30 @@ func (n *Node) txStashLoop(ctx context.Context) {
 }
 
 // guardBlockProcessing adds lock on block processing and maintains block conflicts.
-func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) func() error {
-	return func() error {
-		n.processLock.Lock()
-		defer n.processLock.Unlock()
+func (n *Node) guardBlockProcessing(blockNum uint32, process func(conflicts uint32) error) error {
+	n.processLock.Lock()
+	defer n.processLock.Unlock()
 
-		if blockNum > n.maxBlockNum {
-			if blockNum > n.maxBlockNum+1 {
-				// the block is surely unprocessable now
-				return errBlockTemporaryUnprocessable
-			}
-			n.maxBlockNum = blockNum
-			return process(0)
+	if blockNum > n.maxBlockNum {
+		if blockNum > n.maxBlockNum+1 {
+			// the block is surely unprocessable now
+			return errBlockTemporaryUnprocessable
 		}
-
-		conflicts, err := n.repo.ScanConflicts(blockNum)
-		if err != nil {
-			return err
-		}
-		return process(conflicts)
+		n.maxBlockNum = blockNum
+		return process(0)
 	}
+
+	conflicts, err := n.repo.ScanConflicts(blockNum)
+	if err != nil {
+		return err
+	}
+	return process(conflicts)
 }
 
 func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, error) {
 	var isTrunk *bool
 
-	if err := evalBlockReceivedMetrics(n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
+	if err := n.guardBlockProcessing(newBlock.Header().Number(), func(conflicts uint32) error {
 		// Check whether the block was already there.
 		// It can be skipped if no conflicts.
 		if conflicts > 0 {
@@ -396,12 +394,13 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			log.Debug("bandwidth updated", "gps", v)
 		}
-
-		metricBlockReceivedProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"status": "receivedBlock"})
-		metricBlockReceivedUsedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"status": "receivedBlock"})
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
+
+		metricBlockProcessedTxs().Add(int64(len(receipts)))
+		metricBlockProcessedGas().Add(int64(newBlock.Header().GasUsed()))
+		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
-	})); err != nil {
+	}); err != nil {
 		switch {
 		case err == errKnownBlock || err == errBFTRejected:
 			stats.UpdateIgnored(1)
@@ -414,8 +413,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		default:
 			log.Error("failed to process block", "err", err)
 		}
+		metricBlockProcessedCount().AddWithLabel(1, labelsReceiveFailed)
 		return false, err
 	}
+	metricBlockProcessedCount().AddWithLabel(1, labelsReceived)
 	return *isTrunk, nil
 }
 
