@@ -124,7 +124,7 @@ var (
 		Usage: "disable state pruner to keep all history",
 	}
 	metricsFlag = cli.BoolFlag{
-		Name:  "metrics",
+		Name:  "metrics-enabled",
 		Usage: "enables metrics collection and",
 	}
 	metricsAddrFlag = cli.StringFlag{
