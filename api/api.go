@@ -30,6 +30,8 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+var log = log15.New("pkg", "api")
+
 // New return api router
 func New(
 	repo *chain.Repository,
@@ -95,7 +97,7 @@ func New(
 
 	handler := handlers.CompressHandler(router)
 	if isReqLoggerEnabled {
-		handler = RequestLoggerHandler(handler, log15.New("pkg", "api"))
+		handler = RequestLoggerHandler(handler, log)
 	}
 
 	handler = handlers.CORS(
