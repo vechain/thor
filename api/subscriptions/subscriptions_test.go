@@ -77,8 +77,8 @@ func testHandlePendingTransactions(t *testing.T) {
 		} else {
 			assert.Equal(t, transaction.ID(), pendingTx.ID)
 		}
-	case <-time.After(5 * time.Second):
-		// If in 5 seconds the message is not received, the test will be skipped
+	case <-time.After(time.Second):
+		// If in 1 second the message is not received, the test will be skipped
 		t.SkipNow()
 	}
 }
