@@ -1,0 +1,2 @@
+ignore:
+  - "builtin/gen/bindata.go"
