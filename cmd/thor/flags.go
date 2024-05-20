@@ -60,8 +60,8 @@ var (
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
 	apiLogsEnabledFlag = cli.BoolFlag{
-		Name:  "api-logs-enabled",
-		Usage: "logs API requests to stdout",
+		Name:  "enable-api-logs",
+		Usage: "enables API requests logging",
 	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
