@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package telemetry
+package metrics
 
 import (
 	"math/rand"
@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNoopTelemetry(t *testing.T) {
+func TestNoopMetrics(t *testing.T) {
 	server := httptest.NewServer(HTTPHandler())
 
 	t.Cleanup(func() {

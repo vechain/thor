@@ -19,7 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/vechain/thor/v2/metric"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -307,16 +306,16 @@ func (t *Transaction) DecodeRLP(s *rlp.Stream) error {
 	}
 	*t = Transaction{body: body}
 
-	t.cache.size.Store(metric.StorageSize(rlp.ListSize(size)))
+	t.cache.size.Store(thor.StorageSize(rlp.ListSize(size)))
 	return nil
 }
 
 // Size returns size in bytes when RLP encoded.
-func (t *Transaction) Size() metric.StorageSize {
+func (t *Transaction) Size() thor.StorageSize {
 	if cached := t.cache.size.Load(); cached != nil {
-		return cached.(metric.StorageSize)
+		return cached.(thor.StorageSize)
 	}
-	var size metric.StorageSize
+	var size thor.StorageSize
 	rlp.Encode(&size, t)
 	t.cache.size.Store(size)
 	return size

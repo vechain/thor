@@ -123,15 +123,14 @@ var (
 		Name:  "disable-pruner",
 		Usage: "disable state pruner to keep all history",
 	}
-
-	telemetryEnabledFlag = cli.BoolTFlag{
-		Name:  "telemetry-enabled",
-		Usage: "enables telemetry server",
+	metricsFlag = cli.BoolFlag{
+		Name:  "metrics-enabled",
+		Usage: "enables metrics collection and",
 	}
-	telemetryAddrFlag = cli.StringFlag{
-		Name:  "telemetry-addr",
+	metricsAddrFlag = cli.StringFlag{
+		Name:  "metrics-addr",
 		Value: "localhost:2112",
-		Usage: "Telemetry service listening address",
+		Usage: "metrics service listening address",
 	}
 
 	// solo mode only flags
