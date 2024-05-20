@@ -89,7 +89,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			metricsFlag,
+			metricsEnabledFlag,
 			metricsAddrFlag,
 		},
 		Action: defaultAction,
@@ -117,7 +117,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
-					metricsFlag,
+					metricsEnabledFlag,
 					metricsAddrFlag,
 				},
 				Action: soloAction,
@@ -150,7 +150,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	// enable metrics as soon as possible
 	metricsURL := ""
-	if ctx.Bool(metricsFlag.Name) {
+	if ctx.Bool(metricsEnabledFlag.Name) {
 		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
@@ -270,7 +270,7 @@ func soloAction(ctx *cli.Context) error {
 
 	// enable metrics as soon as possible
 	metricsURL := ""
-	if ctx.Bool(metricsFlag.Name) {
+	if ctx.Bool(metricsEnabledFlag.Name) {
 		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
