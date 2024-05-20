@@ -43,10 +43,10 @@ import (
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -566,7 +566,7 @@ func startMetricsServer(addr string) (string, func(), error) {
 	}
 
 	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(telemetry.HTTPHandler())
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	handler := handlers.CompressHandler(router)
 
 	srv := &http.Server{Handler: handler}

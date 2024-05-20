@@ -26,9 +26,9 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 	"gopkg.in/urfave/cli.v1"
@@ -151,7 +151,7 @@ func defaultAction(ctx *cli.Context) error {
 	// enable metrics as soon as possible
 	metricsURL := ""
 	if ctx.Bool(metricsFlag.Name) {
-		telemetry.InitializePrometheusTelemetry()
+		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
@@ -271,7 +271,7 @@ func soloAction(ctx *cli.Context) error {
 	// enable metrics as soon as possible
 	metricsURL := ""
 	if ctx.Bool(metricsFlag.Name) {
-		telemetry.InitializePrometheusTelemetry()
+		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)

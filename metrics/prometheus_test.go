@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package telemetry
+package metrics
 
 import (
 	"math/rand"
@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOtelPromTelemetry(t *testing.T) {
+func TestPromMetrics(t *testing.T) {
 	noopGauge := Gauge("noopGauge")
 	lazyLoadGauge := LazyLoadGauge("lazyGauge")
-	InitializePrometheusTelemetry()
+	InitializePrometheusMetrics()
 	server := httptest.NewServer(HTTPHandler())
 
 	t.Cleanup(func() {
@@ -27,7 +27,7 @@ func TestOtelPromTelemetry(t *testing.T) {
 	})
 
 	if _, ok := noopGauge.(*noopMeters); !ok {
-		t.Error("noopGauge is not nooptelemetry")
+		t.Error("noopGauge is not noopmetrics")
 	}
 
 	if _, ok := lazyLoadGauge().(*promGaugeMeter); !ok {
@@ -89,26 +89,26 @@ func TestOtelPromTelemetry(t *testing.T) {
 	metrics, err := parser.TextToMetricFamilies(resp.Body)
 	require.NoError(t, err)
 
-	require.Equal(t, metrics["thor_telemetry_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
-	require.Equal(t, metrics["thor_telemetry_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
-	require.Equal(t, metrics["thor_telemetry_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
+	require.Equal(t, metrics["thor_metrics_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
+	require.Equal(t, metrics["thor_metrics_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
+	require.Equal(t, metrics["thor_metrics_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
 
-	sumHistVect := metrics["thor_telemetry_hist2"].GetMetric()[0].GetHistogram().GetSampleSum() +
-		metrics["thor_telemetry_hist2"].GetMetric()[1].GetHistogram().GetSampleSum()
+	sumHistVect := metrics["thor_metrics_hist2"].GetMetric()[0].GetHistogram().GetSampleSum() +
+		metrics["thor_metrics_hist2"].GetMetric()[1].GetHistogram().GetSampleSum()
 	require.Equal(t, sumHistVect, float64(histTotal))
 
-	sumCountVec := metrics["thor_telemetry_countVec1"].GetMetric()[0].GetCounter().GetValue() +
-		metrics["thor_telemetry_countVec1"].GetMetric()[1].GetCounter().GetValue()
+	sumCountVec := metrics["thor_metrics_countVec1"].GetMetric()[0].GetCounter().GetValue() +
+		metrics["thor_metrics_countVec1"].GetMetric()[1].GetCounter().GetValue()
 	require.Equal(t, sumCountVec, float64(totalCountVec))
 
-	require.Equal(t, metrics["thor_telemetry_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
-	sumGaugeVec := metrics["thor_telemetry_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
-		metrics["thor_telemetry_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
+	require.Equal(t, metrics["thor_metrics_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
+	sumGaugeVec := metrics["thor_metrics_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
+		metrics["thor_metrics_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
 	require.Equal(t, sumGaugeVec, float64(totalGaugeVec))
 }
 
 func TestLazyLoading(t *testing.T) {
-	telemetry = defaultNoopTelemetry() // make sure it starts in the default state
+	metrics = defaultNoopMetrics() // make sure it starts in the default state
 
 	for _, a := range []any{
 		Gauge("noopGauge"),
@@ -122,7 +122,7 @@ func TestLazyLoading(t *testing.T) {
 	}
 
 	// after initialization, newly created metrics become of the prometheus type
-	InitializePrometheusTelemetry()
+	InitializePrometheusMetrics()
 
 	require.IsType(t, &promGaugeMeter{}, LazyLoadGauge("lazyGauge")())
 	require.IsType(t, &promGaugeVecMeter{}, LazyLoadGaugeVec("lazyGaugeVec", nil)())

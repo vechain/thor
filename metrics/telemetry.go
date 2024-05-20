@@ -3,16 +3,16 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package telemetry
+package metrics
 
 import "net/http"
 
-// telemetry is a singleton service that provides global access to a set of meters
+// metrics is a singleton service that provides global access to a set of meters
 // it wraps multiple implementations and defaults to a no-op implementation
-var telemetry = defaultNoopTelemetry() // defaults to a Noop implementation of the telemetry service
+var metrics = defaultNoopMetrics() // defaults to a Noop implementation of the metrics service
 
-// Telemetry defines the interface for telemetry service implementations
-type Telemetry interface {
+// Metrics defines the interface for metrics service implementations
+type Metrics interface {
 	GetOrCreateCountMeter(name string) CountMeter
 	GetOrCreateCountVecMeter(name string, labels []string) CountVecMeter
 	GetOrCreateGaugeMeter(name string) GaugeMeter
@@ -24,7 +24,7 @@ type Telemetry interface {
 
 // HTTPHandler returns the http handler for retrieving metrics
 func HTTPHandler() http.Handler {
-	return telemetry.GetOrCreateHandler()
+	return metrics.GetOrCreateHandler()
 }
 
 // Define standard buckets for histograms
@@ -40,7 +40,7 @@ type HistogramMeter interface {
 }
 
 func Histogram(name string, buckets []int64) HistogramMeter {
-	return telemetry.GetOrCreateHistogramMeter(name, buckets)
+	return metrics.GetOrCreateHistogramMeter(name, buckets)
 }
 
 // HistogramVecMeter same as the Histogram but with labels
@@ -49,7 +49,7 @@ type HistogramVecMeter interface {
 }
 
 func HistogramVec(name string, labels []string, buckets []int64) HistogramVecMeter {
-	return telemetry.GetOrCreateHistogramVecMeter(name, labels, buckets)
+	return metrics.GetOrCreateHistogramVecMeter(name, labels, buckets)
 }
 
 // CountMeter is a cumulative metric that represents a single monotonically increasing counter
@@ -58,7 +58,7 @@ type CountMeter interface {
 	Add(int64)
 }
 
-func Counter(name string) CountMeter { return telemetry.GetOrCreateCountMeter(name) }
+func Counter(name string) CountMeter { return metrics.GetOrCreateCountMeter(name) }
 
 // CountVecMeter is a cumulative metric that represents a single monotonically increasing counter
 // whose value can only increase or be reset to zero on restart with a vector of values.
@@ -67,7 +67,7 @@ type CountVecMeter interface {
 }
 
 func CounterVec(name string, labels []string) CountVecMeter {
-	return telemetry.GetOrCreateCountVecMeter(name, labels)
+	return metrics.GetOrCreateCountVecMeter(name, labels)
 }
 
 // GaugeMeter ...
@@ -76,7 +76,7 @@ type GaugeMeter interface {
 }
 
 func Gauge(name string) GaugeMeter {
-	return telemetry.GetOrCreateGaugeMeter(name)
+	return metrics.GetOrCreateGaugeMeter(name)
 }
 
 // GaugeVecMeter ...
@@ -85,7 +85,7 @@ type GaugeVecMeter interface {
 }
 
 func GaugeVec(name string, labels []string) GaugeVecMeter {
-	return telemetry.GetOrCreateGaugeVecMeter(name, labels)
+	return metrics.GetOrCreateGaugeVecMeter(name, labels)
 }
 
 // LazyLoad allows to defer the instantiation of the metric while allowing its definition. More clearly:

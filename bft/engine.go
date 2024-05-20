@@ -14,9 +14,9 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
-	"github.com/vechain/thor/v2/telemetry"
 	"github.com/vechain/thor/v2/thor"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -27,7 +27,7 @@ const dataStoreName = "bft.engine"
 var (
 	finalizedKey = []byte("finalized")
 
-	metricBlocksCommitted = telemetry.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
+	metricBlocksCommitted = metrics.LazyLoadCounterVec("block_bft_committed_count", []string{"status"})
 )
 
 type Finalizer interface {

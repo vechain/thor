@@ -3,7 +3,7 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package telemetry
+package metrics
 
 import (
 	"net/http"
@@ -14,18 +14,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const namespace = "thor_telemetry"
+const namespace = "thor_metrics"
 
-// InitializePrometheusTelemetry creates a new instance of the Prometheus service and
-// sets the implementation as the default telemetry services
-func InitializePrometheusTelemetry() {
+// InitializePrometheusMetrics creates a new instance of the Prometheus service and
+// sets the implementation as the default metrics services
+func InitializePrometheusMetrics() {
 	// don't allow for reset
-	if _, ok := telemetry.(*prometheusTelemetry); !ok {
-		telemetry = newPrometheusTelemetry()
+	if _, ok := metrics.(*prometheusMetrics); !ok {
+		metrics = newPrometheusMetrics()
 	}
 }
 
-type prometheusTelemetry struct {
+type prometheusMetrics struct {
 	counters      sync.Map
 	counterVecs   sync.Map
 	histograms    sync.Map
@@ -34,8 +34,8 @@ type prometheusTelemetry struct {
 	gauges        sync.Map
 }
 
-func newPrometheusTelemetry() Telemetry {
-	return &prometheusTelemetry{
+func newPrometheusMetrics() Metrics {
+	return &prometheusMetrics{
 		counters:      sync.Map{},
 		counterVecs:   sync.Map{},
 		histograms:    sync.Map{},
@@ -45,7 +45,7 @@ func newPrometheusTelemetry() Telemetry {
 	}
 }
 
-func (o *prometheusTelemetry) GetOrCreateCountMeter(name string) CountMeter {
+func (o *prometheusMetrics) GetOrCreateCountMeter(name string) CountMeter {
 	var meter CountMeter
 	mapItem, ok := o.counters.Load(name)
 	if !ok {
@@ -57,7 +57,7 @@ func (o *prometheusTelemetry) GetOrCreateCountMeter(name string) CountMeter {
 	return meter
 }
 
-func (o *prometheusTelemetry) GetOrCreateCountVecMeter(name string, labels []string) CountVecMeter {
+func (o *prometheusMetrics) GetOrCreateCountVecMeter(name string, labels []string) CountVecMeter {
 	var meter CountVecMeter
 	mapItem, ok := o.counterVecs.Load(name)
 	if !ok {
@@ -69,11 +69,11 @@ func (o *prometheusTelemetry) GetOrCreateCountVecMeter(name string, labels []str
 	return meter
 }
 
-func (o *prometheusTelemetry) GetOrCreateHandler() http.Handler {
+func (o *prometheusMetrics) GetOrCreateHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-func (o *prometheusTelemetry) GetOrCreateHistogramMeter(name string, buckets []int64) HistogramMeter {
+func (o *prometheusMetrics) GetOrCreateHistogramMeter(name string, buckets []int64) HistogramMeter {
 	var meter HistogramMeter
 	mapItem, ok := o.histograms.Load(name)
 	if !ok {
@@ -85,7 +85,7 @@ func (o *prometheusTelemetry) GetOrCreateHistogramMeter(name string, buckets []i
 	return meter
 }
 
-func (o *prometheusTelemetry) GetOrCreateHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
+func (o *prometheusMetrics) GetOrCreateHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
 	var meter HistogramVecMeter
 	mapItem, ok := o.histogramVecs.Load(name)
 	if !ok {
@@ -97,7 +97,7 @@ func (o *prometheusTelemetry) GetOrCreateHistogramVecMeter(name string, labels [
 	return meter
 }
 
-func (o *prometheusTelemetry) GetOrCreateGaugeMeter(name string) GaugeMeter {
+func (o *prometheusMetrics) GetOrCreateGaugeMeter(name string) GaugeMeter {
 	var meter GaugeMeter
 	mapItem, ok := o.gauges.Load(name)
 	if !ok {
@@ -109,7 +109,7 @@ func (o *prometheusTelemetry) GetOrCreateGaugeMeter(name string) GaugeMeter {
 	return meter
 }
 
-func (o *prometheusTelemetry) GetOrCreateGaugeVecMeter(name string, labels []string) GaugeVecMeter {
+func (o *prometheusMetrics) GetOrCreateGaugeVecMeter(name string, labels []string) GaugeVecMeter {
 	var meter GaugeVecMeter
 	mapItem, ok := o.gaugeVecs.Load(name)
 	if !ok {
@@ -121,7 +121,7 @@ func (o *prometheusTelemetry) GetOrCreateGaugeVecMeter(name string, labels []str
 	return meter
 }
 
-func (o *prometheusTelemetry) newHistogramMeter(name string, buckets []int64) HistogramMeter {
+func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) HistogramMeter {
 	var floatBuckets []float64
 	for _, bucket := range buckets {
 		floatBuckets = append(floatBuckets, float64(bucket))
@@ -153,7 +153,7 @@ func (c *promHistogramMeter) Observe(i int64) {
 	c.histogram.Observe(float64(i))
 }
 
-func (o *prometheusTelemetry) newHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
+func (o *prometheusMetrics) newHistogramVecMeter(name string, labels []string, buckets []int64) HistogramVecMeter {
 	var floatBuckets []float64
 	for _, bucket := range buckets {
 		floatBuckets = append(floatBuckets, float64(bucket))
@@ -186,7 +186,7 @@ func (c *promHistogramVecMeter) ObserveWithLabels(i int64, labels map[string]str
 	c.histogram.With(labels).Observe(float64(i))
 }
 
-func (o *prometheusTelemetry) newCountMeter(name string) CountMeter {
+func (o *prometheusMetrics) newCountMeter(name string) CountMeter {
 	meter := prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -203,7 +203,7 @@ func (o *prometheusTelemetry) newCountMeter(name string) CountMeter {
 	}
 }
 
-func (o *prometheusTelemetry) newCountVecMeter(name string, labels []string) CountVecMeter {
+func (o *prometheusMetrics) newCountVecMeter(name string, labels []string) CountVecMeter {
 	meter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -221,7 +221,7 @@ func (o *prometheusTelemetry) newCountVecMeter(name string, labels []string) Cou
 	}
 }
 
-func (o *prometheusTelemetry) newGaugeMeter(name string) GaugeMeter {
+func (o *prometheusMetrics) newGaugeMeter(name string) GaugeMeter {
 	meter := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -238,7 +238,7 @@ func (o *prometheusTelemetry) newGaugeMeter(name string) GaugeMeter {
 	}
 }
 
-func (o *prometheusTelemetry) newGaugeVecMeter(name string, labels []string) GaugeVecMeter {
+func (o *prometheusMetrics) newGaugeVecMeter(name string, labels []string) GaugeVecMeter {
 	meter := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
