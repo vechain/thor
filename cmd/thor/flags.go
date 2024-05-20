@@ -61,7 +61,7 @@ var (
 	}
 	apiLogsEnabledFlag = cli.BoolFlag{
 		Name:  "api-logs-enabled",
-		Usage: "logs inbound requests to stdout",
+		Usage: "logs API requests to stdout",
 	}
 	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
