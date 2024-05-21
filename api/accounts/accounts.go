@@ -354,6 +354,7 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 	return
 }
 
+// parseCodeCallRevision parses the revision query parameter for endpoints that may be estimating gas for new transactions.
 func parseCodeCallRevision(req *http.Request) (utils.Revision, bool, error) {
 	revisionParam := req.URL.Query().Get("revision")
 	if revisionParam == "pending" || revisionParam == "" || revisionParam == "best" {
