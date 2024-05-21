@@ -178,6 +178,7 @@ bin/thor -h
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
+| `--enable-metrics`          | Enables the metrics server                                                                  |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
@@ -185,7 +186,7 @@ bin/thor -h
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
-| `--genesis`                  | Path to genesis file(default: builtin devnet)            |
+| `--genesis`                  | Path to genesis file(default: builtin devnet)      |
 | `--on-demand`                | Create new block when there is pending transaction |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
