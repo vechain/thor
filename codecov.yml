@@ -1,3 +1,2 @@
 ignore:
   - "builtin/gen/bindata.go"
-  - "p2psrv/bootstrap_nodes.go"
