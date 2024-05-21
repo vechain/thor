@@ -383,8 +383,8 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/txpool").
 		Methods(http.MethodGet).
-		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "subscriptions_pending_transactions", s.handlePendingTransactions))
+		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
 	sub.Path("/{subject}").
 		Methods(http.MethodGet).
-		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "subscriptions_subject", s.handleSubject))
+		HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
 }

@@ -90,7 +90,7 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
-			metricsEnabledFlag,
+			enableMetricsFlag,
 			metricsAddrFlag,
 		},
 		Action: defaultAction,
@@ -120,7 +120,7 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
-					metricsEnabledFlag,
+					enableMetricsFlag,
 					metricsAddrFlag,
 				},
 				Action: soloAction,
@@ -153,7 +153,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	// enable metrics as soon as possible
 	metricsURL := ""
-	if ctx.Bool(metricsEnabledFlag.Name) {
+	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
@@ -232,7 +232,9 @@ func defaultAction(ctx *cli.Context) error {
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(apiLogsEnabledFlag.Name),
-		forkConfig)
+		ctx.Bool(enableMetricsFlag.Name),
+		forkConfig,
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -273,7 +275,7 @@ func soloAction(ctx *cli.Context) error {
 
 	// enable metrics as soon as possible
 	metricsURL := ""
-	if ctx.Bool(metricsEnabledFlag.Name) {
+	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
 		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
@@ -358,7 +360,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(apiLogsEnabledFlag.Name),
+		ctx.Bool(enableMetricsFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

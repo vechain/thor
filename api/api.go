@@ -47,6 +47,7 @@ func New(
 	skipLogs bool,
 	allowCustomTracer bool,
 	isReqLoggerEnabled bool,
+	enableMetrics bool,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
@@ -105,6 +106,10 @@ func New(
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
+
+	if enableMetrics {
+		handler = metricsHandler(handler)
+	}
 
 	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }
