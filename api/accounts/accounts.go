@@ -361,7 +361,7 @@ func parseCodeCallRevision(req *http.Request) (utils.Revision, bool, error) {
 		return nil, true, nil
 	}
 
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(revisionParam)
 	if err != nil {
 		return nil, false, utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
