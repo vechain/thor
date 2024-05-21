@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -29,6 +30,8 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+var log = log15.New("pkg", "api")
+
 // New return api router
 func New(
 	repo *chain.Repository,
@@ -43,6 +46,7 @@ func New(
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
+	isReqLoggerEnabled bool,
 	forkConfig thor.ForkConfig,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
@@ -92,11 +96,15 @@ func New(
 	}
 
 	handler := handlers.CompressHandler(router)
+	if isReqLoggerEnabled {
+		handler = RequestLoggerHandler(handler, log)
+	}
+
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
-	return handler.ServeHTTP,
-		subs.Close // subscriptions handles hijacked conns, which need to be closed
+
+	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }

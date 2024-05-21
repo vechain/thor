@@ -78,6 +78,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			apiLogsEnabledFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -104,6 +105,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					apiLogsEnabledFlag,
 					onDemandFlag,
 					persistFlag,
 					gasLimitFlag,
@@ -210,6 +212,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
+		ctx.Bool(apiLogsEnabledFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -279,6 +282,7 @@ func soloAction(ctx *cli.Context) error {
 			return err
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
+
 		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
 			return err
 		}
@@ -323,6 +327,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
+		ctx.Bool(apiLogsEnabledFlag.Name),
 		forkConfig)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -330,7 +335,10 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("stopping API server..."); srvCloser() }()
+	defer func() {
+		log.Info("stopping API server...")
+		srvCloser()
+	}()
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 
