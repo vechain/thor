@@ -67,7 +67,7 @@ func New(
 		// bootstrap nodes will be connected for discovery and for p2p protocols
 		if len(bootstrapNodes) > 0 {
 			opts.RemoteDiscoveryList = ""    // disable remote bootstrap
-			opts.DiscoveryNodes = nil        // discovery nodes are unused given that known nodes are used for both node discovery and p2p protocol
+			opts.DiscoveryNodes = bootstrapNodes        // discovery nodes are unused given that known nodes are used for both node discovery and p2p protocol
 			opts.KnownNodes = bootstrapNodes // bootstrap nodes will be used for discovery and p2p
 		}
 
