@@ -11,16 +11,9 @@ import (
 
 var (
 	metricBlockProcessedCount    = metrics.LazyLoadCounterVec("block_processed_count", []string{"type", "success"})
-	metricBlockProcessedTxs      = metrics.LazyLoadCounter("block_processed_tx_count")
-	metricBlockProcessedGas      = metrics.LazyLoadCounter("block_processed_gas_count")
-	metricBlockProcessedDuration = metrics.LazyLoadHistogram(
-		"block_processed_duration_ms", metrics.Bucket10s,
-	)
-	metricChainForkCount = metrics.LazyLoadCounter("chain_fork_count")
-	metricChainForkSize  = metrics.LazyLoadGauge("chain_fork_size")
-
-	labelsProposed      = map[string]string{"type": "proposed", "success": "true"}
-	labelsReceived      = map[string]string{"type": "received", "success": "true"}
-	labelsProposeFailed = map[string]string{"type": "proposed", "success": "false"}
-	labelsReceiveFailed = map[string]string{"type": "received", "success": "false"}
+	metricBlockProcessedTxs      = metrics.LazyLoadCounterVec("block_processed_tx_count", []string{"type"})
+	metricBlockProcessedGas      = metrics.LazyLoadCounterVec("block_processed_gas_count", []string{"type"})
+	metricBlockProcessedDuration = metrics.LazyLoadHistogram("block_processed_duration_ms", metrics.Bucket10s)
+	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
+	metricChainForkSize          = metrics.LazyLoadGauge("chain_fork_size")
 )

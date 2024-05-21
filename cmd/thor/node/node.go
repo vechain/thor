@@ -396,8 +396,8 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
-		metricBlockProcessedTxs().Add(int64(len(receipts)))
-		metricBlockProcessedGas().Add(int64(newBlock.Header().GasUsed()))
+		metricBlockProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
+		metricBlockProcessedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
 	}); err != nil {
@@ -413,10 +413,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		default:
 			log.Error("failed to process block", "err", err)
 		}
-		metricBlockProcessedCount().AddWithLabel(1, labelsReceiveFailed)
+		metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "false"})
 		return false, err
 	}
-	metricBlockProcessedCount().AddWithLabel(1, labelsReceived)
+	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "true"})
 	return *isTrunk, nil
 }
 

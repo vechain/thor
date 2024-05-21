@@ -114,9 +114,9 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			for _, tx := range txsToRemove {
 				n.txPool.Remove(tx.Hash(), tx.ID())
 			}
-			metricBlockProcessedCount().AddWithLabel(1, labelsProposed)
+			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "true"})
 		} else {
-			metricBlockProcessedCount().AddWithLabel(1, labelsProposeFailed)
+			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "false"})
 		}
 	}()
 
@@ -208,8 +208,8 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 			log.Debug("bandwidth updated", "gps", v)
 		}
 
-		metricBlockProcessedTxs().Add(int64(len(receipts)))
-		metricBlockProcessedGas().Add(int64(newBlock.Header().GasUsed()))
+		metricBlockProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
+		metricBlockProcessedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
 	})
