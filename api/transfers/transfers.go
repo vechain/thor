@@ -69,5 +69,5 @@ func (t *Transfers) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "transfers_transfer_logs", t.handleFilterTransferLogs))
+		HandlerFunc(utils.WrapHandlerFunc(t.handleFilterTransferLogs))
 }

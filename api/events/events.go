@@ -63,5 +63,5 @@ func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("").
 		Methods(http.MethodPost).
-		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "events_filter", e.handleFilter))
+		HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
 }
