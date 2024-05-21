@@ -14,7 +14,6 @@ import (
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/kv"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -24,11 +23,7 @@ import (
 
 const dataStoreName = "bft.engine"
 
-var (
-	finalizedKey = []byte("finalized")
-
-	metricBlocksCommitted = metrics.LazyLoadCounterVec("bft_committed_count", []string{"status"})
-)
+var finalizedKey = []byte("finalized")
 
 type Finalizer interface {
 	Finalized() thor.Bytes32
