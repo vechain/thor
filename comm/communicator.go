@@ -16,17 +16,15 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm/proto"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
-
-var log = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
@@ -41,6 +39,7 @@ type Communicator struct {
 	feedScope      event.SubscriptionScope
 	goes           co.Goes
 	onceSynced     sync.Once
+	logger         log.Logger
 }
 
 // New create a new Communicator instance.
@@ -54,6 +53,7 @@ func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 		peerSet:        newPeerSet(),
 		syncedCh:       make(chan struct{}),
 		announcementCh: make(chan *announcement),
+		logger:         log.New("pkg", "comm"),
 	}
 }
 
@@ -91,7 +91,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			log.Debug("synchronization start")
+			c.logger.Debug("synchronization start")
 
 			best := c.repo.BestBlockSummary().Header
 			// choose peer which has the head block with higher total score
@@ -101,11 +101,11 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			})
 			if peer == nil {
 				if c.peerSet.Len() < 3 {
-					log.Debug("no suitable peer to sync")
+					c.logger.Debug("no suitable peer to sync")
 					break
 				}
 				// if more than 3 peers connected, we are assumed to be the best
-				log.Debug("synchronization done, best assumed")
+				c.logger.Debug("synchronization done, best assumed")
 			} else {
 				if err := download(ctx, c.repo, peer, best.Number(), handler); err != nil {
 					peer.logger.Debug("synchronization failed", "err", err)

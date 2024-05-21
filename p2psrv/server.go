@@ -17,13 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 )
-
-var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
@@ -36,6 +33,7 @@ type Server struct {
 	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
+	logger          log.Logger
 }
 
 // New create a p2p server.
@@ -67,6 +65,7 @@ func New(opts *Options) *Server {
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
 		dialingNodes:    newNodeMap(),
+		logger:          log.New("pkg", "p2psrv"),
 	}
 }
 
@@ -86,9 +85,9 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			if peer.Inbound() {
 				dir = "inbound"
 			}
-			log := log.New("peer", peer, "dir", dir)
+			log := s.logger.New("peer", peer, "dir", dir)
 
-			log.Debug("peer connected")
+			s.logger.Debug("peer connected")
 			startTime := mclock.Now()
 			defer func() {
 				log.Debug("peer disconnected", "reason", err)
@@ -109,12 +108,12 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
-		log.Debug("registering topic", "topic", topic)
+		s.logger.Debug("registering topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discv5.RegisterTopic(topic, s.done)
 		})
 
-		log.Debug("searching topic", "topic", topic)
+		s.logger.Debug("searching topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discoverLoop(topic)
 		})
@@ -122,7 +121,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		s.goes.Go(s.fetchBootstrap)
 	}
 
-	log.Debug("start up", "self", s.Self())
+	s.logger.Debug("start up", "self", s.Self())
 
 	s.goes.Go(s.dialLoop)
 	return nil
@@ -249,7 +248,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				s.discoveredNodes.Set(node.ID, node)
-				log.Debug("discovered node", "node", node)
+				s.logger.Debug("discovered node", "node", node)
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -296,8 +295,8 @@ func (s *Server) dialLoop() {
 				continue
 			}
 
-			log := log.New("node", node)
-			log.Debug("try to dial node")
+			log := s.logger.New("node", node)
+			s.logger.Debug("try to dial node")
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
@@ -352,7 +351,7 @@ func (s *Server) fetchBootstrap() {
 		if err := f(); err == nil || errors.Is(err, context.Canceled) {
 			return
 		} else {
-			log.Warn("update bootstrap nodes from remote failed", "err", err)
+			s.logger.Warn("update bootstrap nodes from remote failed", "err", err)
 		}
 
 		select {

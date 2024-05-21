@@ -18,7 +18,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -34,10 +33,6 @@ const LIMIT = 10
 const LIMIT_PER_ACCOUNT = 2
 
 var devAccounts = genesis.DevAccounts()
-
-func init() {
-	log15.Root().SetHandler(log15.DiscardHandler())
-}
 
 func newPool(limit int, limitPerAccount int) *TxPool {
 	db := muxdb.NewMem()

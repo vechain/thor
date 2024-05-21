@@ -13,8 +13,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/log"
 )
 
 func init() {
@@ -29,7 +29,6 @@ const (
 var (
 	errPeerDisconnected = errors.New("peer disconnected")
 	errMsgTooLarge      = errors.New("msg too large")
-	log                 = log15.New("pkg", "rpc")
 )
 
 // HandleFunc to handle received messages from peer.
@@ -42,7 +41,7 @@ type RPC struct {
 	doneCh   chan struct{}
 	pendings map[uint32]*resultListener
 	lock     sync.Mutex
-	logger   log15.Logger
+	logger   log.Logger
 }
 
 // New create a new RPC instance.
@@ -60,7 +59,7 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 		rw:       rw,
 		doneCh:   make(chan struct{}),
 		pendings: make(map[uint32]*resultListener),
-		logger:   log.New(ctx...),
+		logger:   log.New("pkg", "rpc", ctx),
 	}
 }
 

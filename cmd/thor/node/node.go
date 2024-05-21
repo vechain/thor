@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/bft"
@@ -27,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
@@ -34,8 +34,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
-
-var log = log15.New("pkg", "node")
 
 var (
 	// error when the block larger than known max block number + 1
@@ -64,6 +62,7 @@ type Node struct {
 	maxBlockNum uint32
 	processLock sync.Mutex
 	logWorker   *worker
+	logger      log.Logger
 }
 
 func New(
@@ -92,6 +91,7 @@ func New(
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
 		forkConfig:     forkConfig,
+		logger:         log.New("pkg", "node"),
 	}
 }
 
@@ -118,13 +118,13 @@ func (n *Node) Run(ctx context.Context) error {
 }
 
 func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
-	log.Debug("start to process block stream")
-	defer log.Debug("process block stream done", "err", err)
+	n.logger.Debug("start to process block stream")
+	defer n.logger.Debug("process block stream done", "err", err)
 	var stats blockStats
 	startTime := mclock.Now()
 
 	report := func(block *block.Block) {
-		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+		n.logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 		stats = blockStats{}
 		startTime = mclock.Now()
 	}
@@ -156,8 +156,8 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 }
 
 func (n *Node) houseKeeping(ctx context.Context) {
-	log.Debug("enter house keeping")
-	defer log.Debug("leave house keeping")
+	n.logger.Debug("enter house keeping")
+	defer n.logger.Debug("leave house keeping")
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
@@ -184,12 +184,12 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
 					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					log.Debug("future block added", "id", newBlock.Header().ID())
+					n.logger.Debug("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
 				n.comm.BroadcastBlock(newBlock.Block)
-				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+				n.logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
 		case <-futureTicker.C:
 			// process future blocks
@@ -204,7 +204,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			for i, block := range blocks {
 				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-					log.Debug("future block consumed", "id", block.Header().ID())
+					n.logger.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
 					if isTrunk {
 						n.comm.BroadcastBlock(block)
@@ -212,7 +212,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				}
 
 				if stats.processed > 0 && i == len(blocks)-1 {
-					log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+					n.logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 				}
 			}
 		case <-connectivityTicker.C:
@@ -220,7 +220,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				noPeerTimes++
 				if noPeerTimes > 30 {
 					noPeerTimes = 0
-					go checkClockOffset()
+					go checkClockOffset(n.logger)
 				}
 			} else {
 				noPeerTimes = 0
@@ -230,12 +230,12 @@ func (n *Node) houseKeeping(ctx context.Context) {
 }
 
 func (n *Node) txStashLoop(ctx context.Context) {
-	log.Debug("enter tx stash loop")
-	defer log.Debug("leave tx stash loop")
+	n.logger.Debug("enter tx stash loop")
+	defer n.logger.Debug("leave tx stash loop")
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
-		log.Error("create tx stash", "err", err)
+		n.logger.Error("create tx stash", "err", err)
 		return
 	}
 	defer db.Close()
@@ -245,7 +245,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	{
 		txs := stash.LoadAll()
 		n.txPool.Fill(txs)
-		log.Debug("loaded txs from stash", "count", len(txs))
+		n.logger.Debug("loaded txs from stash", "count", len(txs))
 	}
 
 	var scope event.SubscriptionScope
@@ -264,9 +264,9 @@ func (n *Node) txStashLoop(ctx context.Context) {
 			}
 			// only stash non-executable txs
 			if err := stash.Save(txEv.Tx); err != nil {
-				log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
+				n.logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
 			} else {
-				log.Debug("stashed tx", "id", txEv.Tx.ID())
+				n.logger.Debug("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
 	}
@@ -377,7 +377,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		// sync the log-writing task
 		if logEnabled {
 			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
+				n.logger.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
 		}
@@ -392,7 +392,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			log.Debug("bandwidth updated", "gps", v)
+			n.logger.Debug("bandwidth updated", "gps", v)
 		}
 
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
@@ -406,9 +406,9 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			stats.UpdateQueued(1)
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
-			log.Error(msg, "err", err)
+			n.logger.Error(msg, "err", err)
 		default:
-			log.Error("failed to process block", "err", err)
+			n.logger.Error("failed to process block", "err", err)
 		}
 		return false, err
 	}
@@ -478,41 +478,41 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 
 	sideIds, err := oldTrunk.Exclude(newTrunk)
 	if err != nil {
-		log.Warn("failed to process fork", "err", err)
+		n.logger.Warn("failed to process fork", "err", err)
 		return
 	}
 	if len(sideIds) == 0 {
 		return
 	}
 
-	if n := len(sideIds); n >= 2 {
-		log.Warn(fmt.Sprintf(
+	if i := len(sideIds); i >= 2 {
+		n.logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
-			n, sideIds[n-1]))
+			n, sideIds[i-1]))
 	}
 
 	for _, id := range sideIds {
 		b, err := n.repo.GetBlock(id)
 		if err != nil {
-			log.Warn("failed to process fork", "err", err)
+			n.logger.Warn("failed to process fork", "err", err)
 			return
 		}
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
-				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+				n.logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
 	}
 }
 
-func checkClockOffset() {
+func checkClockOffset(logger log.Logger) {
 	resp, err := ntp.Query("pool.ntp.org")
 	if err != nil {
-		log.Debug("failed to access NTP", "err", err)
+		logger.Debug("failed to access NTP", "err", err)
 		return
 	}
 	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
-		log.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
+		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }
