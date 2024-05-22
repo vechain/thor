@@ -27,7 +27,7 @@ var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	opts            Options
+	opts            *Options
 	srv             *p2p.Server
 	discv5          *discv5.Network
 	goes            co.Goes
@@ -48,7 +48,7 @@ func New(opts *Options) *Server {
 	}
 
 	return &Server{
-		opts: *opts,
+		opts: opts,
 		srv: &p2p.Server{
 			Config: p2p.Config{
 				Name:        opts.Name,
@@ -197,7 +197,7 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	for _, node := range s.opts.BootstrapNodes {
+	for _, node := range s.opts.DiscoveryNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
 	// known nodes are also acting as bootstrap servers
@@ -324,7 +324,7 @@ func (s *Server) tryDial(node *discover.Node) error {
 }
 
 func (s *Server) fetchBootstrap() {
-	if s.opts.RemoteBootstrap == "" {
+	if s.opts.RemoteDiscoveryList == "" {
 		return
 	}
 
@@ -335,7 +335,7 @@ func (s *Server) fetchBootstrap() {
 	}()
 
 	f := func() error {
-		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteBootstrap)
+		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteDiscoveryList)
 		if err != nil {
 			return err
 		}
@@ -361,4 +361,8 @@ func (s *Server) fetchBootstrap() {
 		case <-time.After(time.Second * 10):
 		}
 	}
+}
+
+func (s *Server) Options() *Options {
+	return s.opts
 }
