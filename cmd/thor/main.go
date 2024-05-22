@@ -107,6 +107,7 @@ func main() {
 					apiAllowCustomTracerFlag,
 					apiLogsEnabledFlag,
 					onDemandFlag,
+					blockInterval,
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
@@ -340,6 +341,11 @@ func soloAction(ctx *cli.Context) error {
 		srvCloser()
 	}()
 
+	blockInterval := ctx.Int(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
@@ -352,6 +358,7 @@ func soloAction(ctx *cli.Context) error {
 		uint64(ctx.Int(gasLimitFlag.Name)),
 		ctx.Bool(onDemandFlag.Name),
 		skipLogs,
+		uint64(blockInterval),
 		forkConfig).Run(exitSignal)
 }
 

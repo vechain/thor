@@ -132,6 +132,11 @@ var (
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction",
 	}
+	blockInterval = cli.IntFlag{
+		Name:  "block-interval",
+		Value: 10,
+		Usage: "choose a custom block interval for solo mode (seconds)",
+	}
 	persistFlag = cli.BoolFlag{
 		Name:  "persist",
 		Usage: "blockchain data storage option, if set data will be saved to disk",
