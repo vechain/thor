@@ -92,7 +92,7 @@ func (s *Solo) Run(ctx context.Context) error {
 
 	log.Info("prepared to pack block")
 
-	if err := s.init(); err != nil {
+	if err := s.init(ctx); err != nil {
 		return err
 	}
 
@@ -181,10 +181,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 	realElapsed := mclock.Now() - startTime
 
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
-	}
-
 	if !s.skipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
@@ -194,6 +190,10 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		if err := w.Commit(); err != nil {
 			return errors.WithMessage(err, "commit logs")
 		}
+	}
+
+	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
+		return errors.WithMessage(err, "set best block")
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
@@ -215,7 +215,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 }
 
 // The init function initializes the chain parameters.
-func (s *Solo) init() error {
+func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
 	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
@@ -244,7 +244,11 @@ func (s *Solo) init() error {
 
 	if !s.onDemand {
 		// wait for the next block interval if not on-demand
-		time.Sleep(time.Duration(10-time.Now().Unix()%10) * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(int64(s.blockInterval)-time.Now().Unix()%int64(s.blockInterval)) * time.Second):
+		}
 	}
 
 	return s.packing(tx.Transactions{baseGasePriceTx}, false)
