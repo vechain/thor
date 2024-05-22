@@ -132,35 +132,30 @@ func (t *TerminalHandler) ResetFieldPadding() {
 }
 
 type EthLogHandler struct {
-	logger    Logger
-	verbosity slog.Level
+	logger Logger
 }
 
-func NewEthLogHandler(logger Logger, verbosity slog.Level) *EthLogHandler {
-	return &EthLogHandler{
-		logger:    logger,
-		verbosity: verbosity,
+func SetDefaultGeth(lvl ethlog.Lvl) {
+	handler := &EthLogHandler{
+		logger: New("pkg", "geth"),
 	}
+	ethLogHandler := ethlog.NewGlogHandler(handler)
+	ethLogHandler.Verbosity(lvl)
+	ethlog.Root().SetHandler(ethLogHandler)
 }
 
 func (h *EthLogHandler) Log(r *ethlog.Record) error {
 	switch r.Lvl {
 	case ethlog.LvlCrit:
-		if h.verbosity >= slog.LevelError {
-			h.logger.Crit(r.Msg)
-		}
+		h.logger.Crit(r.Msg)
 	case ethlog.LvlError:
-		if h.verbosity >= slog.LevelError {
-			h.logger.Error(r.Msg)
-		}
+		h.logger.Error(r.Msg)
 	case ethlog.LvlWarn:
-		if h.verbosity >= slog.LevelWarn {
-			h.logger.Warn(r.Msg)
-		}
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Warn(r.Msg)
 	case ethlog.LvlDebug:
-		if h.verbosity >= slog.LevelDebug {
-			h.logger.Debug(r.Msg)
-		}
+		h.logger.Debug(r.Msg)
 	default:
 		break
 	}

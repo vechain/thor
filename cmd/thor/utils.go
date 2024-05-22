@@ -69,9 +69,7 @@ func initLogger(ctx *cli.Context) {
 		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
 	}
 	log.SetDefault(log.NewLogger(handler))
-
-	ethHandler := log.NewEthLogHandler(log.New("pkg", "eth"), slog.LevelWarn)
-	ethlog.Root().SetHandler(ethHandler)
+	log.SetDefaultGeth(ethlog.LvlWarn)
 }
 
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
