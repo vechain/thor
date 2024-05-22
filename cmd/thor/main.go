@@ -335,8 +335,7 @@ func soloAction(ctx *cli.Context) error {
 
 	blockInterval := ctx.Int(blockInterval.Name)
 	if blockInterval == 0 {
-		blockInterval = 10
-		return fmt.Errorf("block-interval cannot be zero")
+		return errors.New("block-interval cannot be zero")
 	}
 
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
