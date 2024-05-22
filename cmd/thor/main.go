@@ -241,7 +241,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(),metricsURL)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err

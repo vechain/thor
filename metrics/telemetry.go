@@ -70,7 +70,7 @@ func CounterVec(name string, labels []string) CountVecMeter {
 	return metrics.GetOrCreateCountVecMeter(name, labels)
 }
 
-// GaugeMeter ...
+// GaugeMeter is a metric that represents a single numeric value, which can arbitrarily go up and down.
 type GaugeMeter interface {
 	Add(int64)
 }
@@ -79,7 +79,8 @@ func Gauge(name string) GaugeMeter {
 	return metrics.GetOrCreateGaugeMeter(name)
 }
 
-// GaugeVecMeter ...
+// GaugeVecMeter is a metric that represents a single numeric value, which can arbitrarily go up and down
+// with multiple labels.
 type GaugeVecMeter interface {
 	GaugeWithLabel(int64, map[string]string)
 }
