@@ -162,7 +162,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
-	logDB, err := openLogDB(ctx, instanceDir)
+	logDB, err := openLogDB(instanceDir)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func soloAction(ctx *cli.Context) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
+		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()

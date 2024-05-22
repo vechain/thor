@@ -349,7 +349,7 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(ctx *cli.Context, dir string) (*logdb.LogDB, error) {
+func openLogDB(dir string) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs.db")
 	db, err := logdb.New(path)
 	if err != nil {
