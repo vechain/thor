@@ -249,7 +249,6 @@ func (s *Solo) init(ctx context.Context) error {
 			return ctx.Err()
 		case <-time.After(time.Duration(int64(s.blockInterval)-time.Now().Unix()%int64(s.blockInterval)) * time.Second):
 		}
-
 	}
 
 	return s.packing(tx.Transactions{baseGasePriceTx}, false)
