@@ -409,7 +409,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			stats.UpdateQueued(1)
 		case err == errBFTRejected:
 			// TODO: capture metrics
-			log.Debug(fmt.Sprintf("block rejected by BFT engine: %v", newBlock.Header()))
+			log.Debug(fmt.Sprintf("block rejected by BFT engine: \n %v\n", newBlock.Header()))
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
 			log.Error(msg, "err", err)
