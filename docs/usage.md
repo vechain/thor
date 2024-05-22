@@ -179,6 +179,7 @@ bin/thor -h
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
 | `--enable-metrics`          | Enables the metrics server                                                                  |
+| `--metrics-addr`            | Metrics service listening address                                                           |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
