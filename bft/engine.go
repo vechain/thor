@@ -132,7 +132,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
-			metricBlocksCommitted().AddWithLabel(1, map[string]string{"status": "finalized"})
+			metricBlocksCommitted().Add(1)
 		}
 	}
 

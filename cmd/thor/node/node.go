@@ -402,11 +402,14 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		return nil
 	}); err != nil {
 		switch {
-		case err == errKnownBlock || err == errBFTRejected:
+		case err == errKnownBlock:
 			stats.UpdateIgnored(1)
 			return false, nil
 		case consensus.IsFutureBlock(err) || err == errParentMissing || err == errBlockTemporaryUnprocessable:
 			stats.UpdateQueued(1)
+		case err == errBFTRejected:
+			// TODO: capture metrics
+			log.Debug(fmt.Sprintf("block rejected by BFT engine\n%v", newBlock.Header()))
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
 			log.Error(msg, "err", err)

@@ -10,5 +10,5 @@ import (
 )
 
 var (
-	metricBlocksCommitted = metrics.LazyLoadCounterVec("bft_committed_count", []string{"status"})
+	metricBlocksCommitted = metrics.LazyLoadCounter("bft_committed_count")
 )
