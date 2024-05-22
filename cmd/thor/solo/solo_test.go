@@ -6,6 +6,7 @@
 package solo
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestInitSolo(t *testing.T) {
 	solo := newSolo()
 
 	// init solo -> this should mine a block with the gas price tx
-	err := solo.init()
+	err := solo.init(context.Background())
 	assert.Nil(t, err)
 
 	// check the gas price
