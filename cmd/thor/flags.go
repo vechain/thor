@@ -127,6 +127,16 @@ var (
 		Name:  "disable-pruner",
 		Usage: "disable state pruner to keep all history",
 	}
+	metricsEnabledFlag = cli.BoolFlag{
+		Name:  "enable-metrics",
+		Usage: "enables metrics collection",
+	}
+	metricsAddrFlag = cli.StringFlag{
+		Name:  "metrics-addr",
+		Value: "localhost:2112",
+		Usage: "metrics service listening address",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",

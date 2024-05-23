@@ -31,6 +31,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
@@ -42,6 +44,7 @@ import (
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -496,6 +499,27 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	}, nil
 }
 
+func startMetricsServer(addr string) (string, func(), error) {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	handler := handlers.CompressHandler(router)
+
+	srv := &http.Server{Handler: handler}
+	var goes co.Goes
+	goes.Go(func() {
+		srv.Serve(listener)
+	})
+	return "http://" + listener.Addr().String() + "/metrics", func() {
+		srv.Close()
+		goes.Wait()
+	}, nil
+}
+
 func printStartupMessage1(
 	gene *genesis.Genesis,
 	repo *chain.Repository,
@@ -505,37 +529,124 @@ func printStartupMessage1(
 ) {
 	bestBlock := repo.BestBlockSummary()
 
+	name := common.MakeName("Thor", fullVersion())
+	if master == nil { // solo has no master
+		name = common.MakeName("Thor solo", fullVersion())
+	}
+
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]
     Best block   [ %v #%v @%v ]
-    Forks        [ %v ]
-    Master       [ %v ]
-    Beneficiary  [ %v ]
+    Forks        [ %v ]%v
     Instance dir [ %v ]
 `,
-		common.MakeName("Thor", fullVersion()),
+		name,
 		gene.ID(), gene.Name(),
 		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
-		master.Address(),
 		func() string {
-			if master.Beneficiary == nil {
-				return "not set, defaults to endorsor"
+			// solo mode does not have master, so skip this part
+			if master == nil {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Master       [ %v ]
+    Beneficiary  [ %v ]`,
+					master.Address(),
+					func() string {
+						if master.Beneficiary == nil {
+							return "not set, defaults to endorsor"
+						}
+						return master.Beneficiary.String()
+					}(),
+				)
 			}
-			return master.Beneficiary.String()
 		}(),
-		dataDir)
+		dataDir,
+	)
 }
 
 func printStartupMessage2(
+	gene *genesis.Genesis,
 	apiURL string,
 	nodeID string,
+	metricsURL string,
 ) {
-	fmt.Printf(`    API portal   [ %v ]
-    Node ID      [ %v ]
+	fmt.Printf(`%v    API portal   [ %v ]%v%v`,
+		func() string { // node ID
+			if nodeID == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`    Node ID      [ %v ]
 `,
+					nodeID)
+			}
+		}(),
 		apiURL,
-		nodeID)
+		func() string { // metrics URL
+			if metricsURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Metrics      [ %v ]`,
+					metricsURL)
+			}
+		}(),
+		func() string {
+			// print default dev net's dev accounts info
+			if gene.ID() == devNetGenesisID {
+				return `
+┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`
+			} else {
+				return "\n"
+			}
+		}(),
+	)
+}
+
+func printSoloStartupMessage(
+	gene *genesis.Genesis,
+	repo *chain.Repository,
+	dataDir string,
+	apiURL string,
+	forkConfig thor.ForkConfig,
+	metricsURL string,
+) {
+	bestBlock := repo.BestBlockSummary()
+
+	info := fmt.Sprintf(`Starting %v
+    Network     [ %v %v ]    
+    Best block  [ %v #%v @%v ]
+    Forks       [ %v ]
+    Data dir    [ %v ]
+    API portal  [ %v ]
+    Metrics     [ %v ]
+`,
+		common.MakeName("Thor solo", fullVersion()),
+		gene.ID(), gene.Name(),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
+		forkConfig,
+		dataDir,
+		apiURL,
+		func() string {
+			if metricsURL == "" {
+				return "Disabled"
+			}
+			return metricsURL
+		}(),
+	)
+
+	if gene.ID() == devNetGenesisID {
+		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`
+	}
+
+	fmt.Print(info)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -548,39 +659,6 @@ func openMemLogDB() *logdb.LogDB {
 		panic(errors.Wrap(err, "open log database"))
 	}
 	return db
-}
-
-func printSoloStartupMessage(
-	gene *genesis.Genesis,
-	repo *chain.Repository,
-	dataDir string,
-	apiURL string,
-	forkConfig thor.ForkConfig,
-) {
-	bestBlock := repo.BestBlockSummary()
-
-	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
-`,
-		common.MakeName("Thor solo", fullVersion()),
-		gene.ID(), gene.Name(),
-		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
-		forkConfig,
-		dataDir,
-		apiURL)
-
-	if gene.ID() == devNetGenesisID {
-		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
-`
-	}
-
-	fmt.Print(info)
 }
 
 func parseNodeList(list string) ([]*discover.Node, error) {

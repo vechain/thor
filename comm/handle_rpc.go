@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/comm/proto"
-	"github.com/vechain/thor/v2/metric"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -111,7 +110,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 		const maxBlocks = 1024
 		const maxSize = 512 * 1024
 		result := make([]rlp.RawValue, 0, maxBlocks)
-		var size metric.StorageSize
+		var size thor.StorageSize
 		chain := c.repo.NewBestChain()
 		for size < maxSize && len(result) < maxBlocks {
 			b, err := chain.GetBlock(num)
@@ -124,7 +123,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 			raw, _ := rlp.EncodeToBytes(b)
 			result = append(result, rlp.RawValue(raw))
 			num++
-			size += metric.StorageSize(len(raw))
+			size += thor.StorageSize(len(raw))
 		}
 		write(result)
 	case proto.MsgGetTxs:
@@ -142,7 +141,7 @@ func (c *Communicator) handleRPC(peer *Peer, msg *p2p.Msg, write func(interface{
 
 			var (
 				toSend tx.Transactions
-				size   metric.StorageSize
+				size   thor.StorageSize
 				n      int
 			)
 

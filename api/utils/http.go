@@ -9,6 +9,11 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/vechain/thor/v2/metrics"
 )
 
 type httpError struct {
@@ -64,6 +69,38 @@ func WrapHandlerFunc(f HandlerFunc) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
+	}
+}
+
+// MetricsWrapHandlerFunc wraps a given handler and adds metrics to it
+func MetricsWrapHandlerFunc(pathPrefix, endpoint string, f HandlerFunc) http.HandlerFunc {
+	fixedPath := strings.ReplaceAll(pathPrefix, "/", "_") // ensure no unexpected slashes
+	httpReqCounter := metrics.CounterVec(fixedPath+"_request_count", []string{"path", "code", "method"})
+	httpReqDuration := metrics.HistogramVec(
+		fixedPath+"_duration_ms", []string{"path", "code", "method"}, metrics.BucketHTTPReqs,
+	)
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		now := time.Now()
+		err := f(w, r)
+
+		method := r.Method
+		status := http.StatusOK
+		if err != nil {
+			if he, ok := err.(*httpError); ok {
+				if he.cause != nil {
+					http.Error(w, he.cause.Error(), he.status)
+				} else {
+					w.WriteHeader(he.status)
+				}
+				status = he.status
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				status = http.StatusInternalServerError
+			}
+		}
+		httpReqCounter.AddWithLabel(1, map[string]string{"path": endpoint, "code": strconv.Itoa(status), "method": method})
+		httpReqDuration.ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"path": endpoint, "code": strconv.Itoa(status), "method": method})
 	}
 }
 
