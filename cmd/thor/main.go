@@ -79,7 +79,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
-			apiLogsEnabledFlag,
+			enableAPILogsFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -108,7 +108,7 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
-					apiLogsEnabledFlag,
+					enableAPILogsFlag,
 					onDemandFlag,
 					blockInterval,
 					persistFlag,
@@ -225,15 +225,15 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		p2pCommunicator.Communicator(),
+		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(apiLogsEnabledFlag.Name),
+		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
-		forkConfig,
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -354,14 +354,16 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
+		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
+		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
-		forkConfig)
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())

@@ -59,7 +59,7 @@ var (
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
-	apiLogsEnabledFlag = cli.BoolFlag{
+	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
 	}
