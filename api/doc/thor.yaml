@@ -68,7 +68,7 @@ paths:
   /accounts/*:
     post:
       parameters:
-        - $ref: '#/components/parameters/RevisionWithNextInQuery'
+        - $ref: '#/components/parameters/CallCodeRevisionInQuery'
       tags:
         - Accounts
       summary: Inspect clauses
@@ -683,7 +683,7 @@ paths:
         
         You can customize the tracer using various options to suit your debugging requirements.
       parameters:
-        - $ref: '#/components/parameters/RevisionWithNextInQuery'
+        - $ref: '#/components/parameters/CallCodeRevisionInQuery'
       requestBody:
         required: true
         content:
@@ -2241,7 +2241,7 @@ components:
       schema:
         type: string
 
-    RevisionWithNextInQuery:
+    CallCodeRevisionInQuery:
       name: revision
       in: query
       description: |
