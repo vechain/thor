@@ -177,7 +177,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
@@ -199,7 +199,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	res, err := d.traceCall(req.Context(), tracer, summary, txCtx, gas, clause)
+	res, err := d.traceCall(req.Context(), tracer, summary, txCtx, gas, clause, isNext)
 	if err != nil {
 		return err
 	}
@@ -214,18 +214,25 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
 }
 
-func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
+func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause, isNext bool) (interface{}, error) {
 	header := summary.Header
 	state := d.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 	signer, _ := header.Signer()
+	number := header.Number()
+	timestamp := header.Timestamp()
+	if isNext {
+		number++
+		timestamp += thor.BlockInterval
+	}
+
 	rt := runtime.New(
 		d.repo.NewChain(header.ID()),
 		state,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
-			Number:      header.Number(),
-			Time:        header.Timestamp(),
+			Number:      number,
+			Time:        timestamp,
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
 		},

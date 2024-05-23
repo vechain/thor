@@ -127,3 +127,46 @@ func TestGetSummary(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCodeCallRevision(t *testing.T) {
+	testCases := []struct {
+		revision string
+		expected Revision
+		isNext   bool
+	}{
+		{
+			revision: "",
+			expected: nil,
+			isNext:   true,
+		},
+		{
+			revision: "1234",
+			expected: uint32(1234),
+			isNext:   false,
+		},
+		{
+			revision: "best",
+			expected: nil,
+			isNext:   true,
+		},
+		{
+			revision: "next",
+			expected: nil,
+			isNext:   true,
+		},
+		{
+			revision: "0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6",
+			expected: thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6"),
+			isNext:   false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.revision, func(t *testing.T) {
+			result, isNext, err := ParseCodeCallRevision(tc.revision)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expected, result)
+			assert.Equal(t, tc.isNext, isNext)
+		})
+	}
+}

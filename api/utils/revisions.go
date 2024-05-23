@@ -63,3 +63,13 @@ func ParseRevision(revision string) (Revision, error) {
 	}
 	return uint32(n), err
 }
+
+// ParseCodeCallRevision parses the revision query parameter for endpoints that may be estimating gas for new transactions.
+func ParseCodeCallRevision(revision string) (Revision, bool, error) {
+	if revision == "next" || revision == "" || revision == "best" {
+		return nil, true, nil
+	}
+
+	res, err := ParseRevision(revision)
+	return res, false, err
+}

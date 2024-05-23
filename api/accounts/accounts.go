@@ -171,9 +171,9 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, isPending, err := parseCodeCallRevision(req)
+	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return err
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
@@ -202,7 +202,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		GasPrice: callData.GasPrice,
 		Caller:   callData.Caller,
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary, isPending)
+	results, err := a.batchCall(req.Context(), batchCallData, summary, isNext)
 	if err != nil {
 		return err
 	}
@@ -214,9 +214,9 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, isPending, err := parseCodeCallRevision(req)
+	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
 	if err != nil {
-		return err
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
 	summary, err := utils.GetSummary(revision, a.repo, a.bft)
 	if err != nil {
@@ -225,7 +225,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 		}
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary, isPending)
+	results, err := a.batchCall(req.Context(), batchCallData, summary, isNext)
 	if err != nil {
 		return err
 	}
@@ -239,10 +239,11 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 	}
 	header := summary.Header
 	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
-
 	blockNumber := header.Number()
+	timestamp := header.Timestamp()
 	if isPending {
 		blockNumber++
+		timestamp += thor.BlockInterval
 	}
 
 	signer, _ := header.Signer()
@@ -251,7 +252,7 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
 			Number:      blockNumber,
-			Time:        header.Timestamp(),
+			Time:        timestamp,
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
 		},
@@ -352,20 +353,6 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 		clauses[i] = tx.NewClause(c.To).WithData(data).WithValue(value)
 	}
 	return
-}
-
-// parseCodeCallRevision parses the revision query parameter for endpoints that may be estimating gas for new transactions.
-func parseCodeCallRevision(req *http.Request) (utils.Revision, bool, error) {
-	revisionParam := req.URL.Query().Get("revision")
-	if revisionParam == "pending" || revisionParam == "" || revisionParam == "best" {
-		return nil, true, nil
-	}
-
-	revision, err := utils.ParseRevision(revisionParam)
-	if err != nil {
-		return nil, false, utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	return revision, false, nil
 }
 
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {

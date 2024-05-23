@@ -68,7 +68,7 @@ paths:
   /accounts/*:
     post:
       parameters:
-        - $ref: '#/components/parameters/RevisionInQuery'
+        - $ref: '#/components/parameters/RevisionWithNextInQuery'
       tags:
         - Accounts
       summary: Inspect clauses
@@ -88,7 +88,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref : '#/components/schemas/ExecuteCodesRequest'
+              $ref: '#/components/schemas/ExecuteCodesRequest'
       responses:
         '200':
           description: OK
@@ -683,7 +683,7 @@ paths:
         
         You can customize the tracer using various options to suit your debugging requirements.
       parameters:
-        - $ref: '#/components/parameters/RevisionInQuery'
+        - $ref: '#/components/parameters/RevisionWithNextInQuery'
       requestBody:
         required: true
         content:
@@ -805,13 +805,13 @@ components:
                 - "0x000000000000000000000000435933c8064b4ae76be665428e0307ef2ccfbd68"
                 - "0x0000000000000000000000000f872421dc479f3c11edd89512731814d0598db5"
               data: "0x0000000000000000000000000000000000000000000000013f306a2409fc0000"
-          transfers: []
+          transfers: [ ]
           gasUsed: 13326
           reverted: false
           vmError: ""
         # VET Transfer
         - data: "0x"
-          events: []
+          events: [ ]
           transfers:
             - sender: "0x435933c8064b4ae76be665428e0307ef2ccfbd68"
               recipient: "0xf077b491b355e64048ce21e3a6fc4751eeea77fa"
@@ -826,7 +826,7 @@ components:
               topics:
                 - "0xb35bf4274d4295009f1ec66ed3f579db287889444366c03d3a695539372e8951"
               data: "0x000000000000000000000000435933c8064b4ae76be665428e0307ef2ccfbd68"
-          transfers: []
+          transfers: [ ]
           gasUsed: 31881
           reverted: false
           vmError: ""
@@ -865,13 +865,13 @@ components:
             - $ref: '#/components/schemas/Tx'
             - properties:
                 meta:
-                    $ref: '#/components/schemas/TxMeta'
+                  $ref: '#/components/schemas/TxMeta'
           title: GetTxResponse
         - allOf:
             - $ref: '#/components/schemas/RawTx'
             - properties:
                 meta:
-                    $ref: '#/components/schemas/TxMeta'
+                  $ref: '#/components/schemas/TxMeta'
           title: GetRawTxResponse
       example:
         id: '0x4de71f2d588aa8a1ea00fe8312d92966da424d9939a511fc0be81e65fad52af8'
@@ -950,25 +950,25 @@ components:
                 example: '0x284bba50ef777889ff1a367ed0b38d5e5626714477c40de38d71cedd6f9fa477'
 
     ExpandedBlockResponse:
-        title: ExpandedBlockResponse
-        type: object
-        description: |
-            The response will contain information about the block identified by the provided `revision`. The `transactions` 
-            field contains an array of transactions, expanded to include their receipts.
-        allOf:
-            - $ref: '#/components/schemas/Block'
-            - $ref: '#/components/schemas/IsTrunk'
-            - $ref: '#/components/schemas/IsFinalized'
-            - properties:
-                transactions:
-                  description: All included transactions, expanded, to include their receipts
-                  type: array
-                  nullable: false
-                  minItems: 0
-                  items:
-                    allOf:
-                      - $ref: '#/components/schemas/Tx'
-                      - $ref: '#/components/schemas/Receipt'
+      title: ExpandedBlockResponse
+      type: object
+      description: |
+        The response will contain information about the block identified by the provided `revision`. The `transactions` 
+        field contains an array of transactions, expanded to include their receipts.
+      allOf:
+        - $ref: '#/components/schemas/Block'
+        - $ref: '#/components/schemas/IsTrunk'
+        - $ref: '#/components/schemas/IsFinalized'
+        - properties:
+            transactions:
+              description: All included transactions, expanded, to include their receipts
+              type: array
+              nullable: false
+              minItems: 0
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/Tx'
+                  - $ref: '#/components/schemas/Receipt'
 
     EventLogFilterRequest:
       type: object
@@ -1172,7 +1172,7 @@ components:
       example:
         target: '0x010709463c1f0c9aa66a31182fb36d1977d99bfb6526bae0564a0eac4006c31a/0/0'
         name: "prestate"
-        config: {}
+        config: { }
 
     PostDebugTracerCallRequest:
       title: PostDebugTracerCallRequest
@@ -1669,7 +1669,7 @@ components:
         to:
           type: string
           description: |
-              The recipient of the call. Null indicates contract deployment.
+            The recipient of the call. Null indicates contract deployment.
           example: '0x0000000000000000000000000000456e65726779'
           nullable: true
           pattern: '^0x[0-9a-f]{40}$'
@@ -2120,11 +2120,11 @@ components:
           type: object
           description: |
             The configuration of the tracer. It is specific to the `name`
-          example: {}
+          example: { }
           nullable: true
       example:
         name: "prestate"
-        config: {}
+        config: { }
 
     StorageRangeOption:
       type: object
@@ -2238,6 +2238,14 @@ components:
       name: revision
       in: query
       description: Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      schema:
+        type: string
+
+    RevisionWithNextInQuery:
+      name: revision
+      in: query
+      description: |
+        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `next` block is assumed.
       schema:
         type: string
 
