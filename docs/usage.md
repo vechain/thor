@@ -168,16 +168,19 @@ bin/thor -h
 | `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
+| `--enable-api-logs`         | Enables API requests logging                                                                |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
 | `--max-peers`               | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)        |
 | `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
 | `--nat`                     | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                  |
+| `--bootnode`                | Comma separated list of bootnode IDs                                                        |
+| `--import`                  | Import master key from keystore                                                             |
+| `--export`                  | Export master key to keystore                                                               |
 | `--target-gas-limit`        | Target block gas limit (adaptive if set to 0) (default: 0)                                  |
 | `--pprof`                   | Turn on go-pprof                                                                            |
 | `--skip-logs`               | Skip writing event\|transfer logs (/logs API will be disabled)                              |
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
-| `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
@@ -185,9 +188,9 @@ bin/thor -h
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
-| `--genesis`                  | Path to genesis file(default: builtin devnet)            |
+| `--genesis`                  | Path to genesis file(default: builtin devnet)      |
 | `--on-demand`                | Create new block when there is pending transaction |
-| `--block-interval`           | Choose a block interval in seconds (default 10s) |
+| `--block-interval`           | Choose a block interval in seconds (default 10s)   |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
