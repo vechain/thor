@@ -232,7 +232,7 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	return utils.WriteJSON(w, results)
 }
 
-func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary, isPending bool) (results BatchCallResults, err error) {
+func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary, isNext bool) (results BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
@@ -241,7 +241,7 @@ func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, 
 	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 	blockNumber := header.Number()
 	timestamp := header.Timestamp()
-	if isPending {
+	if isNext {
 		blockNumber++
 		timestamp += thor.BlockInterval
 	}
