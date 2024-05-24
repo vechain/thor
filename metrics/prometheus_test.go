@@ -7,33 +7,17 @@ package metrics
 
 import (
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
-	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 func TestPromMetrics(t *testing.T) {
-	noopGauge := Gauge("noopGauge")
-	lazyLoadGauge := LazyLoadGauge("lazyGauge")
 	InitializePrometheusMetrics()
-	server := httptest.NewServer(HTTPHandler())
-
-	t.Cleanup(func() {
-		server.Close()
-	})
-
-	if _, ok := noopGauge.(*noopMeters); !ok {
-		t.Error("noopGauge is not noopmetrics")
-	}
-
-	if _, ok := lazyLoadGauge().(*promGaugeMeter); !ok {
-		t.Error("noopGauge is not promGaugeMeter")
-	}
 
 	// 2 ways of accessing it - useful to avoid lookups
 	count1 := Counter("count1")
@@ -78,40 +62,37 @@ func TestPromMetrics(t *testing.T) {
 		totalGaugeVec += i
 	}
 
-	time.Sleep(time.Second) // might take a sec until the metrics are avail in the http handler
-
-	// Make a request to the metrics endpoint
-	resp, err := http.Get(server.URL + "/metrics")
-	if err != nil {
-		t.Errorf("Failed to make GET request: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	parser := expfmt.TextParser{}
-	metrics, err := parser.TextToMetricFamilies(resp.Body)
+	// Gather the metrics
+	gatherers := prometheus.Gatherers{prometheus.DefaultGatherer}
+	metricFamilies, err := gatherers.Gather()
 	require.NoError(t, err)
 
-	require.Equal(t, metrics["thor_metrics_count1"].GetMetric()[0].GetCounter().GetValue(), float64(1))
-	require.Equal(t, metrics["thor_metrics_count2"].GetMetric()[0].GetCounter().GetValue(), float64(randCount2))
-	require.Equal(t, metrics["thor_metrics_hist1"].GetMetric()[0].GetHistogram().GetSampleSum(), float64(histTotal))
+	metrics := make(map[string]*dto.MetricFamily)
+	for _, mf := range metricFamilies {
+		metrics[mf.GetName()] = mf
+	}
 
-	sumHistVect := metrics["thor_metrics_hist2"].GetMetric()[0].GetHistogram().GetSampleSum() +
-		metrics["thor_metrics_hist2"].GetMetric()[1].GetHistogram().GetSampleSum()
-	require.Equal(t, sumHistVect, float64(histTotal))
+	// Validate metrics
+	require.Equal(t, float64(1), metrics["thor_metrics_count1"].Metric[0].GetCounter().GetValue())
+	require.Equal(t, float64(randCount2), metrics["thor_metrics_count2"].Metric[0].GetCounter().GetValue())
+	require.Equal(t, float64(histTotal), metrics["thor_metrics_hist1"].Metric[0].GetHistogram().GetSampleSum())
 
-	sumCountVec := metrics["thor_metrics_countVec1"].GetMetric()[0].GetCounter().GetValue() +
-		metrics["thor_metrics_countVec1"].GetMetric()[1].GetCounter().GetValue()
-	require.Equal(t, sumCountVec, float64(totalCountVec))
+	sumHistVect := metrics["thor_metrics_hist2"].Metric[0].GetHistogram().GetSampleSum() +
+		metrics["thor_metrics_hist2"].Metric[1].GetHistogram().GetSampleSum()
+	require.Equal(t, float64(histTotal), sumHistVect)
 
-	require.Equal(t, metrics["thor_metrics_gauge1"].GetMetric()[0].GetGauge().GetValue(), float64(totalGaugeVec))
-	sumGaugeVec := metrics["thor_metrics_gaugeVec1"].GetMetric()[0].GetGauge().GetValue() +
-		metrics["thor_metrics_gaugeVec1"].GetMetric()[1].GetGauge().GetValue()
-	require.Equal(t, sumGaugeVec, float64(totalGaugeVec))
+	sumCountVec := metrics["thor_metrics_countVec1"].Metric[0].GetCounter().GetValue() +
+		metrics["thor_metrics_countVec1"].Metric[1].GetCounter().GetValue()
+	require.Equal(t, float64(totalCountVec), sumCountVec)
+
+	require.Equal(t, float64(totalGaugeVec), metrics["thor_metrics_gauge1"].Metric[0].GetGauge().GetValue())
+	sumGaugeVec := metrics["thor_metrics_gaugeVec1"].Metric[0].GetGauge().GetValue() +
+		metrics["thor_metrics_gaugeVec1"].Metric[1].GetGauge().GetValue()
+	require.Equal(t, float64(totalGaugeVec), sumGaugeVec)
 }
 
 func TestLazyLoading(t *testing.T) {
-	metrics = defaultNoopMetrics() // make sure it starts in the default state
+	metrics = defaultNoopMetrics() // make sure it starts in the default state of noopMeter
 
 	for _, a := range []any{
 		Gauge("noopGauge"),
@@ -124,13 +105,20 @@ func TestLazyLoading(t *testing.T) {
 		require.IsType(t, &noopMeters{}, a)
 	}
 
+	lazyGauge := LazyLoadGauge("lazyGauge")
+	lazyGaugeVec := LazyLoadGaugeVec("lazyGaugeVec", nil)
+	lazyCounter := LazyLoadCounter("lazyCounter")
+	lazyCounterVec := LazyLoadCounterVec("lazyCounterVec", nil)
+	lazyHistogram := LazyLoadHistogram("lazyHistogram", nil)
+	lazyHistogramVec := LazyLoadHistogramVec("lazyHistogramVec", nil, nil)
+
 	// after initialization, newly created metrics become of the prometheus type
 	InitializePrometheusMetrics()
 
-	require.IsType(t, &promGaugeMeter{}, LazyLoadGauge("lazyGauge")())
-	require.IsType(t, &promGaugeVecMeter{}, LazyLoadGaugeVec("lazyGaugeVec", nil)())
-	require.IsType(t, &promCountMeter{}, LazyLoadCounter("lazyCounter")())
-	require.IsType(t, &promCountVecMeter{}, LazyLoadCounterVec("lazyCounterVec", nil)())
-	require.IsType(t, &promHistogramMeter{}, LazyLoadHistogram("lazyHistogram", nil)())
-	require.IsType(t, &promHistogramVecMeter{}, LazyLoadHistogramVec("lazyHistogramVec", nil, nil)())
+	require.IsType(t, &promGaugeMeter{}, lazyGauge())
+	require.IsType(t, &promGaugeVecMeter{}, lazyGaugeVec())
+	require.IsType(t, &promCountMeter{}, lazyCounter())
+	require.IsType(t, &promCountVecMeter{}, lazyCounterVec())
+	require.IsType(t, &promHistogramMeter{}, lazyHistogram())
+	require.IsType(t, &promHistogramVecMeter{}, lazyHistogramVec())
 }
