@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/require"
@@ -76,6 +77,8 @@ func TestPromMetrics(t *testing.T) {
 		gauge1.Add(int64(i))
 		totalGaugeVec += i
 	}
+
+	time.Sleep(time.Second) // might take a sec until the metrics are avail in the http handler
 
 	// Make a request to the metrics endpoint
 	resp, err := http.Get(server.URL + "/metrics")
