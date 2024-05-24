@@ -180,7 +180,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 
 	for {
 		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60)
+		delay := time.Second * time.Duration(rand.Int()%60+60) // nolint:gosec
 		select {
 		case <-p.ctx.Done():
 			return

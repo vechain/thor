@@ -258,7 +258,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint: gosec
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 }
 
 func httpGetAndCheckResponseStatus(t *testing.T, url string, responseStatusCode int) []byte {
-	res, err := http.Get(url)
+	res, err := http.Get(url) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}
