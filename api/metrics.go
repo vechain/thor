@@ -8,15 +8,15 @@ package api
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/vechain/thor/v2/metrics"
 )
 
 var (
-	metricHttpReqCounter  = metrics.CounterVec("api_request_count", []string{"path", "code", "method"})
-	metricHttpReqDuration = metrics.HistogramVec("api_duration_ms", []string{"path", "code", "method"}, metrics.BucketHTTPReqs)
+	metricHttpReqCounter  = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
+	metricHttpReqDuration = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
 )
 
 // metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
@@ -34,16 +34,30 @@ func (m *metricsResponseWriter) WriteHeader(code int) {
 	m.ResponseWriter.WriteHeader(code)
 }
 
-// metricsHandler is a middleware that records metrics for each request.
-func metricsHandler(h http.Handler) http.Handler {
+// metricMiddleware is a middleware that records metrics for each request.
+func metricMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rt := mux.CurrentRoute(r)
+
+		var (
+			enabled = false
+			name    = ""
+		)
+
+		// all named route will be recorded
+		if rt != nil && rt.GetName() != "" {
+			enabled = true
+			name = rt.GetName()
+		}
+
 		now := time.Now()
-
 		mrw := newMetricsResponseWriter(w)
-		h.ServeHTTP(mrw, r)
 
-		url := strings.ReplaceAll(strings.TrimLeft(r.URL.Path, "/"), "/", "_") // ensure no unexpected slashes
-		metricHttpReqCounter.AddWithLabel(1, map[string]string{"path": url, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
-		metricHttpReqDuration.ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"path": url, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
+		next.ServeHTTP(mrw, r)
+
+		if enabled {
+			metricHttpReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
+			metricHttpReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
+		}
 	})
 }

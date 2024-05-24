@@ -96,6 +96,10 @@ func New(
 		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
+	if enableMetrics {
+		router.Use(metricMiddleware)
+	}
+
 	handler := handlers.CompressHandler(router)
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
@@ -105,9 +109,6 @@ func New(
 
 	if enableReqLogger {
 		handler = RequestLoggerHandler(handler, log)
-	}
-	if enableMetrics {
-		handler = metricsHandler(handler)
 	}
 
 	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
