@@ -31,13 +31,13 @@ func TestPromMetrics(t *testing.T) {
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
 
 	count1.Add(1)
-	randCount2 := rand.Intn(100) + 1
+	randCount2 := rand.Intn(100) + 1 // nolint:gosec
 	for i := 0; i < randCount2; i++ {
 		Counter("count2").Add(1)
 	}
 
 	histTotal := 0
-	for i := 0; i < rand.Intn(100)+1; i++ {
+	for i := 0; i < rand.Intn(100)+2; i++ { // nolint:gosec
 		zeroOrOne := i % 2
 		hist.Observe(int64(i))
 		HistogramVec("hist2", []string{"zeroOrOne"}, nil).
@@ -46,7 +46,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalCountVec := 0
-	randCountVec := rand.Intn(100) + 2
+	randCountVec := rand.Intn(100) + 2 // nolint:gosec
 	for i := 0; i < randCountVec; i++ {
 		zeroOrOne := i % 2
 		countVect.AddWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
@@ -54,7 +54,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalGaugeVec := 0
-	randGaugeVec := rand.Intn(100) + 2
+	randGaugeVec := rand.Intn(100) + 2 // nolint:gosec
 	for i := 0; i < randGaugeVec; i++ {
 		zeroOrOne := i % 2
 		gaugeVec.GaugeWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
