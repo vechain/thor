@@ -56,7 +56,7 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api docs
+	// to serve stoplight, swagger and api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)

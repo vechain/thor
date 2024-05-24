@@ -352,10 +352,23 @@ func (a *Accounts) handleBatchCallData(batchCallData *BatchCallData) (txCtx *xen
 func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/*").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
-	sub.Path("/{address}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
-	sub.Path("/{address}/code").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetCode))
-	sub.Path("/{address}/storage/{key}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(a.handleGetStorage))
-	sub.Path("").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
-	sub.Path("/{address}").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(a.handleCallContract))
+	sub.Path("/*").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_call_batch_code", a.handleCallBatchCode))
+	sub.Path("/{address}").
+		Methods(http.MethodGet).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_get_account", a.handleGetAccount))
+	sub.Path("/{address}/code").
+		Methods(http.MethodGet).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_get_code", a.handleGetCode))
+	sub.Path("/{address}/storage/{key}").
+		Methods("GET").
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_get_storage", a.handleGetStorage))
+	// These two methods are currently deprecated
+	sub.Path("").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_api_call_contract", a.handleCallContract))
+	sub.Path("/{address}").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "accounts_call_contract_address", a.handleCallContract))
 }

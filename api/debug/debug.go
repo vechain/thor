@@ -422,7 +422,13 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
-	sub.Path("/tracers/call").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceCall))
-	sub.Path("/storage-range").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
+	sub.Path("/tracers").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "debug_trace_clause", d.handleTraceClause))
+	sub.Path("/tracers/call").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "debug_trace_call", d.handleTraceCall))
+	sub.Path("/storage-range").
+		Methods(http.MethodPost).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "debug_debug_storage", d.handleDebugStorage))
 }

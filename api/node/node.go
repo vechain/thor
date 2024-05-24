@@ -33,5 +33,7 @@ func (n *Node) handleNetwork(w http.ResponseWriter, req *http.Request) error {
 func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/network/peers").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
+	sub.Path("/network/peers").
+		Methods(http.MethodGet).
+		HandlerFunc(utils.MetricsWrapHandlerFunc(pathPrefix, "node_network", n.handleNetwork))
 }
