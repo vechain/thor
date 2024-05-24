@@ -46,7 +46,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalCountVec := 0
-	randCountVec := rand.Intn(100) + 1
+	randCountVec := rand.Intn(100) + 2
 	for i := 0; i < randCountVec; i++ {
 		zeroOrOne := i % 2
 		countVect.AddWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
@@ -54,7 +54,7 @@ func TestPromMetrics(t *testing.T) {
 	}
 
 	totalGaugeVec := 0
-	randGaugeVec := rand.Intn(100) + 1
+	randGaugeVec := rand.Intn(100) + 2
 	for i := 0; i < randGaugeVec; i++ {
 		zeroOrOne := i % 2
 		gaugeVec.GaugeWithLabel(int64(i), map[string]string{"zeroOrOne": strconv.Itoa(zeroOrOne)})
