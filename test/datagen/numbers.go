@@ -10,9 +10,9 @@ import (
 )
 
 func RandInt() int {
-	return mathrand.Int()
+	return mathrand.Int() // nolint:gosec
 }
 
 func RandIntN(n int) int {
-	return mathrand.Intn(n)
+	return mathrand.Intn(n) // nolint:gosec
 }

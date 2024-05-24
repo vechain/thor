@@ -46,9 +46,9 @@ func TestPrioCache(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		e := kvp{
-			rand.Int(),
-			rand.Int(),
-			rand.Float64()}
+			rand.Int(),     // nolint: gosec
+			rand.Int(),     // nolint:gosec
+			rand.Float64()} // nolint:gosec
 		kvps = append(kvps, e)
 		c.Set(e.k, e.v, e.p)
 	}

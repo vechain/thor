@@ -79,7 +79,7 @@ func TestVerifyBadProof(t *testing.T) {
 			t.Fatal("zero length proof")
 		}
 		keys := proofs.Keys()
-		key := keys[mrand.Intn(len(keys))]
+		key := keys[mrand.Intn(len(keys))] // nolint:gosec
 		node, _ := proofs.Get(key)
 		proofs.Delete(key)
 		mutateByte(node)
@@ -92,8 +92,8 @@ func TestVerifyBadProof(t *testing.T) {
 
 // mutateByte changes one byte in b.
 func mutateByte(b []byte) {
-	for r := mrand.Intn(len(b)); ; {
-		new := byte(mrand.Intn(255))
+	for r := mrand.Intn(len(b)); ; { // nolint:gosec
+		new := byte(mrand.Intn(255)) // nolint:gosec
 		if new != b[r] {
 			b[r] = new
 			break

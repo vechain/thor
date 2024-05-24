@@ -488,7 +488,7 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	handler = handleXGenesisID(handler, genesisID)
 	handler = handleXThorestVersion(handler)
 	handler = requestBodyLimit(handler)
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
 	goes.Go(func() {
 		srv.Serve(listener)
