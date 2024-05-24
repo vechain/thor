@@ -174,8 +174,6 @@ bin/thor -h
 | `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
 | `--nat`                     | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                  |
 | `--bootnode`                | Comma separated list of bootnode IDs                                                        |
-| `--import`                  | Import master key from keystore                                                             |
-| `--export`                  | Export master key to keystore                                                               |
 | `--target-gas-limit`        | Target block gas limit (adaptive if set to 0) (default: 0)                                  |
 | `--pprof`                   | Turn on go-pprof                                                                            |
 | `--skip-logs`               | Skip writing event\|transfer logs (/logs API will be disabled)                              |
