@@ -85,7 +85,7 @@ var (
 	}
 	bootNodeFlag = cli.StringFlag{
 		Name:  "bootnode",
-		Usage: "comma separated list of bootnode IDs",
+		Usage: "comma separated list of bootstrap node IDs",
 	}
 	allowedPeersFlag = cli.StringFlag{
 		Name:   "allowed-peers",
