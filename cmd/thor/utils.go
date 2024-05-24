@@ -509,7 +509,7 @@ func startMetricsServer(addr string) (string, func(), error) {
 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
 	handler := handlers.CompressHandler(router)
 
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
 	goes.Go(func() {
 		srv.Serve(listener)
