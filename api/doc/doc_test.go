@@ -13,6 +13,7 @@ import (
 )
 
 func TestVersion(t *testing.T) {
+	// ensure the version loaded from the yaml file meets the semver format, eg. 1.2.3
 	validVersion := regexp.MustCompile(`^\d+(\.\d+){2}$`)
 
 	assert.True(t, validVersion.Match([]byte(Version())))
