@@ -95,6 +95,6 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 	sub.Path("/{revision}").
 		Methods(http.MethodGet).
-		Name("blocks_get_detail").
+		Name("blocks_get_block").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
 }

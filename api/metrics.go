@@ -34,8 +34,8 @@ func (m *metricsResponseWriter) WriteHeader(code int) {
 	m.ResponseWriter.WriteHeader(code)
 }
 
-// metricMiddleware is a middleware that records metrics for each request.
-func metricMiddleware(next http.Handler) http.Handler {
+// metricsMiddleware is a middleware that records metrics for each request.
+func metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rt := mux.CurrentRoute(r)
 

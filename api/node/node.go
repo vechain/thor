@@ -35,6 +35,6 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 
 	sub.Path("/network/peers").
 		Methods(http.MethodGet).
-		Name("node_network_peers").
+		Name("node_get_peers").
 		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
 }

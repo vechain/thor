@@ -358,7 +358,7 @@ func (a *Accounts) Mount(root *mux.Router, pathPrefix string) {
 		HandlerFunc(utils.WrapHandlerFunc(a.handleCallBatchCode))
 	sub.Path("/{address}").
 		Methods(http.MethodGet).
-		Name("accounts_get_detail").
+		Name("accounts_get_account").
 		HandlerFunc(utils.WrapHandlerFunc(a.handleGetAccount))
 	sub.Path("/{address}/code").
 		Methods(http.MethodGet).

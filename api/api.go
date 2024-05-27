@@ -97,7 +97,7 @@ func New(
 	}
 
 	if enableMetrics {
-		router.Use(metricMiddleware)
+		router.Use(metricsMiddleware)
 	}
 
 	handler := handlers.CompressHandler(router)
