@@ -3,16 +3,10 @@
 // Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
 // file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
 
-package datagen
+package txpool
 
 import (
-	mathrand "math/rand"
+	"github.com/vechain/thor/v2/metrics"
 )
 
-func RandInt() int {
-	return mathrand.Int() // nolint:gosec
-}
-
-func RandIntN(n int) int {
-	return mathrand.Intn(n) // nolint:gosec
-}
+var metricTxPoolGauge = metrics.LazyLoadGaugeVec("txpool_current_tx_count", []string{"source", "total"})

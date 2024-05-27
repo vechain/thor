@@ -12,6 +12,7 @@ requirements may change as the network evolves._
   - [Full Archive Node](#full-archive-node)
   - [Full Node](#full-node)
   - [Full Node without Logs](#full-node-without-logs)
+- [Metrics](#metrics)
 
 ---
 
@@ -93,3 +94,18 @@ bin/thor --network main --skip-logs
 ```
 
 _As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space._
+
+
+### Metrics
+
+Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently. 
+Below is an overview of how metrics is integrated and utilized within our node systems.
+
+Metrics is enabled in nodes by default. It's possible to disable it by setting  `--enable-metrics=false`.
+By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
+
+```shell
+curl localhost:2112/metrics
+```
+
+Instrumentation is in a beta phase at this stage. You can read more about the metric types [here](https://prometheus.io/docs/concepts/metric_types/).

@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -89,6 +90,8 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			metricsEnabledFlag,
+			metricsAddrFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -117,6 +120,8 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					metricsEnabledFlag,
+					metricsAddrFlag,
 				},
 				Action: soloAction,
 			},
@@ -145,6 +150,19 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(metricsEnabledFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -162,7 +180,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
-	logDB, err := openLogDB(ctx, instanceDir)
+	logDB, err := openLogDB(instanceDir)
 	if err != nil {
 		return err
 	}
@@ -223,7 +241,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, p2pCommunicator.Enode())
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -252,6 +270,18 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(metricsEnabledFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
 
 	var (
 		gene       *genesis.Genesis
@@ -284,7 +314,7 @@ func soloAction(ctx *cli.Context) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
+		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
@@ -346,7 +376,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()

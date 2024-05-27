@@ -63,15 +63,14 @@ func New(
 		opts.DiscoveryNodes = nil
 		opts.KnownNodes = allowedPeers
 	} else {
-		// boot nodes flag will overwrite the default bootstrap nodes and also disable remote bootstrap
-		// bootstrap nodes will be connected for discovery and for p2p protocols
+		// bootstrap nodes flag will overwrite the default discovery nodes and also disable remote discovery
 		if len(bootstrapNodes) > 0 {
-			opts.RemoteDiscoveryList = ""        // disable remote bootstrap
-			opts.DiscoveryNodes = bootstrapNodes // discovery nodes are unused given that known nodes are used for both node discovery and p2p protocol
-			opts.KnownNodes = bootstrapNodes     // bootstrap nodes will be used for discovery and p2p
+			opts.RemoteDiscoveryList = ""        // disable remote discovery
+			opts.DiscoveryNodes = bootstrapNodes // overwrite the default discovery nodes
+			opts.KnownNodes = bootstrapNodes     // supplied bootstrap nodes can potentially be p2p node, add to the known nodes
 		}
 
-		// cached peers will be appended to existing or flag-set bootnodes
+		// cached peers will be appended to existing or flag-set bootstrap nodes
 		if len(cachedPeers) > 0 {
 			opts.KnownNodes = dedupNodeSlice(opts.KnownNodes, cachedPeers)
 		}

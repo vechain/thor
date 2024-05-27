@@ -237,7 +237,7 @@ func checkExpandedBlock(t *testing.T, expBl *block.Block, actBl *blocks.JSONExpa
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url)
+	res, err := http.Get(url) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}

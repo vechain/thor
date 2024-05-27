@@ -84,7 +84,7 @@ func (p *Peer) UpdateHead(id thor.Bytes32, totalScore uint64) {
 // MarkTransaction marks a transaction to known.
 func (p *Peer) MarkTransaction(hash thor.Bytes32) {
 	// that's 10~100 block intervals
-	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(91)+10)))
+	expiration := mclock.AbsTime(time.Second * time.Duration(thor.BlockInterval*uint64(rand.Intn(91)+10))) // nolint:gosec
 
 	deadline := mclock.Now() + expiration
 	p.knownTxs.Add(hash, deadline)
