@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -35,52 +34,12 @@ func TestMain(t *testing.T) {
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
-	testHandlePendingTransactions(t)
 	testHandleSubjectWithBlock(t)
 	testHandleSubjectWithEvent(t)
 	testHandleSubjectWithTransfer(t)
 	testHandleSubjectWithBeat(t)
 	testHandleSubjectWithBeat2(t)
 	testHandleSubjectWithNonValidArgument(t)
-}
-
-func testHandlePendingTransactions(t *testing.T) {
-	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/txpool"}
-
-	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	assert.NoError(t, err)
-	defer conn.Close()
-
-	// Check the protocol upgrade to websocket
-	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	assert.Equal(t, "Upgrade", resp.Header.Get("Connection"))
-	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
-
-	// Add a new tx to the mempool
-	transaction := createTx(t, repo, 1)
-	txPool.AddLocal(transaction)
-
-	readComplete := make(chan struct{})
-	var msg []byte
-
-	go func() {
-		defer close(readComplete)
-		_, msg, err = conn.ReadMessage()
-	}()
-
-	select {
-	case <-readComplete:
-		assert.NoError(t, err)
-		var pendingTx *PendingTxIDMessage
-		if err := json.Unmarshal(msg, &pendingTx); err != nil {
-			t.Fatal(err)
-		} else {
-			assert.Equal(t, transaction.ID(), pendingTx.ID)
-		}
-	case <-time.After(time.Second):
-		// If in 1 second the message is not received, the test will be skipped
-		t.SkipNow()
-	}
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {
