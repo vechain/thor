@@ -59,7 +59,7 @@ var (
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
-	apiLogsEnabledFlag = cli.BoolFlag{
+	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
 	}
@@ -127,7 +127,7 @@ var (
 		Name:  "disable-pruner",
 		Usage: "disable state pruner to keep all history",
 	}
-	metricsEnabledFlag = cli.BoolFlag{
+	enableMetricsFlag = cli.BoolFlag{
 		Name:  "enable-metrics",
 		Usage: "enables metrics collection",
 	}
