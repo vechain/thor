@@ -7,6 +7,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/rand"
 	"io"
 	"math"
 	"net/http"
@@ -26,9 +27,11 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
-func TestMetricsMiddleware(t *testing.T) {
+func init() {
 	metrics.InitializePrometheusMetrics()
+}
 
+func TestMetricsMiddleware(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
@@ -38,6 +41,16 @@ func TestMetricsMiddleware(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo, _ := chain.NewRepository(db, b)
+
+	// inject some invalid data to db
+	data := db.NewStore("chain.data")
+	var blkID thor.Bytes32
+	rand.Read(blkID[:])
+	data.Put(blkID[:], []byte("invalid data"))
+
+	// get summary should fail since the block data is not rlp encoded
+	_, err = repo.GetBlockSummary(blkID)
+	assert.NotNil(t, err)
 
 	router := mux.NewRouter()
 	acc := accounts.New(repo, stater, math.MaxUint64, thor.NoFork, solo.NewBFTEngine(repo))
@@ -49,13 +62,16 @@ func TestMetricsMiddleware(t *testing.T) {
 	httpGet(t, ts.URL+"/accounts/0x")
 	httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String())
 
+	_, code := httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String()+"?revision="+blkID.String())
+	assert.Equal(t, 500, code)
+
 	body, _ := httpGet(t, ts.URL+"/metrics")
 	parser := expfmt.TextParser{}
 	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
 	assert.Nil(t, err)
 
 	m := metrics["thor_metrics_api_request_count"].GetMetric()
-	assert.Equal(t, 2, len(m), "should be 2 metric entries")
+	assert.Equal(t, 3, len(m), "should be 3 metric entries")
 	assert.Equal(t, float64(1), m[0].GetCounter().GetValue())
 	assert.Equal(t, float64(1), m[1].GetCounter().GetValue())
 
@@ -72,6 +88,15 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.Equal(t, 3, len(labels))
 	assert.Equal(t, "code", labels[0].GetName())
 	assert.Equal(t, "400", labels[0].GetValue())
+	assert.Equal(t, "method", labels[1].GetName())
+	assert.Equal(t, "GET", labels[1].GetValue())
+	assert.Equal(t, "name", labels[2].GetName())
+	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+
+	labels = m[2].GetLabel()
+	assert.Equal(t, 3, len(labels))
+	assert.Equal(t, "code", labels[0].GetName())
+	assert.Equal(t, "500", labels[0].GetValue())
 	assert.Equal(t, "method", labels[1].GetName())
 	assert.Equal(t, "GET", labels[1].GetValue())
 	assert.Equal(t, "name", labels[2].GetName())
