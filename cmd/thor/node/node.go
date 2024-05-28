@@ -409,17 +409,17 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			stats.UpdateQueued(1)
 		case err == errBFTRejected:
 			// TODO: capture metrics
-			log.Debug(fmt.Sprintf("block rejected by BFT engine: \n%v\n", newBlock.Header()))
+			log.Debug(fmt.Sprintf("block rejected by BFT engine\n%v\n", newBlock.Header()))
 		case consensus.IsCritical(err):
-			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
+			msg := fmt.Sprintf(`failed to process block due to consensus failure\n%v\n`, newBlock.Header())
 			log.Error(msg, "err", err)
 		default:
 			log.Error("failed to process block", "err", err)
 		}
-		metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "false"})
+		metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "false"})
 		return false, err
 	}
-	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "true"})
+	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
 	return *isTrunk, nil
 }
 
