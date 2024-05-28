@@ -66,6 +66,7 @@ func testHandlePendingTransactions(t *testing.T) {
 	transaction := createTx(t, repo, 1)
 	txPool.AddLocal(transaction)
 
+	// Wait for the tx to be notified from mempool
 	<-txChan
 	time.Sleep(100 * time.Millisecond)
 
