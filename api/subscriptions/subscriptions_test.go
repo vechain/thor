@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -68,7 +67,6 @@ func testHandlePendingTransactions(t *testing.T) {
 
 	// Wait for the tx to be notified from mempool
 	<-txChan
-	time.Sleep(100 * time.Millisecond)
 
 	_, msg, err := conn.ReadMessage()
 
