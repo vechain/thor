@@ -6,6 +6,9 @@
 package api
 
 import (
+	"bufio"
+	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -32,6 +35,21 @@ func newMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
 func (m *metricsResponseWriter) WriteHeader(code int) {
 	m.statusCode = code
 	m.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack complies the writer with WS subscriptions interface
+// Hijack lets the caller take over the connection.
+// After a call to Hijack the HTTP server library
+// will not do anything else with the connection.
+//
+// It becomes the caller's responsibility to manage
+// and close the connection.
+func (m *metricsResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := m.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("hijack not supported")
+	}
+	return h.Hijack()
 }
 
 // metricsMiddleware is a middleware that records metrics for each request.
