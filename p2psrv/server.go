@@ -392,9 +392,10 @@ func (s *Server) Options() *Options {
 	return s.opts
 }
 
+var versionRegex = regexp.MustCompile(`\d+\.\d+\.\d+`)
+
 // sameMajor returns true if the peer has the same major version
 func sameMajor(appVersion, peerName string) bool {
-	versionRegex := regexp.MustCompile(`\d+\.\d+\.\d+`)
 	if appVersion == "" || !versionRegex.MatchString(appVersion) {
 		// Got a bad app version, so accept any peer
 		return true
