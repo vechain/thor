@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const version = "2.1.1-88c7c86-release"
+
 func TestNewServer(t *testing.T) {
 	privateKey, err := crypto.GenerateKey()
 	if err != nil {
@@ -31,7 +33,7 @@ func TestNewServer(t *testing.T) {
 		KnownNodes:  Nodes{node},
 	}
 
-	server := New(opts)
+	server := New(opts, version)
 
 	assert.Equal(t, "testNode", server.opts.Name)
 	assert.Equal(t, privateKey, server.opts.PrivateKey)
@@ -62,7 +64,7 @@ func TestNewServerConnectOnly(t *testing.T) {
 		KnownNodes:  Nodes{knownNode},
 	}
 
-	server := New(opts)
+	server := New(opts, version)
 
 	assert.Equal(t, "testNode", server.opts.Name)
 	assert.Equal(t, privateKey, server.opts.PrivateKey)
@@ -74,4 +76,52 @@ func TestNewServerConnectOnly(t *testing.T) {
 	assert.Equal(t, server.knownNodes.Len(), 1)
 	assert.True(t, server.discoveredNodes.Contains(knownNode.ID))
 	assert.True(t, server.knownNodes.Contains(knownNode.ID))
+}
+
+func TestSameMajor(t *testing.T) {
+	testCases := []struct {
+		id         string
+		appVersion string
+		peerName   string
+		expected   bool
+	}{
+		{
+			id:         "only-major-same",
+			appVersion: "2.0.0-88c7c86-release",
+			peerName:   "thor/v2.1.1-88c7c86-release/linux/go1.21.9",
+			expected:   true,
+		},
+		{
+			id:         "only-major-different",
+			appVersion: "2.1.1-88c7c86-release",
+			peerName:   "thor/v1.1.1-88c7c86-release/linux/go1.21.9",
+			expected:   false,
+		},
+		{
+			id:         "app-version-empty",
+			appVersion: "",
+			peerName:   "thor/v1.1.1-88c7c86-release/linux/go1.21.9",
+			expected:   true,
+		},
+		{
+			id:         "exact-match",
+			appVersion: "1.1.1-88c7c86-release",
+			peerName:   "thor/v1.1.1-88c7c86-release/linux/go1.21.9",
+			expected:   true,
+		},
+		{
+			id: "bad-app-version",
+			// bad app version, so accept any peer
+			appVersion: "bad.bad.bad-88c7c86-release",
+			peerName:   "thor/v1.1.1-88c7c86-release/linux/go1.21.9",
+			expected:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.id, func(t *testing.T) {
+			result := sameMajor(tc.appVersion, tc.peerName)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }

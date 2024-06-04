@@ -461,7 +461,7 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 	}
 
 	return p2p.New(
-		comm.New(repo, txPool, version),
+		comm.New(repo, txPool),
 		key,
 		instanceDir,
 		userNAT,

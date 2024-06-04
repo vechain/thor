@@ -9,9 +9,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"regexp"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -43,11 +41,10 @@ type Communicator struct {
 	feedScope      event.SubscriptionScope
 	goes           co.Goes
 	onceSynced     sync.Once
-	version        string
 }
 
 // New create a new Communicator instance.
-func New(repo *chain.Repository, txPool *txpool.TxPool, version string) *Communicator {
+func New(repo *chain.Repository, txPool *txpool.TxPool) *Communicator {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Communicator{
 		repo:           repo,
@@ -57,7 +54,6 @@ func New(repo *chain.Repository, txPool *txpool.TxPool, version string) *Communi
 		peerSet:        newPeerSet(),
 		syncedCh:       make(chan struct{}),
 		announcementCh: make(chan *announcement),
-		version:        version,
 	}
 }
 
@@ -165,11 +161,6 @@ type txsToSync struct {
 }
 
 func (c *Communicator) servePeer(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	if !sameMajor(c.version, p.Name()) {
-		log.Warn("peer version mismatch", "name", p.Name(), "address", p.RemoteAddr().String(), "id", p.ID().String())
-		return nil
-	}
-
 	peer := newPeer(p, rw)
 	c.goes.Go(func() {
 		c.runPeer(peer)
@@ -291,25 +282,4 @@ func (c *Communicator) PeersStats() []*PeerStats {
 		return stats[i].Duration < stats[j].Duration
 	})
 	return stats
-}
-
-// sameMajor returns true if the peer has the same major version
-func sameMajor(appVersion, peerName string) bool {
-	versionRegex := regexp.MustCompile(`\d+\.\d+\.\d+`)
-	if appVersion == "" || !versionRegex.MatchString(appVersion) {
-		// Got a bad app version, so accept any peer
-		return true
-	}
-
-	// Extract the semantic version from the name
-	peerVersion := versionRegex.FindString(peerName)
-	if peerVersion == "" {
-		return false
-	}
-
-	peerMajorVersion := strings.Split(peerVersion, ".")[0]
-	givenMajorVersion := strings.Split(appVersion, ".")[0]
-
-	// Compare the major versions
-	return peerMajorVersion == givenMajorVersion
 }

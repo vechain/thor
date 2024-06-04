@@ -10,6 +10,8 @@ import (
 	"errors"
 	"math"
 	"net"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -36,10 +38,11 @@ type Server struct {
 	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
+	version         string
 }
 
 // New create a p2p server.
-func New(opts *Options) *Server {
+func New(opts *Options, version string) *Server {
 	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
@@ -67,6 +70,7 @@ func New(opts *Options) *Server {
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
 		dialingNodes:    newNodeMap(),
+		version:         version,
 	}
 }
 
@@ -86,7 +90,20 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			if peer.Inbound() {
 				dir = "inbound"
 			}
-			log := log.New("peer", peer, "dir", dir)
+
+			if !sameMajor(s.version, peer.Name()) {
+				log.Warn("peer version mismatch",
+					"name", peer.Name(),
+					"address", peer.RemoteAddr().String(),
+					"id", peer.ID().String())
+
+				peer.Disconnect(p2p.DiscIncompatibleVersion)
+				s.knownNodes.Remove(peer.ID())
+				s.dialingNodes.Remove(peer.ID())
+				return nil
+			}
+
+			log := log.New("peer", peer, "dir", dir, "name", peer.Name())
 
 			log.Debug("peer connected")
 			metricConnectedPeers().Add(1)
@@ -373,4 +390,25 @@ func (s *Server) fetchBootstrap() {
 
 func (s *Server) Options() *Options {
 	return s.opts
+}
+
+// sameMajor returns true if the peer has the same major version
+func sameMajor(appVersion, peerName string) bool {
+	versionRegex := regexp.MustCompile(`\d+\.\d+\.\d+`)
+	if appVersion == "" || !versionRegex.MatchString(appVersion) {
+		// Got a bad app version, so accept any peer
+		return true
+	}
+
+	// Extract the semantic version from the name
+	peerVersion := versionRegex.FindString(peerName)
+	if peerVersion == "" {
+		return false
+	}
+
+	peerMajorVersion := strings.Split(peerVersion, ".")[0]
+	givenMajorVersion := strings.Split(appVersion, ".")[0]
+
+	// Compare the major versions
+	return peerMajorVersion == givenMajorVersion
 }
