@@ -296,9 +296,8 @@ func (c *Communicator) PeersStats() []*PeerStats {
 // SameMajor returns true if the peer has the same major version
 func sameMajor(appVersion, peerName string) bool {
 	versionRegex := regexp.MustCompile(`\d+\.\d+\.\d+`)
-	// Got a bad app version, so accept any peer
 	if appVersion == "" || !versionRegex.MatchString(appVersion) {
-		log.Info("bad app version", "appVersion", appVersion)
+		// Got a bad app version, so accept any peer
 		return true
 	}
 
