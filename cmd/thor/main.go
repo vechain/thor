@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	version       string = "2.1.1"
+	version       string
 	gitCommit     string
 	gitTag        string
 	copyrightYear string
