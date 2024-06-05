@@ -397,7 +397,7 @@ func isIncompatible(peerName string) bool {
 	// Extract the semantic version from the name
 	peerVersion := versionRegex.FindString(peerName)
 	if peerVersion == "" {
-		return false
+		return true
 	}
 
 	major := strings.Split(peerVersion, ".")[0]

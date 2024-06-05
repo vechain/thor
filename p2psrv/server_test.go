@@ -93,6 +93,14 @@ func TestIsIncompatible(t *testing.T) {
 			peerName: "thor/v3.1.1-88c7c86-release/linux/go1.21.9",
 			expected: false,
 		},
+		{
+			peerName: "",
+			expected: true,
+		},
+		{
+			peerName: "thor/v1.bad.v-88c7c86-release/linux/go1.21.9",
+			expected: true,
+		},
 	}
 
 	for _, tc := range testCases {
