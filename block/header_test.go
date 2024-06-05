@@ -6,7 +6,7 @@
 package block
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"sync/atomic"
 	"testing"
 

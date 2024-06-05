@@ -2,7 +2,7 @@
 
 ### Requirements
 
-Thor requires `Go` 1.19+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install).
+Thor requires `Go` 1.22+ and `C` compiler to build. To install `Go`, follow this [link](https://golang.org/doc/install).
 
 ### Clone the repo
 

@@ -1,6 +1,6 @@
 module github.com/vechain/thor/v2
 
-go 1.19
+go 1.22
 
 require (
 	github.com/beevik/ntp v0.2.0
@@ -22,6 +22,7 @@ require (
 	github.com/pkg/errors v0.8.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/prometheus/client_golang v1.18.0
+	github.com/prometheus/client_model v0.5.0
 	github.com/prometheus/common v0.45.0
 	github.com/qianbin/directcache v0.9.7
 	github.com/stretchr/testify v1.8.4
@@ -53,7 +54,6 @@ require (
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-runewidth v0.0.4 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
-	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	golang.org/x/net v0.23.0 // indirect

@@ -4,20 +4,18 @@
 run:
   timeout: 10m
   tests: true
-  # default is true. Enables skipping of directories:
-  #   vendor$, third_party$, testdata$, examples$, Godeps$, builtin$
-  skip-dirs-use-default: true
+  go: '1.22'
 
 linters:
   disable-all: true
   enable:
+    - typecheck
     - goimports
     - gosimple
     - govet
     - ineffassign
     - misspell
     - unconvert
-    - typecheck
     - unused
     - staticcheck
     - bidichk
@@ -41,6 +39,7 @@ linters-settings:
 
 issues:
   max-issues-per-linter: 1000
+  max-same-issues: 10
   exclude-rules:
     - path: vm/contracts.go
       text: 'SA1019: "golang.org/x/crypto/ripemd160" is deprecated: RIPEMD-160 is a legacy hash and should not be used for new applications.'

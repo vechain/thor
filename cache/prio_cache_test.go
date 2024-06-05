@@ -35,7 +35,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 
 func TestPrioCache(t *testing.T) {
 	c := cache.NewPrioCache(5)
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano())) // nolint:gosec
 
 	type kvp struct {
 		k, v int

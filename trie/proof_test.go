@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	mrand.Seed(time.Now().Unix())
+	mrand.New(mrand.NewSource(time.Now().UnixNano())) // nolint:gosec
 }
 
 func TestProof(t *testing.T) {
