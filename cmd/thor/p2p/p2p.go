@@ -78,7 +78,7 @@ func New(
 
 	return &P2P{
 		comm:           communicator,
-		p2pSrv:         p2psrv.New(opts, version),
+		p2pSrv:         p2psrv.New(opts),
 		peersCachePath: peersCachePath,
 		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&privateKey.PublicKey).Bytes(), listenPort),
 	}

@@ -38,11 +38,10 @@ type Server struct {
 	knownNodes      *cache.PrioCache
 	discoveredNodes *cache.RandCache
 	dialingNodes    *nodeMap
-	version         string
 }
 
 // New create a p2p server.
-func New(opts *Options, version string) *Server {
+func New(opts *Options) *Server {
 	knownNodes := cache.NewPrioCache(5)
 	discoveredNodes := cache.NewRandCache(128)
 	for _, node := range opts.KnownNodes {
@@ -70,7 +69,6 @@ func New(opts *Options, version string) *Server {
 		knownNodes:      knownNodes,
 		discoveredNodes: discoveredNodes,
 		dialingNodes:    newNodeMap(),
-		version:         version,
 	}
 }
 
@@ -91,8 +89,8 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 				dir = "inbound"
 			}
 
-			if !sameMajor(s.version, peer.Name()) {
-				log.Warn("peer version mismatch",
+			if isIncompatible(peer.Name()) {
+				log.Warn("incompatible peer version",
 					"name", peer.Name(),
 					"address", peer.RemoteAddr().String(),
 					"id", peer.ID().String())
@@ -392,24 +390,18 @@ func (s *Server) Options() *Options {
 	return s.opts
 }
 
-var versionRegex = regexp.MustCompile(`\d+\.\d+\.\d+`)
+var versionRegex = regexp.MustCompile(`v\d+\.\d+\.\d+`)
 
-// sameMajor returns true if the peer has the same major version
-func sameMajor(appVersion, peerName string) bool {
-	if appVersion == "" || !versionRegex.MatchString(appVersion) {
-		// Got a bad app version, so accept any peer
-		return true
-	}
-
+// isIncompatible checks if the peer is running an incompatible version.
+func isIncompatible(peerName string) bool {
 	// Extract the semantic version from the name
 	peerVersion := versionRegex.FindString(peerName)
 	if peerVersion == "" {
 		return false
 	}
 
-	peerMajorVersion := strings.Split(peerVersion, ".")[0]
-	givenMajorVersion := strings.Split(appVersion, ".")[0]
+	major := strings.Split(peerVersion, ".")[0]
 
-	// Compare the major versions
-	return peerMajorVersion == givenMajorVersion
+	// Only v1 nodes are incompatible for now
+	return major == "v1"
 }
