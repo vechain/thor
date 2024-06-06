@@ -394,24 +394,32 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
 			n.logger.Debug("bandwidth updated", "gps", v)
 		}
-
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
+
+		metricBlockProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
+		metricBlockProcessedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
+		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
 	}); err != nil {
 		switch {
-		case err == errKnownBlock || err == errBFTRejected:
+		case err == errKnownBlock:
 			stats.UpdateIgnored(1)
 			return false, nil
 		case consensus.IsFutureBlock(err) || err == errParentMissing || err == errBlockTemporaryUnprocessable:
 			stats.UpdateQueued(1)
+		case err == errBFTRejected:
+			// TODO: capture metrics
+			n.logger.Debug(fmt.Sprintf("block rejected by BFT engine\n%v\n", newBlock.Header()))
 		case consensus.IsCritical(err):
-			msg := fmt.Sprintf(`failed to process block due to consensus failure \n%v\n`, newBlock.Header())
+			msg := fmt.Sprintf(`failed to process block due to consensus failure\n%v\n`, newBlock.Header())
 			n.logger.Error(msg, "err", err)
 		default:
 			n.logger.Error("failed to process block", "err", err)
 		}
+		metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "false"})
 		return false, err
 	}
+	metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "true"})
 	return *isTrunk, nil
 }
 
@@ -486,6 +494,8 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	}
 
 	if i := len(sideIds); i >= 2 {
+		metricChainForkCount().Add(1)
+		metricChainForkSize().Add(int64(len(sideIds)))
 		n.logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,

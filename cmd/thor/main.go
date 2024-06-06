@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
@@ -77,7 +78,7 @@ func main() {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
-			apiLogsEnabledFlag,
+			enableAPILogsFlag,
 			verbosityFlag,
 			jsonLogsFlag,
 			maxPeersFlag,
@@ -89,6 +90,8 @@ func main() {
 			pprofFlag,
 			verifyLogsFlag,
 			disablePrunerFlag,
+			enableMetricsFlag,
+			metricsAddrFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -105,8 +108,9 @@ func main() {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
-					apiLogsEnabledFlag,
+					enableAPILogsFlag,
 					onDemandFlag,
+					blockInterval,
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
@@ -117,6 +121,8 @@ func main() {
 					txPoolLimitFlag,
 					txPoolLimitPerAccountFlag,
 					disablePrunerFlag,
+					enableMetricsFlag,
+					metricsAddrFlag,
 				},
 				Action: soloAction,
 			},
@@ -145,6 +151,19 @@ func defaultAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
 	gene, forkConfig, err := selectGenesis(ctx)
 	if err != nil {
 		return err
@@ -162,7 +181,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
-	logDB, err := openLogDB(ctx, instanceDir)
+	logDB, err := openLogDB(instanceDir)
 	if err != nil {
 		return err
 	}
@@ -190,7 +209,7 @@ func defaultAction(ctx *cli.Context) error {
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
-	p2pcom, err := newP2PComm(ctx, repo, txPool, instanceDir)
+	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
 		return err
 	}
@@ -206,15 +225,17 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		logDB,
 		bftEngine,
-		p2pcom.comm,
+		p2pCommunicator.Communicator(),
+		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(apiLogsEnabledFlag.Name),
-		forkConfig)
+		ctx.Bool(enableAPILogsFlag.Name),
+		ctx.Bool(enableMetricsFlag.Name),
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -223,12 +244,12 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(apiURL, p2pcom.enode)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
 
-	if err := p2pcom.Start(); err != nil {
+	if err := p2pCommunicator.Start(); err != nil {
 		return err
 	}
-	defer p2pcom.Stop()
+	defer p2pCommunicator.Stop()
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
@@ -241,7 +262,7 @@ func defaultAction(ctx *cli.Context) error {
 		logDB,
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
-		p2pcom.comm,
+		p2pCommunicator.Communicator(),
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
 		skipLogs,
 		forkConfig).Run(exitSignal)
@@ -252,6 +273,18 @@ func soloAction(ctx *cli.Context) error {
 	defer func() { log.Info("exited") }()
 
 	initLogger(ctx)
+
+	// enable metrics as soon as possible
+	metricsURL := ""
+	if ctx.Bool(enableMetricsFlag.Name) {
+		metrics.InitializePrometheusMetrics()
+		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		if err != nil {
+			return fmt.Errorf("unable to start metrics server - %w", err)
+		}
+		metricsURL = url
+		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
 
 	var (
 		gene       *genesis.Genesis
@@ -284,7 +317,7 @@ func soloAction(ctx *cli.Context) error {
 		}
 		defer func() { log.Info("closing main database..."); mainDB.Close() }()
 
-		if logDB, err = openLogDB(ctx, instanceDir); err != nil {
+		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
 		defer func() { log.Info("closing log database..."); logDB.Close() }()
@@ -322,14 +355,16 @@ func soloAction(ctx *cli.Context) error {
 		logDB,
 		bftEngine,
 		&solo.Communicator{},
+		forkConfig,
 		ctx.String(apiCorsFlag.Name),
 		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
 		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
-		ctx.Bool(apiLogsEnabledFlag.Name),
-		forkConfig)
+		ctx.Bool(enableAPILogsFlag.Name),
+		ctx.Bool(enableMetricsFlag.Name),
+	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
@@ -341,7 +376,12 @@ func soloAction(ctx *cli.Context) error {
 		srvCloser()
 	}()
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig)
+	blockInterval := ctx.Int(blockInterval.Name)
+	if blockInterval == 0 {
+		return errors.New("block-interval cannot be zero")
+	}
+
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
@@ -353,6 +393,7 @@ func soloAction(ctx *cli.Context) error {
 		uint64(ctx.Int(gasLimitFlag.Name)),
 		ctx.Bool(onDemandFlag.Name),
 		skipLogs,
+		uint64(blockInterval),
 		forkConfig).Run(exitSignal)
 }
 

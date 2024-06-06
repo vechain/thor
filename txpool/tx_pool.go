@@ -130,6 +130,7 @@ func (p *TxPool) housekeeping() {
 					p.executables.Store(executables)
 				}
 
+				metricTxPoolGauge().GaugeWithLabel(0-int64(removed), map[string]string{"source": "washed", "total": "true"})
 				p.logger.Debug("wash done", ctx...)
 			}
 		}
@@ -178,7 +179,7 @@ func (p *TxPool) fetchBlocklistLoop() {
 
 	for {
 		// delay 1~2 min
-		delay := time.Second * time.Duration(rand.Int()%60+60)
+		delay := time.Second * time.Duration(rand.Int()%60+60) // nolint:gosec
 		select {
 		case <-p.ctx.Done():
 			return
@@ -278,14 +279,16 @@ func (p *TxPool) add(newTx *tx.Transaction, rejectNonExecutable bool, localSubmi
 	return nil
 }
 
-// Add add new tx into pool.
+// Add adds a new tx into pool.
 // It's not assumed as an error if the tx to be added is already in the pool,
 func (p *TxPool) Add(newTx *tx.Transaction) error {
+	metricTxPoolGauge().GaugeWithLabel(1, map[string]string{"source": "remote", "total": "true"}) // total tag allows display the cumulative for this metric
 	return p.add(newTx, false, false)
 }
 
 // AddLocal adds new locally submitted tx into pool.
 func (p *TxPool) AddLocal(newTx *tx.Transaction) error {
+	metricTxPoolGauge().GaugeWithLabel(1, map[string]string{"source": "local", "total": "true"})
 	return p.add(newTx, false, true)
 }
 
@@ -305,6 +308,7 @@ func (p *TxPool) StrictlyAdd(newTx *tx.Transaction) error {
 // Remove removes tx from pool by its Hash.
 func (p *TxPool) Remove(txHash thor.Bytes32, txID thor.Bytes32) bool {
 	if p.all.RemoveByHash(txHash) {
+		metricTxPoolGauge().GaugeWithLabel(-1, map[string]string{"source": "n/a", "total": "true"})
 		p.logger.Debug("tx removed", "id", txID)
 		return true
 	}

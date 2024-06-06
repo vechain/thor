@@ -21,7 +21,7 @@ func TestBlockRef(t *testing.T) {
 	assert.Equal(t, tx.BlockRef{0, 0, 0, 0xff, 0, 0, 0, 0}, tx.NewBlockRef(0xff))
 
 	var bid thor.Bytes32
-	rand.Read(bid[:])
+	rand.Read(bid[:]) // nolint:gosec
 
 	br := tx.NewBlockRefFromID(bid)
 	assert.Equal(t, bid[:8], br[:])

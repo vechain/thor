@@ -18,7 +18,7 @@ import (
 
 func BenchmarkHash(b *testing.B) {
 	data := make([]byte, 10)
-	rand.New(rand.NewSource(1)).Read(data)
+	rand.New(rand.NewSource(1)).Read(data) // nolint:gosec
 
 	b.Run("keccak", func(b *testing.B) {
 		type keccakState interface {
@@ -44,7 +44,7 @@ func BenchmarkHash(b *testing.B) {
 
 func BenchmarkBlake2b(b *testing.B) {
 	data := make([]byte, 100)
-	rand.New(rand.NewSource(1)).Read(data)
+	rand.New(rand.NewSource(1)).Read(data) // nolint:gosec
 	b.Run("Blake2b", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			thor.Blake2b(data).Bytes()

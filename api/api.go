@@ -38,14 +38,15 @@ func New(
 	logDB *logdb.LogDB,
 	bft bft.Finalizer,
 	nw node.Network,
+	forkConfig thor.ForkConfig,
 	allowedOrigins string,
 	backtraceLimit uint32,
 	callGasLimit uint64,
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
-	isReqLoggerEnabled bool,
-	forkConfig thor.ForkConfig,
+	enableReqLogger bool,
+	enableMetrics bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -54,7 +55,7 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api docs
+	// to serve stoplight, swagger and api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
@@ -93,17 +94,22 @@ func New(
 		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
-	handler := handlers.CompressHandler(router)
-	if isReqLoggerEnabled {
-		logger := log.New("pkg", "api")
-		handler = RequestLoggerHandler(handler, logger)
+	if enableMetrics {
+		router.Use(metricsMiddleware)
 	}
+
+	handler := handlers.CompressHandler(router)
 
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
+
+	if enableReqLogger {
+		logger := log.New("pkg", "api")
+		handler = RequestLoggerHandler(handler, logger)
+	}
 
 	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }
