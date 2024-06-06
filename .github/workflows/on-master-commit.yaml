@@ -20,6 +20,10 @@ jobs:
     name: Lint
     uses: ./.github/workflows/lint-go.yaml
 
+  module-check:
+    name: Go Module Check
+    uses: ./.github/workflows/go-mod-check.yaml
+
   run-e2e-tests:
     name: E2E Tests
     uses: ./.github/workflows/test-e2e.yaml
@@ -64,10 +68,12 @@ jobs:
     needs:
       - publish-docker-image
       - generate-tags
+      - license-check
       - lint
+      - module-check
       - run-unit-tests
       - run-e2e-tests
-    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success')
+    if: always() && (needs.publish-docker-image.result != 'success' || needs.run-unit-tests.result != 'success' || needs.lint.result != 'success' || needs.run-e2e-tests.result != 'success' || needs.license-check.result != 'success' || needs.module-check.result != 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -95,4 +101,6 @@ jobs:
               "repository": "${{ github.repository }}",
               "commit-author": "${{ github.event.head_commit.author.name }}",
               "lint-status": "${{ needs.lint.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
+              "license-check": "${{ needs.license-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
+              "module-check": "${{ needs.module-check.result != 'success' && ':alert: Failure' || ':white_check_mark: Success' }}"
             }
