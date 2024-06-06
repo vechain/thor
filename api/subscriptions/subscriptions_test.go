@@ -30,7 +30,7 @@ var txPool *txpool.TxPool
 var repo *chain.Repository
 var blocks []*block.Block
 
-func TestMain(t *testing.T) {
+func TestSubscriptions(t *testing.T) {
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
