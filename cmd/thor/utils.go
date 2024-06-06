@@ -55,6 +55,38 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
+type EthLogHandler struct {
+	logger log.Logger
+}
+
+func initGethLogger(lvl ethlog.Lvl) {
+	handler := &EthLogHandler{
+		logger: log.New("pkg", "geth"),
+	}
+	ethLogHandler := ethlog.NewGlogHandler(handler)
+	ethLogHandler.Verbosity(lvl)
+	ethlog.Root().SetHandler(ethLogHandler)
+}
+
+func (h *EthLogHandler) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlDebug:
+		h.logger.Debug(r.Msg)
+	default:
+		break
+	}
+
+	return nil
+}
+
 func initLogger(ctx *cli.Context) {
 	legacyLogLevel := ctx.Int(verbosityFlag.Name)
 	logLevel := log.FromLegacyLevel(legacyLogLevel)
@@ -69,7 +101,7 @@ func initLogger(ctx *cli.Context) {
 		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
 	}
 	log.SetDefault(log.NewLogger(handler))
-	log.SetDefaultGeth(ethlog.LvlWarn)
+	initGethLogger(ethlog.LvlWarn)
 }
 
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {

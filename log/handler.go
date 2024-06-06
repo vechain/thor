@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	ethlog "github.com/ethereum/go-ethereum/log"
-
 	"github.com/holiman/uint256"
 )
 
@@ -91,12 +89,6 @@ func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *T
 	}
 }
 
-func NewDiscardHandler() *TerminalHandler {
-	return &TerminalHandler{
-		lvl: -10,
-	}
-}
-
 func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -129,38 +121,6 @@ func (t *TerminalHandler) ResetFieldPadding() {
 	t.mu.Lock()
 	t.fieldPadding = make(map[string]int)
 	t.mu.Unlock()
-}
-
-type EthLogHandler struct {
-	logger Logger
-}
-
-func SetDefaultGeth(lvl ethlog.Lvl) {
-	handler := &EthLogHandler{
-		logger: New("pkg", "geth"),
-	}
-	ethLogHandler := ethlog.NewGlogHandler(handler)
-	ethLogHandler.Verbosity(lvl)
-	ethlog.Root().SetHandler(ethLogHandler)
-}
-
-func (h *EthLogHandler) Log(r *ethlog.Record) error {
-	switch r.Lvl {
-	case ethlog.LvlCrit:
-		h.logger.Crit(r.Msg)
-	case ethlog.LvlError:
-		h.logger.Error(r.Msg)
-	case ethlog.LvlWarn:
-		h.logger.Warn(r.Msg)
-	case ethlog.LvlInfo:
-		h.logger.Warn(r.Msg)
-	case ethlog.LvlDebug:
-		h.logger.Debug(r.Msg)
-	default:
-		break
-	}
-
-	return nil
 }
 
 type leveler struct{ minLevel slog.Level }
