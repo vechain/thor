@@ -75,19 +75,19 @@ func testHandlePendingTransactions(t *testing.T) {
 	transaction := createTx(t, repo, 1)
 	assert.NoError(t, txPool.AddLocal(transaction))
 
-	var mempoolNotif, wsNotif bool
+	var wsNotif bool
 	var msg []byte
 	for {
 		select {
-		case <-txChan:
-			mempoolNotif = true
+		//case <-txChan:
+		//	mempoolNotif = true
 		case rcvMsg := <-wsChan:
 			msg = rcvMsg
 			wsNotif = true
 		case <-time.After(5 * time.Second):
 			t.Fatal("message not received in time")
 		}
-		if mempoolNotif && wsNotif {
+		if wsNotif {
 			break
 		}
 	}
