@@ -13,10 +13,12 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -61,16 +63,34 @@ func testHandlePendingTransactions(t *testing.T) {
 	assert.Equal(t, "Upgrade", resp.Header.Get("Connection"))
 	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
 
+	// immediately start listening for messages
+	wsChan := make(chan []byte)
+	go func() {
+		_, msg, err := conn.ReadMessage()
+		require.NoError(t, err)
+		wsChan <- msg
+	}()
+
 	// Add a new tx to the mempool
 	transaction := createTx(t, repo, 1)
 	assert.NoError(t, txPool.AddLocal(transaction))
 
-	// Wait for the tx to be notified from mempool
-	<-txChan
-
-	_, msg, err := conn.ReadMessage()
-
-	assert.NoError(t, err)
+	var mempoolNotif, wsNotif bool
+	var msg []byte
+	for {
+		select {
+		case <-txChan:
+			mempoolNotif = true
+		case rcvMsg := <-wsChan:
+			msg = rcvMsg
+			wsNotif = true
+		case <-time.After(5 * time.Second):
+			t.Fatal("message not received in time")
+		}
+		if mempoolNotif && wsNotif {
+			break
+		}
+	}
 
 	var pendingTx *PendingTxIDMessage
 	if err := json.Unmarshal(msg, &pendingTx); err != nil {
