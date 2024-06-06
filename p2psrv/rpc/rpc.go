@@ -19,7 +19,7 @@ import (
 
 func init() {
 	// required when generate call id
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 }
 
 const (
