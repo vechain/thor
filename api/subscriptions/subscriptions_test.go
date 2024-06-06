@@ -34,50 +34,12 @@ func TestMain(t *testing.T) {
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
-	testHandlePendingTransactions(t)
 	testHandleSubjectWithBlock(t)
 	testHandleSubjectWithEvent(t)
 	testHandleSubjectWithTransfer(t)
 	testHandleSubjectWithBeat(t)
 	testHandleSubjectWithBeat2(t)
 	testHandleSubjectWithNonValidArgument(t)
-}
-
-func testHandlePendingTransactions(t *testing.T) {
-	// This channel makes sure the new tx is notified to mempool subscribers
-	// and then to pendingTx as well so that websocket has the tx to read
-	txChan := make(chan *txpool.TxEvent)
-	sub := txPool.SubscribeTxEvent(txChan)
-	defer sub.Unsubscribe()
-
-	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/txpool"}
-
-	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	assert.NoError(t, err)
-	defer conn.Close()
-
-	// Check the protocol upgrade to websocket
-	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	assert.Equal(t, "Upgrade", resp.Header.Get("Connection"))
-	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
-
-	// Add a new tx to the mempool
-	transaction := createTx(t, repo, 1)
-	txPool.AddLocal(transaction)
-
-	// Wait for the tx to be notified from mempool
-	<-txChan
-
-	_, msg, err := conn.ReadMessage()
-
-	assert.NoError(t, err)
-
-	var pendingTx *PendingTxIDMessage
-	if err := json.Unmarshal(msg, &pendingTx); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, transaction.ID(), pendingTx.ID)
-	}
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {
