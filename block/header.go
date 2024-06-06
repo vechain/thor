@@ -53,22 +53,6 @@ type headerBody struct {
 	Extension extension
 }
 
-func NewMockHeader() *Header {
-	return &Header{body: headerBody{
-		ParentID:        thor.Bytes32{1},
-		Timestamp:       1,
-		GasLimit:        100000,
-		Beneficiary:     thor.Address{1},
-		GasUsed:         11234,
-		TotalScore:      1,
-		TxsRootFeatures: txsRootFeatures{},
-		StateRoot:       thor.Bytes32{1},
-		ReceiptsRoot:    thor.Bytes32{1},
-		Signature:       []byte{1},
-		Extension:       extension{Alpha: []byte{1}, COM: true},
-	}}
-}
-
 // ParentID returns id of parent block.
 func (h *Header) ParentID() thor.Bytes32 {
 	return h.body.ParentID
