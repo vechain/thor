@@ -270,6 +270,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 			return nil
 		})
 		for {
+			log.Debug("websocket is ready")
 			if _, _, err := conn.ReadMessage(); err != nil {
 				log.Debug("websocket read err", "err", err)
 				close(closed)

@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
@@ -33,16 +34,17 @@ var repo *chain.Repository
 var blocks []*block.Block
 
 func TestSubscriptions(t *testing.T) {
+	log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlDebug, log15.StdoutHandler))
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
-	testHandlePendingTransactions(t)
 	testHandleSubjectWithBlock(t)
 	testHandleSubjectWithEvent(t)
 	testHandleSubjectWithTransfer(t)
 	testHandleSubjectWithBeat(t)
 	testHandleSubjectWithBeat2(t)
 	testHandleSubjectWithNonValidArgument(t)
+	testHandlePendingTransactions(t)
 }
 
 func testHandlePendingTransactions(t *testing.T) {
@@ -72,22 +74,22 @@ func testHandlePendingTransactions(t *testing.T) {
 	}()
 
 	// Add a new tx to the mempool
-	transaction := createTx(t, repo, 1)
+	transaction := createTx(t, repo, 2)
 	assert.NoError(t, txPool.AddLocal(transaction))
 
-	var wsNotif bool
+	var mempoolNotif, wsNotif bool
 	var msg []byte
 	for {
 		select {
-		//case <-txChan:
-		//	mempoolNotif = true
+		case <-txChan:
+			mempoolNotif = true
 		case rcvMsg := <-wsChan:
 			msg = rcvMsg
 			wsNotif = true
 		case <-time.After(5 * time.Second):
 			t.Fatal("message not received in time")
 		}
-		if wsNotif {
+		if wsNotif && mempoolNotif {
 			break
 		}
 	}
