@@ -74,17 +74,17 @@ docker run -d\
   --name thor-node vechain/thor --network test
 ```
 
-
-Notes: 
+Notes:
 
 - Add the `--api-addr 0.0.0.0:8669` flag if you want other containers and/or hosts to have access to the
-RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself without
-the flag._
+  RESTful API. `Thor` binds to `localhost` by default and it will not accept requests outside the container itself
+  without
+  the flag._
 
 - Release [v2.0.4](https://github.com/vechain/thor/releases/tag/v2.0.4) changed the default user from `root` (UID: 0)
-to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
-that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
-with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
+  to `thor` (UID: 1000). Ensure that UID 1000 has `rwx` permissions on the data directory of the docker host. You can do
+  that with ACL `sudo setfacl -R -m u:1000:rwx {path-to-your-data-directory}`, or update ownership
+  with `sudo chown -R 1000:1000 {path-to-your-data-directory}`.
 
 ___
 
@@ -169,6 +169,7 @@ bin/thor -h
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
 | `--enable-api-logs`         | Enables API requests logging                                                                |
+| `--json-logs`               | Use JSON format for console logs                                                            |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
 | `--max-peers`               | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)        |
 | `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
