@@ -21,6 +21,11 @@ var (
 		Hidden: true,
 		Usage:  "directory for user global configurations",
 	}
+	masterKeyStdinFlag = cli.BoolFlag{
+		Name:   "master-key-stdin",
+		Usage:  "read master key from stdin",
+		Hidden: true,
+	}
 	dataDirFlag = cli.StringFlag{
 		Name:  "data-dir",
 		Value: defaultDataDir(),
