@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
+	refIDQuery     = "(SELECT id FROM ref WHERE data=?)"
+	limitThreshold = 1000
 )
 
 type LogDB struct {
@@ -111,7 +112,7 @@ FROM (%v) e
 		filter = &EventFilter{
 			Options: &Options{
 				Offset: 0,
-				Limit:  1000,
+				Limit:  limitThreshold,
 			},
 			Order: "desc",
 		}
@@ -155,11 +156,11 @@ FROM (%v) e
 	subQuery += " LIMIT ?, ?" // all queries are bounded to a max of 1000 results
 	if filter.Options != nil && filter.Options.Limit > 1000 {
 		// offset could have been specified
-		filter.Options.Limit = 1000
+		filter.Options.Limit = limitThreshold
 	} else if filter.Options == nil {
 		filter.Options = &Options{
 			Offset: 0,
-			Limit:  1000,
+			Limit:  limitThreshold,
 		}
 	}
 	args = append(args, filter.Options.Offset, filter.Options.Limit)
@@ -182,7 +183,7 @@ FROM (%v) t
 		filter = &TransferFilter{
 			Options: &Options{
 				Offset: 0,
-				Limit:  1000,
+				Limit:  limitThreshold,
 			},
 			Order: "desc",
 		}
@@ -223,13 +224,13 @@ FROM (%v) t
 
 	// if there is limit option, set order inside subquery
 	subQuery += " LIMIT ?, ?"
-	if filter.Options != nil && filter.Options.Limit > 1000 {
+	if filter.Options != nil && filter.Options.Limit > limitThreshold {
 		// offset could have been specified
-		filter.Options.Limit = 1000
+		filter.Options.Limit = limitThreshold
 	} else if filter.Options == nil {
 		filter.Options = &Options{
 			Offset: 0,
-			Limit:  1000,
+			Limit:  limitThreshold,
 		}
 	}
 	args = append(args, filter.Options.Offset, filter.Options.Limit)
