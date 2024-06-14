@@ -65,6 +65,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithMalformedBodyRequest(t)
 	testHandleTraceCallWithEmptyTraceCallOption(t)
 	testHandleTraceCall(t)
+	testTraceCallNextBlock(t)
 	testHandleTraceCallWithValidRevisions(t)
 	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
 	testHandleTraceCallWithRevisionAsNonExistingId(t)
@@ -248,6 +249,11 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
+}
+
+func testTraceCallNextBlock(t *testing.T) {
+	traceCallOption := &TraceCallOption{}
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revisoun=next", traceCallOption, 200)
 }
 
 func testHandleTraceCall(t *testing.T) {
