@@ -41,7 +41,7 @@ func TestCachedObject(t *testing.T) {
 	assert.Nil(t, err)
 
 	code := make([]byte, 100)
-	rand.Read(code) // nolint:gosec
+	rand.Read(code) // nolint
 
 	codeHash := thor.Keccak256(code).Bytes()
 	db.NewStore(codeStoreName).Put(codeHash, code)

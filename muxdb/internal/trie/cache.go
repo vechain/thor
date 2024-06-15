@@ -13,6 +13,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/qianbin/directcache"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/trie"
 )
 
@@ -204,10 +205,8 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			str = "n/a"
 		}
 
-		log.Info(msg,
-			"lookups", lookups,
-			"hitrate", str,
-		)
+		log.Info(msg, "pkg", "muxdb.trie", "lookups", lookups, "hitrate", str)
+
 		atomic.StoreInt32(&cs.flag, flag)
 	}, atomic.LoadInt32(&cs.flag) != flag
 }

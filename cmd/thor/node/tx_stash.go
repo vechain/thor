@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -22,10 +23,11 @@ type txStash struct {
 	db      *leveldb.DB
 	fifo    *list.List
 	maxSize int
+	logger  log.Logger
 }
 
 func newTxStash(db *leveldb.DB, maxSize int) *txStash {
-	return &txStash{db, list.New(), maxSize}
+	return &txStash{db, list.New(), maxSize, log.New("pkg", "node")}
 }
 
 func (ts *txStash) Save(tx *tx.Transaction) error {
@@ -67,7 +69,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 	for it.Next() {
 		var tx tx.Transaction
 		if err := rlp.DecodeBytes(it.Value(), &tx); err != nil {
-			log.Warn("decode stashed tx", "err", err)
+			ts.logger.Warn("decode stashed tx", "err", err)
 			batch.Delete(it.Key())
 		} else {
 			txs = append(txs, &tx)
@@ -83,7 +85,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 	}
 
 	if err := ts.db.Write(&batch, nil); err != nil {
-		log.Warn("remap stashed txs", "err", err)
+		ts.logger.Warn("remap stashed txs", "err", err)
 	}
 	return txs
 }

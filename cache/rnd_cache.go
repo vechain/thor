@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 }
 
 // RandCache a simple cache which randomly evicts entries when

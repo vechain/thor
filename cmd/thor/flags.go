@@ -6,7 +6,6 @@
 package main
 
 import (
-	"github.com/inconshreveable/log15"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -64,9 +63,14 @@ var (
 		Usage: "enables API requests logging",
 	}
 	verbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Value: int(log15.LvlInfo),
+		Name: "verbosity",
+		// Legacy for log15.LvlDebug
+		Value: 3,
 		Usage: "log verbosity (0-9)",
+	}
+	jsonLogsFlag = cli.BoolFlag{
+		Name:  "json-logs",
+		Usage: "output logs in JSON format",
 	}
 	maxPeersFlag = cli.IntFlag{
 		Name:  "max-peers",

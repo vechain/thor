@@ -15,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
@@ -25,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
@@ -43,7 +43,6 @@ var (
 	gitCommit     string
 	gitTag        string
 	copyrightYear string
-	log           = log15.New()
 
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
@@ -81,6 +80,7 @@ func main() {
 			apiAllowCustomTracerFlag,
 			enableAPILogsFlag,
 			verbosityFlag,
+			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
 			natFlag,
@@ -114,6 +114,7 @@ func main() {
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
+					jsonLogsFlag,
 					pprofFlag,
 					verifyLogsFlag,
 					skipLogsFlag,

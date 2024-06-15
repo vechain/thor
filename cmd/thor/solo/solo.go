@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -24,6 +23,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/bandwidth"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
@@ -33,7 +33,6 @@ import (
 )
 
 var (
-	log          = log15.New("pkg", "solo")
 	baseGasPrice = big.NewInt(1e13)
 )
 
@@ -49,6 +48,7 @@ type Solo struct {
 	blockInterval uint64
 	onDemand      bool
 	skipLogs      bool
+	logger        log.Logger
 }
 
 // New returns Solo instance
@@ -78,6 +78,7 @@ func New(
 		blockInterval: blockInterval,
 		skipLogs:      skipLogs,
 		onDemand:      onDemand,
+		logger:        log.New("pkg", "solo"),
 	}
 }
 
@@ -90,7 +91,7 @@ func (s *Solo) Run(ctx context.Context) error {
 		goes.Wait()
 	}()
 
-	log.Info("prepared to pack block")
+	s.logger.Info("prepared to pack block")
 
 	if err := s.init(ctx); err != nil {
 		return err
@@ -107,18 +108,18 @@ func (s *Solo) loop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("stopping interval packing service......")
+			s.logger.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
 			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
-					log.Error("failed to pack block", "err", err)
+					s.logger.Error("failed to pack block", "err", err)
 				}
 			} else if s.onDemand {
 				pendingTxs := s.txPool.Executables()
 				if len(pendingTxs) > 0 {
 					if err := s.packing(pendingTxs, true); err != nil {
-						log.Error("failed to pack block", "err", err)
+						s.logger.Error("failed to pack block", "err", err)
 					}
 				}
 			}
@@ -199,17 +200,17 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	commitElapsed := mclock.Now() - startTime - execElapsed
 
 	if v, updated := s.bandwidth.Update(b.Header(), time.Duration(realElapsed)); updated {
-		log.Debug("bandwidth updated", "gps", v)
+		s.logger.Debug("bandwidth updated", "gps", v)
 	}
 
 	blockID := b.Header().ID()
-	log.Info("📦 new block packed",
+	s.logger.Info("📦 new block packed",
 		"txs", len(receipts),
 		"mgas", float64(b.Header().GasUsed())/1000/1000,
 		"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
 		"id", fmt.Sprintf("[#%v…%x]", block.Number(blockID), blockID[28:]),
 	)
-	log.Debug(b.String())
+	s.logger.Debug(b.String())
 
 	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -23,10 +22,6 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 )
-
-func init() {
-	log15.Root().SetHandler(log15.DiscardHandler())
-}
 
 func TestBlockReader_Read(t *testing.T) {
 	repo, generatedBlocks, _ := initChain(t)

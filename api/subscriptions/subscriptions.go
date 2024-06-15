@@ -12,11 +12,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -31,15 +31,12 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
+	logger         log.Logger
 }
 
 type msgReader interface {
 	Read() (msgs []interface{}, hasMore bool, err error)
 }
-
-var (
-	log = log15.New("pkg", "subscriptions")
-)
 
 const (
 	// Time allowed to read the next pong message from the peer.
@@ -69,6 +66,7 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 		},
 		pendingTx: newPendingTx(txpool),
 		done:      make(chan struct{}),
+		logger:    log.New("pkg", "subscriptions"),
 	}
 
 	sub.wg.Add(1)
@@ -205,7 +203,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
+		s.logger.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
 
@@ -221,7 +219,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
+		s.logger.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
 	defer s.closeConn(conn, err)
@@ -271,7 +269,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		})
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
-				log.Debug("websocket read err", "err", err)
+				s.logger.Debug("websocket read err", "err", err)
 				close(closed)
 				break
 			}
@@ -290,11 +288,11 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
 	}
 
 	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		log.Debug("write close message", "err", err)
+		s.logger.Debug("write close message", "err", err)
 	}
 
 	if err := conn.Close(); err != nil {
-		log.Debug("close websocket", "err", err)
+		s.logger.Debug("close websocket", "err", err)
 	}
 }
 

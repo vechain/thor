@@ -63,7 +63,7 @@ func TestHeader_BetterThan(t *testing.T) {
 
 func TestHeaderEncoding(t *testing.T) {
 	var sig [65]byte
-	rand.Read(sig[:]) // nolint:gosec
+	rand.Read(sig[:]) // nolint
 
 	block := new(Builder).Build().WithSignature(sig[:])
 	h := block.Header()
@@ -86,8 +86,8 @@ func TestHeaderEncoding(t *testing.T) {
 
 	var proof [81]byte
 	var alpha [32]byte
-	rand.Read(proof[:]) // nolint:gosec
-	rand.Read(alpha[:]) // nolint:gosec
+	rand.Read(proof[:]) // nolint
+	rand.Read(alpha[:]) // nolint
 
 	complex, err := NewComplexSignature(sig[:], proof[:])
 	if err != nil {
@@ -110,7 +110,7 @@ func TestHeaderEncoding(t *testing.T) {
 // type extension struct{Alpha []byte}
 func TestEncodingBadExtension(t *testing.T) {
 	var sig [65]byte
-	rand.Read(sig[:]) // nolint:gosec
+	rand.Read(sig[:]) // nolint
 
 	block := new(Builder).Build().WithSignature(sig[:])
 	h := block.Header()
@@ -157,8 +157,8 @@ func TestEncodingBadExtension(t *testing.T) {
 func TestEncodingExtension(t *testing.T) {
 	var sig [ComplexSigSize]byte
 	var alpha [32]byte
-	rand.Read(sig[:])   // nolint:gosec
-	rand.Read(alpha[:]) // nolint:gosec
+	rand.Read(sig[:])   // nolint
+	rand.Read(alpha[:]) // nolint
 
 	block := new(Builder).Alpha(alpha[:]).Build().WithSignature(sig[:])
 	h := block.Header()
