@@ -35,6 +35,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
+	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
@@ -407,10 +408,21 @@ func masterKeyPath(ctx *cli.Context) (string, error) {
 }
 
 func loadNodeMasterFromStdin() (*ecdsa.PrivateKey, error) {
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return nil, err
+	var (
+		input string
+		err   error
+	)
+	if isatty.IsTerminal(os.Stdin.Fd()) {
+		input, err = readPasswordFromNewTTY("Enter master key: ")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		input, err = reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return crypto.HexToECDSA(strings.TrimSpace(input))
