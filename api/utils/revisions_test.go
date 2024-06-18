@@ -137,7 +137,7 @@ func TestParseCodeCallRevision(t *testing.T) {
 		{
 			revision: "",
 			expected: nil,
-			isNext:   true,
+			isNext:   false,
 		},
 		{
 			revision: "1234",
@@ -147,7 +147,7 @@ func TestParseCodeCallRevision(t *testing.T) {
 		{
 			revision: "best",
 			expected: nil,
-			isNext:   true,
+			isNext:   false,
 		},
 		{
 			revision: "next",
