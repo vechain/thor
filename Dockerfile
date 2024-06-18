@@ -7,7 +7,7 @@ COPY . /go/thor
 RUN make all
 
 # Pull thor into a second stage deploy alpine container
-FROM alpine:latest
+FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates
 RUN apk upgrade libssl3 libcrypto3
