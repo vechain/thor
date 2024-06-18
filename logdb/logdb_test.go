@@ -8,6 +8,7 @@ package logdb_test
 import (
 	"context"
 	"crypto/rand"
+	"flag"
 	"fmt"
 	"math/big"
 	"os"
@@ -20,6 +21,12 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
+
+var dbPath string
+
+func init() {
+	flag.StringVar(&dbPath, "dbPath", "", "Path to the database file")
+}
 
 func newTx() *tx.Transaction {
 	tx := new(tx.Builder).Build()
@@ -610,8 +617,12 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	}
 }
 
+// go test -bench=BenchmarkTestDB_HasBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_HasBlockID(b *testing.B) {
-	db, err := logdb.New("/Volumes/Sandisk/testnet_logs.db")
+	if dbPath == "" {
+		b.Fatal("Please provide a dbPath")
+	}
+	db, err := logdb.New(dbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -629,8 +640,12 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	}
 }
 
+// go test -bench=BenchmarkTestDB_NewestBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_NewestBlockID(b *testing.B) {
-	db, err := logdb.New("/Volumes/Sandisk/testnet_logs.db")
+	if dbPath == "" {
+		b.Fatal("Please provide a dbPath")
+	}
+	db, err := logdb.New(dbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -645,8 +660,12 @@ func BenchmarkTestDB_NewestBlockID(b *testing.B) {
 	}
 }
 
+// go test -bench=BenchmarkTestDB_FilterEvents  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterEvents(b *testing.B) {
-	db, err := logdb.New("/Volumes/Sandisk/testnet_logs.db")
+	if dbPath == "" {
+		b.Fatal("Please provide a dbPath")
+	}
+	db, err := logdb.New(dbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -693,8 +712,12 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	}
 }
 
+// go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
-	db, err := logdb.New("/Volumes/Sandisk/testnet_logs.db")
+	if dbPath == "" {
+		b.Fatal("Please provide a dbPath")
+	}
+	db, err := logdb.New(dbPath)
 	if err != nil {
 		b.Fatal(err)
 	}
