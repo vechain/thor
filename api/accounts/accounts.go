@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -65,7 +66,7 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
@@ -121,7 +122,7 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
@@ -148,7 +149,7 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "key"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
@@ -171,11 +172,11 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	header, st, err := utils.GetHeaderAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -202,7 +203,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		GasPrice: callData.GasPrice,
 		Caller:   callData.Caller,
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary, isNext)
+	results, err := a.batchCall(req.Context(), batchCallData, header, st)
 	if err != nil {
 		return err
 	}
@@ -214,45 +215,37 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	header, st, err := utils.GetHeaderAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary, isNext)
+	results, err := a.batchCall(req.Context(), batchCallData, header, st)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, results)
 }
 
-func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary, isNext bool) (results BatchCallResults, err error) {
+func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, header *block.Header, st *state.State) (results BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
 	}
-	header := summary.Header
-	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
-	blockNumber := header.Number()
-	timestamp := header.Timestamp()
-	if isNext {
-		blockNumber++
-		timestamp += thor.BlockInterval
-	}
 
 	signer, _ := header.Signer()
-	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
-			Number:      blockNumber,
-			Time:        timestamp,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
 		},

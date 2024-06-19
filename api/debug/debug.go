@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -177,11 +178,11 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, isNext, err := utils.ParseCodeCallRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, d.repo, d.bft)
+	header, st, err := utils.GetHeaderAndState(revision, d.repo, d.bft, d.stater)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -199,7 +200,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	res, err := d.traceCall(req.Context(), tracer, summary, txCtx, gas, clause, isNext)
+	res, err := d.traceCall(req.Context(), tracer, header, st, txCtx, gas, clause)
 	if err != nil {
 		return err
 	}
@@ -214,34 +215,26 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
 }
 
-func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause, isNext bool) (interface{}, error) {
-	header := summary.Header
-	state := d.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
+func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
 	signer, _ := header.Signer()
-	number := header.Number()
-	timestamp := header.Timestamp()
-	if isNext {
-		number++
-		timestamp += thor.BlockInterval
-	}
 
 	rt := runtime.New(
-		d.repo.NewChain(header.ID()),
-		state,
+		d.repo.NewChain(header.ParentID()),
+		st,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
-			Number:      number,
-			Time:        timestamp,
+			Number:      header.Number(),
+			Time:        header.Timestamp(),
 			GasLimit:    header.GasLimit(),
 			TotalScore:  header.TotalScore(),
 		},
 		d.forkConfig)
 
 	tracer.SetContext(&tracers.Context{
-		BlockID:   summary.Header.ID(),
-		BlockTime: summary.Header.Timestamp(),
-		State:     state,
+		BlockID:   header.ID(),
+		BlockTime: header.Timestamp(),
+		State:     st,
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
