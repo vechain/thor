@@ -80,6 +80,7 @@ func main() {
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
 			enableAPILogsFlag,
+			apiLogsLimitFlag,
 			verbosityFlag,
 			maxPeersFlag,
 			p2pPortFlag,
@@ -109,6 +110,7 @@ func main() {
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
 					enableAPILogsFlag,
+					apiLogsLimitFlag,
 					onDemandFlag,
 					blockInterval,
 					persistFlag,
@@ -234,6 +236,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
+		uint64(ctx.Int(apiLogsLimitFlag.Name)),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -363,6 +366,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
+		uint64(ctx.Int(apiLogsLimitFlag.Name)),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

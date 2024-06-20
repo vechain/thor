@@ -17,21 +17,23 @@ import (
 )
 
 type Events struct {
-	repo *chain.Repository
-	db   *logdb.LogDB
+	repo  *chain.Repository
+	db    *logdb.LogDB
+	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB) *Events {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
 	return &Events{
 		repo,
 		db,
+		logsLimit,
 	}
 }
 
 // Filter query events with option
 func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
 	chain := e.repo.NewBestChain()
-	filter, err := convertEventFilter(chain, ef)
+	filter, err := convertEventFilter(chain, ef, e.limit)
 	if err != nil {
 		return nil, err
 	}

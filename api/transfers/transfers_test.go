@@ -28,6 +28,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+const defaultLogLimit uint64 = 1000
+
 var ts *httptest.Server
 
 func TestEmptyTransfers(t *testing.T) {
@@ -133,7 +135,7 @@ func initTransferServer(t *testing.T, logDb *logdb.LogDB) {
 
 	repo, _ := chain.NewRepository(muxDb, b)
 
-	transfers.New(repo, logDb).Mount(router, "/transfers")
+	transfers.New(repo, logDb, defaultLogLimit).Mount(router, "/transfers")
 	ts = httptest.NewServer(router)
 }
 

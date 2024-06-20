@@ -26,6 +26,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+const defaultLogLimit uint64 = 1000
+
 var ts *httptest.Server
 
 var (
@@ -142,7 +144,7 @@ func initEventServer(t *testing.T, logDb *logdb.LogDB) {
 
 	repo, _ := chain.NewRepository(muxDb, b)
 
-	events.New(repo, logDb).Mount(router, "/events")
+	events.New(repo, logDb, defaultLogLimit).Mount(router, "/events")
 	ts = httptest.NewServer(router)
 }
 
@@ -209,4 +211,10 @@ func newReceipt() *tx.Receipt {
 			},
 		},
 	}
+}
+
+func TestNormalize(t *testing.T) {
+	assert.Equal(t, &logdb.Options{Offset: 0, Limit: 10}, events.NormalizeOptions(nil, 10))
+	assert.Equal(t, &logdb.Options{Offset: 10, Limit: 5}, events.NormalizeOptions(&logdb.Options{Offset: 10, Limit: 5}, 10))
+	assert.Equal(t, &logdb.Options{Offset: 10, Limit: 10}, events.NormalizeOptions(&logdb.Options{Offset: 10, Limit: 15}, 10))
 }

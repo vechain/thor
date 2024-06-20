@@ -18,14 +18,16 @@ import (
 )
 
 type Transfers struct {
-	repo *chain.Repository
-	db   *logdb.LogDB
+	repo  *chain.Repository
+	db    *logdb.LogDB
+	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Transfers {
 	return &Transfers{
 		repo,
 		db,
+		logsLimit,
 	}
 }
 
@@ -39,7 +41,7 @@ func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*Filt
 	transfers, err := t.db.FilterTransfers(ctx, &logdb.TransferFilter{
 		CriteriaSet: filter.CriteriaSet,
 		Range:       rng,
-		Options:     filter.Options,
+		Options:     events.NormalizeOptions(filter.Options, t.limit),
 		Order:       filter.Order,
 	})
 	if err != nil {
