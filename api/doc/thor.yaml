@@ -2245,7 +2245,7 @@ components:
       name: revision
       in: query
       description: |
-        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `next` block is assumed.
+        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 
