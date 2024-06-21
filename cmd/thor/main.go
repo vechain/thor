@@ -69,6 +69,7 @@ func main() {
 		Flags: []cli.Flag{
 			networkFlag,
 			configDirFlag,
+			masterKeyStdinFlag,
 			dataDirFlag,
 			cacheFlag,
 			beneficiaryFlag,
