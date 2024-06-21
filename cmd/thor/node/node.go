@@ -58,6 +58,7 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	forkConfig     thor.ForkConfig
+	enableMetrics  bool
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
@@ -78,6 +79,7 @@ func New(
 	targetGasLimit uint64,
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
+	enableMetrics bool,
 ) *Node {
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
@@ -92,6 +94,7 @@ func New(
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
 		forkConfig:     forkConfig,
+		enableMetrics:  enableMetrics,
 	}
 }
 
@@ -399,6 +402,8 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		metricBlockProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
+		metricsGasPerBlock().Add(int64(newBlock.Header().GasUsed()))
+		metricsTxsPerBlock().Add(int64(len(receipts)))
 		return nil
 	}); err != nil {
 		switch {

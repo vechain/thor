@@ -7,6 +7,7 @@ package subscriptions
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
+	enableMetrics  bool
 }
 
 type msgReader interface {
@@ -48,7 +50,7 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool, enableMetrics bool) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,
@@ -67,8 +69,9 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 				return false
 			},
 		},
-		pendingTx: newPendingTx(txpool),
-		done:      make(chan struct{}),
+		pendingTx:     newPendingTx(txpool),
+		done:          make(chan struct{}),
+		enableMetrics: enableMetrics,
 	}
 
 	sub.wg.Add(1)
@@ -202,7 +205,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
 
-	conn, closed, err := s.setupConn(w, req)
+	conn, closed, subject, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
@@ -210,7 +213,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	}
 
 	err = s.pipe(conn, reader, closed)
-	s.closeConn(conn, err)
+	s.closeConn(conn, err, subject)
 	return nil
 }
 
@@ -218,13 +221,13 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	conn, closed, err := s.setupConn(w, req)
+	conn, closed, subject, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
-	defer s.closeConn(conn, err)
+	defer s.closeConn(conn, err, subject)
 
 	pingTicker := time.NewTicker(pingPeriod)
 	defer pingTicker.Stop()
@@ -253,10 +256,10 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	}
 }
 
-func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, error) {
+func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, string, error) {
 	conn, err := s.upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 
 	closed := make(chan struct{})
@@ -278,10 +281,15 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		}
 	}()
 
-	return conn, closed, nil
+	subject := strings.Split(req.URL.Path, "/")[2]
+	if s.enableMetrics {
+		metricsActiveCount().GaugeWithLabel(1, map[string]string{"subject": subject})
+	}
+
+	return conn, closed, subject, nil
 }
 
-func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
+func (s *Subscriptions) closeConn(conn *websocket.Conn, err error, subject string) {
 	var closeMsg []byte
 	if err != nil {
 		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
@@ -291,6 +299,10 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
 
 	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
 		log.Debug("write close message", "err", err)
+	}
+
+	if s.enableMetrics {
+		metricsActiveCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
 	}
 
 	if err := conn.Close(); err != nil {
