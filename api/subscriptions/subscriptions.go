@@ -283,7 +283,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 
 	subject := strings.Split(req.URL.Path, "/")[2]
 	if s.enableMetrics {
-		metricsActiveCount().GaugeWithLabel(1, map[string]string{"subject": subject})
+		metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
 	}
 
 	return conn, closed, subject, nil
@@ -302,7 +302,7 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error, subject strin
 	}
 
 	if s.enableMetrics {
-		metricsActiveCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
+		metricsActiveConnectionCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
 	}
 
 	if err := conn.Close(); err != nil {
