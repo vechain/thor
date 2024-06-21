@@ -33,7 +33,7 @@ func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
 // Filter query events with option
 func (e *Events) filter(ctx context.Context, ef *EventFilter) ([]*FilteredEvent, error) {
 	chain := e.repo.NewBestChain()
-	filter, err := convertEventFilter(chain, ef, e.limit)
+	filter, err := convertEventFilter(chain, ef)
 	if err != nil {
 		return nil, err
 	}
@@ -53,6 +53,16 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if filter.Options != nil && filter.Options.Limit > e.limit {
+		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+	}
+	if filter.Options == nil {
+		filter.Options = &logdb.Options{
+			Offset: 0,
+			Limit:  e.limit,
+		}
+	}
+
 	fes, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err

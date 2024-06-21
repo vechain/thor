@@ -212,9 +212,3 @@ func newReceipt() *tx.Receipt {
 		},
 	}
 }
-
-func TestNormalize(t *testing.T) {
-	assert.Equal(t, &logdb.Options{Offset: 0, Limit: 10}, events.NormalizeOptions(nil, 10))
-	assert.Equal(t, &logdb.Options{Offset: 10, Limit: 5}, events.NormalizeOptions(&logdb.Options{Offset: 10, Limit: 5}, 10))
-	assert.Equal(t, &logdb.Options{Offset: 10, Limit: 10}, events.NormalizeOptions(&logdb.Options{Offset: 10, Limit: 15}, 10))
-}

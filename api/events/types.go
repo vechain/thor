@@ -101,14 +101,14 @@ type EventFilter struct {
 	Order       logdb.Order      `json:"order"`
 }
 
-func convertEventFilter(chain *chain.Chain, filter *EventFilter, logsLimit uint64) (*logdb.EventFilter, error) {
+func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
 	rng, err := ConvertRange(chain, filter.Range)
 	if err != nil {
 		return nil, err
 	}
 	f := &logdb.EventFilter{
 		Range:   rng,
-		Options: NormalizeOptions(filter.Options, logsLimit),
+		Options: filter.Options,
 		Order:   filter.Order,
 	}
 	if len(filter.CriteriaSet) > 0 {
@@ -186,18 +186,4 @@ func ConvertRange(chain *chain.Chain, r *Range) (*logdb.Range, error) {
 		From: uint32(r.From),
 		To:   uint32(r.To),
 	}, nil
-}
-
-func NormalizeOptions(ops *logdb.Options, defaultLimit uint64) *logdb.Options {
-	if ops == nil {
-		return &logdb.Options{
-			Offset: 0,
-			Limit:  defaultLimit,
-		}
-	}
-
-	if ops.Limit > defaultLimit {
-		ops.Limit = defaultLimit
-	}
-	return ops
 }
