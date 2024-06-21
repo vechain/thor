@@ -42,7 +42,7 @@ func newTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx.BlockRef
 
 	tx := builder.BlockRef(blockRef).
 		Expiration(expiration).
-		Nonce(rand.Uint64()).
+		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).Build()
@@ -61,7 +61,7 @@ func newDelegatedTx(chainTag byte, clauses []*tx.Clause, gas uint64, blockRef tx
 
 	tx := builder.BlockRef(blockRef).
 		Expiration(expiration).
-		Nonce(rand.Uint64()).
+		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(dependsOn).
 		Features(features).
 		Gas(gas).Build()

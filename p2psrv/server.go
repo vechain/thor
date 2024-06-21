@@ -27,7 +27,7 @@ var log = log15.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	opts            Options
+	opts            *Options
 	srv             *p2p.Server
 	discv5          *discv5.Network
 	goes            co.Goes
@@ -48,7 +48,7 @@ func New(opts *Options) *Server {
 	}
 
 	return &Server{
-		opts: *opts,
+		opts: opts,
 		srv: &p2p.Server{
 			Config: p2p.Config{
 				Name:        opts.Name,
@@ -89,6 +89,8 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			log := log.New("peer", peer, "dir", dir)
 
 			log.Debug("peer connected")
+			metricConnectedPeers().Add(1)
+
 			startTime := mclock.Now()
 			defer func() {
 				log.Debug("peer disconnected", "reason", err)
@@ -96,6 +98,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 					// we assume that good peer has longer connection duration.
 					s.knownNodes.Set(peer.ID(), node, float64(mclock.Now()-startTime))
 				}
+				metricConnectedPeers().Add(-1)
 			}()
 			return run(peer, rw)
 		}
@@ -197,7 +200,7 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	for _, node := range s.opts.BootstrapNodes {
+	for _, node := range s.opts.DiscoveryNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
 	// known nodes are also acting as bootstrap servers
@@ -248,6 +251,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 		case v5node := <-discNodes:
 			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
+				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
 				log.Debug("discovered node", "node", node)
 			}
@@ -301,10 +305,14 @@ func (s *Server) dialLoop() {
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
+				metricDialingNewNode().Add(1)
+				defer metricDialingNewNode().Add(-1)
+
 				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
+
 				s.discoveredNodes.Remove(node.ID)
 			}()
 
@@ -324,7 +332,7 @@ func (s *Server) tryDial(node *discover.Node) error {
 }
 
 func (s *Server) fetchBootstrap() {
-	if s.opts.RemoteBootstrap == "" {
+	if s.opts.RemoteDiscoveryList == "" {
 		return
 	}
 
@@ -335,7 +343,7 @@ func (s *Server) fetchBootstrap() {
 	}()
 
 	f := func() error {
-		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteBootstrap)
+		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteDiscoveryList)
 		if err != nil {
 			return err
 		}
@@ -361,4 +369,8 @@ func (s *Server) fetchBootstrap() {
 		case <-time.After(time.Second * 10):
 		}
 	}
+}
+
+func (s *Server) Options() *Options {
+	return s.opts
 }

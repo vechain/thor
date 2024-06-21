@@ -39,15 +39,16 @@ var (
 
 // Solo mode is the standalone client without p2p server
 type Solo struct {
-	repo      *chain.Repository
-	stater    *state.Stater
-	txPool    *txpool.TxPool
-	packer    *packer.Packer
-	logDB     *logdb.LogDB
-	gasLimit  uint64
-	bandwidth bandwidth.Bandwidth
-	onDemand  bool
-	skipLogs  bool
+	repo          *chain.Repository
+	stater        *state.Stater
+	txPool        *txpool.TxPool
+	packer        *packer.Packer
+	logDB         *logdb.LogDB
+	gasLimit      uint64
+	bandwidth     bandwidth.Bandwidth
+	blockInterval uint64
+	onDemand      bool
+	skipLogs      bool
 }
 
 // New returns Solo instance
@@ -59,6 +60,7 @@ func New(
 	gasLimit uint64,
 	onDemand bool,
 	skipLogs bool,
+	blockInterval uint64,
 	forkConfig thor.ForkConfig,
 ) *Solo {
 	return &Solo{
@@ -71,10 +73,11 @@ func New(
 			genesis.DevAccounts()[0].Address,
 			&genesis.DevAccounts()[0].Address,
 			forkConfig),
-		logDB:    logDB,
-		gasLimit: gasLimit,
-		skipLogs: skipLogs,
-		onDemand: onDemand,
+		logDB:         logDB,
+		gasLimit:      gasLimit,
+		blockInterval: blockInterval,
+		skipLogs:      skipLogs,
+		onDemand:      onDemand,
 	}
 }
 
@@ -89,7 +92,7 @@ func (s *Solo) Run(ctx context.Context) error {
 
 	log.Info("prepared to pack block")
 
-	if err := s.init(); err != nil {
+	if err := s.init(ctx); err != nil {
 		return err
 	}
 
@@ -107,7 +110,7 @@ func (s *Solo) loop(ctx context.Context) {
 			log.Info("stopping interval packing service......")
 			return
 		case <-time.After(time.Duration(1) * time.Second):
-			if left := uint64(time.Now().Unix()) % thor.BlockInterval; left == 0 {
+			if left := uint64(time.Now().Unix()) % s.blockInterval; left == 0 {
 				if err := s.packing(s.txPool.Executables(), false); err != nil {
 					log.Error("failed to pack block", "err", err)
 				}
@@ -178,10 +181,6 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 	}
 	realElapsed := mclock.Now() - startTime
 
-	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
-		return errors.WithMessage(err, "set best block")
-	}
-
 	if !s.skipLogs {
 		w := s.logDB.NewWriter()
 		if err := w.Write(b, receipts); err != nil {
@@ -191,6 +190,10 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 		if err := w.Commit(); err != nil {
 			return errors.WithMessage(err, "commit logs")
 		}
+	}
+
+	if err := s.repo.SetBestBlockID(b.Header().ID()); err != nil {
+		return errors.WithMessage(err, "set best block")
 	}
 
 	commitElapsed := mclock.Now() - startTime - execElapsed
@@ -212,7 +215,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 }
 
 // The init function initializes the chain parameters.
-func (s *Solo) init() error {
+func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
 	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
@@ -241,7 +244,11 @@ func (s *Solo) init() error {
 
 	if !s.onDemand {
 		// wait for the next block interval if not on-demand
-		time.Sleep(time.Duration(10-time.Now().Unix()%10) * time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(int64(s.blockInterval)-time.Now().Unix()%int64(s.blockInterval)) * time.Second):
+		}
 	}
 
 	return s.packing(tx.Transactions{baseGasePriceTx}, false)
@@ -256,7 +263,7 @@ func (s *Solo) newTx(clauses []*tx.Clause, from genesis.DevAccount) (*tx.Transac
 
 	newTx := builder.BlockRef(tx.NewBlockRef(0)).
 		Expiration(math.MaxUint32).
-		Nonce(rand.Uint64()).
+		Nonce(rand.Uint64()). // nolint:gosec
 		DependsOn(nil).
 		Gas(1_000_000).
 		Build()

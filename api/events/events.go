@@ -61,5 +61,8 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 func (e *Events) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
+	sub.Path("").
+		Methods(http.MethodPost).
+		Name("logs_filter_event").
+		HandlerFunc(utils.WrapHandlerFunc(e.handleFilter))
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -29,6 +30,8 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
+var log = log15.New("pkg", "api")
+
 // New return api router
 func New(
 	repo *chain.Repository,
@@ -37,13 +40,15 @@ func New(
 	logDB *logdb.LogDB,
 	bft bft.Finalizer,
 	nw node.Network,
+	forkConfig thor.ForkConfig,
 	allowedOrigins string,
 	backtraceLimit uint32,
 	callGasLimit uint64,
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
-	forkConfig thor.ForkConfig,
+	enableReqLogger bool,
+	enableMetrics bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -52,7 +57,7 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api docs
+	// to serve stoplight, swagger and api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
@@ -91,12 +96,20 @@ func New(
 		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
+	if enableMetrics {
+		router.Use(metricsMiddleware)
+	}
+
 	handler := handlers.CompressHandler(router)
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
-	return handler.ServeHTTP,
-		subs.Close // subscriptions handles hijacked conns, which need to be closed
+
+	if enableReqLogger {
+		handler = RequestLoggerHandler(handler, log)
+	}
+
+	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }

@@ -6,6 +6,7 @@
 package solo
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -29,14 +30,14 @@ func newSolo() *Solo {
 	repo, _ := chain.NewRepository(db, b)
 	mempool := txpool.New(repo, stater, txpool.Options{Limit: 10000, LimitPerAccount: 16, MaxLifetime: 10 * time.Minute})
 
-	return New(repo, stater, logDb, mempool, 0, true, false, thor.ForkConfig{})
+	return New(repo, stater, logDb, mempool, 0, true, false, thor.BlockInterval, thor.ForkConfig{})
 }
 
 func TestInitSolo(t *testing.T) {
 	solo := newSolo()
 
 	// init solo -> this should mine a block with the gas price tx
-	err := solo.init()
+	err := solo.init(context.Background())
 	assert.Nil(t, err)
 
 	// check the gas price

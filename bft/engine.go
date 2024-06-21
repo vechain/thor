@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/builtin"
@@ -18,6 +17,8 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const dataStoreName = "bft.engine"
@@ -131,6 +132,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 				return err
 			}
 			engine.finalized.Store(id)
+			metricBlocksCommitted().Add(1)
 		}
 	}
 

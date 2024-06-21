@@ -331,7 +331,7 @@ func TestIteratorContinueAfterError(t *testing.T) {
 		// because that one is already loaded.
 		var rkey []byte
 		for {
-			if rkey = keys[rand.Intn(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) {
+			if rkey = keys[rand.Intn(len(keys))]; !bytes.Equal(rkey, tr.Hash().Bytes()) { // nolint:gosec
 				break
 			}
 		}
