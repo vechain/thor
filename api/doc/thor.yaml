@@ -12,7 +12,7 @@ info:
   license:
     name: LGPL 3.0
     url: https://www.gnu.org/licenses/lgpl-3.0.en.html
-  version: 2.1.2
+  version: 2.1.3
 servers:
   - url: /
     description: Current Node
@@ -2258,6 +2258,12 @@ components:
       in: query
       description: |
         Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+        
+        If the `next` block is specified, the call code will be executed on the next block, with the following:
+        - The block number is the `best` block number plus one.
+        - The timestamp is the `best` block timestamp plus the block interval.
+        - Total score, gas limit and beneficiary are the same as the `best` block.
+        - The signer will be the zero address
       schema:
         type: string
 
