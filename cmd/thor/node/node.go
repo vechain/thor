@@ -79,7 +79,6 @@ func New(
 	targetGasLimit uint64,
 	skipLogs bool,
 	forkConfig thor.ForkConfig,
-	enableMetrics bool,
 ) *Node {
 	return &Node{
 		packer:         packer.New(repo, stater, master.Address(), master.Beneficiary, forkConfig),
@@ -94,7 +93,6 @@ func New(
 		targetGasLimit: targetGasLimit,
 		skipLogs:       skipLogs,
 		forkConfig:     forkConfig,
-		enableMetrics:  enableMetrics,
 	}
 }
 

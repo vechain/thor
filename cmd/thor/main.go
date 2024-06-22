@@ -265,7 +265,6 @@ func defaultAction(ctx *cli.Context) error {
 		uint64(ctx.Int(targetGasLimitFlag.Name)),
 		skipLogs,
 		forkConfig,
-		ctx.Bool(enableMetricsFlag.Name),
 	).Run(exitSignal)
 }
 

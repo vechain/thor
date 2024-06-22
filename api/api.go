@@ -85,7 +85,7 @@ func New(
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
-	subs := subscriptions.New(repo, origins, backtraceLimit, txPool, enableMetrics)
+	subs := subscriptions.New(repo, origins, backtraceLimit, txPool)
 	subs.Mount(router, "/subscriptions")
 
 	if pprofOn {

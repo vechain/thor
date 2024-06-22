@@ -213,7 +213,7 @@ func initSubscriptionsServer(t *testing.T) {
 	txPool = pool
 	blocks = generatedBlocks
 	router := mux.NewRouter()
-	sub = New(repo, []string{}, 5, txPool, false)
+	sub = New(repo, []string{}, 5, txPool)
 	sub.Mount(router, "/subscriptions")
 	ts = httptest.NewServer(router)
 	client = &http.Client{}

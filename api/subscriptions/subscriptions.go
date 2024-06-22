@@ -32,7 +32,6 @@ type Subscriptions struct {
 	pendingTx      *pendingTx
 	done           chan struct{}
 	wg             sync.WaitGroup
-	enableMetrics  bool
 }
 
 type msgReader interface {
@@ -50,7 +49,7 @@ const (
 	pingPeriod = (pongWait * 7) / 10
 )
 
-func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool, enableMetrics bool) *Subscriptions {
+func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32, txpool *txpool.TxPool) *Subscriptions {
 	sub := &Subscriptions{
 		backtraceLimit: backtraceLimit,
 		repo:           repo,
@@ -69,9 +68,8 @@ func New(repo *chain.Repository, allowedOrigins []string, backtraceLimit uint32,
 				return false
 			},
 		},
-		pendingTx:     newPendingTx(txpool),
-		done:          make(chan struct{}),
-		enableMetrics: enableMetrics,
+		pendingTx: newPendingTx(txpool),
+		done:      make(chan struct{}),
 	}
 
 	sub.wg.Add(1)
@@ -282,10 +280,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 	}()
 
 	subject := strings.Split(req.URL.Path, "/")[2]
-	if s.enableMetrics {
-		metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
-	}
-
+	metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
 	return conn, closed, subject, nil
 }
 
@@ -301,10 +296,7 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error, subject strin
 		log.Debug("write close message", "err", err)
 	}
 
-	if s.enableMetrics {
-		metricsActiveConnectionCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
-	}
-
+	metricsActiveConnectionCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
 	if err := conn.Close(); err != nil {
 		log.Debug("close websocket", "err", err)
 	}
