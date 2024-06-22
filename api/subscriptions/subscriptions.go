@@ -279,7 +279,11 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		}
 	}()
 
-	subject := strings.Split(req.URL.Path, "/")[2]
+	paths := strings.Split(req.URL.Path, "/")
+	subject := "unknown"
+	if len(paths) > 2 {
+		subject = paths[2]
+	}
 	metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
 	return conn, closed, subject, nil
 }
