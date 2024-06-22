@@ -58,7 +58,6 @@ type Node struct {
 	targetGasLimit uint64
 	skipLogs       bool
 	forkConfig     thor.ForkConfig
-	enableMetrics  bool
 
 	logDBFailed bool
 	bandwidth   bandwidth.Bandwidth
