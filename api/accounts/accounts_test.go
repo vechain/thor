@@ -379,7 +379,7 @@ func callContract(t *testing.T) {
 	// next revisoun should be valid
 	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", reqBody)
 	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
-	_, statusCode = httpPost(t, ts.URL+"/accounts?revisioun=next", reqBody)
+	_, statusCode = httpPost(t, ts.URL+"/accounts?revision=next", reqBody)
 	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
 	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
