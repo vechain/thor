@@ -17,14 +17,16 @@ import (
 )
 
 type Events struct {
-	repo *chain.Repository
-	db   *logdb.LogDB
+	repo  *chain.Repository
+	db    *logdb.LogDB
+	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB) *Events {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Events {
 	return &Events{
 		repo,
 		db,
+		logsLimit,
 	}
 }
 
@@ -51,6 +53,16 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if filter.Options != nil && filter.Options.Limit > e.limit {
+		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+	}
+	if filter.Options == nil {
+		filter.Options = &logdb.Options{
+			Offset: 0,
+			Limit:  e.limit,
+		}
+	}
+
 	fes, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err

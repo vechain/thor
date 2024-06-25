@@ -64,6 +64,11 @@ var (
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
+	apiLogsLimitFlag = cli.IntFlag{
+		Name:  "api-logs-limit",
+		Value: 1000,
+		Usage: "limit the number of logs returned by /logs API",
+	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
