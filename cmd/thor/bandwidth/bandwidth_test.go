@@ -22,9 +22,7 @@ func TestBandwidth(t *testing.T) {
 
 	val := bandwidth.Value()
 
-	if val != 0 {
-		t.Errorf("Expected 0, got %d", val)
-	}
+	assert.Equal(t, uint64(0), val)
 }
 
 func GetMockHeader(t *testing.T) *block.Header {
