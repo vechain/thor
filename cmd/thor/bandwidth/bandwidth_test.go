@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -60,7 +61,5 @@ func TestBandwidthSuggestGasLimit(t *testing.T) {
 	bandwidth.Update(header, 1)
 	val := bandwidth.SuggestGasLimit()
 
-	if val != 5617000000000 {
-		t.Errorf("Expected 5617000000000, got %d", val)
-	}
+	assert.Equal(t, uint64(5617000000000), val)
 }
