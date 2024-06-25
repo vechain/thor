@@ -65,6 +65,6 @@ func TestBandwidthSuggestGasLimit(t *testing.T) {
 	val := bandwidth.SuggestGasLimit()
 
 	if val != 5617000000000 {
-		t.Errorf("Expected 0, got %d", val)
+		t.Errorf("Expected 5617000000000, got %d", val)
 	}
 }
