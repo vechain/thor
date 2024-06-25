@@ -48,9 +48,7 @@ func TestBandwithUpdate(t *testing.T) {
 	bandwidth.Update(header, 1)
 	val := bandwidth.Value()
 
-	if val != 11234000000000 {
-		t.Errorf("Expected 11234000000000, got %d", val)
-	}
+	assert.Equal(t, uint64(11234000000000), val)
 }
 
 func TestBandwidthSuggestGasLimit(t *testing.T) {
