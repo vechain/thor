@@ -21,6 +21,11 @@ var (
 		Hidden: true,
 		Usage:  "directory for user global configurations",
 	}
+	masterKeyStdinFlag = cli.BoolFlag{
+		Name:   "master-key-stdin",
+		Usage:  "read master key from stdin",
+		Hidden: true,
+	}
 	dataDirFlag = cli.StringFlag{
 		Name:  "data-dir",
 		Value: defaultDataDir(),
@@ -58,6 +63,11 @@ var (
 	apiAllowCustomTracerFlag = cli.BoolFlag{
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
+	}
+	apiLogsLimitFlag = cli.IntFlag{
+		Name:  "api-logs-limit",
+		Value: 1000,
+		Usage: "limit the number of logs returned by /logs API",
 	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
