@@ -152,7 +152,11 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	initLogger(ctx)
+	lvl, err := readIntFromFlag(ctx, verbosityFlag.Name)
+	if err != nil {
+		return err
+	}
+	initLogger(log15.Lvl(lvl))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -230,14 +234,14 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		ctx.Uint64(apiCallGasLimitFlag.Name),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
-		uint64(ctx.Int(apiLogsLimitFlag.Name)),
+		ctx.Uint64(apiLogsLimitFlag.Name),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -266,7 +270,7 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pCommunicator.Communicator(),
-		uint64(ctx.Int(targetGasLimitFlag.Name)),
+		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
 		forkConfig).Run(exitSignal)
 }
@@ -275,7 +279,11 @@ func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 
-	initLogger(ctx)
+	lvl, err := readIntFromFlag(ctx, verbosityFlag.Name)
+	if err != nil {
+		return err
+	}
+	initLogger(log15.Lvl(lvl))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -309,7 +317,6 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
-	var err error
 
 	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
@@ -344,8 +351,14 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit = ctx.Int(txPoolLimitFlag.Name)
-	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
+	txPoolOption.Limit, err = readIntFromFlag(ctx, txPoolLimitFlag.Name)
+	if err != nil {
+		return err
+	}
+	txPoolOption.LimitPerAccount, err = readIntFromFlag(ctx, txPoolLimitPerAccountFlag.Name)
+	if err != nil {
+		return err
+	}
 
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
@@ -360,14 +373,14 @@ func soloAction(ctx *cli.Context) error {
 		&solo.Communicator{},
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		ctx.Uint64(apiCallGasLimitFlag.Name),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
-		uint64(ctx.Int(apiLogsLimitFlag.Name)),
+		ctx.Uint64(apiLogsLimitFlag.Name),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -380,7 +393,7 @@ func soloAction(ctx *cli.Context) error {
 		srvCloser()
 	}()
 
-	blockInterval := ctx.Int(blockInterval.Name)
+	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
@@ -394,10 +407,10 @@ func soloAction(ctx *cli.Context) error {
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
-		uint64(ctx.Int(gasLimitFlag.Name)),
+		ctx.Uint64(gasLimitFlag.Name),
 		ctx.Bool(onDemandFlag.Name),
 		skipLogs,
-		uint64(blockInterval),
+		blockInterval,
 		forkConfig).Run(exitSignal)
 }
 
