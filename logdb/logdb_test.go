@@ -253,6 +253,8 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+// TestLogDB_NewestBlockID performs a series of read/write tests on the NewestBlockID functionality of the LogDB.
+// It validates the correctness of the NewestBlockID method under various scenarios.
 func TestLogDB_NewestBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -375,6 +377,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 	}
 }
 
+// TestLogDB_HasBlockID performs a series of tests on the HasBlockID functionality of the LogDB.
 func TestLogDB_HasBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -456,6 +459,8 @@ func createTempDBPath() (string, error) {
 	return tmpFile.Name(), nil
 }
 
+// TestLogDB_NewestBlockID performs a series of read/write benchmarks on the NewestBlockID functionality of the LogDB.
+// It validates the correctness of the NewestBlockID method under various scenarios.
 func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	dbPath, err := createTempDBPath()
 	defer os.Remove(dbPath)
@@ -571,6 +576,7 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	}
 }
 
+// BenchmarkFakeDB_WriteBlocks creates a temporary database, performs some write only benchmarks and then deletes it
 func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	dbPath, err := createTempDBPath()
 	defer os.Remove(dbPath)
@@ -609,7 +615,8 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	}
 }
 
-// go test -bench=BenchmarkTestDB_HasBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// BenchmarkTestDB_HasBlockID opens a log.db file and measures the performance of the HasBlockID functionality of LogDB.
+// Running: go test -bench=BenchmarkTestDB_HasBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	if dbPath == "" {
 		b.Fatal("Please provide a dbPath")
@@ -632,7 +639,8 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	}
 }
 
-// go test -bench=BenchmarkTestDB_NewestBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// BenchmarkTestDB_NewestBlockID opens a log.db file and measures the performance of the NewestBlockID functionality of LogDB.
+// Running: go test -bench=BenchmarkTestDB_NewestBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_NewestBlockID(b *testing.B) {
 	if dbPath == "" {
 		b.Fatal("Please provide a dbPath")
@@ -652,7 +660,8 @@ func BenchmarkTestDB_NewestBlockID(b *testing.B) {
 	}
 }
 
-// go test -bench=BenchmarkTestDB_FilterEvents  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Event filtering functionality of LogDB.
+// Running: go test -bench=BenchmarkTestDB_FilterEvents  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	if dbPath == "" {
 		b.Fatal("Please provide a dbPath")
@@ -704,7 +713,8 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	}
 }
 
-// go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
+// Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	if dbPath == "" {
 		b.Fatal("Please provide a dbPath")
