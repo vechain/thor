@@ -438,7 +438,7 @@ func TestLogDB_HasBlockID(t *testing.T) {
 	assert.True(t, has)
 }
 
-func CreateTempDBPath() (string, error) {
+func createTempDBPath() (string, error) {
 	dir, err := os.MkdirTemp("", "tempdir-")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
@@ -457,7 +457,7 @@ func CreateTempDBPath() (string, error) {
 }
 
 func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
-	dbPath, err := CreateTempDBPath()
+	dbPath, err := createTempDBPath()
 	defer os.Remove(dbPath)
 
 	if err != nil {
@@ -574,7 +574,7 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 }
 
 func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
-	dbPath, err := CreateTempDBPath()
+	dbPath, err := createTempDBPath()
 	defer os.Remove(dbPath)
 
 	if err != nil {
