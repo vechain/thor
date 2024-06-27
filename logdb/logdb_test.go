@@ -470,10 +470,8 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	}
 	defer db.Close()
 
-	b := new(block.Builder).Build()
-
-	b = new(block.Builder).
-		ParentID(b.Header().ID()).
+	b := new(block.Builder).
+		ParentID(new(block.Builder).Build().Header().ID()).
 		Transaction(newTx()).
 		Build()
 	receipts := tx.Receipts{newReceipt()}
