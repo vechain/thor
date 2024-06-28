@@ -13,6 +13,12 @@ git clone https://github.com/vechain/thor.git
 cd thor
 ```
 
+It is recommended to use the latest stable release. To checkout the latest stable release, run:
+
+```shell
+git checkout $(git describe --tags `git rev-list --tags --max-count=1`)
+```
+
 To see a list of all available commands, run `make help`
 
 ### Building
