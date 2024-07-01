@@ -73,6 +73,7 @@ func CounterVec(name string, labels []string) CountVecMeter {
 // GaugeMeter is a metric that represents a single numeric value, which can arbitrarily go up and down.
 type GaugeMeter interface {
 	Add(int64)
+	Set(int64)
 }
 
 func Gauge(name string) GaugeMeter {
