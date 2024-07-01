@@ -13,10 +13,13 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/thor"
@@ -30,7 +33,8 @@ var txPool *txpool.TxPool
 var repo *chain.Repository
 var blocks []*block.Block
 
-func TestMain(t *testing.T) {
+func TestSubscriptions(t *testing.T) {
+	log15.Root().SetHandler(log15.LvlFilterHandler(log15.LvlDebug, log15.StdoutHandler))
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
@@ -40,6 +44,62 @@ func TestMain(t *testing.T) {
 	testHandleSubjectWithBeat(t)
 	testHandleSubjectWithBeat2(t)
 	testHandleSubjectWithNonValidArgument(t)
+	testHandlePendingTransactions(t)
+}
+
+func testHandlePendingTransactions(t *testing.T) {
+	// This channel makes sure the new tx is notified to mempool subscribers
+	// and then to pendingTx as well so that websocket has the tx to read
+	txChan := make(chan *txpool.TxEvent)
+	sub := txPool.SubscribeTxEvent(txChan)
+	defer sub.Unsubscribe()
+
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/txpool"}
+
+	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.NoError(t, err)
+	defer func() { assert.NoError(t, conn.Close()) }()
+
+	// Check the protocol upgrade to websocket
+	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+	assert.Equal(t, "Upgrade", resp.Header.Get("Connection"))
+	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
+
+	// immediately start listening for messages
+	wsChan := make(chan []byte)
+	go func() {
+		_, msg, err := conn.ReadMessage()
+		require.NoError(t, err)
+		wsChan <- msg
+	}()
+
+	// Add a new tx to the mempool
+	transaction := createTx(t, repo, 2)
+	assert.NoError(t, txPool.AddLocal(transaction))
+
+	var mempoolNotif, wsNotif bool
+	var msg []byte
+	for {
+		select {
+		case <-txChan:
+			mempoolNotif = true
+		case rcvMsg := <-wsChan:
+			msg = rcvMsg
+			wsNotif = true
+		case <-time.After(5 * time.Second):
+			t.Fatal("message not received in time")
+		}
+		if wsNotif && mempoolNotif {
+			break
+		}
+	}
+
+	var pendingTx *PendingTxIDMessage
+	if err := json.Unmarshal(msg, &pendingTx); err != nil {
+		t.Fatal(err)
+	} else {
+		assert.Equal(t, transaction.ID(), pendingTx.ID)
+	}
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {
@@ -49,7 +109,7 @@ func testHandleSubjectWithBlock(t *testing.T) {
 
 	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer func() { assert.NoError(t, conn.Close()) }()
 
 	// Check the protocol upgrade to websocket
 	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)

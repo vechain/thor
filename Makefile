@@ -50,7 +50,7 @@ $(CURDIR)/bin/thor \
 $(CURDIR)/bin/disco
 
 test:| go_version_check #@ Run the tests
-	@go test -cover $(PACKAGES)
+	@go test -v --count=1 -cover $(PACKAGES)
 
 test-coverage:| go_version_check #@ Run the tests with coverage
 	@go test -race -coverprofile=coverage.out -covermode=atomic $(PACKAGES)
