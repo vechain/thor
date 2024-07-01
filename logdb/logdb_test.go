@@ -244,6 +244,8 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+// TestLogDB_NewestBlockID performs a series of read/write tests on the NewestBlockID functionality of the LogDB.
+// It validates the correctness of the NewestBlockID method under various scenarios.
 func TestLogDB_NewestBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -366,6 +368,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 	}
 }
 
+// TestLogDB_HasBlockID performs a series of tests on the HasBlockID functionality of the LogDB.
 func TestLogDB_HasBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {

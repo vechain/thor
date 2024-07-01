@@ -139,21 +139,29 @@ FROM (%v) e
 		subQuery += ")"
 	}
 
-	if filter.Order == DESC {
-		subQuery += " ORDER BY seq DESC "
-	} else {
-		subQuery += " ORDER BY seq ASC "
-	}
-
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
+		if filter.Order == DESC {
+			subQuery += " ORDER BY seq DESC "
+		} else {
+			subQuery += " ORDER BY seq ASC "
+		}
 		subQuery += " LIMIT ?, ?"
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
 
-	return db.queryEvents(ctx, fmt.Sprintf(query, subQuery), args...)
+	eventQuery := fmt.Sprintf(query, subQuery)
+	// if there is no limit option, set order outside
+	if filter.Options == nil {
+		if filter.Order == DESC {
+			eventQuery += " ORDER BY seq DESC "
+		} else {
+			eventQuery += " ORDER BY seq ASC "
+		}
+	}
+	return db.queryEvents(ctx, eventQuery, args...)
 }
 
 func (db *LogDB) FilterTransfers(ctx context.Context, filter *TransferFilter) ([]*Transfer, error) {
@@ -196,21 +204,28 @@ FROM (%v) t
 		subQuery += ")"
 	}
 
-	if filter.Order == DESC {
-		subQuery += " ORDER BY seq DESC "
-	} else {
-		subQuery += " ORDER BY seq ASC "
-	}
-
 	// if there is limit option, set order inside subquery
 	if filter.Options != nil {
+		if filter.Order == DESC {
+			subQuery += " ORDER BY seq DESC"
+		} else {
+			subQuery += " ORDER BY seq ASC"
+		}
 		subQuery += " LIMIT ?, ?"
 		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN transfer e ON s.seq = e.seq"
-
-	return db.queryTransfers(ctx, fmt.Sprintf(query, subQuery), args...)
+	transferQuery := fmt.Sprintf(query, subQuery)
+	// if there is no limit option, set order outside
+	if filter.Options == nil {
+		if filter.Order == DESC {
+			transferQuery += " ORDER BY seq DESC "
+		} else {
+			transferQuery += " ORDER BY seq ASC "
+		}
+	}
+	return db.queryTransfers(ctx, transferQuery, args...)
 }
 
 func (db *LogDB) queryEvents(ctx context.Context, query string, args ...interface{}) ([]*Event, error) {
