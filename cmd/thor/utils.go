@@ -60,9 +60,8 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-func initLogger(ctx *cli.Context) {
-	logLevel := ctx.Int(verbosityFlag.Name)
-	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
+func initLogger(lvl log15.Lvl) {
+	log15.Root().SetHandler(log15.LvlFilterHandler(lvl, log15.StderrHandler))
 	// set go-ethereum log lvl to Warn
 	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
 	ethLogHandler.Verbosity(ethlog.LvlWarn)
@@ -711,4 +710,15 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 	}
 
 	return nodes, nil
+}
+
+func readIntFromFlag(ctx *cli.Context, name string) (int, error) {
+	val := ctx.Uint64(name)
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value for flag -%s: %d", name, val)
+	}
+
+	return i, nil
 }
