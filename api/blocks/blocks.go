@@ -30,7 +30,7 @@ func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
-	revision, err := utils.ParseRevision(mux.Vars(req)["revision"])
+	revision, err := utils.ParseRevision(mux.Vars(req)["revision"], false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
