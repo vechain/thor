@@ -399,8 +399,8 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		metricBlockProcessedTxs().AddWithLabel(int64(len(receipts)), map[string]string{"type": "received"})
 		metricBlockProcessedGas().AddWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "received"})
 		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
-		metricsGasPerBlock().Add(int64(newBlock.Header().GasUsed()))
-		metricsTxsPerBlock().Add(int64(len(receipts)))
+		metricsGasPerBlock().Set(int64(newBlock.Header().GasUsed()))
+		metricsTxsPerBlock().Set(int64(len(receipts)))
 		return nil
 	}); err != nil {
 		switch {
@@ -491,13 +491,15 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 		log.Warn("failed to process fork", "err", err)
 		return
 	}
+
+	metricChainForkSize().Set(int64(len(sideIds)))
+
 	if len(sideIds) == 0 {
 		return
 	}
 
 	if n := len(sideIds); n >= 2 {
 		metricChainForkCount().Add(1)
-		metricChainForkSize().Add(int64(len(sideIds)))
 		log.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
