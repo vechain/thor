@@ -6,8 +6,8 @@
 package state
 
 import (
+	"crypto/rand"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/rlp"

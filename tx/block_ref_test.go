@@ -6,7 +6,7 @@
 package tx_test
 
 import (
-	"math/rand"
+	"crypto/rand"
 	"testing"
 
 	"github.com/vechain/thor/v2/thor"

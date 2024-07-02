@@ -20,7 +20,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.55.2
+          version: v1.59.0
           # use the default if on main branch, otherwise use the pull request config
           args: --timeout=30m --config=.golangci.yml
           only-new-issues: true
