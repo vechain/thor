@@ -19,6 +19,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+const VTHO_ADDRESS = "0x0000000000000000000000000000456E65726779"
+
 var dbPath string
 
 func init() {
@@ -259,15 +261,26 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	eventCriteria1 := make([]*logdb.EventCriteria, 0, 1)
 	eventCriteria2 := make([]*logdb.EventCriteria, 0, 1)
 
+	vthoAddress, err := thor.ParseAddress(VTHO_ADDRESS)
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
 	addressCriteria := &logdb.EventCriteria{
-		Address: &thor.Address{0x1},
+		Address: &vthoAddress,
 	}
 
 	topics := [5]*thor.Bytes32{new(thor.Bytes32), nil, nil, nil, nil}
-	*topics[0] = thor.Bytes32{20}
+	*topics[0], err = thor.ParseBytes32("0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF")
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	topicCriteria := &logdb.EventCriteria{
-		Topics: topics,
+		Topics:  topics,
+		Address: &vthoAddress,
 	}
 
 	eventCriteria1 = append(eventCriteria1, addressCriteria)
@@ -311,8 +324,14 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 
 	transferCriteria := make([]*logdb.TransferCriteria, 0, 1)
 
+	txOrigin, err := thor.ParseAddress("0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED")
+
+	if err != nil {
+		b.Fatal(err)
+	}
+
 	newCriteria := &logdb.TransferCriteria{
-		TxOrigin:  &thor.Address{0x1},
+		TxOrigin:  &txOrigin,
 		Sender:    nil,
 		Recipient: nil,
 	}
