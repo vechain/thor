@@ -712,12 +712,11 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 	return nodes, nil
 }
 
-func readIntFromFlag(ctx *cli.Context, name string) (int, error) {
-	val := ctx.Uint64(name)
+func readIntFromUInt64Flag(val uint64) (int, error) {
 	i := int(val)
 
 	if i < 0 {
-		return 0, fmt.Errorf("invalid value for flag -%s: %d", name, val)
+		return 0, fmt.Errorf("invalid value %d ", val)
 	}
 
 	return i, nil

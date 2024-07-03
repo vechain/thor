@@ -152,9 +152,9 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	lvl, err := readIntFromFlag(ctx, verbosityFlag.Name)
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "parse verbosity flag")
 	}
 	initLogger(log15.Lvl(lvl))
 
@@ -279,9 +279,9 @@ func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 
-	lvl, err := readIntFromFlag(ctx, verbosityFlag.Name)
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "parse verbosity flag")
 	}
 	initLogger(log15.Lvl(lvl))
 
@@ -351,13 +351,13 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit, err = readIntFromFlag(ctx, txPoolLimitFlag.Name)
+	txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "parse txpool-limit flag")
 	}
-	txPoolOption.LimitPerAccount, err = readIntFromFlag(ctx, txPoolLimitPerAccountFlag.Name)
+	txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
 	}
 
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
