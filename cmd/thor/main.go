@@ -150,7 +150,8 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { log.Info("exited") }()
 
-	initLogger(ctx)
+	levelVar := initLogger(ctx)
+	handleSIGHUP(levelVar)
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -272,7 +273,8 @@ func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { log.Info("exited") }()
 
-	initLogger(ctx)
+	levelVar := initLogger(ctx)
+	handleSIGHUP(levelVar)
 
 	// enable metrics as soon as possible
 	metricsURL := ""

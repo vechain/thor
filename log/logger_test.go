@@ -34,7 +34,9 @@ import (
 // TestLoggingWithVmodule checks that vmodule works.
 func TestLoggingWithVmodule(t *testing.T) {
 	out := new(bytes.Buffer)
-	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false))
+	var levelVar slog.LevelVar
+	levelVar.Set(slog.LevelInfo)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, &levelVar, false))
 	glog.Verbosity(LevelCrit)
 	logger := NewLogger(glog)
 	logger.Warn("This should not be seen", "ignored", "true")
@@ -52,7 +54,9 @@ func TestLoggingWithVmodule(t *testing.T) {
 
 func TestTerminalHandlerWithAttrs(t *testing.T) {
 	out := new(bytes.Buffer)
-	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, LevelTrace, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")}))
+	var levelVar slog.LevelVar
+	levelVar.Set(slog.LevelInfo)
+	glog := NewGlogHandler(NewTerminalHandlerWithLevel(out, &levelVar, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")}))
 	glog.Verbosity(LevelTrace)
 	logger := NewLogger(glog)
 	logger.Trace("a message", "foo", "bar")
