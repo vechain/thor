@@ -92,23 +92,6 @@ func (h *EthLogHandler) Log(r *ethlog.Record) error {
 	return nil
 }
 
-func handleSIGHUP(levelVar *slog.LevelVar) {
-	sighupChan := make(chan os.Signal, 1)
-	signal.Notify(sighupChan, syscall.SIGHUP)
-
-	go func() {
-		for range sighupChan {
-			currentLevel := levelVar.Level()
-			if currentLevel == slog.LevelDebug {
-				levelVar.Set(slog.LevelInfo) // Set to your default verbosity level
-			} else {
-				levelVar.Set(slog.LevelDebug)
-			}
-			log.Info("Verbosity level toggled", "newLevel", levelVar.Level())
-		}
-	}()
-}
-
 func initLogger(ctx *cli.Context) *slog.LevelVar {
 	legacyLogLevel := ctx.Int(verbosityFlag.Name)
 	logLevel := log.FromLegacyLevel(legacyLogLevel)
@@ -120,7 +103,7 @@ func initLogger(ctx *cli.Context) *slog.LevelVar {
 
 	var handler slog.Handler
 	if jsonLogs {
-		handler = log.JSONHandlerWithLevel(output, logLevel)
+		handler = log.JSONHandlerWithLevel(output, &levelVar)
 	} else {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		handler = log.NewTerminalHandlerWithLevel(output, &levelVar, useColor)

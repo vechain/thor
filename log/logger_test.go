@@ -81,7 +81,9 @@ func TestJSONHandler(t *testing.T) {
 	}
 
 	out.Reset()
-	handler = JSONHandlerWithLevel(out, slog.LevelInfo)
+	var levelVar slog.LevelVar
+	levelVar.Set(slog.LevelInfo)
+	handler = JSONHandlerWithLevel(out, &levelVar)
 	logger = slog.New(handler)
 	logger.Debug("hi there")
 	if len(out.String()) != 0 {
