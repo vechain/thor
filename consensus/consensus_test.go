@@ -84,6 +84,7 @@ func newTestConsensus() (*testConsensus, error) {
 	}
 
 	forkConfig := thor.NoFork
+	forkConfig.VIP191 = 1
 	forkConfig.BLOCKLIST = 0
 	forkConfig.VIP214 = 2
 
@@ -91,6 +92,29 @@ func newTestConsensus() (*testConsensus, error) {
 	p := packer.New(repo, stater, proposer.Address, &proposer.Address, forkConfig)
 	parentSum, _ := repo.GetBlockSummary(parent.Header().ID())
 	flow, err := p.Schedule(parentSum, parent.Header().Timestamp()+100*thor.BlockInterval)
+	if err != nil {
+		return nil, err
+	}
+
+	addr := thor.BytesToAddress([]byte("to"))
+	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
+	transaction := new(tx.Builder).
+		ChainTag(repo.ChainTag()).
+		GasPriceCoef(1).
+		Expiration(10).
+		Gas(21000).
+		Nonce(1).
+		Clause(cla).
+		BlockRef(tx.NewBlockRef(0)).
+		Build()
+
+	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
+	if err != nil {
+		return nil, err
+	}
+	transaction = transaction.WithSignature(sig)
+
+	err = flow.Adopt(transaction)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +218,7 @@ func (tc *testConsensus) signWithKey(builder *block.Builder, pk *ecdsa.PrivateKe
 }
 
 func (tc *testConsensus) builder(header *block.Header) *block.Builder {
-	return new(block.Builder).
+	builder := new(block.Builder).
 		ParentID(header.ParentID()).
 		Timestamp(header.Timestamp()).
 		TotalScore(header.TotalScore()).
@@ -203,6 +227,8 @@ func (tc *testConsensus) builder(header *block.Header) *block.Builder {
 		Beneficiary(header.Beneficiary()).
 		StateRoot(header.StateRoot()).
 		ReceiptsRoot(header.ReceiptsRoot())
+	builder.TransactionFeatures(tc.original.Header().TxsFeatures())
+	return builder
 }
 
 func (tc *testConsensus) consent(blk *block.Block) error {
@@ -662,6 +688,28 @@ func TestValidateProposer(t *testing.T) {
 
 				err = tc.consent(blk)
 				expected := consensusError("block signature length invalid: want 65 have 0")
+
+				assert.Equal(t, expected, err)
+			},
+		},
+		{
+			"ErrInvalidFeatures", func(t *testing.T) {
+
+				header := tc.original.Header()
+				builder := new(block.Builder).
+					ParentID(header.ParentID()).
+					Timestamp(header.Timestamp()).
+					TotalScore(header.TotalScore()).
+					GasLimit(header.GasLimit()).
+					GasUsed(header.GasUsed()).
+					Beneficiary(header.Beneficiary()).
+					StateRoot(header.StateRoot()).
+					ReceiptsRoot(header.ReceiptsRoot())
+
+				blk := builder.Build()
+
+				err = tc.consent(blk)
+				expected := consensusError("block txs features invalid: want 1, have 0")
 
 				assert.Equal(t, expected, err)
 			},
