@@ -13,13 +13,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/block"
-	logdb "github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
 
-const VTHO_ADDRESS = "0x0000000000000000000000000000456E65726779"
+const (
+	VTHO_ADDRESS = "0x0000000000000000000000000000456E65726779"
+	VTHO_TOPIC   = "0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF"
+	TEST_ADDRESS = "0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED"
+)
 
 var dbPath string
 
@@ -27,38 +32,11 @@ func init() {
 	flag.StringVar(&dbPath, "dbPath", "", "Path to the database file")
 }
 
-func createTempDBPath() (string, error) {
-	dir, err := os.MkdirTemp("", "tempdir-")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp(dir, "temp-*.db")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	if err := tmpFile.Close(); err != nil {
-		return "", fmt.Errorf("failed to close temp file: %w", err)
-	}
-
-	return tmpFile.Name(), nil
-}
-
 // TestLogDB_NewestBlockID performs a series of read/write benchmarks on the NewestBlockID functionality of the LogDB.
-// It validates the correctness of the NewestBlockID method under various scenarios.
+// It benchmarks the creating, writing, committing a new block, followed by fetching this new block as the NewestBlockID
 func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
-	dbPath, err := createTempDBPath()
-	defer os.Remove(dbPath)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := createTempDB()
+	require.NoError(t, err)
 	defer db.Close()
 
 	b := new(block.Builder).
@@ -68,12 +46,8 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	receipts := tx.Receipts{newReceipt()}
 
 	w := db.NewWriter()
-	if err := w.Write(b, receipts); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, w.Write(b, receipts))
+	require.NoError(t, w.Commit())
 
 	tests := []struct {
 		name    string
@@ -82,76 +56,26 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 		{
 			"newest block id",
 			func() (thor.Bytes32, error) {
-				return b.Header().ID(), nil
-			},
-		},
-		{
-			"add both event and transfer, best should change",
-			func() (thor.Bytes32, error) {
 				b = new(block.Builder).
 					ParentID(b.Header().ID()).
-					Transaction(newTx()).
 					Build()
 				receipts := tx.Receipts{newReceipt()}
 
-				w := db.NewWriter()
-				if err := w.Write(b, receipts); err != nil {
-					return thor.Bytes32{}, nil
-				}
-				if err := w.Commit(); err != nil {
-					return thor.Bytes32{}, nil
-				}
-				return b.Header().ID(), nil
-			},
-		},
-		{
-			"add event only, best should change",
-			func() (thor.Bytes32, error) {
-				b = new(block.Builder).
-					ParentID(b.Header().ID()).
-					Transaction(newTx()).
-					Build()
-				receipts := tx.Receipts{newEventOnlyReceipt()}
+				require.NoError(t, w.Write(b, receipts))
+				require.NoError(t, w.Commit())
 
-				w := db.NewWriter()
-				if err := w.Write(b, receipts); err != nil {
-					return thor.Bytes32{}, nil
-				}
-				if err := w.Commit(); err != nil {
-					return thor.Bytes32{}, nil
-				}
-				return b.Header().ID(), nil
-			},
-		},
-		{
-			"add transfer only, best should change",
-			func() (thor.Bytes32, error) {
-				b = new(block.Builder).
-					ParentID(b.Header().ID()).
-					Transaction(newTx()).
-					Build()
-				receipts := tx.Receipts{newTransferOnlyReceipt()}
-
-				w := db.NewWriter()
-				if err := w.Write(b, receipts); err != nil {
-					return thor.Bytes32{}, nil
-				}
-				if err := w.Commit(); err != nil {
-					return thor.Bytes32{}, nil
-				}
 				return b.Header().ID(), nil
 			},
 		},
 	}
 
-	t.ResetTimer()
 	for _, tt := range tests {
 		t.Run(tt.name, func(b *testing.B) {
+			t.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				want, err := tt.prepare()
-				if err != nil {
-					b.Fatal(err)
-				}
+				require.NoError(t, err)
+
 				got, err := db.NewestBlockID()
 				if err != nil {
 					b.Fatal(err)
@@ -162,86 +86,48 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 	}
 }
 
-// BenchmarkFakeDB_WriteBlocks creates a temporary database, performs some write only benchmarks and then deletes it
+// BenchmarkFakeDB_WriteBlocks creates a temporary database, performs some write + commit benchmarks and then deletes the db
 func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
-	dbPath, err := createTempDBPath()
-	defer os.Remove(dbPath)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, err := createTempDB()
+	require.NoError(t, err)
 	defer db.Close()
 
 	b := new(block.Builder).Build()
+	w := db.NewWriter()
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		for i := 0; i < 1_000; i++ {
+		for i := 0; i < 10_000; i++ {
 			b = new(block.Builder).
 				ParentID(b.Header().ID()).
 				Transaction(newTx()).
-				Transaction(newTx()).
 				Build()
 			receipts := tx.Receipts{newReceipt(), newReceipt()}
-
-			w := db.NewWriter()
-			if err := w.Write(b, receipts); err != nil {
-				t.Fatal(err)
-			}
-
-			if err := w.Commit(); err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, w.Write(b, receipts))
+			require.NoError(t, w.Commit())
 		}
 	}
 }
 
 // BenchmarkTestDB_HasBlockID opens a log.db file and measures the performance of the HasBlockID functionality of LogDB.
 // Running: go test -bench=BenchmarkTestDB_HasBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
+// It uses unbounded event filtering to check for blocks existence using the HasBlockID
 func BenchmarkTestDB_HasBlockID(b *testing.B) {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath")
-	}
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		b.Fatal(err)
-	}
+	db, err := loadDBFromDisk(b)
+	require.NoError(b, err)
 	defer db.Close()
 
-	b0 := new(block.Builder).Build()
+	// find the first 500k blocks with events
+	events, err := db.FilterEvents(context.Background(), &logdb.EventFilter{Options: &logdb.Options{Offset: 0, Limit: 500_000}})
+	require.NoError(b, err)
+	require.GreaterOrEqual(b, len(events), 500_000, "there should be more than 500k events in the db")
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		has, err := db.HasBlockID(b0.Header().ID())
-		if err != nil {
-			b.Fatal(err)
-		}
-		assert.False(b, has)
-	}
-}
-
-// BenchmarkTestDB_NewestBlockID opens a log.db file and measures the performance of the NewestBlockID functionality of LogDB.
-// Running: go test -bench=BenchmarkTestDB_NewestBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
-func BenchmarkTestDB_NewestBlockID(b *testing.B) {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath")
-	}
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer db.Close()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := db.NewestBlockID()
-		if err != nil {
-			b.Fatal(err)
+		for _, event := range events {
+			has, err := db.HasBlockID(event.BlockID)
+			require.NoError(b, err)
+			require.True(b, has)
 		}
 	}
 }
@@ -249,17 +135,12 @@ func BenchmarkTestDB_NewestBlockID(b *testing.B) {
 // BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Event filtering functionality of LogDB.
 // Running: go test -bench=BenchmarkTestDB_FilterEvents  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterEvents(b *testing.B) {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath")
-	}
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		b.Fatal(err)
-	}
+	db, err := loadDBFromDisk(b)
+	require.NoError(b, err)
 	defer db.Close()
 
 	vthoAddress := thor.MustParseAddress(VTHO_ADDRESS)
-	topic := thor.MustParseBytes32("0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF")
+	topic := thor.MustParseBytes32(VTHO_TOPIC)
 
 	addressFilterCriteria := []*logdb.EventCriteria{
 		{
@@ -284,35 +165,27 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 		{"EventRangeDesc", &logdb.EventFilter{Range: &logdb.Range{From: 500000, To: 1_000_000}, Order: logdb.DESC}},
 	}
 
-	for j, tt := range tests {
+	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
 			b.ResetTimer()
-			var events []*logdb.Event
 			for i := 0; i < b.N; i++ {
-				events, err = db.FilterEvents(context.Background(), tt.arg)
+				_, err = db.FilterEvents(context.Background(), tt.arg)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
-			fmt.Printf("Test %d - Total events: %d\n", j, len(events))
 		})
-
 	}
 }
 
 // BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
 // Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
-	if dbPath == "" {
-		b.Fatal("Please provide a dbPath")
-	}
-	db, err := logdb.New(dbPath)
-	if err != nil {
-		b.Fatal(err)
-	}
+	db, err := loadDBFromDisk(b)
+	require.NoError(b, err)
 	defer db.Close()
 
-	txOrigin := thor.MustParseAddress("0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED")
+	txOrigin := thor.MustParseAddress(TEST_ADDRESS)
 	transferCriteria := []*logdb.TransferCriteria{
 		{
 			TxOrigin:  &txOrigin,
@@ -342,4 +215,35 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 			}
 		})
 	}
+}
+
+func createTempDB() (*logdb.LogDB, error) {
+	dir, err := os.MkdirTemp("", "tempdir-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp directory: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, "temp-*.db")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	db, err := logdb.New(tmpFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("unable to load logdb: %w", err)
+	}
+
+	return db, nil
+}
+
+func loadDBFromDisk(b *testing.B) (*logdb.LogDB, error) {
+	if dbPath == "" {
+		b.Fatal("Please provide a dbPath")
+	}
+
+	return logdb.New(dbPath)
 }
