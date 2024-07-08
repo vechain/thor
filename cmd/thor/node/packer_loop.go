@@ -181,7 +181,7 @@ func (n *Node) pack(flow *packer.Flow) (err error) {
 		}
 		realElapsed := mclock.Now() - startTime
 
-		// sync the logger-writing task
+		// sync the log-writing task
 		if logEnabled {
 			if err := n.logWorker.Sync(); err != nil {
 				logger.Warn("failed to write logs", "err", err)

@@ -17,7 +17,7 @@ import (
 // RequestLoggerHandler returns a http handler to ensure requests are syphoned into the writer
 func RequestLoggerHandler(handler http.Handler, logger log.Logger) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		// Read and logger the body (note: this can only be done once)
+		// Read and log the body (note: this can only be done once)
 		// Ensure you don't disrupt the request body for handlers that need to read it
 		var bodyBytes []byte
 		var err error

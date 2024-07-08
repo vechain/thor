@@ -83,7 +83,7 @@ func (h *EthLogHandler) Log(r *ethlog.Record) error {
 	case ethlog.LvlWarn:
 		h.logger.Warn(r.Msg)
 	case ethlog.LvlInfo:
-		h.logger.Warn(r.Msg)
+		h.logger.Info(r.Msg)
 	case ethlog.LvlDebug:
 		h.logger.Debug(r.Msg)
 	default:
@@ -398,7 +398,7 @@ func openLogDB(dir string) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs.db")
 	db, err := logdb.New(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open logger database [%v]", path)
+		return nil, errors.Wrapf(err, "open log database [%v]", path)
 	}
 	return db, nil
 }
@@ -731,7 +731,7 @@ func openMemMainDB() *muxdb.MuxDB {
 func openMemLogDB() *logdb.LogDB {
 	db, err := logdb.NewMem()
 	if err != nil {
-		panic(errors.Wrap(err, "open logger database"))
+		panic(errors.Wrap(err, "open log database"))
 	}
 	return db
 }

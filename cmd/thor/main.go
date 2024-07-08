@@ -189,7 +189,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { logger.Info("closing logger database..."); logDB.Close() }()
+	defer func() { logger.Info("closing log database..."); logDB.Close() }()
 
 	repo, err := initChainRepository(gene, mainDB, logDB)
 	if err != nil {
@@ -325,7 +325,7 @@ func soloAction(ctx *cli.Context) error {
 		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
-		defer func() { logger.Info("closing logger database..."); logDB.Close() }()
+		defer func() { logger.Info("closing log database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()

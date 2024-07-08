@@ -374,7 +374,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		realElapsed := mclock.Now() - startTime
 
-		// sync the logger-writing task
+		// sync the log-writing task
 		if logEnabled {
 			if err := n.logWorker.Sync(); err != nil {
 				logger.Warn("failed to write logs", "err", err)
@@ -426,7 +426,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
 	var w *logdb.Writer
 	if int64(newBlock.Header().Timestamp()) < time.Now().Unix()-24*3600 {
-		// turn off logger sync to quickly catch up
+		// turn off log sync to quickly catch up
 		w = n.logDB.NewWriterSyncOff()
 	} else {
 		w = n.logDB.NewWriter()
