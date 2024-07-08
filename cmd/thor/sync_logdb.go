@@ -25,11 +25,11 @@ import (
 func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, verify bool) error {
 	startPos, err := seekLogDBSyncPosition(repo, logDB)
 	if err != nil {
-		return errors.Wrap(err, "seek log db sync position")
+		return errors.Wrap(err, "seek logger db sync position")
 	}
 	if verify && startPos > 0 {
 		if err := verifyLogDB(ctx, startPos-1, repo, logDB); err != nil {
-			return errors.Wrap(err, "verify log db")
+			return errors.Wrap(err, "verify logger db")
 		}
 	}
 
@@ -42,10 +42,10 @@ func syncLogDB(ctx context.Context, repo *chain.Repository, logDB *logdb.LogDB, 
 	}
 
 	if startPos == 0 {
-		fmt.Println(">> Rebuilding log db <<")
+		fmt.Println(">> Rebuilding logger db <<")
 		startPos = 1 // block 0 can be skipped
 	} else {
-		fmt.Println(">> Syncing log db <<")
+		fmt.Println(">> Syncing logger db <<")
 	}
 
 	pb := pb.New64(int64(bestNum)).
@@ -155,7 +155,7 @@ func seekLogDBSyncPosition(repo *chain.Repository, logDB *logdb.LogDB) (uint32, 
 }
 
 func verifyLogDB(ctx context.Context, endBlockNum uint32, repo *chain.Repository, logDB *logdb.LogDB) error {
-	fmt.Println(">> Verifying log db <<")
+	fmt.Println(">> Verifying logger db <<")
 	pb := pb.New64(int64(endBlockNum)).
 		Set64(0).
 		SetMaxWidth(90).

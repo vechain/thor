@@ -43,7 +43,7 @@ var (
 	gitCommit     string
 	gitTag        string
 	copyrightYear string
-	log           = log15.New()
+	logger        = log15.New()
 
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
@@ -150,7 +150,7 @@ func main() {
 func defaultAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 
-	defer func() { log.Info("exited") }()
+	defer func() { logger.Info("exited") }()
 
 	initLogger(ctx)
 
@@ -163,7 +163,7 @@ func defaultAction(ctx *cli.Context) error {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { logger.Info("stopping metrics server..."); close() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -179,7 +179,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("closing main database..."); mainDB.Close() }()
+	defer func() { logger.Info("closing main database..."); mainDB.Close() }()
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
@@ -187,7 +187,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("closing log database..."); logDB.Close() }()
+	defer func() { logger.Info("closing logger database..."); logDB.Close() }()
 
 	repo, err := initChainRepository(gene, mainDB, logDB)
 	if err != nil {
@@ -209,7 +209,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	txpoolOpt := defaultTxPoolOptions
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	defer func() { logger.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
@@ -239,13 +239,13 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		uint64(ctx.Int(apiLogsLimitFlag.Name)),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
+	defer func() { logger.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("stopping API server..."); srvCloser() }()
+	defer func() { logger.Info("stopping API server..."); srvCloser() }()
 
 	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
 
@@ -255,7 +255,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pCommunicator.Stop()
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	defer func() { logger.Info("stopping optimizer..."); optimizer.Stop() }()
 
 	return node.New(
 		master,
@@ -273,7 +273,7 @@ func defaultAction(ctx *cli.Context) error {
 
 func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
-	defer func() { log.Info("exited") }()
+	defer func() { logger.Info("exited") }()
 
 	initLogger(ctx)
 
@@ -286,7 +286,7 @@ func soloAction(ctx *cli.Context) error {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { logger.Info("stopping metrics server..."); close() }()
 	}
 
 	var (
@@ -318,12 +318,12 @@ func soloAction(ctx *cli.Context) error {
 		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
 			return err
 		}
-		defer func() { log.Info("closing main database..."); mainDB.Close() }()
+		defer func() { logger.Info("closing main database..."); mainDB.Close() }()
 
 		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
-		defer func() { log.Info("closing log database..."); logDB.Close() }()
+		defer func() { logger.Info("closing logger database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()
@@ -348,7 +348,7 @@ func soloAction(ctx *cli.Context) error {
 	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
 
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	defer func() { logger.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
 	apiHandler, apiCloser := api.New(
@@ -369,14 +369,14 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableMetricsFlag.Name),
 		uint64(ctx.Int(apiLogsLimitFlag.Name)),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
+	defer func() { logger.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
 	defer func() {
-		log.Info("stopping API server...")
+		logger.Info("stopping API server...")
 		srvCloser()
 	}()
 
@@ -388,7 +388,7 @@ func soloAction(ctx *cli.Context) error {
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	defer func() { logger.Info("stopping optimizer..."); optimizer.Stop() }()
 
 	return solo.New(repo,
 		state.NewStater(mainDB),

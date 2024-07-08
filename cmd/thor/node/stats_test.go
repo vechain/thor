@@ -47,7 +47,7 @@ func TestLogContext(t *testing.T) {
 
 	logContext := s.LogContext(&mockHeader)
 
-	// Verify the log context elements
+	// Verify the logger context elements
 	assert.Equal(t, 10, logContext[1], "txs count mismatch")
 	assert.Equal(t, 5.0, logContext[3], "used gas in mgas mismatch")
 }

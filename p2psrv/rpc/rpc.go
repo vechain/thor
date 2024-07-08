@@ -29,7 +29,7 @@ const (
 var (
 	errPeerDisconnected = errors.New("peer disconnected")
 	errMsgTooLarge      = errors.New("msg too large")
-	log                 = log15.New("pkg", "rpc")
+	logger              = log15.New("pkg", "rpc")
 )
 
 // HandleFunc to handle received messages from peer.
@@ -60,7 +60,7 @@ func New(peer *p2p.Peer, rw p2p.MsgReadWriter) *RPC {
 		rw:       rw,
 		doneCh:   make(chan struct{}),
 		pendings: make(map[uint32]*resultListener),
-		logger:   log.New(ctx...),
+		logger:   logger.New(ctx...),
 	}
 }
 

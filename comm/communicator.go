@@ -26,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "comm")
+var logger = log15.New("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {
@@ -91,7 +91,7 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			log.Debug("synchronization start")
+			logger.Debug("synchronization start")
 
 			best := c.repo.BestBlockSummary().Header
 			// choose peer which has the head block with higher total score
@@ -101,11 +101,11 @@ func (c *Communicator) Sync(ctx context.Context, handler HandleBlockStream) {
 			})
 			if peer == nil {
 				if c.peerSet.Len() < 3 {
-					log.Debug("no suitable peer to sync")
+					logger.Debug("no suitable peer to sync")
 					break
 				}
 				// if more than 3 peers connected, we are assumed to be the best
-				log.Debug("synchronization done, best assumed")
+				logger.Debug("synchronization done, best assumed")
 			} else {
 				if err := download(ctx, c.repo, peer, best.Number(), handler); err != nil {
 					peer.logger.Debug("synchronization failed", "err", err)

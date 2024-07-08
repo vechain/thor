@@ -58,7 +58,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		Peer:        peer,
 		RPC:         rpc.New(peer, rw),
-		logger:      log.New(ctx...),
+		logger:      logger.New(ctx...),
 		createdTime: mclock.Now(),
 		knownTxs:    knownTxs,
 		knownBlocks: knownBlocks,

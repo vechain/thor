@@ -30,7 +30,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "api")
+var logger = log15.New("pkg", "api")
 
 // New return api router
 func New(
@@ -109,7 +109,7 @@ func New(
 	)(handler)
 
 	if enableReqLogger {
-		handler = RequestLoggerHandler(handler, log)
+		handler = RequestLoggerHandler(handler, logger)
 	}
 
 	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed

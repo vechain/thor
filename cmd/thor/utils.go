@@ -63,7 +63,7 @@ var devNetGenesisID = genesis.NewDevnet().ID()
 func initLogger(ctx *cli.Context) {
 	logLevel := ctx.Int(verbosityFlag.Name)
 	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
-	// set go-ethereum log lvl to Warn
+	// set go-ethereum logger lvl to Warn
 	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
 	ethLogHandler.Verbosity(ethlog.LvlWarn)
 	ethlog.Root().SetHandler(ethLogHandler)
@@ -129,7 +129,7 @@ func handleExitSignal() context.Context {
 		signal.Notify(exitSignalCh, os.Interrupt, syscall.SIGTERM)
 
 		sig := <-exitSignalCh
-		log.Info("exit signal received", "signal", sig)
+		logger.Info("exit signal received", "signal", sig)
 		cancel()
 	}()
 	return ctx
@@ -272,10 +272,10 @@ func makeInstanceDir(ctx *cli.Context, gene *genesis.Genesis) (string, error) {
 
 func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	cacheMB := normalizeCacheSize(ctx.Int(cacheFlag.Name))
-	log.Debug("cache size(MB)", "size", cacheMB)
+	logger.Debug("cache size(MB)", "size", cacheMB)
 
 	fdCache := suggestFDCache()
-	log.Debug("fd cache", "n", fdCache)
+	logger.Debug("fd cache", "n", fdCache)
 
 	opts := muxdb.Options{
 		TrieNodeCacheSizeMB:        cacheMB,
@@ -294,7 +294,7 @@ func openMainDB(ctx *cli.Context, dir string) (*muxdb.MuxDB, error) {
 	totalCacheMB := cacheMB + opts.ReadCacheMB + opts.WriteBufferMB*2
 	gogc := math.Max(10, math.Min(100, 50/(float64(totalCacheMB)/1024)))
 
-	log.Debug("sanitize Go's GC trigger", "percent", int(gogc))
+	logger.Debug("sanitize Go's GC trigger", "percent", int(gogc))
 	debug.SetGCPercent(int(gogc))
 
 	if opts.TrieWillCleanHistory {
@@ -318,7 +318,7 @@ func normalizeCacheSize(sizeMB int) int {
 
 	var mem gosigar.Mem
 	if err := mem.Get(); err != nil {
-		log.Warn("failed to get total mem:", "err", err)
+		logger.Warn("failed to get total mem:", "err", err)
 	} else {
 		total := int(mem.Total / 1024 / 1024)
 		half := total / 2
@@ -331,7 +331,7 @@ func normalizeCacheSize(sizeMB int) int {
 
 		if sizeMB > limitMB {
 			sizeMB = limitMB
-			log.Warn("cache size(MB) limited", "limit", limitMB)
+			logger.Warn("cache size(MB) limited", "limit", limitMB)
 		}
 	}
 	return sizeMB
@@ -340,11 +340,11 @@ func normalizeCacheSize(sizeMB int) int {
 func suggestFDCache() int {
 	limit, err := fdlimit.Current()
 	if err != nil {
-		log.Warn("unable to get fdlimit", "error", err)
+		logger.Warn("unable to get fdlimit", "error", err)
 		return 500
 	}
 	if limit <= 1024 {
-		log.Warn("low fd limit, increase it if possible", "limit", limit)
+		logger.Warn("low fd limit, increase it if possible", "limit", limit)
 	}
 
 	n := limit / 2
@@ -358,7 +358,7 @@ func openLogDB(dir string) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs.db")
 	db, err := logdb.New(path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "open log database [%v]", path)
+		return nil, errors.Wrapf(err, "open logger database [%v]", path)
 	}
 	return db, nil
 }
@@ -489,10 +489,10 @@ func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool
 	var cachedPeers p2psrv.Nodes
 	if data, err := os.ReadFile(peersCachePath); err != nil {
 		if !os.IsNotExist(err) {
-			log.Warn("failed to load peers cache", "err", err)
+			logger.Warn("failed to load peers cache", "err", err)
 		}
 	} else if err := rlp.DecodeBytes(data, &cachedPeers); err != nil {
-		log.Warn("failed to load peers cache", "err", err)
+		logger.Warn("failed to load peers cache", "err", err)
 	}
 
 	return p2p.New(
@@ -691,7 +691,7 @@ func openMemMainDB() *muxdb.MuxDB {
 func openMemLogDB() *logdb.LogDB {
 	db, err := logdb.NewMem()
 	if err != nil {
-		panic(errors.Wrap(err, "open log database"))
+		panic(errors.Wrap(err, "open logger database"))
 	}
 	return db
 }

@@ -35,7 +35,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var log = log15.New("pkg", "node")
+var logger = log15.New("pkg", "node")
 
 var (
 	// error when the block larger than known max block number + 1
@@ -118,13 +118,13 @@ func (n *Node) Run(ctx context.Context) error {
 }
 
 func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block) (err error) {
-	log.Debug("start to process block stream")
-	defer log.Debug("process block stream done", "err", err)
+	logger.Debug("start to process block stream")
+	defer logger.Debug("process block stream done", "err", err)
 	var stats blockStats
 	startTime := mclock.Now()
 
 	report := func(block *block.Block) {
-		log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+		logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 		stats = blockStats{}
 		startTime = mclock.Now()
 	}
@@ -156,8 +156,8 @@ func (n *Node) handleBlockStream(ctx context.Context, stream <-chan *block.Block
 }
 
 func (n *Node) houseKeeping(ctx context.Context) {
-	log.Debug("enter house keeping")
-	defer log.Debug("leave house keeping")
+	logger.Debug("enter house keeping")
+	defer logger.Debug("leave house keeping")
 
 	var scope event.SubscriptionScope
 	defer scope.Close()
@@ -184,12 +184,12 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			if isTrunk, err := n.processBlock(newBlock.Block, &stats); err != nil {
 				if consensus.IsFutureBlock(err) ||
 					((err == errParentMissing || err == errBlockTemporaryUnprocessable) && futureBlocks.Contains(newBlock.Header().ParentID())) {
-					log.Debug("future block added", "id", newBlock.Header().ID())
+					logger.Debug("future block added", "id", newBlock.Header().ID())
 					futureBlocks.Set(newBlock.Header().ID(), newBlock.Block)
 				}
 			} else if isTrunk {
 				n.comm.BroadcastBlock(newBlock.Block)
-				log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
+				logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(newBlock.Block.Header())...)
 			}
 		case <-futureTicker.C:
 			// process future blocks
@@ -204,7 +204,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 			var stats blockStats
 			for i, block := range blocks {
 				if isTrunk, err := n.processBlock(block, &stats); err == nil || err == errKnownBlock {
-					log.Debug("future block consumed", "id", block.Header().ID())
+					logger.Debug("future block consumed", "id", block.Header().ID())
 					futureBlocks.Remove(block.Header().ID())
 					if isTrunk {
 						n.comm.BroadcastBlock(block)
@@ -212,7 +212,7 @@ func (n *Node) houseKeeping(ctx context.Context) {
 				}
 
 				if stats.processed > 0 && i == len(blocks)-1 {
-					log.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
+					logger.Info(fmt.Sprintf("imported blocks (%v)", stats.processed), stats.LogContext(block.Header())...)
 				}
 			}
 		case <-connectivityTicker.C:
@@ -230,12 +230,12 @@ func (n *Node) houseKeeping(ctx context.Context) {
 }
 
 func (n *Node) txStashLoop(ctx context.Context) {
-	log.Debug("enter tx stash loop")
-	defer log.Debug("leave tx stash loop")
+	logger.Debug("enter tx stash loop")
+	defer logger.Debug("leave tx stash loop")
 
 	db, err := leveldb.OpenFile(n.txStashPath, nil)
 	if err != nil {
-		log.Error("create tx stash", "err", err)
+		logger.Error("create tx stash", "err", err)
 		return
 	}
 	defer db.Close()
@@ -245,7 +245,7 @@ func (n *Node) txStashLoop(ctx context.Context) {
 	{
 		txs := stash.LoadAll()
 		n.txPool.Fill(txs)
-		log.Debug("loaded txs from stash", "count", len(txs))
+		logger.Debug("loaded txs from stash", "count", len(txs))
 	}
 
 	var scope event.SubscriptionScope
@@ -264,9 +264,9 @@ func (n *Node) txStashLoop(ctx context.Context) {
 			}
 			// only stash non-executable txs
 			if err := stash.Save(txEv.Tx); err != nil {
-				log.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
+				logger.Warn("stash tx", "id", txEv.Tx.ID(), "err", err)
 			} else {
-				log.Debug("stashed tx", "id", txEv.Tx.ID())
+				logger.Debug("stashed tx", "id", txEv.Tx.ID())
 			}
 		}
 	}
@@ -374,10 +374,10 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 
 		realElapsed := mclock.Now() - startTime
 
-		// sync the log-writing task
+		// sync the logger-writing task
 		if logEnabled {
 			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
+				logger.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
 		}
@@ -392,7 +392,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			log.Debug("bandwidth updated", "gps", v)
+			logger.Debug("bandwidth updated", "gps", v)
 		}
 		stats.UpdateProcessed(1, len(receipts), execElapsed, commitElapsed, realElapsed, newBlock.Header().GasUsed())
 
@@ -409,12 +409,12 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			stats.UpdateQueued(1)
 		case err == errBFTRejected:
 			// TODO: capture metrics
-			log.Debug(fmt.Sprintf("block rejected by BFT engine\n%v\n", newBlock.Header()))
+			logger.Debug(fmt.Sprintf("block rejected by BFT engine\n%v\n", newBlock.Header()))
 		case consensus.IsCritical(err):
 			msg := fmt.Sprintf(`failed to process block due to consensus failure\n%v\n`, newBlock.Header())
-			log.Error(msg, "err", err)
+			logger.Error(msg, "err", err)
 		default:
-			log.Error("failed to process block", "err", err)
+			logger.Error("failed to process block", "err", err)
 		}
 		metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "received", "success": "false"})
 		return false, err
@@ -426,7 +426,7 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 func (n *Node) writeLogs(newBlock *block.Block, newReceipts tx.Receipts, oldBestBlockID thor.Bytes32) (err error) {
 	var w *logdb.Writer
 	if int64(newBlock.Header().Timestamp()) < time.Now().Unix()-24*3600 {
-		// turn off log sync to quickly catch up
+		// turn off logger sync to quickly catch up
 		w = n.logDB.NewWriterSyncOff()
 	} else {
 		w = n.logDB.NewWriter()
@@ -486,7 +486,7 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 
 	sideIds, err := oldTrunk.Exclude(newTrunk)
 	if err != nil {
-		log.Warn("failed to process fork", "err", err)
+		logger.Warn("failed to process fork", "err", err)
 		return
 	}
 	if len(sideIds) == 0 {
@@ -496,7 +496,7 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 	if n := len(sideIds); n >= 2 {
 		metricChainForkCount().Add(1)
 		metricChainForkSize().Add(int64(len(sideIds)))
-		log.Warn(fmt.Sprintf(
+		logger.Warn(fmt.Sprintf(
 			`⑂⑂⑂⑂⑂⑂⑂⑂ FORK HAPPENED ⑂⑂⑂⑂⑂⑂⑂⑂
 side-chain:   %v  %v`,
 			n, sideIds[n-1]))
@@ -505,12 +505,12 @@ side-chain:   %v  %v`,
 	for _, id := range sideIds {
 		b, err := n.repo.GetBlock(id)
 		if err != nil {
-			log.Warn("failed to process fork", "err", err)
+			logger.Warn("failed to process fork", "err", err)
 			return
 		}
 		for _, tx := range b.Transactions() {
 			if err := n.txPool.Add(tx); err != nil {
-				log.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
+				logger.Debug("failed to add tx to tx pool", "err", err, "id", tx.ID())
 			}
 		}
 	}
@@ -519,10 +519,10 @@ side-chain:   %v  %v`,
 func checkClockOffset() {
 	resp, err := ntp.Query("pool.ntp.org")
 	if err != nil {
-		log.Debug("failed to access NTP", "err", err)
+		logger.Debug("failed to access NTP", "err", err)
 		return
 	}
 	if resp.ClockOffset > time.Duration(thor.BlockInterval)*time.Second/2 {
-		log.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
+		logger.Warn("clock offset detected", "offset", common.PrettyDuration(resp.ClockOffset))
 	}
 }

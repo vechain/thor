@@ -1,6 +1,6 @@
 module github.com/vechain/thor/v2
 
-go 1.19
+go 1.21
 
 require (
 	github.com/beevik/ntp v0.2.0
@@ -13,7 +13,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/golang-lru v0.0.0-20160813221303-0a025b7e63ad
-	github.com/holiman/uint256 v1.2.0
+	github.com/holiman/uint256 v1.2.4
 	github.com/inconshreveable/log15 v0.0.0-20171019012758-0decfc6c20d9
 	github.com/mattn/go-isatty v0.0.3
 	github.com/mattn/go-sqlite3 v1.14.9

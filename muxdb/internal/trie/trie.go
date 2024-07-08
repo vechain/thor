@@ -15,7 +15,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-var log = log15.New("pkg", "muxdb.trie")
+var logger = log15.New("pkg", "muxdb.trie")
 
 // Backend is the backend of the trie.
 type Backend struct {
