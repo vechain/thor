@@ -181,7 +181,7 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		for i := 0; i < 100000; i++ {
+		for i := 0; i < 1_000; i++ {
 			b = new(block.Builder).
 				ParentID(b.Header().ID()).
 				Transaction(newTx()).
@@ -258,55 +258,45 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	}
 	defer db.Close()
 
-	eventCriteria1 := make([]*logdb.EventCriteria, 0, 1)
-	eventCriteria2 := make([]*logdb.EventCriteria, 0, 1)
+	vthoAddress := thor.MustParseAddress(VTHO_ADDRESS)
+	topic := thor.MustParseBytes32("0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF")
 
-	vthoAddress, err := thor.ParseAddress(VTHO_ADDRESS)
-
-	if err != nil {
-		b.Fatal(err)
+	addressFilterCriteria := []*logdb.EventCriteria{
+		{
+			Address: &vthoAddress,
+		},
 	}
-
-	addressCriteria := &logdb.EventCriteria{
-		Address: &vthoAddress,
+	topicFilterCriteria := []*logdb.EventCriteria{
+		{
+			Topics: [5]*thor.Bytes32{&topic, nil, nil, nil, nil},
+		},
 	}
-
-	topics := [5]*thor.Bytes32{new(thor.Bytes32), nil, nil, nil, nil}
-	*topics[0], err = thor.ParseBytes32("0xDDF252AD1BE2C89B69C2B068FC378DAA952BA7F163C4A11628F55A4DF523B3EF")
-
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	topicCriteria := &logdb.EventCriteria{
-		Topics:  topics,
-		Address: &vthoAddress,
-	}
-
-	eventCriteria1 = append(eventCriteria1, addressCriteria)
-	eventCriteria2 = append(eventCriteria2, topicCriteria)
 
 	tests := []struct {
-		arg *logdb.EventFilter
+		name string
+		arg  *logdb.EventFilter
 	}{
-		{&logdb.EventFilter{CriteriaSet: eventCriteria1, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
-		{&logdb.EventFilter{CriteriaSet: eventCriteria2, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
-		{&logdb.EventFilter{Order: logdb.ASC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
-		{&logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
-		{&logdb.EventFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}},
-		{&logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}}},
-		{&logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}},
-		{&logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}},
+		{"AddressCriteriaFilter", &logdb.EventFilter{CriteriaSet: addressFilterCriteria, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"TopicCriteriaFilter", &logdb.EventFilter{CriteriaSet: topicFilterCriteria, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventLimit", &logdb.EventFilter{Order: logdb.ASC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventLimitDesc", &logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
+		{"EventRange", &logdb.EventFilter{Range: &logdb.Range{From: 500000, To: 1_000_000}}},
+		{"EventRangeDesc", &logdb.EventFilter{Range: &logdb.Range{From: 500000, To: 1_000_000}, Order: logdb.DESC}},
 	}
 
-	b.ResetTimer()
-	for _, tt := range tests {
-		for i := 0; i < b.N; i++ {
-			_, err := db.FilterEvents(context.Background(), tt.arg)
-			if err != nil {
-				b.Fatal(err)
+	for j, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ResetTimer()
+			var events []*logdb.Event
+			for i := 0; i < b.N; i++ {
+				events, err = db.FilterEvents(context.Background(), tt.arg)
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
-		}
+			fmt.Printf("Test %d - Total events: %d\n", j, len(events))
+		})
+
 	}
 }
 
@@ -322,43 +312,34 @@ func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	}
 	defer db.Close()
 
-	transferCriteria := make([]*logdb.TransferCriteria, 0, 1)
-
-	txOrigin, err := thor.ParseAddress("0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED")
-
-	if err != nil {
-		b.Fatal(err)
+	txOrigin := thor.MustParseAddress("0x7567D83B7B8D80ADDCB281A71D54FC7B3364FFED")
+	transferCriteria := []*logdb.TransferCriteria{
+		{
+			TxOrigin:  &txOrigin,
+			Sender:    nil,
+			Recipient: nil,
+		},
 	}
-
-	newCriteria := &logdb.TransferCriteria{
-		TxOrigin:  &txOrigin,
-		Sender:    nil,
-		Recipient: nil,
-	}
-
-	transferCriteria = append(transferCriteria, newCriteria)
 
 	tests := []struct {
-		arg *logdb.TransferFilter
+		name string
+		arg  *logdb.TransferFilter
 	}{
-		{&logdb.TransferFilter{CriteriaSet: transferCriteria, Options: &logdb.Options{Offset: 0, Limit: 500000}}},
-		{&logdb.TransferFilter{}},
-		{nil},
-		{&logdb.TransferFilter{Order: logdb.ASC}},
-		{&logdb.TransferFilter{Order: logdb.DESC}},
-		{&logdb.TransferFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}},
-		{&logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}}},
-		{&logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}},
-		{&logdb.TransferFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}},
+		{"TransferCriteria", &logdb.TransferFilter{CriteriaSet: transferCriteria, Options: &logdb.Options{Offset: 0, Limit: 500_000}}},
+		{"TransferCriteriaDesc", &logdb.TransferFilter{Order: logdb.DESC, CriteriaSet: transferCriteria, Options: &logdb.Options{Offset: 0, Limit: 500_000}}},
+		{"Ranged500K", &logdb.TransferFilter{Range: &logdb.Range{From: 500_000, To: 1_000_000}}},
+		{"Ranged500KDesc", &logdb.TransferFilter{Range: &logdb.Range{From: 500_000, To: 1_000_000}, Order: logdb.DESC}},
 	}
 
-	b.ResetTimer()
 	for _, tt := range tests {
-		for i := 0; i < b.N; i++ {
-			_, err := db.FilterTransfers(context.Background(), tt.arg)
-			if err != nil {
-				b.Fatal(err)
+		b.Run(tt.name, func(b *testing.B) {
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err = db.FilterTransfers(context.Background(), tt.arg)
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
-		}
+		})
 	}
 }

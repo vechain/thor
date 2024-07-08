@@ -1,6 +1,6 @@
 module github.com/vechain/thor/v2
 
-go 1.22.4
+go 1.22
 
 require (
 	github.com/beevik/ntp v0.2.0
