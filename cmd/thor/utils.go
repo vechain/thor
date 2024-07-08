@@ -26,8 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vechain/thor/v2/log"
-
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -47,6 +45,7 @@ import (
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
