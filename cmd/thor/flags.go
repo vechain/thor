@@ -44,17 +44,17 @@ var (
 		Value: "",
 		Usage: "comma separated list of domains from which to accept cross origin requests to API",
 	}
-	apiTimeoutFlag = cli.IntFlag{
+	apiTimeoutFlag = cli.Uint64Flag{
 		Name:  "api-timeout",
 		Value: 10000,
 		Usage: "API request timeout value in milliseconds",
 	}
-	apiCallGasLimitFlag = cli.IntFlag{
+	apiCallGasLimitFlag = cli.Uint64Flag{
 		Name:  "api-call-gas-limit",
 		Value: 50000000,
 		Usage: "limit contract call gas",
 	}
-	apiBacktraceLimitFlag = cli.IntFlag{
+	apiBacktraceLimitFlag = cli.Uint64Flag{
 		Name:  "api-backtrace-limit",
 		Value: 1000,
 		Usage: "limit the distance between 'position' and best block for subscriptions APIs",
@@ -63,7 +63,7 @@ var (
 		Name:  "api-allow-custom-tracer",
 		Usage: "allow custom JS tracer to be used tracer API",
 	}
-	apiLogsLimitFlag = cli.IntFlag{
+	apiLogsLimitFlag = cli.Uint64Flag{
 		Name:  "api-logs-limit",
 		Value: 1000,
 		Usage: "limit the number of logs returned by /logs API",
@@ -72,7 +72,7 @@ var (
 		Name:  "enable-api-logs",
 		Usage: "enables API requests logging",
 	}
-	verbosityFlag = cli.IntFlag{
+	verbosityFlag = cli.Uint64Flag{
 		Name: "verbosity",
 		// Legacy value for log15.LvlInfo
 		Value: 3,
@@ -82,12 +82,12 @@ var (
 		Name:  "json-logs",
 		Usage: "output logs in JSON format",
 	}
-	maxPeersFlag = cli.IntFlag{
+	maxPeersFlag = cli.Uint64Flag{
 		Name:  "max-peers",
 		Usage: "maximum number of P2P network peers (P2P network disabled if set to 0)",
 		Value: 25,
 	}
-	p2pPortFlag = cli.IntFlag{
+	p2pPortFlag = cli.Uint64Flag{
 		Name:  "p2p-port",
 		Value: 11235,
 		Usage: "P2P network listening port",
@@ -114,7 +114,7 @@ var (
 		Name:  "export",
 		Usage: "export master key to keystore",
 	}
-	targetGasLimitFlag = cli.IntFlag{
+	targetGasLimitFlag = cli.Uint64Flag{
 		Name:  "target-gas-limit",
 		Value: 0,
 		Usage: "target block gas limit (adaptive if set to 0)",
@@ -132,7 +132,7 @@ var (
 		Usage:  "verify log db at startup",
 		Hidden: true,
 	}
-	cacheFlag = cli.IntFlag{
+	cacheFlag = cli.Uint64Flag{
 		Name:  "cache",
 		Usage: "megabytes of ram allocated to trie nodes cache",
 		Value: 4096,
@@ -156,7 +156,7 @@ var (
 		Name:  "on-demand",
 		Usage: "create new block when there is pending transaction",
 	}
-	blockInterval = cli.IntFlag{
+	blockInterval = cli.Uint64Flag{
 		Name:  "block-interval",
 		Value: 10,
 		Usage: "choose a custom block interval for solo mode (seconds)",
@@ -165,17 +165,17 @@ var (
 		Name:  "persist",
 		Usage: "blockchain data storage option, if set data will be saved to disk",
 	}
-	gasLimitFlag = cli.IntFlag{
+	gasLimitFlag = cli.Uint64Flag{
 		Name:  "gas-limit",
 		Value: 40_000_000,
 		Usage: "block gas limit(adaptive if set to 0)",
 	}
-	txPoolLimitFlag = cli.IntFlag{
+	txPoolLimitFlag = cli.Uint64Flag{
 		Name:  "txpool-limit",
 		Value: 10000,
 		Usage: "set tx limit in pool",
 	}
-	txPoolLimitPerAccountFlag = cli.IntFlag{
+	txPoolLimitPerAccountFlag = cli.Uint64Flag{
 		Name:  "txpool-limit-per-account",
 		Value: 16,
 		Usage: "set tx limit per account in pool",

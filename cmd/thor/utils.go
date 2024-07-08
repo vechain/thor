@@ -93,10 +93,8 @@ func (h *EthLogHandler) Log(r *ethlog.Record) error {
 	return nil
 }
 
-func initLogger(ctx *cli.Context) {
-	legacyLogLevel := ctx.Int(verbosityFlag.Name)
-	logLevel := log.FromLegacyLevel(legacyLogLevel)
-	jsonLogs := ctx.Bool(jsonLogsFlag.Name)
+func initLogger(legacyLevel int, jsonLogs bool) {
+	logLevel := log.FromLegacyLevel(legacyLevel)
 	output := io.Writer(os.Stdout)
 
 	var handler slog.Handler
@@ -751,4 +749,14 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 	}
 
 	return nodes, nil
+}
+
+func readIntFromUInt64Flag(val uint64) (int, error) {
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value %d ", val)
+	}
+
+	return i, nil
 }
