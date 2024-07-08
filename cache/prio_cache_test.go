@@ -35,7 +35,7 @@ func TestPrioCacheAddRemove(t *testing.T) {
 
 func TestPrioCache(t *testing.T) {
 	c := cache.NewPrioCache(5)
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 
 	type kvp struct {
 		k, v int

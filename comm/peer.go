@@ -25,7 +25,7 @@ const (
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 }
 
 // Peer extends p2p.Peer with RPC integrated.
