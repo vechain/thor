@@ -12,7 +12,6 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/debug"
@@ -24,13 +23,14 @@ import (
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var logger = log15.New("pkg", "api")
+var logger = log.New("pkg", "api")
 
 // New return api router
 func New(

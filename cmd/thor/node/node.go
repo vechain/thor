@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vechain/thor/v2/bft"
@@ -27,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/consensus"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
@@ -35,7 +35,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var logger = log15.New("pkg", "node")
+var logger = log.New("pkg", "node")
 
 var (
 	// error when the block larger than known max block number + 1

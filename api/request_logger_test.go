@@ -5,13 +5,15 @@
 package api
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/log"
 )
 
 // mockLogger is a simple logger implementation for testing purposes
@@ -19,11 +21,23 @@ type mockLogger struct {
 	loggedData []interface{}
 }
 
-func (m *mockLogger) New(ctx ...interface{}) log15.Logger { return m }
+func (m *mockLogger) With(ctx ...interface{}) log.Logger {
+	return m
+}
 
-func (m *mockLogger) GetHandler() log15.Handler { return nil }
+func (m *mockLogger) Log(level slog.Level, msg string, ctx ...interface{}) {}
 
-func (m *mockLogger) SetHandler(h log15.Handler) {}
+func (m *mockLogger) Trace(msg string, ctx ...interface{}) {}
+
+func (m *mockLogger) Write(level slog.Level, msg string, attrs ...any) {}
+
+func (m *mockLogger) Enabled(ctx context.Context, level slog.Level) bool {
+	return true
+}
+
+func (m *mockLogger) Handler() slog.Handler { return nil }
+
+func (m *mockLogger) New(ctx ...interface{}) log.Logger { return m }
 
 func (m *mockLogger) Debug(msg string, ctx ...interface{}) {}
 

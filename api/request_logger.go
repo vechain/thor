@@ -11,11 +11,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/inconshreveable/log15"
+	"github.com/vechain/thor/v2/log"
 )
 
 // RequestLoggerHandler returns a http handler to ensure requests are syphoned into the writer
-func RequestLoggerHandler(handler http.Handler, logger log15.Logger) http.Handler {
+func RequestLoggerHandler(handler http.Handler, logger log.Logger) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		// Read and logger the body (note: this can only be done once)
 		// Ensure you don't disrupt the request body for handlers that need to read it

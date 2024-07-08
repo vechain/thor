@@ -10,11 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vechain/thor/v2/log"
+
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/p2psrv/rpc"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -32,7 +33,7 @@ func init() {
 type Peer struct {
 	*p2p.Peer
 	*rpc.RPC
-	logger log15.Logger
+	logger log.Logger
 
 	createdTime mclock.AbsTime
 	knownTxs    *lru.Cache

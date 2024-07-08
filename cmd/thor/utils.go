@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -25,6 +26,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vechain/thor/v2/log"
+
 	"github.com/elastic/gosigar"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
@@ -34,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
@@ -60,15 +62,54 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-func initLogger(ctx *cli.Context) {
-	logLevel := ctx.Int(verbosityFlag.Name)
-	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
-	// set go-ethereum logger lvl to Warn
-	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
-	ethLogHandler.Verbosity(ethlog.LvlWarn)
+type EthLogHandler struct {
+	logger log.Logger
+}
+
+func initGethLogger(lvl ethlog.Lvl) {
+	handler := &EthLogHandler{
+		logger: log.New("pkg", "geth"),
+	}
+	ethLogHandler := ethlog.NewGlogHandler(handler)
+	ethLogHandler.Verbosity(lvl)
 	ethlog.Root().SetHandler(ethLogHandler)
 }
 
+func (h *EthLogHandler) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlDebug:
+		h.logger.Debug(r.Msg)
+	default:
+		break
+	}
+
+	return nil
+}
+
+func initLogger(ctx *cli.Context) {
+	legacyLogLevel := ctx.Int(verbosityFlag.Name)
+	logLevel := log.FromLegacyLevel(legacyLogLevel)
+	jsonLogs := ctx.Bool(jsonLogsFlag.Name)
+	output := io.Writer(os.Stdout)
+
+	var handler slog.Handler
+	if jsonLogs {
+		handler = log.JSONHandlerWithLevel(output, logLevel)
+	} else {
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+	}
+	log.SetDefault(log.NewLogger(handler))
+	initGethLogger(ethlog.LvlWarn)
+}
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	key, err := crypto.LoadECDSA(path)
 	if err == nil {

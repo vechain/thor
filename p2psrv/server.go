@@ -17,13 +17,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 )
 
-var logger = log15.New("pkg", "p2psrv")
+var logger = log.New("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {

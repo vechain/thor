@@ -17,7 +17,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -104,8 +103,6 @@ func TestStatus(t *testing.T) {
 }
 
 func TestNewOptimizer(t *testing.T) {
-	log15.Root().SetHandler(log15.DiscardHandler())
-
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
@@ -153,8 +150,6 @@ func newTempFileDB() (*muxdb.MuxDB, func() error, error) {
 }
 
 func TestProcessDump(t *testing.T) {
-	log15.Root().SetHandler(log15.DiscardHandler())
-
 	db, closeDB, err := newTempFileDB()
 	assert.Nil(t, err)
 	stater := state.NewStater(db)
@@ -292,7 +287,6 @@ func TestDumpAndPrune(t *testing.T) {
 	db, closeDB, err := newTempFileDB()
 	assert.Nil(t, err)
 
-	// log15.Root().SetHandler(log15.DiscardHandler())
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
 	b0, _, _, _ := gene.Build(stater)
