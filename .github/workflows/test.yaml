@@ -13,9 +13,6 @@ jobs:
       matrix:
         go-version: [1.22.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
-        include:
-          - go-version: 1.22.x
-            os: ubuntu-latest
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
