@@ -28,6 +28,13 @@ const (
 
 var dbPath string
 
+// Command used to benchmark
+//
+// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logdb -dbPath <path-to-logs.db> |tee -a master.txt
+// go test -bench="^Benchmark"  -benchmem -count=5 github.com/vechain/thor/v2/logdb -dbPath <path-to-logs.db> |tee -a pr.txt
+// benchstat maser.txt pr.txt
+//
+
 func init() {
 	flag.StringVar(&dbPath, "dbPath", "", "Path to the database file")
 }
@@ -69,9 +76,9 @@ func BenchmarkFakeDB_NewestBlockID(t *testing.B) {
 		},
 	}
 
+	t.ResetTimer()
 	for _, tt := range tests {
 		t.Run(tt.name, func(b *testing.B) {
-			t.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				want, err := tt.prepare()
 				require.NoError(t, err)
@@ -92,25 +99,55 @@ func BenchmarkFakeDB_WriteBlocks(t *testing.B) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	b := new(block.Builder).Build()
+	blk := new(block.Builder).Build()
 	w := db.NewWriter()
+	writeCount := 10_000
+
+	tests := []struct {
+		name      string
+		writeFunc func(b *testing.B)
+	}{
+		{
+			"repeated writes",
+			func(b *testing.B) {
+				for i := 0; i < writeCount; i++ {
+					blk = new(block.Builder).
+						ParentID(blk.Header().ID()).
+						Transaction(newTx()).
+						Build()
+					receipts := tx.Receipts{newReceipt(), newReceipt()}
+					require.NoError(t, w.Write(blk, receipts))
+					require.NoError(t, w.Commit())
+				}
+			},
+		},
+		{
+			"batched writes",
+			func(b *testing.B) {
+				for i := 0; i < writeCount; i++ {
+					blk = new(block.Builder).
+						ParentID(blk.Header().ID()).
+						Transaction(newTx()).
+						Build()
+					receipts := tx.Receipts{newReceipt(), newReceipt()}
+					require.NoError(t, w.Write(blk, receipts))
+				}
+				require.NoError(t, w.Commit())
+			},
+		},
+	}
 
 	t.ResetTimer()
-	for i := 0; i < t.N; i++ {
-		for i := 0; i < 10_000; i++ {
-			b = new(block.Builder).
-				ParentID(b.Header().ID()).
-				Transaction(newTx()).
-				Build()
-			receipts := tx.Receipts{newReceipt(), newReceipt()}
-			require.NoError(t, w.Write(b, receipts))
-			require.NoError(t, w.Commit())
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < t.N; i++ {
+				tt.writeFunc(b)
+			}
+		})
 	}
 }
 
 // BenchmarkTestDB_HasBlockID opens a log.db file and measures the performance of the HasBlockID functionality of LogDB.
-// Running: go test -bench=BenchmarkTestDB_HasBlockID  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 // It uses unbounded event filtering to check for blocks existence using the HasBlockID
 func BenchmarkTestDB_HasBlockID(b *testing.B) {
 	db, err := loadDBFromDisk(b)
@@ -133,7 +170,6 @@ func BenchmarkTestDB_HasBlockID(b *testing.B) {
 }
 
 // BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Event filtering functionality of LogDB.
-// Running: go test -bench=BenchmarkTestDB_FilterEvents  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	db, err := loadDBFromDisk(b)
 	require.NoError(b, err)
