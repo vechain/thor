@@ -98,21 +98,8 @@ func newTestConsensus() (*testConsensus, error) {
 
 	addr := thor.BytesToAddress([]byte("to"))
 	cla := tx.NewClause(&addr).WithValue(big.NewInt(10000))
-	transaction := new(tx.Builder).
-		ChainTag(repo.ChainTag()).
-		GasPriceCoef(1).
-		Expiration(10).
-		Gas(21000).
-		Nonce(1).
-		Clause(cla).
-		BlockRef(tx.NewBlockRef(0)).
-		Build()
-
-	sig, err := crypto.Sign(transaction.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-	transaction = transaction.WithSignature(sig)
+	txBuilder := txBuilder(repo.ChainTag()).Clause(cla)
+	transaction := txSign(txBuilder)
 
 	err = flow.Adopt(transaction)
 	if err != nil {
