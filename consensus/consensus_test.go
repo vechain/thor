@@ -681,7 +681,6 @@ func TestValidateProposer(t *testing.T) {
 		},
 		{
 			"ErrInvalidFeatures", func(t *testing.T) {
-
 				header := tc.original.Header()
 				builder := new(block.Builder).
 					ParentID(header.ParentID()).
