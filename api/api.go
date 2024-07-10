@@ -49,6 +49,7 @@ func New(
 	allowCustomTracer bool,
 	enableReqLogger bool,
 	enableMetrics bool,
+	logsLimit uint64,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -72,9 +73,9 @@ func New(
 		Mount(router, "/accounts")
 
 	if !skipLogs {
-		events.New(repo, logDB).
+		events.New(repo, logDB, logsLimit).
 			Mount(router, "/logs/event")
-		transfers.New(repo, logDB).
+		transfers.New(repo, logDB, logsLimit).
 			Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).

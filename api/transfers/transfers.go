@@ -18,14 +18,16 @@ import (
 )
 
 type Transfers struct {
-	repo *chain.Repository
-	db   *logdb.LogDB
+	repo  *chain.Repository
+	db    *logdb.LogDB
+	limit uint64
 }
 
-func New(repo *chain.Repository, db *logdb.LogDB) *Transfers {
+func New(repo *chain.Repository, db *logdb.LogDB, logsLimit uint64) *Transfers {
 	return &Transfers{
 		repo,
 		db,
+		logsLimit,
 	}
 }
 
@@ -57,6 +59,16 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if err := utils.ParseJSON(req.Body, &filter); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+	if filter.Options != nil && filter.Options.Limit > t.limit {
+		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+	}
+	if filter.Options == nil {
+		filter.Options = &logdb.Options{
+			Offset: 0,
+			Limit:  t.limit,
+		}
+	}
+
 	tLogs, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err

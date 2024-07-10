@@ -132,7 +132,7 @@ func TestEvents(t *testing.T) {
 	var allEvents eventLogs
 	var allTransfers transferLogs
 
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < 100; i++ {
 		b = new(block.Builder).
 			ParentID(b.Header().ID()).
 			Transaction(newTx()).
@@ -187,14 +187,11 @@ func TestEvents(t *testing.T) {
 			arg  *logdb.EventFilter
 			want eventLogs
 		}{
-			{"query all events", &logdb.EventFilter{}, allEvents[:1000]},
-			{"query all events with nil option", nil, allEvents.Reverse()[:1000]},
-			{"query all events asc", &logdb.EventFilter{Order: logdb.ASC}, allEvents[:1000]},
-			{"query all events desc", &logdb.EventFilter{Order: logdb.DESC}, allEvents.Reverse()[:1000]},
+			{"query all events", &logdb.EventFilter{}, allEvents},
+			{"query all events with nil option", nil, allEvents},
+			{"query all events asc", &logdb.EventFilter{Order: logdb.ASC}, allEvents},
+			{"query all events desc", &logdb.EventFilter{Order: logdb.DESC}, allEvents.Reverse()},
 			{"query all events limit offset", &logdb.EventFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allEvents[1:11]},
-			{"query all transfers offset", &logdb.EventFilter{Options: &logdb.Options{Offset: 1500, Limit: 10000}, Order: logdb.ASC}, allEvents[1500:2500]},
-			{"query all events outsized limit ", &logdb.EventFilter{Options: &logdb.Options{Limit: 2000}}, allEvents[:1000]},
-			{"query all events outsized limit offset", &logdb.EventFilter{Options: &logdb.Options{Offset: 2, Limit: 2000}}, allEvents[2:1002]},
 			{"query all events range", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 })},
 			{"query events with range and desc", &logdb.EventFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allEvents.Filter(func(ev *logdb.Event) bool { return ev.BlockNumber >= 10 && ev.BlockNumber <= 20 }).Reverse()},
 			{"query events with limit with desc", &logdb.EventFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allEvents.Reverse()[0:10]},
@@ -221,14 +218,11 @@ func TestEvents(t *testing.T) {
 			arg  *logdb.TransferFilter
 			want transferLogs
 		}{
-			{"query all transfers", &logdb.TransferFilter{}, allTransfers[:1000]},
-			{"query all transfers with nil option", nil, allTransfers.Reverse()[:1000]},
-			{"query all transfers asc", &logdb.TransferFilter{Order: logdb.ASC}, allTransfers[:1000]},
-			{"query all transfers desc", &logdb.TransferFilter{Order: logdb.DESC}, allTransfers.Reverse()[:1000]},
+			{"query all transfers", &logdb.TransferFilter{}, allTransfers},
+			{"query all transfers with nil option", nil, allTransfers},
+			{"query all transfers asc", &logdb.TransferFilter{Order: logdb.ASC}, allTransfers},
+			{"query all transfers desc", &logdb.TransferFilter{Order: logdb.DESC}, allTransfers.Reverse()},
 			{"query all transfers limit offset", &logdb.TransferFilter{Options: &logdb.Options{Offset: 1, Limit: 10}}, allTransfers[1:11]},
-			{"query all transfers offset", &logdb.TransferFilter{Options: &logdb.Options{Offset: 1500, Limit: 10000}, Order: logdb.ASC}, allTransfers[1500:2500]},
-			{"query all transfers outsized limit ", &logdb.TransferFilter{Options: &logdb.Options{Limit: 2000}}, allTransfers[:1000]},
-			{"query all transfers outsized limit offset", &logdb.TransferFilter{Options: &logdb.Options{Offset: 2, Limit: 2000}}, allTransfers[2:1002]},
 			{"query all transfers range", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 })},
 			{"query transfers with range and desc", &logdb.TransferFilter{Range: &logdb.Range{From: 10, To: 20}, Order: logdb.DESC}, allTransfers.Filter(func(tr *logdb.Transfer) bool { return tr.BlockNumber >= 10 && tr.BlockNumber <= 20 }).Reverse()},
 			{"query transfers with limit with desc", &logdb.TransferFilter{Order: logdb.DESC, Options: &logdb.Options{Limit: 10}}, allTransfers.Reverse()[0:10]},
@@ -250,6 +244,8 @@ func TestEvents(t *testing.T) {
 	}
 }
 
+// TestLogDB_NewestBlockID performs a series of read/write tests on the NewestBlockID functionality of the LogDB.
+// It validates the correctness of the NewestBlockID method under various scenarios.
 func TestLogDB_NewestBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
@@ -372,6 +368,7 @@ func TestLogDB_NewestBlockID(t *testing.T) {
 	}
 }
 
+// TestLogDB_HasBlockID performs a series of tests on the HasBlockID functionality of the LogDB.
 func TestLogDB_HasBlockID(t *testing.T) {
 	db, err := logdb.NewMem()
 	if err != nil {
