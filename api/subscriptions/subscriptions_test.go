@@ -30,16 +30,20 @@ var txPool *txpool.TxPool
 var repo *chain.Repository
 var blocks []*block.Block
 
-func TestMain(t *testing.T) {
+func TestSubscriptions(t *testing.T) {
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
-	testHandleSubjectWithBlock(t)
-	testHandleSubjectWithEvent(t)
-	testHandleSubjectWithTransfer(t)
-	testHandleSubjectWithBeat(t)
-	testHandleSubjectWithBeat2(t)
-	testHandleSubjectWithNonValidArgument(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testHandleSubjectWithBlock":            testHandleSubjectWithBlock,
+		"testHandleSubjectWithEvent":            testHandleSubjectWithEvent,
+		"testHandleSubjectWithTransfer":         testHandleSubjectWithTransfer,
+		"testHandleSubjectWithBeat":             testHandleSubjectWithBeat,
+		"testHandleSubjectWithBeat2":            testHandleSubjectWithBeat2,
+		"testHandleSubjectWithNonValidArgument": testHandleSubjectWithNonValidArgument,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func testHandleSubjectWithBlock(t *testing.T) {

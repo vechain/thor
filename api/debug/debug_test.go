@@ -50,32 +50,44 @@ func TestDebug(t *testing.T) {
 	defer ts.Close()
 
 	// /tracers endpoint
-	testTraceClauseWithEmptyTracerTarget(t)
-	testTraceClauseWithBadBlockId(t)
-	testTraceClauseWithNonExistingBlockId(t)
-	testTraceClauseWithBadTxId(t)
-	testTraceClauseWithNonExistingTx(t)
-	testTraceClauseWithBadClauseIndex(t)
-	testTraceClauseWithTxIndexOutOfBound(t)
-	testTraceClauseWithClauseIndexOutOfBound(t)
-	testTraceClauseWithCustomTracer(t)
-	testTraceClause(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
+		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
+		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
+		"testTraceClauseWithBadTxId":               testTraceClauseWithBadTxId,
+		"testTraceClauseWithNonExistingTx":         testTraceClauseWithNonExistingTx,
+		"testTraceClauseWithBadClauseIndex":        testTraceClauseWithBadClauseIndex,
+		"testTraceClauseWithTxIndexOutOfBound":     testTraceClauseWithTxIndexOutOfBound,
+		"testTraceClauseWithClauseIndexOutOfBound": testTraceClauseWithClauseIndexOutOfBound,
+		"testTraceClauseWithCustomTracer":          testTraceClauseWithCustomTracer,
+		"testTraceClause":                          testTraceClause,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /tracers/call endpoint
-	testHandleTraceCallWithMalformedBodyRequest(t)
-	testHandleTraceCallWithEmptyTraceCallOption(t)
-	testHandleTraceCall(t)
-	testHandleTraceCallWithValidRevisions(t)
-	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
-	testHandleTraceCallWithRevisionAsNonExistingId(t)
-	testHandleTraceCallWithMalfomredRevision(t)
-	testHandleTraceCallWithInsufficientGas(t)
-	testHandleTraceCallWithBadBlockRef(t)
-	testHandleTraceCallWithInvalidLengthBlockRef(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testHandleTraceCallWithMalformedBodyRequest":        testHandleTraceCallWithMalformedBodyRequest,
+		"testHandleTraceCallWithEmptyTraceCallOption":        testHandleTraceCallWithEmptyTraceCallOption,
+		"testHandleTraceCall":                                testHandleTraceCall,
+		"testHandleTraceCallWithValidRevisions":              testHandleTraceCallWithValidRevisions,
+		"testHandleTraceCallWithRevisionAsNonExistingHeight": testHandleTraceCallWithRevisionAsNonExistingHeight,
+		"testHandleTraceCallWithRevisionAsNonExistingId":     testHandleTraceCallWithRevisionAsNonExistingId,
+		"testHandleTraceCallWithMalfomredRevision":           testHandleTraceCallWithMalfomredRevision,
+		"testHandleTraceCallWithInsufficientGas":             testHandleTraceCallWithInsufficientGas,
+		"testHandleTraceCallWithBadBlockRef":                 testHandleTraceCallWithBadBlockRef,
+		"testHandleTraceCallWithInvalidLengthBlockRef":       testHandleTraceCallWithInvalidLengthBlockRef,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /storage/range endpoint
-	testStorageRangeWithError(t)
-	testStorageRange(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testStorageRangeWithError": testStorageRangeWithError,
+		"testStorageRange":          testStorageRange,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func TestStorageRangeFunc(t *testing.T) {
