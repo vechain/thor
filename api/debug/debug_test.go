@@ -253,7 +253,7 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 
 func testTraceCallNextBlock(t *testing.T) {
 	traceCallOption := &TraceCallOption{}
-	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revisoun=next", traceCallOption, 200)
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
 }
 
 func testHandleTraceCall(t *testing.T) {
