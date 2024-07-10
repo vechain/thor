@@ -492,6 +492,7 @@ func (n *Node) processFork(newBlock *block.Block, oldBestBlockID thor.Bytes32) {
 		return
 	}
 
+	// Set the gauge metric to the size of the fork (0 if there are no forks)
 	metricChainForkSize().Set(int64(len(sideIds)))
 
 	if len(sideIds) == 0 {
