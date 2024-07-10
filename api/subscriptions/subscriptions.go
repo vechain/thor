@@ -279,9 +279,11 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		}
 	}()
 
+	// example path: /subscriptions/txpool
 	paths := strings.Split(req.URL.Path, "/")
 	subject := "unknown"
 	if len(paths) > 2 {
+		// subject = txpool
 		subject = paths[2]
 	}
 	metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
