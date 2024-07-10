@@ -182,7 +182,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	header, st, err := utils.GetHeaderAndState(revision, d.repo, d.bft, d.stater)
+	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater)
 	if err != nil {
 		if d.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -200,7 +200,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	res, err := d.traceCall(req.Context(), tracer, header, st, txCtx, gas, clause)
+	res, err := d.traceCall(req.Context(), tracer, summary.Header, st, txCtx, gas, clause)
 	if err != nil {
 		return err
 	}

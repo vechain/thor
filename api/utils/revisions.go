@@ -95,9 +95,9 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Finalizer) (sum *
 	return summary, nil
 }
 
-// GetHeaderAndState returns the block header and state for the given revision,
+// GetSummaryAndState returns the block summary and state for the given revision,
 // this function supports the "next" revision.
-func GetHeaderAndState(rev *Revision, repo *chain.Repository, bft bft.Finalizer, stater *state.Stater) (*block.Header, *state.State, error) {
+func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Finalizer, stater *state.Stater) (*chain.BlockSummary, *state.State, error) {
 	if rev.IsNext() {
 		best := repo.BestBlockSummary()
 
@@ -128,7 +128,14 @@ func GetHeaderAndState(rev *Revision, repo *chain.Repository, bft bft.Finalizer,
 		// state is also reused from the parent block
 		st := stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
 
-		return mocked.Header(), st, nil
+		// rebuild the block summary with the next header (mocked) AND the best block status
+		return &chain.BlockSummary{
+			Header:    mocked.Header(),
+			Txs:       best.Txs,
+			Size:      uint64(mocked.Size()),
+			Conflicts: best.Conflicts,
+			SteadyNum: best.SteadyNum,
+		}, st, nil
 	}
 	sum, err := GetSummary(rev, repo, bft)
 	if err != nil {
@@ -136,5 +143,5 @@ func GetHeaderAndState(rev *Revision, repo *chain.Repository, bft bft.Finalizer,
 	}
 
 	st := stater.NewState(sum.Header.StateRoot(), sum.Header.Number(), sum.Conflicts, sum.SteadyNum)
-	return sum.Header, st, nil
+	return sum, st, nil
 }
