@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -34,6 +35,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/inconshreveable/log15"
+	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
@@ -58,9 +60,8 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-func initLogger(ctx *cli.Context) {
-	logLevel := ctx.Int(verbosityFlag.Name)
-	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
+func initLogger(lvl log15.Lvl) {
+	log15.Root().SetHandler(log15.LvlFilterHandler(lvl, log15.StderrHandler))
 	// set go-ethereum log lvl to Warn
 	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
 	ethLogHandler.Verbosity(ethlog.LvlWarn)
@@ -405,15 +406,48 @@ func masterKeyPath(ctx *cli.Context) (string, error) {
 	return filepath.Join(configDir, "master.key"), nil
 }
 
+func loadNodeMasterFromStdin() (*ecdsa.PrivateKey, error) {
+	var (
+		input string
+		err   error
+	)
+	if isatty.IsTerminal(os.Stdin.Fd()) {
+		input, err = readPasswordFromNewTTY("Enter master key: ")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		input, err = reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return crypto.HexToECDSA(strings.TrimSpace(input))
+}
+
 func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
-	path, err := masterKeyPath(ctx)
-	if err != nil {
-		return nil, err
+	var key *ecdsa.PrivateKey
+	var err error
+
+	useStdin := ctx.Bool(masterKeyStdinFlag.Name)
+	if useStdin {
+		key, err = loadNodeMasterFromStdin()
+		if err != nil {
+			return nil, errors.Wrap(err, "read master key from stdin")
+		}
+	} else {
+		path, err := masterKeyPath(ctx)
+		if err != nil {
+			return nil, err
+		}
+		key, err = loadOrGeneratePrivateKey(path)
+		if err != nil {
+			return nil, errors.Wrap(err, "load or generate master key")
+		}
 	}
-	key, err := loadOrGeneratePrivateKey(path)
-	if err != nil {
-		return nil, errors.Wrap(err, "load or generate master key")
-	}
+
 	master := &node.Master{PrivateKey: key}
 	if master.Beneficiary, err = beneficiary(ctx); err != nil {
 		return nil, err
@@ -676,4 +710,14 @@ func parseNodeList(list string) ([]*discover.Node, error) {
 	}
 
 	return nodes, nil
+}
+
+func readIntFromUInt64Flag(val uint64) (int, error) {
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value %d ", val)
+	}
+
+	return i, nil
 }

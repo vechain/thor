@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	refIDQuery     = "(SELECT id FROM ref WHERE data=?)"
-	limitThreshold = 1000
+	refIDQuery = "(SELECT id FROM ref WHERE data=?)"
 )
 
 type LogDB struct {
@@ -108,14 +107,8 @@ FROM (%v) e
 	LEFT JOIN ref r7 ON e.topic3 = r7.id
 	LEFT JOIN ref r8 ON e.topic4 = r8.id`
 
-	if filter == nil { // default query filtering
-		filter = &EventFilter{
-			Options: &Options{
-				Offset: 0,
-				Limit:  limitThreshold,
-			},
-			Order: "desc",
-		}
+	if filter == nil {
+		return db.queryEvents(ctx, fmt.Sprintf(query, "event"))
 	}
 
 	var (
@@ -153,17 +146,10 @@ FROM (%v) e
 	}
 
 	// if there is limit option, set order inside subquery
-	subQuery += " LIMIT ?, ?" // all queries are bounded to a max of 1000 results
-	if filter.Options != nil && filter.Options.Limit > 1000 {
-		// offset could have been specified
-		filter.Options.Limit = limitThreshold
-	} else if filter.Options == nil {
-		filter.Options = &Options{
-			Offset: 0,
-			Limit:  limitThreshold,
-		}
+	if filter.Options != nil {
+		subQuery += " LIMIT ?, ?"
+		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
-	args = append(args, filter.Options.Offset, filter.Options.Limit)
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN event e ON s.seq = e.seq"
 
@@ -179,14 +165,8 @@ FROM (%v) t
 	LEFT JOIN ref r3 ON t.sender = r3.id
 	LEFT JOIN ref r4 ON t.recipient = r4.id`
 
-	if filter == nil { // default query filtering
-		filter = &TransferFilter{
-			Options: &Options{
-				Offset: 0,
-				Limit:  limitThreshold,
-			},
-			Order: "desc",
-		}
+	if filter == nil {
+		return db.queryTransfers(ctx, fmt.Sprintf(query, "transfer"))
 	}
 
 	var (
@@ -223,17 +203,10 @@ FROM (%v) t
 	}
 
 	// if there is limit option, set order inside subquery
-	subQuery += " LIMIT ?, ?"
-	if filter.Options != nil && filter.Options.Limit > limitThreshold {
-		// offset could have been specified
-		filter.Options.Limit = limitThreshold
-	} else if filter.Options == nil {
-		filter.Options = &Options{
-			Offset: 0,
-			Limit:  limitThreshold,
-		}
+	if filter.Options != nil {
+		subQuery += " LIMIT ?, ?"
+		args = append(args, filter.Options.Offset, filter.Options.Limit)
 	}
-	args = append(args, filter.Options.Offset, filter.Options.Limit)
 
 	subQuery = "SELECT e.* FROM (" + subQuery + ") s LEFT JOIN transfer e ON s.seq = e.seq"
 

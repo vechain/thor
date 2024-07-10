@@ -169,6 +169,7 @@ bin/thor -h
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
 | `--enable-api-logs`         | Enables API requests logging                                                                |
+| `--api-logs-limit`          | Limit the number of logs returned by /logs API (default: 1000)                              |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
 | `--max-peers`               | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)        |
 | `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
