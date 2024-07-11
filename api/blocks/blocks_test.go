@@ -42,19 +42,24 @@ func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 
-	for name, tt := range map[string]func(t2 *testing.T){
-		"testBadQueryParams":                    testBadQueryParams,
-		"testInvalidBlockId":                    testInvalidBlockId,
-		"testInvalidBlockNumber":                testInvalidBlockNumber,
-		"testGetBlockById":                      testGetBlockById,
-		"testGetBlockNotFound":                  testGetBlockNotFound,
-		"testGetExpandedBlockById":              testGetExpandedBlockById,
-		"testGetBlockByHeight":                  testGetBlockByHeight,
-		"testGetBestBlock":                      testGetBestBlock,
-		"testGetFinalizedBlock":                 testGetFinalizedBlock,
-		"testGetBlockWithRevisionNumberTooHigh": testGetBlockWithRevisionNumberTooHigh,
-	} {
-		t.Run(name, tt)
+	tests := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"testBadQueryParams", testBadQueryParams},
+		{"testInvalidBlockId", testInvalidBlockId},
+		{"testInvalidBlockNumber", testInvalidBlockNumber},
+		{"testGetBlockById", testGetBlockById},
+		{"testGetBlockNotFound", testGetBlockNotFound},
+		{"testGetExpandedBlockById", testGetExpandedBlockById},
+		{"testGetBlockByHeight", testGetBlockByHeight},
+		{"testGetBestBlock", testGetBestBlock},
+		{"testGetFinalizedBlock", testGetFinalizedBlock},
+		{"testGetBlockWithRevisionNumberTooHigh", testGetBlockWithRevisionNumberTooHigh},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.run)
 	}
 }
 
