@@ -152,7 +152,7 @@ func TestGetSummary(t *testing.T) {
 	}
 }
 
-func TestGetHeaderAndState(t *testing.T) {
+func TestGetSummaryAndState(t *testing.T) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
@@ -163,17 +163,17 @@ func TestGetHeaderAndState(t *testing.T) {
 	repo, _ := chain.NewRepository(db, b)
 	bft := solo.NewBFTEngine(repo)
 
-	header, _, err := GetHeaderAndState(&Revision{revBest}, repo, bft, stater)
+	summary, _, err := GetSummaryAndState(&Revision{revBest}, repo, bft, stater)
 	assert.Nil(t, err)
-	assert.Equal(t, header.Number(), b.Header().Number())
-	assert.Equal(t, header.Timestamp(), b.Header().Timestamp())
+	assert.Equal(t, summary.Header.Number(), b.Header().Number())
+	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp())
 
-	header, _, err = GetHeaderAndState(&Revision{revNext}, repo, bft, stater)
+	summary, _, err = GetSummaryAndState(&Revision{revNext}, repo, bft, stater)
 	assert.Nil(t, err)
-	assert.Equal(t, header.Number(), b.Header().Number()+1)
-	assert.Equal(t, header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
+	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
+	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
 
-	signer, err := header.Signer()
+	signer, err := summary.Header.Signer()
 	assert.NotNil(t, err)
 	assert.True(t, signer.IsZero())
 }

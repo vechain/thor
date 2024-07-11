@@ -103,7 +103,6 @@ func TestStorageRangeFunc(t *testing.T) {
 	}
 
 	storageRangeRes, err := storageRangeAt(trie, start, 1)
-
 	assert.NoError(t, err)
 	assert.NotNil(t, storageRangeRes.NextKey)
 	storage := storageRangeRes.Storage
