@@ -125,8 +125,8 @@ func Crit(msg string, ctx ...interface{}) {
 	os.Exit(1)
 }
 
-// New returns a new logger with the given context.
-func New(ctx ...interface{}) Logger {
+// WithContext returns a logger that uses Root with the provided context
+func WithContext(ctx ...interface{}) Logger {
 	return &RootWithContext{
 		ctx: ctx,
 	}

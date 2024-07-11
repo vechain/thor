@@ -38,7 +38,7 @@ type msgReader interface {
 }
 
 var (
-	logger = log.New("pkg", "subscriptions")
+	logger = log.WithContext("pkg", "subscriptions")
 )
 
 const (

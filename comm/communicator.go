@@ -26,7 +26,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var logger = log.New("pkg", "comm")
+var logger = log.WithContext("pkg", "comm")
 
 // Communicator communicates with remote p2p peers to exchange blocks and txs, etc.
 type Communicator struct {

@@ -67,7 +67,7 @@ type EthLogHandler struct {
 
 func initGethLogger(lvl ethlog.Lvl) {
 	handler := &EthLogHandler{
-		logger: log.New("pkg", "geth"),
+		logger: log.WithContext("pkg", "geth"),
 	}
 	ethLogHandler := ethlog.NewGlogHandler(handler)
 	ethLogHandler.Verbosity(lvl)

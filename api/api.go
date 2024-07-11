@@ -30,7 +30,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var logger = log.New("pkg", "api")
+var logger = log.WithContext("pkg", "api")
 
 // New return api router
 func New(

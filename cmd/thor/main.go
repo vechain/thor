@@ -43,7 +43,7 @@ var (
 	gitCommit     string
 	gitTag        string
 	copyrightYear string
-	logger        = log.New("ctx", "main")
+	logger        = log.WithContext("ctx", "main")
 
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,

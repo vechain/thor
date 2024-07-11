@@ -23,7 +23,7 @@ import (
 	"github.com/vechain/thor/v2/trie"
 )
 
-var logger = log.New("pkg", "optimizer")
+var logger = log.WithContext("pkg", "optimizer")
 
 const (
 	propsStoreName = "optimizer.props"

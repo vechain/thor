@@ -22,7 +22,7 @@ import (
 	"github.com/vechain/thor/v2/log"
 )
 
-var logger = log.New("pkg", "p2psrv")
+var logger = log.WithContext("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {

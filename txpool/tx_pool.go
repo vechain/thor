@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	logger = log.New("pkg", "txpool")
+	logger = log.WithContext("pkg", "txpool")
 )
 
 // Options options for tx pool.

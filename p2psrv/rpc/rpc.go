@@ -29,7 +29,7 @@ const (
 var (
 	errPeerDisconnected = errors.New("peer disconnected")
 	errMsgTooLarge      = errors.New("msg too large")
-	logger              = log.New("pkg", "rpc")
+	logger              = log.WithContext("pkg", "rpc")
 )
 
 // HandleFunc to handle received messages from peer.

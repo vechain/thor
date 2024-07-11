@@ -35,7 +35,7 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-var logger = log.New("pkg", "node")
+var logger = log.WithContext("pkg", "node")
 
 var (
 	// error when the block larger than known max block number + 1

@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	logger       = log.New("pkg", "solo")
+	logger       = log.WithContext("pkg", "solo")
 	baseGasPrice = big.NewInt(1e13)
 )
 
