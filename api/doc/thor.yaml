@@ -83,6 +83,8 @@ paths:
           - Estimate the gas consumption of a transaction. <b>Note:</b> The `caller` field should be provided for higher accuracy.
         
         The fields `gasPrice`, `gasPayer`, `provedWork`, `blockRef` and `expiration` are for exposing themselves in EVM. Transaction meta features won't be reflected in the result, for example, no error is returned if the transaction is technically expired. For more information, please refer to the vechain documentation.
+        
+        It is recommended to set the `revision` query parameter to `next` when estimating gas for a transaction.
 
         To access historical details, you can specify a `revision` as a query parameter.
       requestBody:
@@ -692,6 +694,7 @@ paths:
         This endpoint enables clients to create a tracer for a specific vechain function call. 
         
         You can customize the tracer using various options to suit your debugging requirements.
+
       parameters:
         - $ref: '#/components/parameters/CallCodeRevisionInQuery'
       requestBody:
