@@ -24,32 +24,36 @@ func TestParseRevision(t *testing.T) {
 	testCases := []struct {
 		revision string
 		err      error
-		expected Revision
+		expected *Revision
 	}{
 		{
 			revision: "",
 			err:      nil,
-			expected: nil,
+			expected: &Revision{revBest},
 		},
 		{
 			revision: "1234",
 			err:      nil,
-			expected: uint32(1234),
+			expected: &Revision{uint32(1234)},
 		},
 		{
 			revision: "best",
 			err:      nil,
-			expected: nil,
+			expected: &Revision{revBest},
 		},
 		{
 			revision: "finalized",
 			err:      nil,
-			expected: "finalized",
+			expected: &Revision{revFinalized},
+		}, {
+			revision: "next",
+			err:      nil,
+			expected: &Revision{revNext},
 		},
 		{
 			revision: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 			err:      nil,
-			expected: thor.MustParseBytes32("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"),
+			expected: &Revision{thor.MustParseBytes32("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef")},
 		},
 		{
 			revision: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdzz",
@@ -70,7 +74,7 @@ func TestParseRevision(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.revision, func(t *testing.T) {
-			result, err := ParseRevision(tc.revision)
+			result, err := ParseRevision(tc.revision, true)
 			if tc.err != nil {
 				assert.Equal(t, tc.err.Error(), err.Error())
 			} else {
@@ -79,6 +83,16 @@ func TestParseRevision(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAllowNext(t *testing.T) {
+	_, err := ParseRevision("next", false)
+	assert.Error(t, err, "invalid revision: next is not allowed")
+
+	_, err = ParseRevision("next", true)
+	assert.Nil(t, err)
+	_, err = ParseRevision("finalized", false)
+	assert.Nil(t, err)
 }
 
 func TestGetSummary(t *testing.T) {
@@ -94,29 +108,39 @@ func TestGetSummary(t *testing.T) {
 
 	// Test cases
 	testCases := []struct {
-		revision Revision
+		name     string
+		revision *Revision
 		err      error
 	}{
 		{
-			revision: nil,
+			name:     "best",
+			revision: &Revision{revBest},
 			err:      nil,
 		},
 		{
-			revision: uint32(1234),
+			name:     "1234",
+			revision: &Revision{uint32(1234)},
 			err:      errors.New("not found"),
 		},
 		{
-			revision: "finalized",
+			name:     "finalized",
+			revision: &Revision{revFinalized},
 			err:      nil,
 		},
 		{
-			revision: thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6"),
+			name:     "0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6",
+			revision: &Revision{thor.MustParseBytes32("0x00000000c05a20fbca2bf6ae3affba6af4a74b800b585bf7a4988aba7aea69f6")},
 			err:      nil,
+		},
+		{
+			name:     "next",
+			revision: &Revision{revNext},
+			err:      errors.New("invalid revision"),
 		},
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("%v", tc.revision), func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			summary, err := GetSummary(tc.revision, repo, bft)
 			if tc.err != nil {
 				assert.Equal(t, tc.err.Error(), err.Error())
@@ -126,4 +150,30 @@ func TestGetSummary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetSummaryAndState(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	gene := genesis.NewDevnet()
+	b, _, _, err := gene.Build(stater)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, _ := chain.NewRepository(db, b)
+	bft := solo.NewBFTEngine(repo)
+
+	summary, _, err := GetSummaryAndState(&Revision{revBest}, repo, bft, stater)
+	assert.Nil(t, err)
+	assert.Equal(t, summary.Header.Number(), b.Header().Number())
+	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp())
+
+	summary, _, err = GetSummaryAndState(&Revision{revNext}, repo, bft, stater)
+	assert.Nil(t, err)
+	assert.Equal(t, summary.Header.Number(), b.Header().Number()+1)
+	assert.Equal(t, summary.Header.Timestamp(), b.Header().Timestamp()+thor.BlockInterval)
+
+	signer, err := summary.Header.Signer()
+	assert.NotNil(t, err)
+	assert.True(t, signer.IsZero())
 }

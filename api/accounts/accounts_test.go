@@ -380,6 +380,13 @@ func callContract(t *testing.T) {
 	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
+
+	// next revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+	_, statusCode = httpPost(t, ts.URL+"/accounts?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+
 	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
 	var output *accounts.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
@@ -468,6 +475,10 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
+
+	// 'next' revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
 	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
 	var results accounts.BatchCallResults
