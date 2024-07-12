@@ -7,7 +7,6 @@ package subscriptions
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -203,7 +202,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 		return utils.HTTPError(errors.New("not found"), http.StatusNotFound)
 	}
 
-	conn, closed, subject, err := s.setupConn(w, req)
+	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
@@ -211,7 +210,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	}
 
 	err = s.pipe(conn, reader, closed)
-	s.closeConn(conn, err, subject)
+	s.closeConn(conn, err)
 	return nil
 }
 
@@ -219,13 +218,13 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	s.wg.Add(1)
 	defer s.wg.Done()
 
-	conn, closed, subject, err := s.setupConn(w, req)
+	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
 		log.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
-	defer s.closeConn(conn, err, subject)
+	defer s.closeConn(conn, err)
 
 	pingTicker := time.NewTicker(pingPeriod)
 	defer pingTicker.Stop()
@@ -254,10 +253,10 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	}
 }
 
-func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, string, error) {
+func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*websocket.Conn, chan struct{}, error) {
 	conn, err := s.upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, err
 	}
 
 	closed := make(chan struct{})
@@ -279,17 +278,10 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		}
 	}()
 
-	// example path: /subscriptions/txpool -> subject = txpool
-	paths := strings.Split(req.URL.Path, "/")
-	subject := "unknown"
-	if len(paths) > 2 {
-		subject = paths[2]
-	}
-	metricsActiveConnectionCount().GaugeWithLabel(1, map[string]string{"subject": subject})
-	return conn, closed, subject, nil
+	return conn, closed, nil
 }
 
-func (s *Subscriptions) closeConn(conn *websocket.Conn, err error, subject string) {
+func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
 	var closeMsg []byte
 	if err != nil {
 		closeMsg = websocket.FormatCloseMessage(websocket.CloseInternalServerErr, err.Error())
@@ -301,7 +293,6 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error, subject strin
 		log.Debug("write close message", "err", err)
 	}
 
-	metricsActiveConnectionCount().GaugeWithLabel(-1, map[string]string{"subject": subject})
 	if err := conn.Close(); err != nil {
 		log.Debug("close websocket", "err", err)
 	}
@@ -394,7 +385,7 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("subscriptions_pending_tx").
 		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
-	sub.Path("/{subject}").
+	sub.Path("/{subject:beat|beat2|block|event|transfer}").
 		Methods(http.MethodGet).
 		Name("subscriptions_subject").
 		HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
