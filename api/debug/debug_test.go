@@ -50,32 +50,45 @@ func TestDebug(t *testing.T) {
 	defer ts.Close()
 
 	// /tracers endpoint
-	testTraceClauseWithEmptyTracerTarget(t)
-	testTraceClauseWithBadBlockId(t)
-	testTraceClauseWithNonExistingBlockId(t)
-	testTraceClauseWithBadTxId(t)
-	testTraceClauseWithNonExistingTx(t)
-	testTraceClauseWithBadClauseIndex(t)
-	testTraceClauseWithTxIndexOutOfBound(t)
-	testTraceClauseWithClauseIndexOutOfBound(t)
-	testTraceClauseWithCustomTracer(t)
-	testTraceClause(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
+		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
+		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
+		"testTraceClauseWithBadTxId":               testTraceClauseWithBadTxId,
+		"testTraceClauseWithNonExistingTx":         testTraceClauseWithNonExistingTx,
+		"testTraceClauseWithBadClauseIndex":        testTraceClauseWithBadClauseIndex,
+		"testTraceClauseWithTxIndexOutOfBound":     testTraceClauseWithTxIndexOutOfBound,
+		"testTraceClauseWithClauseIndexOutOfBound": testTraceClauseWithClauseIndexOutOfBound,
+		"testTraceClauseWithCustomTracer":          testTraceClauseWithCustomTracer,
+		"testTraceClause":                          testTraceClause,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /tracers/call endpoint
-	testHandleTraceCallWithMalformedBodyRequest(t)
-	testHandleTraceCallWithEmptyTraceCallOption(t)
-	testHandleTraceCall(t)
-	testHandleTraceCallWithValidRevisions(t)
-	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
-	testHandleTraceCallWithRevisionAsNonExistingId(t)
-	testHandleTraceCallWithMalfomredRevision(t)
-	testHandleTraceCallWithInsufficientGas(t)
-	testHandleTraceCallWithBadBlockRef(t)
-	testHandleTraceCallWithInvalidLengthBlockRef(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testHandleTraceCallWithMalformedBodyRequest":        testHandleTraceCallWithMalformedBodyRequest,
+		"testHandleTraceCallWithEmptyTraceCallOption":        testHandleTraceCallWithEmptyTraceCallOption,
+		"testHandleTraceCall":                                testHandleTraceCall,
+		"testHandleTraceCallWithValidRevisions":              testHandleTraceCallWithValidRevisions,
+		"testHandleTraceCallWithRevisionAsNonExistingHeight": testHandleTraceCallWithRevisionAsNonExistingHeight,
+		"testHandleTraceCallWithRevisionAsNonExistingId":     testHandleTraceCallWithRevisionAsNonExistingId,
+		"testHandleTraceCallWithMalfomredRevision":           testHandleTraceCallWithMalfomredRevision,
+		"testHandleTraceCallWithInsufficientGas":             testHandleTraceCallWithInsufficientGas,
+		"testHandleTraceCallWithBadBlockRef":                 testHandleTraceCallWithBadBlockRef,
+		"testHandleTraceCallWithInvalidLengthBlockRef":       testHandleTraceCallWithInvalidLengthBlockRef,
+		"testTraceCallNextBlock":                             testTraceCallNextBlock,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /storage/range endpoint
-	testStorageRangeWithError(t)
-	testStorageRange(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testStorageRangeWithError": testStorageRangeWithError,
+		"testStorageRange":          testStorageRange,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func TestStorageRangeFunc(t *testing.T) {
@@ -102,7 +115,6 @@ func TestStorageRangeFunc(t *testing.T) {
 	}
 
 	storageRangeRes, err := storageRangeAt(trie, start, 1)
-
 	assert.NoError(t, err)
 	assert.NotNil(t, storageRangeRes.NextKey)
 	storage := storageRangeRes.Storage
@@ -248,6 +260,11 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
+}
+
+func testTraceCallNextBlock(t *testing.T) {
+	traceCallOption := &TraceCallOption{}
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
 }
 
 func testHandleTraceCall(t *testing.T) {

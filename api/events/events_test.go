@@ -41,8 +41,12 @@ func TestEmptyEvents(t *testing.T) {
 	initEventServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	testEventsBadRequest(t)
-	testEventWithEmptyDb(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testEventsBadRequest": testEventsBadRequest,
+		"testEventWithEmptyDb": testEventWithEmptyDb,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func TestEvents(t *testing.T) {
@@ -52,7 +56,6 @@ func TestEvents(t *testing.T) {
 
 	blocksToInsert := 5
 	insertBlocks(t, db, blocksToInsert)
-
 	testEventWithBlocks(t, blocksToInsert)
 }
 

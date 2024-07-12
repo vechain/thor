@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/runtime"
 	"github.com/vechain/thor/v2/state"
@@ -49,10 +50,8 @@ func New(
 	}
 }
 
-func (a *Accounts) getCode(addr thor.Address, summary *chain.BlockSummary) ([]byte, error) {
-	code, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
-		GetCode(addr)
+func (a *Accounts) getCode(addr thor.Address, state *state.State) ([]byte, error) {
+	code, err := state.GetCode(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -65,26 +64,27 @@ func (a *Accounts) handleGetCode(w http.ResponseWriter, req *http.Request) error
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+
+	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
-	code, err := a.getCode(addr, summary)
+	code, err := a.getCode(addr, st)
 	if err != nil {
 		return err
 	}
+
 	return utils.WriteJSON(w, map[string]string{"code": hexutil.Encode(code)})
 }
 
-func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*Account, error) {
-	state := a.stater.NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum)
+func (a *Accounts) getAccount(addr thor.Address, header *block.Header, state *state.State) (*Account, error) {
 	b, err := state.GetBalance(addr)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*
 	if err != nil {
 		return nil, err
 	}
-	energy, err := state.GetEnergy(addr, summary.Header.Timestamp())
+	energy, err := state.GetEnergy(addr, header.Timestamp())
 	if err != nil {
 		return nil, err
 	}
@@ -105,11 +105,8 @@ func (a *Accounts) getAccount(addr thor.Address, summary *chain.BlockSummary) (*
 	}, nil
 }
 
-func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, summary *chain.BlockSummary) (thor.Bytes32, error) {
-	storage, err := a.stater.
-		NewState(summary.Header.StateRoot(), summary.Header.Number(), summary.Conflicts, summary.SteadyNum).
-		GetStorage(addr, key)
-
+func (a *Accounts) getStorage(addr thor.Address, key thor.Bytes32, state *state.State) (thor.Bytes32, error) {
+	storage, err := state.GetStorage(addr, key)
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
@@ -121,18 +118,20 @@ func (a *Accounts) handleGetAccount(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "address"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
-	acc, err := a.getAccount(addr, summary)
+
+	acc, err := a.getAccount(addr, summary.Header, st)
 	if err != nil {
 		return err
 	}
@@ -148,18 +147,20 @@ func (a *Accounts) handleGetStorage(w http.ResponseWriter, req *http.Request) er
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "key"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), false)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+
+	_, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
-	storage, err := a.getStorage(addr, key, summary)
+
+	storage, err := a.getStorage(addr, key, st)
 	if err != nil {
 		return err
 	}
@@ -171,11 +172,11 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 	if err := utils.ParseJSON(req.Body, &callData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
@@ -202,7 +203,7 @@ func (a *Accounts) handleCallContract(w http.ResponseWriter, req *http.Request) 
 		GasPrice: callData.GasPrice,
 		Caller:   callData.Caller,
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary)
+	results, err := a.batchCall(req.Context(), batchCallData, summary.Header, st)
 	if err != nil {
 		return err
 	}
@@ -214,34 +215,37 @@ func (a *Accounts) handleCallBatchCode(w http.ResponseWriter, req *http.Request)
 	if err := utils.ParseJSON(req.Body, &batchCallData); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "revision"))
 	}
-	summary, err := utils.GetSummary(revision, a.repo, a.bft)
+	summary, st, err := utils.GetSummaryAndState(revision, a.repo, a.bft, a.stater)
 	if err != nil {
 		if a.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "revision"))
 		}
 		return err
 	}
-	results, err := a.batchCall(req.Context(), batchCallData, summary)
+	results, err := a.batchCall(req.Context(), batchCallData, summary.Header, st)
 	if err != nil {
 		return err
 	}
 	return utils.WriteJSON(w, results)
 }
 
-func (a *Accounts) batchCall(ctx context.Context, batchCallData *BatchCallData, summary *chain.BlockSummary) (results BatchCallResults, err error) {
+func (a *Accounts) batchCall(
+	ctx context.Context,
+	batchCallData *BatchCallData,
+	header *block.Header,
+	st *state.State,
+) (results BatchCallResults, err error) {
 	txCtx, gas, clauses, err := a.handleBatchCallData(batchCallData)
 	if err != nil {
 		return nil, err
 	}
-	header := summary.Header
-	state := a.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
 
 	signer, _ := header.Signer()
-	rt := runtime.New(a.repo.NewChain(header.ParentID()), state,
+	rt := runtime.New(a.repo.NewChain(header.ParentID()), st,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
