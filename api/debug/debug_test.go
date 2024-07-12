@@ -65,6 +65,7 @@ func TestDebug(t *testing.T) {
 	testHandleTraceCallWithMalformedBodyRequest(t)
 	testHandleTraceCallWithEmptyTraceCallOption(t)
 	testHandleTraceCall(t)
+	testTraceCallNextBlock(t)
 	testHandleTraceCallWithValidRevisions(t)
 	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
 	testHandleTraceCallWithRevisionAsNonExistingId(t)
@@ -102,7 +103,6 @@ func TestStorageRangeFunc(t *testing.T) {
 	}
 
 	storageRangeRes, err := storageRangeAt(trie, start, 1)
-
 	assert.NoError(t, err)
 	assert.NotNil(t, storageRangeRes.NextKey)
 	storage := storageRangeRes.Storage
@@ -248,6 +248,11 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
+}
+
+func testTraceCallNextBlock(t *testing.T) {
+	traceCallOption := &TraceCallOption{}
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
 }
 
 func testHandleTraceCall(t *testing.T) {

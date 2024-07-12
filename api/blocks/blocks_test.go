@@ -42,16 +42,25 @@ func TestBlock(t *testing.T) {
 	initBlockServer(t)
 	defer ts.Close()
 
-	testBadQueryParams(t)
-	testInvalidBlockId(t)
-	testInvalidBlockNumber(t)
-	testGetBlockById(t)
-	testGetBlockNotFound(t)
-	testGetExpandedBlockById(t)
-	testGetBlockByHeight(t)
-	testGetBestBlock(t)
-	testGetFinalizedBlock(t)
-	testGetBlockWithRevisionNumberTooHigh(t)
+	tests := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"testBadQueryParams", testBadQueryParams},
+		{"testInvalidBlockId", testInvalidBlockId},
+		{"testInvalidBlockNumber", testInvalidBlockNumber},
+		{"testGetBlockById", testGetBlockById},
+		{"testGetBlockNotFound", testGetBlockNotFound},
+		{"testGetExpandedBlockById", testGetExpandedBlockById},
+		{"testGetBlockByHeight", testGetBlockByHeight},
+		{"testGetBestBlock", testGetBestBlock},
+		{"testGetFinalizedBlock", testGetFinalizedBlock},
+		{"testGetBlockWithRevisionNumberTooHigh", testGetBlockWithRevisionNumberTooHigh},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, tt.run)
+	}
 }
 
 func testBadQueryParams(t *testing.T) {
