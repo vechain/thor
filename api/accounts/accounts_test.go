@@ -108,19 +108,24 @@ var ts *httptest.Server
 func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
-	getAccount(t)
-	getAccountWithNonExisitingRevision(t)
-	getAccountWithGenesisRevision(t)
-	getAccountWithFinalizedRevision(t)
-	getCode(t)
-	getCodeWithNonExisitingRevision(t)
-	getStorage(t)
-	getStorageWithNonExisitingRevision(t)
-	deployContractWithCall(t)
-	callContract(t)
-	callContractWithNonExisitingRevision(t)
-	batchCall(t)
-	batchCallWithNonExisitingRevision(t)
+
+	for name, tt := range map[string]func(*testing.T){
+		"getAccount":                           getAccount,
+		"getAccountWithNonExisitingRevision":   getAccountWithNonExisitingRevision,
+		"getAccountWithGenesisRevision":        getAccountWithGenesisRevision,
+		"getAccountWithFinalizedRevision":      getAccountWithFinalizedRevision,
+		"getCode":                              getCode,
+		"getCodeWithNonExisitingRevision":      getCodeWithNonExisitingRevision,
+		"getStorage":                           getStorage,
+		"getStorageWithNonExisitingRevision":   getStorageWithNonExisitingRevision,
+		"deployContractWithCall":               deployContractWithCall,
+		"callContract":                         callContract,
+		"callContractWithNonExisitingRevision": callContractWithNonExisitingRevision,
+		"batchCall":                            batchCall,
+		"batchCallWithNonExisitingRevision":    batchCallWithNonExisitingRevision,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getAccount(t *testing.T) {

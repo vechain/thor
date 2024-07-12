@@ -48,26 +48,38 @@ func TestTransaction(t *testing.T) {
 	defer ts.Close()
 
 	// Send tx
-	sendTx(t)
-	sendTxWithBadFormat(t)
-	sendTxThatCannotBeAcceptedInLocalMempool(t)
+	for name, tt := range map[string]func(*testing.T){
+		"sendTx":              sendTx,
+		"sendTxWithBadFormat": sendTxWithBadFormat,
+		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
+	} {
+		t.Run(name, tt)
+	}
 
 	// Get tx
-	getTx(t)
-	getTxWithBadId(t)
-	txWithBadHeader(t)
-	getNonExistingRawTransactionWhenTxStillInMempool(t)
-	getNonPendingRawTransactionWhenTxStillInMempool(t)
-	getRawTransactionWhenTxStillInMempool(t)
-	getTransactionByIDTxNotFound(t)
-	getTransactionByIDPendingTxNotFound(t)
-	handleGetTransactionByIDWithBadQueryParams(t)
-	handleGetTransactionByIDWithNonExistingHead(t)
+	for name, tt := range map[string]func(*testing.T){
+		"getTx":           getTx,
+		"getTxWithBadId":  getTxWithBadId,
+		"txWithBadHeader": txWithBadHeader,
+		"getNonExistingRawTransactionWhenTxStillInMempool": getNonExistingRawTransactionWhenTxStillInMempool,
+		"getNonPendingRawTransactionWhenTxStillInMempool":  getNonPendingRawTransactionWhenTxStillInMempool,
+		"getRawTransactionWhenTxStillInMempool":            getRawTransactionWhenTxStillInMempool,
+		"getTransactionByIDTxNotFound":                     getTransactionByIDTxNotFound,
+		"getTransactionByIDPendingTxNotFound":              getTransactionByIDPendingTxNotFound,
+		"handleGetTransactionByIDWithBadQueryParams":       handleGetTransactionByIDWithBadQueryParams,
+		"handleGetTransactionByIDWithNonExistingHead":      handleGetTransactionByIDWithNonExistingHead,
+	} {
+		t.Run(name, tt)
+	}
 
 	// Get tx receipt
-	getTxReceipt(t)
-	getReceiptWithBadId(t)
-	handleGetTransactionReceiptByIDWithNonExistingHead(t)
+	for name, tt := range map[string]func(*testing.T){
+		"getTxReceipt":        getTxReceipt,
+		"getReceiptWithBadId": getReceiptWithBadId,
+		"handleGetTransactionReceiptByIDWithNonExistingHead": handleGetTransactionReceiptByIDWithNonExistingHead,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getTx(t *testing.T) {

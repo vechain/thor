@@ -19,12 +19,17 @@ import (
 )
 
 func TestEventsTypes(t *testing.T) {
-	chain := initChain(t)
-
-	testConvertRangeWithBlockRangeType(t, chain)
-	testConvertRangeWithTimeRangeTypeLessThenGenesis(t, chain)
-	testConvertRangeWithTimeRangeType(t, chain)
-	testConvertRangeWithFromGreaterThanGenesis(t, chain)
+	c := initChain(t)
+	for name, tt := range map[string]func(*testing.T, *chain.Chain){
+		"testConvertRangeWithBlockRangeType":               testConvertRangeWithBlockRangeType,
+		"testConvertRangeWithTimeRangeTypeLessThenGenesis": testConvertRangeWithTimeRangeTypeLessThenGenesis,
+		"testConvertRangeWithTimeRangeType":                testConvertRangeWithTimeRangeType,
+		"testConvertRangeWithFromGreaterThanGenesis":       testConvertRangeWithFromGreaterThanGenesis,
+	} {
+		t.Run(name, func(t *testing.T) {
+			tt(t, c)
+		})
+	}
 }
 
 func testConvertRangeWithBlockRangeType(t *testing.T, chain *chain.Chain) {
