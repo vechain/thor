@@ -83,7 +83,8 @@ func Gauge(name string) GaugeMeter {
 // GaugeVecMeter is a metric that represents a single numeric value, which can arbitrarily go up and down
 // with multiple labels.
 type GaugeVecMeter interface {
-	GaugeWithLabel(int64, map[string]string)
+	AddWithLabel(int64, map[string]string)
+	SetWithLabel(int64, map[string]string)
 }
 
 func GaugeVec(name string, labels []string) GaugeVecMeter {

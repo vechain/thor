@@ -81,13 +81,13 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		now := time.Now()
 		mrw := newMetricsResponseWriter(w)
 		if subscription != "" {
-			metricsActiveWebsocketCount().GaugeWithLabel(1, map[string]string{"subject": subscription})
+			metricsActiveWebsocketCount().AddWithLabel(1, map[string]string{"subject": subscription})
 		}
 
 		next.ServeHTTP(mrw, r)
 
 		if subscription != "" {
-			metricsActiveWebsocketCount().GaugeWithLabel(-1, map[string]string{"subject": subscription})
+			metricsActiveWebsocketCount().AddWithLabel(-1, map[string]string{"subject": subscription})
 		} else if enabled {
 			metricHttpReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 			metricHttpReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})

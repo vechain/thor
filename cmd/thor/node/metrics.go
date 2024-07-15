@@ -11,11 +11,9 @@ import (
 
 var (
 	metricBlockProcessedCount    = metrics.LazyLoadCounterVec("block_processed_count", []string{"type", "success"})
-	metricBlockProcessedTxs      = metrics.LazyLoadCounterVec("block_processed_tx_count", []string{"type"})
-	metricBlockProcessedGas      = metrics.LazyLoadCounterVec("block_processed_gas_count", []string{"type"})
+	metricBlockProcessedTxs      = metrics.LazyLoadGaugeVec("block_processed_tx_gauge", []string{"type"})
+	metricBlockProcessedGas      = metrics.LazyLoadGaugeVec("block_processed_gas_gauge", []string{"type"})
 	metricBlockProcessedDuration = metrics.LazyLoadHistogram("block_processed_duration_ms", metrics.Bucket10s)
 	metricChainForkCount         = metrics.LazyLoadCounter("chain_fork_count")
-	metricChainForkSize          = metrics.LazyLoadGauge("chain_fork_size")
-	metricsGasPerBlock           = metrics.LazyLoadGauge("gas_per_block_gauge")
-	metricsTxsPerBlock           = metrics.LazyLoadGauge("txs_per_block_gauge")
+	metricChainForkSize          = metrics.LazyLoadGauge("chain_fork_gauge")
 )
