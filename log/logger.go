@@ -28,12 +28,12 @@ import (
 const errorKey = "LOG_ERROR"
 
 const (
-	legacyLevelCrit = iota
-	legacyLevelError
-	legacyLevelWarn
-	legacyLevelInfo
-	legacyLevelDebug
-	legacyLevelTrace
+	LegacyLevelCrit = iota
+	LegacyLevelError
+	LegacyLevelWarn
+	LegacyLevelInfo
+	LegacyLevelDebug
+	LegacyLevelTrace
 )
 
 const (
@@ -55,24 +55,24 @@ const (
 // to levels defined by slog
 func FromLegacyLevel(lvl int) slog.Level {
 	switch lvl {
-	case legacyLevelCrit:
+	case LegacyLevelCrit:
 		return LevelCrit
-	case legacyLevelError:
+	case LegacyLevelError:
 		return slog.LevelError
-	case legacyLevelWarn:
+	case LegacyLevelWarn:
 		return slog.LevelWarn
-	case legacyLevelInfo:
+	case LegacyLevelInfo:
 		return slog.LevelInfo
-	case legacyLevelDebug:
+	case LegacyLevelDebug:
 		return slog.LevelDebug
-	case legacyLevelTrace:
+	case LegacyLevelTrace:
 		return LevelTrace
 	default:
 		break
 	}
 
 	// TODO: should we allow use of custom levels or force them to match existing max/min if they fall outside the range as I am doing here?
-	if lvl > legacyLevelTrace {
+	if lvl > LegacyLevelTrace {
 		return LevelTrace
 	}
 	return LevelCrit

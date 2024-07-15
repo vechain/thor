@@ -154,11 +154,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	defer func() { logger.Info("exited") }()
 
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
-	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	initLogger(ctx)
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -281,11 +277,7 @@ func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 	defer func() { logger.Info("exited") }()
 
-	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
-	if err != nil {
-		return errors.Wrap(err, "parse verbosity flag")
-	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	initLogger(ctx)
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -302,6 +294,7 @@ func soloAction(ctx *cli.Context) error {
 	var (
 		gene       *genesis.Genesis
 		forkConfig thor.ForkConfig
+		err        error
 	)
 
 	flagGenesis := ctx.String(genesisFlag.Name)

@@ -7,12 +7,52 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	ethlog "github.com/ethereum/go-ethereum/log"
+	"github.com/mattn/go-isatty"
+	"github.com/vechain/thor/v2/log"
+	"gopkg.in/urfave/cli.v1"
 )
+
+func initLogger(ctx *cli.Context) {
+	logLevel := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	output := io.Writer(os.Stdout)
+	useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+	handler := log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+	log.SetDefault(log.NewLogger(handler))
+	ethlog.Root().SetHandler(&ethLogger{
+		logger: log.WithContext("pkg", "geth"),
+	})
+}
+
+type ethLogger struct {
+	logger log.Logger
+}
+
+func (h *ethLogger) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Info(r.Msg)
+	case ethlog.LvlDebug:
+		h.logger.Debug(r.Msg)
+	case ethlog.LvlTrace:
+		h.logger.Trace(r.Msg)
+	default:
+		break
+	}
+	return nil
+}
 
 func loadOrGenerateKeyFile(keyFile string) (key *ecdsa.PrivateKey, err error) {
 	if !filepath.IsAbs(keyFile) {

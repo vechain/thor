@@ -6,6 +6,7 @@
 package main
 
 import (
+	"github.com/vechain/thor/v2/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -73,9 +74,8 @@ var (
 		Usage: "enables API requests logging",
 	}
 	verbosityFlag = cli.Uint64Flag{
-		Name: "verbosity",
-		// Legacy value for log15.LvlInfo
-		Value: 3,
+		Name:  "verbosity",
+		Value: log.LegacyLevelInfo,
 		Usage: "log verbosity (0-9)",
 	}
 	jsonLogsFlag = cli.BoolFlag{

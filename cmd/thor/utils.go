@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/fdlimit"
 	"github.com/ethereum/go-ethereum/crypto"
+	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -55,46 +56,13 @@ import (
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
 	"gopkg.in/urfave/cli.v1"
-
-	ethlog "github.com/ethereum/go-ethereum/log"
 )
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-type EthLogHandler struct {
-	logger log.Logger
-}
-
-func initGethLogger(lvl ethlog.Lvl) {
-	handler := &EthLogHandler{
-		logger: log.WithContext("pkg", "geth"),
-	}
-	ethLogHandler := ethlog.NewGlogHandler(handler)
-	ethLogHandler.Verbosity(lvl)
-	ethlog.Root().SetHandler(ethLogHandler)
-}
-
-func (h *EthLogHandler) Log(r *ethlog.Record) error {
-	switch r.Lvl {
-	case ethlog.LvlCrit:
-		h.logger.Crit(r.Msg)
-	case ethlog.LvlError:
-		h.logger.Error(r.Msg)
-	case ethlog.LvlWarn:
-		h.logger.Warn(r.Msg)
-	case ethlog.LvlInfo:
-		h.logger.Info(r.Msg)
-	case ethlog.LvlDebug:
-		h.logger.Debug(r.Msg)
-	default:
-		break
-	}
-
-	return nil
-}
-
-func initLogger(legacyLevel int, jsonLogs bool) {
-	logLevel := log.FromLegacyLevel(legacyLevel)
+func initLogger(ctx *cli.Context) {
+	logLevel := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	jsonLogs := ctx.Bool(jsonLogsFlag.Name)
 	output := io.Writer(os.Stdout)
 
 	var handler slog.Handler
@@ -105,8 +73,29 @@ func initLogger(legacyLevel int, jsonLogs bool) {
 		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
 	}
 	log.SetDefault(log.NewLogger(handler))
-	initGethLogger(ethlog.LvlWarn)
+	ethlog.Root().SetHandler(&ethLogger{
+		logger: log.WithContext("pkg", "geth"),
+	})
 }
+
+type ethLogger struct {
+	logger log.Logger
+}
+
+func (h *ethLogger) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	default:
+		return nil
+	}
+	return nil
+}
+
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
 	key, err := crypto.LoadECDSA(path)
 	if err == nil {
