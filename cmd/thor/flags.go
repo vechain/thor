@@ -6,7 +6,7 @@
 package main
 
 import (
-	"github.com/inconshreveable/log15"
+	"github.com/vechain/thor/v2/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -75,8 +75,12 @@ var (
 	}
 	verbosityFlag = cli.Uint64Flag{
 		Name:  "verbosity",
-		Value: uint64(log15.LvlInfo),
+		Value: log.LegacyLevelInfo,
 		Usage: "log verbosity (0-9)",
+	}
+	jsonLogsFlag = cli.BoolFlag{
+		Name:  "json-logs",
+		Usage: "output logs in JSON format",
 	}
 	maxPeersFlag = cli.Uint64Flag{
 		Name:  "max-peers",

@@ -14,7 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/inconshreveable/log15"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/p2psrv/rpc"
 	"github.com/vechain/thor/v2/thor"
 )
@@ -25,14 +25,14 @@ const (
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 }
 
 // Peer extends p2p.Peer with RPC integrated.
 type Peer struct {
 	*p2p.Peer
 	*rpc.RPC
-	logger log15.Logger
+	logger log.Logger
 
 	createdTime mclock.AbsTime
 	knownTxs    *lru.Cache
@@ -58,7 +58,7 @@ func newPeer(peer *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		Peer:        peer,
 		RPC:         rpc.New(peer, rw),
-		logger:      log.New(ctx...),
+		logger:      logger.New(ctx...),
 		createdTime: mclock.Now(),
 		knownTxs:    knownTxs,
 		knownBlocks: knownBlocks,
