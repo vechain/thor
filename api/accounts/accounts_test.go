@@ -108,19 +108,24 @@ var ts *httptest.Server
 func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
-	getAccount(t)
-	getAccountWithNonExisitingRevision(t)
-	getAccountWithGenesisRevision(t)
-	getAccountWithFinalizedRevision(t)
-	getCode(t)
-	getCodeWithNonExisitingRevision(t)
-	getStorage(t)
-	getStorageWithNonExisitingRevision(t)
-	deployContractWithCall(t)
-	callContract(t)
-	callContractWithNonExisitingRevision(t)
-	batchCall(t)
-	batchCallWithNonExisitingRevision(t)
+
+	for name, tt := range map[string]func(*testing.T){
+		"getAccount":                           getAccount,
+		"getAccountWithNonExisitingRevision":   getAccountWithNonExisitingRevision,
+		"getAccountWithGenesisRevision":        getAccountWithGenesisRevision,
+		"getAccountWithFinalizedRevision":      getAccountWithFinalizedRevision,
+		"getCode":                              getCode,
+		"getCodeWithNonExisitingRevision":      getCodeWithNonExisitingRevision,
+		"getStorage":                           getStorage,
+		"getStorageWithNonExisitingRevision":   getStorageWithNonExisitingRevision,
+		"deployContractWithCall":               deployContractWithCall,
+		"callContract":                         callContract,
+		"callContractWithNonExisitingRevision": callContractWithNonExisitingRevision,
+		"batchCall":                            batchCall,
+		"batchCallWithNonExisitingRevision":    batchCallWithNonExisitingRevision,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getAccount(t *testing.T) {
@@ -375,6 +380,13 @@ func callContract(t *testing.T) {
 	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
+
+	// next revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+	_, statusCode = httpPost(t, ts.URL+"/accounts?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+
 	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
 	var output *accounts.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
@@ -463,6 +475,10 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
+
+	// 'next' revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
 	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
 	var results accounts.BatchCallResults

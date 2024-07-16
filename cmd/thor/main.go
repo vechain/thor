@@ -15,7 +15,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/inconshreveable/log15"
 	"github.com/mattn/go-isatty"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
@@ -25,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/cmd/thor/optimizer"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
@@ -43,7 +43,7 @@ var (
 	gitCommit     string
 	gitTag        string
 	copyrightYear string
-	log           = log15.New()
+	logger        = log.WithContext("ctx", "main")
 
 	defaultTxPoolOptions = txpool.Options{
 		Limit:           10000,
@@ -69,6 +69,7 @@ func main() {
 		Flags: []cli.Flag{
 			networkFlag,
 			configDirFlag,
+			masterKeyStdinFlag,
 			dataDirFlag,
 			cacheFlag,
 			beneficiaryFlag,
@@ -80,7 +81,9 @@ func main() {
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
 			enableAPILogsFlag,
+			apiLogsLimitFlag,
 			verbosityFlag,
+			jsonLogsFlag,
 			maxPeersFlag,
 			p2pPortFlag,
 			natFlag,
@@ -109,11 +112,13 @@ func main() {
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
 					enableAPILogsFlag,
+					apiLogsLimitFlag,
 					onDemandFlag,
 					blockInterval,
 					persistFlag,
 					gasLimitFlag,
 					verbosityFlag,
+					jsonLogsFlag,
 					pprofFlag,
 					verifyLogsFlag,
 					skipLogsFlag,
@@ -147,7 +152,7 @@ func main() {
 func defaultAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
 
-	defer func() { log.Info("exited") }()
+	defer func() { logger.Info("exited") }()
 
 	initLogger(ctx)
 
@@ -160,7 +165,7 @@ func defaultAction(ctx *cli.Context) error {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { logger.Info("stopping metrics server..."); close() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -176,7 +181,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("closing main database..."); mainDB.Close() }()
+	defer func() { logger.Info("closing main database..."); mainDB.Close() }()
 
 	skipLogs := ctx.Bool(skipLogsFlag.Name)
 
@@ -184,7 +189,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("closing log database..."); logDB.Close() }()
+	defer func() { logger.Info("closing log database..."); logDB.Close() }()
 
 	repo, err := initChainRepository(gene, mainDB, logDB)
 	if err != nil {
@@ -206,7 +211,7 @@ func defaultAction(ctx *cli.Context) error {
 
 	txpoolOpt := defaultTxPoolOptions
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	defer func() { logger.Info("closing tx pool..."); txPool.Close() }()
 
 	p2pCommunicator, err := newP2PCommunicator(ctx, repo, txPool, instanceDir)
 	if err != nil {
@@ -227,21 +232,22 @@ func defaultAction(ctx *cli.Context) error {
 		p2pCommunicator.Communicator(),
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		ctx.Uint64(apiCallGasLimitFlag.Name),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
+		ctx.Uint64(apiLogsLimitFlag.Name),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
+	defer func() { logger.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
-	defer func() { log.Info("stopping API server..."); srvCloser() }()
+	defer func() { logger.Info("stopping API server..."); srvCloser() }()
 
 	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
 
@@ -251,7 +257,7 @@ func defaultAction(ctx *cli.Context) error {
 	defer p2pCommunicator.Stop()
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	defer func() { logger.Info("stopping optimizer..."); optimizer.Stop() }()
 
 	return node.New(
 		master,
@@ -262,14 +268,14 @@ func defaultAction(ctx *cli.Context) error {
 		txPool,
 		filepath.Join(instanceDir, "tx.stash"),
 		p2pCommunicator.Communicator(),
-		uint64(ctx.Int(targetGasLimitFlag.Name)),
+		ctx.Uint64(targetGasLimitFlag.Name),
 		skipLogs,
 		forkConfig).Run(exitSignal)
 }
 
 func soloAction(ctx *cli.Context) error {
 	exitSignal := handleExitSignal()
-	defer func() { log.Info("exited") }()
+	defer func() { logger.Info("exited") }()
 
 	initLogger(ctx)
 
@@ -282,12 +288,13 @@ func soloAction(ctx *cli.Context) error {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
 		metricsURL = url
-		defer func() { log.Info("stopping metrics server..."); close() }()
+		defer func() { logger.Info("stopping metrics server..."); close() }()
 	}
 
 	var (
 		gene       *genesis.Genesis
 		forkConfig thor.ForkConfig
+		err        error
 	)
 
 	flagGenesis := ctx.String(genesisFlag.Name)
@@ -305,7 +312,6 @@ func soloAction(ctx *cli.Context) error {
 	var mainDB *muxdb.MuxDB
 	var logDB *logdb.LogDB
 	var instanceDir string
-	var err error
 
 	if ctx.Bool(persistFlag.Name) {
 		if instanceDir, err = makeInstanceDir(ctx, gene); err != nil {
@@ -314,12 +320,12 @@ func soloAction(ctx *cli.Context) error {
 		if mainDB, err = openMainDB(ctx, instanceDir); err != nil {
 			return err
 		}
-		defer func() { log.Info("closing main database..."); mainDB.Close() }()
+		defer func() { logger.Info("closing main database..."); mainDB.Close() }()
 
 		if logDB, err = openLogDB(instanceDir); err != nil {
 			return err
 		}
-		defer func() { log.Info("closing log database..."); logDB.Close() }()
+		defer func() { logger.Info("closing log database..."); logDB.Close() }()
 	} else {
 		instanceDir = "Memory"
 		mainDB = openMemMainDB()
@@ -340,11 +346,17 @@ func soloAction(ctx *cli.Context) error {
 	}
 
 	txPoolOption := defaultTxPoolOptions
-	txPoolOption.Limit = ctx.Int(txPoolLimitFlag.Name)
-	txPoolOption.LimitPerAccount = ctx.Int(txPoolLimitPerAccountFlag.Name)
+	txPoolOption.Limit, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit flag")
+	}
+	txPoolOption.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	}
 
 	txPool := txpool.New(repo, state.NewStater(mainDB), txPoolOption)
-	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
+	defer func() { logger.Info("closing tx pool..."); txPool.Close() }()
 
 	bftEngine := solo.NewBFTEngine(repo)
 	apiHandler, apiCloser := api.New(
@@ -356,26 +368,27 @@ func soloAction(ctx *cli.Context) error {
 		&solo.Communicator{},
 		forkConfig,
 		ctx.String(apiCorsFlag.Name),
-		uint32(ctx.Int(apiBacktraceLimitFlag.Name)),
-		uint64(ctx.Int(apiCallGasLimitFlag.Name)),
+		uint32(ctx.Uint64(apiBacktraceLimitFlag.Name)),
+		ctx.Uint64(apiCallGasLimitFlag.Name),
 		ctx.Bool(pprofFlag.Name),
 		skipLogs,
 		ctx.Bool(apiAllowCustomTracerFlag.Name),
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
+		ctx.Uint64(apiLogsLimitFlag.Name),
 	)
-	defer func() { log.Info("closing API..."); apiCloser() }()
+	defer func() { logger.Info("closing API..."); apiCloser() }()
 
 	apiURL, srvCloser, err := startAPIServer(ctx, apiHandler, repo.GenesisBlock().Header().ID())
 	if err != nil {
 		return err
 	}
 	defer func() {
-		log.Info("stopping API server...")
+		logger.Info("stopping API server...")
 		srvCloser()
 	}()
 
-	blockInterval := ctx.Int(blockInterval.Name)
+	blockInterval := ctx.Uint64(blockInterval.Name)
 	if blockInterval == 0 {
 		return errors.New("block-interval cannot be zero")
 	}
@@ -383,16 +396,16 @@ func soloAction(ctx *cli.Context) error {
 	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
-	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
+	defer func() { logger.Info("stopping optimizer..."); optimizer.Stop() }()
 
 	return solo.New(repo,
 		state.NewStater(mainDB),
 		logDB,
 		txPool,
-		uint64(ctx.Int(gasLimitFlag.Name)),
+		ctx.Uint64(gasLimitFlag.Name),
 		ctx.Bool(onDemandFlag.Name),
 		skipLogs,
-		uint64(blockInterval),
+		blockInterval,
 		forkConfig).Run(exitSignal)
 }
 

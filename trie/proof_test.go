@@ -19,7 +19,6 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
-	"fmt"
 	mrand "math/rand"
 	"testing"
 	"time"
@@ -30,14 +29,13 @@ import (
 )
 
 func init() {
-	mrand.Seed(time.Now().Unix())
+	mrand.Seed(time.Now().Unix()) // nolint:staticcheck
 }
 
 func TestProof(t *testing.T) {
 	trie, vals := randomTrie(500)
 	root := trie.Hash()
 	for _, kv := range vals {
-		fmt.Println(kv)
 		proofs := ethdb.NewMemDatabase()
 		if trie.Prove(kv.k, 0, proofs) != nil {
 			t.Fatalf("missing key %x while constructing proof", kv.k)

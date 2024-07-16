@@ -1,7 +1,7 @@
 PACKAGE = github.com/vechain/thor
 
 GIT_COMMIT = $(shell git --no-pager log --pretty="%h" -n 1)
-GIT_TAG = $(shell git tag -l --points-at HEAD)
+GIT_TAG = $(shell git tag -l --points-at HEAD | head -n 1)
 COPYRIGHT_YEAR = $(shell git --no-pager log -1 --format=%ad --date=format:%Y)
 THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -26,6 +27,8 @@ import (
 	"github.com/vechain/thor/v2/tx"
 )
 
+const defaultLogLimit uint64 = 1000
+
 var ts *httptest.Server
 
 var (
@@ -35,22 +38,57 @@ var (
 
 func TestEmptyEvents(t *testing.T) {
 	db := createDb(t)
-	initEventServer(t, db)
+	initEventServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
-	testEventsBadRequest(t)
-	testEventWithEmptyDb(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testEventsBadRequest": testEventsBadRequest,
+		"testEventWithEmptyDb": testEventWithEmptyDb,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func TestEvents(t *testing.T) {
 	db := createDb(t)
-	initEventServer(t, db)
+	initEventServer(t, db, defaultLogLimit)
 	defer ts.Close()
 
 	blocksToInsert := 5
 	insertBlocks(t, db, blocksToInsert)
-
 	testEventWithBlocks(t, blocksToInsert)
+}
+
+func TestOption(t *testing.T) {
+	db := createDb(t)
+	initEventServer(t, db, 5)
+	defer ts.Close()
+	insertBlocks(t, db, 10)
+
+	filter := events.EventFilter{
+		CriteriaSet: make([]*events.EventCriteria, 0),
+		Range:       nil,
+		Options:     &logdb.Options{Limit: 6},
+		Order:       logdb.DESC,
+	}
+
+	res, statusCode := httpPost(t, ts.URL+"/events", filter)
+	assert.Equal(t, "options.limit exceeds the maximum allowed value", strings.Trim(string(res), "\n"))
+	assert.Equal(t, http.StatusForbidden, statusCode)
+
+	filter.Options.Limit = 5
+	_, statusCode = httpPost(t, ts.URL+"/events", filter)
+	assert.Equal(t, http.StatusOK, statusCode)
+
+	// with nil options, should use default limit
+	filter.Options = nil
+	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	var tLogs []*events.FilteredEvent
+	if err := json.Unmarshal(res, &tLogs); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, http.StatusOK, statusCode)
+	assert.Equal(t, 5, len(tLogs))
 }
 
 // Test functions
@@ -128,7 +166,7 @@ func testEventWithBlocks(t *testing.T, expectedBlocks int) {
 }
 
 // Init functions
-func initEventServer(t *testing.T, logDb *logdb.LogDB) {
+func initEventServer(t *testing.T, logDb *logdb.LogDB, limit uint64) {
 	router := mux.NewRouter()
 
 	muxDb := muxdb.NewMem()
@@ -142,7 +180,7 @@ func initEventServer(t *testing.T, logDb *logdb.LogDB) {
 
 	repo, _ := chain.NewRepository(muxDb, b)
 
-	events.New(repo, logDb).Mount(router, "/events")
+	events.New(repo, logDb, limit).Mount(router, "/events")
 	ts = httptest.NewServer(router)
 }
 

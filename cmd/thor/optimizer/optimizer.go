@@ -12,18 +12,18 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
-var log = log15.New("pkg", "optimizer")
+var logger = log.WithContext("pkg", "optimizer")
 
 const (
 	propsStoreName = "optimizer.props"
@@ -51,7 +51,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository, prune bool) *Optimizer {
 	o.goes.Go(func() {
 		if err := o.loop(prune); err != nil {
 			if err != context.Canceled && errors.Cause(err) != context.Canceled {
-				log.Warn("optimizer interrupted", "error", err)
+				logger.Warn("optimizer interrupted", "error", err)
 			}
 		}
 	})
@@ -66,7 +66,7 @@ func (p *Optimizer) Stop() {
 
 // loop is the main loop.
 func (p *Optimizer) loop(prune bool) error {
-	log.Info("optimizer started")
+	logger.Info("optimizer started")
 
 	const (
 		period        = 2000  // the period to update leafbank.
@@ -110,7 +110,7 @@ func (p *Optimizer) loop(prune bool) error {
 
 		if now := time.Now().UnixNano(); now-lastLogTime > int64(time.Second*20) {
 			lastLogTime = now
-			log.Info("optimized tries",
+			logger.Info("optimized tries",
 				"range", fmt.Sprintf("#%v+%v", status.Base, target-status.Base),
 				"et", time.Duration(now-startTime),
 			)
