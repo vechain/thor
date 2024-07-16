@@ -150,6 +150,10 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
+	enableDebug = cli.BoolFlag{
+		Name:  "enable-debug",
+		Usage: "enable `/debug` endpoint on the node",
+	}
 
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{

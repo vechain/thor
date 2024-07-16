@@ -50,6 +50,7 @@ func New(
 	enableReqLogger bool,
 	enableMetrics bool,
 	logsLimit uint64,
+	enableDebug bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -82,8 +83,10 @@ func New(
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
-		Mount(router, "/debug")
+	if enableDebug {
+		debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
+			Mount(router, "/debug")
+	}
 	node.New(nw).
 		Mount(router, "/node")
 	subs := subscriptions.New(repo, origins, backtraceLimit, txPool)

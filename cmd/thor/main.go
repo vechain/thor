@@ -95,6 +95,7 @@ func main() {
 			disablePrunerFlag,
 			enableMetricsFlag,
 			metricsAddrFlag,
+			enableDebug,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -127,6 +128,7 @@ func main() {
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
+					enableDebug,
 				},
 				Action: soloAction,
 			},
@@ -240,6 +242,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		ctx.Bool(enableDebug.Name),
 	)
 	defer func() { logger.Info("closing API..."); apiCloser() }()
 
@@ -376,6 +379,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		ctx.Bool(enableDebug.Name),
 	)
 	defer func() { logger.Info("closing API..."); apiCloser() }()
 
