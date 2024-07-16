@@ -50,8 +50,7 @@ func New(
 	enableReqLogger bool,
 	enableMetrics bool,
 	logsLimit uint64,
-	allowedCredsEnabled bool,
-	allowedOriginEnabled bool,
+	corsAllowCredsEnabled bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -110,15 +109,18 @@ func New(
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	}
 
-	if allowedCredsEnabled {
+	if corsAllowCredsEnabled {
 		corsOptions = append(corsOptions, handlers.AllowCredentials())
-	}
 
-	if allowedOriginEnabled {
-		corsOptions = append(corsOptions, handlers.AllowedOriginValidator(func(origin string) bool {
-			// Allow all origins by always returning true
-			return true
-		}))
+		if len(origins) == 1 && origins[0] == "*" {
+			// use the origin validator when allow credentials is enabled and the allowed origins is "*"
+			// browsers blocks the request when allow-origin is "*" and allow-credentials is true. origin
+			// validator always returns true, and the CORS handler will add $http_origin to allow-origin
+			// header, thus pass the browser's limit
+			corsOptions = append(corsOptions, handlers.AllowedOriginValidator(func(origin string) bool {
+				return true
+			}))
+		}
 	}
 
 	handler = handlers.CORS(corsOptions...)(handler)
