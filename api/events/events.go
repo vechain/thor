@@ -7,6 +7,7 @@ package events
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -54,7 +55,7 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	if filter.Options != nil && filter.Options.Limit > e.limit {
-		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
 	}
 	if filter.Options == nil {
 		filter.Options = &logdb.Options{

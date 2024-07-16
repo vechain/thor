@@ -7,6 +7,7 @@ package transfers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -60,7 +61,7 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	if filter.Options != nil && filter.Options.Limit > t.limit {
-		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", t.limit))
 	}
 	if filter.Options == nil {
 		filter.Options = &logdb.Options{

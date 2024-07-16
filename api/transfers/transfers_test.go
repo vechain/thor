@@ -68,7 +68,7 @@ func TestOption(t *testing.T) {
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/transfers", filter)
-	assert.Equal(t, "options.limit exceeds the maximum allowed value", strings.Trim(string(res), "\n"))
+	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
