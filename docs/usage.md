@@ -181,6 +181,7 @@ bin/thor -h
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--enable-metrics`          | Enables the metrics server                                                                  |
+| `--enable-debug`            | Enables the /debug endpoint                                                                 |
 | `--metrics-addr`            | Metrics service listening address                                                           |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
