@@ -71,7 +71,7 @@ var (
 	}
 	apiCorsAllowedCredsFlag = cli.BoolFlag{
 		Name:  "api-cors-allow-creds",
-		Usage: "enables Access-Control-Allow-Credentials header in API response",
+		Usage: "sets Access-Control-Allow-Credentials:true and Access-Control-Allow-Origin:$host (if api-cors='*') in the header of the API response",
 	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",

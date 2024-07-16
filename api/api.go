@@ -113,10 +113,10 @@ func New(
 		corsOptions = append(corsOptions, handlers.AllowCredentials())
 
 		if len(origins) == 1 && origins[0] == "*" {
-			// use the origin validator when allow credentials is enabled and the allowed origins is "*"
-			// browsers blocks the request when allow-origin is "*" and allow-credentials is true. origin
-			// validator always returns true, and the CORS handler will add $http_origin to allow-origin
-			// header, thus pass the browser's limit
+			// uses the origin validator when allow credentials is enabled and the allowed origins is "*".
+			// browsers blocks the request when allow-origin is "*" and allow-credentials is true.
+			// origin validator always returns true, and the CORS handler will add $http_origin to allow-origin
+			// header, thus pass the browser's limit.
 			corsOptions = append(corsOptions, handlers.AllowedOriginValidator(func(origin string) bool {
 				return true
 			}))
