@@ -69,13 +69,9 @@ var (
 		Value: 1000,
 		Usage: "limit the number of logs returned by /logs API",
 	}
-	apiAllowedCredsFlag = cli.BoolFlag{
-		Name:  "api-allowed-creds",
-		Usage: "enables Access-Control-Allow-Credentials header in API response",
-	}
-	apiAllowedOriginsFlag = cli.BoolFlag{
-		Name:  "api-allowed-origins",
-		Usage: "enables Access-Control-Allow-Origin to be set as the Origin request",
+	apiCorsAllowedCredsFlag = cli.BoolFlag{
+		Name:  "api-cors-allow-creds",
+		Usage: "sets Access-Control-Allow-Credentials:true and Access-Control-Allow-Origin:$host (if api-cors='*') in the header of the API response",
 	}
 	enableAPILogsFlag = cli.BoolFlag{
 		Name:  "enable-api-logs",
