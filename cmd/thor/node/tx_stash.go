@@ -67,7 +67,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 	for it.Next() {
 		var tx tx.Transaction
 		if err := rlp.DecodeBytes(it.Value(), &tx); err != nil {
-			log.Warn("decode stashed tx", "err", err)
+			logger.Warn("decode stashed tx", "err", err)
 			batch.Delete(it.Key())
 		} else {
 			txs = append(txs, &tx)
@@ -83,7 +83,7 @@ func (ts *txStash) LoadAll() tx.Transactions {
 	}
 
 	if err := ts.db.Write(&batch, nil); err != nil {
-		log.Warn("remap stashed txs", "err", err)
+		logger.Warn("remap stashed txs", "err", err)
 	}
 	return txs
 }

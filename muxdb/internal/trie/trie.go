@@ -8,14 +8,14 @@ package trie
 import (
 	"context"
 
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
-var log = log15.New("pkg", "muxdb.trie")
+var logger = log.WithContext("pkg", "muxdb.trie")
 
 // Backend is the backend of the trie.
 type Backend struct {

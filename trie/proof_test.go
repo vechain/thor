@@ -29,7 +29,7 @@ import (
 )
 
 func init() {
-	mrand.Seed(time.Now().Unix())
+	mrand.Seed(time.Now().Unix()) // nolint:staticcheck
 }
 
 func TestProof(t *testing.T) {

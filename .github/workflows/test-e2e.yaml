@@ -32,7 +32,8 @@ jobs:
           retention-days: 7
 
   run-tests:
-    runs-on: ubuntu-latest
+    # https://docs.aws.amazon.com/codebuild/latest/userguide/action-runner.html#sample-github-action-runners-create-project
+    runs-on: codebuild-ThorGHA-${{ github.run_id }}-${{ github.run_attempt }}-ubuntu-7.0-large
     needs: build-docker-image
     env:
       THOR_IMAGE: vechain/thor:${{ github.sha }}
@@ -44,7 +45,7 @@ jobs:
         with:
           repository: vechain/thor-e2e-tests
           # https://github.com/vechain/thor-e2e-tests/tree/00bd3f1b949b05da94e82686e0089a11a136c34c
-          ref: 48aa71d61ee6438cc270f541a6a369731717ac06
+          ref: 4f984b8afd3bb21639f6838fd8c99bf64a9367f2
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -55,7 +56,7 @@ jobs:
       - name: Setup Node JS
         uses: actions/setup-node@v4
         with:
-          node-version: '18.x'
+          node-version: '20.x'
 
       - name: Load image
         run: |
@@ -66,6 +67,7 @@ jobs:
         run: |
           export THOR_IMAGE=vechain/thor:${{ github.sha }}
           yarn install
+          yarn docker:up
           yarn test
 
       - uses: actions/upload-artifact@v4

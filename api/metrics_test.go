@@ -19,7 +19,6 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/inconshreveable/log15"
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/accounts"
@@ -36,7 +35,6 @@ import (
 
 func init() {
 	metrics.InitializePrometheusMetrics()
-	log15.Root().SetHandler(log15.DiscardHandler())
 }
 
 func TestMetricsMiddleware(t *testing.T) {

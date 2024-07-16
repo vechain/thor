@@ -17,13 +17,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 )
 
-var log = log15.New("pkg", "p2psrv")
+var logger = log.WithContext("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
@@ -86,7 +85,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			if peer.Inbound() {
 				dir = "inbound"
 			}
-			log := log.New("peer", peer, "dir", dir)
+			log := logger.New("peer", peer, "dir", dir)
 
 			log.Debug("peer connected")
 			metricConnectedPeers().Add(1)
@@ -112,12 +111,12 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
-		log.Debug("registering topic", "topic", topic)
+		logger.Debug("registering topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discv5.RegisterTopic(topic, s.done)
 		})
 
-		log.Debug("searching topic", "topic", topic)
+		logger.Debug("searching topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discoverLoop(topic)
 		})
@@ -125,7 +124,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		s.goes.Go(s.fetchBootstrap)
 	}
 
-	log.Debug("start up", "self", s.Self())
+	logger.Debug("start up", "self", s.Self())
 
 	s.goes.Go(s.dialLoop)
 	return nil
@@ -253,7 +252,7 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
 				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
-				log.Debug("discovered node", "node", node)
+				logger.Debug("discovered node", "node", node)
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -300,7 +299,7 @@ func (s *Server) dialLoop() {
 				continue
 			}
 
-			log := log.New("node", node)
+			log := logger.New("node", node)
 			log.Debug("try to dial node")
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
@@ -360,7 +359,7 @@ func (s *Server) fetchBootstrap() {
 		if err := f(); err == nil || errors.Is(err, context.Canceled) {
 			return
 		} else {
-			log.Warn("update bootstrap nodes from remote failed", "err", err)
+			logger.Warn("update bootstrap nodes from remote failed", "err", err)
 		}
 
 		select {
