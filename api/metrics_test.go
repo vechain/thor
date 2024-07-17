@@ -12,12 +12,17 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
@@ -25,6 +30,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/txpool"
 )
 
 func init() {
@@ -101,6 +107,88 @@ func TestMetricsMiddleware(t *testing.T) {
 	assert.Equal(t, "GET", labels[1].GetValue())
 	assert.Equal(t, "name", labels[2].GetName())
 	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+}
+
+func TestWebsocketMetrics(t *testing.T) {
+	db := muxdb.NewMem()
+	stater := state.NewStater(db)
+	gene := genesis.NewDevnet()
+
+	b, _, _, err := gene.Build(stater)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, _ := chain.NewRepository(db, b)
+
+	router := mux.NewRouter()
+	sub := subscriptions.New(repo, []string{"*"}, 10, txpool.New(repo, stater, txpool.Options{}))
+	sub.Mount(router, "/subscriptions")
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	router.Use(metricsMiddleware)
+	ts := httptest.NewServer(router)
+
+	// initiate 1 beat subscription, active websocket should be 1
+	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/beat"}
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+
+	body, _ := httpGet(t, ts.URL+"/metrics")
+	parser := expfmt.TextParser{}
+	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m := metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	assert.Equal(t, 1, len(m), "should be 1 metric entries")
+	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
+
+	labels := m[0].GetLabel()
+	assert.Equal(t, "subject", labels[0].GetName())
+	assert.Equal(t, "beat", labels[0].GetValue())
+
+	// initiate 1 beat subscription, active websocket should be 2
+	_, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+
+	body, _ = httpGet(t, ts.URL+"/metrics")
+	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m = metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	assert.Equal(t, 1, len(m), "should be 1 metric entries")
+	assert.Equal(t, float64(2), m[0].GetGauge().GetValue())
+
+	// close 1 beat subscription, active websocket should be 1
+	conn.Close()
+	// ensure close is done
+	<-time.After(100 * time.Millisecond)
+
+	body, _ = httpGet(t, ts.URL+"/metrics")
+	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m = metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	assert.Equal(t, 1, len(m), "should be 1 metric entries")
+	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
+
+	// initiate 1 block subscription, active websocket should be 2
+	u = url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/block"}
+	_, _, err = websocket.DefaultDialer.Dial(u.String(), nil)
+	assert.Nil(t, err)
+
+	body, _ = httpGet(t, ts.URL+"/metrics")
+	metrics, err = parser.TextToMetricFamilies(bytes.NewReader(body))
+	assert.Nil(t, err)
+
+	m = metrics["thor_metrics_api_active_websocket_count"].GetMetric()
+	assert.Equal(t, 2, len(m), "should be 2 metric entries")
+	// both m[0] and m[1] should have the value of 1
+	assert.Equal(t, float64(1), m[0].GetGauge().GetValue())
+	assert.Equal(t, float64(1), m[1].GetGauge().GetValue())
+
+	// m[1] should have the subject of block
+	labels = m[1].GetLabel()
+	assert.Equal(t, "subject", labels[0].GetName())
+	assert.Equal(t, "block", labels[0].GetValue())
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {

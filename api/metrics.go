@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -18,8 +19,9 @@ import (
 )
 
 var (
-	metricHttpReqCounter  = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
-	metricHttpReqDuration = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
+	metricHttpReqCounter        = metrics.LazyLoadCounterVec("api_request_count", []string{"name", "code", "method"})
+	metricHttpReqDuration       = metrics.LazyLoadHistogramVec("api_duration_ms", []string{"name", "code", "method"}, metrics.BucketHTTPReqs)
+	metricsActiveWebsocketCount = metrics.LazyLoadGaugeVec("api_active_websocket_count", []string{"subject"})
 )
 
 // metricsResponseWriter is a wrapper around http.ResponseWriter that captures the status code.
@@ -58,22 +60,35 @@ func metricsMiddleware(next http.Handler) http.Handler {
 		rt := mux.CurrentRoute(r)
 
 		var (
-			enabled = false
-			name    = ""
+			enabled      = false
+			name         = ""
+			subscription = ""
 		)
 
 		// all named route will be recorded
 		if rt != nil && rt.GetName() != "" {
 			enabled = true
 			name = rt.GetName()
+			if strings.HasPrefix(name, "subscriptions") {
+				// example path: /subscriptions/txpool -> subject = txpool
+				paths := strings.Split(r.URL.Path, "/")
+				if len(paths) > 2 {
+					subscription = paths[2]
+				}
+			}
 		}
 
 		now := time.Now()
 		mrw := newMetricsResponseWriter(w)
+		if subscription != "" {
+			metricsActiveWebsocketCount().AddWithLabel(1, map[string]string{"subject": subscription})
+		}
 
 		next.ServeHTTP(mrw, r)
 
-		if enabled {
+		if subscription != "" {
+			metricsActiveWebsocketCount().AddWithLabel(-1, map[string]string{"subject": subscription})
+		} else if enabled {
 			metricHttpReqCounter().AddWithLabel(1, map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 			metricHttpReqDuration().ObserveWithLabels(time.Since(now).Milliseconds(), map[string]string{"name": name, "code": strconv.Itoa(mrw.statusCode), "method": r.Method})
 		}

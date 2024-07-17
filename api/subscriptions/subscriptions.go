@@ -385,7 +385,7 @@ func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("subscriptions_pending_tx").
 		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
-	sub.Path("/{subject}").
+	sub.Path("/{subject:beat|beat2|block|event|transfer}").
 		Methods(http.MethodGet).
 		Name("subscriptions_subject").
 		HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))

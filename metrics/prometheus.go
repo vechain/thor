@@ -280,10 +280,18 @@ func (c *promGaugeMeter) Add(i int64) {
 	c.gauge.Add(float64(i))
 }
 
+func (c *promGaugeMeter) Set(i int64) {
+	c.gauge.Set(float64(i))
+}
+
 type promGaugeVecMeter struct {
 	gauge *prometheus.GaugeVec
 }
 
-func (c *promGaugeVecMeter) GaugeWithLabel(i int64, labels map[string]string) {
+func (c *promGaugeVecMeter) AddWithLabel(i int64, labels map[string]string) {
 	c.gauge.With(labels).Add(float64(i))
+}
+
+func (c *promGaugeVecMeter) SetWithLabel(i int64, labels map[string]string) {
+	c.gauge.With(labels).Set(float64(i))
 }
