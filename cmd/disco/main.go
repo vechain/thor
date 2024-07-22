@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/log"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -38,7 +37,11 @@ var (
 )
 
 func run(ctx *cli.Context) error {
-	initLogger(ctx)
+	lvl, err := readIntFromUInt64Flag(ctx.Uint64(verbosityFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse verbosity flag")
+	}
+	initLogger(lvl)
 
 	natm, err := nat.Parse(ctx.String("nat"))
 	if err != nil {
@@ -89,7 +92,7 @@ func run(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Info("Running", "URI", net.Self().String())
+	fmt.Println("Running", net.Self().String())
 
 	select {}
 }
