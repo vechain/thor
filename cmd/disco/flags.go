@@ -34,7 +34,7 @@ var (
 		Name:  "netrestrict",
 		Usage: "restrict network communication to the given IP networks (CIDR masks)",
 	}
-	verbosityFlag = cli.IntFlag{
+	verbosityFlag = cli.UintFlag{
 		Name:  "verbosity",
 		Value: log.LegacyLevelWarn,
 		Usage: "log verbosity (0-9)",
