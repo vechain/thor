@@ -69,7 +69,10 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	fes, err := e.filter(req.Context(), &filter)
 	if err != nil {
 		return err
-	} else if len(fes) > int(e.limit) {
+	}
+
+	// ensure the result size is less than the configured limit
+	if len(fes) > int(e.limit) {
 		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.limit))
 	}
 

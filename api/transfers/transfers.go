@@ -75,7 +75,10 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	tLogs, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
-	} else if len(tLogs) > int(t.limit) {
+	}
+
+	// ensure the result size is less than the configured limit
+	if len(tLogs) > int(t.limit) {
 		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.limit))
 	}
 
