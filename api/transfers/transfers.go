@@ -64,16 +64,21 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", t.limit))
 	}
 	if filter.Options == nil {
+		// if filter.Options is nil, set to the default limit +1
+		// to detect whether there are more logs than the default limit
 		filter.Options = &logdb.Options{
 			Offset: 0,
-			Limit:  t.limit,
+			Limit:  t.limit + 1,
 		}
 	}
 
 	tLogs, err := t.filter(req.Context(), &filter)
 	if err != nil {
 		return err
+	} else if len(tLogs) > int(t.limit) {
+		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.limit))
 	}
+
 	return utils.WriteJSON(w, tLogs)
 }
 
