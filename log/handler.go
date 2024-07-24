@@ -55,7 +55,7 @@ func (h *discardHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 type TerminalHandler struct {
 	mu       sync.Mutex
 	wr       io.Writer
-	lvl      slog.Level
+	lvl      *slog.LevelVar
 	useColor bool
 	attrs    []slog.Attr
 	// fieldPadding is a map with maximum field value lengths seen until now
@@ -75,12 +75,14 @@ type TerminalHandler struct {
 //
 //	[DBUG] [May 16 20:58:45] remove route ns=haproxy addr=127.0.0.1:50002
 func NewTerminalHandler(wr io.Writer, useColor bool) *TerminalHandler {
-	return NewTerminalHandlerWithLevel(wr, levelMaxVerbosity, useColor)
+	var level slog.LevelVar
+	level.Set(levelMaxVerbosity)
+	return NewTerminalHandlerWithLevel(wr, &level, useColor)
 }
 
 // NewTerminalHandlerWithLevel returns the same handler as NewTerminalHandler but only outputs
 // records which are less than or equal to the specified verbosity level.
-func NewTerminalHandlerWithLevel(wr io.Writer, lvl slog.Level, useColor bool) *TerminalHandler {
+func NewTerminalHandlerWithLevel(wr io.Writer, lvl *slog.LevelVar, useColor bool) *TerminalHandler {
 	return &TerminalHandler{
 		wr:           wr,
 		lvl:          lvl,
@@ -99,7 +101,7 @@ func (h *TerminalHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *TerminalHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return level >= h.lvl
+	return level.Level() >= h.lvl.Level()
 }
 
 func (h *TerminalHandler) WithGroup(name string) slog.Handler {

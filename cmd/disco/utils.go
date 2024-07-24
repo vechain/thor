@@ -8,6 +8,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -19,15 +20,18 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func initLogger(ctx *cli.Context) {
+func initLogger(ctx *cli.Context) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+	var level slog.LevelVar
+	level.Set(logLevel)
 	output := io.Writer(os.Stdout)
 	useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-	handler := log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+	handler := log.NewTerminalHandlerWithLevel(output, &level, useColor)
 	log.SetDefault(log.NewLogger(handler))
 	ethlog.Root().SetHandler(&ethLogger{
 		logger: log.WithContext("pkg", "geth"),
 	})
+	return &level
 }
 
 type ethLogger struct {
