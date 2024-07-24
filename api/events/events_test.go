@@ -63,7 +63,7 @@ func TestOption(t *testing.T) {
 	db := createDb(t)
 	initEventServer(t, db, 5)
 	defer ts.Close()
-	insertBlocks(t, db, 10)
+	insertBlocks(t, db, 5)
 
 	filter := events.EventFilter{
 		CriteriaSet: make([]*events.EventCriteria, 0),
@@ -73,22 +73,30 @@ func TestOption(t *testing.T) {
 	}
 
 	res, statusCode := httpPost(t, ts.URL+"/events", filter)
-	assert.Equal(t, "options.limit exceeds the maximum allowed value", strings.Trim(string(res), "\n"))
+	assert.Equal(t, "options.limit exceeds the maximum allowed value of 5", strings.Trim(string(res), "\n"))
 	assert.Equal(t, http.StatusForbidden, statusCode)
 
 	filter.Options.Limit = 5
 	_, statusCode = httpPost(t, ts.URL+"/events", filter)
 	assert.Equal(t, http.StatusOK, statusCode)
 
-	// with nil options, should use default limit
+	// with nil options, should use default limit, when the filtered lower
+	// or equal to the limit, should return the filtered events
 	filter.Options = nil
 	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	assert.Equal(t, http.StatusOK, statusCode)
 	var tLogs []*events.FilteredEvent
 	if err := json.Unmarshal(res, &tLogs); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, http.StatusOK, statusCode)
 	assert.Equal(t, 5, len(tLogs))
+
+	// when the filtered events exceed the limit, should return the forbidden
+	insertBlocks(t, db, 6)
+	res, statusCode = httpPost(t, ts.URL+"/events", filter)
+	assert.Equal(t, http.StatusForbidden, statusCode)
+	assert.Equal(t, "the number of filtered logs exceeds the maximum allowed value of 5, please use pagination", strings.Trim(string(res), "\n"))
 }
 
 // Test functions

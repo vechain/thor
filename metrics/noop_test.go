@@ -42,7 +42,7 @@ func TestNoopMetrics(t *testing.T) {
 	gaugeVec := GaugeVec("gaugeVec1", []string{"zeroOrOne"})
 	for i := 0; i < rand.Intn(100)+1; i++ { // nolint:gosec
 		countVect.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
-		gaugeVec.GaugeWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
+		gaugeVec.AddWithLabel(int64(i), map[string]string{"thisIsNonsense": "butDoesntBreak"})
 	}
 
 	// Make a request to the metrics endpoint

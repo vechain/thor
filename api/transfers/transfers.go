@@ -7,6 +7,7 @@ package transfers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -60,12 +61,14 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
 	if filter.Options != nil && filter.Options.Limit > t.limit {
-		return utils.Forbidden(errors.New("options.limit exceeds the maximum allowed value"))
+		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", t.limit))
 	}
 	if filter.Options == nil {
+		// if filter.Options is nil, set to the default limit +1
+		// to detect whether there are more logs than the default limit
 		filter.Options = &logdb.Options{
 			Offset: 0,
-			Limit:  t.limit,
+			Limit:  t.limit + 1,
 		}
 	}
 
@@ -73,6 +76,12 @@ func (t *Transfers) handleFilterTransferLogs(w http.ResponseWriter, req *http.Re
 	if err != nil {
 		return err
 	}
+
+	// ensure the result size is less than the configured limit
+	if len(tLogs) > int(t.limit) {
+		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", t.limit))
+	}
+
 	return utils.WriteJSON(w, tLogs)
 }
 

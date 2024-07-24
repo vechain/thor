@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/vechain/thor/v2/log"
 )
+
+var logger = log.WithContext("pkg", "metrics")
 
 const namespace = "thor_metrics"
 
@@ -137,7 +139,7 @@ func (o *prometheusMetrics) newHistogramMeter(name string, buckets []int64) Hist
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 
 	return &promHistogramMeter{
@@ -170,7 +172,7 @@ func (o *prometheusMetrics) newHistogramVecMeter(name string, labels []string, b
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 
 	return &promHistogramVecMeter{
@@ -196,7 +198,7 @@ func (o *prometheusMetrics) newCountMeter(name string) CountMeter {
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promCountMeter{
 		counter: meter,
@@ -214,7 +216,7 @@ func (o *prometheusMetrics) newCountVecMeter(name string, labels []string) Count
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promCountVecMeter{
 		counter: meter,
@@ -231,7 +233,7 @@ func (o *prometheusMetrics) newGaugeMeter(name string) GaugeMeter {
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promGaugeMeter{
 		gauge: meter,
@@ -249,7 +251,7 @@ func (o *prometheusMetrics) newGaugeVecMeter(name string, labels []string) Gauge
 
 	err := prometheus.Register(meter)
 	if err != nil {
-		log.Warn("unable to register metric", "err", err)
+		logger.Warn("unable to register metric", "err", err)
 	}
 	return &promGaugeVecMeter{
 		gauge: meter,
@@ -280,10 +282,18 @@ func (c *promGaugeMeter) Add(i int64) {
 	c.gauge.Add(float64(i))
 }
 
+func (c *promGaugeMeter) Set(i int64) {
+	c.gauge.Set(float64(i))
+}
+
 type promGaugeVecMeter struct {
 	gauge *prometheus.GaugeVec
 }
 
-func (c *promGaugeVecMeter) GaugeWithLabel(i int64, labels map[string]string) {
+func (c *promGaugeVecMeter) AddWithLabel(i int64, labels map[string]string) {
 	c.gauge.With(labels).Add(float64(i))
+}
+
+func (c *promGaugeVecMeter) SetWithLabel(i int64, labels map[string]string) {
+	c.gauge.With(labels).Set(float64(i))
 }
