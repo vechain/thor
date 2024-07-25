@@ -60,21 +60,25 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-func initLogger(lvl int, jsonLogs bool) {
+func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
 	output := io.Writer(os.Stdout)
+	var level slog.LevelVar
+	level.Set(logLevel)
 
 	var handler slog.Handler
 	if jsonLogs {
 		handler = log.JSONHandlerWithLevel(output, logLevel)
 	} else {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+		handler = log.NewTerminalHandlerWithLevel(output, &level, useColor)
 	}
 	log.SetDefault(log.NewLogger(handler))
 	ethlog.Root().SetHandler(ethlog.LvlFilterHandler(ethlog.LvlWarn, &ethLogger{
 		logger: log.WithContext("pkg", "geth"),
 	}))
+
+	return &level
 }
 
 type ethLogger struct {
