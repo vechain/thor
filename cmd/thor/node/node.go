@@ -365,6 +365,12 @@ func (n *Node) processBlock(newBlock *block.Block, stats *blockStats) (bool, err
 			return errors.Wrap(err, "add block")
 		}
 
+		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
+			if err := n.bft.JustifyBlock(newBlock.Header()); err != nil {
+				return errors.Wrap(err, "bft justify")
+			}
+		}
+
 		// commit block in bft engine
 		if newBlock.Header().Number() >= n.forkConfig.FINALITY {
 			if err := n.bft.CommitBlock(newBlock.Header(), false); err != nil {

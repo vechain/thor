@@ -21,6 +21,7 @@ const (
 	revBest      int64 = -1
 	revFinalized int64 = -2
 	revNext      int64 = -3
+	revJustified int64 = -4
 )
 
 type Revision struct {
@@ -39,6 +40,10 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 
 	if revision == "finalized" {
 		return &Revision{revFinalized}, nil
+	}
+
+	if revision == "justified" {
+		return &Revision{revJustified}, nil
 	}
 
 	if revision == "next" {
@@ -83,6 +88,8 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Finalizer) (sum *
 			id = repo.BestBlockSummary().Header.ID()
 		case revFinalized:
 			id = bft.Finalized()
+		case revJustified:
+			id = bft.Justified()
 		}
 	}
 	if id.IsZero() {

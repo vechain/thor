@@ -24,9 +24,11 @@ import (
 const dataStoreName = "bft.engine"
 
 var finalizedKey = []byte("finalized")
+var justifiedKey = []byte("justified")
 
 type Finalizer interface {
 	Finalized() thor.Bytes32
+	Justified() thor.Bytes32
 }
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
@@ -39,6 +41,7 @@ type BFTEngine struct {
 	master     thor.Address
 	casts      casts
 	finalized  atomic.Value
+	justified  atomic.Value
 	caches     struct {
 		state     *lru.Cache
 		quality   *lru.Cache
@@ -60,6 +63,17 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	engine.caches.quality, _ = lru.New(16)
 	engine.caches.justifier = cache.NewPrioCache(16)
 
+	// Restore justified block, if any
+	if val, err := engine.data.Get(justifiedKey); err != nil {
+		if !engine.data.IsNotFound(err) {
+			return nil, err
+		}
+		engine.justified.Store(engine.repo.GenesisBlock().Header().ID())
+	} else {
+		engine.justified.Store(thor.BytesToBytes32(val))
+	}
+
+	// Restore finalized block, if any
 	if val, err := engine.data.Get(finalizedKey); err != nil {
 		if !engine.data.IsNotFound(err) {
 			return nil, err
@@ -75,6 +89,10 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 // Finalized returns the finalized checkpoint.
 func (engine *BFTEngine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
+}
+
+func (engine *BFTEngine) Justified() thor.Bytes32 {
+	return engine.justified.Load().(thor.Bytes32)
 }
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
@@ -106,6 +124,25 @@ func (engine *BFTEngine) Select(header *block.Header) (bool, error) {
 	}
 
 	return header.BetterThan(best), nil
+}
+
+func (engine *BFTEngine) JustifyBlock(header *block.Header) error {
+	if getStorePoint(header.Number()) == header.Number() {
+		st, err := engine.computeState(header)
+		if err != nil {
+			return err
+		}
+
+		if st.Justified {
+			// get last checkpoint
+			checkpoint, err := engine.repo.NewChain(header.ID()).GetBlockSummary(getCheckPoint(header.Number()))
+			if err != nil {
+				return err
+			}
+			engine.justified.Store(checkpoint.Header.ID())
+		}
+	}
+	return nil
 }
 
 // CommitBlock commits bft state to storage.
@@ -223,7 +260,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-// computeState computes the bft state regarding the given block header.
+// computeState computes the bft state regarding the given block header to the closest checkpoint.
 func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil
