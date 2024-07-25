@@ -69,7 +69,7 @@ func initLogger(lvl int, jsonLogs bool) *slog.LevelVar {
 
 	var handler slog.Handler
 	if jsonLogs {
-		handler = log.JSONHandlerWithLevel(output, logLevel)
+		handler = log.JSONHandlerWithLevel(output, &level)
 	} else {
 		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 		handler = log.NewTerminalHandlerWithLevel(output, &level, useColor)

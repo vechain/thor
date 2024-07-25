@@ -125,20 +125,22 @@ func (t *TerminalHandler) ResetFieldPadding() {
 	t.mu.Unlock()
 }
 
-type leveler struct{ minLevel slog.Level }
+type leveler struct{ minLevel *slog.LevelVar }
 
 func (l *leveler) Level() slog.Level {
-	return l.minLevel
+	return l.minLevel.Level()
 }
 
 // JSONHandler returns a handler which prints records in JSON format.
 func JSONHandler(wr io.Writer) slog.Handler {
-	return JSONHandlerWithLevel(wr, levelMaxVerbosity)
+	var level slog.LevelVar
+	level.Set(levelMaxVerbosity)
+	return JSONHandlerWithLevel(wr, &level)
 }
 
 // JSONHandlerWithLevel returns a handler which prints records in JSON format that are less than or equal to
 // the specified verbosity level.
-func JSONHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
+func JSONHandlerWithLevel(wr io.Writer, level *slog.LevelVar) slog.Handler {
 	return slog.NewJSONHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceJSON,
 		Level:       &leveler{level},
@@ -157,7 +159,7 @@ func LogfmtHandler(wr io.Writer) slog.Handler {
 
 // LogfmtHandlerWithLevel returns the same handler as LogfmtHandler but it only outputs
 // records which are less than or equal to the specified verbosity level.
-func LogfmtHandlerWithLevel(wr io.Writer, level slog.Level) slog.Handler {
+func LogfmtHandlerWithLevel(wr io.Writer, level *slog.LevelVar) slog.Handler {
 	return slog.NewTextHandler(wr, &slog.HandlerOptions{
 		ReplaceAttr: builtinReplaceLogfmt,
 		Level:       &leveler{level},
