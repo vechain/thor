@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -57,7 +56,7 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			var err error
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
-				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+				logger.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return err
 			}
 		default:

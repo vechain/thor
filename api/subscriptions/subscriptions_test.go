@@ -30,44 +30,19 @@ var txPool *txpool.TxPool
 var repo *chain.Repository
 var blocks []*block.Block
 
-func TestMain(t *testing.T) {
+func TestSubscriptions(t *testing.T) {
 	initSubscriptionsServer(t)
 	defer ts.Close()
 
-	testHandlePendingTransactions(t)
-	testHandleSubjectWithBlock(t)
-	testHandleSubjectWithEvent(t)
-	testHandleSubjectWithTransfer(t)
-	testHandleSubjectWithBeat(t)
-	testHandleSubjectWithBeat2(t)
-	testHandleSubjectWithNonValidArgument(t)
-}
-
-func testHandlePendingTransactions(t *testing.T) {
-	u := url.URL{Scheme: "ws", Host: strings.TrimPrefix(ts.URL, "http://"), Path: "/subscriptions/txpool"}
-
-	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	assert.NoError(t, err)
-	defer conn.Close()
-
-	// Check the protocol upgrade to websocket
-	assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	assert.Equal(t, "Upgrade", resp.Header.Get("Connection"))
-	assert.Equal(t, "websocket", resp.Header.Get("Upgrade"))
-
-	// Add a new tx to the mempool
-	transaction := createTx(t, repo, 1)
-	txPool.AddLocal(transaction)
-
-	_, msg, err := conn.ReadMessage()
-
-	assert.NoError(t, err)
-
-	var pendingTx *PendingTxIDMessage
-	if err := json.Unmarshal(msg, &pendingTx); err != nil {
-		t.Fatal(err)
-	} else {
-		assert.Equal(t, transaction.ID(), pendingTx.ID)
+	for name, tt := range map[string]func(*testing.T){
+		"testHandleSubjectWithBlock":            testHandleSubjectWithBlock,
+		"testHandleSubjectWithEvent":            testHandleSubjectWithEvent,
+		"testHandleSubjectWithTransfer":         testHandleSubjectWithTransfer,
+		"testHandleSubjectWithBeat":             testHandleSubjectWithBeat,
+		"testHandleSubjectWithBeat2":            testHandleSubjectWithBeat2,
+		"testHandleSubjectWithNonValidArgument": testHandleSubjectWithNonValidArgument,
+	} {
+		t.Run(name, tt)
 	}
 }
 

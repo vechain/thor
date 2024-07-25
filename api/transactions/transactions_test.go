@@ -21,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/gorilla/mux"
-	"github.com/inconshreveable/log15"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/chain"
@@ -34,10 +33,6 @@ import (
 	"github.com/vechain/thor/v2/txpool"
 )
 
-func init() {
-	log15.Root().SetHandler(log15.DiscardHandler())
-}
-
 var repo *chain.Repository
 var ts *httptest.Server
 var transaction *tx.Transaction
@@ -48,26 +43,38 @@ func TestTransaction(t *testing.T) {
 	defer ts.Close()
 
 	// Send tx
-	sendTx(t)
-	sendTxWithBadFormat(t)
-	sendTxThatCannotBeAcceptedInLocalMempool(t)
+	for name, tt := range map[string]func(*testing.T){
+		"sendTx":              sendTx,
+		"sendTxWithBadFormat": sendTxWithBadFormat,
+		"sendTxThatCannotBeAcceptedInLocalMempool": sendTxThatCannotBeAcceptedInLocalMempool,
+	} {
+		t.Run(name, tt)
+	}
 
 	// Get tx
-	getTx(t)
-	getTxWithBadId(t)
-	txWithBadHeader(t)
-	getNonExistingRawTransactionWhenTxStillInMempool(t)
-	getNonPendingRawTransactionWhenTxStillInMempool(t)
-	getRawTransactionWhenTxStillInMempool(t)
-	getTransactionByIDTxNotFound(t)
-	getTransactionByIDPendingTxNotFound(t)
-	handleGetTransactionByIDWithBadQueryParams(t)
-	handleGetTransactionByIDWithNonExistingHead(t)
+	for name, tt := range map[string]func(*testing.T){
+		"getTx":           getTx,
+		"getTxWithBadId":  getTxWithBadId,
+		"txWithBadHeader": txWithBadHeader,
+		"getNonExistingRawTransactionWhenTxStillInMempool": getNonExistingRawTransactionWhenTxStillInMempool,
+		"getNonPendingRawTransactionWhenTxStillInMempool":  getNonPendingRawTransactionWhenTxStillInMempool,
+		"getRawTransactionWhenTxStillInMempool":            getRawTransactionWhenTxStillInMempool,
+		"getTransactionByIDTxNotFound":                     getTransactionByIDTxNotFound,
+		"getTransactionByIDPendingTxNotFound":              getTransactionByIDPendingTxNotFound,
+		"handleGetTransactionByIDWithBadQueryParams":       handleGetTransactionByIDWithBadQueryParams,
+		"handleGetTransactionByIDWithNonExistingHead":      handleGetTransactionByIDWithNonExistingHead,
+	} {
+		t.Run(name, tt)
+	}
 
 	// Get tx receipt
-	getTxReceipt(t)
-	getReceiptWithBadId(t)
-	handleGetTransactionReceiptByIDWithNonExistingHead(t)
+	for name, tt := range map[string]func(*testing.T){
+		"getTxReceipt":        getTxReceipt,
+		"getReceiptWithBadId": getReceiptWithBadId,
+		"handleGetTransactionReceiptByIDWithNonExistingHead": handleGetTransactionReceiptByIDWithNonExistingHead,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getTx(t *testing.T) {
@@ -258,7 +265,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint: gosec
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +371,7 @@ func checkMatchingTx(t *testing.T, expectedTx *tx.Transaction, actualTx *transac
 }
 
 func httpGetAndCheckResponseStatus(t *testing.T, url string, responseStatusCode int) []byte {
-	res, err := http.Get(url)
+	res, err := http.Get(url) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}

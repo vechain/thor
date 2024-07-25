@@ -6,7 +6,7 @@
 package subscriptions
 
 import (
-	"crypto/rand"
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -25,12 +25,11 @@ import (
 
 func TestConvertBlockWithBadSignature(t *testing.T) {
 	// Arrange
-	var sig [65]byte
-	rand.Read(sig[:])
+	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	b := new(block.Builder).
 		Build().
-		WithSignature(sig[:])
+		WithSignature(badSig[:])
 
 	extendedBlock := &chain.ExtendedBlock{Block: b, Obsolete: false}
 
@@ -146,8 +145,7 @@ func TestConvertTransfer(t *testing.T) {
 
 func TestConvertEventWithBadSignature(t *testing.T) {
 	// Arrange
-	var sig [65]byte
-	rand.Read(sig[:])
+	badSig := bytes.Repeat([]byte{0xf}, 65)
 
 	// New tx
 	transaction := new(tx.Builder).
@@ -158,7 +156,7 @@ func TestConvertEventWithBadSignature(t *testing.T) {
 		Nonce(1).
 		BlockRef(tx.NewBlockRef(0)).
 		Build().
-		WithSignature(sig[:])
+		WithSignature(badSig[:])
 
 	// New block
 	blk := new(block.Builder).

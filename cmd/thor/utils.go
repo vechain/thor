@@ -6,11 +6,13 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"net/http"
@@ -32,16 +34,21 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
+	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
+	"github.com/vechain/thor/v2/cmd/thor/p2p"
 	"github.com/vechain/thor/v2/co"
 	"github.com/vechain/thor/v2/comm"
 	"github.com/vechain/thor/v2/genesis"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
+	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -53,13 +60,45 @@ import (
 
 var devNetGenesisID = genesis.NewDevnet().ID()
 
-func initLogger(ctx *cli.Context) {
-	logLevel := ctx.Int(verbosityFlag.Name)
-	log15.Root().SetHandler(log15.LvlFilterHandler(log15.Lvl(logLevel), log15.StderrHandler))
-	// set go-ethereum log lvl to Warn
-	ethLogHandler := ethlog.NewGlogHandler(ethlog.StreamHandler(os.Stderr, ethlog.TerminalFormat(true)))
-	ethLogHandler.Verbosity(ethlog.LvlWarn)
-	ethlog.Root().SetHandler(ethLogHandler)
+func initLogger(lvl int, jsonLogs bool) {
+	logLevel := log.FromLegacyLevel(lvl)
+	output := io.Writer(os.Stdout)
+
+	var handler slog.Handler
+	if jsonLogs {
+		handler = log.JSONHandlerWithLevel(output, logLevel)
+	} else {
+		useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
+		handler = log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+	}
+	log.SetDefault(log.NewLogger(handler))
+	ethlog.Root().SetHandler(ethlog.LvlFilterHandler(ethlog.LvlWarn, &ethLogger{
+		logger: log.WithContext("pkg", "geth"),
+	}))
+}
+
+type ethLogger struct {
+	logger log.Logger
+}
+
+func (h *ethLogger) Log(r *ethlog.Record) error {
+	switch r.Lvl {
+	case ethlog.LvlCrit:
+		h.logger.Crit(r.Msg)
+	case ethlog.LvlError:
+		h.logger.Error(r.Msg)
+	case ethlog.LvlWarn:
+		h.logger.Warn(r.Msg)
+	case ethlog.LvlInfo:
+		h.logger.Info(r.Msg)
+	case ethlog.LvlDebug:
+		h.logger.Debug(r.Msg)
+	case ethlog.LvlTrace:
+		h.logger.Trace(r.Msg)
+	default:
+		return nil
+	}
+	return nil
 }
 
 func loadOrGeneratePrivateKey(path string) (*ecdsa.PrivateKey, error) {
@@ -347,7 +386,7 @@ func suggestFDCache() int {
 	return n
 }
 
-func openLogDB(ctx *cli.Context, dir string) (*logdb.LogDB, error) {
+func openLogDB(dir string) (*logdb.LogDB, error) {
 	path := filepath.Join(dir, "logs.db")
 	db, err := logdb.New(path)
 	if err != nil {
@@ -400,15 +439,48 @@ func masterKeyPath(ctx *cli.Context) (string, error) {
 	return filepath.Join(configDir, "master.key"), nil
 }
 
+func loadNodeMasterFromStdin() (*ecdsa.PrivateKey, error) {
+	var (
+		input string
+		err   error
+	)
+	if isatty.IsTerminal(os.Stdin.Fd()) {
+		input, err = readPasswordFromNewTTY("Enter master key: ")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader := bufio.NewReader(os.Stdin)
+		input, err = reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return crypto.HexToECDSA(strings.TrimSpace(input))
+}
+
 func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
-	path, err := masterKeyPath(ctx)
-	if err != nil {
-		return nil, err
+	var key *ecdsa.PrivateKey
+	var err error
+
+	useStdin := ctx.Bool(masterKeyStdinFlag.Name)
+	if useStdin {
+		key, err = loadNodeMasterFromStdin()
+		if err != nil {
+			return nil, errors.Wrap(err, "read master key from stdin")
+		}
+	} else {
+		path, err := masterKeyPath(ctx)
+		if err != nil {
+			return nil, err
+		}
+		key, err = loadOrGeneratePrivateKey(path)
+		if err != nil {
+			return nil, errors.Wrap(err, "load or generate master key")
+		}
 	}
-	key, err := loadOrGeneratePrivateKey(path)
-	if err != nil {
-		return nil, errors.Wrap(err, "load or generate master key")
-	}
+
 	master := &node.Master{PrivateKey: key}
 	if master.Beneficiary, err = beneficiary(ctx); err != nil {
 		return nil, err
@@ -416,98 +488,58 @@ func loadNodeMaster(ctx *cli.Context) (*node.Master, error) {
 	return master, nil
 }
 
-type p2pComm struct {
-	comm           *comm.Communicator
-	p2pSrv         *p2psrv.Server
-	peersCachePath string
-	enode          string
-}
+func newP2PCommunicator(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2p.P2P, error) {
+	// known peers will be loaded/stored from/in this file
+	peersCachePath := filepath.Join(instanceDir, "peers.cache")
 
-func newP2PComm(ctx *cli.Context, repo *chain.Repository, txPool *txpool.TxPool, instanceDir string) (*p2pComm, error) {
 	configDir, err := makeConfigDir(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	key, err := loadOrGeneratePrivateKey(filepath.Join(configDir, "p2p.key"))
 	if err != nil {
 		return nil, errors.Wrap(err, "load or generate P2P key")
 	}
-	nat, err := nat.Parse(ctx.String(natFlag.Name))
+
+	userNAT, err := nat.Parse(ctx.String(natFlag.Name))
 	if err != nil {
 		cli.ShowAppHelp(ctx)
 		return nil, errors.Wrap(err, "parse -nat flag")
 	}
 
-	opts := &p2psrv.Options{
-		Name:            common.MakeName("thor", fullVersion()),
-		PrivateKey:      key,
-		MaxPeers:        ctx.Int(maxPeersFlag.Name),
-		ListenAddr:      fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
-		BootstrapNodes:  fallbackBootstrapNodes,
-		RemoteBootstrap: remoteBootstrapList,
-		NAT:             nat,
+	allowedPeers, err := parseNodeList(strings.TrimSpace(ctx.String(allowedPeersFlag.Name)))
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse allowed peers - %w", err)
 	}
 
-	peersCachePath := filepath.Join(instanceDir, "peers.cache")
+	bootnodePeers, err := parseNodeList(strings.TrimSpace(ctx.String(bootNodeFlag.Name)))
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse bootnode peers - %w", err)
+	}
 
+	var cachedPeers p2psrv.Nodes
 	if data, err := os.ReadFile(peersCachePath); err != nil {
 		if !os.IsNotExist(err) {
 			log.Warn("failed to load peers cache", "err", err)
 		}
-	} else if err := rlp.DecodeBytes(data, &opts.KnownNodes); err != nil {
+	} else if err := rlp.DecodeBytes(data, &cachedPeers); err != nil {
 		log.Warn("failed to load peers cache", "err", err)
 	}
 
-	flagBootstrapNodes := parseBootNode(ctx)
-	if flagBootstrapNodes != nil {
-		opts.BootstrapNodes = flagBootstrapNodes
-		opts.RemoteBootstrap = ""
-
-		m := make(map[discover.NodeID]bool)
-		for _, node := range opts.KnownNodes {
-			m[node.ID] = true
-		}
-		for _, bootnode := range flagBootstrapNodes {
-			if !m[bootnode.ID] {
-				opts.KnownNodes = append(opts.KnownNodes, bootnode)
-			}
-		}
-	}
-
-	return &p2pComm{
-		comm:           comm.New(repo, txPool),
-		p2pSrv:         p2psrv.New(opts),
-		peersCachePath: peersCachePath,
-		enode:          fmt.Sprintf("enode://%x@[extip]:%v", discover.PubkeyID(&key.PublicKey).Bytes(), ctx.Int(p2pPortFlag.Name)),
-	}, nil
-}
-
-func (p *p2pComm) Start() error {
-	log.Info("starting P2P networking")
-	if err := p.p2pSrv.Start(p.comm.Protocols(), p.comm.DiscTopic()); err != nil {
-		return errors.Wrap(err, "start P2P server")
-	}
-	p.comm.Start()
-	return nil
-}
-
-func (p *p2pComm) Stop() {
-	log.Info("stopping communicator...")
-	p.comm.Stop()
-
-	log.Info("stopping P2P server...")
-	p.p2pSrv.Stop()
-
-	log.Info("saving peers cache...")
-	nodes := p.p2pSrv.KnownNodes()
-	data, err := rlp.EncodeToBytes(nodes)
-	if err != nil {
-		log.Warn("failed to encode cached peers", "err", err)
-		return
-	}
-	if err := os.WriteFile(p.peersCachePath, data, 0600); err != nil {
-		log.Warn("failed to write peers cache", "err", err)
-	}
+	return p2p.New(
+		comm.New(repo, txPool),
+		key,
+		instanceDir,
+		userNAT,
+		fullVersion(),
+		ctx.Int(maxPeersFlag.Name),
+		ctx.Int(p2pPortFlag.Name),
+		fmt.Sprintf(":%v", ctx.Int(p2pPortFlag.Name)),
+		allowedPeers,
+		cachedPeers,
+		bootnodePeers,
+	), nil
 }
 
 func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes32) (string, func(), error) {
@@ -523,12 +555,33 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 	handler = handleXGenesisID(handler, genesisID)
 	handler = handleXThorestVersion(handler)
 	handler = requestBodyLimit(handler)
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
 	var goes co.Goes
 	goes.Go(func() {
 		srv.Serve(listener)
 	})
 	return "http://" + listener.Addr().String() + "/", func() {
+		srv.Close()
+		goes.Wait()
+	}, nil
+}
+
+func startMetricsServer(addr string) (string, func(), error) {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+	handler := handlers.CompressHandler(router)
+
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	var goes co.Goes
+	goes.Go(func() {
+		srv.Serve(listener)
+	})
+	return "http://" + listener.Addr().String() + "/metrics", func() {
 		srv.Close()
 		goes.Wait()
 	}, nil
@@ -543,37 +596,124 @@ func printStartupMessage1(
 ) {
 	bestBlock := repo.BestBlockSummary()
 
+	name := common.MakeName("Thor", fullVersion())
+	if master == nil { // solo has no master
+		name = common.MakeName("Thor solo", fullVersion())
+	}
+
 	fmt.Printf(`Starting %v
     Network      [ %v %v ]
     Best block   [ %v #%v @%v ]
-    Forks        [ %v ]
-    Master       [ %v ]
-    Beneficiary  [ %v ]
+    Forks        [ %v ]%v
     Instance dir [ %v ]
 `,
-		common.MakeName("Thor", fullVersion()),
+		name,
 		gene.ID(), gene.Name(),
 		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
 		forkConfig,
-		master.Address(),
 		func() string {
-			if master.Beneficiary == nil {
-				return "not set, defaults to endorsor"
+			// solo mode does not have master, so skip this part
+			if master == nil {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Master       [ %v ]
+    Beneficiary  [ %v ]`,
+					master.Address(),
+					func() string {
+						if master.Beneficiary == nil {
+							return "not set, defaults to endorsor"
+						}
+						return master.Beneficiary.String()
+					}(),
+				)
 			}
-			return master.Beneficiary.String()
 		}(),
-		dataDir)
+		dataDir,
+	)
 }
 
 func printStartupMessage2(
+	gene *genesis.Genesis,
 	apiURL string,
 	nodeID string,
+	metricsURL string,
 ) {
-	fmt.Printf(`    API portal   [ %v ]
-    Node ID      [ %v ]
+	fmt.Printf(`%v    API portal   [ %v ]%v%v`,
+		func() string { // node ID
+			if nodeID == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`    Node ID      [ %v ]
 `,
+					nodeID)
+			}
+		}(),
 		apiURL,
-		nodeID)
+		func() string { // metrics URL
+			if metricsURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Metrics      [ %v ]`,
+					metricsURL)
+			}
+		}(),
+		func() string {
+			// print default dev net's dev accounts info
+			if gene.ID() == devNetGenesisID {
+				return `
+┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`
+			} else {
+				return "\n"
+			}
+		}(),
+	)
+}
+
+func printSoloStartupMessage(
+	gene *genesis.Genesis,
+	repo *chain.Repository,
+	dataDir string,
+	apiURL string,
+	forkConfig thor.ForkConfig,
+	metricsURL string,
+) {
+	bestBlock := repo.BestBlockSummary()
+
+	info := fmt.Sprintf(`Starting %v
+    Network     [ %v %v ]    
+    Best block  [ %v #%v @%v ]
+    Forks       [ %v ]
+    Data dir    [ %v ]
+    API portal  [ %v ]
+    Metrics     [ %v ]
+`,
+		common.MakeName("Thor solo", fullVersion()),
+		gene.ID(), gene.Name(),
+		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
+		forkConfig,
+		dataDir,
+		apiURL,
+		func() string {
+			if metricsURL == "" {
+				return "Disabled"
+			}
+			return metricsURL
+		}(),
+	)
+
+	if gene.ID() == devNetGenesisID {
+		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
+│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
+└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
+`
+	}
+
+	fmt.Print(info)
 }
 
 func openMemMainDB() *muxdb.MuxDB {
@@ -588,49 +728,29 @@ func openMemLogDB() *logdb.LogDB {
 	return db
 }
 
-func printSoloStartupMessage(
-	gene *genesis.Genesis,
-	repo *chain.Repository,
-	dataDir string,
-	apiURL string,
-	forkConfig thor.ForkConfig,
-) {
-	bestBlock := repo.BestBlockSummary()
-
-	info := fmt.Sprintf(`Starting %v
-    Network     [ %v %v ]    
-    Best block  [ %v #%v @%v ]
-    Forks       [ %v ]
-    Data dir    [ %v ]
-    API portal  [ %v ]
-`,
-		common.MakeName("Thor solo", fullVersion()),
-		gene.ID(), gene.Name(),
-		bestBlock.Header.ID(), bestBlock.Header.Number(), time.Unix(int64(bestBlock.Header.Timestamp()), 0),
-		forkConfig,
-		dataDir,
-		apiURL)
-
-	if gene.ID() == devNetGenesisID {
-		info += `┌──────────────────┬───────────────────────────────────────────────────────────────────────────────┐
-│  Mnemonic Words  │  denial kitchen pet squirrel other broom bar gas better priority spoil cross  │
-└──────────────────┴───────────────────────────────────────────────────────────────────────────────┘
-`
-	}
-
-	fmt.Print(info)
-}
-
-func parseBootNode(ctx *cli.Context) []*discover.Node {
-	s := strings.TrimSpace(ctx.String(bootNodeFlag.Name))
-	if s == "" {
-		return nil
-	}
-	inputs := strings.Split(s, ",")
+func parseNodeList(list string) ([]*discover.Node, error) {
+	inputs := strings.Split(list, ",")
 	var nodes []*discover.Node
 	for _, i := range inputs {
-		node := discover.MustParseNode(i)
+		if i == "" {
+			continue
+		}
+		node, err := discover.ParseNode(i)
+		if err != nil {
+			return nil, err
+		}
 		nodes = append(nodes, node)
 	}
-	return nodes
+
+	return nodes, nil
+}
+
+func readIntFromUInt64Flag(val uint64) (int, error) {
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value %d ", val)
+	}
+
+	return i, nil
 }

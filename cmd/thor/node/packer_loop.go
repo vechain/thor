@@ -22,16 +22,16 @@ import (
 const gasLimitSoftLimit uint64 = 40_000_000
 
 func (n *Node) packerLoop(ctx context.Context) {
-	log.Debug("enter packer loop")
-	defer log.Debug("leave packer loop")
+	logger.Debug("enter packer loop")
+	defer logger.Debug("leave packer loop")
 
-	log.Info("waiting for synchronization...")
+	logger.Info("waiting for synchronization...")
 	select {
 	case <-ctx.Done():
 		return
 	case <-n.comm.Synced():
 	}
-	log.Info("synchronization process done")
+	logger.Info("synchronization process done")
 
 	var (
 		authorized bool
@@ -57,7 +57,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 		if err != nil {
 			if authorized {
 				authorized = false
-				log.Warn("unable to pack block", "err", err)
+				logger.Warn("unable to pack block", "err", err)
 			}
 			select {
 			case <-ctx.Done():
@@ -69,16 +69,16 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 		if !authorized {
 			authorized = true
-			log.Info("prepared to pack block")
+			logger.Info("prepared to pack block")
 		}
-		log.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
+		logger.Debug("scheduled to pack block", "after", time.Duration(flow.When()-now)*time.Second)
 
 		for {
 			if uint64(time.Now().Unix())+thor.BlockInterval/2 > flow.When() {
 				// time to pack block
 				// blockInterval/2 early to allow more time for processing txs
 				if err := n.pack(flow); err != nil {
-					log.Error("failed to pack block", "err", err)
+					logger.Error("failed to pack block", "err", err)
 				}
 				break
 			}
@@ -97,7 +97,7 @@ func (n *Node) packerLoop(ctx context.Context) {
 
 				if (best.Number() == flow.ParentHeader().Number() && s1 != s2) ||
 					best.TotalScore() > flow.TotalScore() {
-					log.Debug("re-schedule packer due to new best block")
+					logger.Debug("re-schedule packer due to new best block")
 					goto RE_SCHEDULE
 				}
 			}
@@ -106,12 +106,17 @@ func (n *Node) packerLoop(ctx context.Context) {
 	}
 }
 
-func (n *Node) pack(flow *packer.Flow) error {
+func (n *Node) pack(flow *packer.Flow) (err error) {
 	txs := n.txPool.Executables()
 	var txsToRemove []*tx.Transaction
 	defer func() {
-		for _, tx := range txsToRemove {
-			n.txPool.Remove(tx.Hash(), tx.ID())
+		if err == nil {
+			for _, tx := range txsToRemove {
+				n.txPool.Remove(tx.Hash(), tx.ID())
+			}
+			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "true"})
+		} else {
+			metricBlockProcessedCount().AddWithLabel(1, map[string]string{"type": "proposed", "success": "false"})
 		}
 	}()
 
@@ -179,7 +184,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		// sync the log-writing task
 		if logEnabled {
 			if err := n.logWorker.Sync(); err != nil {
-				log.Warn("failed to write logs", "err", err)
+				logger.Warn("failed to write logs", "err", err)
 				n.logDBFailed = true
 			}
 		}
@@ -192,7 +197,7 @@ func (n *Node) pack(flow *packer.Flow) error {
 		commitElapsed := mclock.Now() - startTime - execElapsed
 
 		n.comm.BroadcastBlock(newBlock)
-		log.Info("📦 new block packed",
+		logger.Info("📦 new block packed",
 			"txs", len(receipts),
 			"mgas", float64(newBlock.Header().GasUsed())/1000/1000,
 			"et", fmt.Sprintf("%v|%v", common.PrettyDuration(execElapsed), common.PrettyDuration(commitElapsed)),
@@ -200,8 +205,12 @@ func (n *Node) pack(flow *packer.Flow) error {
 		)
 
 		if v, updated := n.bandwidth.Update(newBlock.Header(), time.Duration(realElapsed)); updated {
-			log.Debug("bandwidth updated", "gps", v)
+			logger.Debug("bandwidth updated", "gps", v)
 		}
+
+		metricBlockProcessedTxs().SetWithLabel(int64(len(receipts)), map[string]string{"type": "proposed"})
+		metricBlockProcessedGas().SetWithLabel(int64(newBlock.Header().GasUsed()), map[string]string{"type": "proposed"})
+		metricBlockProcessedDuration().Observe(time.Duration(realElapsed).Milliseconds())
 		return nil
 	})
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) // nolint:staticcheck
 }
 
 // RandCache a simple cache which randomly evicts entries when
@@ -106,7 +106,7 @@ func (rc *RandCache) Pick() *Entry {
 	if len(rc.s) == 0 {
 		return nil
 	}
-	ent := rc.s[rand.Intn(len(rc.s))]
+	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
 	cpy := ent.Entry
 	return &cpy
 }
@@ -141,6 +141,6 @@ func (rc *RandCache) randDrop() {
 	if len(rc.s) == 0 {
 		return
 	}
-	ent := rc.s[rand.Intn(len(rc.s))]
+	ent := rc.s[rand.Intn(len(rc.s))] // nolint:gosec
 	rc.remove(ent.Key)
 }

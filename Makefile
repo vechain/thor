@@ -1,7 +1,7 @@
 PACKAGE = github.com/vechain/thor
 
 GIT_COMMIT = $(shell git --no-pager log --pretty="%h" -n 1)
-GIT_TAG = $(shell git tag -l --points-at HEAD)
+GIT_TAG = $(shell git tag -l --points-at HEAD | head -n 1)
 COPYRIGHT_YEAR = $(shell git --no-pager log -1 --format=%ad --date=format:%Y)
 THOR_VERSION = $(shell cat cmd/thor/VERSION)
 DISCO_VERSION = $(shell cat cmd/disco/VERSION)
@@ -61,6 +61,11 @@ lint_command_check:
 
 lint: | go_version_check lint_command_check #@ Run 'golangci-lint'
 	@golangci-lint run --config .golangci.yml
+
+license-check: #@ Check license headers
+	@FILE_COUNT=$$(find . -type f -name '*.go' | wc -l); \
+	echo "Checking license headers for all .go... $$FILE_COUNT files found"; \
+	docker run -it --rm -v $$(pwd):/github/workspace apache/skywalking-eyes header check
 
 .DEFAULT:
 	@$(MAKE) help

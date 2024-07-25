@@ -52,7 +52,7 @@ ___
 Start a discovery node:
 
 ```shell
-disco --keyhex=99f0500549792796c14fed62011a51081dc5b5e68fe8bd8a13b86be829c4fd36
+disco
 ```
 
 Output:
@@ -160,7 +160,6 @@ bin/thor -h
 | Flag                        | Description                                                                                 |
 |-----------------------------|---------------------------------------------------------------------------------------------|
 | `--network`                 | The network to join (main\|test) or path to the genesis file                                |
-| `--config-dir`              | The directory to use for common configuration files                                         |
 | `--data-dir`                | Directory for blockchain databases                                                          |
 | `--beneficiary`             | Address for block rewards                                                                   |
 | `--api-addr`                | API service listening address (default: "localhost:8669")                                   |
@@ -169,17 +168,20 @@ bin/thor -h
 | `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
+| `--enable-api-logs`         | Enables API requests logging                                                                |
+| `--api-logs-limit`          | Limit the number of logs returned by /logs API (default: 1000)                              |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
 | `--max-peers`               | Maximum number of P2P network peers (P2P network disabled if set to 0) (default: 25)        |
 | `--p2p-port`                | P2P network listening port (default: 11235)                                                 |
 | `--nat`                     | Port mapping mechanism (any\|none\|upnp\|pmp\|extip:<IP>) (default: "any")                  |
+| `--bootnode`                | Comma separated list of bootnode IDs                                                        |
 | `--target-gas-limit`        | Target block gas limit (adaptive if set to 0) (default: 0)                                  |
 | `--pprof`                   | Turn on go-pprof                                                                            |
 | `--skip-logs`               | Skip writing event\|transfer logs (/logs API will be disabled)                              |
-| `--verify-logs`             | Verify the logs DB at startup                                                               |
 | `--cache`                   | Megabytes of RAM allocated to trie nodes cache (default: 4096)                              |
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
-| `--bootnode`                | Comma-separated list of bootnode IDs                                                        |
+| `--enable-metrics`          | Enables the metrics server                                                                  |
+| `--metrics-addr`            | Metrics service listening address                                                           |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
@@ -187,7 +189,9 @@ bin/thor -h
 
 | Flag                         | Description                                        |
 |------------------------------|----------------------------------------------------|
+| `--genesis`                  | Path to genesis file(default: builtin devnet)      |
 | `--on-demand`                | Create new block when there is pending transaction |
+| `--block-interval`           | Choose a block interval in seconds (default 10s)   |
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |

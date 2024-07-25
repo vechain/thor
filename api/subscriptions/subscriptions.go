@@ -12,11 +12,11 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 	"github.com/vechain/thor/v2/txpool"
@@ -38,7 +38,7 @@ type msgReader interface {
 }
 
 var (
-	log = log15.New("pkg", "subscriptions")
+	logger = log.WithContext("pkg", "subscriptions")
 )
 
 const (
@@ -205,7 +205,7 @@ func (s *Subscriptions) handleSubject(w http.ResponseWriter, req *http.Request) 
 	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
+		logger.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
 
@@ -221,7 +221,7 @@ func (s *Subscriptions) handlePendingTransactions(w http.ResponseWriter, req *ht
 	conn, closed, err := s.setupConn(w, req)
 	// since the conn is hijacked here, no error should be returned in lines below
 	if err != nil {
-		log.Debug("upgrade to websocket", "err", err)
+		logger.Debug("upgrade to websocket", "err", err)
 		return nil
 	}
 	defer s.closeConn(conn, err)
@@ -271,7 +271,7 @@ func (s *Subscriptions) setupConn(w http.ResponseWriter, req *http.Request) (*we
 		})
 		for {
 			if _, _, err := conn.ReadMessage(); err != nil {
-				log.Debug("websocket read err", "err", err)
+				logger.Debug("websocket read err", "err", err)
 				close(closed)
 				break
 			}
@@ -290,11 +290,11 @@ func (s *Subscriptions) closeConn(conn *websocket.Conn, err error) {
 	}
 
 	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		log.Debug("write close message", "err", err)
+		logger.Debug("write close message", "err", err)
 	}
 
 	if err := conn.Close(); err != nil {
-		log.Debug("close websocket", "err", err)
+		logger.Debug("close websocket", "err", err)
 	}
 }
 
@@ -381,6 +381,12 @@ func (s *Subscriptions) Close() {
 func (s *Subscriptions) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/txpool").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
-	sub.Path("/{subject}").Methods(http.MethodGet).HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
+	sub.Path("/txpool").
+		Methods(http.MethodGet).
+		Name("subscriptions_pending_tx").
+		HandlerFunc(utils.WrapHandlerFunc(s.handlePendingTransactions))
+	sub.Path("/{subject:beat|beat2|block|event|transfer}").
+		Methods(http.MethodGet).
+		Name("subscriptions_subject").
+		HandlerFunc(utils.WrapHandlerFunc(s.handleSubject))
 }

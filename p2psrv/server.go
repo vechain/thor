@@ -17,17 +17,16 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-
-	"github.com/inconshreveable/log15"
 	"github.com/vechain/thor/v2/cache"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 )
 
-var log = log15.New("pkg", "p2psrv")
+var logger = log.WithContext("pkg", "p2psrv")
 
 // Server p2p server wraps ethereum's p2p.Server, and handles discovery v5 stuff.
 type Server struct {
-	opts            Options
+	opts            *Options
 	srv             *p2p.Server
 	discv5          *discv5.Network
 	goes            co.Goes
@@ -48,14 +47,14 @@ func New(opts *Options) *Server {
 	}
 
 	return &Server{
-		opts: *opts,
+		opts: opts,
 		srv: &p2p.Server{
 			Config: p2p.Config{
 				Name:        opts.Name,
 				PrivateKey:  opts.PrivateKey,
 				MaxPeers:    opts.MaxPeers,
-				NoDiscovery: true,
-				DiscoveryV5: false, // disable discovery inside p2p.Server instance
+				NoDiscovery: true,  // disable discovery inside p2p.Server instance(we use our own)
+				DiscoveryV5: false, // disable discovery inside p2p.Server instance(we use our own)
 				ListenAddr:  opts.ListenAddr,
 				NetRestrict: opts.NetRestrict,
 				NAT:         opts.NAT,
@@ -86,9 +85,11 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 			if peer.Inbound() {
 				dir = "inbound"
 			}
-			log := log.New("peer", peer, "dir", dir)
+			log := logger.New("peer", peer, "dir", dir)
 
 			log.Debug("peer connected")
+			metricConnectedPeers().Add(1)
+
 			startTime := mclock.Now()
 			defer func() {
 				log.Debug("peer disconnected", "reason", err)
@@ -96,6 +97,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 					// we assume that good peer has longer connection duration.
 					s.knownNodes.Set(peer.ID(), node, float64(mclock.Now()-startTime))
 				}
+				metricConnectedPeers().Add(-1)
 			}()
 			return run(peer, rw)
 		}
@@ -109,12 +111,12 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		if err := s.listenDiscV5(); err != nil {
 			return err
 		}
-		log.Debug("registering topic", "topic", topic)
+		logger.Debug("registering topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discv5.RegisterTopic(topic, s.done)
 		})
 
-		log.Debug("searching topic", "topic", topic)
+		logger.Debug("searching topic", "topic", topic)
 		s.goes.Go(func() {
 			s.discoverLoop(topic)
 		})
@@ -122,7 +124,7 @@ func (s *Server) Start(protocols []*p2p.Protocol, topic discv5.Topic) error {
 		s.goes.Go(s.fetchBootstrap)
 	}
 
-	log.Debug("start up", "self", s.Self())
+	logger.Debug("start up", "self", s.Self())
 
 	s.goes.Go(s.dialLoop)
 	return nil
@@ -197,9 +199,10 @@ func (s *Server) listenDiscV5() (err error) {
 		}
 	}()
 
-	for _, node := range s.opts.BootstrapNodes {
+	for _, node := range s.opts.DiscoveryNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
+	// known nodes are also acting as bootstrap servers
 	for _, node := range s.opts.KnownNodes {
 		s.bootstrapNodes = append(s.bootstrapNodes, discv5.NewNode(discv5.NodeID(node.ID), node.IP, node.UDP, node.TCP))
 	}
@@ -247,8 +250,9 @@ func (s *Server) discoverLoop(topic discv5.Topic) {
 		case v5node := <-discNodes:
 			node := discover.NewNode(discover.NodeID(v5node.ID), v5node.IP, v5node.UDP, v5node.TCP)
 			if _, found := s.discoveredNodes.Get(node.ID); !found {
+				metricDiscoveredNodes().Add(1)
 				s.discoveredNodes.Set(node.ID, node)
-				log.Debug("discovered node", "node", node)
+				logger.Debug("discovered node", "node", node)
 			}
 		case <-s.done:
 			close(setPeriod)
@@ -295,15 +299,20 @@ func (s *Server) dialLoop() {
 				continue
 			}
 
-			log := log.New("node", node)
+			log := logger.New("node", node)
 			log.Debug("try to dial node")
 			s.dialingNodes.Add(node)
 			// don't use goes.Go, since the dial process can't be interrupted
 			go func() {
+				metricDialingNewNode().Add(1)
+				defer metricDialingNewNode().Add(-1)
+
 				if err := s.tryDial(node); err != nil {
 					s.dialingNodes.Remove(node.ID)
 					log.Debug("failed to dial node", "err", err)
 				}
+
+				s.discoveredNodes.Remove(node.ID)
 			}()
 
 			dialCount++
@@ -322,7 +331,7 @@ func (s *Server) tryDial(node *discover.Node) error {
 }
 
 func (s *Server) fetchBootstrap() {
-	if s.opts.RemoteBootstrap == "" {
+	if s.opts.RemoteDiscoveryList == "" {
 		return
 	}
 
@@ -333,7 +342,7 @@ func (s *Server) fetchBootstrap() {
 	}()
 
 	f := func() error {
-		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteBootstrap)
+		remoteNodes, err := fetchRemoteBootstrapNodes(ctx, s.opts.RemoteDiscoveryList)
 		if err != nil {
 			return err
 		}
@@ -350,7 +359,7 @@ func (s *Server) fetchBootstrap() {
 		if err := f(); err == nil || errors.Is(err, context.Canceled) {
 			return
 		} else {
-			log.Warn("update bootstrap nodes from remote failed", "err", err)
+			logger.Warn("update bootstrap nodes from remote failed", "err", err)
 		}
 
 		select {
@@ -359,4 +368,8 @@ func (s *Server) fetchBootstrap() {
 		case <-time.After(time.Second * 10):
 		}
 	}
+}
+
+func (s *Server) Options() *Options {
+	return s.opts
 }

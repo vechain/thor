@@ -26,6 +26,7 @@ import (
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -107,14 +108,24 @@ var ts *httptest.Server
 func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
-	getAccount(t)
-	getAccountWithNonExisitingRevision(t)
-	getAccountWithGenesisRevision(t)
-	getCode(t)
-	getStorage(t)
-	deployContractWithCall(t)
-	callContract(t)
-	batchCall(t)
+
+	for name, tt := range map[string]func(*testing.T){
+		"getAccount":                           getAccount,
+		"getAccountWithNonExisitingRevision":   getAccountWithNonExisitingRevision,
+		"getAccountWithGenesisRevision":        getAccountWithGenesisRevision,
+		"getAccountWithFinalizedRevision":      getAccountWithFinalizedRevision,
+		"getCode":                              getCode,
+		"getCodeWithNonExisitingRevision":      getCodeWithNonExisitingRevision,
+		"getStorage":                           getStorage,
+		"getStorageWithNonExisitingRevision":   getStorageWithNonExisitingRevision,
+		"deployContractWithCall":               deployContractWithCall,
+		"callContract":                         callContract,
+		"callContractWithNonExisitingRevision": callContractWithNonExisitingRevision,
+		"batchCall":                            batchCall,
+		"batchCallWithNonExisitingRevision":    batchCallWithNonExisitingRevision,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func getAccount(t *testing.T) {
@@ -135,11 +146,12 @@ func getAccount(t *testing.T) {
 }
 
 func getAccountWithNonExisitingRevision(t *testing.T) {
-	revision64Len := "0123456789012345678901234567890123456789012345678901234567890123"
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	_, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getAccountWithGenesisRevision(t *testing.T) {
@@ -162,6 +174,18 @@ func getAccountWithGenesisRevision(t *testing.T) {
 	assert.Equal(t, false, acc.HasCode, "hasCode should be false")
 }
 
+func getAccountWithFinalizedRevision(t *testing.T) {
+	soloAddress := "0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa"
+
+	genesisAccount := httpGetAccount(t, soloAddress+"?revision="+genesisBlock.Header().ID().String())
+	finalizedAccount := httpGetAccount(t, soloAddress+"?revision=finalized")
+
+	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
+	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
+
+	assert.Equal(t, genesisEnergy, finalizedEnergy, "finalized energy should equal genesis energy")
+}
+
 func getCode(t *testing.T) {
 	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/code")
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
@@ -181,6 +205,15 @@ func getCode(t *testing.T) {
 	}
 	assert.Equal(t, runtimeBytecode, c, "code should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
+}
+
+func getCodeWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+revision64Len)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getStorage(t *testing.T) {
@@ -205,6 +238,15 @@ func getStorage(t *testing.T) {
 	}
 	assert.Equal(t, thor.BytesToBytes32([]byte{storageValue}), h, "storage should be equal")
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
+}
+
+func getStorageWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+revision64Len)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func initAccountServer(t *testing.T) {
@@ -237,7 +279,7 @@ func initAccountServer(t *testing.T) {
 
 	router := mux.NewRouter()
 	gasLimit = math.MaxUint32
-	acc = accounts.New(repo, stater, gasLimit, thor.NoFork)
+	acc = accounts.New(repo, stater, gasLimit, thor.NoFork, solo.NewBFTEngine(repo))
 	acc.Mount(router, "/accounts")
 	ts = httptest.NewServer(router)
 }
@@ -338,6 +380,13 @@ func callContract(t *testing.T) {
 	reqBody := &accounts.CallData{
 		Data: hexutil.Encode(input),
 	}
+
+	// next revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+	_, statusCode = httpPost(t, ts.URL+"/accounts?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+
 	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
 	var output *accounts.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
@@ -354,6 +403,15 @@ func callContract(t *testing.T) {
 	}
 	assert.Equal(t, http.StatusOK, statusCode)
 	assert.Equal(t, a+b, ret)
+}
+
+func callContractWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision="+revision64Len, nil)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func batchCall(t *testing.T) {
@@ -387,8 +445,8 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
 
 	// Request body has an invalid malformed revision
-	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%d", ts.URL, malformedBody), badBody)
-	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
+	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%s", ts.URL, "0xZZZ"), badBody)
+	assert.Equal(t, http.StatusBadRequest, statusCode, "revision")
 
 	// Request body has an invalid revision number
 	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
@@ -417,6 +475,10 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
+
+	// 'next' revisoun should be valid
+	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision=next", reqBody)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
 	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
 	var results accounts.BatchCallResults
@@ -467,12 +529,21 @@ func batchCall(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, statusCode)
 }
 
+func batchCallWithNonExisitingRevision(t *testing.T) {
+	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
+
+	res, statusCode := httpPost(t, ts.URL+"/accounts/*?revision="+revision64Len, nil)
+
+	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
+	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
+}
+
 func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 	data, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +556,7 @@ func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
 }
 
 func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url)
+	res, err := http.Get(url) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,4 +566,16 @@ func httpGet(t *testing.T, url string) ([]byte, int) {
 		t.Fatal(err)
 	}
 	return r, res.StatusCode
+}
+
+func httpGetAccount(t *testing.T, path string) *accounts.Account {
+	res, statusCode := httpGet(t, ts.URL+"/accounts/"+path)
+	var acc accounts.Account
+	if err := json.Unmarshal(res, &acc); err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, http.StatusOK, statusCode, "get account failed")
+
+	return &acc
 }

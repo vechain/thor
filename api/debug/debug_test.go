@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
@@ -49,33 +50,45 @@ func TestDebug(t *testing.T) {
 	defer ts.Close()
 
 	// /tracers endpoint
-	testTraceClauseWithEmptyTracerTarget(t)
-	testTraceClauseWithBadBlockId(t)
-	testTraceClauseWithNonExistingBlockId(t)
-	testTraceClauseWithBadTxId(t)
-	testTraceClauseWithNonExistingTx(t)
-	testTraceClauseWithBadClauseIndex(t)
-	testTraceClauseWithTxIndexOutOfBound(t)
-	testTraceClauseWithClauseIndexOutOfBound(t)
-	testTraceClauseWithCustomTracer(t)
-	testTraceClause(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
+		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
+		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
+		"testTraceClauseWithBadTxId":               testTraceClauseWithBadTxId,
+		"testTraceClauseWithNonExistingTx":         testTraceClauseWithNonExistingTx,
+		"testTraceClauseWithBadClauseIndex":        testTraceClauseWithBadClauseIndex,
+		"testTraceClauseWithTxIndexOutOfBound":     testTraceClauseWithTxIndexOutOfBound,
+		"testTraceClauseWithClauseIndexOutOfBound": testTraceClauseWithClauseIndexOutOfBound,
+		"testTraceClauseWithCustomTracer":          testTraceClauseWithCustomTracer,
+		"testTraceClause":                          testTraceClause,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /tracers/call endpoint
-	testHandleTraceCallWithMalformedBodyRequest(t)
-	testHandleTraceCallWithEmptyTraceCallOption(t)
-	testHandleTraceCall(t)
-	testHandleTraceCallWithRevisionAsBlockId(t)
-	testHandleTraceCallWithRevisionAsHeight(t)
-	testHandleTraceCallWithRevisionAsNonExistingHeight(t)
-	testHandleTraceCallWithRevisionAsNonExistingId(t)
-	testHandleTraceCallWithMalfomredRevision(t)
-	testHandleTraceCallWithInsufficientGas(t)
-	testHandleTraceCallWithBadBlockRef(t)
-	testHandleTraceCallWithInvalidLengthBlockRef(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testHandleTraceCallWithMalformedBodyRequest":        testHandleTraceCallWithMalformedBodyRequest,
+		"testHandleTraceCallWithEmptyTraceCallOption":        testHandleTraceCallWithEmptyTraceCallOption,
+		"testHandleTraceCall":                                testHandleTraceCall,
+		"testHandleTraceCallWithValidRevisions":              testHandleTraceCallWithValidRevisions,
+		"testHandleTraceCallWithRevisionAsNonExistingHeight": testHandleTraceCallWithRevisionAsNonExistingHeight,
+		"testHandleTraceCallWithRevisionAsNonExistingId":     testHandleTraceCallWithRevisionAsNonExistingId,
+		"testHandleTraceCallWithMalfomredRevision":           testHandleTraceCallWithMalfomredRevision,
+		"testHandleTraceCallWithInsufficientGas":             testHandleTraceCallWithInsufficientGas,
+		"testHandleTraceCallWithBadBlockRef":                 testHandleTraceCallWithBadBlockRef,
+		"testHandleTraceCallWithInvalidLengthBlockRef":       testHandleTraceCallWithInvalidLengthBlockRef,
+		"testTraceCallNextBlock":                             testTraceCallNextBlock,
+	} {
+		t.Run(name, tt)
+	}
 
 	// /storage/range endpoint
-	testStorageRangeWithError(t)
-	testStorageRange(t)
+	for name, tt := range map[string]func(*testing.T){
+		"testStorageRangeWithError": testStorageRangeWithError,
+		"testStorageRange":          testStorageRange,
+	} {
+		t.Run(name, tt)
+	}
 }
 
 func TestStorageRangeFunc(t *testing.T) {
@@ -102,7 +115,6 @@ func TestStorageRangeFunc(t *testing.T) {
 	}
 
 	storageRangeRes, err := storageRangeAt(trie, start, 1)
-
 	assert.NoError(t, err)
 	assert.NotNil(t, storageRangeRes.NextKey)
 	storage := storageRangeRes.Storage
@@ -250,6 +262,11 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
+func testTraceCallNextBlock(t *testing.T) {
+	traceCallOption := &TraceCallOption{}
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
+}
+
 func testHandleTraceCall(t *testing.T) {
 	addr := randAddress()
 	provedWork := math.HexOrDecimal256(*big.NewInt(1000))
@@ -281,39 +298,30 @@ func testHandleTraceCall(t *testing.T) {
 	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
-func testHandleTraceCallWithRevisionAsBlockId(t *testing.T) {
-	revision := blk.Header().ID().String()
-	expectedExecutionResult := &logger.ExecutionResult{
-		Gas:         0,
-		Failed:      false,
-		ReturnValue: "",
-		StructLogs:  make([]logger.StructLogRes, 0),
+func testHandleTraceCallWithValidRevisions(t *testing.T) {
+	revisions := []string{
+		blk.Header().ID().String(),
+		"1",
+		"finalized",
+		"best",
 	}
 
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
+	for _, revision := range revisions {
+		expectedExecutionResult := &logger.ExecutionResult{
+			Gas:         0,
+			Failed:      false,
+			ReturnValue: "",
+			StructLogs:  make([]logger.StructLogRes, 0),
+		}
 
-	var parsedExecutionRes *logger.ExecutionResult
-	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
-		t.Fatal(err)
+		res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
+
+		var parsedExecutionRes *logger.ExecutionResult
+		if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, expectedExecutionResult, parsedExecutionRes, "revision: %s", revision)
 	}
-	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
-}
-
-func testHandleTraceCallWithRevisionAsHeight(t *testing.T) {
-	expectedExecutionResult := &logger.ExecutionResult{
-		Gas:         0,
-		Failed:      false,
-		ReturnValue: "",
-		StructLogs:  make([]logger.StructLogRes, 0),
-	}
-
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=1", &TraceCallOption{}, 200)
-
-	var parsedExecutionRes *logger.ExecutionResult
-	if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, expectedExecutionResult, parsedExecutionRes)
 }
 
 func testHandleTraceCallWithRevisionAsNonExistingHeight(t *testing.T) {
@@ -508,7 +516,7 @@ func initDebugServer(t *testing.T) {
 
 	forkConfig := thor.GetForkConfig(b.Header().ID())
 	router := mux.NewRouter()
-	debug = New(repo, stater, forkConfig, 21000, true)
+	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo))
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
@@ -518,7 +526,7 @@ func httpPostAndCheckResponseStatus(t *testing.T, url string, obj interface{}, r
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data))
+	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint:gosec
 	if err != nil {
 		t.Fatal(err)
 	}
