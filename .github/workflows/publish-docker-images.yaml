@@ -104,7 +104,4 @@ jobs:
           token: ${{ secrets.INTERNAL_CI_TOKEN }}
           repository: vechain/thor-internal-ci
           event-type: internal-thor-ci
-          client-payload: |
-            { 
-                "thor_image": ${{ fromJSON(steps.build-and-push-image.outputs.meta.json).tags[0] }}
-            }
+          client-payload: '{"thor_image": "${{ fromJSON(steps.build-and-push-image.outputs.meta.json).tags[0] }}"}'
