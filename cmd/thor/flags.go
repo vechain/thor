@@ -150,6 +150,15 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
+	enableAdminFlag = cli.BoolFlag{
+		Name:  "enable-admin",
+		Usage: "enables admin service",
+	}
+	adminAddrFlag = cli.StringFlag{
+		Name:  "admin-addr",
+		Value: "localhost:2113",
+		Usage: "admin service listening address",
+	}
 
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{

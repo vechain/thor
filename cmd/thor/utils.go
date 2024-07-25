@@ -39,6 +39,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
+	"github.com/vechain/thor/v2/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -585,6 +586,27 @@ func startMetricsServer(addr string) (string, func(), error) {
 	}, nil
 }
 
+func startAdminServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
+	}
+
+	router := mux.NewRouter()
+	router.PathPrefix("/admin").Handler(admin.HTTPHandler(logLevel))
+	handler := handlers.CompressHandler(router)
+
+	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
+	var goes co.Goes
+	goes.Go(func() {
+		srv.Serve(listener)
+	})
+	return "http://" + listener.Addr().String() + "/admin", func() {
+		srv.Close()
+		goes.Wait()
+	}, nil
+}
+
 func printStartupMessage1(
 	gene *genesis.Genesis,
 	repo *chain.Repository,
@@ -636,8 +658,9 @@ func printStartupMessage2(
 	apiURL string,
 	nodeID string,
 	metricsURL string,
+	adminURL string,
 ) {
-	fmt.Printf(`%v    API portal   [ %v ]%v%v`,
+	fmt.Printf(`%v    API portal   [ %v ]%v%v%v`,
 		func() string { // node ID
 			if nodeID == "" {
 				return ""
@@ -655,6 +678,15 @@ func printStartupMessage2(
 				return fmt.Sprintf(`
     Metrics      [ %v ]`,
 					metricsURL)
+			}
+		}(),
+		func() string { // metrics URL
+			if adminURL == "" {
+				return ""
+			} else {
+				return fmt.Sprintf(`
+    Admin        [ %v ]`,
+					adminURL)
 			}
 		}(),
 		func() string {
@@ -679,6 +711,7 @@ func printSoloStartupMessage(
 	apiURL string,
 	forkConfig thor.ForkConfig,
 	metricsURL string,
+	adminURL string,
 ) {
 	bestBlock := repo.BestBlockSummary()
 
@@ -689,6 +722,7 @@ func printSoloStartupMessage(
     Data dir    [ %v ]
     API portal  [ %v ]
     Metrics     [ %v ]
+    Admin       [ %v ]
 `,
 		common.MakeName("Thor solo", fullVersion()),
 		gene.ID(), gene.Name(),
@@ -701,6 +735,12 @@ func printSoloStartupMessage(
 				return "Disabled"
 			}
 			return metricsURL
+		}(),
+		func() string {
+			if adminURL == "" {
+				return "Disabled"
+			}
+			return adminURL
 		}(),
 	)
 
