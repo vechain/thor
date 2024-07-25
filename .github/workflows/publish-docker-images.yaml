@@ -99,6 +99,7 @@ jobs:
       - name: Internal CI
         uses: peter-evans/repository-dispatch@v3
         if: ${{ inputs.trigger_internal_ci }}
+        continue-on-error: true
         with:
           token: ${{ secrets.INTERNAL_CI_TOKEN }}
           repository: vechain/thor-internal-ci
