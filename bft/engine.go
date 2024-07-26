@@ -134,12 +134,15 @@ func (engine *BFTEngine) JustifyBlock(header *block.Header) error {
 		}
 
 		if st.Justified {
-			// get last checkpoint
-			checkpoint, err := engine.repo.NewChain(header.ID()).GetBlockSummary(getCheckPoint(header.Number()))
+			// get last checkpointId
+			checkpointId, err := engine.repo.NewChain(header.ID()).GetBlockID(getCheckPoint(header.Number()))
 			if err != nil {
 				return err
 			}
-			engine.justified.Store(checkpoint.Header.ID())
+			if err := engine.data.Put(justifiedKey, checkpointId[:]); err != nil {
+				return err
+			}
+			engine.justified.Store(checkpointId)
 		}
 	}
 	return nil
