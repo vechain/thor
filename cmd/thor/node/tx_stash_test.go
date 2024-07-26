@@ -20,7 +20,7 @@ import (
 )
 
 func newTx() *tx.Transaction {
-	tx := new(tx.Builder).Nonce(rand.Uint64()).Build()
+	tx := new(tx.Builder).Nonce(rand.Uint64()).Build() // nolint:gosec
 	sig, _ := crypto.Sign(tx.SigningHash().Bytes(), genesis.DevAccounts()[0].PrivateKey)
 	return tx.WithSignature(sig)
 }

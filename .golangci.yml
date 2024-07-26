@@ -24,6 +24,7 @@ linters:
     - durationcheck
     - exportloopref
     - whitespace
+    - gosec
 
     # - structcheck # lots of false positives
     # - errcheck #lot of false positives

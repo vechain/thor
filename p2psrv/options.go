@@ -40,13 +40,13 @@ type Options struct {
 
 	KnownNodes Nodes
 
-	// BootstrapNodes are used to establish connectivity
+	// DiscoveryNodes are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodes Nodes
+	DiscoveryNodes Nodes
 
-	// RemoteBootstrap is the url of remote dynamic bootstrap list.
-	RemoteBootstrap string
+	// RemoteDiscoveryList is the url of remote dynamic discovery node list.
+	RemoteDiscoveryList string
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the

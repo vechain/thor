@@ -7,6 +7,7 @@ package debug
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"math/big"
 	"net/http"
@@ -18,6 +19,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/api/utils"
+	"github.com/vechain/thor/v2/bft"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/consensus"
 	"github.com/vechain/thor/v2/genesis"
@@ -41,15 +44,17 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
+	bft               bft.Finalizer
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer) *Debug {
 	return &Debug{
 		repo,
 		stater,
 		forkConfig,
 		callGaslimit,
 		allowCustomTracer,
+		bft,
 	}
 }
 
@@ -151,20 +156,12 @@ func (d *Debug) handleTraceClause(w http.ResponseWriter, req *http.Request) erro
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-	var tracer tracers.Tracer
-	if opt.Name == "" {
-		tr, err := logger.NewStructLogger(opt.Config)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
-	} else {
-		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
+
+	tracer, err := d.createTracer(opt.Name, opt.Config)
+	if err != nil {
+		return utils.Forbidden(err)
 	}
+
 	blockID, txIndex, clauseIndex, err := d.parseTarget(opt.Target)
 	if err != nil {
 		return err
@@ -181,25 +178,21 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
-
-	summary, err := d.handleRevision(req.URL.Query().Get("revision"))
+	revision, err := utils.ParseRevision(req.URL.Query().Get("revision"), true)
 	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	summary, st, err := utils.GetSummaryAndState(revision, d.repo, d.bft, d.stater)
+	if err != nil {
+		if d.repo.IsNotFound(err) {
+			return utils.BadRequest(errors.WithMessage(err, "revision"))
+		}
 		return err
 	}
 
-	var tracer tracers.Tracer
-	if opt.Name == "" {
-		tr, err := logger.NewStructLogger(opt.Config)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
-	} else {
-		tr, err := tracers.DefaultDirectory.New(opt.Name, opt.Config, d.allowCustomTracer)
-		if err != nil {
-			return utils.Forbidden(err)
-		}
-		tracer = tr
+	tracer, err := d.createTracer(opt.Name, opt.Config)
+	if err != nil {
+		return utils.Forbidden(err)
 	}
 
 	txCtx, gas, clause, err := d.handleTraceCallOption(&opt)
@@ -207,7 +200,7 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 		return err
 	}
 
-	res, err := d.traceCall(req.Context(), tracer, summary, txCtx, gas, clause)
+	res, err := d.traceCall(req.Context(), tracer, summary.Header, st, txCtx, gas, clause)
 	if err != nil {
 		return err
 	}
@@ -215,13 +208,19 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 	return utils.WriteJSON(w, res)
 }
 
-func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *chain.BlockSummary, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
-	header := summary.Header
-	state := d.stater.NewState(header.StateRoot(), header.Number(), summary.Conflicts, summary.SteadyNum)
+func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
+	if name == "" {
+		return logger.NewStructLogger(config)
+	}
+	return tracers.DefaultDirectory.New(name, config, d.allowCustomTracer)
+}
+
+func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, header *block.Header, st *state.State, txCtx *xenv.TransactionContext, gas uint64, clause *tx.Clause) (interface{}, error) {
 	signer, _ := header.Signer()
+
 	rt := runtime.New(
-		d.repo.NewChain(header.ID()),
-		state,
+		d.repo.NewChain(header.ParentID()),
+		st,
 		&xenv.BlockContext{
 			Beneficiary: header.Beneficiary(),
 			Signer:      signer,
@@ -233,9 +232,9 @@ func (d *Debug) traceCall(ctx context.Context, tracer tracers.Tracer, summary *c
 		d.forkConfig)
 
 	tracer.SetContext(&tracers.Context{
-		BlockID:   summary.Header.ID(),
-		BlockTime: summary.Header.Timestamp(),
-		State:     state,
+		BlockID:   header.ID(),
+		BlockTime: header.Timestamp(),
+		State:     st,
 	})
 	rt.SetVMConfig(vm.Config{Tracer: tracer})
 
@@ -356,41 +355,6 @@ func (d *Debug) parseTarget(target string) (blockID thor.Bytes32, txIndex uint64
 	return
 }
 
-func (d *Debug) handleRevision(revision string) (*chain.BlockSummary, error) {
-	if revision == "" || revision == "best" {
-		return d.repo.BestBlockSummary(), nil
-	}
-	if len(revision) == 66 || len(revision) == 64 {
-		blockID, err := thor.ParseBytes32(revision)
-		if err != nil {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		summary, err := d.repo.GetBlockSummary(blockID)
-		if err != nil {
-			if d.repo.IsNotFound(err) {
-				return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-			}
-			return nil, err
-		}
-		return summary, nil
-	}
-	n, err := strconv.ParseUint(revision, 0, 0)
-	if err != nil {
-		return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-	}
-	if n > math.MaxUint32 {
-		return nil, utils.BadRequest(errors.WithMessage(errors.New("block number out of max uint32"), "revision"))
-	}
-	summary, err := d.repo.NewBestChain().GetBlockSummary(uint32(n))
-	if err != nil {
-		if d.repo.IsNotFound(err) {
-			return nil, utils.BadRequest(errors.WithMessage(err, "revision"))
-		}
-		return nil, err
-	}
-	return summary, nil
-}
-
 func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionContext, uint64, *tx.Clause, error) {
 	gas := opt.Gas
 	if opt.Gas > d.callGasLimit {
@@ -458,7 +422,16 @@ func (d *Debug) handleTraceCallOption(opt *TraceCallOption) (*xenv.TransactionCo
 func (d *Debug) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
-	sub.Path("/tracers").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
-	sub.Path("/tracers/call").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleTraceCall))
-	sub.Path("/storage-range").Methods(http.MethodPost).HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
+	sub.Path("/tracers").
+		Methods(http.MethodPost).
+		Name("debug_trace_clause").
+		HandlerFunc(utils.WrapHandlerFunc(d.handleTraceClause))
+	sub.Path("/tracers/call").
+		Methods(http.MethodPost).
+		Name("debug_trace_call").
+		HandlerFunc(utils.WrapHandlerFunc(d.handleTraceCall))
+	sub.Path("/storage-range").
+		Methods(http.MethodPost).
+		Name("debug_trace_storage").
+		HandlerFunc(utils.WrapHandlerFunc(d.handleDebugStorage))
 }

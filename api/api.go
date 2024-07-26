@@ -21,12 +21,16 @@ import (
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/api/transfers"
+	"github.com/vechain/thor/v2/bft"
 	"github.com/vechain/thor/v2/chain"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
+
+var logger = log.WithContext("pkg", "api")
 
 // New return api router
 func New(
@@ -34,15 +38,18 @@ func New(
 	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
-	bft blocks.BFTEngine,
+	bft bft.Finalizer,
 	nw node.Network,
+	forkConfig thor.ForkConfig,
 	allowedOrigins string,
 	backtraceLimit uint32,
 	callGasLimit uint64,
 	pprofOn bool,
 	skipLogs bool,
 	allowCustomTracer bool,
-	forkConfig thor.ForkConfig,
+	enableReqLogger bool,
+	enableMetrics bool,
+	logsLimit uint64,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -51,7 +58,7 @@ func New(
 
 	router := mux.NewRouter()
 
-	// to serve api docs
+	// to serve stoplight, swagger and api docs
 	router.PathPrefix("/doc").Handler(
 		http.StripPrefix("/doc/", http.FileServer(http.FS(doc.FS))),
 	)
@@ -62,20 +69,20 @@ func New(
 			http.Redirect(w, req, "doc/stoplight-ui/", http.StatusTemporaryRedirect)
 		})
 
-	accounts.New(repo, stater, callGasLimit, forkConfig).
+	accounts.New(repo, stater, callGasLimit, forkConfig, bft).
 		Mount(router, "/accounts")
 
 	if !skipLogs {
-		events.New(repo, logDB).
+		events.New(repo, logDB, logsLimit).
 			Mount(router, "/logs/event")
-		transfers.New(repo, logDB).
+		transfers.New(repo, logDB, logsLimit).
 			Mount(router, "/logs/transfer")
 	}
 	blocks.New(repo, bft).
 		Mount(router, "/blocks")
 	transactions.New(repo, txPool).
 		Mount(router, "/transactions")
-	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer).
+	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
 		Mount(router, "/debug")
 	node.New(nw).
 		Mount(router, "/node")
@@ -90,12 +97,20 @@ func New(
 		router.PathPrefix("/debug/pprof/").HandlerFunc(pprof.Index)
 	}
 
+	if enableMetrics {
+		router.Use(metricsMiddleware)
+	}
+
 	handler := handlers.CompressHandler(router)
 	handler = handlers.CORS(
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
 	)(handler)
-	return handler.ServeHTTP,
-		subs.Close // subscriptions handles hijacked conns, which need to be closed
+
+	if enableReqLogger {
+		handler = RequestLoggerHandler(handler, logger)
+	}
+
+	return handler.ServeHTTP, subs.Close // subscriptions handles hijacked conns, which need to be closed
 }
