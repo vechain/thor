@@ -38,7 +38,7 @@ func New(
 	stater *state.Stater,
 	txPool *txpool.TxPool,
 	logDB *logdb.LogDB,
-	bft bft.Finalizer,
+	bft bft.CommitLevel,
 	nw node.Network,
 	forkConfig thor.ForkConfig,
 	allowedOrigins string,

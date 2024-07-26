@@ -31,7 +31,7 @@ type Accounts struct {
 	stater       *state.Stater
 	callGasLimit uint64
 	forkConfig   thor.ForkConfig
-	bft          bft.Finalizer
+	bft          bft.CommitLevel
 }
 
 func New(
@@ -39,7 +39,7 @@ func New(
 	stater *state.Stater,
 	callGasLimit uint64,
 	forkConfig thor.ForkConfig,
-	bft bft.Finalizer,
+	bft bft.CommitLevel,
 ) *Accounts {
 	return &Accounts{
 		repo,

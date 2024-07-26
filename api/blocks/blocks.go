@@ -19,10 +19,10 @@ import (
 
 type Blocks struct {
 	repo *chain.Repository
-	bft  bft.Finalizer
+	bft  bft.CommitLevel
 }
 
-func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
+func New(repo *chain.Repository, bft bft.CommitLevel) *Blocks {
 	return &Blocks{
 		repo,
 		bft,
