@@ -8,23 +8,24 @@ package thor
 import (
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestForkConfigString verifies that the String method returns expected values.
 func TestForkConfigString(t *testing.T) {
 	fc := ForkConfig{
-		VIP191:    1,
-		ETH_CONST: math.MaxUint32,
-		BLOCKLIST: 2,
-		ETH_IST:   math.MaxUint32,
-		VIP214:    math.MaxUint32,
-		FINALITY:  math.MaxUint32,
+		VIP191:       1,
+		ETH_CONST:    math.MaxUint32,
+		BLOCKLIST:    2,
+		ETH_IST:      math.MaxUint32,
+		VIP214:       math.MaxUint32,
+		FINALITY:     math.MaxUint32,
+		EXTENSION_V3: 0,
 	}
 
-	expectedStr := "VIP191: #1, BLOCKLIST: #2"
-	if fc.String() != expectedStr {
-		t.Errorf("ForkConfig.String() = %v, want %v", fc.String(), expectedStr)
-	}
+	expectedStr := "VIP191: #1, BLOCKLIST: #2, EXTENSION_V3: #0"
+	assert.Equal(t, expectedStr, fc.String())
 }
 
 // TestNoFork verifies the NoFork variable is correctly set up.
