@@ -55,7 +55,7 @@ var (
 
 type JumpTable [256]*operation
 
-// NewIstanbulInstructionSet returns the frontier, homestead
+// NewShanghaiInstructionSet returns the frontier, homestead
 // byzantium, constantinople , istanbul and shanghai instructions.
 func NewShanghaiInstructionSet() *JumpTable {
 	instructionSet := NewIstanbulInstructionSet()
