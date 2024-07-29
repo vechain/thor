@@ -6,6 +6,7 @@
 package admin
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,11 +16,35 @@ import (
 	"github.com/vechain/thor/v2/log"
 )
 
-func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
-	router := mux.NewRouter()
-	router.PathPrefix("/admin").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		verbosity := r.URL.Query().Get("verbosity")
-		switch verbosity {
+type logLevelRequest struct {
+	Level string `json:"level"`
+}
+
+type logLevelResponse struct {
+	CurrentLevel string `json:"currentLevel"`
+}
+
+func getLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		response := logLevelResponse{
+			CurrentLevel: logLevel.Level().String(),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		}
+	}
+}
+
+func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req logLevelRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		switch req.Level {
 		case "debug":
 			logLevel.Set(log.LevelDebug)
 		case "info":
@@ -37,7 +62,25 @@ func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
 			return
 		}
 
-		fmt.Fprintln(w, "Verbosity changed to ", verbosity)
-	}))
+		fmt.Fprintln(w, "Verbosity changed to ", req.Level)
+	}
+}
+
+func logLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			getLogLevelHandler(logLevel).ServeHTTP(w, r)
+		case http.MethodPost:
+			postLogLevelHandler(logLevel).ServeHTTP(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	}
+}
+
+func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
+	router := mux.NewRouter()
+	router.HandleFunc("/admin/loglevel", logLevelHandler(logLevel))
 	return handlers.CompressHandler(router)
 }
