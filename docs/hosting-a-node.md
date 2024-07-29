@@ -101,11 +101,29 @@ _As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space.
 Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently. 
 Below is an overview of how metrics is integrated and utilized within our node systems.
 
-Metrics is enabled in nodes by default. It's possible to disable it by setting  `--enable-metrics=false`.
-By default, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
+Metrics is not enabled in nodes by default. It's possible to enable it by setting  `--enable-metrics`.
+Once enabled, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
 
 ```shell
 curl localhost:2112/metrics
 ```
 
 Instrumentation is in a beta phase at this stage. You can read more about the metric types [here](https://prometheus.io/docs/concepts/metric_types/).
+
+### Admin
+
+Admin is used to allow privilidged actions to the node by the administrator. Currently is supports changing the logger's verbosity at runtime.
+
+Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an Admin server is available at `localhost:2113/admin` with the following capabilities:
+
+Retrieve the current log level via a GET request to /admin/loglevel.
+
+```shell
+curl http://localhost:2113/admin/loglevel
+```
+
+Change the log level via a POST request to /admin/loglevel.
+
+```shell
+curl -X POST -H "Content-Type: application/json" -d '{"level": "trace"}' http://localhost:2113/admin/loglevel
+```
