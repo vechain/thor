@@ -17,9 +17,13 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vm"
 )
 
-var codeSizeCache, _ = lru.New(32 * 1024)
+var (
+	_                vm.StateDB = (*StateDB)(nil)
+	codeSizeCache, _            = lru.New(32 * 1024)
+)
 
 // StateDB implements evm.StateDB, only adapt to evm.
 type StateDB struct {
@@ -28,12 +32,16 @@ type StateDB struct {
 }
 
 type (
-	suicideFlagKey common.Address
-	refundKey      struct{}
-	preimageKey    common.Hash
-	eventKey       struct{}
-	transferKey    struct{}
-	stateRevKey    struct{}
+	suicideFlagKey      common.Address
+	refundKey           struct{}
+	preimageKey         common.Hash
+	eventKey            struct{}
+	transferKey         struct{}
+	stateRevKey         struct{}
+	transientStorageKey struct {
+		addr thor.Address
+		key  thor.Bytes32
+	}
 )
 
 // New create a statedb object.
@@ -44,6 +52,8 @@ func New(state *state.State) *StateDB {
 			return false, true, nil
 		case refundKey:
 			return uint64(0), true, nil
+		case transientStorageKey:
+			return common.Hash{}, true, nil
 		}
 		panic(fmt.Sprintf("unknown type of key %+v", k))
 	}
@@ -250,6 +260,15 @@ func (s *StateDB) AddLog(vmlog *types.Log) {
 
 func (s *StateDB) AddTransfer(transfer *tx.Transfer) {
 	s.repo.Put(transferKey{}, transfer)
+}
+
+func (s *StateDB) SetTransientState(addr common.Address, key, value common.Hash) {
+	s.repo.Put(transientStorageKey{thor.Address(addr), thor.Bytes32(key)}, value)
+}
+
+func (s *StateDB) GetTransientState(addr common.Address, key common.Hash) common.Hash {
+	v, _, _ := s.repo.Get(transientStorageKey{thor.Address(addr), thor.Bytes32(key)})
+	return v.(common.Hash)
 }
 
 // Snapshot stub.
