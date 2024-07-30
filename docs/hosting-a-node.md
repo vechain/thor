@@ -101,7 +101,7 @@ _As of 22nd April 2024, a full node without logs uses **~100 GB** of disk space.
 Telemetry plays a critical role in monitoring and managing blockchain nodes efficiently. 
 Below is an overview of how metrics is integrated and utilized within our node systems.
 
-Metrics is not enabled in nodes by default. It's possible to enable it by setting  `--enable-metrics`.
+Metrics are not enabled in nodes by default. It's possible to enable them by setting  `--enable-metrics`.
 Once enabled, a [prometheus](https://prometheus.io/docs/introduction/overview/) server is available at `localhost:2112/metrics` with the metrics.
 
 ```shell
