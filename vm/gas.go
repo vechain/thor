@@ -32,6 +32,11 @@ const (
 	GasReturn       uint64 = 0
 	GasStop         uint64 = 0
 	GasContractByte uint64 = 200
+
+	Bn256AddGasEIP1108             uint64 = 150   // Gas needed for an elliptic curve addition
+	Bn256ScalarMulGasEIP1108       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
+	Bn256PairingBaseGasEIP1108     uint64 = 45000 // Base price for an elliptic curve pairing check
+	Bn256PairingPerPointGasEIP1108 uint64 = 34000 // Per-point price for an elliptic curve pairing check
 )
 
 // callGas returns the actual gas cost of the call.
