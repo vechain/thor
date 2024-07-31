@@ -439,7 +439,7 @@ type bn256Add struct {
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256Add) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
-		return thor.Bn256AddGasEIP1108
+		return Bn256AddGasEIP1108
 	}
 	return params.Bn256AddGas
 }
@@ -466,7 +466,7 @@ type bn256ScalarMul struct {
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
-		return thor.Bn256ScalarMulGasEIP1108
+		return Bn256ScalarMulGasEIP1108
 	}
 	return params.Bn256ScalarMulGas
 }
@@ -500,7 +500,7 @@ type bn256Pairing struct {
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256Pairing) RequiredGas(input []byte) uint64 {
 	if c.eip1108 {
-		return thor.Bn256PairingBaseGasEIP1108 + uint64(len(input)/192)*thor.Bn256PairingPerPointGasEIP1108
+		return Bn256PairingBaseGasEIP1108 + uint64(len(input)/192)*Bn256PairingPerPointGasEIP1108
 	}
 	return params.Bn256PairingBaseGas + uint64(len(input)/192)*params.Bn256PairingPerPointGas
 }

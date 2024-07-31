@@ -20,17 +20,13 @@ const (
 	ClauseGas                 uint64 = params.TxGas - TxGas
 	ClauseGasContractCreation uint64 = params.TxGasContractCreation - TxGas
 
-	MinGasLimit                    uint64 = 1000 * 1000
-	InitialGasLimit                uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
-	GasLimitBoundDivisor           uint64 = 1024             // from ethereum
-	GetBalanceGas                  uint64 = 400              // EIP158 gas table
-	SloadGas                       uint64 = 200              // EIP158 gas table
-	SstoreSetGas                   uint64 = params.SstoreSetGas
-	SstoreResetGas                 uint64 = params.SstoreResetGas
-	Bn256AddGasEIP1108             uint64 = 150   // Gas needed for an elliptic curve addition
-	Bn256ScalarMulGasEIP1108       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
-	Bn256PairingBaseGasEIP1108     uint64 = 45000 // Base price for an elliptic curve pairing check
-	Bn256PairingPerPointGasEIP1108 uint64 = 34000 // Per-point price for an elliptic curve pairing check
+	MinGasLimit          uint64 = 1000 * 1000
+	InitialGasLimit      uint64 = 10 * 1000 * 1000 // InitialGasLimit gas limit value int genesis block.
+	GasLimitBoundDivisor uint64 = 1024             // from ethereum
+	GetBalanceGas        uint64 = 400              // EIP158 gas table
+	SloadGas             uint64 = 200              // EIP158 gas table
+	SstoreSetGas         uint64 = params.SstoreSetGas
+	SstoreResetGas       uint64 = params.SstoreResetGas
 
 	MaxTxWorkDelay uint32 = 30 // (unit: block) if tx delay exceeds this value, no energy can be exchanged.
 
