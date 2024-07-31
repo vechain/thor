@@ -37,6 +37,8 @@ const (
 	Bn256ScalarMulGasEIP1108       uint64 = 6000  // Gas needed for an elliptic curve scalar multiplication
 	Bn256PairingBaseGasEIP1108     uint64 = 45000 // Base price for an elliptic curve pairing check
 	Bn256PairingPerPointGasEIP1108 uint64 = 34000 // Per-point price for an elliptic curve pairing check
+
+	WarmStorageReadCost = uint64(100) // WARM_STORAGE_READ_COST
 )
 
 // callGas returns the actual gas cost of the call.
