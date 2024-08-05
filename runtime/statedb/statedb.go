@@ -17,13 +17,9 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
-	"github.com/vechain/thor/v2/vm"
 )
 
-var (
-	_                vm.StateDB = (*StateDB)(nil)
-	codeSizeCache, _            = lru.New(32 * 1024)
-)
+var codeSizeCache, _ = lru.New(32 * 1024)
 
 // StateDB implements evm.StateDB, only adapt to evm.
 type StateDB struct {
