@@ -26,7 +26,7 @@ const dataStoreName = "bft.engine"
 var finalizedKey = []byte("finalized")
 var justifiedKey = []byte("justified")
 
-type CommitLevel interface {
+type Committer interface {
 	Finalized() thor.Bytes32
 	Justified() thor.Bytes32
 }
