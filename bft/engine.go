@@ -95,11 +95,10 @@ func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
 	chain := engine.repo.NewBestChain()
 	headNumber := block.Number(chain.HeadID())
 
-	// current epoch is not concluded yet, so search from previous checkpoint
-	from := getCheckPoint(headNumber - thor.CheckpointInterval)
-	if getStorePoint(headNumber) == headNumber {
-		// current epoch is concluded
-		from = getCheckPoint(headNumber)
+	from := getStorePoint(headNumber)
+	if from > headNumber {
+		// current epoch is not concluded yet
+		from -= thor.CheckpointInterval
 	}
 
 	fromId, err := chain.GetBlockID(from)
@@ -129,13 +128,18 @@ func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
 		}
 
 		if quality > parentQuality {
-			engine.justified.Store(justified{search: fromId, value: id})
-			return id, nil
+			checkpoint, err := chain.GetBlockID(getCheckPoint(block.Number(id)))
+			if err != nil {
+				return thor.Bytes32{}, err
+			}
+
+			engine.justified.Store(justified{search: fromId, value: checkpoint})
+			return checkpoint, nil
 		}
 
-		if block.Number(parentID) <= block.Number(finalized) {
-			engine.justified.Store(justified{search: fromId, value: finalized})
-			return finalized, nil
+		if getCheckPoint(block.Number(parentID)) <= block.Number(finalized) {
+			// this should never happen, if it does, something wrong with the storage
+			return thor.Bytes32{}, errors.New("failed to find the justified checkpoint")
 		}
 
 		id = parentID
