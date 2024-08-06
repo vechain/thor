@@ -89,7 +89,10 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *
 		case revFinalized:
 			id = bft.Finalized()
 		case revJustified:
-			id = bft.Justified()
+			id, err = bft.Justified()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if id.IsZero() {

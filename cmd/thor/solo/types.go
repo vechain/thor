@@ -30,8 +30,8 @@ func (engine *BFTEngine) Finalized() thor.Bytes32 {
 	return engine.finalized
 }
 
-func (engine *BFTEngine) Justified() thor.Bytes32 {
-	return engine.justified
+func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
+	return engine.justified, nil
 }
 
 func NewBFTEngine(repo *chain.Repository) *BFTEngine {
