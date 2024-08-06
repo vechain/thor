@@ -192,7 +192,7 @@ func (cs *cacheStats) ShouldLog(msg string) (func(), bool) {
 			str = "n/a"
 		}
 
-		log.Info(msg,
+		logger.Info(msg,
 			"lookups", lookups,
 			"hitrate", str,
 		)

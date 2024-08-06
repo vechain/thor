@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/co"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/trie"
 )
 
-var log = log15.New("pkg", "pruner")
+var logger = log.WithContext("pkg", "pruner")
 
 const (
 	propsStoreName = "pruner.props"
@@ -50,7 +50,7 @@ func New(db *muxdb.MuxDB, repo *chain.Repository) *Pruner {
 	o.goes.Go(func() {
 		if err := o.loop(); err != nil {
 			if err != context.Canceled && errors.Cause(err) != context.Canceled {
-				log.Warn("pruner interrupted", "error", err)
+				logger.Warn("pruner interrupted", "error", err)
 			}
 		}
 	})
@@ -65,7 +65,7 @@ func (p *Pruner) Stop() {
 
 // loop is the main loop.
 func (p *Pruner) loop() error {
-	log.Info("pruner started")
+	logger.Info("pruner started")
 
 	var (
 		status     status
@@ -96,7 +96,7 @@ func (p *Pruner) loop() error {
 			return errors.Wrap(err, "prune tries")
 		}
 
-		log.Info("prune tries",
+		logger.Info("prune tries",
 			"range", fmt.Sprintf("#%v+%v", status.Base, target-status.Base),
 			"et", time.Duration(time.Now().UnixNano()-startTime),
 		)

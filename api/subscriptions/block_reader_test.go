@@ -105,7 +105,7 @@ func initChain(t *testing.T) (*chain.Repository, []*block.Block, *txpool.TxPool)
 		t.Fatal(err)
 	}
 	insertMockOutputEvent(receipts)
-	if err := repo.AddBlock(blk, receipts, 0); err != nil {
+	if err := repo.AddBlock(blk, receipts, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
