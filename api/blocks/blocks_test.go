@@ -7,6 +7,7 @@ package blocks_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"math/big"
@@ -43,6 +44,7 @@ func TestBlock(t *testing.T) {
 	defer ts.Close()
 
 	for name, tt := range map[string]func(*testing.T){
+		"testGetBlockGasCoef":                   testGetBlockGasCoef,
 		"testBadQueryParams":                    testBadQueryParams,
 		"testInvalidBlockId":                    testInvalidBlockId,
 		"testInvalidBlockNumber":                testInvalidBlockNumber,
@@ -83,6 +85,11 @@ func testGetBlockByHeight(t *testing.T) {
 		t.Fatal(err)
 	}
 	checkCollapsedBlock(t, blk, rb)
+	assert.Equal(t, http.StatusOK, statusCode)
+}
+func testGetBlockGasCoef(t *testing.T) {
+	res, statusCode := httpGet(t, ts.URL+"/blocks/best/baseGasCoef")
+	fmt.Println(res)
 	assert.Equal(t, http.StatusOK, statusCode)
 }
 

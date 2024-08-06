@@ -90,6 +90,12 @@ type JSONExpandedBlock struct {
 	Transactions []*JSONEmbeddedTx `json:"transactions"`
 }
 
+type JSONGasBaseCoefPrice struct {
+	Latest    uint8
+	Suggested uint8
+	Reason    string
+}
+
 func buildJSONBlockSummary(summary *chain.BlockSummary, isTrunk bool, isFinalized bool) *JSONBlockSummary {
 	header := summary.Header
 	signer, _ := header.Signer()
