@@ -153,10 +153,6 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.engine.JustifyBlock(b.Header()); err != nil {
-		return nil, err
-	}
-
 	if err = test.engine.CommitBlock(b.Header(), false); err != nil {
 		return nil, err
 	}
@@ -226,10 +222,6 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, best bool) (*c
 		return nil, err
 	}
 
-	if err := test.engine.JustifyBlock(blk.Header); err != nil {
-		return nil, err
-	}
-
 	if err := test.engine.CommitBlock(blk.Header, true); err != nil {
 		return nil, err
 	}
@@ -251,7 +243,10 @@ func TestNewEngine(t *testing.T) {
 
 	genID := testBFT.repo.BestBlockSummary().Header.ID()
 	assert.Equal(t, genID, testBFT.engine.Finalized())
-	assert.Equal(t, genID, testBFT.engine.Justified())
+
+	j, err := testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, genID, j)
 }
 
 func TestNewBlock(t *testing.T) {
@@ -409,7 +404,9 @@ func TestFinalized(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, justified, testBFT.engine.Justified())
+	j, err := testBFT.engine.Justified()
+	assert.NoError(t, err)
+	assert.Equal(t, justified, j)
 }
 
 func TestAccepts(t *testing.T) {
