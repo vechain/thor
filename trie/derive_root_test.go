@@ -5,7 +5,9 @@
 
 package trie
 
-import "testing"
+import (
+	"testing"
+)
 
 type mockedDerivableList struct {
 	n       int

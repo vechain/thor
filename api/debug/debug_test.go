@@ -29,6 +29,7 @@ import (
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient"
 	"github.com/vechain/thor/v2/tracers/logger"
+	"github.com/vechain/thor/v2/trie"
 	"github.com/vechain/thor/v2/tx"
 
 	// Force-load the tracer native engines to trigger registration
@@ -95,7 +96,7 @@ func TestDebug(t *testing.T) {
 
 func TestStorageRangeFunc(t *testing.T) {
 	db := muxdb.NewMem()
-	state := state.New(db, thor.Bytes32{}, 0, 0, 0)
+	state := state.New(db, trie.Root{})
 
 	// Create an account and set storage values
 	addr := thor.BytesToAddress([]byte("account1"))
