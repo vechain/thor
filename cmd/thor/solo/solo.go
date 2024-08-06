@@ -212,7 +212,7 @@ func (s *Solo) packing(pendingTxs tx.Transactions, onDemand bool) error {
 // The init function initializes the chain parameters.
 func (s *Solo) init(ctx context.Context) error {
 	best := s.repo.BestBlockSummary()
-	newState := s.stater.NewState(best.Header.StateRoot(), best.Header.Number(), best.Conflicts, best.SteadyNum)
+	newState := s.stater.NewState(best.Root())
 	currentBGP, err := builtin.Params.Native(newState).Get(thor.KeyBaseGasPrice)
 	if err != nil {
 		return errors.WithMessage(err, "failed to get the current base gas price")

@@ -11,13 +11,13 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/inconshreveable/log15"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/vechain/thor/v2/kv"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/muxdb/engine"
 	"github.com/vechain/thor/v2/trie"
 )
@@ -33,7 +33,7 @@ const (
 	configKey     = "config"
 )
 
-var log = log15.New("pkg", "muxdb")
+var logger = log.WithContext("pkg", "muxdb")
 
 // Options optional parameters for MuxDB.
 type Options struct {

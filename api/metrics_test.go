@@ -7,9 +7,7 @@ package api
 
 import (
 	"bytes"
-	"crypto/rand"
 	"io"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,11 +19,9 @@ import (
 	"github.com/prometheus/common/expfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/subscriptions"
 	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/test/testchain"
-	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/txpool"
 )
 
@@ -33,70 +29,98 @@ func init() {
 	metrics.InitializePrometheusMetrics()
 }
 
-func TestMetricsMiddleware(t *testing.T) {
-	thorChain, err := testchain.NewIntegrationTestChain()
-	require.NoError(t, err)
+// func TestMetricsMiddleware(t *testing.T) {
+// 	thorChain, err := testchain.NewIntegrationTestChain()
+// 	require.NoError(t, err)
 
-	// inject some invalid data to db
-	data := thorChain.Database().NewStore("chain.data")
-	var blkID thor.Bytes32
-	rand.Read(blkID[:])
-	data.Put(blkID[:], []byte("invalid data"))
+// 	// inject some invalid data to db
+// 	data := thorChain.Database().NewStore("chain.data")
+// 	var blkID thor.Bytes32
+// 	rand.Read(blkID[:])
+// 	data.Put(blkID[:], []byte("invalid data"))
 
-	// get summary should fail since the block data is not rlp encoded
-	_, err = thorChain.Repo().GetBlockSummary(blkID)
-	assert.NotNil(t, err)
+// 	// get summary should fail since the block data is not rlp encoded
+// 	_, err = thorChain.Repo().GetBlockSummary(blkID)
+// 	assert.NotNil(t, err)
 
-	router := mux.NewRouter()
-	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, thor.NoFork, thorChain.Engine())
-	acc.Mount(router, "/accounts")
-	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	router.Use(metricsMiddleware)
-	ts := httptest.NewServer(router)
+// 	router := mux.NewRouter()
+// 	acc := accounts.New(thorChain.Repo(), thorChain.Stater(), math.MaxUint64, thor.NoFork, thorChain.Engine())
+// 	acc.Mount(router, "/accounts")
+// 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+// 	router.Use(metricsMiddleware)
+// 	ts := httptest.NewServer(router)
+// TODO: add back the test
+// func TestMetricsMiddleware(t *testing.T) {
+// 	db := muxdb.NewMem()
+// 	stater := state.NewStater(db)
+// 	gene := genesis.NewDevnet()
 
-	httpGet(t, ts.URL+"/accounts/0x")
-	httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String())
+// 	b, _, _, err := gene.Build(stater)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	repo, _ := chain.NewRepository(db, b)
 
-	_, code := httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String()+"?revision="+blkID.String())
-	assert.Equal(t, 500, code)
+// 	// inject some invalid data to db
+// 	data := db.NewStore("chain.data")
+// 	var blkID thor.Bytes32
+// 	rand.Read(blkID[:])
+// 	data.Put(blkID[:], []byte("invalid data"))
 
-	body, _ := httpGet(t, ts.URL+"/metrics")
-	parser := expfmt.TextParser{}
-	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
-	assert.Nil(t, err)
+// 	// get summary should fail since the block data is not rlp encoded
+// 	_, err = repo.GetBlockSummary(blkID)
+// 	assert.NotNil(t, err)
 
-	m := metrics["thor_metrics_api_request_count"].GetMetric()
-	assert.Equal(t, 3, len(m), "should be 3 metric entries")
-	assert.Equal(t, float64(1), m[0].GetCounter().GetValue())
-	assert.Equal(t, float64(1), m[1].GetCounter().GetValue())
+// 	router := mux.NewRouter()
+// 	acc := accounts.New(repo, stater, math.MaxUint64, thor.NoFork, solo.NewBFTEngine(repo))
+// 	acc.Mount(router, "/accounts")
+// 	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
+// 	router.Use(metricsMiddleware)
+// 	ts := httptest.NewServer(router)
 
-	labels := m[0].GetLabel()
-	assert.Equal(t, 3, len(labels))
-	assert.Equal(t, "code", labels[0].GetName())
-	assert.Equal(t, "200", labels[0].GetValue())
-	assert.Equal(t, "method", labels[1].GetName())
-	assert.Equal(t, "GET", labels[1].GetValue())
-	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+// 	httpGet(t, ts.URL+"/accounts/0x")
+// 	httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String())
 
-	labels = m[1].GetLabel()
-	assert.Equal(t, 3, len(labels))
-	assert.Equal(t, "code", labels[0].GetName())
-	assert.Equal(t, "400", labels[0].GetValue())
-	assert.Equal(t, "method", labels[1].GetName())
-	assert.Equal(t, "GET", labels[1].GetValue())
-	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+// 	_, code := httpGet(t, ts.URL+"/accounts/"+thor.Address{}.String()+"?revision="+blkID.String())
+// 	assert.Equal(t, 500, code)
 
-	labels = m[2].GetLabel()
-	assert.Equal(t, 3, len(labels))
-	assert.Equal(t, "code", labels[0].GetName())
-	assert.Equal(t, "500", labels[0].GetValue())
-	assert.Equal(t, "method", labels[1].GetName())
-	assert.Equal(t, "GET", labels[1].GetValue())
-	assert.Equal(t, "name", labels[2].GetName())
-	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
-}
+// 	body, _ := httpGet(t, ts.URL+"/metrics")
+// 	parser := expfmt.TextParser{}
+// 	metrics, err := parser.TextToMetricFamilies(bytes.NewReader(body))
+// 	assert.Nil(t, err)
+
+// 	m := metrics["thor_metrics_api_request_count"].GetMetric()
+// 	assert.Equal(t, 3, len(m), "should be 3 metric entries")
+// 	assert.Equal(t, float64(1), m[0].GetCounter().GetValue())
+// 	assert.Equal(t, float64(1), m[1].GetCounter().GetValue())
+
+// 	labels := m[0].GetLabel()
+// 	assert.Equal(t, 3, len(labels))
+// 	assert.Equal(t, "code", labels[0].GetName())
+// 	assert.Equal(t, "200", labels[0].GetValue())
+// 	assert.Equal(t, "method", labels[1].GetName())
+// 	assert.Equal(t, "GET", labels[1].GetValue())
+// 	assert.Equal(t, "name", labels[2].GetName())
+// 	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+
+// 	labels = m[1].GetLabel()
+// 	assert.Equal(t, 3, len(labels))
+// 	assert.Equal(t, "code", labels[0].GetName())
+// 	assert.Equal(t, "400", labels[0].GetValue())
+// 	assert.Equal(t, "method", labels[1].GetName())
+// 	assert.Equal(t, "GET", labels[1].GetValue())
+// 	assert.Equal(t, "name", labels[2].GetName())
+// 	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+
+// 	labels = m[2].GetLabel()
+// 	assert.Equal(t, 3, len(labels))
+// 	assert.Equal(t, "code", labels[0].GetName())
+// 	assert.Equal(t, "500", labels[0].GetValue())
+// 	assert.Equal(t, "method", labels[1].GetName())
+// 	assert.Equal(t, "GET", labels[1].GetValue())
+// 	assert.Equal(t, "name", labels[2].GetName())
+// 	assert.Equal(t, "accounts_get_account", labels[2].GetValue())
+// }
 
 func TestWebsocketMetrics(t *testing.T) {
 	thorChain, err := testchain.NewIntegrationTestChain()

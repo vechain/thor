@@ -133,7 +133,7 @@ func addNewBlock(repo *chain.Repository, stater *state.Stater, b0 *block.Block, 
 	if _, err := stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.AddBlock(blk, receipts, 0); err != nil {
+	if err := repo.AddBlock(blk, receipts, 0, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.SetBestBlockID(blk.Header().ID()); err != nil {
