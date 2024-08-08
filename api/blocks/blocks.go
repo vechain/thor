@@ -64,8 +64,6 @@ func (b *Blocks) handleGetGasCoef(w http.ResponseWriter, req *http.Request) erro
 			avgBaseCoef = avgBaseCoef.Add(avgBaseCoef, big.NewInt(int64(tx.GasPriceCoef())))
 		}
 		avgBaseCoef = avgBaseCoef.Div(avgBaseCoef, big.NewInt(int64(len(txs))))
-	} else {
-		fmt.Println("No transactions")
 	}
 
 	totalGasUsed := summary.Header.GasUsed()
@@ -75,22 +73,25 @@ func (b *Blocks) handleGetGasCoef(w http.ResponseWriter, req *http.Request) erro
 
 	// Convert avgBaseCoef to big.Float for percentage calculation
 	avgBaseCoefFloat := new(big.Float).SetInt(avgBaseCoef)
-	multiplier := big.NewFloat(0.12)
+	suggestedBaseCoef := new(big.Float).SetInt(avgBaseCoef)
+	multiplier := big.NewFloat(0.125)
 	twelvePercent := new(big.Float).Mul(avgBaseCoefFloat, multiplier)
 
 	// Check if the gas usage is more than 50%
-	suggestedBaseCoef := avgBaseCoefFloat
-
 	// todo remove reason
-	reason := fmt.Sprintf("Blk: %s, GasLimit: %d, GasUsed: %d", summary.Header.ID().AbbrevString(), summary.Header.GasLimit(), summary.Header.GasUsed())
-	if div > 0.5 {
-		reason += " - Increased!"
+	reason := fmt.Sprintf("Blk: %s, GasLimit: %d, GasUsed: %d, Div: %f",
+		summary.Header.ID().AbbrevString(),
+		summary.Header.GasLimit(),
+		summary.Header.GasUsed(),
+		div*100)
+	if div > 0.3 {
+		reason += ", Increase"
 		suggestedBaseCoef = suggestedBaseCoef.Add(suggestedBaseCoef, twelvePercent)
-	} else if div < 0.5 {
-		reason += " - Decreased!"
+	} else if div < 0.3 {
+		reason += ", Decrease"
 		suggestedBaseCoef = suggestedBaseCoef.Sub(suggestedBaseCoef, twelvePercent)
 	} else {
-		reason += " - Stayed the same."
+		reason += ", Stay"
 	}
 
 	// Convert big.Float to uint8 with rounding up
@@ -109,10 +110,10 @@ func (b *Blocks) handleGetGasCoef(w http.ResponseWriter, req *http.Request) erro
 	}
 
 	return utils.WriteJSON(w, &JSONGasBaseCoefPrice{
-		Latest:    latest,
+		Average:   latest,
 		Suggested: suggested,
 		// todo remove reason
-		Reason: fmt.Sprintf("%s Base Coef - Avg: %s, Sug %s", reason, avgBaseCoef.String(), suggestedBaseCoef.String()),
+		Reason: reason,
 	})
 }
 
@@ -184,7 +185,7 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("blocks_get_block").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
-	sub.Path("/{id}/baseGasCoef").
+	sub.Path("/{revision}/baseGasCoef").
 		Methods(http.MethodGet).
 		Name("blocks_get_baseGasCoef").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetGasCoef))

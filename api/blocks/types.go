@@ -91,7 +91,7 @@ type JSONExpandedBlock struct {
 }
 
 type JSONGasBaseCoefPrice struct {
-	Latest    uint8
+	Average   uint8
 	Suggested uint8
 	Reason    string
 }
