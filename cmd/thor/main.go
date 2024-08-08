@@ -74,6 +74,7 @@ func main() {
 			targetGasLimitFlag,
 			apiAddrFlag,
 			apiCorsFlag,
+			apiCorsAllowedCredsFlag,
 			apiTimeoutFlag,
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
@@ -105,6 +106,7 @@ func main() {
 					cacheFlag,
 					apiAddrFlag,
 					apiCorsFlag,
+					apiCorsAllowedCredsFlag,
 					apiTimeoutFlag,
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
@@ -242,6 +244,8 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		ctx.Bool(apiAllowedCredsFlag.Name),
+		ctx.Bool(apiAllowedOriginsFlag.Name),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -380,6 +384,8 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		ctx.Bool(apiAllowedCredsFlag.Name),
+		ctx.Bool(apiAllowedOriginsFlag.Name),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
