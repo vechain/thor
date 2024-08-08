@@ -134,9 +134,17 @@ func init() {
 			output := env.TransactionContext().GasPayer
 			return []interface{}{output}
 		}},
+		{"native_txClauseIndex", func(env *xenv.Environment) []interface{} {
+			output := env.ClauseIndex()
+			return []interface{}{output}
+		}},
+		{"native_txClauseCount", func(env *xenv.Environment) []interface{} {
+			count := env.TransactionContext().ClauseCount
+			return []interface{}{count}
+		}},
 	}
 
-	abi := Extension.V2.NativeABI()
+	abi := Extension.V3.NativeABI()
 	for _, def := range defines {
 		if method, found := abi.MethodByName(def.name); found {
 			nativeMethods[methodKey{Extension.Address, method.ID()}] = &nativeMethod{

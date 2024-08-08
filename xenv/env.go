@@ -32,24 +32,26 @@ type BlockContext struct {
 
 // TransactionContext transaction context.
 type TransactionContext struct {
-	ID         thor.Bytes32
-	Origin     thor.Address
-	GasPayer   thor.Address
-	GasPrice   *big.Int
-	ProvedWork *big.Int
-	BlockRef   tx.BlockRef
-	Expiration uint32
+	ID          thor.Bytes32
+	Origin      thor.Address
+	GasPayer    thor.Address
+	GasPrice    *big.Int
+	ProvedWork  *big.Int
+	ClauseCount *big.Int
+	BlockRef    tx.BlockRef
+	Expiration  uint32
 }
 
 // Environment an env to execute native method.
 type Environment struct {
-	abi      *abi.Method
-	chain    *chain.Chain
-	state    *state.State
-	blockCtx *BlockContext
-	txCtx    *TransactionContext
-	evm      *vm.EVM
-	contract *vm.Contract
+	abi         *abi.Method
+	chain       *chain.Chain
+	state       *state.State
+	blockCtx    *BlockContext
+	txCtx       *TransactionContext
+	evm         *vm.EVM
+	contract    *vm.Contract
+	clauseIndex uint32
 }
 
 // New create a new env.
@@ -61,15 +63,17 @@ func New(
 	txCtx *TransactionContext,
 	evm *vm.EVM,
 	contract *vm.Contract,
+	clauseIndex uint32,
 ) *Environment {
 	return &Environment{
-		abi:      abi,
-		chain:    chain,
-		state:    state,
-		blockCtx: blockCtx,
-		txCtx:    txCtx,
-		evm:      evm,
-		contract: contract,
+		abi:         abi,
+		chain:       chain,
+		state:       state,
+		blockCtx:    blockCtx,
+		txCtx:       txCtx,
+		evm:         evm,
+		contract:    contract,
+		clauseIndex: clauseIndex,
 	}
 }
 
@@ -79,6 +83,7 @@ func (env *Environment) TransactionContext() *TransactionContext { return env.tx
 func (env *Environment) BlockContext() *BlockContext             { return env.blockCtx }
 func (env *Environment) Caller() thor.Address                    { return thor.Address(env.contract.Caller()) }
 func (env *Environment) To() thor.Address                        { return thor.Address(env.contract.Address()) }
+func (env *Environment) ClauseIndex() uint32                     { return env.clauseIndex }
 
 func (env *Environment) UseGas(gas uint64) {
 	if !env.contract.UseGas(gas) {
