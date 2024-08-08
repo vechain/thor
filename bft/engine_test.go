@@ -5,7 +5,6 @@
 package bft
 
 import (
-	"crypto/rand"
 	"math"
 	"testing"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
+	"github.com/vechain/thor/v2/test/datagen"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -37,20 +37,6 @@ var defaultFC = thor.ForkConfig{
 	ETH_IST:   math.MaxUint32,
 	VIP214:    math.MaxUint32,
 	FINALITY:  0,
-}
-
-func RandomAddress() thor.Address {
-	var addr thor.Address
-
-	rand.Read(addr[:])
-	return addr
-}
-
-func RandomBytes32() thor.Bytes32 {
-	var b32 thor.Bytes32
-
-	rand.Read(b32[:])
-	return b32
 }
 
 func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
@@ -399,14 +385,15 @@ func TestFinalized(t *testing.T) {
 
 	assert.Equal(t, finalized, testBFT.engine.Finalized())
 
-	justified, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	j, err := testBFT.engine.Justified()
 	assert.NoError(t, err)
-	assert.Equal(t, justified, j)
+	assert.Equal(t, jc, j)
+	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
 }
 
 func TestAccepts(t *testing.T) {
@@ -726,8 +713,8 @@ func TestJustifier(t *testing.T) {
 
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), true)
+					blkID = datagen.RandomHash()
+					vs.AddBlock(blkID, datagen.RandomAddress(), true)
 				}
 
 				st := vs.Summarize()
@@ -736,7 +723,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Committed)
 
 				// add vote after commits，commit/justify stays the same
-				vs.AddBlock(RandomBytes32(), RandomAddress(), true)
+				vs.AddBlock(datagen.RandomHash(), datagen.RandomAddress(), true)
 				st = vs.Summarize()
 				assert.Equal(t, uint32(3), st.Quality)
 				assert.True(t, st.Justified)
@@ -759,8 +746,8 @@ func TestJustifier(t *testing.T) {
 
 				var blkID thor.Bytes32
 				for i := 0; i <= MaxBlockProposers*2/3; i++ {
-					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), false)
+					blkID = datagen.RandomHash()
+					vs.AddBlock(blkID, datagen.RandomAddress(), false)
 				}
 
 				st := vs.Summarize()
@@ -786,13 +773,13 @@ func TestJustifier(t *testing.T) {
 				var blkID thor.Bytes32
 				// vote <threshold> times COM
 				for i := 0; i < MaxBlockProposers*2/3; i++ {
-					blkID = RandomBytes32()
-					vs.AddBlock(blkID, RandomAddress(), true)
+					blkID = datagen.RandomHash()
+					vs.AddBlock(blkID, datagen.RandomAddress(), true)
 				}
 
-				master := RandomAddress()
+				master := datagen.RandomAddress()
 				// master votes WIT
-				blkID = RandomBytes32()
+				blkID = datagen.RandomHash()
 				vs.AddBlock(blkID, master, false)
 
 				// justifies but not committed
@@ -800,7 +787,7 @@ func TestJustifier(t *testing.T) {
 				assert.True(t, st.Justified)
 				assert.False(t, st.Committed)
 
-				blkID = RandomBytes32()
+				blkID = datagen.RandomHash()
 				// master votes COM
 				vs.AddBlock(blkID, master, true)
 
@@ -809,8 +796,8 @@ func TestJustifier(t *testing.T) {
 				assert.False(t, st.Committed)
 
 				// another master votes WIT
-				blkID = RandomBytes32()
-				vs.AddBlock(blkID, RandomAddress(), true)
+				blkID = datagen.RandomHash()
+				vs.AddBlock(blkID, datagen.RandomAddress(), true)
 				st = vs.Summarize()
 				assert.True(t, st.Committed)
 			},
@@ -826,20 +813,20 @@ func TestJustifier(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				master := RandomAddress()
-				vs.AddBlock(RandomBytes32(), master, true)
+				master := datagen.RandomAddress()
+				vs.AddBlock(datagen.RandomHash(), master, true)
 				assert.Equal(t, true, vs.votes[master])
 				assert.Equal(t, uint64(1), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, false)
+				vs.AddBlock(datagen.RandomHash(), master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, true)
+				vs.AddBlock(datagen.RandomHash(), master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, false)
+				vs.AddBlock(datagen.RandomHash(), master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
@@ -847,19 +834,19 @@ func TestJustifier(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				vs.AddBlock(RandomBytes32(), master, false)
+				vs.AddBlock(datagen.RandomHash(), master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, true)
+				vs.AddBlock(datagen.RandomHash(), master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, true)
+				vs.AddBlock(datagen.RandomHash(), master, true)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 
-				vs.AddBlock(RandomBytes32(), master, false)
+				vs.AddBlock(datagen.RandomHash(), master, false)
 				assert.Equal(t, false, vs.votes[master])
 				assert.Equal(t, uint64(0), vs.comVotes)
 			},
@@ -870,4 +857,98 @@ func TestJustifier(t *testing.T) {
 			tt.testFunc(t)
 		})
 	}
+}
+
+func TestJustified(t *testing.T) {
+	testBFT, err := newTestBft(defaultFC)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// chain stops the end of third bft round,should commit the second checkpoint
+	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	actual, err := testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, actual)
+	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
+	again, err := testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, again)
+	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
+
+	if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
+		t.Fatal(err)
+	}
+
+	// move forward with minority, should not change finalized and justified
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+	actual, err = testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, actual)
+
+	if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
+		t.Fatal(err)
+	}
+
+	// move forward with minority, should not change finalized and justified
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+	actual, err = testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, actual)
+
+	// move forward with majority
+	if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+		t.Fatal(err)
+	}
+
+	// finalized should move forward 1 epoch
+	finalized, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+	jc, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err = testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, actual)
+
+	// move forward with majority
+	if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+		t.Fatal(err)
+	}
+
+	// finalized should be head(concluded) - 2 epoch
+	finalized, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, finalized, testBFT.engine.Finalized())
+
+	// justified should be head(concluded) -1 epoch
+	jc, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err = testBFT.engine.Justified()
+	assert.Nil(t, err)
+	assert.Equal(t, jc, actual)
 }
