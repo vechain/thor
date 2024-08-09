@@ -42,6 +42,11 @@ func TestParseRevision(t *testing.T) {
 			expected: &Revision{revBest},
 		},
 		{
+			revision: "justified",
+			err:      nil,
+			expected: &Revision{revJustified},
+		},
+		{
 			revision: "finalized",
 			err:      nil,
 			expected: &Revision{revFinalized},
@@ -121,6 +126,11 @@ func TestGetSummary(t *testing.T) {
 			name:     "1234",
 			revision: &Revision{uint32(1234)},
 			err:      errors.New("not found"),
+		},
+		{
+			name:     "justified",
+			revision: &Revision{revJustified},
+			err:      nil,
 		},
 		{
 			name:     "finalized",

@@ -25,8 +25,14 @@ const dataStoreName = "bft.engine"
 
 var finalizedKey = []byte("finalized")
 
-type Finalizer interface {
+type Committer interface {
 	Finalized() thor.Bytes32
+	Justified() (thor.Bytes32, error)
+}
+
+type justified struct {
+	search thor.Bytes32
+	value  thor.Bytes32
 }
 
 // BFTEngine tracks all votes of blocks, computes the finalized checkpoint.
@@ -39,6 +45,7 @@ type BFTEngine struct {
 	master     thor.Address
 	casts      casts
 	finalized  atomic.Value
+	justified  atomic.Value
 	caches     struct {
 		state     *lru.Cache
 		quality   *lru.Cache
@@ -60,6 +67,7 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 	engine.caches.quality, _ = lru.New(16)
 	engine.caches.justifier = cache.NewPrioCache(16)
 
+	// Restore finalized block, if any
 	if val, err := engine.data.Get(finalizedKey); err != nil {
 		if !engine.data.IsNotFound(err) {
 			return nil, err
@@ -75,6 +83,67 @@ func NewEngine(repo *chain.Repository, mainDB *muxdb.MuxDB, forkConfig thor.Fork
 // Finalized returns the finalized checkpoint.
 func (engine *BFTEngine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
+}
+
+func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
+	finalized := engine.Finalized()
+
+	if block.Number(finalized) == 0 {
+		return finalized, nil
+	}
+
+	chain := engine.repo.NewBestChain()
+	headNumber := block.Number(chain.HeadID())
+
+	from := getStorePoint(headNumber)
+	if from > headNumber {
+		// current epoch is not concluded yet
+		from -= thor.CheckpointInterval
+	}
+
+	fromId, err := chain.GetBlockID(from)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	if val := engine.justified.Load(); val != nil && fromId == val.(justified).search {
+		return val.(justified).value, nil
+	}
+
+	id := fromId
+	for {
+		quality, err := engine.getQuality(id)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+
+		parentID, err := chain.GetBlockID(block.Number(id) - thor.CheckpointInterval)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+
+		parentQuality, err := engine.getQuality(parentID)
+		if err != nil {
+			return thor.Bytes32{}, err
+		}
+
+		if quality > parentQuality {
+			checkpoint, err := chain.GetBlockID(getCheckPoint(block.Number(id)))
+			if err != nil {
+				return thor.Bytes32{}, err
+			}
+
+			engine.justified.Store(justified{search: fromId, value: checkpoint})
+			return checkpoint, nil
+		}
+
+		if getCheckPoint(block.Number(parentID)) <= block.Number(finalized) {
+			// this should never happen, if it does, something wrong with the storage
+			return thor.Bytes32{}, errors.New("failed to find the justified checkpoint")
+		}
+
+		id = parentID
+	}
 }
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
@@ -223,7 +292,7 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 	return true, nil
 }
 
-// computeState computes the bft state regarding the given block header.
+// computeState computes the bft state regarding the given block header to the closest checkpoint.
 func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 	if cached, ok := engine.caches.state.Get(header.ID()); ok {
 		return cached.(*bftState), nil

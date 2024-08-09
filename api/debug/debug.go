@@ -46,10 +46,10 @@ type Debug struct {
 	forkConfig        thor.ForkConfig
 	callGasLimit      uint64
 	allowCustomTracer bool
-	bft               bft.Finalizer
+	bft               bft.Committer
 }
 
-func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Finalizer) *Debug {
+func New(repo *chain.Repository, stater *state.Stater, forkConfig thor.ForkConfig, callGaslimit uint64, allowCustomTracer bool, bft bft.Committer) *Debug {
 	return &Debug{
 		repo,
 		stater,

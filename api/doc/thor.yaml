@@ -2252,7 +2252,7 @@ components:
     RevisionInQuery:
       name: revision
       in: query
-      description: Specify either `best`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+      description: Specify either `best`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
       schema:
         type: string
 
@@ -2260,7 +2260,7 @@ components:
       name: revision
       in: query
       description: |
-        Specify either `best`,`next`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
+        Specify either `best`, `next`, `justified`, `finalized`, a block number or block ID. If omitted, the `best` block is assumed.
         
         If the `next` block is specified, the call code will be executed on the next block, with the following:
         - The block number is the `best` block number plus one.
@@ -2279,6 +2279,7 @@ components:
         - a block ID (hex string)
         - a block number (integer)
         - `best` stands for latest block
+        - `justified` stands for the justified block
         - `finalized` stands for the finalized block
       required: true
       schema:

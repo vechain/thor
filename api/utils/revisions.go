@@ -21,6 +21,7 @@ const (
 	revBest      int64 = -1
 	revFinalized int64 = -2
 	revNext      int64 = -3
+	revJustified int64 = -4
 )
 
 type Revision struct {
@@ -39,6 +40,10 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 
 	if revision == "finalized" {
 		return &Revision{revFinalized}, nil
+	}
+
+	if revision == "justified" {
+		return &Revision{revJustified}, nil
 	}
 
 	if revision == "next" {
@@ -67,7 +72,7 @@ func ParseRevision(revision string, allowNext bool) (*Revision, error) {
 
 // GetSummary returns the block summary for the given revision,
 // revision required to be a deterministic block other than "next".
-func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Finalizer) (sum *chain.BlockSummary, err error) {
+func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Committer) (sum *chain.BlockSummary, err error) {
 	var id thor.Bytes32
 	switch rev := rev.val.(type) {
 	case thor.Bytes32:
@@ -83,6 +88,11 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Finalizer) (sum *
 			id = repo.BestBlockSummary().Header.ID()
 		case revFinalized:
 			id = bft.Finalized()
+		case revJustified:
+			id, err = bft.Justified()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if id.IsZero() {
@@ -97,7 +107,7 @@ func GetSummary(rev *Revision, repo *chain.Repository, bft bft.Finalizer) (sum *
 
 // GetSummaryAndState returns the block summary and state for the given revision,
 // this function supports the "next" revision.
-func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Finalizer, stater *state.Stater) (*chain.BlockSummary, *state.State, error) {
+func GetSummaryAndState(rev *Revision, repo *chain.Repository, bft bft.Committer, stater *state.Stater) (*chain.BlockSummary, *state.State, error) {
 	if rev.IsNext() {
 		best := repo.BestBlockSummary()
 
