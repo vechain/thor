@@ -45,7 +45,7 @@ jobs:
         with:
           repository: vechain/thor-e2e-tests
           # https://github.com/vechain/thor-e2e-tests/tree/00bd3f1b949b05da94e82686e0089a11a136c34c
-          ref: 4f984b8afd3bb21639f6838fd8c99bf64a9367f2
+          ref: 5fb22b0b3f3d28d5083e2d78e27e711da0425cdc
 
       - name: Download artifact
         uses: actions/download-artifact@v4
