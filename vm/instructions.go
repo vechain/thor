@@ -17,20 +17,11 @@
 package vm
 
 import (
-	"errors"
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 	"github.com/vechain/thor/v2/thor"
-)
-
-var (
-	errWriteProtection       = errors.New("evm: write protection")
-	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
-	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -328,14 +319,14 @@ func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, 
 	)
 	offset64, overflow := dataOffset.Uint64WithOverflow()
 	if overflow {
-		return nil, errReturnDataOutOfBounds
+		return nil, ErrReturnDataOutOfBounds
 	}
 	// we can reuse dataOffset now (aliasing it for clarity)
 	var end = dataOffset
 	end.Add(dataOffset, length)
 	end64, overflow := end.Uint64WithOverflow()
 	if overflow || uint64(len(evm.interpreter.returnData)) < end64 {
-		return nil, errReturnDataOutOfBounds
+		return nil, ErrReturnDataOutOfBounds
 	}
 	memory.Set(memOffset.Uint64(), length.Uint64(), evm.interpreter.returnData[offset64:end64])
 	return nil, nil
@@ -531,8 +522,7 @@ func opSstore(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 func opJump(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos := stack.popptr()
 	if !contract.validJumpdest(pos) {
-		nop := contract.GetOp(pos.Uint64())
-		return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+		return nil, ErrInvalidJump
 	}
 	*pc = pos.Uint64()
 	return nil, nil
@@ -542,8 +532,7 @@ func opJumpi(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *St
 	pos, cond := stack.popptr(), stack.popptr()
 	if !cond.IsZero() {
 		if !contract.validJumpdest(pos) {
-			nop := contract.GetOp(pos.Uint64())
-			return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+			return nil, ErrInvalidJump
 		}
 		*pc = pos.Uint64()
 	} else {
@@ -804,6 +793,19 @@ func opChainID(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 func opSelfBalance(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	balance, _ := uint256.FromBig(evm.StateDB.GetBalance(contract.Address()))
 	stack.push(balance)
+	return nil, nil
+}
+
+// opBaseFee implements BASEFEE opcode
+func opBaseFee(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	baseFee, _ := uint256.FromBig(evm.Context.BaseFee)
+	stack.push(baseFee)
+	return nil, nil
+}
+
+// opPush0 implements the PUSH0 opcode
+func opPush0(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(new(uint256.Int))
 	return nil, nil
 }
 

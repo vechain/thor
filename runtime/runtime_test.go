@@ -7,6 +7,7 @@ package runtime_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
+	"github.com/vechain/thor/v2/vm"
 	"github.com/vechain/thor/v2/xenv"
 )
 
@@ -30,314 +32,578 @@ func M(a ...interface{}) []interface{} {
 	return a
 }
 
-func TestContractSuicide(t *testing.T) {
-	db := muxdb.NewMem()
+func TestEVMFunction(t *testing.T) {
+	target := thor.BytesToAddress([]byte("acc01"))
 
-	g := genesis.NewDevnet()
-	stater := state.NewStater(db)
-	b0, _, _, err := g.Build(stater)
-	assert.Nil(t, err)
-
-	repo, _ := chain.NewRepository(db, b0)
-
-	// contract:
-	//
-	// pragma solidity ^0.4.18;
-
-	// contract TestSuicide {
-	// 	function testSuicide() public {
-	// 		selfdestruct(msg.sender);
-	// 	}
-	// }
-	data, _ := hex.DecodeString("608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063085da1b3146044575b600080fd5b348015604f57600080fd5b5060566058565b005b3373ffffffffffffffffffffffffffffffffffffffff16ff00a165627a7a723058204cb70b653a3d1821e00e6ade869638e80fa99719931c9fa045cec2189d94086f0029")
-	time := b0.Header().Timestamp()
-	addr := thor.BytesToAddress([]byte("acc01"))
-	state := stater.NewState(b0.Header().StateRoot(), 0, 0, 0)
-	state.SetCode(addr, data)
-	state.SetEnergy(addr, big.NewInt(100), time)
-	state.SetBalance(addr, big.NewInt(200))
-
-	abi, _ := abi.New([]byte(`[{
-			"constant": false,
-			"inputs": [],
-			"name": "testSuicide",
-			"outputs": [],
-			"payable": false,
-			"stateMutability": "nonpayable",
-			"type": "function"
-		}
-	]`))
-	suicide, _ := abi.MethodByName("testSuicide")
-	methodData, err := suicide.EncodeInput()
-	if err != nil {
-		t.Fatal(err)
+	type context struct {
+		chain  *chain.Chain
+		state  *state.State
+		method *abi.Method
 	}
 
-	origin := genesis.DevAccounts()[0].Address
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{Time: time}, thor.NoFork).
-		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
-	out, _, err := exec()
-	assert.Nil(t, err)
-	assert.Nil(t, out.VMErr)
-
-	expectedTransfer := &tx.Transfer{
-		Sender:    addr,
-		Recipient: origin,
-		Amount:    big.NewInt(200),
+	type testcase = struct {
+		name       string
+		code       string
+		abi        string
+		methodName string
+		testFunc   func(*context, *testing.T)
 	}
-	assert.Equal(t, 1, len(out.Transfers))
-	assert.Equal(t, expectedTransfer, out.Transfers[0])
 
-	event, _ := builtin.Energy.ABI.EventByName("Transfer")
-	expectedEvent := &tx.Event{
-		Address: builtin.Energy.Address,
-		Topics:  []thor.Bytes32{event.ID(), thor.BytesToBytes32(addr.Bytes()), thor.BytesToBytes32(origin.Bytes())},
-		Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100},
-	}
-	assert.Equal(t, 1, len(out.Events))
-	assert.Equal(t, expectedEvent, out.Events[0])
+	baseTests := []testcase{
+		{
+			name:       "Contract Suicide",
+			code:       "608060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063085da1b3146044575b600080fd5b348015604f57600080fd5b5060566058565b005b3373ffffffffffffffffffffffffffffffffffffffff16ff00a165627a7a723058204cb70b653a3d1821e00e6ade869638e80fa99719931c9fa045cec2189d94086f0029",
+			abi:        `[{"constant":false,"inputs":[],"name":"testSuicide","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"}]`,
+			methodName: "testSuicide",
+			testFunc: func(ctx *context, t *testing.T) {
+				// contract:
+				//
+				// pragma solidity ^0.4.18;
 
-	assert.Equal(t, M(big.NewInt(0), nil), M(state.GetBalance(addr)))
-	assert.Equal(t, M(big.NewInt(0), nil), M(state.GetEnergy(addr, time)))
+				// contract TestSuicide {
+				// 	function testSuicide() public {
+				// 		selfdestruct(msg.sender);
+				// 	}
+				// }
 
-	bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
-	assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(200)), nil), M(state.GetBalance(origin)))
-	assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(100)), nil), M(state.GetEnergy(origin, time)))
-}
+				// time := ctx.chain.GetBlockSummary()
+				// .Header().Timestamp()
 
-func TestChainID(t *testing.T) {
-	db := muxdb.NewMem()
+				head, _ := ctx.chain.GetBlockSummary(0)
+				time := head.Header.Timestamp()
 
-	g := genesis.NewDevnet()
+				ctx.state.SetEnergy(target, big.NewInt(100), time)
+				ctx.state.SetBalance(target, big.NewInt(200))
 
-	stater := state.NewStater(db)
-	b0, _, _, err := g.Build(stater)
-	assert.Nil(t, err)
-
-	repo, _ := chain.NewRepository(db, b0)
-
-	// pragma solidity >=0.7.0 <0.9.0;
-	// contract TestChainID {
-
-	//     function chainID() public view returns (uint256) {
-	//         return block.chainid;
-	//     }
-	// }
-	data, _ := hex.DecodeString("6080604052348015600f57600080fd5b506004361060285760003560e01c8063adc879e914602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600046905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea264697066735822122060b67d944ffa8f0c5ee69f2f47decc3dc175ea2e4341a4de3705d72b868ce2b864736f6c63430008010033")
-	addr := thor.BytesToAddress([]byte("acc01"))
-	state := stater.NewState(b0.Header().StateRoot(), 0, 0, 0)
-	state.SetCode(addr, data)
-
-	abi, _ := abi.New([]byte(`[{
-			"inputs": [],
-			"name": "chainID",
-			"outputs": [
-				{
-					"internalType": "uint256",
-					"name": "",
-					"type": "uint256"
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
 				}
-			],
-			"stateMutability": "view",
-			"type": "function"
-		}
-	]`))
-	chainIDMethod, _ := abi.MethodByName("chainID")
-	methodData, err := chainIDMethod.EncodeInput()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
-		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
-	out, _, err := exec()
-	assert.Nil(t, err)
-	assert.Nil(t, out.VMErr)
+				origin := genesis.DevAccounts()[0].Address
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{Time: time}, thor.NoFork).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{Origin: origin})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
 
-	assert.Equal(t, g.ID(), thor.BytesToBytes32(out.Data))
-}
-
-func TestSelfBalance(t *testing.T) {
-	db := muxdb.NewMem()
-
-	g := genesis.NewDevnet()
-
-	stater := state.NewStater(db)
-	b0, _, _, err := g.Build(stater)
-	assert.Nil(t, err)
-
-	repo, _ := chain.NewRepository(db, b0)
-
-	// pragma solidity >=0.7.0 <0.9.0;
-	// contract TestSelfBalance {
-
-	//     function selfBalance() public view returns (uint256) {
-	//         return address(this).balance;
-	//     }
-	// }
-
-	data, _ := hex.DecodeString("6080604052348015600f57600080fd5b506004361060285760003560e01c8063b0bed0ba14602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600047905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea2646970667358221220eeac1b7322c414db88987af09d3c8bdfde83bb378be9ac0e9ebe3fe34ecbcf2564736f6c63430008010033")
-	addr := thor.BytesToAddress([]byte("acc01"))
-	state := stater.NewState(b0.Header().StateRoot(), 0, 0, 0)
-	state.SetCode(addr, data)
-	state.SetBalance(addr, big.NewInt(100))
-
-	abi, _ := abi.New([]byte(`[{
-			"inputs": [],
-			"name": "selfBalance",
-			"outputs": [
-				{
-					"internalType": "uint256",
-					"name": "",
-					"type": "uint256"
+				expectedTransfer := &tx.Transfer{
+					Sender:    target,
+					Recipient: origin,
+					Amount:    big.NewInt(200),
 				}
-			],
-			"stateMutability": "view",
-			"type": "function"
-		}
-	]`))
-	selfBalanceMethod, _ := abi.MethodByName("selfBalance")
-	methodData, err := selfBalanceMethod.EncodeInput()
-	if err != nil {
-		t.Fatal(err)
-	}
+				assert.Equal(t, 1, len(out.Transfers))
+				assert.Equal(t, expectedTransfer, out.Transfers[0])
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
-		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
-	out, _, err := exec()
-	assert.Nil(t, err)
-	assert.Nil(t, out.VMErr)
-
-	assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(100)) == 0)
-}
-
-func TestBlake2(t *testing.T) {
-	db := muxdb.NewMem()
-
-	g := genesis.NewDevnet()
-
-	stater := state.NewStater(db)
-	b0, _, _, err := g.Build(stater)
-	assert.Nil(t, err)
-
-	repo, _ := chain.NewRepository(db, b0)
-
-	// pragma solidity >=0.7.0 <0.9.0;
-	// contract TestBlake2 {
-	// 	function F(uint32 rounds, bytes32[2] memory h, bytes32[4] memory m, bytes8[2] memory t, bool f) public view returns (bytes32[2] memory) {
-	// 		bytes32[2] memory output;
-
-	// 		bytes memory args = abi.encodePacked(rounds, h[0], h[1], m[0], m[1], m[2], m[3], t[0], t[1], f);
-
-	// 		assembly {
-	// 		  if iszero(staticcall(not(0), 0x09, add(args, 32), 0xd5, output, 0x40)) {
-	// 			revert(0, 0)
-	// 		  }
-	// 		}
-
-	// 		return output;
-	// 	  }
-
-	// 	  function callF() public view returns (bytes32[2] memory) {
-	// 		uint32 rounds = 12;
-
-	// 		bytes32[2] memory h;
-	// 		h[0] = hex"48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5";
-	// 		h[1] = hex"d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b";
-
-	// 		bytes32[4] memory m;
-	// 		m[0] = hex"6162630000000000000000000000000000000000000000000000000000000000";
-	// 		m[1] = hex"0000000000000000000000000000000000000000000000000000000000000000";
-	// 		m[2] = hex"0000000000000000000000000000000000000000000000000000000000000000";
-	// 		m[3] = hex"0000000000000000000000000000000000000000000000000000000000000000";
-
-	// 		bytes8[2] memory t;
-	// 		t[0] = hex"03000000";
-	// 		t[1] = hex"00000000";
-
-	// 		bool f = true;
-
-	// 		// Expected output:
-	// 		// ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1
-	// 		// 7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923
-	// 		return F(rounds, h, m, t, f);
-	// 	  }
-	//   }
-	data, _ := hex.DecodeString("608060405234801561001057600080fd5b50600436106100365760003560e01c806372de3cbd1461003b578063fc75ac471461006b575b600080fd5b61005560048036038101906100509190610894565b610089565b6040516100629190610a9b565b60405180910390f35b6100736102e5565b6040516100809190610a9b565b60405180910390f35b61009161063c565b61009961063c565b600087876000600281106100d6577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015188600160028110610115577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015188600060048110610154577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015189600160048110610193577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518a6002600481106101d2577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518b600360048110610211577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518b600060028110610250577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518c60016002811061028f577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518c6040516020016102ae9a999897969594939291906109e7565b604051602081830303815290604052905060408260d5602084016009600019fa6102d757600080fd5b819250505095945050505050565b6102ed61063c565b6000600c90506102fb61063c565b7f48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa581600060028110610356577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250507fd182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b816001600281106103ba577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506103cb61065e565b7f616263000000000000000000000000000000000000000000000000000000000081600060048110610426577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201818152505060008160016004811061046b577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506000816002600481106104b0577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506000816003600481106104f5577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002018181525050610506610680565b7f030000000000000000000000000000000000000000000000000000000000000081600060028110610561577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002019077ffffffffffffffffffffffffffffffffffffffffffffffff1916908177ffffffffffffffffffffffffffffffffffffffffffffffff1916815250506000816001600281106105de577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002019077ffffffffffffffffffffffffffffffffffffffffffffffff1916908177ffffffffffffffffffffffffffffffffffffffffffffffff1916815250506000600190506106328585858585610089565b9550505050505090565b6040518060400160405280600290602082028036833780820191505090505090565b6040518060800160405280600490602082028036833780820191505090505090565b6040518060400160405280600290602082028036833780820191505090505090565b60006106b56106b084610adb565b610ab6565b905080828560208602820111156106cb57600080fd5b60005b858110156106fb57816106e18882610855565b8452602084019350602083019250506001810190506106ce565b5050509392505050565b600061071861071384610b01565b610ab6565b9050808285602086028201111561072e57600080fd5b60005b8581101561075e57816107448882610855565b845260208401935060208301925050600181019050610731565b5050509392505050565b600061077b61077684610b27565b610ab6565b9050808285602086028201111561079157600080fd5b60005b858110156107c157816107a7888261086a565b845260208401935060208301925050600181019050610794565b5050509392505050565b600082601f8301126107dc57600080fd5b60026107e98482856106a2565b91505092915050565b600082601f83011261080357600080fd5b6004610810848285610705565b91505092915050565b600082601f83011261082a57600080fd5b6002610837848285610768565b91505092915050565b60008135905061084f81610ca1565b92915050565b60008135905061086481610cb8565b92915050565b60008135905061087981610ccf565b92915050565b60008135905061088e81610ce6565b92915050565b600080600080600061014086880312156108ad57600080fd5b60006108bb8882890161087f565b95505060206108cc888289016107cb565b94505060606108dd888289016107f2565b93505060e06108ee88828901610819565b92505061012061090088828901610840565b9150509295509295909350565b60006109198383610993565b60208301905092915050565b61092e81610b57565b6109388184610b6f565b925061094382610b4d565b8060005b8381101561097457815161095b878261090d565b965061096683610b62565b925050600181019050610947565b505050505050565b61098d61098882610b7a565b610bfd565b82525050565b61099c81610b86565b82525050565b6109b36109ae82610b86565b610c0f565b82525050565b6109ca6109c582610b90565b610c19565b82525050565b6109e16109dc82610bbc565b610c23565b82525050565b60006109f3828d6109d0565b600482019150610a03828c6109a2565b602082019150610a13828b6109a2565b602082019150610a23828a6109a2565b602082019150610a3382896109a2565b602082019150610a4382886109a2565b602082019150610a5382876109a2565b602082019150610a6382866109b9565b600882019150610a7382856109b9565b600882019150610a83828461097c565b6001820191508190509b9a5050505050505050505050565b6000604082019050610ab06000830184610925565b92915050565b6000610ac0610ad1565b9050610acc8282610bcc565b919050565b6000604051905090565b600067ffffffffffffffff821115610af657610af5610c47565b5b602082029050919050565b600067ffffffffffffffff821115610b1c57610b1b610c47565b5b602082029050919050565b600067ffffffffffffffff821115610b4257610b41610c47565b5b602082029050919050565b6000819050919050565b600060029050919050565b6000602082019050919050565b600081905092915050565b60008115159050919050565b6000819050919050565b60007fffffffffffffffff00000000000000000000000000000000000000000000000082169050919050565b600063ffffffff82169050919050565b610bd582610c76565b810181811067ffffffffffffffff82111715610bf457610bf3610c47565b5b80604052505050565b6000610c0882610c35565b9050919050565b6000819050919050565b6000819050919050565b6000610c2e82610c87565b9050919050565b6000610c4082610c94565b9050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6000601f19601f8301169050919050565b60008160e01b9050919050565b60008160f81b9050919050565b610caa81610b7a565b8114610cb557600080fd5b50565b610cc181610b86565b8114610ccc57600080fd5b50565b610cd881610b90565b8114610ce357600080fd5b50565b610cef81610bbc565b8114610cfa57600080fd5b5056fea2646970667358221220d54d4583b224c049d80665ae690afd0e7e998bf883c6b97472d292d1e2e5fa3e64736f6c63430008010033")
-	addr := thor.BytesToAddress([]byte("acc01"))
-	state := stater.NewState(b0.Header().StateRoot(), 0, 0, 0)
-	state.SetCode(addr, data)
-
-	abi, _ := abi.New([]byte(`[{
-			"inputs": [
-				{
-					"internalType": "uint32",
-					"name": "rounds",
-					"type": "uint32"
-				},
-				{
-					"internalType": "bytes32[2]",
-					"name": "h",
-					"type": "bytes32[2]"
-				},
-				{
-					"internalType": "bytes32[4]",
-					"name": "m",
-					"type": "bytes32[4]"
-				},
-				{
-					"internalType": "bytes8[2]",
-					"name": "t",
-					"type": "bytes8[2]"
-				},
-				{
-					"internalType": "bool",
-					"name": "f",
-					"type": "bool"
+				event, _ := builtin.Energy.ABI.EventByName("Transfer")
+				expectedEvent := &tx.Event{
+					Address: builtin.Energy.Address,
+					Topics:  []thor.Bytes32{event.ID(), thor.BytesToBytes32(target.Bytes()), thor.BytesToBytes32(origin.Bytes())},
+					Data:    []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100},
 				}
-			],
-			"name": "F",
-			"outputs": [
-				{
-					"internalType": "bytes32[2]",
-					"name": "",
-					"type": "bytes32[2]"
-				}
-			],
-			"stateMutability": "view",
-			"type": "function"
+				assert.Equal(t, 1, len(out.Events))
+				assert.Equal(t, expectedEvent, out.Events[0])
+
+				assert.Equal(t, M(big.NewInt(0), nil), M(ctx.state.GetBalance(target)))
+				assert.Equal(t, M(big.NewInt(0), nil), M(ctx.state.GetEnergy(target, time)))
+
+				bal, _ := new(big.Int).SetString("1000000000000000000000000000", 10)
+				assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(200)), nil), M(ctx.state.GetBalance(origin)))
+				assert.Equal(t, M(new(big.Int).Add(bal, big.NewInt(100)), nil), M(ctx.state.GetEnergy(origin, time)))
+			},
 		},
 		{
-			"inputs": [],
-			"name": "callF",
-			"outputs": [
-				{
-					"internalType": "bytes32[2]",
-					"name": "",
-					"type": "bytes32[2]"
+			name:       "ChainID",
+			code:       "6080604052348015600f57600080fd5b506004361060285760003560e01c8063adc879e914602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600046905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea264697066735822122060b67d944ffa8f0c5ee69f2f47decc3dc175ea2e4341a4de3705d72b868ce2b864736f6c63430008010033",
+			abi:        `[{"inputs":[],"name":"chainID","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "chainID",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract TestChainID {
+
+				//     function chainID() public view returns (uint256) {
+				//         return block.chainid;
+				//     }
+				// }
+
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
 				}
-			],
-			"stateMutability": "view",
-			"type": "function"
-		}
-	]`))
-	callFMethod, _ := abi.MethodByName("callF")
-	methodData, err := callFMethod.EncodeInput()
-	if err != nil {
-		t.Fatal(err)
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				assert.Equal(t, ctx.chain.GenesisID(), thor.BytesToBytes32(out.Data))
+			},
+		}, {
+			name:       "Self Balance",
+			code:       "6080604052348015600f57600080fd5b506004361060285760003560e01c8063b0bed0ba14602d575b600080fd5b60336047565b604051603e9190605c565b60405180910390f35b600047905090565b6056816075565b82525050565b6000602082019050606f6000830184604f565b92915050565b600081905091905056fea2646970667358221220eeac1b7322c414db88987af09d3c8bdfde83bb378be9ac0e9ebe3fe34ecbcf2564736f6c63430008010033",
+			abi:        `[{"inputs":[],"name":"selfBalance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "selfBalance",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract TestSelfBalance {
+
+				//     function selfBalance() public view returns (uint256) {
+				//         return address(this).balance;
+				//     }
+				// }
+
+				ctx.state.SetBalance(target, big.NewInt(100))
+
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(100)) == 0)
+			},
+		}, {
+			name:       "Blake2F",
+			code:       "608060405234801561001057600080fd5b50600436106100365760003560e01c806372de3cbd1461003b578063fc75ac471461006b575b600080fd5b61005560048036038101906100509190610894565b610089565b6040516100629190610a9b565b60405180910390f35b6100736102e5565b6040516100809190610a9b565b60405180910390f35b61009161063c565b61009961063c565b600087876000600281106100d6577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015188600160028110610115577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015188600060048110610154577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002015189600160048110610193577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518a6002600481106101d2577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518b600360048110610211577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518b600060028110610250577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518c60016002811061028f577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201518c6040516020016102ae9a999897969594939291906109e7565b604051602081830303815290604052905060408260d5602084016009600019fa6102d757600080fd5b819250505095945050505050565b6102ed61063c565b6000600c90506102fb61063c565b7f48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa581600060028110610356577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250507fd182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b816001600281106103ba577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506103cb61065e565b7f616263000000000000000000000000000000000000000000000000000000000081600060048110610426577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b60200201818152505060008160016004811061046b577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506000816002600481106104b0577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b6020020181815250506000816003600481106104f5577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002018181525050610506610680565b7f030000000000000000000000000000000000000000000000000000000000000081600060028110610561577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002019077ffffffffffffffffffffffffffffffffffffffffffffffff1916908177ffffffffffffffffffffffffffffffffffffffffffffffff1916815250506000816001600281106105de577f4e487b7100000000000000000000000000000000000000000000000000000000600052603260045260246000fd5b602002019077ffffffffffffffffffffffffffffffffffffffffffffffff1916908177ffffffffffffffffffffffffffffffffffffffffffffffff1916815250506000600190506106328585858585610089565b9550505050505090565b6040518060400160405280600290602082028036833780820191505090505090565b6040518060800160405280600490602082028036833780820191505090505090565b6040518060400160405280600290602082028036833780820191505090505090565b60006106b56106b084610adb565b610ab6565b905080828560208602820111156106cb57600080fd5b60005b858110156106fb57816106e18882610855565b8452602084019350602083019250506001810190506106ce565b5050509392505050565b600061071861071384610b01565b610ab6565b9050808285602086028201111561072e57600080fd5b60005b8581101561075e57816107448882610855565b845260208401935060208301925050600181019050610731565b5050509392505050565b600061077b61077684610b27565b610ab6565b9050808285602086028201111561079157600080fd5b60005b858110156107c157816107a7888261086a565b845260208401935060208301925050600181019050610794565b5050509392505050565b600082601f8301126107dc57600080fd5b60026107e98482856106a2565b91505092915050565b600082601f83011261080357600080fd5b6004610810848285610705565b91505092915050565b600082601f83011261082a57600080fd5b6002610837848285610768565b91505092915050565b60008135905061084f81610ca1565b92915050565b60008135905061086481610cb8565b92915050565b60008135905061087981610ccf565b92915050565b60008135905061088e81610ce6565b92915050565b600080600080600061014086880312156108ad57600080fd5b60006108bb8882890161087f565b95505060206108cc888289016107cb565b94505060606108dd888289016107f2565b93505060e06108ee88828901610819565b92505061012061090088828901610840565b9150509295509295909350565b60006109198383610993565b60208301905092915050565b61092e81610b57565b6109388184610b6f565b925061094382610b4d565b8060005b8381101561097457815161095b878261090d565b965061096683610b62565b925050600181019050610947565b505050505050565b61098d61098882610b7a565b610bfd565b82525050565b61099c81610b86565b82525050565b6109b36109ae82610b86565b610c0f565b82525050565b6109ca6109c582610b90565b610c19565b82525050565b6109e16109dc82610bbc565b610c23565b82525050565b60006109f3828d6109d0565b600482019150610a03828c6109a2565b602082019150610a13828b6109a2565b602082019150610a23828a6109a2565b602082019150610a3382896109a2565b602082019150610a4382886109a2565b602082019150610a5382876109a2565b602082019150610a6382866109b9565b600882019150610a7382856109b9565b600882019150610a83828461097c565b6001820191508190509b9a5050505050505050505050565b6000604082019050610ab06000830184610925565b92915050565b6000610ac0610ad1565b9050610acc8282610bcc565b919050565b6000604051905090565b600067ffffffffffffffff821115610af657610af5610c47565b5b602082029050919050565b600067ffffffffffffffff821115610b1c57610b1b610c47565b5b602082029050919050565b600067ffffffffffffffff821115610b4257610b41610c47565b5b602082029050919050565b6000819050919050565b600060029050919050565b6000602082019050919050565b600081905092915050565b60008115159050919050565b6000819050919050565b60007fffffffffffffffff00000000000000000000000000000000000000000000000082169050919050565b600063ffffffff82169050919050565b610bd582610c76565b810181811067ffffffffffffffff82111715610bf457610bf3610c47565b5b80604052505050565b6000610c0882610c35565b9050919050565b6000819050919050565b6000819050919050565b6000610c2e82610c87565b9050919050565b6000610c4082610c94565b9050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6000601f19601f8301169050919050565b60008160e01b9050919050565b60008160f81b9050919050565b610caa81610b7a565b8114610cb557600080fd5b50565b610cc181610b86565b8114610ccc57600080fd5b50565b610cd881610b90565b8114610ce357600080fd5b50565b610cef81610bbc565b8114610cfa57600080fd5b5056fea2646970667358221220d54d4583b224c049d80665ae690afd0e7e998bf883c6b97472d292d1e2e5fa3e64736f6c63430008010033",
+			abi:        `[{"inputs":[{"internalType":"uint32","name":"rounds","type":"uint32"},{"internalType":"bytes32[2]","name":"h","type":"bytes32[2]"},{"internalType":"bytes32[4]","name":"m","type":"bytes32[4]"},{"internalType":"bytes8[2]","name":"t","type":"bytes8[2]"},{"internalType":"bool","name":"f","type":"bool"}],"name":"F","outputs":[{"internalType":"bytes32[2]","name":"","type":"bytes32[2]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"callF","outputs":[{"internalType":"bytes32[2]","name":"","type":"bytes32[2]"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "callF",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract TestBlake2 {
+				// 	function F(uint32 rounds, bytes32[2] memory h, bytes32[4] memory m, bytes8[2] memory t, bool f) public view returns (bytes32[2] memory) {
+				// 		bytes32[2] memory output;
+
+				// 		bytes memory args = abi.encodePacked(rounds, h[0], h[1], m[0], m[1], m[2], m[3], t[0], t[1], f);
+
+				// 		assembly {
+				// 		  if iszero(staticcall(not(0), 0x09, add(args, 32), 0xd5, output, 0x40)) {
+				// 			revert(0, 0)
+				// 		  }
+				// 		}
+
+				// 		return output;
+				// 	  }
+
+				// 	  function callF() public view returns (bytes32[2] memory) {
+				// 		uint32 rounds = 12;
+
+				// 		bytes32[2] memory h;
+				// 		h[0] = hex"48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5";
+				// 		h[1] = hex"d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b";
+
+				// 		bytes32[4] memory m;
+				// 		m[0] = hex"6162630000000000000000000000000000000000000000000000000000000000";
+				// 		m[1] = hex"0000000000000000000000000000000000000000000000000000000000000000";
+				// 		m[2] = hex"0000000000000000000000000000000000000000000000000000000000000000";
+				// 		m[3] = hex"0000000000000000000000000000000000000000000000000000000000000000";
+
+				// 		bytes8[2] memory t;
+				// 		t[0] = hex"03000000";
+				// 		t[1] = hex"00000000";
+
+				// 		bool f = true;
+
+				// 		// Expected output:
+				// 		// ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1
+				// 		// 7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923
+				// 		return F(rounds, h, m, t, f);
+				// 	  }
+				//   }
+
+				methodData, err := ctx.method.EncodeInput()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				var hashes [2][32]uint8
+				ctx.method.DecodeOutput(out.Data, &hashes)
+
+				assert.Equal(t, thor.MustParseBytes32("ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1"), thor.Bytes32(hashes[0]))
+				assert.Equal(t, thor.MustParseBytes32("7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"), thor.Bytes32(hashes[1]))
+			},
+		},
 	}
 
-	exec, _ := runtime.New(repo.NewChain(b0.Header().ID()), state, &xenv.BlockContext{}, thor.ForkConfig{ETH_IST: 0}).
-		PrepareClause(tx.NewClause(&addr).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
-	out, _, err := exec()
-	assert.Nil(t, err)
-	assert.Nil(t, out.VMErr)
+	shanghaiTests := []testcase{
+		{
+			name:       "pre ETH_SH deploy 0xEF started contract code",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				code, _ := hex.DecodeString("60ef60005360016000f3")
 
-	var hashes [2][32]uint8
-	callFMethod.DecodeOutput(out.Data, &hashes)
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.NoFork).
+					PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
 
-	assert.Equal(t, thor.MustParseBytes32("ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1"), thor.Bytes32(hashes[0]))
-	assert.Equal(t, thor.MustParseBytes32("7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923"), thor.Bytes32(hashes[1]))
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+			},
+		},
+		{
+			name:       "ETH_SH deploy 0xEF started contract code",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				failingCalldata := []string{"60ef60005360016000f3", "60ef60005360026000f3", "60ef60005360036000f3", "60ef60005360206000f3"}
+				for _, calldata := range failingCalldata {
+					code, _ := hex.DecodeString(calldata)
+
+					exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+						PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{})
+					out, _, err := exec()
+
+					assert.Nil(t, err)
+					assert.NotNil(t, out.VMErr)
+					assert.Equal(t, "invalid code: must not begin with 0xef", out.VMErr.Error())
+				}
+			},
+		},
+		{
+			name:       "ETH_SH deploy None 0xEF started contract code",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				code, _ := hex.DecodeString("60ee60005360016000f3")
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(nil).WithData(code), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+			},
+		},
+		{
+			name:       "ETH_SH PUSH0 gas cost",
+			code:       "",
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				// 0x5f is PUSH0 opCode
+				codeData := []byte{0x5f}
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(nil).WithData(codeData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+				assert.Equal(t, uint64(2), math.MaxUint64-out.LeftOverGas)
+			},
+		},
+		{
+			name:       "ETH_SH BASEFEE output gas cost",
+			code:       hex.EncodeToString([]byte{byte(vm.BASEFEE)}),
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(0)) == 0)
+				assert.Equal(t, uint64(2), math.MaxUint64-out.LeftOverGas)
+			},
+		},
+		{
+			name:       "ETH_SH BASEFEE",
+			code:       hex.EncodeToString([]byte{byte(vm.BASEFEE), byte(vm.PUSH1), 0x80, byte(vm.MSTORE), byte(vm.PUSH1), 0x20, byte(vm.PUSH1), 0x80, byte(vm.RETURN)}),
+			abi:        "",
+			methodName: "",
+			testFunc: func(ctx *context, t *testing.T) {
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
+					PrepareClause(tx.NewClause(&target), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				assert.True(t, new(big.Int).SetBytes(out.Data).Cmp(big.NewInt(0)) == 0)
+			},
+		},
+		{
+			name:       "Precompile modexp",
+			code:       "608060405234801561001057600080fd5b506004361061002b5760003560e01c8063577b75b914610030575b600080fd5b61004a60048036038101906100459190610287565b610060565b60405161005791906102e9565b60405180910390f35b6000806000600573ffffffffffffffffffffffffffffffffffffffff168460405161008b9190610375565b600060405180830381855afa9150503d80600081146100c6576040519150601f19603f3d011682016040523d82523d6000602084013e6100cb565b606091505b509150915081610110576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016101079061040f565b60405180910390fd5b80806020019051810190610124919061045b565b92505050919050565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6101948261014b565b810181811067ffffffffffffffff821117156101b3576101b261015c565b5b80604052505050565b60006101c661012d565b90506101d2828261018b565b919050565b600067ffffffffffffffff8211156101f2576101f161015c565b5b6101fb8261014b565b9050602081019050919050565b82818337600083830152505050565b600061022a610225846101d7565b6101bc565b90508281526020810184848401111561024657610245610146565b5b610251848285610208565b509392505050565b600082601f83011261026e5761026d610141565b5b813561027e848260208601610217565b91505092915050565b60006020828403121561029d5761029c610137565b5b600082013567ffffffffffffffff8111156102bb576102ba61013c565b5b6102c784828501610259565b91505092915050565b6000819050919050565b6102e3816102d0565b82525050565b60006020820190506102fe60008301846102da565b92915050565b600081519050919050565b600081905092915050565b60005b8381101561033857808201518184015260208101905061031d565b60008484015250505050565b600061034f82610304565b610359818561030f565b935061036981856020860161031a565b80840191505092915050565b60006103818284610344565b915081905092915050565b600082825260208201905092915050565b7f4d6f64756c61724578706f6e656e74696174696f6e3a204661696c656420617460008201527f2063616c63756c6174696e672074686520726573756c74000000000000000000602082015250565b60006103f960378361038c565b91506104048261039d565b604082019050919050565b60006020820190508181036000830152610428816103ec565b9050919050565b610438816102d0565b811461044357600080fd5b50565b6000815190506104558161042f565b92915050565b60006020828403121561047157610470610137565b5b600061047f84828501610446565b9150509291505056fea2646970667358221220d362967bdc1ba52fd086eee3092f6a9a77f6993dd89c74e0718dfa791bc4794e64736f6c63430008180033",
+			abi:        `[{"inputs":[{"internalType":"bytes","name":"input","type":"bytes"}],"name":"modExpBytes","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "modExpBytes",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract Math{
+				// 	function modExpBytes(bytes memory input) public view returns (uint256) {
+				// 		(bool success, bytes memory result) = (address(5).staticcall(input));
+				// 		require(success, "ModularExponentiation: Failed at calculating the result");
+				// 		return abi.decode(result, (uint256));
+				// 	}
+				// }
+
+				// test case picked from vm/testdata/precompiles
+				input := common.FromHex("000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000200db34d0e438249c0ed685c949cc28776a05094e1c48691dc3f2dca5fc3356d2a0663bd376e4712839917eb9a19c670407e2c377a2de385a3ff3b52104f7f1f4e0c7bf7717fb913896693dc5edbb65b760ef1b00e42e9d8f9af17352385e1cd742c9b006c0f669995cb0bb21d28c0aced2892267637b6470d8cee0ab27fc5d42658f6e88240c31d6774aa60a7ebd25cd48b56d0da11209f1928e61005c6eb709f3e8e0aaf8d9b10f7d7e296d772264dc76897ccdddadc91efa91c1903b7232a9e4c3b941917b99a3bc0c26497dedc897c25750af60237aa67934a26a2bc491db3dcc677491944bc1f51d3e5d76b8d846a62db03dedd61ff508f91a56d71028125035c3a44cbb041497c83bf3e4ae2a9613a401cc721c547a2afa3b16a2969933d3626ed6d8a7428648f74122fd3f2a02a20758f7f693892c8fd798b39abac01d18506c45e71432639e9f9505719ee822f62ccbf47f6850f096ff77b5afaf4be7d772025791717dbe5abf9b3f40cff7d7aab6f67e38f62faf510747276e20a42127e7500c444f9ed92baf65ade9e836845e39c4316d9dce5f8e2c8083e2c0acbb95296e05e51aab13b6b8f53f06c9c4276e12b0671133218cc3ea907da3bd9a367096d9202128d14846cc2e20d56fc8473ecb07cecbfb8086919f3971926e7045b853d85a69d026195c70f9f7a823536e2a8f4b3e12e94d9b53a934353451094b8102df3143a0057457d75e8c708b6337a6f5a4fd1a06727acf9fb93e2993c62f3378b37d56c85e7b1e00f0145ebf8e4095bd723166293c60b6ac1252291ef65823c9e040ddad14969b3b340a4ef714db093a587c37766d68b8d6b5016e741587e7e6bf7e763b44f0247e64bae30f994d248bfd20541a333e5b225ef6a61199e301738b1e688f70ec1d7fb892c183c95dc543c3e12adf8a5e8b9ca9d04f9445cced3ab256f29e998e69efaa633a7b60e1db5a867924ccab0a171d9d6e1098dfa15acde9553de599eaa56490c8f411e4985111f3d40bddfc5e301edb01547b01a886550a61158f7e2033c59707789bf7c854181d0c2e2a42a93cf09209747d7082e147eb8544de25c3eb14f2e35559ea0c0f5877f2f3fc92132c0ae9da4e45b2f6c866a224ea6d1f28c05320e287750fbc647368d41116e528014cc1852e5531d53e4af938374daba6cee4baa821ed07117253bb3601ddd00d59a3d7fb2ef1f5a2fbba7c429f0cf9a5b3462410fd833a69118f8be9c559b1000cc608fd877fb43f8e65c2d1302622b944462579056874b387208d90623fcdaf93920ca7a9e4ba64ea208758222ad868501cc2c345e2d3a5ea2a17e5069248138c8a79c0251185d29ee73e5afab5354769142d2bf0cb6712727aa6bf84a6245fcdae66e4938d84d1b9dd09a884818622080ff5f98942fb20acd7e0c916c2d5ea7ce6f7e173315384518f")
+				methodData, err := ctx.method.EncodeInput(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				forkConfig := thor.NoFork
+				forkConfig.ETH_IST = 0
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasBefore := math.MaxUint64 - out.LeftOverGas
+
+				forkConfig.ETH_SH = 0
+				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err = exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasAfter := math.MaxUint64 - out.LeftOverGas
+				assert.True(t, gasBefore > gasAfter)
+				// test case picked from vm/testdata/precompiles, 5580-1365
+				assert.Zero(t, gasBefore-gasAfter-4215)
+			},
+		},
+		{
+			name:       "Precompile bn256Add",
+			code:       "608060405234801561001057600080fd5b506004361061002b5760003560e01c806383304e8a14610030575b600080fd5b61004a60048036038101906100459190610287565b610060565b60405161005791906102e9565b60405180910390f35b6000806000600673ffffffffffffffffffffffffffffffffffffffff168460405161008b9190610375565b600060405180830381855afa9150503d80600081146100c6576040519150601f19603f3d011682016040523d82523d6000602084013e6100cb565b606091505b509150915081610110576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016101079061040f565b60405180910390fd5b80806020019051810190610124919061045b565b92505050919050565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6101948261014b565b810181811067ffffffffffffffff821117156101b3576101b261015c565b5b80604052505050565b60006101c661012d565b90506101d2828261018b565b919050565b600067ffffffffffffffff8211156101f2576101f161015c565b5b6101fb8261014b565b9050602081019050919050565b82818337600083830152505050565b600061022a610225846101d7565b6101bc565b90508281526020810184848401111561024657610245610146565b5b610251848285610208565b509392505050565b600082601f83011261026e5761026d610141565b5b813561027e848260208601610217565b91505092915050565b60006020828403121561029d5761029c610137565b5b600082013567ffffffffffffffff8111156102bb576102ba61013c565b5b6102c784828501610259565b91505092915050565b6000819050919050565b6102e3816102d0565b82525050565b60006020820190506102fe60008301846102da565b92915050565b600081519050919050565b600081905092915050565b60005b8381101561033857808201518184015260208101905061031d565b60008484015250505050565b600061034f82610304565b610359818561030f565b935061036981856020860161031a565b80840191505092915050565b60006103818284610344565b915081905092915050565b600082825260208201905092915050565b7f626e3235364164643a204661696c65642061742063616c63756c6174696e672060008201527f74686520726573756c7400000000000000000000000000000000000000000000602082015250565b60006103f9602a8361038c565b91506104048261039d565b604082019050919050565b60006020820190508181036000830152610428816103ec565b9050919050565b610438816102d0565b811461044357600080fd5b50565b6000815190506104558161042f565b92915050565b60006020828403121561047157610470610137565b5b600061047f84828501610446565b9150509291505056fea26469706673582212203fcccf78a18856182dd27cee0e3011ad18f00a9a29feb40bbcf800cdeb29a75a64736f6c63430008180033",
+			abi:        `[{"inputs":[{"internalType":"bytes","name":"input","type":"bytes"}],"name":"bn256AddBytes","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "bn256AddBytes",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract Math{
+				// 	function bn256AddBytes(bytes memory input) public view returns (uint256) {
+				// 		(bool success, bytes memory result) = (address(6).staticcall(input));
+				// 		require(success, "bn256Add: Failed at calculating the result");
+				// 		return abi.decode(result, (uint256));
+				// 	}
+				// }
+				// test case picked from vm/testdata/precompiles
+				input := common.FromHex("18b18acfb4c2c30276db5411368e7185b311dd124691610c5d3b74034e093dc9063c909c4720840cb5134cb9f59fa749755796819658d32efc0d288198f3726607c2b7f58a84bd6145f00c9c2bc0bb1a187f20ff2c92963a88019e7c6a014eed06614e20c147e940f2d70da3f74c9a17df361706a4485c742bd6788478fa17d7")
+				methodData, err := ctx.method.EncodeInput(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				forkConfig := thor.NoFork
+				forkConfig.ETH_IST = 0
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasBefore := math.MaxUint64 - out.LeftOverGas
+
+				forkConfig.ETH_SH = 0
+				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err = exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasAfter := math.MaxUint64 - out.LeftOverGas
+				assert.True(t, gasBefore > gasAfter)
+				// test case picked from vm/testdata/precompiles, 500-150
+				assert.Zero(t, gasBefore-gasAfter-350)
+			},
+		},
+		{
+			name:       "Precompile bn256ScalarMul",
+			code:       "608060405234801561001057600080fd5b506004361061002b5760003560e01c8063701961aa14610030575b600080fd5b61004a60048036038101906100459190610274565b610060565b604051610057919061033c565b60405180910390f35b6060600080600773ffffffffffffffffffffffffffffffffffffffff168460405161008b919061039a565b600060405180830381855afa9150503d80600081146100c6576040519150601f19603f3d011682016040523d82523d6000602084013e6100cb565b606091505b509150915081610110576040517f08c379a000000000000000000000000000000000000000000000000000000000815260040161010790610434565b60405180910390fd5b8092505050919050565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b61018182610138565b810181811067ffffffffffffffff821117156101a05761019f610149565b5b80604052505050565b60006101b361011a565b90506101bf8282610178565b919050565b600067ffffffffffffffff8211156101df576101de610149565b5b6101e882610138565b9050602081019050919050565b82818337600083830152505050565b6000610217610212846101c4565b6101a9565b90508281526020810184848401111561023357610232610133565b5b61023e8482856101f5565b509392505050565b600082601f83011261025b5761025a61012e565b5b813561026b848260208601610204565b91505092915050565b60006020828403121561028a57610289610124565b5b600082013567ffffffffffffffff8111156102a8576102a7610129565b5b6102b484828501610246565b91505092915050565b600081519050919050565b600082825260208201905092915050565b60005b838110156102f75780820151818401526020810190506102dc565b60008484015250505050565b600061030e826102bd565b61031881856102c8565b93506103288185602086016102d9565b61033181610138565b840191505092915050565b600060208201905081810360008301526103568184610303565b905092915050565b600081905092915050565b6000610374826102bd565b61037e818561035e565b935061038e8185602086016102d9565b80840191505092915050565b60006103a68284610369565b915081905092915050565b600082825260208201905092915050565b7f626e3235364164643a204661696c65642061742063616c63756c6174696e672060008201527f74686520726573756c7400000000000000000000000000000000000000000000602082015250565b600061041e602a836103b1565b9150610429826103c2565b604082019050919050565b6000602082019050818103600083015261044d81610411565b905091905056fea2646970667358221220469c90049edd24983926f66efd6ae8e5ca288ad0b2b206fde2e8a5fb6875a81764736f6c63430008180033",
+			abi:        `[{"inputs":[{"internalType":"bytes","name":"input","type":"bytes"}],"name":"bn256ScalarMulBytes","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "bn256ScalarMulBytes",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract Math{
+				// 	function bn256ScalarMulBytes(bytes memory input) public view returns (bytes memory) {
+				// 		(bool success, bytes memory result) = (address(7).staticcall(input));
+				// 		require(success, "bn256ScalarMul: Failed at calculating the result");
+				// 		return result;
+				// 	}
+				// }
+				// test case picked from vm/testdata/precompiles
+				input := common.FromHex("2bd3e6d0f3b142924f5ca7b49ce5b9d54c4703d7ae5648e61d02268b1a0a9fb721611ce0a6af85915e2f1d70300909ce2e49dfad4a4619c8390cae66cefdb20400000000000000000000000000000000000000000000000011138ce750fa15c2")
+				methodData, err := ctx.method.EncodeInput(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				forkConfig := thor.NoFork
+				forkConfig.ETH_IST = 0
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasBefore := math.MaxUint64 - out.LeftOverGas
+
+				forkConfig.ETH_SH = 0
+				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err = exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasAfter := math.MaxUint64 - out.LeftOverGas
+				assert.True(t, gasBefore > gasAfter)
+				// test case picked from vm/testdata/precompiles, 40000-6000
+				assert.Zero(t, gasBefore-gasAfter-34000)
+			},
+		},
+		{
+			name:       "Precompile bn256Pairing",
+			code:       "608060405234801561001057600080fd5b506004361061002b5760003560e01c806382b72bfd14610030575b600080fd5b61004a60048036038101906100459190610287565b610060565b60405161005791906102e9565b60405180910390f35b6000806000600873ffffffffffffffffffffffffffffffffffffffff168460405161008b9190610375565b600060405180830381855afa9150503d80600081146100c6576040519150601f19603f3d011682016040523d82523d6000602084013e6100cb565b606091505b509150915081610110576040517f08c379a00000000000000000000000000000000000000000000000000000000081526004016101079061040f565b60405180910390fd5b80806020019051810190610124919061045b565b92505050919050565b6000604051905090565b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b6101948261014b565b810181811067ffffffffffffffff821117156101b3576101b261015c565b5b80604052505050565b60006101c661012d565b90506101d2828261018b565b919050565b600067ffffffffffffffff8211156101f2576101f161015c565b5b6101fb8261014b565b9050602081019050919050565b82818337600083830152505050565b600061022a610225846101d7565b6101bc565b90508281526020810184848401111561024657610245610146565b5b610251848285610208565b509392505050565b600082601f83011261026e5761026d610141565b5b813561027e848260208601610217565b91505092915050565b60006020828403121561029d5761029c610137565b5b600082013567ffffffffffffffff8111156102bb576102ba61013c565b5b6102c784828501610259565b91505092915050565b6000819050919050565b6102e3816102d0565b82525050565b60006020820190506102fe60008301846102da565b92915050565b600081519050919050565b600081905092915050565b60005b8381101561033857808201518184015260208101905061031d565b60008484015250505050565b600061034f82610304565b610359818561030f565b935061036981856020860161031a565b80840191505092915050565b60006103818284610344565b915081905092915050565b600082825260208201905092915050565b7f626e32353650616972696e673a204661696c65642061742063616c63756c617460008201527f696e672074686520726573756c74000000000000000000000000000000000000602082015250565b60006103f9602e8361038c565b91506104048261039d565b604082019050919050565b60006020820190508181036000830152610428816103ec565b9050919050565b610438816102d0565b811461044357600080fd5b50565b6000815190506104558161042f565b92915050565b60006020828403121561047157610470610137565b5b600061047f84828501610446565b9150509291505056fea26469706673582212203f7c1d2240693474593d78d55b56a6b10de6fb80fd59956aea8108863cc779b064736f6c63430008180033",
+			abi:        `[{"inputs":[{"internalType":"bytes","name":"input","type":"bytes"}],"name":"bn256PairingBytes","outputs":[{"internalType":"bytes","name":"","type":"bytes"}],"stateMutability":"view","type":"function"}]`,
+			methodName: "bn256PairingBytes",
+			testFunc: func(ctx *context, t *testing.T) {
+				// pragma solidity >=0.7.0 <0.9.0;
+				// contract Math{
+				// contract Math{
+				// 	function bn256PairingBytes(bytes memory input) public view returns (uint256) {
+				// 		(bool success, bytes memory result) = (address(8).staticcall(input));
+				// 		require(success, "bn256Pairing: Failed at calculating the result");
+				// 		return abi.decode(result, (uint256));
+				// 	}
+				// }
+				// test case picked from vm/testdata/precompiles
+				input := common.FromHex("1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f593034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef41209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b4a452003a35bf704bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416782bb8324af6cfc93537a2ad1a445cfd0ca2a71acd7ac41fadbf933c2a51be344d120a2a4cf30c1bf9845f20c6fe39e07ea2cce61f0c9bb048165fe5e4de877550111e129f1cf1097710d41c4ac70fcdfa5ba2023c6ff1cbeac322de49d1b6df7c2032c61a830e3c17286de9462bf242fca2883585b93870a73853face6a6bf411198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c21800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa")
+				methodData, err := ctx.method.EncodeInput(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				forkConfig := thor.NoFork
+				forkConfig.ETH_IST = 0
+
+				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err := exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasBefore := math.MaxUint64 - out.LeftOverGas
+
+				forkConfig.ETH_SH = 0
+				exec, _ = runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, forkConfig).
+					PrepareClause(tx.NewClause(&target).WithData(methodData), 0, math.MaxUint64, &xenv.TransactionContext{})
+				out, _, err = exec()
+				assert.Nil(t, err)
+				assert.Nil(t, out.VMErr)
+
+				gasAfter := math.MaxUint64 - out.LeftOverGas
+				assert.True(t, gasBefore > gasAfter)
+				// test case picked from vm/testdata/precompiles, 260000-113000
+				assert.Zero(t, gasBefore-gasAfter-147000)
+			},
+		},
+	}
+
+	var tests = []testcase{}
+
+	tests = append(tests, baseTests...)
+	tests = append(tests, shanghaiTests...)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := muxdb.NewMem()
+			g := genesis.NewDevnet()
+			stater := state.NewStater(db)
+			b0, _, _, _ := g.Build(stater)
+			repo, _ := chain.NewRepository(db, b0)
+
+			ctx := &context{
+				repo.NewChain(b0.Header().ID()),
+				stater.NewState(b0.Header().StateRoot(), 0, 0, 0),
+				nil,
+			}
+
+			if len(tt.methodName) > 0 {
+				abi, _ := abi.New([]byte(tt.abi))
+				method, _ := abi.MethodByName(tt.methodName)
+
+				ctx.method = method
+			}
+
+			if len(tt.code) > 0 {
+				code, err := hex.DecodeString(tt.code)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx.state.SetCode(target, code)
+			}
+
+			tt.testFunc(ctx, t)
+		})
+	}
+}
+
+func TestPreForkOpCode(t *testing.T) {
+	db := muxdb.NewMem()
+	g := genesis.NewDevnet()
+	stater := state.NewStater(db)
+	b0, _, _, _ := g.Build(stater)
+	repo, _ := chain.NewRepository(db, b0)
+
+	chain := repo.NewChain(b0.Header().ID())
+	state := stater.NewState(b0.Header().StateRoot(), 0, 0, 0)
+
+	tests := []struct {
+		name string
+		code []byte
+		op   vm.OpCode
+	}{
+		{
+			name: "BASEFEE",
+			code: []byte{byte(vm.BASEFEE)},
+			op:   vm.BASEFEE,
+		},
+		{
+			name: "PUSH0",
+			code: []byte{byte(vm.PUSH0)},
+			op:   vm.PUSH0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exec, _ := runtime.New(chain, state, &xenv.BlockContext{}, thor.NoFork).
+				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
+			out, _, err := exec()
+			assert.Nil(t, err)
+			assert.NotNil(t, out.VMErr)
+			assert.Equal(t, fmt.Sprintf("invalid opcode 0x%x", int(tt.op)), out.VMErr.Error())
+
+			// this one applies a fork config that forks from the start
+			exec, _ = runtime.New(chain, state, &xenv.BlockContext{}, thor.ForkConfig{}).
+				PrepareClause(tx.NewClause(nil).WithData(tt.code), 0, math.MaxUint64, &xenv.TransactionContext{})
+			out, _, err = exec()
+			assert.Nil(t, err)
+			assert.Nil(t, out.VMErr, "after fork should not return error")
+		})
+	}
 }
 
 func TestCall(t *testing.T) {

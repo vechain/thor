@@ -36,7 +36,7 @@ type Config struct {
 	// JumpTable contains the EVM instruction table. This
 	// may be left uninitialised and will be set to the default
 	// table.
-	JumpTable JumpTable
+	JumpTable *JumpTable
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -59,6 +59,8 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// we'll set the default jump table.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.ChainConfig().IsShanghai(evm.BlockNumber):
+			cfg.JumpTable = shanghaiInstructionSet
 		case evm.ChainConfig().IsIstanbul(evm.BlockNumber):
 			cfg.JumpTable = istanbulInstructionSet
 		case evm.ChainConfig().IsConstantinople(evm.BlockNumber):
@@ -88,7 +90,7 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation *operation, stac
 			// account to the others means the state is modified and should also
 			// return with an error.
 			if operation.writes || (op == CALL && stack.Back(2).BitLen() > 0) {
-				return errWriteProtection
+				return ErrWriteProtection
 			}
 		}
 	}
@@ -186,12 +188,12 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 		if operation.memorySize != nil {
 			memSize, overflow := operation.memorySize(stack)
 			if overflow {
-				return nil, errGasUintOverflow
+				return nil, ErrGasUintOverflow
 			}
 			// memory is expanded in words of 32 bytes. Gas
 			// is also calculated in words.
 			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
-				return nil, errGasUintOverflow
+				return nil, ErrGasUintOverflow
 			}
 		}
 		// consume the gas and return an error if not enough gas is available.
