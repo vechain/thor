@@ -190,6 +190,34 @@ func (t *Transactions) handleGetTransactionReceiptByID(w http.ResponseWriter, re
 		return utils.BadRequest(errors.WithMessage(err, "head"))
 	}
 
+	//if _, err := t.repo.GetBlockSummary(head); err != nil {
+	//	if t.repo.IsNotFound(err) {
+	//		return utils.BadRequest(errors.WithMessage(err, "head"))
+	//	}
+	//}
+
+	receipt, err := t.getTransactionReceiptByID(txID, head)
+	if err != nil {
+		return err
+	}
+	if !receipt.Reverted {
+		return utils.WriteJSON(w, receipt)
+	}
+	return utils.WriteJSON(w, receipt)
+}
+
+func (t *Transactions) handleGetRevertReason(w http.ResponseWriter, req *http.Request) error {
+	id := mux.Vars(req)["id"]
+	txID, err := thor.ParseBytes32(id)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "id"))
+	}
+
+	head, err := t.parseHead(req.URL.Query().Get("head"))
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "head"))
+	}
+
 	if _, err := t.repo.GetBlockSummary(head); err != nil {
 		if t.repo.IsNotFound(err) {
 			return utils.BadRequest(errors.WithMessage(err, "head"))
