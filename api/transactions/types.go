@@ -220,3 +220,8 @@ func convertReceipt(txReceipt *tx.Receipt, header *block.Header, tx *tx.Transact
 	}
 	return receipt, nil
 }
+
+// Revert reason.
+type RevertReason struct {
+	Reason string `json:"reason"`
+}
