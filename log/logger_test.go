@@ -33,7 +33,9 @@ import (
 
 func TestTerminalHandlerWithAttrs(t *testing.T) {
 	out := new(bytes.Buffer)
-	handler := NewTerminalHandlerWithLevel(out, LevelTrace, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")})
+	var level slog.LevelVar
+	level.Set(LevelTrace)
+	handler := NewTerminalHandlerWithLevel(out, &level, false).WithAttrs([]slog.Attr{slog.String("baz", "bat")})
 	logger := NewLogger(handler)
 	logger.Trace("a message", "foo", "bar")
 	have := out.String()
@@ -57,7 +59,11 @@ func TestJSONHandler(t *testing.T) {
 	}
 
 	out.Reset()
-	handler = JSONHandlerWithLevel(out, slog.LevelInfo)
+
+	var level slog.LevelVar
+	level.Set(LevelInfo)
+
+	handler = JSONHandlerWithLevel(out, &level)
 	logger = slog.New(handler)
 	logger.Debug("hi there")
 	if len(out.String()) != 0 {
@@ -128,7 +134,9 @@ func TestLoggerOutput(t *testing.T) {
 	)
 
 	out := new(bytes.Buffer)
-	handler := NewTerminalHandlerWithLevel(out, LevelInfo, false)
+	var level slog.LevelVar
+	level.Set(LevelInfo)
+	handler := NewTerminalHandlerWithLevel(out, &level, false)
 	NewLogger(handler).Info("This is a message",
 		"foo", int16(123),
 		"bytes", bb,
