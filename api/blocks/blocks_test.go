@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
@@ -103,9 +104,7 @@ func testGetFinalizedBlock(t *testing.T) {
 func testGetJustifiedBlock(t *testing.T) {
 	res, statusCode := httpGet(t, ts.URL+"/blocks/justified")
 	justified := new(blocks.JSONCollapsedBlock)
-	if err := json.Unmarshal(res, &justified); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, json.Unmarshal(res, &justified))
 
 	assert.Equal(t, http.StatusOK, statusCode)
 	assert.Equal(t, uint32(0), justified.Number)
