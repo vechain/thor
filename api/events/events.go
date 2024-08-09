@@ -58,9 +58,11 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 		return utils.Forbidden(fmt.Errorf("options.limit exceeds the maximum allowed value of %d", e.limit))
 	}
 	if filter.Options == nil {
+		// if filter.Options is nil, set to the default limit +1
+		// to detect whether there are more logs than the default limit
 		filter.Options = &logdb.Options{
 			Offset: 0,
-			Limit:  e.limit,
+			Limit:  e.limit + 1,
 		}
 	}
 
@@ -68,6 +70,12 @@ func (e *Events) handleFilter(w http.ResponseWriter, req *http.Request) error {
 	if err != nil {
 		return err
 	}
+
+	// ensure the result size is less than the configured limit
+	if len(fes) > int(e.limit) {
+		return utils.Forbidden(fmt.Errorf("the number of filtered logs exceeds the maximum allowed value of %d, please use pagination", e.limit))
+	}
+
 	return utils.WriteJSON(w, fes)
 }
 

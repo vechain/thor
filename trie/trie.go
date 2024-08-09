@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/thor"
 )
 
@@ -31,6 +31,8 @@ var (
 	emptyRoot = thor.Blake2b(rlp.EmptyString)
 	// This is the known hash of an empty state trie entry.
 	emptyState = thor.Blake2b(nil)
+
+	logger = log.WithContext("pkg", "trie")
 )
 
 // Database must be implemented by backing stores for the trie.
@@ -117,7 +119,7 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
+		logger.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }

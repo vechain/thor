@@ -7,6 +7,7 @@ package main
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"io"
 	"os"
 	"os/user"
@@ -16,11 +17,10 @@ import (
 	ethlog "github.com/ethereum/go-ethereum/log"
 	"github.com/mattn/go-isatty"
 	"github.com/vechain/thor/v2/log"
-	"gopkg.in/urfave/cli.v1"
 )
 
-func initLogger(ctx *cli.Context) {
-	logLevel := log.FromLegacyLevel(ctx.Int(verbosityFlag.Name))
+func initLogger(lvl int) {
+	logLevel := log.FromLegacyLevel(lvl)
 	output := io.Writer(os.Stdout)
 	useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
 	handler := log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
@@ -99,4 +99,14 @@ func mustHomeDir() string {
 	}
 
 	return filepath.Base(os.Args[0])
+}
+
+func readIntFromUInt64Flag(val uint64) (int, error) {
+	i := int(val)
+
+	if i < 0 {
+		return 0, fmt.Errorf("invalid value %d ", val)
+	}
+
+	return i, nil
 }
