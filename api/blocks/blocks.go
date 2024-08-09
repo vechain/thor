@@ -6,6 +6,9 @@
 package blocks
 
 import (
+	"fmt"
+	"math"
+	"math/big"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -27,6 +30,91 @@ func New(repo *chain.Repository, bft bft.Finalizer) *Blocks {
 		repo,
 		bft,
 	}
+}
+
+func (b *Blocks) handleGetGasCoef(w http.ResponseWriter, req *http.Request) error {
+	revision, err := utils.ParseRevision(mux.Vars(req)["revision"], false)
+	if err != nil {
+		return utils.BadRequest(errors.WithMessage(err, "revision"))
+	}
+	expanded := req.URL.Query().Get("expanded")
+	if expanded != "" && expanded != "false" && expanded != "true" {
+		return utils.BadRequest(errors.WithMessage(errors.New("should be boolean"), "expanded"))
+	}
+
+	summary, err := utils.GetSummary(revision, b.repo, b.bft)
+	if err != nil {
+		if b.repo.IsNotFound(err) {
+			return utils.WriteJSON(w, nil)
+		}
+		return err
+	}
+
+	txs, err := b.repo.GetBlockTransactions(summary.Header.ID())
+	if err != nil {
+		return err
+	}
+
+	// Initialize avgBaseCoef as a big.Int with a value of 0
+	avgBaseCoef := big.NewInt(0)
+
+	// Calculate average base coefficient
+	if len(txs) > 0 {
+		for _, tx := range txs {
+			avgBaseCoef = avgBaseCoef.Add(avgBaseCoef, big.NewInt(int64(tx.GasPriceCoef())))
+		}
+		avgBaseCoef = avgBaseCoef.Div(avgBaseCoef, big.NewInt(int64(len(txs))))
+	}
+
+	totalGasUsed := summary.Header.GasUsed()
+	gasLimit := summary.Header.GasLimit()
+
+	div := float64(totalGasUsed) / float64(gasLimit)
+
+	// Convert avgBaseCoef to big.Float for percentage calculation
+	avgBaseCoefFloat := new(big.Float).SetInt(avgBaseCoef)
+	suggestedBaseCoef := new(big.Float).SetInt(avgBaseCoef)
+	multiplier := big.NewFloat(0.125)
+	twelvePercent := new(big.Float).Mul(avgBaseCoefFloat, multiplier)
+
+	// Check if the gas usage is more than 50%
+	// todo remove reason
+	reason := fmt.Sprintf("Blk: %s, GasLimit: %d, GasUsed: %d, Div: %f",
+		summary.Header.ID().AbbrevString(),
+		summary.Header.GasLimit(),
+		summary.Header.GasUsed(),
+		div*100)
+	if div > 0.3 {
+		reason += ", Increase"
+		suggestedBaseCoef = suggestedBaseCoef.Add(suggestedBaseCoef, twelvePercent)
+	} else if div < 0.3 {
+		reason += ", Decrease"
+		suggestedBaseCoef = suggestedBaseCoef.Sub(suggestedBaseCoef, twelvePercent)
+	} else {
+		reason += ", Stay"
+	}
+
+	// Convert big.Float to uint8 with rounding up
+	avgBaseCoefFloat64, _ := avgBaseCoefFloat.Float64()
+	suggestedBaseCoefFloat64, _ := suggestedBaseCoef.Float64()
+
+	latest := uint8(math.Ceil(avgBaseCoefFloat64))
+	suggested := uint8(math.Ceil(suggestedBaseCoefFloat64))
+
+	// Safeguard against overflow in uint8
+	if latest > 255 {
+		latest = 255
+	}
+	if suggested > 255 {
+		suggested = 255
+	}
+
+	return utils.WriteJSON(w, &JSONGasBaseCoefPrice{
+		Average:   latest,
+		Suggested: suggested,
+		// todo remove reason
+		Reason: reason,
+	})
 }
 
 func (b *Blocks) handleGetBlock(w http.ResponseWriter, req *http.Request) error {
@@ -97,4 +185,8 @@ func (b *Blocks) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("blocks_get_block").
 		HandlerFunc(utils.WrapHandlerFunc(b.handleGetBlock))
+	sub.Path("/{revision}/baseGasCoef").
+		Methods(http.MethodGet).
+		Name("blocks_get_baseGasCoef").
+		HandlerFunc(utils.WrapHandlerFunc(b.handleGetGasCoef))
 }
