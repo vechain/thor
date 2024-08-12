@@ -181,9 +181,8 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *accounts.Ba
 	encodedBlockRef := hexutil.Encode(blockRef[:])
 
 	return &accounts.BatchCallData{
-		Clauses: cls,
-		Gas:     tx.Gas(),
-		//GasPrice:   (*math.HexOrDecimal256)(big.NewInt(1)),
+		Clauses:    cls,
+		Gas:        tx.Gas(),
 		ProvedWork: nil,
 		Caller:     addr,
 		GasPayer:   nil,
