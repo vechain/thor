@@ -7,7 +7,6 @@ package admin
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -24,14 +23,27 @@ type logLevelResponse struct {
 	CurrentLevel string `json:"currentLevel"`
 }
 
+type errorResponse struct {
+	ErrorCode    int    `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
+}
+
+func writeError(w http.ResponseWriter, errCode int, errMsg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(errCode)
+	json.NewEncoder(w).Encode(errorResponse{
+		ErrorCode:    errCode,
+		ErrorMessage: errMsg,
+	})
+}
+
 func getLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		response := logLevelResponse{
 			CurrentLevel: logLevel.Level().String(),
 		}
-		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "Failed to encode response")
 		}
 	}
 }
@@ -40,7 +52,7 @@ func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req logLevelRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
@@ -58,11 +70,16 @@ func postLogLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 		case "crit":
 			logLevel.Set(log.LevelCrit)
 		default:
-			http.Error(w, "Invalid verbosity level", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "Invalid verbosity level")
 			return
 		}
 
-		fmt.Fprintln(w, "Verbosity changed to ", req.Level)
+		w.Header().Set("Content-Type", "application/json")
+		response := logLevelResponse{
+			CurrentLevel: logLevel.Level().String(),
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 	}
 }
 
@@ -74,7 +91,7 @@ func logLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
 		case http.MethodPost:
 			postLogLevelHandler(logLevel).ServeHTTP(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		}
 	}
 }
