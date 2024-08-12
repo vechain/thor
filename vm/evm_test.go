@@ -176,7 +176,7 @@ func TestMaxCodeSize(t *testing.T) {
 		{
 			name:        "Code size greater than max code size",
 			input:       bytecodeLimitPlusOne,
-			expectedErr: errMaxCodeSizeExceeded,
+			expectedErr: ErrMaxCodeSizeExceeded,
 		},
 	}
 
