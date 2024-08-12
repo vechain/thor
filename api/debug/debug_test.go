@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/block"
+	"github.com/vechain/thor/v2/builtin"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/solo"
 	"github.com/vechain/thor/v2/genesis"
@@ -84,8 +85,9 @@ func TestDebug(t *testing.T) {
 
 	// /storage/range endpoint
 	for name, tt := range map[string]func(*testing.T){
-		"testStorageRangeWithError": testStorageRangeWithError,
-		"testStorageRange":          testStorageRange,
+		"testStorageRangeWithError":     testStorageRangeWithError,
+		"testStorageRange":              testStorageRange,
+		"testStorageRangeDefaultOption": testStorageRangeDefaultOption,
 	} {
 		t.Run(name, tt)
 	}
@@ -119,6 +121,39 @@ func TestStorageRangeFunc(t *testing.T) {
 	assert.NotNil(t, storageRangeRes.NextKey)
 	storage := storageRangeRes.Storage
 	assert.Equal(t, 1, len(storage))
+}
+
+func TestStorageRangeMaxResult(t *testing.T) {
+	db := muxdb.NewMem()
+	state := state.New(db, thor.Bytes32{}, 0, 0, 0)
+
+	addr := thor.BytesToAddress([]byte("account1"))
+	for i := 0; i < 1001; i++ {
+		key := thor.BytesToBytes32([]byte(fmt.Sprintf("key%d", i)))
+		value := thor.BytesToBytes32([]byte(fmt.Sprintf("value%d", i)))
+		state.SetRawStorage(addr, key, value[:])
+	}
+
+	trie, err := state.BuildStorageTrie(addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, err := hexutil.Decode("0x00")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	storageRangeRes, err := storageRangeAt(trie, start, 1001)
+	assert.NoError(t, err)
+	assert.Equal(t, 1001, len(storageRangeRes.Storage))
+
+	storageRangeRes, err = storageRangeAt(trie, start, 1000)
+	assert.NoError(t, err)
+	assert.Equal(t, 1000, len(storageRangeRes.Storage))
+
+	storageRangeRes, err = storageRangeAt(trie, start, 10)
+	assert.NoError(t, err)
+	assert.Equal(t, 10, len(storageRangeRes.Storage))
 }
 
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
@@ -418,6 +453,9 @@ func testStorageRangeWithError(t *testing.T) {
 	// Error case 2: bad StorageRangeOption
 	badBodyRequest := 123
 	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badBodyRequest, 400)
+
+	badMaxResult := &StorageRangeOption{MaxResult: 1001}
+	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", badMaxResult, 400)
 }
 
 func testStorageRange(t *testing.T) {
@@ -439,6 +477,21 @@ func testStorageRange(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, expectedStorageRangeResult, parsedExecutionRes)
+}
+
+func testStorageRangeDefaultOption(t *testing.T) {
+	opt := StorageRangeOption{
+		Address: builtin.Energy.Address,
+		Target:  fmt.Sprintf("%s/%s/0", blk.Header().ID(), transaction.ID()),
+	}
+
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/storage-range", &opt, 200)
+
+	var storageRangeRes *StorageRangeResult
+	if err := json.Unmarshal([]byte(res), &storageRangeRes); err != nil {
+		t.Fatal(err)
+	}
+	assert.NotZero(t, len(storageRangeRes.Storage))
 }
 
 func initDebugServer(t *testing.T) {

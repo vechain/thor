@@ -62,6 +62,7 @@ jobs:
       tags: |
         type=raw,value=master-${{ needs.generate-tags.outputs.tag_date }}-${{ needs.generate-tags.outputs.short_sha }}
         type=raw,value=master-latest
+      trigger_internal_ci: true
 
   notify-slack:
     name: Notify Slack

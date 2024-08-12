@@ -148,6 +148,54 @@ func TestCreate(t *testing.T) {
 	assert.NotNil(t, leftOverGas)
 }
 
+func TestMaxCodeSize(t *testing.T) {
+	parentCallerAddress := common.HexToAddress("0x01234567A")
+
+	type testCase struct {
+		name        string
+		input       []byte
+		expectedErr error
+	}
+
+	testCases := []testCase{
+		{
+			name:        "Empty code",
+			input:       []byte{},
+			expectedErr: nil,
+		},
+		{
+			name:        "Code size below max code size",
+			input:       bytecodeBelowLimit,
+			expectedErr: nil,
+		},
+		{
+			name:        "Code size equal to max code size",
+			input:       bytecodeSameLimit,
+			expectedErr: nil,
+		},
+		{
+			name:        "Code size greater than max code size",
+			input:       bytecodeLimitPlusOne,
+			expectedErr: ErrMaxCodeSizeExceeded,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			codeAddr := common.BytesToAddress([]byte{1})
+			evm, _ := setupEvmTestContract(&codeAddr)
+
+			_, _, _, err := evm.Create(AccountRef(parentCallerAddress), tc.input, 10000000, big.NewInt(0))
+
+			if tc.expectedErr != nil {
+				assert.EqualError(t, err, tc.expectedErr.Error())
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
 func TestCreate2(t *testing.T) {
 	codeAddr := common.BytesToAddress([]byte{1})
 	evm, _ := setupEvmTestContract(&codeAddr)
