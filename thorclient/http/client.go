@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/api/blocks"
@@ -22,16 +21,9 @@ type Client struct {
 }
 
 func NewClient(url string) *Client {
-	// if the transport is set to nil it defaults to http.DefaultTransport
-	return NewClientWithInterceptor(strings.TrimSuffix(url, "/"), nil)
-}
-
-func NewClientWithInterceptor(url string, transport http.RoundTripper) *Client {
 	return &Client{
 		url: url,
-		c: &http.Client{
-			Transport: transport,
-		},
+		c:   &http.Client{},
 	}
 }
 
