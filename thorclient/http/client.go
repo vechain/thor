@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -33,7 +34,7 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32) (*transactions.Receip
 		return nil, fmt.Errorf("unable to fetch receipt - %w", err)
 	}
 
-	if string(body) == "null\n" {
+	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
 		return nil, common.NotFoundErr
 	}
 
