@@ -1,3 +1,8 @@
+// Copyright (c) 2024 The VeChainThor developers
+
+// Distributed under the GNU Lesser General Public License v3.0 software license, see the accompanying
+// file LICENSE or <https://www.gnu.org/licenses/lgpl-3.0.html>
+
 package ws
 
 import (
@@ -17,8 +22,8 @@ type Client struct {
 }
 
 func NewClient(url string) (*Client, error) {
-	host := url
-	scheme := "ws"
+	var host string
+	var scheme string
 
 	if strings.Contains(url, "https://") || strings.Contains(url, "wss://") {
 		host = strings.TrimPrefix(strings.TrimPrefix(url, "https://"), "wss://")
