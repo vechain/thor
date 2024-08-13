@@ -83,7 +83,7 @@ func TestConvertToBatchCallData(t *testing.T) {
 
 func TestRevision(t *testing.T) {
 	addr := thor.BytesToAddress([]byte("account1"))
-	revision := thor.BytesToBytes32([]byte("revision1"))
+	revision := "revision1"
 
 	for _, tc := range []struct {
 		name             string
@@ -99,7 +99,7 @@ func TestRevision(t *testing.T) {
 		},
 		{
 			name:             "GetAccounForRevision",
-			function:         func(client *Client) { client.GetAccountForRevision(&addr, &revision) },
+			function:         func(client *Client) { client.GetAccountForRevision(&addr, revision) },
 			expectedPath:     "/accounts/" + addr.String(),
 			expectedRevision: "",
 		},
@@ -111,7 +111,7 @@ func TestRevision(t *testing.T) {
 		},
 		{
 			name:             "GetAccountCodeForRevision",
-			function:         func(client *Client) { client.GetAccountCodeForRevision(&addr, &revision) },
+			function:         func(client *Client) { client.GetAccountCodeForRevision(&addr, revision) },
 			expectedPath:     "/accounts/" + addr.String() + "/code",
 			expectedRevision: "",
 		},

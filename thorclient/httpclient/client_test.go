@@ -160,7 +160,7 @@ func TestClient_GetAccount(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	account, err := client.GetAccount(&addr, &thor.Bytes32{})
+	account, err := client.GetAccount(&addr, "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedAccount, account)
@@ -178,7 +178,7 @@ func TestClient_GetAccountCode(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	byteCode, err := client.GetAccountCode(&addr, &thor.Bytes32{})
+	byteCode, err := client.GetAccountCode(&addr, "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedByteCode, byteCode)
@@ -378,12 +378,12 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "GetAccount",
 			path:     "/accounts/" + addr.String(),
-			function: func(client *Client) (*accounts.Account, error) { return client.GetAccount(&addr, &thor.Bytes32{}) },
+			function: func(client *Client) (*accounts.Account, error) { return client.GetAccount(&addr, "") },
 		},
 		{
 			name:     "GetContractByteCode",
 			path:     "/accounts/" + addr.String() + "/code",
-			function: func(client *Client) ([]byte, error) { return client.GetAccountCode(&addr, &thor.Bytes32{}) },
+			function: func(client *Client) ([]byte, error) { return client.GetAccountCode(&addr, "") },
 		},
 		{
 			name:     "GetStorage",

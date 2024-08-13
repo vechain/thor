@@ -87,18 +87,18 @@ func (c *Client) GetLogTransfer(req map[string]interface{}) ([]*transfers.Filter
 }
 
 func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {
-	return c.conn.GetAccount(addr, &thor.Bytes32{})
+	return c.conn.GetAccount(addr, "")
 }
 
-func (c *Client) GetAccountForRevision(addr *thor.Address, revision *thor.Bytes32) (*accounts.Account, error) {
+func (c *Client) GetAccountForRevision(addr *thor.Address, revision string) (*accounts.Account, error) {
 	return c.conn.GetAccount(addr, revision)
 }
 
 func (c *Client) GetAccountCode(addr *thor.Address) ([]byte, error) {
-	return c.conn.GetAccountCode(addr, &thor.Bytes32{})
+	return c.conn.GetAccountCode(addr, "")
 }
 
-func (c *Client) GetAccountCodeForRevision(addr *thor.Address, revision *thor.Bytes32) ([]byte, error) {
+func (c *Client) GetAccountCodeForRevision(addr *thor.Address, revision string) ([]byte, error) {
 	return c.conn.GetAccountCode(addr, revision)
 }
 

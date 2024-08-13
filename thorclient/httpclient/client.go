@@ -111,10 +111,10 @@ func (c *Client) GetLogsEvent(req map[string]interface{}) ([]events.FilteredEven
 	return c.GetLogs(c.url+"/logs/event", req)
 }
 
-func (c *Client) GetAccount(addr *thor.Address, revision *thor.Bytes32) (*accounts.Account, error) {
+func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
 	url := c.url + "/accounts/" + addr.String()
-	if !revision.IsZero() {
-		url += "?revision=" + revision.String()
+	if revision != "" {
+		url += "?revision=" + revision
 	}
 
 	body, err := c.httpGET(url)
@@ -130,10 +130,10 @@ func (c *Client) GetAccount(addr *thor.Address, revision *thor.Bytes32) (*accoun
 	return &account, nil
 }
 
-func (c *Client) GetAccountCode(addr *thor.Address, revision *thor.Bytes32) ([]byte, error) {
+func (c *Client) GetAccountCode(addr *thor.Address, revision string) ([]byte, error) {
 	url := c.url + "/accounts/" + addr.String() + "/code"
-	if !revision.IsZero() {
-		url += "?revision=" + revision.String()
+	if revision != "" {
+		url += "?revision=" + revision
 	}
 
 	return c.httpGET(url)
