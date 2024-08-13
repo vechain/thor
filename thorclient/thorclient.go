@@ -20,35 +20,35 @@ import (
 	"github.com/vechain/thor/v2/api/transfers"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/thorclient/common"
-	"github.com/vechain/thor/v2/thorclient/http"
-	"github.com/vechain/thor/v2/thorclient/ws"
+	"github.com/vechain/thor/v2/thorclient/httpclient"
+	"github.com/vechain/thor/v2/thorclient/wsclient"
 	"github.com/vechain/thor/v2/tx"
 )
 
 type Client struct {
-	conn   *http.Client
-	wsConn *ws.Client
+	conn   *httpclient.Client
+	wsConn *wsclient.Client
 }
 
 func NewClient(url string) *Client {
 	return &Client{
-		conn: http.NewClient(url),
+		conn: httpclient.NewClient(url),
 	}
 }
 
 func NewClientWithWS(url string) (*Client, error) {
-	wsClient, err := ws.NewClient(url)
+	wsClient, err := wsclient.NewClient(url)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Client{
-		conn:   http.NewClient(url),
+		conn:   httpclient.NewClient(url),
 		wsConn: wsClient,
 	}, nil
 }
 
-func (c *Client) RawClient() *http.Client {
+func (c *Client) RawClient() *httpclient.Client {
 	return c.conn
 }
 
