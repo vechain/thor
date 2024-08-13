@@ -95,7 +95,7 @@ func TestClient_SendTransaction(t *testing.T) {
 	assert.Equal(t, expectedResult, result)
 }
 
-func TestClient_GetLogTransfer(t *testing.T) {
+func TestClient_FilterTransfers(t *testing.T) {
 	req := map[string]interface{}{}
 	expectedTransfers := []*transfers.FilteredTransfer{{
 		Sender:    thor.Address{0x01},
@@ -113,13 +113,13 @@ func TestClient_GetLogTransfer(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	transfers, err := client.GetLogTransfer(req)
+	transfers, err := client.FilterTransfers(req)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTransfers, transfers)
 }
 
-func TestClient_GetLogsEvent(t *testing.T) {
+func TestClient_FilterEvents(t *testing.T) {
 	req := map[string]interface{}{}
 	expectedEvents := []events.FilteredEvent{{
 		Address: thor.Address{0x01},
@@ -127,9 +127,10 @@ func TestClient_GetLogsEvent(t *testing.T) {
 		Data:    "data",
 		Meta:    events.LogMeta{},
 	}}
+	expectedPath := "/logs/event"
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/logs/event", r.URL.Path)
+		assert.Equal(t, expectedPath, r.URL.Path)
 
 		filteredEventsBytes, _ := json.Marshal(expectedEvents)
 		w.Write(filteredEventsBytes)
@@ -137,7 +138,7 @@ func TestClient_GetLogsEvent(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	events, err := client.GetLogsEvent(req)
+	events, err := client.FilterEvents(req)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEvents, events)
@@ -362,17 +363,17 @@ func TestClient_Errors(t *testing.T) {
 			},
 		},
 		{
-			name: "GetLogTransfer",
+			name: "FilterTransfers",
 			path: "/logs/transfer",
 			function: func(client *Client) ([]*transfers.FilteredTransfer, error) {
-				return client.GetLogTransfer(map[string]interface{}{})
+				return client.FilterTransfers(map[string]interface{}{})
 			},
 		},
 		{
-			name: "GetLogsEvent",
+			name: "FilterEvents",
 			path: "/logs/event",
 			function: func(client *Client) ([]events.FilteredEvent, error) {
-				return client.GetLogsEvent(map[string]interface{}{})
+				return client.FilterEvents(map[string]interface{}{})
 			},
 		},
 		{

@@ -78,12 +78,12 @@ func (c *Client) SendEncodedTransaction(rlpTx []byte) (*common.TxSendResult, err
 	return c.conn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 
-func (c *Client) GetLogEvents(req map[string]interface{}) ([]events.FilteredEvent, error) {
-	return c.conn.GetLogsEvent(req)
+func (c *Client) FilterEvents(req map[string]interface{}) ([]events.FilteredEvent, error) {
+	return c.conn.FilterEvents(req)
 }
 
-func (c *Client) GetLogTransfer(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
-	return c.conn.GetLogTransfer(req)
+func (c *Client) FilterTransfers(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
+	return c.conn.FilterTransfers(req)
 }
 
 func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {

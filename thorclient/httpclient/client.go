@@ -79,8 +79,8 @@ func (c *Client) SendTransaction(obj *transactions.RawTx) (*common.TxSendResult,
 	return &txID, nil
 }
 
-func (c *Client) GetLogs(eventEndpoint string, req map[string]interface{}) ([]events.FilteredEvent, error) {
-	body, err := c.httpPOST(eventEndpoint, req)
+func (c *Client) FilterEvents(req map[string]interface{}) ([]events.FilteredEvent, error) {
+	body, err := c.httpPOST(c.url+"/logs/event", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
 	}
@@ -93,7 +93,7 @@ func (c *Client) GetLogs(eventEndpoint string, req map[string]interface{}) ([]ev
 	return filteredEvents, nil
 }
 
-func (c *Client) GetLogTransfer(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
 	body, err := c.httpPOST(c.url+"/logs/transfer", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send retrieve transfer logs - %w", err)
@@ -105,10 +105,6 @@ func (c *Client) GetLogTransfer(req map[string]interface{}) ([]*transfers.Filter
 	}
 
 	return filteredEvents, nil
-}
-
-func (c *Client) GetLogsEvent(req map[string]interface{}) ([]events.FilteredEvent, error) {
-	return c.GetLogs(c.url+"/logs/event", req)
 }
 
 func (c *Client) GetAccount(addr *thor.Address, revision string) (*accounts.Account, error) {
