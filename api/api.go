@@ -63,7 +63,6 @@ func New(
 		LogsLimit:         logsLimit,
 		DebugEnabled:      true,
 		DebugCustomTracer: allowCustomTracer,
-		DebugPprofEnabled: pprofOn,
 		CallGasLimit:      callGasLimit,
 		WSBackTraceLimit:  backtraceLimit,
 	}

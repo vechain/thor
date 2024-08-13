@@ -20,7 +20,6 @@ type Info struct {
 	LogsLimit         uint64 `json:"logsLimit"`
 	DebugEnabled      bool   `json:"debugEnabled"`
 	DebugCustomTracer bool   `json:"debugCustomTracer"`
-	DebugPprofEnabled bool   `json:"debugPprofEnabled"`
 	CallGasLimit      uint64 `json:"callGasLimit"`
 	WSBackTraceLimit  uint32 `json:"wsBackTraceLimit"`
 }

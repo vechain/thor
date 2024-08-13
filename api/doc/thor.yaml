@@ -1109,11 +1109,6 @@ components:
           type: boolean
           description: Indicates whether the custom tracers are allowed in the `/debug` API.
           example: true
-        debugPprofEnabled:
-          type: boolean
-          description: Indicates whether the `/debug/pprof` endpoints are enabled.
-          example: true
-          nullable: false
         callGasLimit:
           type: integer
           description: The maximum gas limit for a contract call.
