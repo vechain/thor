@@ -1,11 +1,14 @@
 package client
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/accounts"
+	"github.com/vechain/thor/v2/api/transactions"
 	"github.com/vechain/thor/v2/thor"
 	"github.com/vechain/thor/v2/tx"
 )
@@ -71,4 +74,97 @@ func TestConvertToBatchCallData(t *testing.T) {
 		BlockRef:   "0x0000000000000000",
 	}
 	assert.Equal(t, expected1, convertToBatchCallData(tx1, addr1))
+}
+
+func TestRevision(t *testing.T) {
+	addr := thor.BytesToAddress([]byte("account1"))
+	revision := thor.BytesToBytes32([]byte("revision1"))
+
+	for _, tc := range []struct {
+		name             string
+		function         interface{}
+		expectedPath     string
+		expectedRevision string
+	}{
+		{
+			name:             "GetAccount",
+			function:         func(client *Client) { client.GetAccount(&addr) },
+			expectedPath:     "/accounts/" + addr.String(),
+			expectedRevision: "",
+		},
+		{
+			name:             "GetAccounForRevision",
+			function:         func(client *Client) { client.GetAccountForRevision(&addr, &revision) },
+			expectedPath:     "/accounts/" + addr.String(),
+			expectedRevision: "",
+		},
+		{
+			name:             "GetAccountCode",
+			function:         func(client *Client) { client.GetAccountCode(&addr) },
+			expectedPath:     "/accounts/" + addr.String() + "/code",
+			expectedRevision: "",
+		},
+		{
+			name:             "GetAccountCodeForRevision",
+			function:         func(client *Client) { client.GetAccountCodeForRevision(&addr, &revision) },
+			expectedPath:     "/accounts/" + addr.String() + "/code",
+			expectedRevision: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, tc.expectedPath, r.URL.Path)
+				if tc.expectedRevision != "" {
+					assert.Equal(t, "revision", r.URL.Query().Get("revision"))
+				}
+
+				w.Write([]byte{})
+			}))
+			defer ts.Close()
+
+			client := NewClient(ts.URL)
+
+			fn := reflect.ValueOf(tc.function)
+			fn.Call([]reflect.Value{reflect.ValueOf(client)})
+		})
+	}
+}
+
+func TestGetTransaction(t *testing.T) {
+	expectedTx := &transactions.Transaction{
+		ID: thor.BytesToBytes32([]byte("txid1")),
+	}
+
+	for _, tc := range []struct {
+		name      string
+		function  interface{}
+		isPending bool
+	}{
+		{
+			name:      "GetTransaction",
+			function:  func(client *Client) { client.GetTransaction(&expectedTx.ID) },
+			isPending: false,
+		},
+		{
+			name:      "GetPendingTransaction",
+			function:  func(client *Client) { client.GetPendingTransaction(expectedTx.ID) },
+			isPending: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/transactions/"+expectedTx.ID.String(), r.URL.Path)
+				if tc.isPending {
+					assert.Equal(t, "true", r.URL.Query().Get("pending"))
+				}
+
+				w.Write(expectedTx.ID[:])
+			}))
+			defer ts.Close()
+
+			client := NewClient(ts.URL)
+			fn := reflect.ValueOf(tc.function)
+			fn.Call([]reflect.Value{reflect.ValueOf(client)})
+		})
+	}
 }

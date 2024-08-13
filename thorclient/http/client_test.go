@@ -155,13 +155,13 @@ func TestClient_GetAccount(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	account, err := client.GetAccount(&addr)
+	account, err := client.GetAccount(&addr, &thor.Bytes32{})
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedAccount, account)
 }
 
-func TestClient_GetContractByteCode(t *testing.T) {
+func TestClient_GetAccountCode(t *testing.T) {
 	addr := thor.Address{0x01}
 	expectedByteCode := []byte{0x01}
 
@@ -173,7 +173,7 @@ func TestClient_GetContractByteCode(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	byteCode, err := client.GetContractByteCode(&addr)
+	byteCode, err := client.GetAccountCode(&addr, &thor.Bytes32{})
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedByteCode, byteCode)
@@ -258,7 +258,7 @@ func TestClient_GetTransaction(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	tx, err := client.GetTransaction(&txID)
+	tx, err := client.GetTransaction(&txID, false)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedTx, tx)
@@ -373,12 +373,12 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "GetAccount",
 			path:     "/accounts/" + addr.String(),
-			function: func(client *Client) (*accounts.Account, error) { return client.GetAccount(&addr) },
+			function: func(client *Client) (*accounts.Account, error) { return client.GetAccount(&addr, &thor.Bytes32{}) },
 		},
 		{
 			name:     "GetContractByteCode",
 			path:     "/accounts/" + addr.String() + "/code",
-			function: func(client *Client) ([]byte, error) { return client.GetContractByteCode(&addr) },
+			function: func(client *Client) ([]byte, error) { return client.GetAccountCode(&addr, &thor.Bytes32{}) },
 		},
 		{
 			name:     "GetStorage",
@@ -398,7 +398,7 @@ func TestClient_Errors(t *testing.T) {
 		{
 			name:     "GetTransaction",
 			path:     "/transactions/" + txID.String(),
-			function: func(client *Client) (*transactions.Transaction, error) { return client.GetTransaction(&txID) },
+			function: func(client *Client) (*transactions.Transaction, error) { return client.GetTransaction(&txID, false) },
 		},
 		{
 			name:     "RawHTTPPost",

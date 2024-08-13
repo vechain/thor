@@ -106,8 +106,13 @@ func (c *Client) GetLogsEvent(req map[string]interface{}) ([]events.FilteredEven
 	return c.GetLogs(c.url+"/logs/event", req)
 }
 
-func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {
-	body, err := c.httpGET(c.url + "/accounts/" + addr.String())
+func (c *Client) GetAccount(addr *thor.Address, revision *thor.Bytes32) (*accounts.Account, error) {
+	url := c.url + "/accounts/" + addr.String()
+	if !revision.IsZero() {
+		url += "?revision=" + revision.String()
+	}
+
+	body, err := c.httpGET(url)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve account - %w", err)
 	}
@@ -120,8 +125,13 @@ func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {
 	return &account, nil
 }
 
-func (c *Client) GetContractByteCode(addr *thor.Address) ([]byte, error) {
-	return c.httpGET(c.url + "/accounts/" + addr.String() + "/code")
+func (c *Client) GetAccountCode(addr *thor.Address, revision *thor.Bytes32) ([]byte, error) {
+	url := c.url + "/accounts/" + addr.String() + "/code"
+	if !revision.IsZero() {
+		url += "?revision=" + revision.String()
+	}
+
+	return c.httpGET(url)
 }
 
 func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32) ([]byte, error) {
@@ -156,8 +166,13 @@ func (c *Client) GetBlock(blockID string) (*blocks.JSONBlockSummary, error) {
 	return &block, nil
 }
 
-func (c *Client) GetTransaction(txID *thor.Bytes32) (*transactions.Transaction, error) {
-	body, err := c.httpGET(c.url + "/transactions/" + txID.String())
+func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool) (*transactions.Transaction, error) {
+	url := c.url + "/transactions/" + txID.String()
+	if isPending {
+		url += "?pending=true"
+	}
+
+	body, err := c.httpGET(url)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve transaction - %w", err)
 	}
