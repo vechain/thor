@@ -96,7 +96,7 @@ func TestClient_SendTransaction(t *testing.T) {
 }
 
 func TestClient_FilterTransfers(t *testing.T) {
-	req := map[string]interface{}{}
+	req := &events.EventFilter{}
 	expectedTransfers := []*transfers.FilteredTransfer{{
 		Sender:    thor.Address{0x01},
 		Recipient: thor.Address{0x02},
@@ -120,7 +120,7 @@ func TestClient_FilterTransfers(t *testing.T) {
 }
 
 func TestClient_FilterEvents(t *testing.T) {
-	req := map[string]interface{}{}
+	req := &events.EventFilter{}
 	expectedEvents := []events.FilteredEvent{{
 		Address: thor.Address{0x01},
 		Topics:  []*thor.Bytes32{{0x01}},
@@ -366,14 +366,14 @@ func TestClient_Errors(t *testing.T) {
 			name: "FilterTransfers",
 			path: "/logs/transfer",
 			function: func(client *Client) ([]*transfers.FilteredTransfer, error) {
-				return client.FilterTransfers(map[string]interface{}{})
+				return client.FilterTransfers(&events.EventFilter{})
 			},
 		},
 		{
 			name: "FilterEvents",
 			path: "/logs/event",
 			function: func(client *Client) ([]events.FilteredEvent, error) {
-				return client.FilterEvents(map[string]interface{}{})
+				return client.FilterEvents(&events.EventFilter{})
 			},
 		},
 		{

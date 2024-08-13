@@ -79,7 +79,7 @@ func (c *Client) SendTransaction(obj *transactions.RawTx) (*common.TxSendResult,
 	return &txID, nil
 }
 
-func (c *Client) FilterEvents(req map[string]interface{}) ([]events.FilteredEvent, error) {
+func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
 	body, err := c.httpPOST(c.url+"/logs/event", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send raw transaction - %w", err)
@@ -93,7 +93,7 @@ func (c *Client) FilterEvents(req map[string]interface{}) ([]events.FilteredEven
 	return filteredEvents, nil
 }
 
-func (c *Client) FilterTransfers(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
 	body, err := c.httpPOST(c.url+"/logs/transfer", req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to send retrieve transfer logs - %w", err)

@@ -78,11 +78,11 @@ func (c *Client) SendEncodedTransaction(rlpTx []byte) (*common.TxSendResult, err
 	return c.conn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 
-func (c *Client) FilterEvents(req map[string]interface{}) ([]events.FilteredEvent, error) {
+func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
 	return c.conn.FilterEvents(req)
 }
 
-func (c *Client) FilterTransfers(req map[string]interface{}) ([]*transfers.FilteredTransfer, error) {
+func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
 	return c.conn.FilterTransfers(req)
 }
 
