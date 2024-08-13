@@ -214,7 +214,7 @@ func BenchmarkTestDB_FilterEvents(b *testing.B) {
 	}
 }
 
-// BenchmarkTestDB_FilterEvents opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
+// BenchmarkTestDB_FilterTransfers opens a log.db file and measures the performance of the Transfer filtering functionality of LogDB.
 // Running: go test -bench=BenchmarkTestDB_FilterTransfers  -benchmem  github.com/vechain/thor/v2/logdb -dbPath /path/to/log.db
 func BenchmarkTestDB_FilterTransfers(b *testing.B) {
 	db, err := loadDBFromDisk(b)
