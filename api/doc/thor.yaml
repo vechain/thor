@@ -378,6 +378,21 @@ paths:
                 type: string
                 example: 'Invalid request body'
 
+  /node/info:
+    get:
+      tags:
+        - Node
+      summary: Retrieve node information
+      description: |
+        Retrieve information about the node, such as enabled endpoints and limits.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeInfo'
+
   /node/network/peers:
     get:
       tags:
@@ -1064,6 +1079,51 @@ components:
       nullable: false
       items:
         $ref: '#/components/schemas/PeerStats'
+
+    NodeInfo:
+      type: object
+      title: NodeInfo
+      nullable: false
+      properties:
+        version:
+          type: string
+          description: The version of the node
+          example: '2.0.0'
+          nullable: false
+        logsEnabled:
+          type: boolean
+          description: Indicates whether the `/logs` API is enabled
+          example: true
+          nullable: false
+        logsLimit:
+          type: integer
+          description: The maximum number of logs that can be retrieved in a single request.
+          example: 1000
+          nullable: false
+        debugEnabled:
+          type: boolean
+          description: Indicates whether the `/debug` API is enabled.
+          example: true
+          nullable: false
+        debugCustomTracer:
+          type: boolean
+          description: Indicates whether the custom tracers are allowed in the `/debug` API.
+          example: true
+        debugPprofEnabled:
+          type: boolean
+          description: Indicates whether the `/debug/pprof` endpoints are enabled.
+          example: true
+          nullable: false
+        callGasLimit:
+          type: integer
+          description: The maximum gas limit for a contract call.
+          example: 10000000
+          nullable: false
+        wsBackTraceLimit:
+          type: integer
+          description: The maximum amount of blocks that a websocket subscription can go back to.
+          example: 10
+          nullable: false
 
     SubscriptionBlockResponse:
       type: object

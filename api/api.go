@@ -57,6 +57,16 @@ func New(
 	}
 
 	router := mux.NewRouter()
+	info := node.Info{
+		Version:           doc.Version(),
+		LogsEnabled:       !skipLogs,
+		LogsLimit:         logsLimit,
+		DebugEnabled:      true,
+		DebugCustomTracer: allowCustomTracer,
+		DebugPprofEnabled: pprofOn,
+		CallGasLimit:      callGasLimit,
+		WSBackTraceLimit:  backtraceLimit,
+	}
 
 	// to serve stoplight, swagger and api docs
 	router.PathPrefix("/doc").Handler(
@@ -84,7 +94,7 @@ func New(
 		Mount(router, "/transactions")
 	debug.New(repo, stater, forkConfig, callGasLimit, allowCustomTracer, bft).
 		Mount(router, "/debug")
-	node.New(nw).
+	node.New(nw, info).
 		Mount(router, "/node")
 	subs := subscriptions.New(repo, origins, backtraceLimit, txPool)
 	subs.Mount(router, "/subscriptions")

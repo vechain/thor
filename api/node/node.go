@@ -13,12 +13,14 @@ import (
 )
 
 type Node struct {
-	nw Network
+	nw   Network
+	info Info
 }
 
-func New(nw Network) *Node {
+func New(nw Network, info Info) *Node {
 	return &Node{
 		nw,
+		info,
 	}
 }
 
@@ -30,6 +32,10 @@ func (n *Node) handleNetwork(w http.ResponseWriter, req *http.Request) error {
 	return utils.WriteJSON(w, n.PeersStats())
 }
 
+func (n *Node) handleNodeInfo(w http.ResponseWriter, req *http.Request) error {
+	return utils.WriteJSON(w, n.info)
+}
+
 func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 	sub := root.PathPrefix(pathPrefix).Subrouter()
 
@@ -37,4 +43,8 @@ func (n *Node) Mount(root *mux.Router, pathPrefix string) {
 		Methods(http.MethodGet).
 		Name("node_get_peers").
 		HandlerFunc(utils.WrapHandlerFunc(n.handleNetwork))
+	sub.Path("/info").
+		Methods(http.MethodGet).
+		Name("node_get_info").
+		HandlerFunc(utils.WrapHandlerFunc(n.handleNodeInfo))
 }

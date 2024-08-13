@@ -14,6 +14,17 @@ type Network interface {
 	PeersStats() []*comm.PeerStats
 }
 
+type Info struct {
+	Version           string `json:"version"`
+	LogsEnabled       bool   `json:"logsEnabled"`
+	LogsLimit         uint64 `json:"logsLimit"`
+	DebugEnabled      bool   `json:"debugEnabled"`
+	DebugCustomTracer bool   `json:"debugCustomTracer"`
+	DebugPprofEnabled bool   `json:"debugPprofEnabled"`
+	CallGasLimit      uint64 `json:"callGasLimit"`
+	WSBackTraceLimit  uint32 `json:"wsBackTraceLimit"`
+}
+
 type PeerStats struct {
 	Name        string       `json:"name"`
 	BestBlockID thor.Bytes32 `json:"bestBlockID"`
