@@ -26,16 +26,27 @@ import (
 var ts *httptest.Server
 
 func TestNode(t *testing.T) {
-	initCommServer(t)
-	res := httpGet(t, ts.URL+"/node/network/peers")
+	info := node.Info{
+		Version: "2.0.93",
+	}
+	initCommServer(t, info)
+
+	peersRes := httpGet(t, ts.URL+"/node/network/peers")
 	var peersStats map[string]string
-	if err := json.Unmarshal(res, &peersStats); err != nil {
+	if err := json.Unmarshal(peersRes, &peersStats); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 0, len(peersStats), "count should be zero")
+
+	infoRes := httpGet(t, ts.URL+"/node/info")
+	var infoResMap map[string]interface{}
+	if err := json.Unmarshal(infoRes, &infoResMap); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, "2.0.93", infoResMap["version"], "version should be 2.0.93")
 }
 
-func initCommServer(t *testing.T) {
+func initCommServer(t *testing.T, info node.Info) {
 	db := muxdb.NewMem()
 	stater := state.NewStater(db)
 	gene := genesis.NewDevnet()
@@ -51,7 +62,7 @@ func initCommServer(t *testing.T) {
 		MaxLifetime:     10 * time.Minute,
 	}))
 	router := mux.NewRouter()
-	node.New(comm).Mount(router, "/node")
+	node.New(comm, info).Mount(router, "/node")
 	ts = httptest.NewServer(router)
 }
 
