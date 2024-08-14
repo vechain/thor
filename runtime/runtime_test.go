@@ -296,7 +296,7 @@ func TestEVMFunction(t *testing.T) {
 			methodName: "",
 			testFunc: func(ctx *context, t *testing.T) {
 				// 0x5f is PUSH0 opCode
-				codeData := []byte{0x5f}
+				codeData := []byte{byte(vm.PUSH0)}
 				exec, _ := runtime.New(ctx.chain, ctx.state, &xenv.BlockContext{}, thor.ForkConfig{}).
 					PrepareClause(tx.NewClause(nil).WithData(codeData), 0, math.MaxUint64, &xenv.TransactionContext{})
 				out, _, err := exec()
