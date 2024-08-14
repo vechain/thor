@@ -122,10 +122,8 @@ func ActivePrecompiles(rules Rules) []common.Address {
 		return PrecompiledAddressesShanghai
 	case rules.IsIstanbul:
 		return PrecompiledAddressesIstanbul
-	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
 	default:
-		return PrecompiledAddressesHomestead
+		return PrecompiledAddressesByzantium
 	}
 }
 
