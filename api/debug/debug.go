@@ -36,6 +36,8 @@ import (
 	"github.com/vechain/thor/v2/xenv"
 )
 
+const defaultMaxStorageResult = 1000
+
 var devNetGenesisID = genesis.NewDevnet().ID()
 
 type Debug struct {
@@ -296,6 +298,15 @@ func (d *Debug) handleDebugStorage(w http.ResponseWriter, req *http.Request) err
 	if err := utils.ParseJSON(req.Body, &opt); err != nil {
 		return utils.BadRequest(errors.WithMessage(err, "body"))
 	}
+
+	if opt.MaxResult > defaultMaxStorageResult {
+		return utils.BadRequest(errors.Errorf("maxResult: exceeds limit of %d", defaultMaxStorageResult))
+	}
+
+	if opt.MaxResult == 0 {
+		opt.MaxResult = defaultMaxStorageResult
+	}
+
 	blockID, txIndex, clauseIndex, err := d.parseTarget(opt.Target)
 	if err != nil {
 		return err
