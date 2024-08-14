@@ -112,7 +112,7 @@ Instrumentation is in a beta phase at this stage. You can read more about the me
 
 ### Admin
 
-Admin is used to allow privilidged actions to the node by the administrator. Currently is supports changing the logger's verbosity at runtime.
+Admin is used to allow privileged actions to the node by the administrator. Currently it supports changing the logger's verbosity at runtime.
 
 Admin is not enabled in nodes by default. It's possible to enable it by setting  `--enable-admin`. Once enabled, an Admin server is available at `localhost:2113/admin` with the following capabilities:
 
