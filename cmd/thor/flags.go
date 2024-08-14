@@ -150,8 +150,8 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
-	enableDebug = cli.BoolFlag{
-		Name:  "enable-debug",
+	enableAPIDebug = cli.BoolFlag{
+		Name:  "enable-api-debug",
 		Usage: "enable `/debug` endpoint on the node",
 	}
 
