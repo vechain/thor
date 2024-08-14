@@ -24,6 +24,7 @@ func CustomNetWithParams(t *testing.T, executor genesis.Executor, baseGasPrice g
 		ETH_IST:   math.MaxUint32,
 		VIP214:    math.MaxUint32,
 		FINALITY:  0,
+		ETH_SH:    0,
 	}
 
 	devAccounts := genesis.DevAccounts()
