@@ -42,10 +42,6 @@ func TestWs_Error(t *testing.T) {
 			function: client.SubscribeTxPool,
 		},
 		{
-			name:     "SubscribeBeats",
-			function: client.SubscribeBeats,
-		},
-		{
 			name:     "SubscribeBeats2",
 			function: client.SubscribeBeats2,
 		},

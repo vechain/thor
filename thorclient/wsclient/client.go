@@ -7,13 +7,13 @@ package wsclient
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 type Client struct {
@@ -41,7 +41,7 @@ func NewClient(url string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) SubscribeEvents(query string) (<-chan *subscriptions.EventMessage, error) {
+func (c *Client) SubscribeEvents(query string) (<-chan common.EventWrapper[*subscriptions.EventMessage], error) {
 	conn, err := c.connect("/subscriptions/event", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
@@ -50,7 +50,7 @@ func (c *Client) SubscribeEvents(query string) (<-chan *subscriptions.EventMessa
 	return subscribe[subscriptions.EventMessage](conn)
 }
 
-func (c *Client) SubscribeBlocks(query string) (<-chan *blocks.JSONBlockSummary, error) {
+func (c *Client) SubscribeBlocks(query string) (<-chan common.EventWrapper[*blocks.JSONBlockSummary], error) {
 	conn, err := c.connect("/subscriptions/block", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
@@ -59,7 +59,7 @@ func (c *Client) SubscribeBlocks(query string) (<-chan *blocks.JSONBlockSummary,
 	return subscribe[blocks.JSONBlockSummary](conn)
 }
 
-func (c *Client) SubscribeTransfers(query string) (<-chan *subscriptions.TransferMessage, error) {
+func (c *Client) SubscribeTransfers(query string) (<-chan common.EventWrapper[*subscriptions.TransferMessage], error) {
 	conn, err := c.connect("/subscriptions/transfer", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
@@ -68,16 +68,7 @@ func (c *Client) SubscribeTransfers(query string) (<-chan *subscriptions.Transfe
 	return subscribe[subscriptions.TransferMessage](conn)
 }
 
-func (c *Client) SubscribeBeats(query string) (<-chan *subscriptions.BeatMessage, error) {
-	conn, err := c.connect("/subscriptions/beats", query)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect - %w", err)
-	}
-
-	return subscribe[subscriptions.BeatMessage](conn)
-}
-
-func (c *Client) SubscribeTxPool(query string) (<-chan *subscriptions.PendingTxIDMessage, error) {
+func (c *Client) SubscribeTxPool(query string) (<-chan common.EventWrapper[*subscriptions.PendingTxIDMessage], error) {
 	conn, err := c.connect("/subscriptions/txpool", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
@@ -86,7 +77,7 @@ func (c *Client) SubscribeTxPool(query string) (<-chan *subscriptions.PendingTxI
 	return subscribe[subscriptions.PendingTxIDMessage](conn)
 }
 
-func (c *Client) SubscribeBeats2(query string) (<-chan *subscriptions.Beat2Message, error) {
+func (c *Client) SubscribeBeats2(query string) (<-chan common.EventWrapper[*subscriptions.Beat2Message], error) {
 	conn, err := c.connect("/subscriptions/beat2", query)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect - %w", err)
@@ -97,9 +88,9 @@ func (c *Client) SubscribeBeats2(query string) (<-chan *subscriptions.Beat2Messa
 
 // subscribe creates a channel to handle new subscriptions
 // It takes a websocket connection as an argument and returns a read-only channel for receiving messages of type T and an error if any occurs.
-func subscribe[T any](conn *websocket.Conn) (<-chan *T, error) {
+func subscribe[T any](conn *websocket.Conn) (<-chan common.EventWrapper[*T], error) {
 	// Create a new channel for events
-	eventChan := make(chan *T)
+	eventChan := make(chan common.EventWrapper[*T])
 
 	// Start a goroutine to handle receiving messages from the websocket connection
 	go func() {
@@ -111,13 +102,13 @@ func subscribe[T any](conn *websocket.Conn) (<-chan *T, error) {
 			// Read a JSON message from the websocket and unmarshal it into data
 			err := conn.ReadJSON(&data)
 			if err != nil {
-				// Log the error and exit the loop if reading fails
-				log.Println("Read error:", err)
+				// Send an EventWrapper with the error to the channel
+				eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.UnexpectedMsgErr, err)}
 				return
 			}
 
 			// Send the received data to the event channel
-			eventChan <- &data
+			eventChan <- common.EventWrapper[*T]{Data: &data}
 			// TODO: handle the case where data is invalid or undesirable
 		}
 	}()

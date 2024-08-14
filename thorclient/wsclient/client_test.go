@@ -6,6 +6,7 @@
 package wsclient
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vechain/thor/v2/api/blocks"
 	"github.com/vechain/thor/v2/api/subscriptions"
+	"github.com/vechain/thor/v2/thorclient/common"
 )
 
 func TestClient_SubscribeEvents(t *testing.T) {
@@ -39,7 +41,7 @@ func TestClient_SubscribeEvents(t *testing.T) {
 	eventChan, err := client.SubscribeEvents(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedEvent, <-eventChan)
+	assert.Equal(t, expectedEvent, (<-eventChan).Data)
 }
 
 func TestClient_SubscribeBlocks(t *testing.T) {
@@ -64,7 +66,7 @@ func TestClient_SubscribeBlocks(t *testing.T) {
 	blockChan, err := client.SubscribeBlocks(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedBlock, <-blockChan)
+	assert.Equal(t, expectedBlock, (<-blockChan).Data)
 }
 
 func TestClient_SubscribeTransfers(t *testing.T) {
@@ -89,32 +91,7 @@ func TestClient_SubscribeTransfers(t *testing.T) {
 	transferChan, err := client.SubscribeTransfers(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedTransfer, <-transferChan)
-}
-
-func TestClient_SubscribeBeats(t *testing.T) {
-	query := "exampleQuery"
-	expectedBeat := &subscriptions.BeatMessage{}
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/subscriptions/beats", r.URL.Path)
-		assert.Equal(t, query, r.URL.RawQuery)
-
-		upgrader := websocket.Upgrader{}
-
-		conn, _ := upgrader.Upgrade(w, r, nil)
-		defer conn.Close()
-
-		conn.WriteJSON(expectedBeat)
-	}))
-	defer ts.Close()
-
-	client, err := NewClient(ts.URL)
-	assert.NoError(t, err)
-	beatChan, err := client.SubscribeBeats(query)
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedBeat, <-beatChan)
+	assert.Equal(t, expectedTransfer, (<-transferChan).Data)
 }
 
 func TestClient_SubscribeTxPool(t *testing.T) {
@@ -139,7 +116,7 @@ func TestClient_SubscribeTxPool(t *testing.T) {
 	pendingTxIDChan, err := client.SubscribeTxPool(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedPendingTxID, <-pendingTxIDChan)
+	assert.Equal(t, expectedPendingTxID, (<-pendingTxIDChan).Data)
 }
 
 func TestClient_SubscribeBeats2(t *testing.T) {
@@ -164,7 +141,7 @@ func TestClient_SubscribeBeats2(t *testing.T) {
 	beat2Chan, err := client.SubscribeBeats2(query)
 
 	assert.NoError(t, err)
-	assert.Equal(t, expectedBeat2, <-beat2Chan)
+	assert.Equal(t, expectedBeat2, (<-beat2Chan).Data)
 }
 func TestNewClient(t *testing.T) {
 	expectedHost := "example.com"
@@ -231,10 +208,6 @@ func TestClient_SubscribeError(t *testing.T) {
 			subscribeFunc: client.SubscribeTransfers,
 		},
 		{
-			name:          "SubscribeBeats",
-			subscribeFunc: client.SubscribeBeats,
-		},
-		{
 			name:          "SubscribeTxPool",
 			subscribeFunc: client.SubscribeTxPool,
 		},
@@ -258,4 +231,71 @@ func TestClient_SubscribeError(t *testing.T) {
 		err := result[1].Interface().(error)
 		assert.Error(t, err)
 	}
+}
+
+func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
+	query := ""
+	expectedError := "test error"
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/subscriptions/block", r.URL.Path)
+		assert.Equal(t, query, r.URL.RawQuery)
+
+		upgrader := websocket.Upgrader{}
+
+		conn, _ := upgrader.Upgrade(w, r, nil)
+		defer conn.Close()
+
+		// Send a message that causes an error on the client side
+		conn.WriteMessage(websocket.TextMessage, []byte(expectedError))
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL)
+	assert.NoError(t, err)
+	blockChan, err := client.SubscribeBlocks(query)
+
+	assert.NoError(t, err)
+
+	// Read the error from the event channel
+	event := <-blockChan
+	assert.Error(t, event.Error)
+	assert.True(t, errors.Is(event.Error, common.UnexpectedMsgErr))
+}
+
+func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
+	query := "exampleQuery"
+	expectedBlock := &blocks.JSONBlockSummary{}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/subscriptions/block", r.URL.Path)
+		assert.Equal(t, query, r.URL.RawQuery)
+
+		upgrader := websocket.Upgrader{}
+
+		conn, _ := upgrader.Upgrade(w, r, nil)
+
+		// Send a valid block to the client
+		conn.WriteJSON(expectedBlock)
+
+		// Simulate a server shutdown by closing the WebSocket connection
+		conn.Close()
+	}))
+	defer ts.Close()
+
+	client, err := NewClient(ts.URL)
+	assert.NoError(t, err)
+	blockChan, err := client.SubscribeBlocks(query)
+
+	assert.NoError(t, err)
+
+	// The first event should be the valid block
+	event := <-blockChan
+	assert.NoError(t, event.Error)
+	assert.Equal(t, expectedBlock, event.Data)
+
+	// The next event should be an error due to the server shutdown
+	event = <-blockChan
+	assert.Error(t, event.Error)
+	assert.Contains(t, event.Error.Error(), "websocket: close")
 }

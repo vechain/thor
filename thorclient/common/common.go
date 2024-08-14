@@ -12,10 +12,16 @@ import (
 )
 
 var (
-	NotFoundErr     = fmt.Errorf("not found")
-	Not200StatusErr = fmt.Errorf("not 200 status code")
+	NotFoundErr      = fmt.Errorf("not found")
+	Not200StatusErr  = fmt.Errorf("not 200 status code")
+	UnexpectedMsgErr = fmt.Errorf("unexpected message format")
 )
 
 type TxSendResult struct {
 	ID *thor.Bytes32
+}
+
+type EventWrapper[T any] struct {
+	Data  T
+	Error error
 }
