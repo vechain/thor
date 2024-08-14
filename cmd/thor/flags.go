@@ -150,11 +150,6 @@ var (
 		Value: "localhost:2112",
 		Usage: "metrics service listening address",
 	}
-	txPoolLimitFlag = cli.Uint64Flag{
-		Name:  "txpool-limit",
-		Value: 10000,
-		Usage: "set tx limit in pool",
-	}
 	txPoolLimitPerAccountFlag = cli.Uint64Flag{
 		Name:  "txpool-limit-per-account",
 		Value: 16,
@@ -179,6 +174,11 @@ var (
 		Name:  "gas-limit",
 		Value: 40_000_000,
 		Usage: "block gas limit(adaptive if set to 0)",
+	}
+	txPoolLimitFlag = cli.Uint64Flag{
+		Name:  "txpool-limit",
+		Value: 10000,
+		Usage: "set tx limit in pool",
 	}
 	genesisFlag = cli.StringFlag{
 		Name:  "genesis",
