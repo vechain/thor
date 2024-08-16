@@ -50,6 +50,7 @@ func New(
 	enableReqLogger bool,
 	enableMetrics bool,
 	logsLimit uint64,
+	corsAllowCredsEnabled bool,
 ) (http.HandlerFunc, func()) {
 	origins := strings.Split(strings.TrimSpace(allowedOrigins), ",")
 	for i, o := range origins {
@@ -102,11 +103,27 @@ func New(
 	}
 
 	handler := handlers.CompressHandler(router)
-	handler = handlers.CORS(
+	corsOptions := []handlers.CORSOption{
 		handlers.AllowedOrigins(origins),
 		handlers.AllowedHeaders([]string{"content-type", "x-genesis-id"}),
 		handlers.ExposedHeaders([]string{"x-genesis-id", "x-thorest-ver"}),
-	)(handler)
+	}
+
+	if corsAllowCredsEnabled {
+		corsOptions = append(corsOptions, handlers.AllowCredentials())
+
+		if len(origins) == 1 && origins[0] == "*" {
+			// uses the origin validator when allow credentials is enabled and the allowed origins is "*".
+			// browsers blocks the request when allow-origin is "*" and allow-credentials is true.
+			// origin validator always returns true, and the CORS handler will add $http_origin to allow-origin
+			// header, thus pass the browser's limit.
+			corsOptions = append(corsOptions, handlers.AllowedOriginValidator(func(origin string) bool {
+				return true
+			}))
+		}
+	}
+
+	handler = handlers.CORS(corsOptions...)(handler)
 
 	if enableReqLogger {
 		handler = RequestLoggerHandler(handler, logger)
