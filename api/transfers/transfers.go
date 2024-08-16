@@ -50,7 +50,7 @@ func (t *Transfers) filter(ctx context.Context, filter *TransferFilter) ([]*Filt
 	}
 	tLogs := make([]*FilteredTransfer, len(transfers))
 	for i, trans := range transfers {
-		tLogs[i] = convertTransfer(trans)
+		tLogs[i] = convertTransfer(trans, filter.Indexes)
 	}
 	return tLogs, nil
 }

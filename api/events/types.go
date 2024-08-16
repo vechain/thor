@@ -23,6 +23,8 @@ type LogMeta struct {
 	TxID           thor.Bytes32 `json:"txID"`
 	TxOrigin       thor.Address `json:"txOrigin"`
 	ClauseIndex    uint32       `json:"clauseIndex"`
+	LogIndex       *uint32      `json:"logIndex,omitempty"` // pointer for backwards compatibility
+	TxIndex        *uint32      `json:"txIndex,omitempty"`  // pointer for backwards compatibility
 }
 
 type TopicSet struct {
@@ -42,7 +44,7 @@ type FilteredEvent struct {
 }
 
 // convert a logdb.Event into a json format Event
-func convertEvent(event *logdb.Event) *FilteredEvent {
+func convertEvent(event *logdb.Event, indexes bool) *FilteredEvent {
 	fe := FilteredEvent{
 		Address: event.Address,
 		Data:    hexutil.Encode(event.Data),
@@ -55,6 +57,12 @@ func convertEvent(event *logdb.Event) *FilteredEvent {
 			ClauseIndex:    event.ClauseIndex,
 		},
 	}
+
+	if indexes {
+		fe.Meta.TxIndex = &event.TxIndex
+		fe.Meta.LogIndex = &event.LogIndex
+	}
+
 	fe.Topics = make([]*thor.Bytes32, 0)
 	for i := 0; i < 5; i++ {
 		if event.Topics[i] != nil {
@@ -99,6 +107,7 @@ type EventFilter struct {
 	Range       *Range           `json:"range"`
 	Options     *logdb.Options   `json:"options"`
 	Order       logdb.Order      `json:"order"`
+	Indexes     bool             `json:"indexes,omitempty"`
 }
 
 func convertEventFilter(chain *chain.Chain, filter *EventFilter) (*logdb.EventFilter, error) {
