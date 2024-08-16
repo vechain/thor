@@ -328,6 +328,7 @@ func (c *Consensus) verifyBlock(blk *block.Block, state *state.State, blockConfl
 		totalGasUsed += receipt.GasUsed
 		receipts = append(receipts, receipt)
 		processedTxs[tx.ID()] = receipt.Reverted
+		metricCoefBucket().Observe(int64(tx.GasPriceCoef()))
 	}
 
 	if header.GasUsed() != totalGasUsed {
