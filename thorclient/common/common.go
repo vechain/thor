@@ -21,6 +21,7 @@ type TxSendResult struct {
 	ID *thor.Bytes32
 }
 
+// EventWrapper is used to return errors from the websocket alongside the data
 type EventWrapper[T any] struct {
 	Data  T
 	Error error

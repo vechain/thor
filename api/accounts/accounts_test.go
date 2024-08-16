@@ -115,9 +115,9 @@ func TestAccount(t *testing.T) {
 		"getAccountWithGenesisRevision":        getAccountWithGenesisRevision,
 		"getAccountWithFinalizedRevision":      getAccountWithFinalizedRevision,
 		"getCode":                              getCode,
-		"getCodeWithNonExisitingRevision":      getCodeWithNonExisitingRevision,
+		"getCodeWithNonExistingRevision":       getCodeWithNonExistingRevision,
 		"getStorage":                           getStorage,
-		"getStorageWithNonExisitingRevision":   getStorageWithNonExisitingRevision,
+		"getStorageWithNonExistingRevision":    getStorageWithNonExistingRevision,
 		"deployContractWithCall":               deployContractWithCall,
 		"callContract":                         callContract,
 		"callContractWithNonExisitingRevision": callContractWithNonExisitingRevision,
@@ -207,7 +207,7 @@ func getCode(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
-func getCodeWithNonExisitingRevision(t *testing.T) {
+func getCodeWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
 	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+revision64Len)
@@ -240,7 +240,7 @@ func getStorage(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
-func getStorageWithNonExisitingRevision(t *testing.T) {
+func getStorageWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
 	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+revision64Len)
