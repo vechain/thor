@@ -19,7 +19,7 @@ import (
 )
 
 func TestWs_Error(t *testing.T) {
-	client := NewClient("http://test.com")
+	client := New("http://test.com")
 
 	for _, tc := range []struct {
 		name     string
@@ -123,7 +123,7 @@ func TestRevision(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := NewClient(ts.URL)
+			client := New(ts.URL)
 
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
@@ -163,7 +163,7 @@ func TestGetTransaction(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := NewClient(ts.URL)
+			client := New(ts.URL)
 			fn := reflect.ValueOf(tc.function)
 			fn.Call([]reflect.Value{reflect.ValueOf(client)})
 		})

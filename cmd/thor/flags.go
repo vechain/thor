@@ -151,6 +151,21 @@ var (
 		Usage: "metrics service listening address",
 	}
 
+	enableAdminFlag = cli.BoolFlag{
+		Name:  "enable-admin",
+		Usage: "enables admin service",
+	}
+	adminAddrFlag = cli.StringFlag{
+		Name:  "admin-addr",
+		Value: "localhost:2113",
+		Usage: "admin service listening address",
+	}
+	txPoolLimitPerAccountFlag = cli.Uint64Flag{
+		Name:  "txpool-limit-per-account",
+		Value: 16,
+		Usage: "set tx limit per account in pool",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",
@@ -174,11 +189,6 @@ var (
 		Name:  "txpool-limit",
 		Value: 10000,
 		Usage: "set tx limit in pool",
-	}
-	txPoolLimitPerAccountFlag = cli.Uint64Flag{
-		Name:  "txpool-limit-per-account",
-		Value: 16,
-		Usage: "set tx limit per account in pool",
 	}
 	genesisFlag = cli.StringFlag{
 		Name:  "genesis",

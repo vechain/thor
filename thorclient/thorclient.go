@@ -30,13 +30,13 @@ type Client struct {
 	wsConn *wsclient.Client
 }
 
-func NewClient(url string) *Client {
+func New(url string) *Client {
 	return &Client{
 		conn: httpclient.NewClient(url),
 	}
 }
 
-func NewClientWithWS(url string) (*Client, error) {
+func NewWithWS(url string) (*Client, error) {
 	wsClient, err := wsclient.NewClient(url)
 	if err != nil {
 		return nil, err
