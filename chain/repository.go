@@ -196,6 +196,7 @@ func (r *Repository) saveBlock(block *block.Block, receipts tx.Receipts, conflic
 		buf := make([]byte, 64)
 		copy(buf[32:], id[:])
 		for i, tx := range txs {
+			metricCoefBucket().Observe(int64(tx.GasPriceCoef()))
 			txid := tx.ID()
 			summary.Txs = append(summary.Txs, txid)
 
