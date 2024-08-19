@@ -151,6 +151,12 @@ var (
 		Usage: "metrics service listening address",
 	}
 
+	allowedTracersFlag = cli.StringFlag{
+		Name:  "allowed-tracers",
+		Value: "all",
+		Usage: "define allowed API tracers",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",

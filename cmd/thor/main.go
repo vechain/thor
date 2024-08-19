@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -35,6 +36,7 @@ import (
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/vechain/thor/v2/tracers/js"
+	_ "github.com/vechain/thor/v2/tracers/logger"
 	_ "github.com/vechain/thor/v2/tracers/native"
 )
 
@@ -93,6 +95,7 @@ func main() {
 			disablePrunerFlag,
 			enableMetricsFlag,
 			metricsAddrFlag,
+			allowedTracersFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -125,6 +128,7 @@ func main() {
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
+					allowedTracersFlag,
 				},
 				Action: soloAction,
 			},
@@ -242,6 +246,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -380,6 +385,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 

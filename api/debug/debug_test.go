@@ -52,6 +52,7 @@ func TestDebug(t *testing.T) {
 
 	// /tracers endpoint
 	for name, tt := range map[string]func(*testing.T){
+		"testTraceClauseWithEmptyTracerName":       testTraceClauseWithEmptyTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
 		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
 		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
@@ -156,13 +157,18 @@ func TestStorageRangeMaxResult(t *testing.T) {
 	assert.Equal(t, 10, len(storageRangeRes.Storage))
 }
 
+func testTraceClauseWithEmptyTracerName(t *testing.T) {
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{}, 403)
+	assert.Contains(t, strings.TrimSpace(res), "unable to create custom tracer")
+}
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
-	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{}, 400)
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "logger"}, 400)
 	assert.Equal(t, "target: unsupported", strings.TrimSpace(res))
 }
 
 func testTraceClauseWithBadBlockId(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: "badBlockId/x/x",
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
@@ -177,6 +183,7 @@ func testTraceClauseWithNonExistingBlockId(t *testing.T) {
 
 func testTraceClauseWithBadTxId(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/badTxId/x", blk.Header().ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
@@ -186,6 +193,7 @@ func testTraceClauseWithBadTxId(t *testing.T) {
 func testTraceClauseWithNonExistingTx(t *testing.T) {
 	nonExistingTxId := "0x4500ade0d72115abfc77571aef752df45ba5e87ca81fbd67fbfc46d455b17f91"
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), nonExistingTxId),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 403)
@@ -195,6 +203,7 @@ func testTraceClauseWithNonExistingTx(t *testing.T) {
 func testTraceClauseWithBadClauseIndex(t *testing.T) {
 	// Clause index is not a number
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/%s/x", blk.Header().ID(), transaction.ID()),
 	}
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
@@ -202,6 +211,7 @@ func testTraceClauseWithBadClauseIndex(t *testing.T) {
 
 	// Clause index is out of range
 	traceClauseOption = &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/%s/%d", blk.Header().ID(), transaction.ID(), uint64(math.MaxUint64)),
 	}
 	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", traceClauseOption, 400)
@@ -237,6 +247,7 @@ func testTraceClauseWithCustomTracer(t *testing.T) {
 
 func testTraceClause(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/%s/1", blk.Header().ID(), transaction.ID()),
 	}
 	expectedExecutionResult := &logger.ExecutionResult{
@@ -256,6 +267,7 @@ func testTraceClause(t *testing.T) {
 
 func testTraceClauseWithTxIndexOutOfBound(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/10/1", blk.Header().ID()),
 	}
 
@@ -266,6 +278,7 @@ func testTraceClauseWithTxIndexOutOfBound(t *testing.T) {
 
 func testTraceClauseWithClauseIndexOutOfBound(t *testing.T) {
 	traceClauseOption := &TraceClauseOption{
+		Name:   "logger",
 		Target: fmt.Sprintf("%s/%s/10", blk.Header().ID(), transaction.ID()),
 	}
 
@@ -280,7 +293,7 @@ func testHandleTraceCallWithMalformedBodyRequest(t *testing.T) {
 }
 
 func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
-	traceCallOption := &TraceCallOption{}
+	traceCallOption := &TraceCallOption{Name: "logger"}
 	expectedExecutionResult := &logger.ExecutionResult{
 		Gas:         0,
 		Failed:      false,
@@ -298,7 +311,7 @@ func testHandleTraceCallWithEmptyTraceCallOption(t *testing.T) {
 }
 
 func testTraceCallNextBlock(t *testing.T) {
-	traceCallOption := &TraceCallOption{}
+	traceCallOption := &TraceCallOption{Name: "logger"}
 	httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision=next", traceCallOption, 200)
 }
 
@@ -306,6 +319,7 @@ func testHandleTraceCall(t *testing.T) {
 	addr := randAddress()
 	provedWork := math.HexOrDecimal256(*big.NewInt(1000))
 	traceCallOption := &TraceCallOption{
+		Name:       "logger",
 		To:         &addr,
 		Value:      &math.HexOrDecimal256{},
 		Data:       "0x00",
@@ -349,7 +363,7 @@ func testHandleTraceCallWithValidRevisions(t *testing.T) {
 			StructLogs:  make([]logger.StructLogRes, 0),
 		}
 
-		res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{}, 200)
+		res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers/call?revision="+revision, &TraceCallOption{Name: "logger"}, 200)
 
 		var parsedExecutionRes *logger.ExecutionResult
 		if err := json.Unmarshal([]byte(res), &parsedExecutionRes); err != nil {
@@ -391,6 +405,7 @@ func testHandleTraceCallWithMalfomredRevision(t *testing.T) {
 func testHandleTraceCallWithInsufficientGas(t *testing.T) {
 	addr := randAddress()
 	traceCallOption := &TraceCallOption{
+		Name:       "logger",
 		To:         &addr,
 		Value:      &math.HexOrDecimal256{},
 		Data:       "0x00",
@@ -410,6 +425,7 @@ func testHandleTraceCallWithInsufficientGas(t *testing.T) {
 func testHandleTraceCallWithBadBlockRef(t *testing.T) {
 	addr := randAddress()
 	traceCallOption := &TraceCallOption{
+		Name:       "logger",
 		To:         &addr,
 		Value:      &math.HexOrDecimal256{},
 		Data:       "0x00",
@@ -429,6 +445,7 @@ func testHandleTraceCallWithBadBlockRef(t *testing.T) {
 func testHandleTraceCallWithInvalidLengthBlockRef(t *testing.T) {
 	addr := randAddress()
 	traceCallOption := &TraceCallOption{
+		Name:       "logger",
 		To:         &addr,
 		Value:      &math.HexOrDecimal256{},
 		Data:       "0x00",
@@ -569,7 +586,8 @@ func initDebugServer(t *testing.T) {
 
 	forkConfig := thor.GetForkConfig(b.Header().ID())
 	router := mux.NewRouter()
-	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo))
+	allTracersEnabled := map[string]interface{}{"all": new(interface{})}
+	debug = New(repo, stater, forkConfig, 21000, true, solo.NewBFTEngine(repo), allTracersEnabled)
 	debug.Mount(router, "/debug")
 	ts = httptest.NewServer(router)
 }
