@@ -9,6 +9,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -19,15 +20,19 @@ import (
 	"github.com/vechain/thor/v2/log"
 )
 
-func initLogger(lvl int) {
+func initLogger(lvl int) *slog.LevelVar {
 	logLevel := log.FromLegacyLevel(lvl)
+	var level slog.LevelVar
+	level.Set(logLevel)
 	output := io.Writer(os.Stdout)
 	useColor := (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd())) && os.Getenv("TERM") != "dumb"
-	handler := log.NewTerminalHandlerWithLevel(output, logLevel, useColor)
+	handler := log.NewTerminalHandlerWithLevel(output, &level, useColor)
 	log.SetDefault(log.NewLogger(handler))
 	ethlog.Root().SetHandler(&ethLogger{
 		logger: log.WithContext("pkg", "geth"),
 	})
+
+	return &level
 }
 
 type ethLogger struct {

@@ -93,6 +93,8 @@ func main() {
 			disablePrunerFlag,
 			enableMetricsFlag,
 			metricsAddrFlag,
+			adminAddrFlag,
+			enableAdminFlag,
 			txPoolLimitPerAccountFlag,
 		},
 		Action: defaultAction,
@@ -126,6 +128,8 @@ func main() {
 					disablePrunerFlag,
 					enableMetricsFlag,
 					metricsAddrFlag,
+					adminAddrFlag,
+					enableAdminFlag,
 				},
 				Action: soloAction,
 			},
@@ -157,7 +161,7 @@ func defaultAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -169,6 +173,16 @@ func defaultAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); close() }()
 	}
 
 	gene, forkConfig, err := selectGenesis(ctx)
@@ -256,7 +270,7 @@ func defaultAction(ctx *cli.Context) error {
 	}
 	defer func() { log.Info("stopping API server..."); srvCloser() }()
 
-	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL)
+	printStartupMessage2(gene, apiURL, p2pCommunicator.Enode(), metricsURL, adminURL)
 
 	if err := p2pCommunicator.Start(); err != nil {
 		return err
@@ -288,7 +302,8 @@ func soloAction(ctx *cli.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "parse verbosity flag")
 	}
-	initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
+
+	logLevel := initLogger(lvl, ctx.Bool(jsonLogsFlag.Name))
 
 	// enable metrics as soon as possible
 	metricsURL := ""
@@ -300,6 +315,16 @@ func soloAction(ctx *cli.Context) error {
 		}
 		metricsURL = url
 		defer func() { log.Info("stopping metrics server..."); close() }()
+	}
+
+	adminURL := ""
+	if ctx.Bool(enableAdminFlag.Name) {
+		url, close, err := startAdminServer(ctx.String(adminAddrFlag.Name), logLevel)
+		if err != nil {
+			return fmt.Errorf("unable to start admin server - %w", err)
+		}
+		adminURL = url
+		defer func() { log.Info("stopping admin server..."); close() }()
 	}
 
 	var (
@@ -402,7 +427,7 @@ func soloAction(ctx *cli.Context) error {
 		return errors.New("block-interval cannot be zero")
 	}
 
-	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL)
+	printSoloStartupMessage(gene, repo, instanceDir, apiURL, forkConfig, metricsURL, adminURL)
 
 	optimizer := optimizer.New(mainDB, repo, !ctx.Bool(disablePrunerFlag.Name))
 	defer func() { log.Info("stopping optimizer..."); optimizer.Stop() }()
