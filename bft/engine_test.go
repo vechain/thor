@@ -5,11 +5,11 @@
 package bft
 
 import (
-	"math"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
+	"github.com/vechain/thor/v2/block"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/muxdb"
@@ -29,14 +29,13 @@ type TestBFT struct {
 
 const MaxBlockProposers = 11
 
-var devAccounts = genesis.DevAccounts()
-var defaultFC = thor.ForkConfig{
-	VIP191:    math.MaxUint32,
-	ETH_CONST: math.MaxUint32,
-	BLOCKLIST: math.MaxUint32,
-	ETH_IST:   math.MaxUint32,
-	VIP214:    math.MaxUint32,
-	FINALITY:  0,
+var (
+	devAccounts = genesis.DevAccounts()
+	defaultFC   = thor.NoFork
+)
+
+func init() {
+	defaultFC.FINALITY = 0
 }
 
 func newTestBft(forkCfg thor.ForkConfig) (*TestBFT, error) {
@@ -139,8 +138,10 @@ func (test *TestBFT) newBlock(parentSummary *chain.BlockSummary, master genesis.
 		return nil, err
 	}
 
-	if err = test.engine.CommitBlock(b.Header(), false); err != nil {
-		return nil, err
+	if b.Header().Number() >= test.fc.FINALITY {
+		if err = test.engine.CommitBlock(b.Header(), false); err != nil {
+			return nil, err
+		}
 	}
 
 	return test.repo.GetBlockSummary(b.Header().ID())
@@ -208,8 +209,10 @@ func (test *TestBFT) pack(parentID thor.Bytes32, shouldVote bool, best bool) (*c
 		return nil, err
 	}
 
-	if err := test.engine.CommitBlock(blk.Header, true); err != nil {
-		return nil, err
+	if blk.Header.Number() >= test.fc.FINALITY {
+		if err := test.engine.CommitBlock(blk.Header, true); err != nil {
+			return nil, err
+		}
 	}
 
 	if best {
@@ -629,6 +632,20 @@ func TestGetVote(t *testing.T) {
 
 				assert.Equal(t, false, v)
 			},
+		}, {
+			"test findCheckpointByQuality edge case, should not fail", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				testBFT.fastForwardWithMinority(thor.CheckpointInterval * 3)
+				testBFT.fastForward(thor.CheckpointInterval*1 + 3)
+				_, err = testBFT.engine.ShouldVote(testBFT.repo.BestBlockSummary().Header.ID())
+				if err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
 	}
 
@@ -860,95 +877,172 @@ func TestJustifier(t *testing.T) {
 }
 
 func TestJustified(t *testing.T) {
-	testBFT, err := newTestBft(defaultFC)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name     string
+		testFunc func(*testing.T)
+	}{
+		{
+			"first several rounds, never justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				for i := 0; i < 3*thor.CheckpointInterval; i++ {
+					if err = testBFT.fastForwardWithMinority(1); err != nil {
+						t.Fatal(err)
+					}
+
+					justified, err := testBFT.engine.Justified()
+					assert.Nil(t, err)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+				}
+			},
+		}, {
+			"first several rounds, get justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				for i := 0; i < 2*thor.CheckpointInterval-2; i++ {
+					if err = testBFT.fastForward(1); err != nil {
+						t.Fatal(err)
+					}
+
+					justified, err := testBFT.engine.Justified()
+					assert.Nil(t, err)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+				}
+
+				if err = testBFT.fastForward(1); err != nil {
+					t.Fatal(err)
+				}
+				justified, err := testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+			},
+		}, {
+			"first three not justified rounds, then justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if err = testBFT.fastForwardWithMinority(3*thor.CheckpointInterval - 1); err != nil {
+					t.Fatal(err)
+				}
+
+				justified, err := testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
+				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+
+				if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+					t.Fatal(err)
+				}
+				justified, err = testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+			},
+		}, {
+			"get finalized, then justified", func(t *testing.T) {
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if err = testBFT.fastForward(3*thor.CheckpointInterval - 1); err != nil {
+					t.Fatal(err)
+				}
+
+				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(testBFT.engine.Finalized()))
+
+				if err = testBFT.fastForward(thor.CheckpointInterval - 1); err != nil {
+					t.Fatal(err)
+				}
+
+				justified, err := testBFT.engine.Justified()
+				assert.Nil(t, err)
+				// current epoch is not concluded
+				assert.Equal(t, uint32(2*thor.CheckpointInterval), block.Number(justified))
+
+				if err = testBFT.fastForward(1); err != nil {
+					t.Fatal(err)
+				}
+				justified, err = testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(3*thor.CheckpointInterval), block.Number(justified))
+			},
+		}, {
+			"get finalized, not justified, then justified", func(t *testing.T) {
+				type tJustified = justified
+				testBFT, err := newTestBft(defaultFC)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if err = testBFT.fastForward(3*thor.CheckpointInterval - 1); err != nil {
+					t.Fatal(err)
+				}
+
+				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(testBFT.engine.Finalized()))
+
+				if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
+					t.Fatal(err)
+				}
+				justified, err := testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(2*thor.CheckpointInterval), block.Number(justified))
+
+				if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
+					t.Fatal(err)
+				}
+				justified, err = testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(4*thor.CheckpointInterval), block.Number(justified))
+				// test cache
+				assert.Equal(t, justified, testBFT.engine.justified.Load().(tJustified).value)
+			},
+		}, {
+			"fork in the middle, get justified", func(t *testing.T) {
+				fc := defaultFC
+				fc.FINALITY = thor.CheckpointInterval
+
+				testBFT, err := newTestBft(fc)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				for i := 0; i < 2*thor.CheckpointInterval-2; i++ {
+					if err = testBFT.fastForward(1); err != nil {
+						t.Fatal(err)
+					}
+
+					justified, err := testBFT.engine.Justified()
+					assert.Nil(t, err)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), justified)
+					assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+				}
+
+				if err = testBFT.fastForward(1); err != nil {
+					t.Fatal(err)
+				}
+				justified, err := testBFT.engine.Justified()
+				assert.Nil(t, err)
+				assert.Equal(t, uint32(thor.CheckpointInterval), block.Number(justified))
+				assert.Equal(t, testBFT.repo.GenesisBlock().Header().ID(), testBFT.engine.Finalized())
+			},
+		},
 	}
 
-	if err = testBFT.fastForward(thor.CheckpointInterval*3 - 1); err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.testFunc(t)
+		})
 	}
-
-	// chain stops the end of third bft round,should commit the second checkpoint
-	finalized, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-	jc, err := testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	actual, err := testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, actual)
-	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
-	again, err := testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, again)
-	assert.Equal(t, jc, testBFT.engine.justified.Load().(justified).value)
-
-	if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
-		t.Fatal(err)
-	}
-
-	// move forward with minority, should not change finalized and justified
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-	actual, err = testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, actual)
-
-	if err = testBFT.fastForwardWithMinority(thor.CheckpointInterval); err != nil {
-		t.Fatal(err)
-	}
-
-	// move forward with minority, should not change finalized and justified
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-	actual, err = testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, actual)
-
-	// move forward with majority
-	if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
-		t.Fatal(err)
-	}
-
-	// finalized should move forward 1 epoch
-	finalized, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-	jc, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actual, err = testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, actual)
-
-	// move forward with majority
-	if err = testBFT.fastForward(thor.CheckpointInterval); err != nil {
-		t.Fatal(err)
-	}
-
-	// finalized should be head(concluded) - 2 epoch
-	finalized, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 5)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, finalized, testBFT.engine.Finalized())
-
-	// justified should be head(concluded) -1 epoch
-	jc, err = testBFT.repo.NewBestChain().GetBlockID(thor.CheckpointInterval * 6)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actual, err = testBFT.engine.Justified()
-	assert.Nil(t, err)
-	assert.Equal(t, jc, actual)
 }

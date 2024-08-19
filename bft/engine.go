@@ -85,65 +85,50 @@ func (engine *BFTEngine) Finalized() thor.Bytes32 {
 	return engine.finalized.Load().(thor.Bytes32)
 }
 
+// Justified returns the justified checkpoint.
 func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
+	head := engine.repo.BestBlockSummary().Header
 	finalized := engine.Finalized()
 
-	if block.Number(finalized) == 0 {
+	// if head is in the first epoch and not concluded yet
+	if head.Number() < getCheckPoint(engine.forkConfig.FINALITY)+thor.CheckpointInterval-1 {
 		return finalized, nil
 	}
 
-	chain := engine.repo.NewBestChain()
-	headNumber := block.Number(chain.HeadID())
-
-	from := getStorePoint(headNumber)
-	if from > headNumber {
-		// current epoch is not concluded yet
-		from -= thor.CheckpointInterval
+	// find the recent concluded checkpoint
+	concluded := getCheckPoint(head.Number())
+	if head.Number() < getStorePoint(head.Number()) {
+		concluded -= thor.CheckpointInterval
 	}
 
-	fromId, err := chain.GetBlockID(from)
+	headChain := engine.repo.NewChain(head.ID())
+
+	// storeID is the block id where an epoch concluded
+	storeID, err := headChain.GetBlockID(getStorePoint(concluded))
 	if err != nil {
 		return thor.Bytes32{}, err
 	}
 
-	if val := engine.justified.Load(); val != nil && fromId == val.(justified).search {
+	if val := engine.justified.Load(); val != nil && storeID == val.(justified).search {
 		return val.(justified).value, nil
 	}
 
-	id := fromId
-	for {
-		quality, err := engine.getQuality(id)
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-
-		parentID, err := chain.GetBlockID(block.Number(id) - thor.CheckpointInterval)
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-
-		parentQuality, err := engine.getQuality(parentID)
-		if err != nil {
-			return thor.Bytes32{}, err
-		}
-
-		if quality > parentQuality {
-			checkpoint, err := chain.GetBlockID(getCheckPoint(block.Number(id)))
-			if err != nil {
-				return thor.Bytes32{}, err
-			}
-
-			engine.justified.Store(justified{search: fromId, value: checkpoint})
-			return checkpoint, nil
-		}
-
-		if getCheckPoint(block.Number(parentID)) <= block.Number(finalized) {
-			// this should never happen, if it does, something wrong with the storage
-			return thor.Bytes32{}, errors.New("failed to find the justified checkpoint")
-		}
-
-		id = parentID
+	quality, err := engine.getQuality(storeID)
+	if err != nil {
+		return thor.Bytes32{}, err
 	}
+
+	if quality == 0 {
+		return finalized, nil
+	}
+
+	checkpoint, err := engine.findCheckpointByQuality(quality, finalized, storeID)
+	if err != nil {
+		return thor.Bytes32{}, err
+	}
+
+	engine.justified.Store(justified{search: storeID, value: checkpoint})
+	return checkpoint, nil
 }
 
 // Accepts checks if the given block is on the same branch of finalized checkpoint.
@@ -192,7 +177,7 @@ func (engine *BFTEngine) CommitBlock(header *block.Header, isPacking bool) error
 		engine.caches.quality.Add(header.ID(), state.Quality)
 
 		if state.Committed && state.Quality > 1 {
-			id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ParentID())
+			id, err := engine.findCheckpointByQuality(state.Quality-1, engine.Finalized(), header.ID())
 			if err != nil {
 				return err
 			}
@@ -251,17 +236,23 @@ func (engine *BFTEngine) ShouldVote(parentID thor.Bytes32) (bool, error) {
 
 	headQuality := st.Quality
 	finalized := engine.Finalized()
+	chain := engine.repo.NewChain(parentID)
 	// most recent justified checkpoint
 	var recentJC thor.Bytes32
 	if st.Justified {
 		// if justified in this round, use this round's checkpoint
-		checkpoint, err := engine.repo.NewChain(parentID).GetBlockID(getCheckPoint(block.Number(parentID)))
+		checkpoint, err := chain.GetBlockID(getCheckPoint(block.Number(parentID)))
 		if err != nil {
 			return false, err
 		}
 		recentJC = checkpoint
 	} else {
-		checkpoint, err := engine.findCheckpointByQuality(headQuality, finalized, parentID)
+		// if current round is not justified, find the most recent justified checkpoint
+		prev, err := chain.GetBlockID(getStorePoint(block.Number(parentID) - thor.CheckpointInterval))
+		if err != nil {
+			return false, err
+		}
+		checkpoint, err := engine.findCheckpointByQuality(headQuality, finalized, prev)
 		if err != nil {
 			return false, err
 		}
@@ -347,7 +338,8 @@ func (engine *BFTEngine) computeState(header *block.Header) (*bftState, error) {
 }
 
 // findCheckpointByQuality finds the first checkpoint reaches the given quality.
-func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, parentID thor.Bytes32) (blockID thor.Bytes32, err error) {
+// It is caller's responsibility to ensure the epoch that headID belongs to is concluded.
+func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, headID thor.Bytes32) (blockID thor.Bytes32, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -360,7 +352,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		searchStart = getCheckPoint(engine.forkConfig.FINALITY)
 	}
 
-	c := engine.repo.NewChain(parentID)
+	c := engine.repo.NewChain(headID)
 	get := func(i int) (uint32, error) {
 		id, err := c.GetBlockID(getStorePoint(searchStart + uint32(i)*thor.CheckpointInterval))
 		if err != nil {
@@ -369,7 +361,8 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		return engine.getQuality(id)
 	}
 
-	n := int((block.Number(parentID) + 1 - searchStart) / thor.CheckpointInterval)
+	// sort.Search searches from [0, n)
+	n := int((block.Number(headID)-searchStart)/thor.CheckpointInterval) + 1
 	num := sort.Search(n, func(i int) bool {
 		quality, err := get(i)
 		if err != nil {
@@ -379,6 +372,7 @@ func (engine *BFTEngine) findCheckpointByQuality(target uint32, finalized, paren
 		return quality >= target
 	})
 
+	// n means not found for sort.Search
 	if num == n {
 		return thor.Bytes32{}, errors.New("failed find the block by quality")
 	}
