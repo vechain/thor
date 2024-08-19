@@ -168,6 +168,7 @@ bin/thor -h
 | `--api-call-gas-limit`      | Limit contract call gas (default: 50000000)                                                 |
 | `--api-backtrace-limit`     | Limit the distance between 'position' and best block for subscriptions APIs (default: 1000) |
 | `--api-allow-custom-tracer` | Allow custom JS tracer to be used for the tracer API                                        |
+| `--api-allowed-tracers`     | Comma-separated list of allowed tracers (default: "all")                                    |
 | `--enable-api-logs`         | Enables API requests logging                                                                |
 | `--api-logs-limit`          | Limit the number of logs returned by /logs API (default: 1000)                              |
 | `--verbosity`               | Log verbosity (0-9) (default: 3)                                                            |
