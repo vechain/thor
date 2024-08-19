@@ -217,7 +217,7 @@ func TestClient_GetExpandedBlock(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	block, err := client.GetExpandedBlock(blockID)
+	block, err := client.GetBlockExpanded(blockID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedBlock, block)
@@ -394,9 +394,9 @@ func TestClient_Errors(t *testing.T) {
 			function: func(client *Client) ([]byte, error) { return client.GetStorage(&addr, &thor.Bytes32{}) },
 		},
 		{
-			name:     "GetExpandedBlock",
+			name:     "GetBlockExpanded",
 			path:     "/blocks/" + blockID + "?expanded=true",
-			function: func(client *Client) (*blocks.JSONExpandedBlock, error) { return client.GetExpandedBlock(blockID) },
+			function: func(client *Client) (*blocks.JSONExpandedBlock, error) { return client.GetBlockExpanded(blockID) },
 		},
 		{
 			name:     "GetBlock",

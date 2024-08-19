@@ -139,7 +139,7 @@ func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32) ([]byte, erro
 	return c.httpGET(c.url + "/accounts/" + addr.String() + "/key/" + key.String())
 }
 
-func (c *Client) GetExpandedBlock(blockID string) (*blocks.JSONExpandedBlock, error) {
+func (c *Client) GetBlockExpanded(blockID string) (*blocks.JSONExpandedBlock, error) {
 	body, err := c.httpGET(c.url + "/blocks/" + blockID + "?expanded=true")
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve block - %w", err)

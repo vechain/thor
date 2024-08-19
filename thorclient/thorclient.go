@@ -26,13 +26,13 @@ import (
 )
 
 type Client struct {
-	conn   *httpclient.Client
-	wsConn *wsclient.Client
+	httpConn *httpclient.Client
+	wsConn   *wsclient.Client
 }
 
 func New(url string) *Client {
 	return &Client{
-		conn: httpclient.NewClient(url),
+		httpConn: httpclient.NewClient(url),
 	}
 }
 
@@ -43,21 +43,24 @@ func NewWithWS(url string) (*Client, error) {
 	}
 
 	return &Client{
-		conn:   httpclient.NewClient(url),
-		wsConn: wsClient,
+		httpConn: httpclient.NewClient(url),
+		wsConn:   wsClient,
 	}, nil
 }
 
-func (c *Client) RawClient() *httpclient.Client {
-	return c.conn
+func (c *Client) RawHTTPClient() *httpclient.Client {
+	return c.httpConn
+}
+func (c *Client) RawWSClient() *wsclient.Client {
+	return c.wsConn
 }
 
 func (c *Client) GetTransactionReceipt(id *thor.Bytes32) (*transactions.Receipt, error) {
-	return c.conn.GetTransactionReceipt(id)
+	return c.httpConn.GetTransactionReceipt(id)
 }
 
 func (c *Client) InspectClauses(calldata *accounts.BatchCallData) ([]*accounts.CallResult, error) {
-	return c.conn.InspectClauses(calldata)
+	return c.httpConn.InspectClauses(calldata)
 }
 
 func (c *Client) InspectTxClauses(tx *tx.Transaction, senderAddr *thor.Address) ([]*accounts.CallResult, error) {
@@ -71,63 +74,59 @@ func (c *Client) SendTransaction(tx *tx.Transaction) (*common.TxSendResult, erro
 		return nil, fmt.Errorf("unable to encode transaction - %w", err)
 	}
 
-	return c.SendEncodedTransaction(rlpTx)
+	return c.SendTransactionRaw(rlpTx)
 }
 
-func (c *Client) SendEncodedTransaction(rlpTx []byte) (*common.TxSendResult, error) {
-	return c.conn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
+func (c *Client) SendTransactionRaw(rlpTx []byte) (*common.TxSendResult, error) {
+	return c.httpConn.SendTransaction(&transactions.RawTx{Raw: hexutil.Encode(rlpTx)})
 }
 
 func (c *Client) FilterEvents(req *events.EventFilter) ([]events.FilteredEvent, error) {
-	return c.conn.FilterEvents(req)
+	return c.httpConn.FilterEvents(req)
 }
 
 func (c *Client) FilterTransfers(req *events.EventFilter) ([]*transfers.FilteredTransfer, error) {
-	return c.conn.FilterTransfers(req)
+	return c.httpConn.FilterTransfers(req)
 }
 
 func (c *Client) GetAccount(addr *thor.Address) (*accounts.Account, error) {
-	return c.conn.GetAccount(addr, "")
+	return c.httpConn.GetAccount(addr, "")
 }
 
 func (c *Client) GetAccountForRevision(addr *thor.Address, revision string) (*accounts.Account, error) {
-	return c.conn.GetAccount(addr, revision)
+	return c.httpConn.GetAccount(addr, revision)
 }
 
 func (c *Client) GetAccountCode(addr *thor.Address) ([]byte, error) {
-	return c.conn.GetAccountCode(addr, "")
+	return c.httpConn.GetAccountCode(addr, "")
 }
 
 func (c *Client) GetAccountCodeForRevision(addr *thor.Address, revision string) ([]byte, error) {
-	return c.conn.GetAccountCode(addr, revision)
+	return c.httpConn.GetAccountCode(addr, revision)
 }
 
 func (c *Client) GetStorage(addr *thor.Address, key *thor.Bytes32) ([]byte, error) {
-	return c.conn.GetStorage(addr, key)
+	return c.httpConn.GetStorage(addr, key)
 }
 
-func (c *Client) GetExpandedBlock(block string) (blocks *blocks.JSONExpandedBlock, err error) {
-	return c.conn.GetExpandedBlock(block)
+func (c *Client) GetBlockExpanded(block string) (blocks *blocks.JSONExpandedBlock, err error) {
+	return c.httpConn.GetBlockExpanded(block)
 }
 
 func (c *Client) GetBlock(block string) (blocks *blocks.JSONBlockSummary, err error) {
-	return c.conn.GetBlock(block)
-}
-
-func (c *Client) GetBestBlock() (blocks *blocks.JSONExpandedBlock, err error) {
-	return c.GetExpandedBlock("best")
+	return c.httpConn.GetBlock(block)
 }
 
 func (c *Client) GetTransaction(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.conn.GetTransaction(id, false)
+	return c.httpConn.GetTransaction(id, false)
 }
 
-func (c *Client) GetPendingTransaction(id thor.Bytes32) (*transactions.Transaction, error) {
-	return c.conn.GetTransaction(&id, true)
+func (c *Client) GetTransactionPending(id thor.Bytes32) (*transactions.Transaction, error) {
+	return c.httpConn.GetTransaction(&id, true)
 }
 
 func (c *Client) GetPeers() ([]*node.PeerStats, error) {
-	return c.conn.GetPeers()
+	return c.httpConn.GetPeers()
 }
 
 func (c *Client) ChainTag() (byte, error) {
@@ -185,10 +184,10 @@ func convertToBatchCallData(tx *tx.Transaction, addr *thor.Address) *accounts.Ba
 	return &accounts.BatchCallData{
 		Clauses:    cls,
 		Gas:        tx.Gas(),
-		ProvedWork: nil,
+		ProvedWork: nil, // todo hook this field
 		Caller:     addr,
-		GasPayer:   nil,
-		GasPrice:   nil,
+		GasPayer:   nil, // todo hook this field
+		GasPrice:   nil, // todo hook this field
 		Expiration: tx.Expiration(),
 		BlockRef:   encodedBlockRef,
 	}
