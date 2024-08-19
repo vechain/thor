@@ -95,6 +95,7 @@ func main() {
 			metricsAddrFlag,
 			adminAddrFlag,
 			enableAdminFlag,
+			txPoolLimitPerAccountFlag,
 		},
 		Action: defaultAction,
 		Commands: []cli.Command{
@@ -226,6 +227,10 @@ func defaultAction(ctx *cli.Context) error {
 	}
 
 	txpoolOpt := defaultTxPoolOptions
+	txpoolOpt.LimitPerAccount, err = readIntFromUInt64Flag(ctx.Uint64(txPoolLimitPerAccountFlag.Name))
+	if err != nil {
+		return errors.Wrap(err, "parse txpool-limit-per-account flag")
+	}
 	txPool := txpool.New(repo, state.NewStater(mainDB), txpoolOpt)
 	defer func() { log.Info("closing tx pool..."); txPool.Close() }()
 
