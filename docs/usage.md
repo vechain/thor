@@ -183,6 +183,9 @@ bin/thor -h
 | `--disable-pruner`          | Disable state pruner to keep all history                                                    |
 | `--enable-metrics`          | Enables the metrics server                                                                  |
 | `--metrics-addr`            | Metrics service listening address                                                           |
+| `--enable-admin`            | Enables the admin server                                                                    |
+| `--admin-addr`              | Admin service listening address                                                             |
+| `--txpool-limit-per-account`| Transaction pool size limit per account                                                     |
 | `--help, -h`                | Show help                                                                                   |
 | `--version, -v`             | Print the version                                                                           |
 
@@ -196,7 +199,7 @@ bin/thor -h
 | `--persist`                  | Save blockchain data to disk(default to memory)    |
 | `--gas-limit`                | Gas limit for each block                           |
 | `--txpool-limit`             | Transaction pool size limit                        |
-| `--txpool-limit-per-account` | Transaction pool size limit per account            |
+
 
 #### Discovery Node Flags
 
