@@ -16,9 +16,20 @@ import (
 )
 
 func (c *Client) httpRequest(method, url string, payload io.Reader) ([]byte, error) {
+	body, statusCode, err := c.rawHTTPRequest(method, url, payload)
+	if err != nil {
+		return nil, err
+	}
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("http error - Status Code %d - %s - %w", statusCode, body, common.Not200StatusErr)
+	}
+	return body, nil
+}
+
+func (c *Client) rawHTTPRequest(method, url string, payload io.Reader) ([]byte, int, error) {
 	req, err := http.NewRequest(method, url, payload)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %w", err)
+		return nil, 0, fmt.Errorf("error creating request: %w", err)
 	}
 
 	if method == "POST" {
@@ -28,19 +39,16 @@ func (c *Client) httpRequest(method, url string, payload io.Reader) ([]byte, err
 
 	resp, err := c.c.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error performing request: %w", err)
+		return nil, 0, fmt.Errorf("error performing request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %w", err)
+		return nil, 0, fmt.Errorf("error reading response body: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http error - Status Code %d - %s - %w", resp.StatusCode, responseBody, common.Not200StatusErr)
-	}
-	return responseBody, nil
+	return responseBody, resp.StatusCode, nil
 }
 
 func (c *Client) httpGET(url string) ([]byte, error) {

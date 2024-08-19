@@ -283,10 +283,11 @@ func TestClient_RawHTTPPost(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	response, err := client.RawHTTPPost(url, calldata)
+	response, statusCode, err := client.RawHTTPPost(url, calldata)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResponse, response)
+	assert.Equal(t, http.StatusOK, statusCode)
 }
 
 func TestClient_RawHTTPGet(t *testing.T) {
@@ -301,10 +302,11 @@ func TestClient_RawHTTPGet(t *testing.T) {
 	defer ts.Close()
 
 	client := NewClient(ts.URL)
-	response, err := client.RawHTTPGet(url)
+	response, statusCode, err := client.RawHTTPGet(url)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResponse, response)
+	assert.Equal(t, http.StatusOK, statusCode)
 }
 
 func TestClient_GetPeers(t *testing.T) {
@@ -407,16 +409,6 @@ func TestClient_Errors(t *testing.T) {
 			function: func(client *Client) (*transactions.Transaction, error) { return client.GetTransaction(&txID, false) },
 		},
 		{
-			name:     "RawHTTPPost",
-			path:     "/test",
-			function: func(client *Client) ([]byte, error) { return client.RawHTTPPost("/test", map[string]interface{}{}) },
-		},
-		{
-			name:     "RawHTTPGet",
-			path:     "/test",
-			function: func(client *Client) ([]byte, error) { return client.RawHTTPGet("/test") },
-		},
-		{
 			name:     "GetPeers",
 			path:     "/node/network/peers",
 			function: func(client *Client) ([]*node.PeerStats, error) { return client.GetPeers() },
@@ -435,12 +427,12 @@ func TestClient_Errors(t *testing.T) {
 			fn := reflect.ValueOf(tc.function)
 			result := fn.Call([]reflect.Value{reflect.ValueOf(client)})
 
-			if result[1].IsNil() {
+			if result[len(result)-1].IsNil() {
 				t.Errorf("expected error for %s, but got nil", tc.name)
 				return
 			}
 
-			err := result[1].Interface().(error)
+			err := result[len(result)-1].Interface().(error)
 			assert.Error(t, err)
 		})
 	}

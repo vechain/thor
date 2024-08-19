@@ -118,14 +118,6 @@ func (c *Client) GetBestBlock() (blocks *blocks.JSONExpandedBlock, err error) {
 	return c.GetExpandedBlock("best")
 }
 
-func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, error) {
-	return c.conn.RawHTTPPost(url, calldata)
-}
-
-func (c *Client) RawHTTPGet(url string) ([]byte, error) {
-	return c.conn.RawHTTPGet(url)
-}
-
 func (c *Client) GetTransaction(id *thor.Bytes32) (*transactions.Transaction, error) {
 	return c.conn.GetTransaction(id, false)
 }

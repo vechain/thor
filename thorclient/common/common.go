@@ -11,6 +11,10 @@ import (
 	"github.com/vechain/thor/v2/thor"
 )
 
+const (
+	FinalizedRevision = "finalized"
+)
+
 var (
 	NotFoundErr      = fmt.Errorf("not found")
 	Not200StatusErr  = fmt.Errorf("not 200 status code")

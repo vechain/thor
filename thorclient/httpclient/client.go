@@ -186,12 +186,24 @@ func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool) (*transactio
 	return &tx, nil
 }
 
-func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, error) {
-	return c.httpPOST(c.url+url, calldata)
+func (c *Client) RawHTTPPost(url string, calldata interface{}) ([]byte, int, error) {
+	var data []byte
+	var err error
+
+	if _, ok := calldata.([]byte); ok {
+		data = calldata.([]byte)
+	} else {
+		data, err = json.Marshal(calldata)
+		if err != nil {
+			return nil, 0, fmt.Errorf("unable to unmarshal payload - %w", err)
+		}
+	}
+
+	return c.rawHTTPRequest("POST", c.url+url, bytes.NewBuffer(data))
 }
 
-func (c *Client) RawHTTPGet(url string) ([]byte, error) {
-	return c.httpGET(c.url + url)
+func (c *Client) RawHTTPGet(url string) ([]byte, int, error) {
+	return c.rawHTTPRequest("GET", c.url+url, nil)
 }
 
 func (c *Client) GetPeers() ([]*node.PeerStats, error) {

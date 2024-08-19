@@ -6,10 +6,8 @@
 package accounts_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ABI "github.com/vechain/thor/v2/abi"
 	"github.com/vechain/thor/v2/api/accounts"
 	"github.com/vechain/thor/v2/block"
@@ -32,6 +31,8 @@ import (
 	"github.com/vechain/thor/v2/packer"
 	"github.com/vechain/thor/v2/state"
 	"github.com/vechain/thor/v2/thor"
+	"github.com/vechain/thor/v2/thorclient"
+	tccommon "github.com/vechain/thor/v2/thorclient/common"
 	"github.com/vechain/thor/v2/tx"
 )
 
@@ -105,38 +106,44 @@ var invalidNumberRevision = "4294967296"                                        
 var acc *accounts.Accounts
 var ts *httptest.Server
 
+var tclient *thorclient.Client
+
 func TestAccount(t *testing.T) {
 	initAccountServer(t)
 	defer ts.Close()
 
+	tclient = thorclient.New(ts.URL)
 	for name, tt := range map[string]func(*testing.T){
-		"getAccount":                           getAccount,
-		"getAccountWithNonExisitingRevision":   getAccountWithNonExisitingRevision,
-		"getAccountWithGenesisRevision":        getAccountWithGenesisRevision,
-		"getAccountWithFinalizedRevision":      getAccountWithFinalizedRevision,
-		"getCode":                              getCode,
-		"getCodeWithNonExistingRevision":       getCodeWithNonExistingRevision,
-		"getStorage":                           getStorage,
-		"getStorageWithNonExistingRevision":    getStorageWithNonExistingRevision,
-		"deployContractWithCall":               deployContractWithCall,
-		"callContract":                         callContract,
-		"callContractWithNonExisitingRevision": callContractWithNonExisitingRevision,
-		"batchCall":                            batchCall,
-		"batchCallWithNonExisitingRevision":    batchCallWithNonExisitingRevision,
+		"getAccount":                          getAccount,
+		"getAccountWithNonExistingRevision":   getAccountWithNonExistingRevision,
+		"getAccountWithGenesisRevision":       getAccountWithGenesisRevision,
+		"getAccountWithFinalizedRevision":     getAccountWithFinalizedRevision,
+		"getCode":                             getCode,
+		"getCodeWithNonExistingRevision":      getCodeWithNonExistingRevision,
+		"getStorage":                          getStorage,
+		"getStorageWithNonExistingRevision":   getStorageWithNonExistingRevision,
+		"deployContractWithCall":              deployContractWithCall,
+		"callContract":                        callContract,
+		"callContractWithNonExistingRevision": callContractWithNonExistingRevision,
+		"batchCall":                           batchCall,
+		"batchCallWithNonExistingRevision":    batchCallWithNonExistingRevision,
 	} {
 		t.Run(name, tt)
 	}
 }
 
 func getAccount(t *testing.T) {
-	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr)
+	_, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + invalidAddr)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	_, statusCode = httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+invalidNumberRevision)
+	_, statusCode, err = tclient.RawClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + invalidNumberRevision)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
-	//revision is optional defaut `best`
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String())
+	//revision is optional default `best`
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + addr.String())
+	require.NoError(t, err)
 	var acc accounts.Account
 	if err := json.Unmarshal(res, &acc); err != nil {
 		t.Fatal(err)
@@ -145,17 +152,19 @@ func getAccount(t *testing.T) {
 	assert.Equal(t, http.StatusOK, statusCode, "OK")
 }
 
-func getAccountWithNonExisitingRevision(t *testing.T) {
+func getAccountWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+revision64Len)
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + revision64Len)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getAccountWithGenesisRevision(t *testing.T) {
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+addr.String()+"?revision="+genesisBlock.Header().ID().String())
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + addr.String() + "?revision=" + genesisBlock.Header().ID().String())
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "bad revision")
 
 	var acc accounts.Account
@@ -175,10 +184,13 @@ func getAccountWithGenesisRevision(t *testing.T) {
 }
 
 func getAccountWithFinalizedRevision(t *testing.T) {
-	soloAddress := "0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa"
+	soloAddress := thor.MustParseAddress("0xf077b491b355E64048cE21E3A6Fc4751eEeA77fa")
 
-	genesisAccount := httpGetAccount(t, soloAddress+"?revision="+genesisBlock.Header().ID().String())
-	finalizedAccount := httpGetAccount(t, soloAddress+"?revision=finalized")
+	genesisAccount, err := tclient.GetAccountForRevision(&soloAddress, genesisBlock.Header().ID().String())
+	require.NoError(t, err)
+
+	finalizedAccount, err := tclient.GetAccountForRevision(&soloAddress, tccommon.FinalizedRevision)
+	require.NoError(t, err)
 
 	genesisEnergy := (*big.Int)(&genesisAccount.Energy)
 	finalizedEnergy := (*big.Int)(&finalizedAccount.Energy)
@@ -187,14 +199,17 @@ func getAccountWithFinalizedRevision(t *testing.T) {
 }
 
 func getCode(t *testing.T) {
-	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/code")
+	_, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + invalidAddr + "/code")
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+invalidNumberRevision)
+	_, statusCode, err = tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code?revision=" + invalidNumberRevision)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code")
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code")
+	require.NoError(t, err)
 	var code map[string]string
 	if err := json.Unmarshal(res, &code); err != nil {
 		t.Fatal(err)
@@ -210,24 +225,29 @@ func getCode(t *testing.T) {
 func getCodeWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/code?revision="+revision64Len)
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/code?revision=" + revision64Len)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
 }
 
 func getStorage(t *testing.T) {
-	_, statusCode := httpGet(t, ts.URL+"/accounts/"+invalidAddr+"/storage/"+storageKey.String())
+	_, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + invalidAddr + "/storage/" + storageKey.String())
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad address")
 
-	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+invalidBytes32)
+	_, statusCode, err = tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + invalidBytes32)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad storage key")
 
-	_, statusCode = httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+invalidNumberRevision)
+	_, statusCode, err = tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + invalidNumberRevision)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String())
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String())
+	require.NoError(t, err)
 	var value map[string]string
 	if err := json.Unmarshal(res, &value); err != nil {
 		t.Fatal(err)
@@ -243,7 +263,8 @@ func getStorage(t *testing.T) {
 func getStorageWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+contractAddr.String()+"/storage/"+storageKey.String()+"?revision="+revision64Len)
+	res, statusCode, err := tclient.RawClient().RawHTTPGet("/accounts/" + contractAddr.String() + "/storage/" + storageKey.String() + "?revision=" + revision64Len)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
@@ -331,7 +352,8 @@ func deployContractWithCall(t *testing.T) {
 		Gas:  10000000,
 		Data: "abc",
 	}
-	_, statusCode := httpPost(t, ts.URL+"/accounts", badBody)
+	_, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts", badBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad data")
 
 	reqBody := &accounts.CallData{
@@ -339,11 +361,13 @@ func deployContractWithCall(t *testing.T) {
 		Data: hexutil.Encode(bytecode),
 	}
 
-	_, statusCode = httpPost(t, ts.URL+"/accounts?revision="+invalidNumberRevision, reqBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts?revision="+invalidNumberRevision, reqBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 
 	//revision is optional defaut `best`
-	res, _ := httpPost(t, ts.URL+"/accounts", reqBody)
+	res, _, err := tclient.RawClient().RawHTTPPost("/accounts", reqBody)
+	require.NoError(t, err)
 	var output *accounts.CallResult
 	if err := json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
@@ -352,20 +376,24 @@ func deployContractWithCall(t *testing.T) {
 }
 
 func callContract(t *testing.T) {
-	_, statusCode := httpPost(t, ts.URL+"/accounts/"+invalidAddr, nil)
+	_, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/"+invalidAddr, nil)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
 	malFormedBody := 123
-	_, statusCode = httpPost(t, ts.URL+"/accounts", malFormedBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts", malFormedBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
-	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), malFormedBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/"+contractAddr.String(), malFormedBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid address")
 
 	badBody := &accounts.CallData{
 		Data: "input",
 	}
-	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), badBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/"+contractAddr.String(), badBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid input data")
 
 	a := uint8(1)
@@ -382,12 +410,16 @@ func callContract(t *testing.T) {
 	}
 
 	// next revisoun should be valid
-	_, statusCode = httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision=next", reqBody)
-	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
-	_, statusCode = httpPost(t, ts.URL+"/accounts?revision=next", reqBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/"+contractAddr.String()+"?revision=next", reqBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
-	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String(), reqBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts?revision=next", reqBody)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
+
+	res, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/"+contractAddr.String(), reqBody)
+	require.NoError(t, err)
 	var output *accounts.CallResult
 	if err = json.Unmarshal(res, &output); err != nil {
 		t.Fatal(err)
@@ -405,10 +437,11 @@ func callContract(t *testing.T) {
 	assert.Equal(t, a+b, ret)
 }
 
-func callContractWithNonExisitingRevision(t *testing.T) {
+func callContractWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode := httpPost(t, ts.URL+"/accounts/"+contractAddr.String()+"?revision="+revision64Len, nil)
+	res, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/"+contractAddr.String()+"?revision="+revision64Len, nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
@@ -417,7 +450,8 @@ func callContractWithNonExisitingRevision(t *testing.T) {
 func batchCall(t *testing.T) {
 	// Request body is not a valid JSON
 	malformedBody := 123
-	_, statusCode := httpPost(t, ts.URL+"/accounts/*", malformedBody)
+	_, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/*", malformedBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "malformed data")
 
 	// Request body is not a valid BatchCallData
@@ -434,22 +468,26 @@ func batchCall(t *testing.T) {
 				Value: nil,
 			}},
 	}
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*", badBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*", badBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid data")
 
 	// Request body has an invalid blockRef
 	badBlockRef := &accounts.BatchCallData{
 		BlockRef: "0x00",
 	}
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*", badBlockRef)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*", badBlockRef)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusInternalServerError, statusCode, "invalid blockRef")
 
 	// Request body has an invalid malformed revision
-	_, statusCode = httpPost(t, fmt.Sprintf("%s/accounts/*?revision=%s", ts.URL, "0xZZZ"), badBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost(fmt.Sprintf("/accounts/*?revision=%s", "0xZZZ"), badBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "revision")
 
 	// Request body has an invalid revision number
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision="+invalidNumberRevision, badBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*?revision="+invalidNumberRevision, badBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusBadRequest, statusCode, "invalid revision")
 
 	// Valid request
@@ -477,10 +515,12 @@ func batchCall(t *testing.T) {
 	}
 
 	// 'next' revisoun should be valid
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*?revision=next", reqBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*?revision=next", reqBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode, "next revision should be okay")
 
-	res, statusCode := httpPost(t, ts.URL+"/accounts/*", reqBody)
+	res, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/*", reqBody)
+	require.NoError(t, err)
 	var results accounts.BatchCallResults
 	if err = json.Unmarshal(res, &results); err != nil {
 		t.Fatal(err)
@@ -511,7 +551,8 @@ func batchCall(t *testing.T) {
 		Expiration: 100,
 		BlockRef:   "0x00000000aabbccdd",
 	}
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*", fullBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*", fullBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, statusCode)
 
 	// Request with not enough gas
@@ -525,57 +566,17 @@ func batchCall(t *testing.T) {
 		Expiration: 100,
 		BlockRef:   "0x00000000aabbccdd",
 	}
-	_, statusCode = httpPost(t, ts.URL+"/accounts/*", tooMuchGasBody)
+	_, statusCode, err = tclient.RawClient().RawHTTPPost("/accounts/*", tooMuchGasBody)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, statusCode)
 }
 
-func batchCallWithNonExisitingRevision(t *testing.T) {
+func batchCallWithNonExistingRevision(t *testing.T) {
 	revision64Len := "0x00000000851caf3cfdb6e899cf5958bfb1ac3413d346d43539627e6be7ec1b4a"
 
-	res, statusCode := httpPost(t, ts.URL+"/accounts/*?revision="+revision64Len, nil)
+	res, statusCode, err := tclient.RawClient().RawHTTPPost("/accounts/*?revision="+revision64Len, nil)
+	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusBadRequest, statusCode, "bad revision")
 	assert.Equal(t, "revision: leveldb: not found\n", string(res), "revision not found")
-}
-
-func httpPost(t *testing.T, url string, body interface{}) ([]byte, int) {
-	data, err := json.Marshal(body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := http.Post(url, "application/x-www-form-urlencoded", bytes.NewReader(data)) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
-}
-
-func httpGet(t *testing.T, url string) ([]byte, int) {
-	res, err := http.Get(url) // nolint:gosec
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := io.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return r, res.StatusCode
-}
-
-func httpGetAccount(t *testing.T, path string) *accounts.Account {
-	res, statusCode := httpGet(t, ts.URL+"/accounts/"+path)
-	var acc accounts.Account
-	if err := json.Unmarshal(res, &acc); err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, http.StatusOK, statusCode, "get account failed")
-
-	return &acc
 }
