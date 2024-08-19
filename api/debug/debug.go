@@ -213,6 +213,9 @@ func (d *Debug) handleTraceCall(w http.ResponseWriter, req *http.Request) error 
 }
 
 func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Tracer, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("tracer name must be defined")
+	}
 	_, allTracers := d.allowedTracers["all"]
 
 	// fail if the tracer is not enable OR if the "all" tracers code isn't active

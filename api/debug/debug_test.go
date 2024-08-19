@@ -159,7 +159,10 @@ func TestStorageRangeMaxResult(t *testing.T) {
 
 func testTraceClauseWithEmptyTracerName(t *testing.T) {
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{}, 403)
-	assert.Contains(t, strings.TrimSpace(res), "unable to create custom tracer")
+	assert.Equal(t, "tracer name must be defined", strings.TrimSpace(res))
+
+	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: " "}, 403)
+	assert.Equal(t, "tracer name must be defined", strings.TrimSpace(res))
 }
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "logger"}, 400)
