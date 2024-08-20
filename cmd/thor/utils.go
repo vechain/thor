@@ -39,7 +39,6 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
-	"github.com/vechain/thor/v2/admin"
 	"github.com/vechain/thor/v2/api/doc"
 	"github.com/vechain/thor/v2/chain"
 	"github.com/vechain/thor/v2/cmd/thor/node"
@@ -587,27 +586,6 @@ func startMetricsServer(addr string) (string, func(), error) {
 		srv.Serve(listener)
 	})
 	return "http://" + listener.Addr().String() + "/metrics", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
-}
-
-func startAdminServer(addr string, logLevel *slog.LevelVar) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen admin API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/admin").Handler(admin.HTTPHandler(logLevel))
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/admin", func() {
 		srv.Close()
 		goes.Wait()
 	}, nil
