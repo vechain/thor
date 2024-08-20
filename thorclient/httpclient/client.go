@@ -167,10 +167,13 @@ func (c *Client) GetBlock(blockID string) (*blocks.JSONBlockSummary, error) {
 	return &block, nil
 }
 
-func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool) (*transactions.Transaction, error) {
-	url := c.url + "/transactions/" + txID.String()
+func (c *Client) GetTransaction(txID *thor.Bytes32, isPending bool, fetchRaw bool) (*transactions.Transaction, error) {
+	url := c.url + "/transactions/" + txID.String() + "?"
 	if isPending {
-		url += "?pending=true"
+		url += "pending=true&"
+	}
+	if fetchRaw {
+		url += "raw=true&"
 	}
 
 	body, err := c.httpGET(url)

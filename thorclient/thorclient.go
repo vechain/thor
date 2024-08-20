@@ -118,11 +118,15 @@ func (c *Client) GetBlock(block string) (blocks *blocks.JSONBlockSummary, err er
 }
 
 func (c *Client) GetTransaction(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, false)
+	return c.httpConn.GetTransaction(id, false, false)
+}
+
+func (c *Client) GetTransactionRaw(id *thor.Bytes32) (*transactions.Transaction, error) {
+	return c.httpConn.GetTransaction(id, false, true)
 }
 
 func (c *Client) GetTransactionPending(id *thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(id, true)
+	return c.httpConn.GetTransaction(id, true, false)
 }
 
 func (c *Client) GetPeers() ([]*node.PeerStats, error) {
