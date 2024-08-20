@@ -148,7 +148,7 @@ func TestGetTransaction(t *testing.T) {
 		},
 		{
 			name:      "GetTransactionPending",
-			function:  func(client *Client) { client.GetTransactionPending(expectedTx.ID) },
+			function:  func(client *Client) { client.GetTransactionPending(&expectedTx.ID) },
 			isPending: true,
 		},
 	} {

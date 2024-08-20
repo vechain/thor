@@ -32,7 +32,7 @@ type Client struct {
 
 func New(url string) *Client {
 	return &Client{
-		httpConn: httpclient.NewClient(url),
+		httpConn: httpclient.New(url),
 	}
 }
 
@@ -43,7 +43,7 @@ func NewWithWS(url string) (*Client, error) {
 	}
 
 	return &Client{
-		httpConn: httpclient.NewClient(url),
+		httpConn: httpclient.New(url),
 		wsConn:   wsClient,
 	}, nil
 }
@@ -121,8 +121,8 @@ func (c *Client) GetTransaction(id *thor.Bytes32) (*transactions.Transaction, er
 	return c.httpConn.GetTransaction(id, false)
 }
 
-func (c *Client) GetTransactionPending(id thor.Bytes32) (*transactions.Transaction, error) {
-	return c.httpConn.GetTransaction(&id, true)
+func (c *Client) GetTransactionPending(id *thor.Bytes32) (*transactions.Transaction, error) {
+	return c.httpConn.GetTransaction(id, true)
 }
 
 func (c *Client) GetPeers() ([]*node.PeerStats, error) {

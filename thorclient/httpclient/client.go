@@ -26,7 +26,7 @@ type Client struct {
 	c   *http.Client
 }
 
-func NewClient(url string) *Client {
+func New(url string) *Client {
 	return &Client{
 		url: url,
 		c:   &http.Client{},
@@ -40,7 +40,7 @@ func (c *Client) GetTransactionReceipt(txID *thor.Bytes32) (*transactions.Receip
 	}
 
 	if len(body) == 0 || bytes.Equal(bytes.TrimSpace(body), []byte("null")) {
-		return nil, common.NotFoundErr
+		return nil, common.ErrNotFound
 	}
 
 	var receipt transactions.Receipt

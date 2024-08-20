@@ -103,7 +103,7 @@ func subscribe[T any](conn *websocket.Conn) (<-chan common.EventWrapper[*T], err
 			err := conn.ReadJSON(&data)
 			if err != nil {
 				// Send an EventWrapper with the error to the channel
-				eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.UnexpectedMsgErr, err)}
+				eventChan <- common.EventWrapper[*T]{Error: fmt.Errorf("%w: %w", common.ErrUnexpectedMsg, err)}
 				return
 			}
 

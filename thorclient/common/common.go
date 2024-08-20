@@ -16,9 +16,9 @@ const (
 )
 
 var (
-	NotFoundErr      = fmt.Errorf("not found")
-	Not200StatusErr  = fmt.Errorf("not 200 status code")
-	UnexpectedMsgErr = fmt.Errorf("unexpected message format")
+	ErrNotFound      = fmt.Errorf("not found")
+	ErrNot200Status  = fmt.Errorf("not 200 status code")
+	ErrUnexpectedMsg = fmt.Errorf("unexpected message format")
 )
 
 type TxSendResult struct {

@@ -260,7 +260,7 @@ func TestClient_SubscribeBlocks_ServerError(t *testing.T) {
 	// Read the error from the event channel
 	event := <-blockChan
 	assert.Error(t, event.Error)
-	assert.True(t, errors.Is(event.Error, common.UnexpectedMsgErr))
+	assert.True(t, errors.Is(event.Error, common.ErrUnexpectedMsg))
 }
 
 func TestClient_SubscribeBlocks_ServerShutdown(t *testing.T) {
