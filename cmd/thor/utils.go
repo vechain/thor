@@ -34,8 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"github.com/mattn/go-isatty"
 	"github.com/mattn/go-tty"
 	"github.com/pkg/errors"
@@ -48,7 +46,6 @@ import (
 	"github.com/vechain/thor/v2/genesis"
 	"github.com/vechain/thor/v2/log"
 	"github.com/vechain/thor/v2/logdb"
-	"github.com/vechain/thor/v2/metrics"
 	"github.com/vechain/thor/v2/muxdb"
 	"github.com/vechain/thor/v2/p2psrv"
 	"github.com/vechain/thor/v2/state"
@@ -565,27 +562,6 @@ func startAPIServer(ctx *cli.Context, handler http.Handler, genesisID thor.Bytes
 		srv.Serve(listener)
 	})
 	return "http://" + listener.Addr().String() + "/", func() {
-		srv.Close()
-		goes.Wait()
-	}, nil
-}
-
-func startMetricsServer(addr string) (string, func(), error) {
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return "", nil, errors.Wrapf(err, "listen metrics API addr [%v]", addr)
-	}
-
-	router := mux.NewRouter()
-	router.PathPrefix("/metrics").Handler(metrics.HTTPHandler())
-	handler := handlers.CompressHandler(router)
-
-	srv := &http.Server{Handler: handler, ReadHeaderTimeout: time.Second, ReadTimeout: 5 * time.Second}
-	var goes co.Goes
-	goes.Go(func() {
-		srv.Serve(listener)
-	})
-	return "http://" + listener.Addr().String() + "/metrics", func() {
 		srv.Close()
 		goes.Wait()
 	}, nil

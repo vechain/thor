@@ -168,7 +168,7 @@ func defaultAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, close, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
@@ -310,7 +310,7 @@ func soloAction(ctx *cli.Context) error {
 	metricsURL := ""
 	if ctx.Bool(enableMetricsFlag.Name) {
 		metrics.InitializePrometheusMetrics()
-		url, close, err := startMetricsServer(ctx.String(metricsAddrFlag.Name))
+		url, close, err := api.StartMetricsServer(ctx.String(metricsAddrFlag.Name))
 		if err != nil {
 			return fmt.Errorf("unable to start metrics server - %w", err)
 		}
