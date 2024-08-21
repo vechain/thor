@@ -118,6 +118,8 @@ func (engine *BFTEngine) Justified() (thor.Bytes32, error) {
 		return thor.Bytes32{}, err
 	}
 
+	// if the quality is 0, then the epoch is not justified
+	// this is possible for the starting epochs
 	if quality == 0 {
 		return finalized, nil
 	}
