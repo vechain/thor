@@ -216,10 +216,11 @@ func (d *Debug) createTracer(name string, config json.RawMessage) (tracers.Trace
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("tracer name must be defined")
 	}
+	_, noTracers := d.allowedTracers["none"]
 	_, allTracers := d.allowedTracers["all"]
 
-	// fail if the tracer is not enable OR if the "all" tracers code isn't active
-	if _, ok := d.allowedTracers[name]; !ok && !allTracers {
+	// fail if the requested tracer is not allowed OR if the "all" tracers code isn't active
+	if _, ok := d.allowedTracers[name]; noTracers || (!ok && !allTracers) {
 		return nil, fmt.Errorf("creating tracer is not allowed: %s", name)
 	}
 

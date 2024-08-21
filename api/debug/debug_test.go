@@ -164,6 +164,7 @@ func testTraceClauseWithEmptyTracerName(t *testing.T) {
 	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: " "}, 403)
 	assert.Equal(t, "tracer name must be defined", strings.TrimSpace(res))
 }
+
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
 	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "logger"}, 400)
 	assert.Equal(t, "target: unsupported", strings.TrimSpace(res))

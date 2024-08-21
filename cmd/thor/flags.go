@@ -168,7 +168,7 @@ var (
 
 	allowedTracersFlag = cli.StringFlag{
 		Name:  "api-allowed-tracers",
-		Value: "all",
+		Value: "none",
 		Usage: "define allowed API tracers",
 	}
 
