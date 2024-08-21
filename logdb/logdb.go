@@ -398,9 +398,19 @@ func (db *LogDB) NewWriterSyncOff() *Writer {
 
 func topicValue(topics []thor.Bytes32, i int) []byte {
 	if i < len(topics) {
-		return topics[i][:]
+		return removeLeadingZeros(topics[i][:])
 	}
 	return nil
+}
+
+func removeLeadingZeros(bytes []byte) []byte {
+	for _, b := range bytes {
+		if b != 0 {
+			break
+		}
+		bytes = bytes[1:]
+	}
+	return bytes
 }
 
 // Writer is the transactional log writer.
