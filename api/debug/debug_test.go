@@ -53,6 +53,7 @@ func TestDebug(t *testing.T) {
 	// /tracers endpoint
 	for name, tt := range map[string]func(*testing.T){
 		"testTraceClauseWithEmptyTracerName":       testTraceClauseWithEmptyTracerName,
+		"testTraceClauseWithInvalidTracerName":     testTraceClauseWithInvalidTracerName,
 		"testTraceClauseWithEmptyTracerTarget":     testTraceClauseWithEmptyTracerTarget,
 		"testTraceClauseWithBadBlockId":            testTraceClauseWithBadBlockId,
 		"testTraceClauseWithNonExistingBlockId":    testTraceClauseWithNonExistingBlockId,
@@ -163,6 +164,11 @@ func testTraceClauseWithEmptyTracerName(t *testing.T) {
 
 	res = httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: " "}, 403)
 	assert.Equal(t, "tracer name must be defined", strings.TrimSpace(res))
+}
+
+func testTraceClauseWithInvalidTracerName(t *testing.T) {
+	res := httpPostAndCheckResponseStatus(t, ts.URL+"/debug/tracers", &TraceClauseOption{Name: "non-existent"}, 403)
+	assert.Contains(t, res, "unable to create custom tracer")
 }
 
 func testTraceClauseWithEmptyTracerTarget(t *testing.T) {
