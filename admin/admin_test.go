@@ -14,88 +14,89 @@ import (
 	"testing"
 )
 
-func TestPostLogLevelHandler_ValidInput(t *testing.T) {
-	var logLevel slog.LevelVar
-	logLevel.Set(slog.LevelInfo)
-
-	body := []byte(`{"level":"debug"}`)
-	req, err := http.NewRequest("POST", "/admin/loglevel", bytes.NewBuffer(body))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(HTTPHandler(&logLevel).ServeHTTP)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	var response logLevelResponse
-	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-		t.Fatalf("could not decode response: %v", err)
-	}
-
-	if response.CurrentLevel != "DEBUG" {
-		t.Errorf("handler returned unexpected log level: got %v want %v", response.CurrentLevel, "DEBUG")
-	}
+type TestCase struct {
+	name             string
+	method           string
+	body             interface{}
+	expectedStatus   int
+	expectedLevel    string
+	expectedErrorMsg string
 }
 
-func TestPostLogLevelHandler_InvalidInput(t *testing.T) {
-	var logLevel slog.LevelVar
-	logLevel.Set(slog.LevelInfo)
-
-	body := []byte(`{"level":"invalid_body"}`)
-	req, err := http.NewRequest("POST", "/admin/loglevel", bytes.NewBuffer(body))
-	if err != nil {
-		t.Fatal(err)
+func marshalBody(tt TestCase, t *testing.T) []byte {
+	var reqBody []byte
+	var err error
+	if tt.body != nil {
+		reqBody, err = json.Marshal(tt.body)
+		if err != nil {
+			t.Fatalf("could not marshal request body: %v", err)
+		}
 	}
-
-	rr := httptest.NewRecorder()
-
-	handler := http.HandlerFunc(HTTPHandler(&logLevel).ServeHTTP)
-	handler.ServeHTTP(rr, req)
-
-	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
-
-	expectedErrorMessage := "Invalid verbosity level"
-	var response errorResponse
-	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-		t.Fatalf("could not decode response: %v", err)
-	}
-
-	if response.ErrorMessage != expectedErrorMessage {
-		t.Errorf("handler returned unexpected log level: got %v want %v", response.ErrorMessage, expectedErrorMessage)
-	}
+	return reqBody
 }
 
-func TestGetLogLevelHandler(t *testing.T) {
-	var logLevel slog.LevelVar
-
-	req, err := http.NewRequest("GET", "/admin/loglevel", nil)
-	if err != nil {
-		t.Fatal(err)
+func TestLogLevelHandler(t *testing.T) {
+	tests := []TestCase{
+		{
+			name:           "Valid POST input - set level to DEBUG",
+			method:         "POST",
+			body:           map[string]string{"level": "debug"},
+			expectedStatus: http.StatusOK,
+			expectedLevel:  "DEBUG",
+		},
+		{
+			name:             "Invalid POST input - invalid level",
+			method:           "POST",
+			body:             map[string]string{"level": "invalid_body"},
+			expectedStatus:   http.StatusBadRequest,
+			expectedErrorMsg: "Invalid verbosity level",
+		},
+		{
+			name:           "GET request - get current level INFO",
+			method:         "GET",
+			body:           nil,
+			expectedStatus: http.StatusOK,
+			expectedLevel:  "INFO",
+		},
 	}
 
-	rr := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logLevel slog.LevelVar
+			logLevel.Set(slog.LevelInfo)
 
-	handler := http.HandlerFunc(HTTPHandler(&logLevel).ServeHTTP)
-	handler.ServeHTTP(rr, req)
+			reqBodyBytes := marshalBody(tt, t)
 
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
+			req, err := http.NewRequest(tt.method, "/admin/loglevel", bytes.NewBuffer(reqBodyBytes))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	var response logLevelResponse
-	if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
-		t.Fatalf("could not decode response: %v", err)
-	}
+			rr := httptest.NewRecorder()
+			handler := http.HandlerFunc(HTTPHandler(&logLevel).ServeHTTP)
+			handler.ServeHTTP(rr, req)
 
-	if response.CurrentLevel != "INFO" {
-		t.Errorf("handler returned unexpected log level: got %v want %v", response.CurrentLevel, "INFO")
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
+			}
+
+			if tt.expectedLevel != "" {
+				var response logLevelResponse
+				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+					t.Fatalf("could not decode response: %v", err)
+				}
+				if response.CurrentLevel != tt.expectedLevel {
+					t.Errorf("handler returned unexpected log level: got %v want %v", response.CurrentLevel, tt.expectedLevel)
+				}
+			} else {
+				var response errorResponse
+				if err := json.NewDecoder(rr.Body).Decode(&response); err != nil {
+					t.Fatalf("could not decode response: %v", err)
+				}
+				if response.ErrorMessage != tt.expectedErrorMsg {
+					t.Errorf("handler returned unexpected error message: got %v want %v", response.ErrorMessage, tt.expectedErrorMsg)
+				}
+			}
+		})
 	}
 }
