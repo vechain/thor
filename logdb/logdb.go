@@ -404,13 +404,11 @@ func topicValue(topics []thor.Bytes32, i int) []byte {
 }
 
 func removeLeadingZeros(bytes []byte) []byte {
-	for _, b := range bytes {
-		if b != 0 {
-			break
-		}
-		bytes = bytes[1:]
+	i := 0
+	// increase i until it reaches the first non-zero byte
+	for ; i < len(bytes) && bytes[i] == 0; i++ {
 	}
-	return bytes
+	return bytes[i:]
 }
 
 // Writer is the transactional log writer.
@@ -484,14 +482,22 @@ func (w *Writer) Write(b *block.Block, receipts tx.Receipts) error {
 
 		for clauseIndex, output := range r.Outputs {
 			for _, ev := range output.Events {
+
+				t0Val := topicValue(ev.Topics, 0)
+				t1Val := topicValue(ev.Topics, 1)
+				t2Val := topicValue(ev.Topics, 2)
+				t3Val := topicValue(ev.Topics, 3)
+				t4Val := topicValue(ev.Topics, 4)
+
 				if err := w.exec(
 					"INSERT OR IGNORE INTO ref (data) VALUES(?),(?),(?),(?),(?),(?)",
 					ev.Address[:],
-					topicValue(ev.Topics, 0),
-					topicValue(ev.Topics, 1),
-					topicValue(ev.Topics, 2),
-					topicValue(ev.Topics, 3),
-					topicValue(ev.Topics, 4)); err != nil {
+					t0Val,
+					t1Val,
+					t2Val,
+					t3Val,
+					t4Val,
+				); err != nil {
 					return err
 				}
 
