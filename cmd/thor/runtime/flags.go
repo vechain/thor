@@ -166,6 +166,12 @@ var (
 		Usage: "set tx limit per account in pool",
 	}
 
+	allowedTracersFlag = cli.StringFlag{
+		Name:  "api-allowed-tracers",
+		Value: "none",
+		Usage: "define allowed API tracers",
+	}
+
 	// solo mode only flags
 	onDemandFlag = cli.BoolFlag{
 		Name:  "on-demand",

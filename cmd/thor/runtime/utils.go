@@ -798,3 +798,16 @@ func readIntFromUInt64Flag(val uint64) (int, error) {
 
 	return i, nil
 }
+
+func parseTracerList(list string) map[string]interface{} {
+	inputs := strings.Split(list, ",")
+	tracerMap := map[string]interface{}{}
+	for _, i := range inputs {
+		if i == "" {
+			continue
+		}
+		tracerMap[i] = new(interface{})
+	}
+
+	return tracerMap
+}

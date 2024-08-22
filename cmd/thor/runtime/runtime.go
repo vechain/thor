@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -78,6 +79,7 @@ func Start(args []string) {
 			apiCallGasLimitFlag,
 			apiBacktraceLimitFlag,
 			apiAllowCustomTracerFlag,
+			allowedTracersFlag,
 			enableAPILogsFlag,
 			apiLogsLimitFlag,
 			verbosityFlag,
@@ -112,6 +114,7 @@ func Start(args []string) {
 					apiCallGasLimitFlag,
 					apiBacktraceLimitFlag,
 					apiAllowCustomTracerFlag,
+					allowedTracersFlag,
 					enableAPILogsFlag,
 					apiLogsLimitFlag,
 					onDemandFlag,
@@ -261,6 +264,7 @@ func defaultAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
@@ -410,6 +414,7 @@ func soloAction(ctx *cli.Context) error {
 		ctx.Bool(enableAPILogsFlag.Name),
 		ctx.Bool(enableMetricsFlag.Name),
 		ctx.Uint64(apiLogsLimitFlag.Name),
+		parseTracerList(strings.TrimSpace(ctx.String(allowedTracersFlag.Name))),
 	)
 	defer func() { log.Info("closing API..."); apiCloser() }()
 
