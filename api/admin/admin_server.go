@@ -17,22 +17,19 @@ import (
 	"github.com/vechain/thor/v2/co"
 )
 
-func logLevelHandler(logLevel *slog.LevelVar) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			getLogLevelHandler(logLevel).ServeHTTP(w, r)
-		case http.MethodPost:
-			postLogLevelHandler(logLevel).ServeHTTP(w, r)
-		default:
-			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
-		}
-	}
-}
-
 func HTTPHandler(logLevel *slog.LevelVar) http.Handler {
 	router := mux.NewRouter()
-	router.HandleFunc("/admin/loglevel", logLevelHandler(logLevel))
+	sub := router.PathPrefix("/admin").Subrouter()
+	sub.Path("/loglevel").
+		Methods(http.MethodGet).
+		Name("get-log-level").
+		HandlerFunc(getLogLevelHandler(logLevel))
+
+	sub.Path("/loglevel").
+		Methods(http.MethodPost).
+		Name("post-log-level").
+		HandlerFunc(postLogLevelHandler(logLevel))
+
 	return handlers.CompressHandler(router)
 }
 
