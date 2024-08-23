@@ -689,9 +689,9 @@ paths:
     post:
       tags:
         - Debug
-      summary: Trace a contract call
+      summary: Trace a call
       description: |
-        This endpoint enables clients to create a tracer for a specific vechain function call. 
+        This endpoint enables clients to create a tracer for a specific vechain clause. 
         
         You can customize the tracer using various options to suit your debugging requirements.
 
