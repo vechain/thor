@@ -53,14 +53,14 @@ func newApiAddr(t *testing.T) string {
 
 func waitForServer(apiAddr string) error {
 	ticker := time.NewTicker(100 * time.Millisecond)
-	timeout := time.NewTimer(10 * time.Second)
+	timeout := time.NewTimer(5 * time.Second)
 
 	for {
 		select {
 		case <-ticker.C:
 			// Wait for the server to start
 			res, err := http.Get("http://" + apiAddr + "/blocks/0")
-			if err != nil && res.StatusCode != http.StatusOK {
+			if err != nil || res.StatusCode != http.StatusOK {
 				continue
 			}
 
